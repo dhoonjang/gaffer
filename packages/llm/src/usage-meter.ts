@@ -12,7 +12,13 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { AGENT_NAMES, agentMinCacheableInput, type AgentName, type LlmEnv } from "./config";
+import {
+  AGENT_NAMES,
+  RECORDED_AGENT_NAMES,
+  agentMinCacheableInput,
+  type AgentName,
+  type LlmEnv,
+} from "./config";
 import type { GameLLM, TurnRequest, TurnResult, TurnUsage } from "./game-llm";
 import { LlmCallError } from "./llm-error";
 
@@ -101,10 +107,9 @@ export function emptyLedger(): UsageLedger {
     calls: 0,
     skipped: 0,
     usage: emptyUsage(),
-    byAgent: Object.fromEntries(AGENT_NAMES.map((agent) => [agent, emptyAgent()])) as Record<
-      AgentName,
-      AgentLedger
-    >,
+    byAgent: Object.fromEntries(
+      RECORDED_AGENT_NAMES.map((agent) => [agent, emptyAgent()]),
+    ) as Record<AgentName, AgentLedger>,
   };
 }
 
@@ -332,4 +337,10 @@ export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.e
       return result;
     },
   };
+}
+
+/** Evaluations share the turn budget ledger, including reported failed-attempt usage. */
+export function recordEvaluationUsage(agent: AgentName, usage: TurnUsage): void {
+  const session = currentSession();
+  session.ledger = recordUsage(session.ledger, agent, usage);
 }

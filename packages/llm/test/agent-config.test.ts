@@ -66,11 +66,6 @@ describe("에이전트별 LLM 설정", () => {
     model: claude-custom
     max_tokens: 100
     timeout_ms: 1000
-  tactic-orders:
-    provider: google
-    model: gemini-custom
-    max_tokens: 150
-    timeout_ms: 1500
   match-reader:
     provider: google
     model: gemini-reader
@@ -89,21 +84,6 @@ describe("에이전트별 LLM 설정", () => {
   finalize-match:
     provider: google
     model: gemini-final
-    max_tokens: 250
-    timeout_ms: 2500
-  market-orders:
-    provider: google
-    model: gemini-market
-    max_tokens: 250
-    timeout_ms: 2500
-  table-orders:
-    provider: google
-    model: gemini-table-orders
-    max_tokens: 250
-    timeout_ms: 2500
-  training-orders:
-    provider: google
-    model: gemini-training-orders
     max_tokens: 250
     timeout_ms: 2500
   training-rater:

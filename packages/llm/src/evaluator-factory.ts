@@ -1,0 +1,26 @@
+import { LLM_CONFIG, type EvaluatorName } from "./config";
+import type { GameEvaluator } from "./game-evaluator";
+import { TypesafeEvaluationError, TypesafeGameEvaluator } from "./typesafe-adapter";
+import { tapEvaluator } from "./turn-trace";
+import { recordEvaluationUsage } from "./usage-meter";
+
+export function createGameEvaluator(name: EvaluatorName): GameEvaluator {
+  const config = name === "instructions" ? LLM_CONFIG.instructions : LLM_CONFIG.matchSheet;
+  if (!config) throw new Error(`Jev evaluator configuration is missing: ${name}`);
+  const client = new TypesafeGameEvaluator(config);
+  return tapEvaluator(
+    {
+      async evaluate(request) {
+        try {
+          const result = await client.evaluate(request);
+          recordEvaluationUsage(name, result.usage);
+          return result;
+        } catch (error) {
+          if (error instanceof TypesafeEvaluationError) recordEvaluationUsage(name, error.usage);
+          throw error;
+        }
+      },
+    },
+    name,
+  );
+}

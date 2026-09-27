@@ -163,6 +163,88 @@ describe("TypesafeGameEvaluator", () => {
     });
   });
 
+  it("normalizes the observed independently rounded Choice vector only when unit mass remains possible", async () => {
+    const probabilities = { unclear: 0.01, v4: 0, v0: 0, absent: 0.8, v1: 0.17, v2: 0, v3: 0.01 };
+    const criteria = Object.fromEntries(Object.keys(probabilities).map((key) => [key, null]));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      Response.json(
+        response({
+          intent: {
+            type: "choice",
+            choice: "absent",
+            probabilities,
+            confidence: 0.8,
+          },
+        }),
+      ),
+    );
+    const result = await evaluator(fetch).evaluate({
+      state: "state",
+      questions: { intent: { ...choiceQuestion, criteria } },
+    });
+    const got = result.answers.intent;
+    if (got?.type !== "choice") throw new Error("Expected Choice answer");
+    expect(got.choice).toBe("absent");
+    expect(got.probabilities.absent).toBeCloseTo(0.8 / 0.99);
+    expect(Object.values(got.probabilities).reduce((sum, value) => sum + value, 0)).toBeCloseTo(1);
+    expect(result.attempts).toBe(1);
+  });
+
+  it.each([
+    { a: 0.32, b: 0.32, c: 0.32 },
+    { a: 0.35, b: 0.35, c: 0.35 },
+    { a: 0.3331, b: 0.3331, c: 0.3331 },
+    { a: 0, b: 0, c: 0 },
+  ])("rejects sums with no supported rounding explanation %#", async (probabilities) => {
+    const criteria = Object.fromEntries(Object.keys(probabilities).map((key) => [key, null]));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () =>
+      Response.json(
+        response({
+          intent: {
+            type: "choice",
+            choice: "a",
+            probabilities,
+            confidence: 0,
+          },
+        }),
+      ),
+    );
+    await expect(
+      evaluator(fetch).evaluate({
+        state: "state",
+        questions: { intent: { ...choiceQuestion, criteria } },
+      }),
+    ).rejects.toMatchObject({
+      kind: "unknown",
+      attempts: 2,
+      usage: { inputTokens: 160, outputTokens: 24 },
+      usageComplete: true,
+    });
+  });
+
+  it("keeps standalone expectations strict even when the wire adapter can explain decimal rounding", () => {
+    expect(() => scoreExpectation({ "0": 0.33, "1": 0.33, "2": 0.33 })).toThrow();
+  });
+
+  it.each([
+    { probabilities: { "0": 0.33, "1": 0.33, "2": 0.33, "3": 0 }, score: 1, expected: 1 },
+    { probabilities: { "0": 0.34, "1": 0.34, "2": 0.33, "3": 0 }, score: 0.99, expected: 1 / 1.01 },
+  ])(
+    "normalizes rounded Score mass above and below one %#",
+    async ({ probabilities, score, expected }) => {
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValue(
+          Response.json(response({ intensity: { ...answer(), probabilities, score } })),
+        );
+      const result = await evaluator(fetch).evaluate(request);
+      const got = result.answers.intensity;
+      if (got?.type !== "score") throw new Error("Expected Score answer");
+      expect(got.score).toBeCloseTo(expected);
+      expect(result.attempts).toBe(1);
+    },
+  );
+
   it.each([
     { ...choiceAnswer, choice: "clarify" },
     { ...choiceAnswer, choice: "unknown" },

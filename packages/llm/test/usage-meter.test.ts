@@ -159,6 +159,33 @@ describe("캐시 히트율 — 프리픽스가 살아 있는가", () => {
     expect(cacheAlerts(ledger)).toEqual(["gm"]);
   });
 
+  it("평가기와 과거 에이전트 사용량은 보존하되 생성 모델 캐시 경고에서 제외한다", () => {
+    const agents = [
+      "gm",
+      "instructions",
+      "match-sheet",
+      "tactic-orders",
+      "training-orders",
+      "market-orders",
+      "table-orders",
+    ] as const;
+    let ledger = emptyLedger();
+    for (const agent of agents) {
+      for (let i = 0; i < 3; i++) {
+        ledger = recordUsage(ledger, agent, usageOf({ inputTokens: 40000 }));
+      }
+    }
+
+    const minInput = vi.fn(() => 1024);
+    expect(cacheAlerts(ledger, minInput)).toEqual(["gm"]);
+    expect(minInput.mock.calls).toEqual([["gm"]]);
+    expect(ledger.calls).toBe(21);
+    expect(ledger.usage.inputTokens).toBe(840000);
+    for (const agent of agents) {
+      expect(ledger.byAgent[agent].calls).toBe(3);
+    }
+  });
+
   it("짧은 입력은 신호가 아니다 — 결산은 애초에 캐시가 안 걸릴 수 있다", () => {
     let ledger = emptyLedger();
     for (let i = 0; i < 5; i++) {

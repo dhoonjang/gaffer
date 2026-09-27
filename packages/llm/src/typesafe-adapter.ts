@@ -88,6 +88,7 @@ function sameKeys(record: Readonly<Record<string, unknown>>, keys: readonly stri
 function normalizedProbabilities(
   probabilities: Readonly<Record<string, number>>,
   keys: readonly string[],
+  allowWireRounding = false,
 ): Record<string, number> {
   const parsed = z.record(probabilitySchema).safeParse(probabilities);
   if (!parsed.success || !sameKeys(probabilities, keys)) {
@@ -95,7 +96,24 @@ function normalizedProbabilities(
   }
   const total = Object.values(parsed.data).reduce((sum, probability) => sum + probability, 0);
   if (Math.abs(total - 1) > PROBABILITY_TOLERANCE) {
-    throw new LlmCallError("unknown", "TypeSafe probabilities do not sum to one");
+    const values = Object.values(parsed.data);
+    const minimum = values.reduce(
+      (sum, probability) => sum + wireProbabilityBounds(probability).lower,
+      0,
+    );
+    const maximum = values.reduce(
+      (sum, probability) => sum + wireProbabilityBounds(probability).upper,
+      0,
+    );
+    if (
+      !allowWireRounding ||
+      total <= 0 ||
+      !values.every(hasWirePrecision) ||
+      minimum > 1 + PROBABILITY_TOLERANCE ||
+      maximum < 1 - PROBABILITY_TOLERANCE
+    ) {
+      throw new LlmCallError("unknown", "TypeSafe probabilities do not sum to one");
+    }
   }
   return Object.fromEntries(
     Object.entries(parsed.data).map(([key, probability]) => [key, probability / total]),
@@ -118,12 +136,18 @@ function hasWirePrecision(value: number): boolean {
   return Math.abs(value * 100 - Math.round(value * 100)) < PROBABILITY_TOLERANCE;
 }
 
+function wireProbabilityBounds(probability: number): { lower: number; upper: number } {
+  return {
+    lower: Math.max(0, probability - WIRE_ROUNDING_RADIUS),
+    upper: Math.min(1, probability + WIRE_ROUNDING_RADIUS),
+  };
+}
+
 /** Possible expectations before independently rounding each reported probability. */
 function roundedScoreBounds(probabilities: Readonly<Record<string, number>>): [number, number] {
   const levels = Object.entries(probabilities).map(([level, probability]) => ({
     level: Number(level),
-    lower: Math.max(0, probability - WIRE_ROUNDING_RADIUS),
-    upper: Math.min(1, probability + WIRE_ROUNDING_RADIUS),
+    ...wireProbabilityBounds(probability),
   }));
   const extreme = (descending: boolean): number => {
     let remaining = 1 - levels.reduce((sum, level) => sum + level.lower, 0);
@@ -132,7 +156,7 @@ function roundedScoreBounds(probabilities: Readonly<Record<string, number>>): [n
       descending ? b.level - a.level : a.level - b.level,
     );
     for (const level of ordered) {
-      const allocated = Math.min(remaining, level.upper - level.lower);
+      const allocated = Math.min(Math.max(0, remaining), level.upper - level.lower);
       expectation += level.level * allocated;
       remaining -= allocated;
     }
@@ -164,6 +188,7 @@ function parseAnswers(
       const probabilities = normalizedProbabilities(
         answer.probabilities,
         Object.keys(question.criteria),
+        true,
       );
       if (
         !Object.hasOwn(question.criteria, answer.choice) ||
@@ -183,7 +208,7 @@ function parseAnswers(
     ) {
       throw new LlmCallError("unknown", "TypeSafe returned mismatched score criteria");
     }
-    const probabilities = normalizedProbabilities(answer.probabilities, levels);
+    const probabilities = normalizedProbabilities(answer.probabilities, levels, true);
     const score = scoreExpectation(probabilities);
     const rounded =
       hasWirePrecision(answer.score) && Object.values(answer.probabilities).every(hasWirePrecision);

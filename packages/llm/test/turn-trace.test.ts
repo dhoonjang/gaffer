@@ -4,12 +4,15 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   TRACE_LIMITS,
+  LlmCallError,
+  TypesafeEvaluationError,
   bindTurnTrace,
   emptyUsage,
   gameVersion,
   noteFact,
   noteTurn,
   tapLlm,
+  tapEvaluator,
   traceBoard,
   traceCall,
   traceTurn,
@@ -20,6 +23,7 @@ import {
   turnRecordById,
   turnTrace,
   type GameLLM,
+  type EvaluationResult,
   type LlmCallEntry,
   type TurnRequest,
   type TurnResult,
@@ -72,6 +76,92 @@ afterEach(() => {
   rmSync(logDir, { recursive: true, force: true });
   rmSync(dataDir, { recursive: true, force: true });
   vi.restoreAllMocks();
+});
+
+describe("tapEvaluator — 평가 실패에도 사용량 근거를 보존한다", () => {
+  const request = {
+    state: "전방 압박",
+    questions: { pressure: { type: "noul" as const, instructions: "압박 지시인가?" } },
+  };
+
+  it("성공한 평가의 답과 재시도 합계를 호출 원문과 타임라인에 남긴다", async () => {
+    const result: EvaluationResult = {
+      model: "test-evaluator",
+      answers: { pressure: { type: "noul", noul: 0.9 } },
+      usage: usageOf({ inputTokens: 200, outputTokens: 40 }),
+      attempts: 2,
+      usageComplete: true,
+    };
+    const evaluator = tapEvaluator({ evaluate: async () => result }, "instructions", dev);
+    await traceTurn(
+      "g1",
+      async () => {
+        expect(await evaluator.evaluate(request)).toBe(result);
+        bindTurnTrace("g1", 0);
+      },
+      dev,
+    );
+
+    const call = turnTrace("g1", 0)[0]!;
+    expect(call.error).toBeNull();
+    expect(call.model).toBe(result.model);
+    expect(call.request.evaluation?.questions).toEqual(request.questions);
+    expect(call.response).toMatchObject({
+      usage: result.usage,
+      stopReason: "completed",
+      output: { answers: result.answers, attempts: 2, usageComplete: true },
+    });
+    expect(turnRecord("g1", 0)!.entries[0]!.data).toMatchObject({
+      usage: result.usage,
+      stopReason: "completed",
+      error: null,
+    });
+  });
+
+  it.each([true, false])(
+    "실패의 보고 사용량과 완전성(%s)을 보존하고 동일한 오류를 다시 던진다",
+    async (usageComplete) => {
+      const usage = usageOf({ inputTokens: 300, outputTokens: 60 });
+      const failure = new TypesafeEvaluationError(
+        new LlmCallError("unknown", "Invalid evaluation response"),
+        usage,
+        2,
+        usageComplete,
+      );
+      const evaluator = tapEvaluator(
+        {
+          evaluate: async () => {
+            throw failure;
+          },
+        },
+        "instructions",
+        dev,
+      );
+      await traceTurn(
+        "g1",
+        async () => {
+          await expect(evaluator.evaluate(request)).rejects.toBe(failure);
+          bindTurnTrace("g1", 0);
+        },
+        dev,
+      );
+
+      const call = turnTrace("g1", 0)[0]!;
+      expect(call.error).toBe(failure.message);
+      expect(call.model).toBeNull();
+      expect(call.response).toMatchObject({
+        usage,
+        stopReason: "other",
+        output: { attempts: 2, usageComplete },
+      });
+      expect(call.response!.output).not.toHaveProperty("answers");
+      expect(turnRecord("g1", 0)!.entries[0]!.data).toMatchObject({
+        usage,
+        stopReason: "other",
+        error: failure.message,
+      });
+    },
+  );
 });
 
 describe("tapLlm — 개발 모드에서만 원문을 남긴다", () => {

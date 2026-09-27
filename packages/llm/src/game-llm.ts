@@ -92,6 +92,8 @@ export interface GameToolSpec {
   description: string;
   /** 제공자 중립 JSON Schema — 각 어댑터가 자기 함수 선언 형식으로 변환한다. */
   inputSchema: JsonObjectSchema;
+  /** Complete nullability for typed command interpretation, independent of prose provider limits. */
+  instructionSchema?: JsonObjectSchema;
   /**
    * 도구의 답 — 동기여도 되고 프로미스여도 된다. 핸들러 안에서 다른 에이전트를
    * 부르는 자리(경기의 해석·마감 — agents.md §3)가 있어 어댑터는 언제나 `await`한다.
