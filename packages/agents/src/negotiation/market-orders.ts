@@ -20,8 +20,6 @@ export const MARKET_OPS: readonly string[] = [
   "recall_loan",
   "adjust_transfer_budget",
   "request_board",
-  "fund_transfer_budget",
-  "pay_player_bonus",
   "set_ticket_price",
   // 자른 자리에 그 턴 안에 다시 앉힐 수 있게 — 자리 상한과 주급 여력을 해고가 먼저 비운다
   "release_staff",

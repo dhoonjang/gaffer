@@ -2,7 +2,6 @@ import {
   type GameState,
   headCoachOf,
   selectCharacters,
-  clampStartingWallet,
   humanizePlayerIds,
   seedOpenings,
   formatClock,
@@ -10,7 +9,6 @@ import {
 } from "@story-fm/engine";
 import { parseSceneHeader, describeCharacters, sanitizeSceneText } from "../../../common/context";
 import {
-  buildOnboardingLimits,
   buildClubBlock,
   ONBOARDING_JUDGE_SYSTEM,
   REPORT_ONBOARDING_INPUT,
@@ -43,7 +41,7 @@ export function isValidOnboardingText(state: GameState, text: string): boolean {
 }
 
 /**
- * 프롬프트 본문 — 자산 한도 · 구단 · 배경 · 수석코치 카드 · 스냅샷.
+ * 프롬프트 본문 — 구단 · 배경 · 수석코치 카드 · 스냅샷.
  *
  * ⚠️ **수석코치의 카드는 지목으로 세운다.** 이력도 지난 발화도 없어 키워드가 걸릴 문장
  * 자체가 없다 — 검증(`isValidOnboardingText`)이 요구하는 그 id가 프롬프트에 실리는
@@ -58,7 +56,6 @@ export function buildOnboardingJudgePrompt(state: GameState, background: string)
     selectCharacters(state, { pointed: [headCoachOf(state).characterId] }),
   );
   return [
-    buildOnboardingLimits(),
     buildClubBlock(state),
     `<background>`,
     background,
@@ -73,9 +70,8 @@ export async function runOnboarding(
   background: string,
   llm?: GameLLM,
 ): Promise<GmTurnResult> {
-  // mock은 자산 없이 정해진 첫 장면으로 시작한다 (agents.md §4-2).
+  // mock은 정해진 첫 장면으로 시작한다 (agents.md §4-2).
   if (resolveLlmMode() === "mock") {
-    state.manager.wallet = clampStartingWallet();
     return buildOnboardingTurn(state);
   }
 
@@ -104,7 +100,6 @@ export async function runOnboarding(
   });
 
   const { report } = turn;
-  state.manager.wallet = clampStartingWallet(report.wallet);
   if (report.openings && report.openings.length > 0) seedOpenings(state, report.openings);
 
   // 첫 장면은 시계를 옮기지 않는다 — 헤더가 없으면 세워 준다

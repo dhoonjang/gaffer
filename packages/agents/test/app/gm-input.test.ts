@@ -411,7 +411,7 @@ describe("레퍼런스 층 — <club>·<manager> (캐시되는 시스템 블록)
     const note = buildGmStateNote(state);
     expect(note).toContain("다른 구단의 접근: mgr-poach-chelsea-x");
     expect(note).toContain(teamName("chelsea"));
-    // 보상금은 감독의 지갑이 아니라 구단의 돈이다 — 그 사실이 줄에 실린다
+    // 보상금은 두 구단 사이의 계약 정산이다 — 그 사실이 줄에 실린다
     expect(note).toContain(`지금 구단에 보상금 ${formatMoney(4_200_000)}`);
     expect(note).toContain(addDays(state.date, 10));
     expect(note).toContain(`${state.date} 공석`);
@@ -734,16 +734,13 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
 
   /** 판정 하나 — 출력 스키마가 받는 산출의 모양 (첫 장면 `scene`은 `reply`가 붙인다) */
   const report = {
-    wallet: 2_000_000,
-    reason: "에이전트로 오래 벌었다",
-    attributes: { negotiation: 70 },
     openings: [
       { kind: "press" as const, title: "언론의 의문", line: "부임 첫날부터 이름표가 붙는다." },
     ],
   };
 
   /**
-   * 판정 셋과 첫 장면을 JSON 하나로 낸 응답 — 실모드에서 어댑터가 읽어 `output`에 세우는
+   * 시작 사건과 첫 장면을 JSON 하나로 낸 응답 — 실모드에서 어댑터가 읽어 `output`에 세우는
    * 그 모양이다 (models.md §3-2). `skipOutput`은 산문으로 답해 산출이 없는 응답이다.
    */
   const reply = (
@@ -795,8 +792,7 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
     // 시계는 움직이지 않는다 — 헤더는 코어가 세운다
     expect(turn.text.startsWith(`[${state.date}`)).toBe(true);
     expect(turn.toolCalls).toEqual([]);
-    // 판정은 앵커 ± 한도로 잘려 장부에 선다
-    expect(state.manager.wallet).toBeGreaterThan(0);
+    // 시작 사건은 장부에 남아 다음 장면으로 이어진다
     expect(state.openings?.map((o) => o.title)).toEqual(["언론의 의문"]);
   });
 

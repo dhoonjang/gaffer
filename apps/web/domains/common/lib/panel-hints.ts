@@ -68,12 +68,7 @@ export const PANEL_OF: Record<string, PanelKey> = {
   // 접수한 날엔 장부가 아직 그대로다 — 그래도 감독이 답을 확인하러 갈 화면은 여기다
   request_board: "재정",
   set_ticket_price: "재정",
-  // 사재는 감독의 돈이지만 오르는 것은 구단 이적 예산이다 — 확인할 화면은 재정이다
-  fund_transfer_budget: "재정",
-  // 오르는 것은 그 선수의 사기다 — 대화와 같은 자리 (스쿼드)
-  pay_player_bonus: "스쿼드",
   // 달라지는 것은 **누가 서 있는가**다 — 스쿼드 화면의 스태프 줄이 그 답을 든다.
-  // 사재 보너스와 같은 자리다: 돈이 움직여도 감독이 확인할 것은 사람 쪽이다
   hire_staff: "스쿼드",
   release_staff: "스쿼드",
   // ── 커리어 — 세계가 감독을 보는 눈 ──
@@ -86,7 +81,7 @@ export const PANEL_OF: Record<string, PanelKey> = {
   // 흥정·지원도 같은 자리다 — 제안 카드의 조건과 공석 명부가 커리어 화면에 선다
   counter_manager_offer: "커리어",
   apply_manager_job: "커리어",
-  // 사임도 자리를 잃는 사건이다 — 카드가 서고 지갑이 깎이는 곳이 커리어 화면이다
+  // 사임도 자리를 잃는 사건이다 — 카드와 계약 정산 기록이 서는 곳이 커리어 화면이다
   resign: "커리어",
 };
 

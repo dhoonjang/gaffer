@@ -82,8 +82,6 @@ import {
   applyFinanceEvent,
   adjustTransferBudget,
   requestBoard,
-  fundTransferBudget,
-  payPlayerBonus,
   resignPost,
   setTicketPrice,
   hireStaff,
@@ -187,8 +185,6 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "recall_loan",
   "adjust_transfer_budget",
   "request_board",
-  "fund_transfer_budget",
-  "pay_player_bonus",
   "set_ticket_price",
   "hire_staff",
   "release_staff",
@@ -231,8 +227,6 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   recall_loan: "임대 복귀",
   adjust_transfer_budget: "이적 예산 조정",
   request_board: "보드에 요청",
-  fund_transfer_budget: "사재 출연",
-  pay_player_bonus: "사재 보너스",
   set_ticket_price: "티켓 가격",
   hire_staff: "스태프 고용",
   release_staff: "스태프 계약 해지",
@@ -1051,24 +1045,6 @@ export function buildToolSpecs(
           .describe("영입 승인(signing)일 때 그 선수 — 이름 그대로 실어도 된다"),
       }),
       (input) => requestBoard(state, input),
-    ),
-    wrap(
-      "fund_transfer_budget",
-      CORE_COMMAND_LABELS.fund_transfer_budget!,
-      z.object({
-        /** 상한은 오타를 막는 자리다 — 실제 문은 지갑 잔고와 시즌 한도가 건다 */
-        amount: money(MONEY_MAX).describe("지갑에서 이적 예산으로 넣을 금액 (£)"),
-      }),
-      (input) => fundTransferBudget(state, input),
-    ),
-    wrap(
-      "pay_player_bonus",
-      CORE_COMMAND_LABELS.pay_player_bonus!,
-      z.object({
-        playerId: playerRef,
-        amount: money(MONEY_MAX).describe("지갑에서 그 선수에게 줄 금액 (£)"),
-      }),
-      (input) => payPlayerBonus(state, input),
     ),
     wrap("resign", descriptions.resign, z.object({}), () => resignPost(state)),
     wrap(
