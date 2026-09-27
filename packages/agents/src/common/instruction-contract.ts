@@ -11,7 +11,7 @@ export interface InstructionCommand {
 
 export interface InstructionCandidate {
   label: string;
-  value: string | number | boolean;
+  value: string | number | boolean | null;
 }
 
 export interface InstructionRequest {
