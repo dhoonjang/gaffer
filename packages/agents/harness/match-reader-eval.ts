@@ -1,3 +1,4 @@
+import { matchReaderOutputSchema } from "../src/match/match-reader";
 /**
  * Recorded-input comparison, offline unless --live is explicit.
  * pnpm exec tsx packages/agents/harness/match-reader-eval.ts --logs <dir> --out <dir>
@@ -493,7 +494,9 @@ async function main() {
   const comparisons = pairs.flatMap((pair) => (pair.agreement ? [pair.agreement] : []));
   const matchedRows = comparisons.reduce((sum, item) => sum + item.matchedRows, 0);
   const instructionComparisons = pairs.flatMap((pair) =>
-    pair.hasSaid && pair.agreement ? [pair.agreement] : [],
+    pair.hasSaid && pair.agreement && "ops" in (matchReaderOutputSchema().properties ?? {})
+      ? [pair.agreement]
+      : [],
   );
   const unmatchedBaselineRows = comparisons.reduce(
     (sum, item) => sum + item.unmatchedBaselineRows,
