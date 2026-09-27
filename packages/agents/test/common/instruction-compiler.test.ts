@@ -76,6 +76,107 @@ const select = (criteria: Record<string, string | null>, label: string) =>
   Object.entries(criteria).find(([, value]) => value?.includes(label))?.[0] ?? "unclear";
 
 describe("source-grounded instruction compiler", () => {
+  it("never omits required fields through an applicability hook", async () => {
+    const model = evaluator((_, __, stage) => (stage === 1 ? "n1" : "v0"));
+    const output = await interpretInstructions(
+      request(
+        [
+          {
+            ...numberCommand,
+            fieldDisposition: (path) => (path === "$.number" ? "omit" : "include"),
+          },
+        ],
+        model,
+      ),
+    );
+    expect(output.ops).toEqual({});
+    expect(output.unresolved).toBeDefined();
+  });
+
+  it("bounds unresolved applicability dependencies without empty model calls", async () => {
+    const model = evaluator(() => "n1");
+    const output = await interpretInstructions(
+      request(
+        [
+          {
+            ...numberCommand,
+            fieldDisposition: () => "defer",
+          },
+        ],
+        model,
+      ),
+    );
+    expect(output.ops).toEqual({});
+    expect(output.unresolved).toBeDefined();
+    expect(model.requests).toHaveLength(1);
+  });
+
+  it("narrows child fields from resolved sibling values without another evaluation round", async () => {
+    const command: InstructionCommand = {
+      name: "scoped",
+      description: "conditional target",
+      limit: 1,
+      inputSchema: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["player"] },
+          target: {
+            type: "object",
+            properties: { playerId: { type: "string" }, side: { type: "string", enum: ["home"] } },
+          },
+        },
+        required: ["kind", "target"],
+      },
+      refineObjectSchema(path, input, schema) {
+        if (path !== "$.target") return schema;
+        expect(input.kind).toBe("player");
+        return {
+          ...schema,
+          properties: { playerId: schema.properties?.playerId },
+          required: ["playerId"],
+        };
+      },
+    };
+    const model = evaluator((instructions, criteria, stage) => {
+      if (stage === 1) return "n1";
+      expect(instructions).not.toContain(".side");
+      expect(criteria).not.toHaveProperty("absent");
+      return "v0";
+    });
+    expect(await interpretInstructions(request([command], model))).toEqual({
+      ops: { scoped: [{ kind: "player", target: { playerId: "p1" } }] },
+    });
+    expect(model.requests).toHaveLength(3);
+    expect(model.requests.every(({ state }) => !state.includes("refineObjectSchema"))).toBe(true);
+  });
+
+  it.each(["new field", "weaker field", "missing required"] as const)(
+    "rejects schema refinement with %s",
+    async (violation) => {
+      const command: InstructionCommand = {
+        ...numberCommand,
+        refineObjectSchema(_, __, schema) {
+          if (violation === "new field")
+            return {
+              ...schema,
+              properties: { ...schema.properties, injected: { type: "string" } },
+            };
+          if (violation === "weaker field")
+            return { ...schema, properties: { ...schema.properties, number: { type: "number" } } };
+          return { ...schema, required: [] };
+        },
+      };
+      const output = await interpretInstructions(
+        request(
+          [command],
+          evaluator(() => "n1"),
+        ),
+      );
+      expect(output.ops).toEqual({});
+      expect(output.unresolved).toBeDefined();
+    },
+  );
+
   it("does not execute or ask for arguments when the execution classifier rejects a question", async () => {
     const model = evaluator(() => "n0");
     expect(

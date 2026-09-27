@@ -66,7 +66,7 @@ describe("에이전트별 LLM 설정", () => {
     model: claude-custom
     max_tokens: 100
     timeout_ms: 1000
-  match-reader:
+  reader-baseline:
     provider: google
     model: gemini-reader
     max_tokens: 150
@@ -332,7 +332,7 @@ ${fields}`;
   });
 
   it("carries the shared retry policy and rejects unbounded timeout/negative prices", () => {
-    expect(parseLlmConfig(configWith("")).matchSheet).toMatchObject({
+    expect(parseLlmConfig(configWith("")).evaluators["match-sheet"]).toMatchObject({
       maxRetries: 2,
       timeoutMs: 2000,
     });

@@ -5,7 +5,7 @@ import { tapEvaluator } from "./turn-trace";
 import { recordEvaluationUsage } from "./usage-meter";
 
 export function createGameEvaluator(name: EvaluatorName): GameEvaluator {
-  const config = name === "instructions" ? LLM_CONFIG.instructions : LLM_CONFIG.matchSheet;
+  const config = LLM_CONFIG.evaluators[name];
   if (!config) throw new Error(`Jev evaluator configuration is missing: ${name}`);
   const client = new TypesafeGameEvaluator(config);
   return tapEvaluator(

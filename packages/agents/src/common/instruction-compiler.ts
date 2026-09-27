@@ -152,12 +152,31 @@ async function evaluate(
 }
 
 function properties(node: Node, target: Record<string, Value>, queue: Node[]): void {
-  const props = object(node.schema.properties);
-  if (!props) {
+  if (node.occurrence.invalid) return;
+  const originalProps = object(node.schema.properties);
+  const schema =
+    node.occurrence.command.refineObjectSchema?.(node.path, node.occurrence.input, {
+      ...node.schema,
+      type: "object",
+    }) ?? node.schema;
+  const props = object(schema.properties);
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  const originalRequired = Array.isArray(node.schema.required) ? node.schema.required : [];
+  if (
+    !props ||
+    !originalProps ||
+    schema.type !== "object" ||
+    Object.keys(props).some(
+      (key) =>
+        !Object.hasOwn(originalProps, key) ||
+        JSON.stringify(props[key]) !== JSON.stringify(originalProps[key]),
+    ) ||
+    required.some((key) => typeof key !== "string" || !Object.hasOwn(props, key)) ||
+    originalRequired.some((key) => !required.includes(key))
+  ) {
     fail(node);
     return;
   }
-  const required = Array.isArray(node.schema.required) ? node.schema.required : [];
   for (const [property, raw] of Object.entries(props)) {
     const schema = object(raw);
     if (!schema) {
@@ -177,12 +196,18 @@ function properties(node: Node, target: Record<string, Value>, queue: Node[]): v
   }
 }
 
-function structural(node: Node, queries: Query[], next: Node[]): boolean {
+function structural(
+  node: Node,
+  queries: Query[],
+  next: Node[],
+  afterAnswers: (() => void)[],
+): boolean {
   if (typeOf(node.schema) === "object") {
     const make = () => {
       const value: Record<string, Value> = {};
       node.assign(value);
-      properties(node, value, next);
+      // Sibling discriminants are resolved in this batch before child applicability is narrowed.
+      afterAnswers.push(() => properties(node, value, next));
     };
     if (node.required) make();
     else
@@ -217,11 +242,13 @@ function structural(node: Node, queries: Query[], next: Node[]): boolean {
   };
   if (!node.required) criteria.absent = "이 배열을 지정하지 않았다 (빈 배열과 다르다)";
   for (let count = minimum; count <= cap; count++)
-    criteria[`n${count}`] = `명시적으로 지시한 항목 ${count}개`;
+    criteria[`n${count}`] = node.occurrence.command.contextual
+      ? `유지할 기존 효과와 새 효과를 합쳐 ${count}개`
+      : `명시적으로 지시한 항목 ${count}개`;
   choose(
     queries,
     node.occurrence.command.contextual
-      ? `${scope(node)} 감독 지시를 실행할 전술 효과와 필요한 대가의 항목 수. 현재 사실에서 정하며 무관한 효과를 만들지 않는다.`
+      ? `${scope(node)} 감독 지시를 실행할 전술 효과와 필요한 대가, 명시적으로 지우거나 대체하지 않은 active_effects를 합친 항목 수. 현재 사실에서 정하며 무관한 효과를 만들지 않는다.`
       : `${scope(node)} 원문이 지시한 항목만 세고 맥락의 기존 명단을 채우지 않는다. 0은 명시적으로 빈 배열을 지시했을 때만.`,
     criteria,
     (answer) => {
@@ -293,15 +320,20 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
   }
   const values = choices.filter((candidate) => validScalar(node.schema, candidate.value));
   const criteria: Record<string, string> = {
-    unclear: "필요하지만 원문에서 정할 수 없거나 여러 해석이 가능하다",
+    unclear: node.occurrence.command.contextual
+      ? "필요한 효과를 지시와 현재 근거에서 정할 수 없다"
+      : "필요하지만 원문에서 정할 수 없거나 여러 해석이 가능하다",
   };
-  if (!node.required) criteria.absent = "감독이 이 인자를 지정하지 않았다";
+  if (!node.required)
+    criteria.absent = node.occurrence.command.contextual
+      ? "이 효과에는 필요하지 않은 인자다"
+      : "감독이 이 인자를 지정하지 않았다";
   values.forEach((candidate, i) => {
     criteria[`v${i}`] = candidate.label;
   });
   choose(
     queries,
-    `${scope(node)} ${node.occurrence.command.contextual ? "감독이 요청한 전술을 최근 흐름과 선수 사실에 맞춰 구현하는 값을 고른다. 필요한 대가도 해석하되 무관한 변경은 하지 않는다." : "이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear)."} 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 숫자는 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear.`,
+    `${scope(node)} ${node.occurrence.command.contextual ? "감독이 요청한 전술을 최근 흐름과 선수 사실에 맞춰 구현하는 값을 고른다. 필요한 대가와 유지할 active_effects도 포함한다. 선택지의 수치 부호는 스키마가 정의한 효과 방향으로 해석한다." : "이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear). 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 숫자는 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear."}`,
     criteria,
     (answer) => {
       if (answer === UNCLEAR) {
@@ -427,7 +459,9 @@ export async function interpretInstructions(
   const state = JSON.stringify({
     instruction: request.said,
     reference: request.context,
-    commands: request.commands,
+    commands: request.commands.map((command) =>
+      command.contextual ? { name: command.name, description: command.description } : command,
+    ),
   });
   try {
     const route: Query[] = [];
@@ -462,11 +496,11 @@ export async function interpretInstructions(
     await evaluate(request, state, route);
     if (uncertain) return unresolved();
     const selected = new Map(occurrences.map(({ command }) => [command.name, command]));
-    const argumentsState = JSON.stringify({
+    const argumentsState = {
       instruction: request.said,
       reference: request.context,
       commands: [...selected.values()],
-    });
+    };
     let queue: Node[] = [];
     for (const occurrence of occurrences)
       properties(
@@ -484,11 +518,34 @@ export async function interpretInstructions(
     for (let round = 0; queue.length > 0 && round < MAX_ROUNDS; round++) {
       const queries: Query[] = [];
       const next: Node[] = [];
+      const afterAnswers: (() => void)[] = [];
       for (const node of queue) {
         if (node.occurrence.invalid) continue;
-        if (!structural(node, queries, next)) scalar(node, request, queries);
+        const disposition =
+          node.occurrence.command.fieldDisposition?.(node.path, node.occurrence.input) ?? "include";
+        if (disposition === "defer") {
+          next.push(node);
+          continue;
+        }
+        if (disposition === "omit") {
+          if (node.required) fail(node);
+          continue;
+        }
+        if (!structural(node, queries, next, afterAnswers)) scalar(node, request, queries);
       }
-      await evaluate(request, argumentsState, queries);
+      await evaluate(
+        request,
+        JSON.stringify({
+          ...argumentsState,
+          selected_arguments: occurrences.map(({ command, index, input }) => ({
+            command: command.name,
+            index,
+            input,
+          })),
+        }),
+        queries,
+      );
+      afterAnswers.forEach((resolve) => resolve());
       queue = next;
     }
     if (queue.length > 0) return unresolved();

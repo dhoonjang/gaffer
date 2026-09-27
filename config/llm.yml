@@ -28,8 +28,8 @@ agents:
     timeout_ms: 180000
     thinking_level: low
 
-  # 경기 사실에서 포인트와 연속 시트를 판독한다. 직접 지시 인자는 instructions가 맡는다.
-  match-reader:
+  # 기록 비교 전용 생성형 판독기. 실제 게임 턴에서는 호출하지 않는다.
+  reader-baseline:
     provider: google
     model: gemini-3.5-flash-lite
     max_tokens: 16000
@@ -103,7 +103,7 @@ agents:
     timeout_ms: 60000
     thinking_level: low
 
-# Direct instructions run before the GM; sheet evaluation remains gated by recorded comparison.
+# Role interpreters run only behind GM skills. match-sheet is comparison-only.
 # Direct TypeSafe API; TYPESAFE_API_KEY. Published input price, checked 2026-09-27.
 evaluators:
   match-sheet:
@@ -111,7 +111,27 @@ evaluators:
     model: jev-1.13.0
     timeout_ms: 10000
     input_usd_per_million: 0.042
-  instructions:
+  tactic-orders:
+    provider: typesafe
+    model: jev-1.13.0
+    timeout_ms: 10000
+    input_usd_per_million: 0.042
+  training-orders:
+    provider: typesafe
+    model: jev-1.13.0
+    timeout_ms: 10000
+    input_usd_per_million: 0.042
+  market-orders:
+    provider: typesafe
+    model: jev-1.13.0
+    timeout_ms: 10000
+    input_usd_per_million: 0.042
+  table-orders:
+    provider: typesafe
+    model: jev-1.13.0
+    timeout_ms: 10000
+    input_usd_per_million: 0.042
+  match-reader:
     provider: typesafe
     model: jev-1.13.0
     timeout_ms: 10000

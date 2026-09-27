@@ -15,6 +15,7 @@ export const AGENT_NAMES = [
   "scout-rater",
   "history-compactor",
   "onboarding-judge",
+  "reader-baseline",
 ] as const;
 
 export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
@@ -231,6 +232,7 @@ const LlmConfigFileSchema = z
         "scout-rater": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,
+        "reader-baseline": RawAgentConfigSchema,
       })
       .strict(),
   })

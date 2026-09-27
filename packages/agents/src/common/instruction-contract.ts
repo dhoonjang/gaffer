@@ -9,6 +9,17 @@ export interface InstructionCommand {
   limit: number;
   /** Tactical effect fields may be inferred from the authorized instruction and observed facts. */
   contextual?: boolean;
+  /** Narrow applicable object fields using previously resolved arguments; never expands the schema. */
+  refineObjectSchema?: (
+    path: string,
+    input: Readonly<Record<string, unknown>>,
+    schema: JsonObjectSchema,
+  ) => JsonObjectSchema;
+  /** Resolve field applicability after discriminants; only optional fields may be omitted. */
+  fieldDisposition?: (
+    path: string,
+    input: Readonly<Record<string, unknown>>,
+  ) => "include" | "omit" | "defer";
 }
 
 export interface InstructionCandidate {

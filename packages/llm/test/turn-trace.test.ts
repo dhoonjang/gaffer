@@ -92,7 +92,7 @@ describe("tapEvaluator — 평가 실패에도 사용량 근거를 보존한다"
       attempts: 2,
       usageComplete: true,
     };
-    const evaluator = tapEvaluator({ evaluate: async () => result }, "instructions", dev);
+    const evaluator = tapEvaluator({ evaluate: async () => result }, "tactic-orders", dev);
     await traceTurn(
       "g1",
       async () => {
@@ -134,7 +134,7 @@ describe("tapEvaluator — 평가 실패에도 사용량 근거를 보존한다"
             throw failure;
           },
         },
-        "instructions",
+        "tactic-orders",
         dev,
       );
       await traceTurn(
