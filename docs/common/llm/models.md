@@ -15,31 +15,33 @@
 `provider`·`model`·`max_tokens`·`timeout_ms`·`thinking_level`·`operator_channel`을
 `parseLlmConfig`가 검증한다.
 
-| 설정 자리                    | 계약과 책임                                |
-| ---------------------------- | ------------------------------------------ |
-| `agents.gm`                  | 평시 장면·관계·사건·판정 스킬              |
-| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
-| `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정         |
-| `agents.match-reader`        | 경기 포인트·연속 강도 시트. 명령 출력 없음 |
-| `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음      |
-| `agents.training-rater`      | 훈련 구간 결산                             |
-| `agents.scout-rater`         | 코어 스카우팅 사실에 한 줄 평              |
-| `agents.history-compactor`   | 평시 이력 요약·인물 기억                   |
-| `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                |
-| `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석               |
-| `evaluators.training-orders` | 훈련·육성 스킬이 요청한 지시 해석          |
-| `evaluators.market-orders`   | 시장·재정 스킬이 요청한 지시 해석          |
-| `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석       |
-| `evaluators.match-sheet`     | 비교 전용 시트 강도 평가. 운영 미채택      |
+| 설정 자리                    | 계약과 책임                                                |
+| ---------------------------- | ---------------------------------------------------------- |
+| `agents.gm`                  | 평시 장면·관계·사건·판정 스킬                              |
+| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리                       |
+| `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정                         |
+| `agents.reader-baseline`     | 기록 입력 비교 전용 생성형 기준. 게임 턴에서 호출하지 않음 |
+| `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음                      |
+| `agents.training-rater`      | 훈련 구간 결산                                             |
+| `agents.scout-rater`         | 코어 스카우팅 사실에 한 줄 평                              |
+| `agents.history-compactor`   | 평시 이력 요약·인물 기억                                   |
+| `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                                |
+| `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석                               |
+| `evaluators.training-orders` | 훈련·육성 스킬이 요청한 지시 해석                          |
+| `evaluators.market-orders`   | 시장·재정 스킬이 요청한 지시 해석                          |
+| `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석                       |
+| `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과                 |
+| `evaluators.match-sheet`     | 비교 전용 시트 강도 평가. 운영 미채택                      |
 
+운영은 생성형 8개와 타입 평가 역할 5개다. 비교 전용 두 설정은 이 수에 포함하지 않는다.
 생성형 에이전트는 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를
 사용한다. 평가자는 `max_tokens`·대화 이력·도구 대신 질문을 받고 설정의 모델·전체
 시한·입력 단가를 쓴다. 요청 단위 재시도 수는 최상위 `max_retries`에서 온다.
 
 감독 지시의 평시·경기·협상 차이는 현재 명령 목록과 상태 문맥으로 범위를 정한다.
 전술·훈련·시장·테이블에 별도 생성형 제공자 키나 출력 에이전트 등록은 없다.
-`runInstructions`는 GM 밖의 선행 작업이므로 그 시한을 GM의 내부 도구 시한으로
-간주하지 않는다. 반대로 `finalize_match` 안의 결산은 GM 도구 루프의 호출이다.
+`runInstructions`는 기존 지시 스킬의 핸들러에서만 실행된다. 역할별 평가와
+`finalize_match` 안의 결산은 모두 GM 도구 루프 안의 호출이므로 전체 시한을 함께 고려한다.
 
 경기 결산·온보딩·기억 압축은 각각 경기 이력·첫 장면·장기 기억을 읽는 자리이고,
 상대 GM은 현재 협상의 서류와 대화만 읽는다. 모델 선택은 이 책임과 실제 지연·품질·
@@ -216,9 +218,8 @@ OpenAI는 2회를 기본으로 돌고 `@google/genai`는 **옵션을 주지 않�
 - **같은 호스트인데 pid가 죽었다** → 곧바로 회수한다. 턴 도중에 죽은 프로세스가 남긴
   락은 아무도 풀어 줄 사람이 없다.
 - **그 밖에는 나이만 본다** — 15분이 지난 락은 회수한다. pid 재사용, 다른 호스트, 멎은
-  프로세스가 여기로 온다. 호출별 시한은 `config/llm.yml`이 소유한다. 직접 지시 평가와
-  판독은 GM 전의 작업이고 경기 마감은 GM 도구 안에 있으므로, 모든 시한을 무조건
-  더하거나 모두 GM 시한에 포함시키지 않는다. 락 회수 상한은 정상적인 전체 턴을
+  프로세스가 여기로 온다. 호출별 시한은 `config/llm.yml`이 소유한다. 직접 지시 평가·경기 판독·경기 마감은
+  GM 도구 루프 안에서 실행되며 각 내부 호출에도 별도 시한이 있다. 락 회수 상한은 정상적인 전체 턴을
   빼앗지 않도록 판단한다.
 - 회수는 `rename`으로 한다 — 두 프로세스가 같은 락을 동시에 회수해도 이름을 바꾸는 데
   성공하는 쪽은 하나뿐이다. 락을 놓을 때는 파일 안의 토큰이 제 것일 때만 지운다.
@@ -448,12 +449,12 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 
 ## 3-2. `outputSchema` — 도구 없이 JSON 하나로 답을 받기
 
-산출이 JSON 하나인 생성형 호출 열 — 경기 판독기 · 경기 마감 · 훈련 결산 · 스카우팅 평 ·
+산출이 JSON 하나인 생성형 호출 열 — 경기 마감 · 훈련 결산 · 스카우팅 평 ·
 이력 압축 · 온보딩 (agents.md §1) — 은 **도구를 들지 않는다.** 답의 꼴은 "이 꼴로만
 답한다"는 **프롬프트 문장이 아니라 요청 파라미터로** 강제한다: 요청에 `outputSchema`
 (제공자 중립 JSON Schema — 최상위는 객체)를 싣고, 어댑터가 자기 제공자의 구조화 출력으로
 옮긴다. 문장에만 기대면 모델이 본문으로 답해도 호출은 정상으로 끝나고, 산출이 빈 채
-판독은 실패 경로로, 결산은 앵커로 떨어진다.
+결산은 앵커로, 비교용 판독은 실험의 실패 경로로 떨어진다.
 
 | 중립 값                | Anthropic                                              | Google                                                        | OpenAI                                                                         |
 | ---------------------- | ------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -464,7 +465,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
   `text`에는 원문이 그대로 남아 기록이 무엇이 왔는지 보인다.
 - **산출이 오지 않은 응답은 실패다.** `output`이 `null`이거나 그 산출의 Zod를 못 지나면
   호출하는 쪽이 `ModelOutputError`로 세워 한 번 더 부르고([agents.md](agents.md) §8),
-  그다음은 자리마다 갈린다 — 판독은 기존 시트 유지, 결산은 앵커, 압축은 접지 않음,
+  그다음은 자리마다 갈린다 — 비교용 판독은 적용 없음, 결산은 앵커, 압축은 접지 않음,
   온보딩은 오류.
 - **왕복이 없다.** 도구 호출·도구 결과라는 형식이 없으므로 요청은 하나고 저장 이력은
   `[발화, 답]`이다. 도구 결과를 이력에 남겨 짝을 맞추던 자리도 함께 없다.
@@ -643,10 +644,11 @@ system 블록 · 이력 · 발화 · 상태 스냅샷 · 도구 스펙, 응답�
   세우고(`--agent` · `--version`으로 거른다), `--facts <갈래>`는 항목을 jsonl로 흘린다
   (§5-3). 거르는 손잡이는 `--game` · `--turn` · `--failed` · `--kind` · `--since 2h` · `--limit`.
 
-**턴은 호출들의 목록이 아니라 나무다.** 턴 앞의 `instructions`와 경기 판독은 GM의
-이웃 호출이고, `finalize_match` 안의 결산은 매치 GM의 자식 호출이다. 호출마다
-`seq`·`parentId`·`viaTool`이 이 실제 실행 관계를 남긴다. Jev의 질문·답·분포·모델·
-시도·보고된 토큰도 평가자 기록에 남는다. 명령 적용은 별도의 코어 사실이다.
+**턴은 호출들의 목록이 아니라 나무다.** 역할별 Jev 평가는 해당 지시 스킬 안에서,
+경기 결산은 `finalize_match` 안에서 도는 GM의 자식 호출이다. `seq`·`parentId`·
+`viaTool`이 실제 실행 관계를 남긴다. Jev의 질문·답·분포·모델·시도·보고된 토큰도
+평가자 기록에 남는다. 실패한 평가도 보고된 사용량과 완전성을 보존하고 `error`와
+`stopReason: "other"`로 성공과 구분한다. 명령 적용은 별도의 코어 사실이다.
 
 관계를 잡는 것은 **실행 문맥**이다. 도구 핸들러가 도는 동안에만 「지금 누구의 어느
 도구 안인가」가 서 있고 모델을 기다리는 동안에는 서지 않으므로, 같은 턴의 이웃
@@ -658,9 +660,8 @@ system 블록 · 이력 · 발화 · 상태 스냅샷 · 도구 스펙, 응답�
 
 ```text
 turn
-  instructions → orders.intent → 성공한 코어 명령 묶음
-  match-reader → match.reading
   match-gm
+    tactic_orders → match-reader → orders.intent → 코어 명령 묶음 · match.reading
     finalize_match → finalize-match → 코어 결산
   scene
 ```
@@ -750,7 +751,7 @@ turn
 - **production에서는 아무 파일도 쓰지 않는다** — 켜지는 조건이 위의 하나뿐이고,
   mock의 모델 호출 원문은 없지만 코어 사실의 타임라인은 남는다.
 - **한 채팅 턴은 호출 하나가 아니다.** 평시 턴은 `gm` + 훈련 결산, 경기 턴은
-  직접 지시 평가·판독·`match-gm`과 마감 도구 안의 `finalize-match`가 필요에 따라 돈다. 그래서 타임라인이
+  `match-gm`과 지시 도구 안의 `match-reader`, 마감 도구 안의 `finalize-match`가 필요에 따라 돈다. 그래서 타임라인이
   그 전부를 **순서대로** 들고, 한 턴을 열면 그 턴에 오간 왕복이 코어의 사실 사이에 선다.
 - **어느 호출이 이 턴의 것인가는 실행 문맥이 정한다**(`AsyncLocalStorage`). 시각이나
   전역 큐로 가르면 두 게임이 같은 프로세스에서 동시에 턴을 돌릴 때 남의 호출이
@@ -866,15 +867,14 @@ turn
   "input": { "kind": "message", "text": "전방부터 잡아라", "date": "2027-03-14", "phase": "match", "orders": [] },
   "before": { /* 턴 앞의 상태 요약 — 날짜·국면·스코어·전술판·주요 표의 크기 */ },
   "entries": [
-    { "seq": 1, "at": "…", "kind": "llm.call", "data": { "id": "instructions-…", "agent": "instructions", … } },
-    { "seq": 2, "at": "…", "kind": "orders.intent", "data": { "agent": "instructions", "ops": { … } } },
-    { "seq": 3, "at": "…", "kind": "command", "data": { … } },
-    { "seq": 4, "at": "…", "kind": "llm.call", "data": { "id": "match-reader-…", "agent": "match-reader", … } },
-    { "seq": 5, "at": "…", "kind": "match.reading", "data": { "points": 5, "sheet": 7, "tick": 68400, … } },
-    { "seq": 6, "at": "…", "kind": "llm.call", "data": { "id": "match-gm-…", "agent": "match-gm", … } },
-    { "seq": 7, "at": "…", "kind": "scene", "data": { … } }
+    { "seq": 1, "at": "…", "kind": "llm.call", "data": { "id": "match-gm-…", "agent": "match-gm", … } },
+    { "seq": 2, "at": "…", "kind": "llm.call", "data": { "id": "match-reader-…", "agent": "match-reader", "parentId": "match-gm-…", "viaTool": "tactic_orders", … } },
+    { "seq": 3, "at": "…", "kind": "orders.intent", "data": { "agent": "match-reader", "ops": { … } } },
+    { "seq": 4, "at": "…", "kind": "command", "data": { … } },
+    { "seq": 5, "at": "…", "kind": "match.reading", "data": { "points": 1, "sheet": 2, "tick": 68400, … } },
+    { "seq": 6, "at": "…", "kind": "scene", "data": { … } }
   ],
-  "callIds": ["instructions-…", "match-reader-…", "match-gm-…"],
+  "callIds": ["match-gm-…", "match-reader-…"],
   "outcome": { "ok": true, "saved": true },
   "after": { /* 턴 뒤의 상태 요약 */ }
 }
@@ -935,8 +935,8 @@ pnpm log --game game-f0o7 --failed             실패한 턴만
 pnpm log --turn 1833 --game game-f0o7          그 채팅 자리의 턴 — 입력·타임라인·결과·앞뒤 diff
 pnpm log turn-mtyjvr3j-5873                    같은 것을 이름으로
 pnpm log turn-mtyjvr3j-5873 --entry 4          타임라인의 항목 하나의 전문
-pnpm log instructions-mtyjvsd0-5d0d           호출의 원문 — --full · --part user · --json · --path
-pnpm log --calls --agent instructions --failed  호출만 한 줄씩
+pnpm log tactic-orders-mtyjvsd0-5d0d           호출의 원문 — --full · --part user · --json · --path
+pnpm log --calls --agent tactic-orders --failed  호출만 한 줄씩
 pnpm log --facts match.checkpoint --game game-f0o7   그 갈래의 항목을 jsonl로 흘린다 — jq·python이 받는 자리
 pnpm log --facts llm.call,orders.intent --game game-f0o7   여럿을 함께
 pnpm log --board --game game-f0o7              전술판 선반만 — 전술판 저장·게임 삭제 (기본 목록은 두 선반이 일어난 순서로)
@@ -1027,10 +1027,12 @@ pnpm log --board --game game-f0o7              전술판 선반만 — 전술판
 
 ## 8. Jev — 직접 지시와 시트 평가의 경계
 
-`config/llm.yml`의 네 해석기 설정은 해당 GM 스킬이 호출할 때만 Jev로 직접 지시를 선택한다.
-`evaluators.match-sheet`는 시트 강도 분리의 비교 전용이다. 운영 판독은 생성형 한 호출로
-포인트·시트를 내며 명령은 내지 않는다. 시트 비교에서는 산문 후보 뒤 Jev를 주입하지만,
-기록 입력 실측에서 평균 지연 개선이 없고 비용이 늘어 운영에는 주입하지 않는다.
+네 기존 지시 스킬이 평시 전술·훈련·시장·협상 조건의 Jev 역할을 필요할 때 호출한다.
+경기의 `tactic_orders`는 `evaluators.match-reader`를 사용해 직접 명령과 복합 전술 효과를
+함께 해석한다. 입력은 감독 원문·현재 사실·실제 최근 10분 흐름이며 포인트 산문은 생성하지 않는다.
+`agents.reader-baseline`과 `evaluators.match-sheet`는 산문 후보와 강도를 분리하는
+기록 비교 전용이다. 해당 실측은 평균 지연 개선이 없고 비용이 늘었으며, 새 운영
+지시 경로의 성능·품질 개선 증거로 재사용하지 않는다.
 
 TypeSafe의 [HTTP API](https://docs.typesafe.ai/api)는
 `POST https://api.typesafe.ai/v1/systemone`에 `state`, `questions`, `model`을 받는다.
@@ -1049,11 +1051,12 @@ state와 가장 긴 질문 합 32k다. 한국어는 영어보다 정확도가 �
 `TYPESAFE_API_KEY`를 읽는다. 키는 기록하지 않고 원문 입력은 로컬 호출 기록에만 둔다. 비교 보고서에는 원문 입력을 복사하지 않는다.
 
 Choice·Noul의 확률은 실행 의도·후보의 확률이고 강도가 아니다. 코어 명령은
-분포 평균으로 섞지 않는다. Score 시범만 검증된 확률의 기대 강도를 시트에 넘긴다.
+분포 평균으로 섞지 않는다. 경기 복합 효과의 Score와 비교 시범은 검증된 확률의 기대 강도를 시트에 넘긴다.
 API가 점수와 확률을 독립 반올림하는 범위는 어댑터가 검증하고 정규화하며, 그 밖의
 값·키·합계 오류는 재시도 또는 실패다. confidence를 강도에 다시 곱하지 않는다.
-확률 원본과 모델 응답 버전·시도·보고된 토큰은 평가 결과에 남는다. 저장된 시트의 의미와 모양은 기존 `step: 0..3` 그대로라 SAVE_VERSION은
-바뀌지 않는다. 실험 입력·설정 추가는 game-version을 올린다.
+확률과 모델 응답 버전·시도·보고된 토큰은 평가 결과에 남는다. 시트 `step: 0..3`의
+범위는 유지하지만 `Point`가 감독 원문 출처가 되고 `live.flow`가 필수로 저장되므로
+SAVE_VERSION은 12다. 모델 입력·스킬·설정의 이 변경은 game-version 12의 한 주요 버전으로 묶는다.
 
 재생 명령, 확보한 기록의 범위와 채택 상태는
 [판독기 비교](match-reader-evaluation.md)에 있다.

@@ -51,7 +51,7 @@ core's spatial simulator in the live web match and xG simulator elsewhere**; the
 LLM only commentates, stages and adjudicates.
 A season starts on July 1 and runs preseason → league/cup/European competition →
 season rollover → next season. Data has two layers: catalog (immutable seed) and
-save (mutable state), model v11.
+save (mutable state), model v12.
 
 ## 3. Stack
 
@@ -318,7 +318,7 @@ non-deterministic LLM.
 
 ## Status
 
-🚧 **Playable prototype (data model v11, SAVE_VERSION 11).** Onboarding → chat
+🚧 **Playable prototype (data model v12, SAVE_VERSION 12).** Onboarding → chat
 instructions → match → season rollover → multi-season runs end to end. What is
 built and what is not is listed in [overview.md](docs/overview.md) §7.
 
