@@ -642,7 +642,6 @@ export function buildToolSpecs(
     name,
     description,
     inputSchema: toToolSchema(schema),
-    instructionSchema: toToolSchema(schema, true),
     readOnly: true,
     handle(input: unknown) {
       const parsed = schema.safeParse(input);

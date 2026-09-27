@@ -48,7 +48,7 @@ import {
   stampMatchStream,
   truncatedNote,
   type GmToolCall,
-  type TacticOrders,
+  type OpsOrders,
 } from "@story-fm/agents";
 import { type GameToolSpec, type TurnRequest } from "@story-fm/llm";
 import { ModelOutputError } from "../../src/common/retry";
@@ -62,7 +62,7 @@ const { runTurn, interpretMatch, createEvaluator, evaluate, instructionState } =
     interpretMatch: vi.fn(),
     evaluate,
     createEvaluator: vi.fn(() => ({ evaluate })),
-    instructionState: { orders: { ops: {} } as TacticOrders },
+    instructionState: { orders: { ops: {} } as OpsOrders },
   };
 });
 vi.mock("../../src/match/jev-match-reader", () => ({ interpretMatchInstructions: interpretMatch }));
@@ -191,7 +191,7 @@ const answered = (text: string, toolCallCount = 0) => ({
 });
 
 /** 한 턴 — 해석이 냈을 의도를 그대로 코어에 넣는다 (LLM은 이 경로에 없다) */
-function turn(state: GameState, intent: TacticOrders, calls: GmToolCall[] = []) {
+function turn(state: GameState, intent: OpsOrders, calls: GmToolCall[] = []) {
   return {
     applied: applyInstructionBatch(state, calls, intent, TACTIC_OPS),
     calls,

@@ -1,7 +1,4 @@
-import { z } from "zod";
 import type { GameToolSpec } from "@story-fm/llm";
-
-export const UnresolvedSchema = z.string().max(200).trim();
 
 /** 한 명령을 한 턴에 부를 수 있는 수 — 오퍼 셋은 있어도 여덟은 없다 */
 export const OPS_PER_COMMAND = 4;
@@ -73,11 +70,6 @@ export function applyOps(
   }
   if (orders.unresolved) notes.push(unresolvedNote(orders.unresolved));
   return { applied, rejected };
-}
-
-/** 이 턴에 무엇 하나라도 부르는가 */
-export function hasOps(ops: OpsInput): boolean {
-  return Object.keys(ops).length > 0;
 }
 
 /** 옮기지 못한 말이 감독에게 돌아가는 한 줄 — **문구는 여기 하나다** */

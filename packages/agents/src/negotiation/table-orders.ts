@@ -1,4 +1,4 @@
-import { type OpsOrders, tagged } from "../common/orders-ops";
+import { tagged } from "../common/orders-ops";
 import {
   type GameState,
   roomPartyOf,
@@ -18,8 +18,6 @@ export const TABLE_OPS: readonly string[] = [
   "open_renewal",
   "propose_personal",
 ];
-
-export type TableOrders = OpsOrders;
 
 const TABLE_LOG_TAIL = 6;
 

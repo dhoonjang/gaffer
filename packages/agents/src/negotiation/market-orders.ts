@@ -1,5 +1,3 @@
-import { type OpsOrders } from "../common/orders-ops";
-
 export const MARKET_OPS: readonly string[] = [
   "respond_offer",
   "accept_deal",
@@ -32,5 +30,3 @@ export const MARKET_OPS: readonly string[] = [
   "counter_manager_offer",
   "apply_manager_job",
 ];
-
-export type MarketOrders = OpsOrders;

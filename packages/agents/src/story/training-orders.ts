@@ -1,5 +1,3 @@
-import { type OpsOrders } from "../common/orders-ops";
-
 export const TRAINING_OPS: readonly string[] = [
   "sign_youth",
   "set_squad_number",
@@ -8,5 +6,3 @@ export const TRAINING_OPS: readonly string[] = [
   "set_mentor",
   "set_training",
 ];
-
-export type TrainingOrders = OpsOrders;
