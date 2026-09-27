@@ -2,9 +2,15 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   HISTORY_DIGEST_CHARS,
   HISTORY_OPEN_CHARS,
-  MOOD_BATCH,
-  MOOD_NOTE_MAX,
-  RATING_MAX,
+  RATING_BAND,
+  MATCH_FAMILIARITY_MIN,
+  MATCH_FAMILIARITY_MAX,
+  buildRatingBrief,
+  finalizeMatch,
+  startMatch,
+  matchRated,
+  settleMatchRating,
+  type MatchRatingBrief,
   TACTIC_GAIN_MAX,
   TACTIC_GAIN_MIN,
   POSITION_TRAIN_MAX,
@@ -29,10 +35,14 @@ import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src
 import { agreement, costUsd, durationStats } from "../../harness/match-reader-eval-metrics";
 import { runReaderPipeline } from "../../harness/reader-pipeline";
 import { matchReaderOutputSchema } from "../../harness/reader-baseline";
-import { SettleMatchSchema, SETTLE_MATCH_INPUT } from "../../src/match/finalize-match";
+import {
+  buildSettlementRequest,
+  evaluateSettlement,
+  runFinalizeMatch,
+} from "../../src/match/finalize-match";
 import { buildTrainingRequest, evaluateTraining } from "../../src/story/training-rater";
 import { reportTraining } from "../../src/app/workflows/story/training-rater";
-import { createTestGame } from "../../../engine/test/helpers";
+import { createTestGame, createMiniGame, advanceToMatchday } from "../../../engine/test/helpers";
 import { REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
 
 const answered = (output: TurnResult["output"]): TurnResult => ({
@@ -139,22 +149,7 @@ describe("anchorStands — 결산 실패는 삼키고 앵커를 남긴다", () =
   });
 });
 
-/**
- * 결산 산출이 받아들이는 폭 — **넘친 값 하나가 결산 전체를 버리지 않는다** (agents.md §4).
- *
- * 스키마는 코어 밴드보다 넓게 열어 두고, 밴드 밖의 값은 파싱을 깨뜨리는 대신 코어가
- * 자른다. 그러나 그 **폭 밖**은 코어에 닿기 전에 반려된다 — 여기가 조여지면 한 선수의
- * 과한 숫자 하나로 경기 판정 전체가 앵커로 떨어지고, 반대로 풀리면 검증되지 않은 값이
- * 코어의 문 앞까지 온다. 재는 것은 그 산출의 Zod 한 벌이다 — 모델이 보는 JSON 스키마가
- * 거기서 파생되므로(prompts.md §2) 한 벌을 재면 둘을 잰다.
- */
-describe("결산 스키마의 수용 폭", () => {
-  /** 반려된 자리들 — 지났으면 빈 문자열이다 */
-  function rejects(schema: z.ZodTypeAny, input: unknown): string {
-    const parsed = schema.safeParse(input);
-    return parsed.success ? "" : parsed.error.issues.map((i) => i.path.join(".")).join(" / ");
-  }
-
+describe("이력 압축 스키마의 수용 폭", () => {
   /** 도구 스키마의 한 자리 — `properties`가 unknown이라 여기서 한 번만 좁힌다 */
   function schemaAt(schema: JsonObjectSchema, path: string): Record<string, unknown> {
     let node: Record<string, unknown> = schema;
@@ -168,40 +163,6 @@ describe("결산 스키마의 수용 폭", () => {
     }
     return node;
   }
-
-  const settle = (input: unknown) => rejects(SettleMatchSchema, input);
-
-  it("평점은 코어 밴드보다 넓게 받고, 그 폭 밖은 코어에 닿기 전에 반려한다", async () => {
-    const rating = schemaAt(SETTLE_MATCH_INPUT, "ratings.[].rating");
-    // 모델이 보는 폭이 코어 밴드보다 양쪽으로 넓다 (코어는 앵커 ±RATING_BAND로 다시 자른다)
-    expect(rating.maximum).toBeGreaterThan(RATING_MAX);
-    expect(rating.minimum).toBe(0);
-
-    expect(settle({ ratings: [{ playerId: "p1", rating: Number(rating.maximum) + 1 }] })).toContain(
-      "rating",
-    );
-    // 빈 제출도, 한 경기 명단을 넘는 제출도 여기서 걸린다
-    expect(settle({ ratings: [] })).not.toBe("");
-    const flood = Array.from({ length: 31 }, (_, i) => ({ playerId: `p${i}`, rating: 7 }));
-    expect(settle({ ratings: flood })).not.toBe("");
-    // 마무리 중계는 비워도 된다 — GM이 대신 닫는다 (agents.md §3)
-    expect(settle({ ratings: [{ playerId: "p1", rating: 7 }] })).toBe("");
-  });
-
-  it("심경 한 줄은 세이브의 상한에서 끊기고, 한 번에 세는 인원도 물려 있다", async () => {
-    // 길이는 세이브의 계약이 정한다 — 여기 다시 적으면 그 자리가 갈린다
-    expect(schemaAt(SETTLE_MATCH_INPUT, "moods.[].text").maxLength).toBe(MOOD_NOTE_MAX);
-
-    const ratings = [{ playerId: "p1", rating: 7 }];
-    const note = (chars: number) => ({
-      playerId: "p1",
-      text: "말".repeat(chars),
-      acknowledgesIssue: false,
-    });
-    expect(settle({ ratings, moods: [note(MOOD_NOTE_MAX + 1)] })).toContain("text");
-    const flood = Array.from({ length: MOOD_BATCH + 1 }, () => note(10));
-    expect(settle({ ratings, moods: flood })).not.toBe("");
-  });
 
   /**
    * ⚠️ 이력 압축의 상한은 **코어·세이브의 상수 그대로**여야 한다. 손으로 다시 적으면
@@ -713,6 +674,271 @@ describe("training evaluation workflow", () => {
       },
     };
     expect(await reportTraining(state, brief, evaluator)).toEqual({ report: null });
+    expect(state).toEqual(settled);
+  });
+});
+
+function settlementBrief(): MatchRatingBrief {
+  return {
+    matchId: "match-test",
+    scoreline: "우리 1 : 0 상대",
+    outcome: "win",
+    timeline: ["후반 압박으로 상대 전개를 막았다"],
+    players: ["p1", "p2"].map((playerId) => ({
+      playerId,
+      name: playerId,
+      position: "CM",
+      started: true,
+      minutes: 90,
+      goals: 0,
+      assists: 0,
+      shots: 0,
+      saves: 0,
+      yellows: 0,
+      reds: 0,
+      anchor: 6.5,
+      age: 25,
+      room: 5,
+      familiarity: 30,
+    })),
+  };
+}
+
+describe("typed match settlement", () => {
+  it.each([0, 1] as const)(
+    "maps the %s endpoint of both score ranges from a single full batch",
+    async (upper) => {
+      const brief = settlementBrief();
+      const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => {
+        expect(JSON.parse(request.state)).toMatchObject({ brief, commentary: "확정 중계" });
+        expect(Object.keys(request.questions)).toHaveLength(brief.players.length * 3);
+        const result = trainingAnswers(request);
+        for (const [key, question] of Object.entries(request.questions)) {
+          expect(question.instructions).toContain(key.startsWith("p0_") ? "p1" : "p2");
+          if (question.type !== "score") continue;
+          const last = question.criteria.length - 1;
+          expect(question.criteria).toHaveLength(key.endsWith("rating") ? 7 : 6);
+          result.answers[key] = {
+            type: "score",
+            score: upper * last,
+            confidence: 0.1,
+            probabilities: Object.fromEntries(
+              question.criteria.map((_, i) => [String(i), i === upper * last ? 1 : 0]),
+            ),
+          };
+        }
+        selectTraining(request, result, "p0_attribute", "pace_down");
+        return result;
+      });
+      const entries = await evaluateSettlement(brief, "확정 중계", { evaluate });
+      expect(evaluate).toHaveBeenCalledTimes(1);
+      expect(entries).toHaveLength(2);
+      expect(entries[0]?.rating).toBeCloseTo(6.5 + (upper ? RATING_BAND : -RATING_BAND));
+      expect(entries[0]?.drill).toBe(upper ? MATCH_FAMILIARITY_MAX : MATCH_FAMILIARITY_MIN);
+      expect(entries[0]).toMatchObject({ playerId: "p1", attribute: "pace", attributeStep: -1 });
+      expect(entries.every((entry) => entry.note === undefined)).toBe(true);
+    },
+  );
+
+  it("retains fractional score expectations and abstains on a tied attribute", async () => {
+    const evaluator: GameEvaluator = {
+      evaluate: async (request) => {
+        const result = trainingAnswers(request);
+        for (const key of ["p0_rating", "p0_drill"]) {
+          const question = request.questions[key];
+          if (question?.type !== "score") throw new Error("expected score");
+          result.answers[key] = {
+            type: "score",
+            score: 2.25,
+            confidence: 0.01,
+            probabilities: Object.fromEntries(
+              question.criteria.map((_, i) => [String(i), i === 2 ? 0.75 : i === 3 ? 0.25 : 0]),
+            ),
+          };
+        }
+        const attribute = result.answers.p0_attribute;
+        if (attribute?.type !== "choice") throw new Error("expected choice");
+        result.answers.p0_attribute = {
+          ...attribute,
+          choice: "pace_up",
+          probabilities: { ...attribute.probabilities, none: 0.5, pace_up: 0.5 },
+        };
+        return result;
+      },
+    };
+    const [entry] = await evaluateSettlement(settlementBrief(), "", evaluator);
+    expect(entry?.rating).toBeCloseTo(6.5 - RATING_BAND + (2.25 * 2 * RATING_BAND) / 6);
+    expect(entry?.drill).toBeCloseTo(
+      MATCH_FAMILIARITY_MIN + (2.25 * (MATCH_FAMILIARITY_MAX - MATCH_FAMILIARITY_MIN)) / 5,
+    );
+    expect(entry).toMatchObject({ attribute: null, attributeStep: null });
+  });
+
+  it.each(["missing", "extra", "wrong key", "invalid mass", "inconsistent score", "wrong type"])(
+    "rejects %s across the whole batch",
+    async (failure) => {
+      const evaluator: GameEvaluator = {
+        evaluate: async (request) => {
+          const result = trainingAnswers(request);
+          if (failure === "missing") delete result.answers.p1_rating;
+          if (failure === "extra") result.answers.unknown = result.answers.p0_rating!;
+          if (failure === "wrong key") {
+            result.answers.unknown = result.answers.p1_rating!;
+            delete result.answers.p1_rating;
+          }
+          const answer = result.answers.p1_rating;
+          if (answer?.type === "score") {
+            if (failure === "invalid mass") answer.probabilities["0"] = 0.1;
+            if (failure === "inconsistent score") answer.score += 0.1;
+          }
+          if (failure === "wrong type") result.answers.p1_rating = { type: "noul", noul: 0.5 };
+          return result;
+        },
+      };
+      await expect(evaluateSettlement(settlementBrief(), "", evaluator)).rejects.toThrow(
+        ModelOutputError,
+      );
+    },
+  );
+
+  it("rejects duplicate subjects rather than repeating a participant's settlement", () => {
+    const brief = settlementBrief();
+    expect(() =>
+      buildSettlementRequest({ ...brief, players: [brief.players[0]!, brief.players[0]!] }, ""),
+    ).toThrow("중복");
+  });
+});
+
+describe("match settlement workflow", () => {
+  let base: GameState;
+  let brief: MatchRatingBrief;
+  beforeAll(() => {
+    base = createMiniGame();
+    advanceToMatchday(base);
+    expect(startMatch(base).ok).toBe(true);
+    brief = buildRatingBrief(base)!;
+    finalizeMatch(base);
+  });
+
+  it("keeps anchors and prose untouched in mock mode", async () => {
+    const state = structuredClone(base);
+    vi.stubEnv("LLM_MODE", "mock");
+    try {
+      expect(
+        await runFinalizeMatch(state, brief, undefined, {
+          notes: [{ playerId: brief.players[0]!.playerId, note: "마감 근거" }],
+        }),
+      ).toEqual({ settled: 0 });
+      expect(state).toEqual(base);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("retries malformed batches once without applying numbers or closing prose", async () => {
+    const state = structuredClone(base);
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => ({
+      ...trainingAnswers(request),
+      answers: {},
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(
+        await runFinalizeMatch(
+          state,
+          brief,
+          { evaluate },
+          { moods: [{ playerId: brief.players[0]!.playerId, text: "좋았다" }] },
+        ),
+      ).toEqual({ settled: 0 });
+      expect(evaluate).toHaveBeenCalledTimes(2);
+      expect(state).toEqual(base);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("rejects malformed closing prose before evaluation or mutation", async () => {
+    const state = structuredClone(base);
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => trainingAnswers(request));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(
+        await runFinalizeMatch(
+          state,
+          brief,
+          { evaluate },
+          { notes: [{ playerId: brief.players[0]!.playerId, note: "" }] },
+        ),
+      ).toEqual({ settled: 0 });
+      expect(evaluate).not.toHaveBeenCalled();
+      expect(state).toEqual(base);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("filters prose to participants, keeps first duplicate note, and never re-applies settlement", async () => {
+    const state = structuredClone(base);
+    const playerId = brief.players[0]!.playerId;
+    const outsider = userPlayers(state).find(
+      (player) => !brief.players.some((subject) => subject.playerId === player.id),
+    )!;
+    const outsiderBefore = structuredClone(outsider.state);
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => {
+      expect(request.state).not.toContain("마감 설명은 별도");
+      return trainingAnswers(request);
+    });
+    const result = await runFinalizeMatch(
+      state,
+      brief,
+      { evaluate },
+      {
+        notes: [
+          { playerId, note: "마감 설명은 별도" },
+          { playerId, note: "덮어쓰면 안 됨" },
+          { playerId: outsider.id, note: "뛰지 않음" },
+        ],
+        moods: [
+          { playerId, text: "끝까지 버텼다", acknowledgesIssue: true },
+          { playerId: outsider.id, text: "뛰지 않았다", acknowledgesIssue: true },
+        ],
+      },
+    );
+    expect(result.settled).toBe(brief.players.length);
+    const notes = state.matches.find((match) => match.id === brief.matchId)?.result?.ratingNotes;
+    expect(notes?.[playerId]).toBe("마감 설명은 별도");
+    expect(notes).not.toHaveProperty(outsider.id);
+    expect(state.players.find((player) => player.id === playerId)?.state.moodNote?.text).toBe(
+      "끝까지 버텼다.",
+    );
+    expect(outsider.state).toEqual(outsiderBefore);
+    expect(matchRated(state, brief.matchId)).toBe(true);
+    const after = structuredClone(state);
+    expect(await runFinalizeMatch(state, brief, { evaluate })).toEqual({ settled: 0 });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(state).toEqual(after);
+  });
+
+  it("ignores an in-flight evaluation if another settlement has already applied", async () => {
+    const state = structuredClone(base);
+    let settled: GameState | undefined;
+    const evaluator: GameEvaluator = {
+      evaluate: async (request) => {
+        settleMatchRating(
+          state,
+          brief.matchId,
+          brief.players.map((player) => ({ playerId: player.playerId, rating: player.anchor })),
+        );
+        settled = structuredClone(state);
+        return trainingAnswers(request);
+      },
+    };
+    expect(
+      await runFinalizeMatch(state, brief, evaluator, {
+        notes: [{ playerId: brief.players[0]!.playerId, note: "반영하면 안 됨" }],
+      }),
+    ).toEqual({ settled: 0 });
     expect(state).toEqual(settled);
   });
 });
