@@ -2,15 +2,17 @@ import { z } from "zod";
 import type {
   EvaluationRequest,
   EvaluationResult,
+  EvaluationAnswer,
   EvaluatorConfig,
   GameEvaluator,
-  ScoreAnswer,
 } from "./game-evaluator";
 import type { TurnUsage } from "./game-llm";
 import { isRetryableStatus, kindOfStatus, LlmCallError } from "./llm-error";
 
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 const PROBABILITY_TOLERANCE = 1e-6;
+// The direct API serializes probabilities and scores independently to hundredths.
+const WIRE_ROUNDING_RADIUS = 0.005;
 const RETRY_BASE_MS = 250;
 const RETRY_MAX_MS = 5_000;
 const probabilitySchema = z.number().finite().min(0).max(1);
@@ -18,13 +20,35 @@ const usageSchema = z.object({
   input_tokens: z.number().int().nonnegative().safe(),
   output_tokens: z.number().int().nonnegative().safe(),
 });
-const questionSchema = z
-  .object({
-    type: z.literal("score"),
-    instructions: z.string().min(1),
-    criteria: z.array(z.string().min(1)).min(2).max(10),
-  })
-  .strict();
+const questionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("score"),
+      instructions: z.string().min(1),
+      criteria: z.array(z.string().min(1)).min(2).max(10),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("choice"),
+      instructions: z.string().min(1),
+      criteria: z.record(z.string().nullable()).refine((criteria) => {
+        const count = Object.keys(criteria).length;
+        return count >= 1 && count <= 255;
+      }),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("noul"),
+      instructions: z.string().min(1),
+      criteria: z
+        .object({ true: z.string().optional(), false: z.string().optional() })
+        .strict()
+        .optional(),
+    })
+    .strict(),
+]);
 const requestSchema = z
   .object({
     state: z.string(),
@@ -35,13 +59,22 @@ const requestSchema = z
 const responseSchema = z.object({
   model: z.string().min(1),
   answers: z.record(
-    z.object({
-      type: z.literal("score"),
-      score: z.number().finite(),
-      legend: z.record(z.string()),
-      probabilities: z.record(probabilitySchema),
-      confidence: probabilitySchema,
-    }),
+    z.discriminatedUnion("type", [
+      z.object({
+        type: z.literal("score"),
+        score: z.number().finite(),
+        legend: z.record(z.string()),
+        probabilities: z.record(probabilitySchema),
+        confidence: probabilitySchema,
+      }),
+      z.object({
+        type: z.literal("choice"),
+        choice: z.string(),
+        probabilities: z.record(probabilitySchema),
+        confidence: probabilitySchema,
+      }),
+      z.object({ type: z.literal("noul"), noul: probabilitySchema }),
+    ]),
   ),
   usage: usageSchema,
 });
@@ -54,12 +87,11 @@ function sameKeys(record: Readonly<Record<string, unknown>>, keys: readonly stri
 
 function normalizedProbabilities(
   probabilities: Readonly<Record<string, number>>,
+  keys: readonly string[],
 ): Record<string, number> {
   const parsed = z.record(probabilitySchema).safeParse(probabilities);
-  const size = Object.keys(probabilities).length;
-  const levels = Array.from({ length: size }, (_, index) => String(index));
-  if (!parsed.success || size < 2 || size > 10 || !sameKeys(probabilities, levels)) {
-    throw new LlmCallError("unknown", "TypeSafe returned invalid score levels");
+  if (!parsed.success || !sameKeys(probabilities, keys)) {
+    throw new LlmCallError("unknown", "TypeSafe returned invalid probability options");
   }
   const total = Object.values(parsed.data).reduce((sum, probability) => sum + probability, 0);
   if (Math.abs(total - 1) > PROBABILITY_TOLERANCE) {
@@ -72,10 +104,41 @@ function normalizedProbabilities(
 
 /** Ordered Score levels start at zero; tiny wire rounding drift is normalized. */
 export function scoreExpectation(probabilities: Readonly<Record<string, number>>): number {
-  return Object.entries(normalizedProbabilities(probabilities)).reduce(
+  const size = Object.keys(probabilities).length;
+  if (size < 2 || size > 10)
+    throw new LlmCallError("unknown", "TypeSafe returned invalid score levels");
+  const levels = Array.from({ length: size }, (_, index) => String(index));
+  return Object.entries(normalizedProbabilities(probabilities, levels)).reduce(
     (sum, [level, probability]) => sum + Number(level) * probability,
     0,
   );
+}
+
+function hasWirePrecision(value: number): boolean {
+  return Math.abs(value * 100 - Math.round(value * 100)) < PROBABILITY_TOLERANCE;
+}
+
+/** Possible expectations before independently rounding each reported probability. */
+function roundedScoreBounds(probabilities: Readonly<Record<string, number>>): [number, number] {
+  const levels = Object.entries(probabilities).map(([level, probability]) => ({
+    level: Number(level),
+    lower: Math.max(0, probability - WIRE_ROUNDING_RADIUS),
+    upper: Math.min(1, probability + WIRE_ROUNDING_RADIUS),
+  }));
+  const extreme = (descending: boolean): number => {
+    let remaining = 1 - levels.reduce((sum, level) => sum + level.lower, 0);
+    let expectation = levels.reduce((sum, level) => sum + level.level * level.lower, 0);
+    const ordered = [...levels].sort((a, b) =>
+      descending ? b.level - a.level : a.level - b.level,
+    );
+    for (const level of ordered) {
+      const allocated = Math.min(remaining, level.upper - level.lower);
+      expectation += level.level * allocated;
+      remaining -= allocated;
+    }
+    return expectation;
+  };
+  return [extreme(false), extreme(true)];
 }
 
 function parseAnswers(
@@ -86,9 +149,32 @@ function parseAnswers(
   if (!parsed.success || !sameKeys(parsed.data.answers, Object.keys(questions))) {
     throw new LlmCallError("unknown", "TypeSafe returned an invalid evaluation response");
   }
-  const answers: Record<string, ScoreAnswer> = {};
+  const answers: Record<string, EvaluationAnswer> = {};
   for (const [key, question] of Object.entries(questions)) {
     const answer = parsed.data.answers[key]!;
+    const typeError = () =>
+      new LlmCallError("unknown", "TypeSafe returned a mismatched answer type");
+    if (question.type === "noul") {
+      if (answer.type !== "noul") throw typeError();
+      answers[key] = answer;
+      continue;
+    }
+    if (question.type === "choice") {
+      if (answer.type !== "choice") throw typeError();
+      const probabilities = normalizedProbabilities(
+        answer.probabilities,
+        Object.keys(question.criteria),
+      );
+      if (
+        !Object.hasOwn(question.criteria, answer.choice) ||
+        probabilities[answer.choice] !== Math.max(...Object.values(probabilities))
+      ) {
+        throw new LlmCallError("unknown", "TypeSafe choice disagrees with its probabilities");
+      }
+      answers[key] = { ...answer, probabilities };
+      continue;
+    }
+    if (answer.type !== "score") throw typeError();
     const levels = question.criteria.map((_, index) => String(index));
     if (
       !sameKeys(answer.probabilities, levels) ||
@@ -97,12 +183,19 @@ function parseAnswers(
     ) {
       throw new LlmCallError("unknown", "TypeSafe returned mismatched score criteria");
     }
-    const probabilities = normalizedProbabilities(answer.probabilities);
+    const probabilities = normalizedProbabilities(answer.probabilities, levels);
     const score = scoreExpectation(probabilities);
+    const rounded =
+      hasWirePrecision(answer.score) && Object.values(answer.probabilities).every(hasWirePrecision);
+    const [minimum, maximum] = rounded ? roundedScoreBounds(answer.probabilities) : [score, score];
+    const scoreTolerance = rounded
+      ? WIRE_ROUNDING_RADIUS
+      : PROBABILITY_TOLERANCE * question.criteria.length;
     if (
       answer.score < 0 ||
       answer.score > question.criteria.length - 1 ||
-      Math.abs(answer.score - score) > PROBABILITY_TOLERANCE * question.criteria.length
+      answer.score + scoreTolerance < minimum - PROBABILITY_TOLERANCE ||
+      answer.score - scoreTolerance > maximum + PROBABILITY_TOLERANCE
     ) {
       throw new LlmCallError("unknown", "TypeSafe score disagrees with its probabilities");
     }

@@ -13,7 +13,7 @@ const config: EvaluatorConfig = {
   maxRetries: 2,
   inputUsdPerMillion: 0.042,
 };
-const request: EvaluationRequest = {
+const request = {
   state: "기록된 경기 상황",
   questions: {
     intensity: {
@@ -22,7 +22,7 @@ const request: EvaluationRequest = {
       criteria: ["없음", "약함", "보통", "강함"],
     },
   },
-};
+} satisfies EvaluationRequest;
 function answer() {
   return {
     type: "score",
@@ -68,6 +68,157 @@ describe("TypeSafe score validation", () => {
 });
 
 describe("TypesafeGameEvaluator", () => {
+  const choiceQuestion = {
+    type: "choice" as const,
+    instructions: "실행할 지시인가?",
+    criteria: { execute: "직접 지시", clarify: null },
+  };
+  const choiceAnswer = {
+    type: "choice" as const,
+    choice: "execute",
+    probabilities: { execute: 0.8, clarify: 0.2 },
+    confidence: 0.6,
+  };
+
+  it("validates mixed Score, Choice and Noul answers without converting classifications to scores", async () => {
+    const questions = {
+      ...request.questions,
+      intent: choiceQuestion,
+      confirmed: {
+        type: "noul" as const,
+        instructions: "명시적 지시인가?",
+        criteria: { true: "지시", false: "질문" },
+      },
+    };
+    const answers = {
+      intensity: answer(),
+      intent: choiceAnswer,
+      confirmed: { type: "noul", noul: 0.7 },
+    };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(Response.json(response(answers)));
+    const result = await evaluator(fetch).evaluate({ state: request.state, questions });
+    expect(result.answers).toEqual({
+      intensity: {
+        type: "score",
+        score: 2.5,
+        probabilities: answer().probabilities,
+        confidence: 0.5,
+      },
+      intent: choiceAnswer,
+      confirmed: { type: "noul", noul: 0.7 },
+    });
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).questions).toEqual(questions);
+  });
+
+  it.each([1, 255])("accepts a nonempty Choice with %i options", async (count) => {
+    const criteria = Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`option_${i}`, null]),
+    );
+    const probabilities = Object.fromEntries(
+      Object.keys(criteria).map((key, i) => [key, i === 0 ? 1 : 0]),
+    );
+    const resultAnswer = { type: "choice", choice: "option_0", probabilities, confidence: 1 };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(Response.json(response({ intent: resultAnswer })));
+    const result = await evaluator(fetch).evaluate({
+      state: "state",
+      questions: { intent: { ...choiceQuestion, criteria } },
+    });
+    expect(result.answers.intent).toEqual(resultAnswer);
+  });
+
+  it.each([0, 256])("rejects %i Choice options before HTTP", async (count) => {
+    const criteria = Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`option_${i}`, null]),
+    );
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    await expect(
+      evaluator(fetch).evaluate({
+        state: "state",
+        questions: { intent: { ...choiceQuestion, criteria } },
+      }),
+    ).rejects.toMatchObject({ kind: "invalid_request", attempts: 0 });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows tied highest-probability choices and normalizes only tiny probability drift", async () => {
+    const tied = {
+      ...choiceAnswer,
+      choice: "clarify",
+      probabilities: { execute: 0.5000001, clarify: 0.5000001 },
+    };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(Response.json(response({ intent: tied })));
+    const result = await evaluator(fetch).evaluate({
+      state: "state",
+      questions: { intent: choiceQuestion },
+    });
+    expect(result.answers.intent).toEqual({
+      ...tied,
+      probabilities: { execute: 0.5, clarify: 0.5 },
+    });
+  });
+
+  it.each([
+    { ...choiceAnswer, choice: "clarify" },
+    { ...choiceAnswer, choice: "unknown" },
+    { ...choiceAnswer, probabilities: { execute: 1 } },
+    { ...choiceAnswer, probabilities: { execute: 0.8, clarify: 0.2, extra: 0 } },
+    { ...choiceAnswer, probabilities: { execute: 0.8, clarify: 0.1 } },
+    { ...choiceAnswer, probabilities: { execute: 1.1, clarify: -0.1 } },
+    { ...choiceAnswer, confidence: 1.1 },
+    { type: "noul", noul: 0.7 },
+  ])(
+    "rejects invalid Choice output and type mismatches after one output retry %#",
+    async (invalid) => {
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async () => Response.json(response({ intent: invalid })));
+      await expect(
+        evaluator(fetch).evaluate({ state: "state", questions: { intent: choiceQuestion } }),
+      ).rejects.toMatchObject({ kind: "unknown", attempts: 2, usage: { inputTokens: 160 } });
+    },
+  );
+
+  it.each([0, 1])("preserves Noul endpoint %i without inventing confidence", async (noul) => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(Response.json(response({ intent: { type: "noul", noul } })));
+    const result = await evaluator(fetch).evaluate({
+      state: "state",
+      questions: { intent: { type: "noul", instructions: "직접 지시인가?" } },
+    });
+    expect(result.answers.intent).toEqual({ type: "noul", noul });
+  });
+
+  it.each([-0.01, 1.01, NaN, Infinity])("rejects invalid Noul probability %s", async (noul) => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => Response.json(response({ intent: { type: "noul", noul } })));
+    await expect(
+      evaluator(fetch).evaluate({
+        state: "state",
+        questions: { intent: { type: "noul", instructions: "직접 지시인가?" } },
+      }),
+    ).rejects.toMatchObject({ kind: "unknown", attempts: 2 });
+  });
+
+  it("rejects a Choice answer to a Noul question even when both could describe the same intent", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => Response.json(response({ intent: choiceAnswer })));
+    await expect(
+      evaluator(fetch).evaluate({
+        state: "state",
+        questions: { intent: { type: "noul", instructions: "직접 지시인가?" } },
+      }),
+    ).rejects.toMatchObject({ kind: "unknown", attempts: 2 });
+  });
+
   it("sends only the typed request, preserves resolved model and usage, and accepts fractional scores", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(response()));
     const result = await evaluator(fetch).evaluate(request);
@@ -91,6 +242,42 @@ describe("TypesafeGameEvaluator", () => {
       usageComplete: true,
     });
   });
+
+  it("accepts independently rounded live Score values but computes strength from the distribution", async () => {
+    const rounded = {
+      ...answer(),
+      score: 1.94,
+      probabilities: { "0": 0, "1": 0.05, "2": 0.95, "3": 0 },
+    };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(Response.json(response({ intensity: rounded })));
+    const result = await evaluator(fetch).evaluate(request);
+    expect(result.answers.intensity).toMatchObject({
+      type: "score",
+      score: 1.95,
+      probabilities: rounded.probabilities,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([1.9, 1.97])(
+    "rejects Score %s when no latent distribution can explain its rounding",
+    async (score) => {
+      const rounded = {
+        ...answer(),
+        score,
+        probabilities: { "0": 0, "1": 0.05, "2": 0.95, "3": 0 },
+      };
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async () => Response.json(response({ intensity: rounded })));
+      await expect(evaluator(fetch).evaluate(request)).rejects.toMatchObject({
+        kind: "unknown",
+        attempts: 2,
+      });
+    },
+  );
 
   it.each([1, 11])("rejects %i rubric levels before HTTP", async (count) => {
     const fetch = vi.fn<typeof globalThis.fetch>();
