@@ -22,7 +22,6 @@
 | `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정         |
 | `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음      |
 | `agents.training-rater`      | 훈련 구간 결산                             |
-| `agents.scout-rater`         | 코어 스카우팅 사실에 한 줄 평              |
 | `agents.history-compactor`   | 평시 이력 요약·인물 기억                   |
 | `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                |
 | `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석               |
@@ -447,7 +446,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 
 ## 3-2. `outputSchema` — 도구 없이 JSON 하나로 답을 받기
 
-산출이 JSON 하나인 생성형 호출 열 — 경기 마감 · 훈련 결산 · 스카우팅 평 ·
+산출이 JSON 하나인 생성형 호출 열 — 경기 마감 · 훈련 결산 ·
 이력 압축 · 온보딩 (agents.md §1) — 은 **도구를 들지 않는다.** 답의 꼴은 "이 꼴로만
 답한다"는 **프롬프트 문장이 아니라 요청 파라미터로** 강제한다: 요청에 `outputSchema`
 (제공자 중립 JSON Schema — 최상위는 객체)를 싣고, 어댑터가 자기 제공자의 구조화 출력으로
