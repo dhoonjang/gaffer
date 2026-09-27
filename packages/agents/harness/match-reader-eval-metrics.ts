@@ -1,5 +1,5 @@
 import type { TurnUsage } from "@story-fm/llm";
-import type { MatchReaderOutput } from "../src/match/match-reader";
+import type { MatchReaderOutput } from "./reader-baseline";
 
 export const emptyUsage = (): TurnUsage => ({
   inputTokens: 0,
@@ -100,6 +100,5 @@ export function agreement(baseline: MatchReaderOutput, candidate: MatchReaderOut
     unmatchedCandidateRows: candidate.sheet.length - matched,
     structuralJaccard: union > 0 ? matched / union : null,
     stepMeanAbsoluteError: matched > 0 ? absoluteError / matched : null,
-    opsExact: stableJson(baseline.ops) === stableJson(candidate.ops),
   };
 }

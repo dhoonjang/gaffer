@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  MATCH_READER_SPEC,
   GM_SYSTEM,
   MATCH_GM_SYSTEM,
   buildMatchTools,
@@ -89,16 +88,6 @@ function gmSystemParts(): { map: number; guide: number; example: number } {
  */
 function settlementLayer(): number {
   return JSON.stringify(SETTLE_MATCH_INPUT).length;
-}
-
-/**
- * 판독기의 고정층 — 시스템 프롬프트 + 산출 스키마(포인트 · 시트).
- *
- * 해석기와 눈금이 같지만 자리가 다르다: 경기의 세 자리(킥오프·지시 턴·구간 뒤)에서
- * 매번 실리므로 구간마다 한 번씩 나간다 (agents.md §3).
- */
-function readerLayer(): number {
-  return MATCH_READER_SPEC.system.length + JSON.stringify(MATCH_READER_SPEC.schema()).length;
 }
 
 /** 경기의 고정층 — 매치 GM 프롬프트 + 경기 도구 둘. 매 경기 턴의 캐시 프리픽스다 */
@@ -271,7 +260,6 @@ describe("프롬프트 회귀", () => {
       "가장 긴 도구 설명 글자": Math.max(...SKILL_CATALOG.map((s) => s.description.length)),
       "경기 고정층 글자": matchLayer(),
       "경기 마감 고정층 글자": settlementLayer(),
-      "판독기 고정층 글자": readerLayer(),
       "훈련 브리프 글자": trainingBriefChars(13),
       "레퍼런스층 글자": reference.length,
       "매 턴 층 글자": stateNote.length,

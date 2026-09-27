@@ -1,4 +1,3 @@
-import { matchReaderOutputSchema } from "../src/match/match-reader";
 /**
  * Recorded-input comparison, offline unless --live is explicit.
  * pnpm exec tsx packages/agents/harness/match-reader-eval.ts --logs <dir> --out <dir>
@@ -17,6 +16,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import {
+  AGENT_NAMES,
   agentConfig,
   createGameLLM,
   gameVersion,
@@ -30,7 +30,7 @@ import {
   type JsonObjectSchema,
   type TurnUsage,
 } from "@story-fm/llm";
-import { ReaderReportSchema, type MatchReaderOutput } from "../src/match/match-reader";
+import { ReaderReportSchema, type MatchReaderOutput } from "./reader-baseline";
 import {
   addUsage,
   agreement,
@@ -239,7 +239,7 @@ async function replay(
   evaluator: GameEvaluator | undefined,
   prices: Prices,
 ): Promise<RunMeasurement> {
-  const { runReaderPipeline } = await import("../src/match/reader-pipeline");
+  const { runReaderPipeline } = await import("./reader-pipeline");
   let proseUsage = emptyUsage();
   let evaluatorUsage = emptyUsage();
   let usageComplete = true;
@@ -309,7 +309,6 @@ async function replay(
       llm,
       user: input.user,
       schema: input.schema,
-      hasSaid: input.hasSaid,
       evaluator: measuredEvaluator,
     });
     reading = result.reading;
@@ -321,7 +320,8 @@ async function replay(
   }
   const proseCost = usageComplete ? costUsd(proseUsage, prices) : null;
   const evaluatorCost =
-    (evaluatorUsage.inputTokens * (LLM_CONFIG.evaluators["match-sheet"]?.inputUsdPerMillion ?? 0)) /
+    (evaluatorUsage.inputTokens *
+      (LLM_CONFIG.evaluators["match-reader"]?.inputUsdPerMillion ?? 0)) /
     1_000_000;
   return {
     success: reading !== undefined,
@@ -368,6 +368,7 @@ async function main() {
       logs: { type: "string" },
       out: { type: "string" },
       live: { type: "boolean", default: false },
+      "baseline-agent": { type: "string" },
       limit: { type: "string" },
       "input-usd-per-million": { type: "string" },
       "output-usd-per-million": { type: "string" },
@@ -375,7 +376,9 @@ async function main() {
     },
   });
   if (!values.logs || !values.out)
-    throw new Error("Required: --logs <directory> --out <directory> [--live] [--limit N]");
+    throw new Error(
+      "Required: --logs <directory> --out <directory> [--live --baseline-agent <configured agent>] [--limit N]",
+    );
   const root = realpathSync(resolve(values.logs));
   const out = canonical(resolve(values.out));
   if (inside(root, out))
@@ -402,6 +405,10 @@ async function main() {
     output: price("output-usd-per-million"),
     cachedInput: price("cached-input-usd-per-million"),
   };
+  const baselineAgent = AGENT_NAMES.find((name) => name === values["baseline-agent"]);
+  if (values["baseline-agent"] && !baselineAgent)
+    throw new Error(`--baseline-agent must be one of: ${AGENT_NAMES.join(", ")}`);
+  const baselineConfig = baselineAgent ? agentConfig(baselineAgent) : undefined;
   const currentGameVersion = gameVersion();
   const data = inventory(root);
   const facts = readingFacts(root);
@@ -457,17 +464,17 @@ async function main() {
     } catch {
       /* Environment-only invocation is supported. */
     }
-    const config = agentConfig("reader-baseline");
+    if (!baselineConfig) blockers.push("--baseline-agent is required for --live");
     if (!process.env.TYPESAFE_API_KEY?.trim()) blockers.push("Missing TYPESAFE_API_KEY");
-    if (!hasKey(config.provider))
-      blockers.push(`Missing baseline credential: ${keyNamesFor(config.provider)}`);
-    if (!LLM_CONFIG.evaluators["match-sheet"])
-      blockers.push("Missing evaluators.match-sheet configuration");
+    if (baselineConfig && !hasKey(baselineConfig.provider))
+      blockers.push(`Missing baseline credential: ${keyNamesFor(baselineConfig.provider)}`);
+    if (!LLM_CONFIG.evaluators["match-reader"])
+      blockers.push("Missing evaluators.match-reader configuration");
     if (!data.cases.length) blockers.push("No replayable recorded inputs");
-    if (!blockers.length && LLM_CONFIG.evaluators["match-sheet"]) {
+    if (!blockers.length && baselineConfig && LLM_CONFIG.evaluators["match-reader"]) {
       const { TypesafeGameEvaluator } = await import("../../llm/src/typesafe-adapter");
-      const client = createGameLLM(config);
-      const evaluator = new TypesafeGameEvaluator(LLM_CONFIG.evaluators["match-sheet"]);
+      const client = createGameLLM(baselineConfig);
+      const evaluator = new TypesafeGameEvaluator(LLM_CONFIG.evaluators["match-reader"]);
       for (const [index, input] of data.cases.slice(0, limit).entries()) {
         console.log(
           `Replaying pair ${index + 1}/${Math.min(limit ?? data.cases.length, data.cases.length)}`,
@@ -495,11 +502,6 @@ async function main() {
   const savings = pairedSuccess.map((pair) => pair.baseline.durationMs - pair.candidate.durationMs);
   const comparisons = pairs.flatMap((pair) => (pair.agreement ? [pair.agreement] : []));
   const matchedRows = comparisons.reduce((sum, item) => sum + item.matchedRows, 0);
-  const instructionComparisons = pairs.flatMap((pair) =>
-    pair.hasSaid && pair.agreement && "ops" in (matchReaderOutputSchema().properties ?? {})
-      ? [pair.agreement]
-      : [],
-  );
   const unmatchedBaselineRows = comparisons.reduce(
     (sum, item) => sum + item.unmatchedBaselineRows,
     0,
@@ -511,9 +513,6 @@ async function main() {
   const unionRows = matchedRows + unmatchedBaselineRows + unmatchedCandidateRows;
   const agreementSummary = {
     comparedPairs: comparisons.length,
-    instructionComparedPairs: instructionComparisons.length,
-    noUtteranceComparedPairs: comparisons.length - instructionComparisons.length,
-    opsExactInstructionPairs: instructionComparisons.filter((item) => item.opsExact).length,
     structuralJaccard: unionRows ? matchedRows / unionRows : null,
     matchedRows,
     unmatchedBaselineRows,
@@ -539,8 +538,10 @@ async function main() {
     gameVersion: currentGameVersion,
     failures: failureCounts,
     blockers,
-    baselineModel: agentConfig("reader-baseline").model,
-    evaluatorModel: LLM_CONFIG.evaluators["match-sheet"]?.model,
+    baselineAgent: baselineAgent ?? null,
+    baselineConfig: baselineConfig ?? null,
+    baselineModel: baselineConfig?.model ?? null,
+    evaluatorModel: LLM_CONFIG.evaluators["match-reader"]?.model,
     prices,
     agreement: agreementSummary,
     baseline,
@@ -554,10 +555,10 @@ async function main() {
     pairs,
   };
   const limitations = [
-    "Pilot scope: prose model still chooses points, sheet structure and operations; Jev evaluates sheet strength only. Candidate latency includes both stages and all observable retries.",
-    "Historical traces use their original prompts/models. Paired replay uses current prompts/model with identical recorded input and operation schema; it is not a reproduction of the historical prompt.",
-    "Replay replaces point/sheet schemas with current domain schemas and retains captured operation schemas. Historical input versions may not represent the current game.",
-    "Agreement is not correctness. Sheet match requires exact structure and normalized point text; unmatched paraphrases require manual review. Empty-sheet overlap is undefined. Operations agreement counts only instruction cases; empty no-utterance operations are not quality evidence.",
+    "Harness-only historical experiment: prose chooses points and sheet structure; Jev evaluates sheet strength only. Neither replay path emits or compares commands. This is not the production Jev-only match reader. Candidate latency includes both stages and observable retries.",
+    "Historical traces use their original prompts/models. Paired replay uses the harness baseline prompt and the explicitly selected configured agent, including its current output limit and timeout; it does not reproduce historical provider settings or production prompts.",
+    "Replay retains recorded input and point/sheet descriptions, replaces item schemas with current domain schemas, and discards all other output fields. Historical input versions may not represent the current game.",
+    "Agreement is not correctness. Sheet match requires exact structure and normalized point text; unmatched paraphrases require manual review. Empty-sheet overlap is undefined. Command quality is not measured.",
     "Blind Korean quality review (football grounding, tradeoffs, instruction fidelity, player facts) and sufficient representative samples are required before adoption. No automated adoption decision is made.",
     "Repeated inputs are replayed once; all original calls remain in historical counts. Samples are deterministic by source path, not randomly selected.",
     "Provider SDK retries may be hidden inside a prose call; wall time includes them, while failed unreported usage makes cost unknown. Prices are operator-supplied for current prose replay only.",
@@ -580,7 +581,9 @@ async function main() {
     "",
     `Mode: ${report.mode}. ${Object.values(data.agents).reduce((a, b) => a + b, 0)} validated call records across agents; ${historical.recordedCalls} match-reader records; ${data.cases.length} unique replayable inputs.`,
     "",
-    "| Measurement | Historical recorded calls | Current baseline | Current prose + Jev |",
+    `Baseline agent: ${live.baselineAgent ?? "not selected (offline)"}; model: ${live.baselineModel ?? "n/a"}; max output tokens: ${baselineConfig?.maxTokens ?? "n/a"}; timeout ms: ${baselineConfig?.timeoutMs ?? "n/a"}.`,
+    "",
+    "| Measurement | Historical recorded calls | Harness baseline | Harness prose + Jev |",
     "| --- | ---: | ---: | ---: |",
     `| Observations (attempted) | ${historical.duration.n} | ${baseline.attempted} | ${candidate.attempted} |`,
     `| Succeeded / failed | ${historical.recordedCalls - historical.failures} / ${historical.failures} | ${baseline.succeeded} / ${baseline.attempted - baseline.succeeded} | ${candidate.succeeded} / ${candidate.attempted - candidate.succeeded} |`,
@@ -590,7 +593,6 @@ async function main() {
     `| Total cost USD | n/a | ${baseline.costUsd ?? "n/a"} | ${candidate.costUsd ?? "n/a"} |`,
     `| Paired structural Jaccard | n/a | reference | ${show(agreementSummary.structuralJaccard)} |`,
     `| Matched-row strength MAE | n/a | reference | ${show(agreementSummary.stepMeanAbsoluteError)} |`,
-    `| Exact ops (instruction pairs only) | n/a | reference | ${agreementSummary.instructionComparedPairs ? `${agreementSummary.opsExactInstructionPairs}/${agreementSummary.instructionComparedPairs}` : "n/a"} |`,
     "",
     `Paired successful comparisons: ${pairedSuccess.length}. Mean paired latency saved: ${show(live.meanPairedLatencySavedMs)} ms.`,
     "",
@@ -619,7 +621,7 @@ async function main() {
         ", ",
       )}. These may include mock runs; ${historical.recordedCalls} calls / ${facts.count} facts is not a unique capture-coverage rate.`,
     "",
-    `Structural agreement: ${agreementSummary.matchedRows} matched rows, ${agreementSummary.unmatchedBaselineRows}/${agreementSummary.unmatchedCandidateRows} unmatched baseline/candidate rows; matched strength MAE ${show(agreementSummary.stepMeanAbsoluteError)}. Exact operations: ${agreementSummary.instructionComparedPairs ? `${agreementSummary.opsExactInstructionPairs}/${agreementSummary.instructionComparedPairs}` : "n/a"} successful instruction pairs; ${agreementSummary.noUtteranceComparedPairs} no-utterance comparisons excluded. Agreement is not correctness.`,
+    `Structural agreement: ${agreementSummary.matchedRows} matched rows, ${agreementSummary.unmatchedBaselineRows}/${agreementSummary.unmatchedCandidateRows} unmatched baseline/candidate rows; matched strength MAE ${show(agreementSummary.stepMeanAbsoluteError)}. Commands are not emitted or compared. Agreement is not correctness.`,
     "",
     "Limitations:",
     "",

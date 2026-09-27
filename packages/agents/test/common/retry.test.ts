@@ -20,8 +20,8 @@ import { LlmCallError, LlmTimeoutError, TokenBudgetExceededError } from "@story-
 import { z } from "zod";
 import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src/common/retry";
 import { agreement, costUsd, durationStats } from "../../harness/match-reader-eval-metrics";
-import { runReaderPipeline } from "../../src/match/reader-pipeline";
-import { matchReaderOutputSchema } from "../../src/match/match-reader";
+import { runReaderPipeline } from "../../harness/reader-pipeline";
+import { matchReaderOutputSchema } from "../../harness/reader-baseline";
 import { SettleMatchSchema, SETTLE_MATCH_INPUT } from "../../src/match/finalize-match";
 import { REPORT_TRAINING_INPUT, TrainingReportSchema } from "../../src/story/training-rater";
 import { REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
@@ -265,7 +265,6 @@ describe("reader pipeline — atomic probabilistic pilot", () => {
       evaluator,
       user: "recorded input",
       schema,
-      hasSaid: false,
     });
     expect(result.reading.sheet[0]?.step).toBe(1.25);
     expect(result.evaluations).toEqual([evaluation]);
@@ -276,7 +275,7 @@ describe("reader pipeline — atomic probabilistic pilot", () => {
     expect(request.outputSchema?.properties).not.toHaveProperty("ops");
   });
 
-  it("no manager utterance means no command, even if the model invents one", async () => {
+  it("empty experimental sheet skips evaluator; obsolete command fields are discarded", async () => {
     const llm: GameLLM = {
       runTurn: async () =>
         answered({
@@ -292,22 +291,21 @@ describe("reader pipeline — atomic probabilistic pilot", () => {
       evaluator,
       user: "facts",
       schema,
-      hasSaid: false,
     });
-    expect(result.reading).toEqual({ points: [], sheet: [], ops: {} });
+    expect(result.reading).toEqual({ points: [], sheet: [] });
     expect(evaluator.evaluate).not.toHaveBeenCalled();
   });
 
-  it("retry invalid point references before evaluating; never return partially translated commands", async () => {
+  it("retry invalid point references before evaluating; never return a partial reading", async () => {
     const llm = {
       runTurn: vi.fn(async () =>
         answered({ points: [], sheet: [candidate], ops: { substitute: [{ out: "a", in: "b" }] } }),
       ),
     };
     const evaluator = { evaluate: vi.fn(async () => evaluation) };
-    await expect(
-      runReaderPipeline({ llm, evaluator, user: "facts", schema, hasSaid: true }),
-    ).rejects.toThrow(ModelOutputError);
+    await expect(runReaderPipeline({ llm, evaluator, user: "facts", schema })).rejects.toThrow(
+      ModelOutputError,
+    );
     expect(llm.runTurn).toHaveBeenCalledTimes(2);
     expect(evaluator.evaluate).not.toHaveBeenCalled();
   });
@@ -331,9 +329,7 @@ describe("reader pipeline — atomic probabilistic pilot", () => {
               };
         },
       };
-      await expect(
-        runReaderPipeline({ llm, evaluator, user: "facts", schema, hasSaid: false }),
-      ).rejects.toThrow();
+      await expect(runReaderPipeline({ llm, evaluator, user: "facts", schema })).rejects.toThrow();
       expect(llm.runTurn).toHaveBeenCalledTimes(1);
     },
   );
@@ -370,19 +366,16 @@ describe("reader comparison metrics", () => {
     const baseline = {
       points: [{ id: "p", text: "same fact", about: [], importance: 1 as const }],
       sheet: [row, row],
-      ops: { set_tactics: [{ pressing: 3, tempo: 2 }] },
     };
     const candidate = {
       ...baseline,
       sheet: [{ ...row, step: 1.5 }],
-      ops: { set_tactics: [{ tempo: 2, pressing: 3 }] },
     };
     expect(agreement(baseline, candidate)).toMatchObject({
       matchedRows: 1,
       unmatchedBaselineRows: 1,
       structuralJaccard: 0.5,
       stepMeanAbsoluteError: 0.5,
-      opsExact: true,
     });
     expect(
       agreement(baseline, {
