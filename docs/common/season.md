@@ -681,8 +681,8 @@ TrainingReport { from, to, sessions, moved[], marks[] }
 - **`marks.code`는 갈래 코드 셋**이다 — 문장이 아니라 코드다
   ([overview.md](../overview.md) §1 철칙 4). 낱말은 `TRAINING_MARK_KO`(두드러짐 ·
   태만 · 지침)가 들고, 화면도 판정자가 받는 설명도 그 표에서 나온다
-  (→ [../llm/prompts.md](llm/prompts.md) §2). 판정이 갈래를 적지 않고 근거만 냈으면
-  `code`는 `null`이고 근거 한 줄만 남는다.
+  (→ [../llm/prompts.md](llm/prompts.md) §2). Jev가 확정하지 못한 태도는 기록하지 않는다.
+  자유 문장 근거는 생성하지 않으므로 `note`는 빈 문자열이다.
 - **갈래도 능력치·적응도와 같은 문을 지난다** — 브리프의 대상 안, 아직 우리 선수,
   한 선수당 **첫 줄만**. 아무것도 움직이지 않았고 갈래도 없는 줄("변화 없음")은
   적지 않는다 — 여백은 사실이 아니다.
@@ -707,9 +707,9 @@ TrainingReport { from, to, sessions, moved[], marks[] }
 - **상태 스냅샷 `<coach>`의 첫 줄** — 구간·세션 수와 **건수·이름까지만**
   ([../llm/agents.md](llm/agents.md) §6 · [../data/people.md](../story/people.md) §7-1).
 - **달력 일지** — 카드의 `to` 날짜에 한 줄, 접으면 카드가 문장으로 펼쳐진다
-  (누가 무엇이 얼마 · 갈래 · 근거 한 줄).
-- **`get_player`의 「최근 성장」** — 대상은 낱말로(`growthLabel`), 훈련 결산이
-  올린 줄에는 그 근거가 함께 선다.
+  (누가 무엇이 얼마 · 갈래).
+- **`get_player`의 「최근 성장」** — 대상은 낱말로(`growthLabel`), 실제 변화량과
+  해당 훈련 날짜가 함께 선다.
 
 ## 5. 시간 진행 — tick과 손잡이 (`app/tick.ts`)
 
