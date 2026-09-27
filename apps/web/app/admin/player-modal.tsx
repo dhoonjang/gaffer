@@ -3,6 +3,9 @@
 import { useState } from "react";
 import {
   ASSOCIATIONS,
+  CatalogPlayerCreateSchema,
+  CatalogPlayerEditSchema,
+  CATALOG_MAX_WAGE,
   AXIS_GROUPS,
   AXIS_GROUP_KO,
   AXIS_KO,
@@ -38,7 +41,7 @@ import {
 
 const AXIS_GROUP_KEYS = Object.keys(AXIS_GROUPS) as Array<keyof typeof AXIS_GROUPS>;
 const NEW_BIRTHDATE = "2004-01-01";
-const MAX_WAGE = 2_000_000;
+const MAX_WAGE = CATALOG_MAX_WAGE;
 
 type Mode = "create" | "edit";
 
@@ -111,29 +114,7 @@ export function PlayerModal({
     ]);
   }
 
-  /** 저장 전 검증 — 서버가 거절할 조합을 여기서 먼저 잡는다 */
-  function validate(): string | null {
-    if (!nameKo.trim()) return "이름 없음";
-    if (!teamId) return "팀을 고르세요";
-    if (mode === "edit") {
-      if (positions.length === 0) return "포지션이 최소 하나 필요합니다";
-      if (!positions.some((p) => p.isNatural)) return "선호 포지션 0개 — 최소 1개";
-      const codes = positions.map((p) => p.position);
-      if (new Set(codes).size !== codes.length) return "같은 포지션이 두 번 들어 있습니다";
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate))
-      return "생년월일 형식(YYYY-MM-DD)이 올바르지 않습니다";
-    return null;
-  }
-
   async function save() {
-    const bad = validate();
-    if (bad) {
-      setFormError(bad);
-      return;
-    }
-    setFormError(null);
-    setSaving(true);
     const numbers = {
       ...Object.fromEntries(ATTRS.map((a) => [a, clampAttr(axes[a])])),
       potential: clampAttr(potential),
@@ -145,47 +126,39 @@ export function PlayerModal({
      */
     const weeklyWage = wage === "" ? null : Math.min(MAX_WAGE, Math.max(0, Math.round(wage) || 0));
     const wagePatch = weeklyWage === null && player?.weeklyWage === undefined ? {} : { weeklyWage };
+    const raw = {
+      teamId,
+      nameKo,
+      nameEn: nameEn.trim() || undefined,
+      birthdate,
+      ...(nationality === "" ? {} : { nationality }),
+      ...numbers,
+      ...(mode === "create"
+        ? {
+            position: mainPosition,
+            ...(secondNationality === "" ? {} : { secondNationality }),
+            ...(weeklyWage === null ? {} : { weeklyWage }),
+          }
+        : { positions, secondNationality, ...wagePatch }),
+    };
+    const parsed = (
+      mode === "create" ? CatalogPlayerCreateSchema : CatalogPlayerEditSchema
+    ).safeParse(raw);
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? "입력 오류");
+      return;
+    }
+    setFormError(null);
+    setSaving(true);
     try {
-      const res =
-        mode === "create"
-          ? await fetch("/api/admin/catalog", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                teamId,
-                nameKo: nameKo.trim(),
-                nameEn: nameEn.trim() || undefined,
-                birthdate,
-                position: mainPosition,
-                ...(nationality === "" ? {} : { nationality }),
-                ...(secondNationality === "" ? {} : { secondNationality }),
-                ...numbers,
-                ...(weeklyWage === null ? {} : { weeklyWage }),
-              }),
-            })
-          : await fetch(`/api/admin/catalog/player/${player!.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                // 지금 소속과 같으면 서버가 이동을 건너뛴다 — 늘 실어 보내도 안전하다
-                teamId,
-                nameKo: nameKo.trim(),
-                nameEn: nameEn.trim() || undefined,
-                birthdate,
-                // 빈 칸은 "지운다"가 아니라 "손대지 않는다"다 — 첫째 국적은 비울 수
-                // 없는 값이라(카탈로그가 클럽 협회로 채운다) 빈 채로 실어 보내지 않는다.
-                // 둘째는 빈 문자열이 곧 지우기다 (world/admin.ts)
-                ...(nationality === "" ? {} : { nationality }),
-                secondNationality,
-                positions: positions.map((p) => ({
-                  position: p.position,
-                  proficiency: clampAttr(p.proficiency),
-                  isNatural: p.isNatural,
-                })),
-                ...numbers,
-                ...wagePatch,
-              }),
-            });
+      const res = await fetch(
+        mode === "create" ? "/api/admin/catalog" : `/api/admin/catalog/player/${player!.id}`,
+        {
+          method: mode === "create" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsed.data),
+        },
+      );
       const data: CatalogResponse = await res.json();
       if (!res.ok) throw new Error(data.error ?? "요청 실패");
       onSaved(data);

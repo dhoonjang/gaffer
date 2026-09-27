@@ -1,7 +1,9 @@
+import { TIER_BASE } from "../src/common/data/team-catalog";
 import { describe, expect, it } from "vitest";
 import { ageOf } from "@story-fm/domain";
 import {
   declareRetirements,
+  generateYouthPlayer,
   isClubTeam,
   transitionSeason,
   youthFreeAgents,
@@ -13,7 +15,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
  * 한 여름 인테이크의 **꼬리** — 세계 전체가 낳은 잠재력·종합의 위 끝
- * (→ `docs/simulation/season.md` §6).
+ * (→ `docs/common/season.md` §6).
  *
  *   pnpm balance youth-intake-tail
  *
@@ -97,7 +99,35 @@ describe("한 여름 인테이크의 꼬리", () => {
     const seedTeen = [...seedTeenOverall].sort((a, b) => a - b);
     const atLeast = (xs: number[], t: number) => xs.filter((v) => v >= t).length;
 
+    const cohort = (tier: 1 | 2 | 3 | 4, bonus = 0) =>
+      Array.from({ length: 1500 }, (_, i) =>
+        generateYouthPlayer(
+          9_000_000 + tier * 100_000 + bonus * 10_000 + i,
+          "arsenal",
+          3,
+          i,
+          tier,
+          new Set(),
+          undefined,
+          2026,
+          new Set(),
+          bonus,
+        ),
+      );
+    const cohorts = ([1, 2, 3, 4] as const).map((tier) => ({ tier, players: cohort(tier) }));
+    const meanPotential = (players: ReturnType<typeof cohort>) =>
+      mean(players.map((p) => p.attributes.potential));
     const readings: Readings<typeof YOUTH_INTAKE_TAIL> = {
+      "체급 코호트 천장 평균 최대 편차": Math.max(
+        ...cohorts.map(({ tier, players }) => Math.abs(meanPotential(players) - TIER_BASE[tier])),
+      ),
+      "체급 코호트 현재 실력 최대 편차": Math.max(
+        ...cohorts.map(
+          ({ tier, players }) => mean(players.map((p) => p.attributes.overall)) - TIER_BASE[tier],
+        ),
+      ),
+      "아카데미 활용 천장 평균 이동":
+        meanPotential(cohort(3, 3)) - meanPotential(cohorts.find((c) => c.tier === 3)!.players),
       "한 여름 인테이크 인원": size,
       "잠재력 ≥95 — 여름당": perSummer(atLeast(potential, 95)),
       "잠재력 ≥90 — 여름당": perSummer(atLeast(potential, 90)),

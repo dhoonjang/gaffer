@@ -1,0 +1,408 @@
+import type { GamePlayer, MatchRecord, MatchSide, TacticsSpec } from "@story-fm/domain";
+import { associationName, isReserveMatch, naturalPositionOf } from "@story-fm/domain";
+import type { LineupSlot } from "@story-fm/sim";
+import { competitionLabel } from "../../common/data/cup-catalog";
+import { derbyForMatch } from "../../common/world/derby";
+import { nextMatchFor } from "../../common/core/calendar";
+import { diffDays } from "../../common/core/dates";
+import { internationalBreaksOf } from "../../common/players/international";
+import { openCallUp } from "../competition/international";
+import {
+  activeSuspensionFor,
+  assignmentsOf,
+  firstTeamPlayers,
+  isAvailableFor,
+  openInjury,
+  teamNameIn,
+  teamShortNameIn,
+  type GameState,
+} from "../../common/core/state";
+import { assembleUserLineup, lineupSlotsOf, slotsFor } from "./match-flow";
+import { teamRatingsOf, type TeamRatings } from "./quick-sim";
+
+/**
+ * 경기 전 상대 분석 — **코어의 사실만이다** (match.md §3.6).
+ *
+ * 감독이 라인업과 6축을 정하는 시점은 경기 전인데, 그때 읽을 수 있는 것은 예상 XI ·
+ * 결장자 · 상대의 전술 · 최근 결과 · 더비 · 두 선발의 평점이다. 판독은 없다 — 전술
+ * 포인트는 킥오프에 판독기가 처음 쓴다.
+ */
+
+/** 예상 XI 한 명 */
+export interface ProjectedPlayer {
+  id: string;
+  name: string;
+  position: string;
+  squadNumber: number | null;
+  /**
+   * 직전 경기 선발에서 **그대로 이어진 이름인가.** `false`면 코어가 메운 자리라
+   * 근거가 다르다 — 리포트를 읽는 쪽이 추정과 관측을 갈라 세워야 감독이 예상을
+   * 확정으로 읽지 않는다.
+   */
+  carried: boolean;
+}
+
+/**
+ * 결장 사유의 이름 — 조회 도구와 GM 스냅샷이 **같은 낱말**을 쓴다.
+ * 갈래가 이 파일의 것이므로 이름도 여기 산다.
+ */
+export const ABSENT_REASON_KO: Record<AbsentReason, string> = {
+  injury: "부상",
+  suspension: "정지",
+  "call-up": "대표팀 소집",
+};
+
+/**
+ * 못 나오는 이유 — **`isAvailableFor`가 닫는 문과 같은 셋이다** (season.md §8 불변식).
+ * 하나를 빠뜨리면 상대 분석이 「그 선수가 나온다」고 말하고 시뮬은 안 세운다.
+ */
+export type AbsentReason = "injury" | "suspension" | "call-up";
+
+/** 못 나오는 선수 — 부상·정지·소집은 공개 기록이라 흐리지 않는다 (player.md §10) */
+export interface AbsentPlayer {
+  id: string;
+  name: string;
+  position: string;
+  reason: AbsentReason;
+  /** 부상은 복귀 예정일, 정지는 남은 경기 수, 소집은 협회와 복귀일 */
+  note: string;
+}
+
+/**
+ * 리포트의 사실 한 조각 — 문장은 `opponentFactText`가 만든다. 화면·조회 도구·GM
+ * 스냅샷이 같은 렌더러를 지나므로 같은 사실이 세 문장으로 갈리지 않는다.
+ */
+export type OpponentFact =
+  /** 더비 — 표의 줄과 열기 */
+  | { kind: "derby"; name: string; heat: number }
+  /** 두 선발의 평점 — 공격·중원·수비 (간이 시뮬과 같은 함수, `teamRatingsOf`) */
+  | { kind: "strength"; ours: TeamRatings; theirs: TeamRatings }
+  /** 상대의 최근 결과 — 그 팀 기준 승·무·패, 최근 것이 앞 */
+  | { kind: "form"; results: Array<"W" | "D" | "L"> }
+  /** 예상 XI의 기둥 — 종합 상위 */
+  | { kind: "key-player"; id: string; name: string; position: string };
+
+export interface OpponentReport {
+  matchId: string;
+  date: string;
+  /** 킥오프 시각 `20:00` */
+  time: string;
+  /** 어느 경기인가 — `프리미어리그 7R` */
+  label: string;
+  /** 오늘로부터 며칠 뒤인가 — 0이면 오늘이다 */
+  inDays: number;
+  venue: "home" | "away" | "neutral";
+  opponent: { id: string; name: string; short: string };
+  /** 우리는 어느 편인가 */
+  ourSide: MatchSide;
+  /** 상대 예상 XI — 직전 경기 선발에서 투영 (`projectXI`) */
+  expectedXI: ProjectedPlayer[];
+  /**
+   * 투영의 근거가 된 상대의 **직전 1군 경기** — 없으면 `null`(개막전·신생 구단).
+   * 근거를 함께 내지 않으면 읽는 쪽이 예상을 확정으로 옮긴다.
+   */
+  basis: { matchId: string; date: string; label: string } | null;
+  /** 부상·정지로 못 나오는 상대 선수 */
+  absent: AbsentPlayer[];
+  /** 상대가 세워 둔 모양과 6축 — 90분 동안 보이는 사실이라 흐리지 않는다 */
+  shape: TacticsSpec;
+  /** 대진의 사실 — 더비 · 두 선발의 평점 · 최근 결과 · 기둥 */
+  facts: OpponentFact[];
+}
+
+/** 최근 결과를 몇 경기 읽는가 */
+const FORM_MATCHES = 5;
+/** 기둥으로 세우는 선수 수 */
+const KEY_PLAYERS = 2;
+
+/** 더비의 열기 낱말 — 1~3 */
+export const DERBY_HEAT_KO: Record<number, string> = {
+  1: "라이벌전",
+  2: "더비",
+  3: "숙명의 더비",
+};
+
+/** 사실 한 조각 → 한 문장. 우열은 우리 편 기준이다 */
+export function opponentFactText(fact: OpponentFact): string {
+  switch (fact.kind) {
+    case "derby":
+      return `${fact.name} — ${DERBY_HEAT_KO[fact.heat] ?? DERBY_HEAT_KO[1]!}`;
+    case "strength": {
+      const r = (v: number) => Math.round(v);
+      return (
+        `선발 평점 — 우리 공격 ${r(fact.ours.attack)} · 중원 ${r(fact.ours.midfield)} · 수비 ${r(fact.ours.defence)}` +
+        ` / 상대 공격 ${r(fact.theirs.attack)} · 중원 ${r(fact.theirs.midfield)} · 수비 ${r(fact.theirs.defence)}`
+      );
+    }
+    case "form":
+      return fact.results.length === 0
+        ? "상대의 최근 결과 — 아직 없다"
+        : `상대의 최근 ${fact.results.length}경기 — ${fact.results.map((r) => (r === "W" ? "승" : r === "D" ? "무" : "패")).join(" ")}`;
+    case "key-player":
+      return `상대의 기둥 — ${fact.name} (${fact.position})`;
+  }
+}
+
+/** 이 사실이 우리 편에 이로운가 — 모르면 null */
+export function opponentFactFavours(fact: OpponentFact): boolean | null {
+  if (fact.kind !== "strength") return null;
+  const ours = fact.ours.attack + fact.ours.midfield + fact.ours.defence;
+  const theirs = fact.theirs.attack + fact.theirs.midfield + fact.theirs.defence;
+  if (Math.abs(ours - theirs) < 3) return null;
+  return ours > theirs;
+}
+
+/** 상대의 직전 1군 경기 — 그 경기가 이미 벌어졌다는 것이 투영의 유일한 근거다 */
+function lastPlayedBefore(
+  state: GameState,
+  teamId: string,
+  before: MatchRecord,
+): MatchRecord | null {
+  let best: MatchRecord | null = null;
+  for (const m of state.matches) {
+    if (!m.result || isReserveMatch(m)) continue;
+    if (m.homeTeamId !== teamId && m.awayTeamId !== teamId) continue;
+    if (m.date > before.date || m.id === before.id) continue;
+    if (best === null || m.date > best.date || (m.date === best.date && m.id > best.id)) best = m;
+  }
+  return best;
+}
+
+/** 상대의 최근 결과 — 그 팀 기준, 최근 것이 앞 */
+function recentFormOf(
+  state: GameState,
+  teamId: string,
+  before: MatchRecord,
+): Array<"W" | "D" | "L"> {
+  return state.matches
+    .filter(
+      (m) =>
+        m.result &&
+        !isReserveMatch(m) &&
+        (m.homeTeamId === teamId || m.awayTeamId === teamId) &&
+        m.date <= before.date &&
+        m.id !== before.id,
+    )
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1))
+    .slice(0, FORM_MATCHES)
+    .map((m) => {
+      const r = m.result!;
+      const ours = m.homeTeamId === teamId ? r.homeGoals : r.awayGoals;
+      const theirs = m.homeTeamId === teamId ? r.awayGoals : r.homeGoals;
+      return ours > theirs ? "W" : ours === theirs ? "D" : "L";
+    });
+}
+
+/**
+ * 상대 예상 XI — **직전 경기 선발 + 가용**으로 투영한다 (match.md §3.6).
+ *
+ * `simSquadOf`를 부르지 않는 것이 이 함수의 전부다. 그쪽은 로테이션·임대 빚까지
+ * 반영해 **내일 실제로 설 열한 명**을 돌려주므로, 경기 전에 보여 주는 순간 감독은
+ * 상대 벤치의 결정을 미리 읽는다. 여기서 쓰는 것은 감독이 실제로 관측할 수 있는
+ * 것뿐이다 — 이미 벌어진 경기의 선발, 그리고 공개 기록인 부상·정지·대표팀 소집.
+ */
+function projectXI(
+  state: GameState,
+  teamId: string,
+  basis: MatchRecord | null,
+  competitionId: string | null,
+): { xi: GamePlayer[]; carried: Set<string> } {
+  const squad = firstTeamPlayers(state, teamId);
+  const byId = new Map(squad.map((p) => [p.id, p] as const));
+  const available = (p: GamePlayer) => isAvailableFor(state, p, competitionId);
+
+  const started =
+    basis === null
+      ? []
+      : ((basis.homeTeamId === teamId ? basis.result?.homeStarters : basis.result?.awayStarters) ??
+        []);
+  const xi: GamePlayer[] = [];
+  const carried = new Set<string>();
+  const seen = new Set<string>();
+  const seat = (p: GamePlayer | undefined, from: "carried" | "guess") => {
+    if (!p || xi.length >= 11 || seen.has(p.id) || !available(p)) return;
+    seen.add(p.id);
+    xi.push(p);
+    if (from === "carried") carried.add(p.id);
+  };
+
+  // ① 직전 경기 선발 중 지금 뛸 수 있는 사람
+  for (const id of started) seat(byId.get(id), "carried");
+  // ② 빈자리는 그 팀 전술판의 선발 배치에서
+  for (const a of assignmentsOf(state, teamId, "starting")) seat(byId.get(a.playerId), "guess");
+  // ③ 그래도 모자라면 가용 1군 종합 상위
+  for (const p of [...squad].sort((a, b) => b.attributes.overall - a.attributes.overall)) {
+    seat(p, "guess");
+  }
+  return { xi, carried };
+}
+
+/** 갈래의 순서 — 오래 못 나오는 쪽이 앞이다 */
+const ABSENT_RANK: Record<AbsentReason, number> = { injury: 0, suspension: 1, "call-up": 2 };
+
+/**
+ * 상대의 결장자 — 부상이 먼저, 그다음 정지·소집. 같은 갈래 안에서는 id 순.
+ * **정지는 이 경기의 대회로 잰다** (match.md §7) — 리그 정지 선수는 컵에 선다.
+ */
+function absentOf(state: GameState, teamId: string, competitionId: string | null): AbsentPlayer[] {
+  const rows: AbsentPlayer[] = [];
+  for (const p of firstTeamPlayers(state, teamId)) {
+    const injury = openInjury(state, p.id);
+    if (injury) {
+      rows.push({
+        id: p.id,
+        name: p.name,
+        position: naturalPositionOf(p).position,
+        reason: "injury",
+        note: `${injury.bodyPart} ~${injury.expectedReturn}`,
+      });
+      continue;
+    }
+    const suspension = activeSuspensionFor(state, p.id, competitionId);
+    if (suspension) {
+      rows.push({
+        id: p.id,
+        name: p.name,
+        position: naturalPositionOf(p).position,
+        reason: "suspension",
+        note: `${suspension.lengthMatches - suspension.served}경기`,
+      });
+      continue;
+    }
+    /**
+     * 소집도 공개 기록이다 (competition.md §5-1) — 명단은 세계가 발표하는 것이라
+     * 상대 구단의 것도 감독이 관측할 수 있다.
+     */
+    const callUp = openCallUp(state, p.id);
+    if (!callUp) continue;
+    const window = internationalBreaksOf(state.season).find((w) => w.key === callUp.breakKey);
+    rows.push({
+      id: p.id,
+      name: p.name,
+      position: naturalPositionOf(p).position,
+      reason: "call-up",
+      note: `${associationName(callUp.country)}${window === undefined ? "" : ` ~${window.to}`}`,
+    });
+  }
+  return rows.sort(
+    (a, b) => ABSENT_RANK[a.reason] - ABSENT_RANK[b.reason] || (a.id < b.id ? -1 : 1),
+  );
+}
+
+/** 우리 쪽은 킥오프에 설 그 열한 명이다 — 자동 대체까지 지난 뒤라야 판이 같다 */
+function ourSlots(state: GameState, competitionId: string | null): LineupSlot[] | null {
+  const lineup = assembleUserLineup(state, competitionId);
+  if (lineup.error) return null;
+  return lineupSlotsOf(state, slotsFor(state, state.userTeamId, lineup.onPitch));
+}
+
+/**
+ * 다음 경기를 고른다 — id를 주면 그것, 아니면 우리 다음 경기.
+ * 끝난 경기·2군 경기·우리가 없는 경기는 리포트의 대상이 아니다.
+ */
+function pickPreviewMatch(state: GameState, matchId?: string): MatchRecord | null {
+  if (matchId === undefined) return nextMatchFor(state.matches, state.userTeamId, state.date);
+  const m = state.matches.find((x) => x.id === matchId);
+  if (!m || m.result || isReserveMatch(m)) return null;
+  if (m.homeTeamId !== state.userTeamId && m.awayTeamId !== state.userTeamId) return null;
+  return m;
+}
+
+/**
+ * 경기 전 상대 분석 리포트 — 예정된 우리 경기 하나. 없으면 `null`.
+ *
+ * **경기 중에는 서지 않는다.** 90분 안에 다음 상대를 분석하는 자리는 없고, 지금
+ * 판은 경기 화면이 이미 들고 있다 (match.md §9). 진행 중인 장부를 읽는
+ * `slotsFor`가 다른 경기의 교체를 우리 배치에 얹는 것도 이 문이 막는다.
+ */
+export function buildOpponentReport(
+  state: GameState,
+  options: {
+    /** 이 경기 하나 — 주지 않으면 우리 다음 경기다 */
+    matchId?: string;
+    /** 며칠 앞까지만 세우는가 — 경기 전날에만 서는 자리(GM 스냅샷)가 매 턴 세울 이유는 없다 */
+    withinDays?: number;
+  } = {},
+): OpponentReport | null {
+  if (state.pendingMatch) return null;
+  const match = pickPreviewMatch(state, options.matchId);
+  if (!match) return null;
+  if (options.withinDays !== undefined && diffDays(state.date, match.date) > options.withinDays) {
+    return null;
+  }
+
+  const userIsHome = match.homeTeamId === state.userTeamId;
+  const opponentId = userIsHome ? match.awayTeamId : match.homeTeamId;
+  const ourSide: MatchSide = userIsHome ? "home" : "away";
+
+  const us = ourSlots(state, match.competitionId);
+  if (!us) return null;
+
+  /** 전술이 없는 팀은 리포트를 세울 수 없다 — 대조할 판이 없다 */
+  const theirTactics = state.tactics.find((t) => t.teamId === opponentId);
+  if (!theirTactics) return null;
+
+  const basis = lastPlayedBefore(state, opponentId, match);
+  const { xi, carried } = projectXI(state, opponentId, basis, match.competitionId);
+  if (xi.length === 0) return null;
+  /** 자리를 앉히는 것도 **킥오프와 같은 함수**다 (`slotsFor`) */
+  const theirSlots = lineupSlotsOf(
+    state,
+    slotsFor(
+      state,
+      opponentId,
+      xi.map((p) => p.id),
+    ),
+  );
+
+  const derby = derbyForMatch(match);
+  const facts: OpponentFact[] = [
+    ...(derby ? [{ kind: "derby", name: derby.name, heat: derby.heat } as const] : []),
+    { kind: "strength", ours: teamRatingsOf(us), theirs: teamRatingsOf(theirSlots) },
+    { kind: "form", results: recentFormOf(state, opponentId, match) },
+    ...[...theirSlots]
+      .sort((a, b) => b.player.attributes.overall - a.player.attributes.overall)
+      .slice(0, KEY_PLAYERS)
+      .map(
+        (slot) =>
+          ({
+            kind: "key-player",
+            id: slot.player.id,
+            name: slot.player.name,
+            position: slot.position,
+          }) as const,
+      ),
+  ];
+
+  return {
+    matchId: match.id,
+    date: match.date,
+    time: match.time,
+    label: competitionLabel(match.competitionId, match.stage, match.round),
+    inDays: Math.max(0, diffDays(state.date, match.date)),
+    venue: match.neutral ? "neutral" : userIsHome ? "home" : "away",
+    opponent: {
+      id: opponentId,
+      name: teamNameIn(state, opponentId),
+      short: teamShortNameIn(state, opponentId),
+    },
+    ourSide,
+    expectedXI: theirSlots.map((slot) => ({
+      id: slot.player.id,
+      name: slot.player.name,
+      position: slot.position,
+      squadNumber: slot.player.squadNumber ?? null,
+      carried: carried.has(slot.player.id),
+    })),
+    basis: basis
+      ? {
+          matchId: basis.id,
+          date: basis.date,
+          label: competitionLabel(basis.competitionId, basis.stage, basis.round),
+        }
+      : null,
+    absent: absentOf(state, opponentId, match.competitionId),
+    shape: { ...theirTactics.spec },
+    facts,
+  };
+}

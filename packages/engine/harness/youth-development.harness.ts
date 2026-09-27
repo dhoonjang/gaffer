@@ -1,3 +1,12 @@
+import { ATTRIBUTE_AXES, type AxisValues } from "@story-fm/domain";
+import {
+  AXIS_AGING,
+  rollMonthlyAxes,
+  MENTOR_BOOST_MAX,
+  growChance,
+  RESERVE_APP_BOOST_MAX,
+  FOCUS_BOOST,
+} from "@story-fm/engine";
 import { describe, expect, it } from "vitest";
 import { ageOf, AXIS_GROUPS, isReserveMatch, PLAYER_ARCHETYPE_TRAITS } from "@story-fm/domain";
 import type { GamePlayer } from "@story-fm/domain";
@@ -30,7 +39,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
  * 유스 육성 — **2군 리그가 돌고, 감독의 선택이 유망주의 성장 속도를 가르는가**
- * (→ `docs/simulation/season.md` §2 2군 리그).
+ * (→ `docs/common/season.md` §2 2군 리그).
  *
  *   pnpm balance youth-development
  *
@@ -51,6 +60,61 @@ const LOAN_ARM_SIZE = 5;
 describe("한 시즌의 유스 육성", () => {
   it("시드 42", () => {
     const state = createTestGame(42);
+    const values = Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, 50])) as AxisValues;
+    const picks = (
+      count: number,
+      extra: { personal?: "finishing"; mentor?: number; boost?: number } = {},
+    ) => {
+      const counts = new Map(ATTRIBUTE_AXES.map((a) => [a, 0]));
+      for (let seed = 1; seed <= count; seed++)
+        for (const row of rollMonthlyAxes({
+          seed,
+          date: "2027-03-01",
+          playerId: "gp-42",
+          age: 19,
+          values,
+          potential: 99,
+          ...extra,
+        })) {
+          if (row.step > 0) counts.set(row.axis, counts.get(row.axis)! + 1);
+        }
+      return counts;
+    };
+    const balanced = picks(8000, { boost: 3 });
+    const axisRatio = Math.max(
+      ...(["early", "mid", "late"] as const).map((curve) => {
+        const xs = ATTRIBUTE_AXES.filter((a) => AXIS_AGING[a] === curve).map((a) =>
+          balanced.get(a)!,
+        );
+        return Math.max(...xs) / Math.min(...xs);
+      }),
+    );
+    const baseline = picks(3000),
+      aimed = picks(3000, { personal: "finishing" });
+    const sum = (counts: typeof baseline, axes: readonly (typeof ATTRIBUTE_AXES)[number][]) =>
+      axes.reduce((n, a) => n + counts.get(a)!, 0);
+    const restAxes = ATTRIBUTE_AXES.filter((a) => a !== "finishing" && a !== "goalkeeping");
+    const plainMentalPicks = picks(1500),
+      withMentor = picks(1500, { mentor: MENTOR_BOOST_MAX });
+    const menuCounts = ATTRIBUTE_AXES.map(
+      (a) => state.trainingSessions.filter((t) => t.focus.includes(a)).length,
+    );
+    const otherContracts = state.contracts.filter(
+      (c) => c.teamId !== state.userTeamId && leagueOfTeamIn(state, c.teamId) !== "laliga",
+    );
+    const calibration = {
+      "동일 곡선 축 빈도 최대비": axisRatio,
+      "개인 결정력 훈련 선택비": aimed.get("finishing")! / baseline.get("finishing")!,
+      "개인 훈련 나머지 필드 선택비": sum(aimed, restAxes) / sum(baseline, restAxes),
+      "멘토 정신축 선택비":
+        sum(withMentor, AXIS_GROUPS.mental) / sum(plainMentalPicks, AXIS_GROUPS.mental),
+      "19세 축당 시즌 기대": growChance(50, 19),
+      "18세 집중육성 시즌 기대": growChance(50, 18) * RESERVE_APP_BOOST_MAX * FOCUS_BOOST,
+      "기본 훈련 축 빈도비": Math.max(...menuCounts) / Math.min(...menuCounts),
+      "비스페인 AI 바이아웃 비율":
+        otherContracts.filter((c) => c.buyoutClause !== undefined).length / otherContracts.length,
+    };
+
     const u21 = (s: GameState, birthdate: string) => ageOf(birthdate, s.date) <= 21;
 
     // 잠재력 여유가 가장 큰 U21 셋에 집중 육성을 건다 — 감독이 할 법한 선택
@@ -322,6 +386,7 @@ describe("한 시즌의 유스 육성", () => {
     const intakeUpside = intake.map((p) => p.attributes.potential - p.attributes.overall);
 
     const readings: Readings<typeof YOUTH_DEVELOPMENT> = {
+      ...calibration,
       "2군 경기 수": reserveMatches.length,
       "결과 없는 2군 경기": unplayed,
       "2군 평균 출전": mean(reserveApps),

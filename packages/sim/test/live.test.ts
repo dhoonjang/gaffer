@@ -1,6 +1,20 @@
+import { isOffsidePosition } from "../src/live/step";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TACTICS, FIELD, type WeightSlot } from "@story-fm/domain";
 import {
+  SheetStepSchema,
+  type SheetLine,
+  DEFAULT_TACTICS,
+  FIELD,
+  type WeightSlot,
+} from "@story-fm/domain";
+import {
+  applySheet,
+  createLiveStepper,
+  stepLive,
+  liveInputOf,
+  SHEET_TARGET_CAP,
+  SHEET_NET_CAP,
+  type SheetContext,
   SLOT_TENDENCY,
   advanceLive,
   heatmapDensity,
@@ -37,8 +51,59 @@ describe("실시간 경기 — 결정성과 장부 계약 (live-match.md §8.2 �
     const b = makeLiveMatch({ seed: 7 });
     advanceLive(a, LIVE_TICKS_PER_SECOND * 600);
     advanceLive(b, LIVE_TICKS_PER_SECOND * 600);
-    expect(liveDigest(a.state, a.ledger)).toBe(liveDigest(b.state, b.ledger));
-    expect(a.ledger.events.length).toBe(b.ledger.events.length);
+    expect(liveDigest(a)).toBe(liveDigest(b));
+    expect(a).toEqual(b);
+  });
+
+  it("digest includes all numerical simulation fields and ignores object insertion order", () => {
+    const match = makeLiveMatch({ seed: 7 });
+    const baseline = liveDigest(match);
+    const mutateNumbers = (value: unknown, path: (string | number)[] = []): void => {
+      if (Array.isArray(value)) {
+        value.forEach((child, i) => mutateNumbers(child, [...path, i]));
+        return;
+      }
+      if (value && typeof value === "object") {
+        for (const [key, child] of Object.entries(value)) {
+          if (key === "committedTick") continue;
+          if (typeof child === "number") {
+            const copy = structuredClone(match);
+            let parent: unknown = copy;
+            for (const part of path) parent = (parent as Record<string, unknown>)[part];
+            (parent as Record<string, unknown>)[key] = child + 0.125;
+            expect(liveDigest(copy), [...path, key].join(".")).not.toBe(baseline);
+          } else mutateNumbers(child, [...path, key]);
+        }
+      }
+    };
+    mutateNumbers(match);
+    const reordered = Object.fromEntries(Object.entries(match).reverse()) as typeof match;
+    expect(liveDigest(reordered)).toBe(baseline);
+  });
+  it("offside uses the second-last opponent including the keeper and the ball", () => {
+    expect(isOffsidePosition(88, 70, [103, 90, 80], "home")).toBe(false);
+    expect(isOffsidePosition(92, 70, [103, 90, 80], "home")).toBe(true);
+    expect(isOffsidePosition(88, 70, [75, 90, 80], "home")).toBe(true);
+    expect(isOffsidePosition(99, 70, [103], "home")).toBe(false);
+    expect(isOffsidePosition(92, 94, [103, 90, 80], "home")).toBe(false);
+  });
+
+  it("입력 인덱스 재사용은 매 틱 새로 읽는 것과 같고 전술 변경을 반영한다", () => {
+    const match = makeLiveMatch({ seed: 13 });
+    let cached = match.state;
+    let fresh = structuredClone(cached);
+    for (const pressing of [1, 5]) {
+      match.tactics.home.pressing = pressing;
+      const input = liveInputOf(match);
+      const step = createLiveStepper(input);
+      for (let tick = 0; tick < 240; tick++) {
+        const a = step(cached);
+        const b = stepLive(fresh, input);
+        expect(a).toEqual(b);
+        cached = a.state;
+        fresh = b.state;
+      }
+    }
   });
 
   it("나눠 굴려도 한 번에 굴린 것과 같다", () => {
@@ -46,7 +111,7 @@ describe("실시간 경기 — 결정성과 장부 계약 (live-match.md §8.2 �
     const b = makeLiveMatch({ seed: 11 });
     advanceLive(a, LIVE_TICKS_PER_SECOND * 300);
     for (let i = 0; i < 300; i++) advanceLive(b, LIVE_TICKS_PER_SECOND);
-    expect(liveDigest(a.state, a.ledger)).toBe(liveDigest(b.state, b.ledger));
+    expect(liveDigest(a)).toBe(liveDigest(b));
   });
 
   it("90분을 끝까지 굴리면 장부가 닫히고 반려는 없다", () => {
@@ -177,5 +242,62 @@ describe("히트맵 — 역할의 연속 분포 (live-match.md §3.3)", () => {
     const mid = (roleId: string) => heatmapMean(zoneAt(70, true, roleId)).depth;
     expect(mid("wing-back")).toBeGreaterThan(mid("full-back"));
     expect(mid("full-back")).toBeGreaterThan(mid("no-nonsense-fb"));
+  });
+});
+
+describe("연속 강도 시트", () => {
+  const context: SheetContext = {
+    points: [{ id: "point", text: "측면의 공간", about: [], importance: 2 }],
+    onPitch: { home: ["player"], away: ["opponent"] },
+    uptake: { home: 1, away: 1 },
+  };
+  const line = (shape: SheetLine["shape"], step: number, sign: 1 | -1 = -1): SheetLine => ({
+    pointId: "point",
+    target: { player: "player", side: "home", lane: "left" },
+    shape,
+    sign,
+    step,
+  });
+
+  it("소수 강도는 양옆의 효과 사이에 있고 0으로 연속해서 작아진다", () => {
+    for (const shape of ["edge", "temper", "legs", "focus", "cohesion"] as const) {
+      for (const sign of [1, -1] as const) {
+        const value = (step: number) =>
+          applySheet([line(shape, step, sign)], context).applied[0]?.value;
+        const a = value(1)!;
+        const b = value(2)!;
+        expect(value(1.5)).toBeCloseTo((a + b) / 2, shape === "temper" || shape === "legs" ? 1 : 4);
+        expect(value(0.01)).toBeDefined();
+        expect(applySheet([line(shape, 0, sign)], context).applied).toEqual([]);
+      }
+    }
+  });
+
+  it("분수 강도로 쪼개도 선수·팀의 효과 한도를 넘지 못한다", () => {
+    const lines = Array.from({ length: 20 }, () => line("edge", 0.5, 1));
+    const result = applySheet(lines, context);
+    expect(result.edge.player).toBeLessThanOrEqual(SHEET_TARGET_CAP);
+    expect(result.edge.player).toBeLessThanOrEqual(SHEET_NET_CAP);
+    expect(result.dropped.length).toBeGreaterThan(0);
+    expect(applySheet(lines, context)).toEqual(result);
+  });
+
+  it("없는 상대를 지목한 행동은 대상으로 바뀌지 않고 전부 반려된다", () => {
+    const result = applySheet(
+      [{ ...line("behavior", 1), action: "mark", targetPlayer: "missing" }],
+      context,
+    );
+    expect(result.behaviors).toEqual([]);
+    expect(result.dropped.map((entry) => entry.code)).toEqual(["no-player"]);
+  });
+
+  it("스키마가 비유한 수와 범위 밖 강도를 막는다", () => {
+    for (const value of [-1, 3.01, Number.NaN, Infinity]) {
+      expect(SheetStepSchema.safeParse(value).success).toBe(false);
+      const result = applySheet([line("edge", value)], context);
+      expect(result.applied).toEqual([]);
+      expect(result.dropped.map((entry) => entry.code)).toEqual(["invalid-step"]);
+    }
+    expect(SheetStepSchema.parse(1.25)).toBe(1.25);
   });
 });

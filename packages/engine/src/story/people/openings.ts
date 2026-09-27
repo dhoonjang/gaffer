@@ -1,0 +1,169 @@
+import {
+  type Opening,
+  OPENING_KIND_KO,
+  OPENING_LINE_MAX,
+  OPENING_TITLE_MAX,
+  type OpeningClose,
+  type OpeningKind,
+  type TickSink,
+} from "@story-fm/domain";
+import { addDays } from "../../common/core/dates";
+import { type GameState, playerById } from "../../common/core/state";
+
+/** 걸린 사람의 이름 — 우리 선수이거나 이 세이브의 인물, 실재하지 않으면 undefined */
+function subjectNameOf(state: GameState, id: string): string | undefined {
+  const player = playerById(state, id);
+  if (player && player.teamId === state.userTeamId) return player.name;
+  return state.personas.find((p) => p.characterId === id)?.name;
+}
+
+/**
+ * 제안을 검증해 앉힌다 — 돌려주는 것은 **앉은 수**다. 실패는 조용히 떨어진다: 시작
+ * 사건은 없어도 게임이 서는 것이고, 반려 사유를 되돌려 줄 상대가 없다.
+ */
+export function seedOpenings(state: GameState, drafts: readonly OpeningDraft[]): number {
+  const seen = new Set<string>();
+  const openings: Opening[] = [];
+  for (const draft of drafts) {
+    if (openings.length >= MAX_OPENINGS) break;
+    const title = draft.title.trim().slice(0, OPENING_TITLE_MAX);
+    const line = draft.line.trim().slice(0, OPENING_LINE_MAX);
+    if (title.length === 0 || line.length === 0) continue;
+    let subjectId = draft.subjectId;
+    if (subjectId !== undefined) {
+      const name = subjectNameOf(state, subjectId);
+      // 없는 사람은 줄까지 지어낸 것이라 실마리째 버리고, 있는데 줄이 부르지 않으면
+      // 이름표만 뗀다 — 줄 자체는 성립한다 (career.md §1). 자르고 난 뒤의 글자로 재는
+      // 것은 스냅샷에 서는 것이 그 글자이기 때문이다.
+      if (name === undefined) continue;
+      if (!lineNames(`${title} ${line}`, name)) subjectId = undefined;
+    }
+    // 같은 갈래·같은 사람은 하나다 — 실마리가 둘이면 GM이 하나를 두 번 연다
+    const key = `${draft.kind}:${subjectId ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    openings.push({
+      id: `opening-${openings.length + 1}`,
+      kind: draft.kind,
+      title,
+      line,
+      ...(subjectId === undefined ? {} : { subjectId }),
+      openedOn: state.date,
+      dueOn: addDays(state.date, OPENING_DAYS),
+      resolvedOn: null,
+    });
+  }
+  state.openings = openings;
+  return openings.length;
+}
+
+/** 아직 열린 시작 사건 */
+export function activeOpenings(state: GameState): Opening[] {
+  return state.openings.filter((o) => o.resolvedOn === null);
+}
+
+/**
+ * 실마리 하나를 닫는다 — **두 사유가 같은 문을 지난다** (career.md §1). 돌려주는 것은
+ * 일지에 남길 줄이고, 그 자리에 열린 실마리가 없으면 null이다.
+ */
+export function resolveOpening(state: GameState, id: string, reason: OpeningClose): string | null {
+  const opening = state.openings.find((o) => o.id === id && o.resolvedOn === null);
+  if (!opening) return null;
+  opening.resolvedOn = state.date;
+  opening.resolvedBy = reason;
+  return reason === "handled"
+    ? `${opening.title} — 감독이 매듭지었다`
+    : `${opening.title} — 첫 몇 주가 지났다`;
+}
+
+/** 기한이 지난 실마리를 닫는다 — 첫 몇 주가 지나면 이야기는 GM과 서사 기억이 잇는다 */
+export function tickOpenings(state: GameState, digest: TickSink): void {
+  for (const opening of activeOpenings(state)) {
+    if (state.date <= opening.dueOn) continue;
+    const line = resolveOpening(state, opening.id, "expired");
+    if (line !== null) digest.push(line);
+  }
+}
+
+/**
+ * 상태 스냅샷 블록 — 열린 것이 없으면 null.
+ *
+ * 괄호에 서는 이름은 `seedOpenings`가 그 줄과 대조해 앉힌 사람뿐이다 (career.md §1).
+ * 앉은 뒤에 구단을 떠난 사람은 이름이 풀리지 않으므로 괄호째 비운다 — 사실 카드에
+ * id가 설 자리는 없다.
+ */
+export function describeOpenings(state: GameState): string | null {
+  const open = activeOpenings(state);
+  if (open.length === 0) return null;
+  return open
+    .map((o) => {
+      const name = o.subjectId === undefined ? undefined : subjectNameOf(state, o.subjectId);
+      return (
+        `- ${o.id} [${OPENING_KIND_KO[o.kind]}] ${o.title} — ${o.line}` +
+        (name === undefined ? "" : ` (${name})`) +
+        ` · ${o.dueOn}까지`
+      );
+    })
+    .join("\n");
+}
+
+/**
+ * **시작 사건** — 부임 첫 몇 주의 진행을 이끄는 실마리 (career.md §1 · agents.md §4-2).
+ *
+ * 온보딩 판정이 배경과 구단의 사실에서 제안하고, 여기서 검증해 앉힌다. 코어가 여는
+ * 장부의 사실에서 나오지 않으므로 검증이 곧 한도다 — 갈래는 목록
+ * 안에서, 걸린 사람은 실재하면서 **그 줄이 부르는** 사람만, 수는 셋까지, 기한은 코어가
+ * 박는다.
+ */
+
+/** 한 게임이 갖는 시작 사건의 상한 — 셋이면 첫 주가 붐비고 넷이면 흩어진다 */
+export const MAX_OPENINGS = 3;
+
+/**
+ * 아무도 손대지 않은 시작 사건이 만료되는 날수 — **프리시즌 한 구간이다.**
+ *
+ * 부임은 언제나 7월 1일이고(`buildSeasonCalendar`) 개막 라운드는 8월 중순에 서므로,
+ * 45일이 닫는 자리는 개막 언저리다 — 창 안에 드는 것은 친선 넷이고 리그 경기는 팀에
+ * 따라 들어오지 않거나 많아야 하나다. 실마리는 공이 구르기 전의 몇 주를 이끌고, 시즌이
+ * 열리면 그 뒤는 GM과 서사 기억이 잇는다.
+ */
+export const OPENING_DAYS = 45;
+
+export interface OpeningDraft {
+  kind: OpeningKind;
+  title: string;
+  line: string;
+  subjectId?: string;
+}
+
+/**
+ * 이름의 마디가 이만큼은 되어야 줄이 그를 부른 것으로 본다 — 「이」·「박」 한 글자는
+ * 아무 문장에나 선다.
+ */
+const NAME_PART_MIN = 2;
+
+/**
+ * 줄이 이 사람을 부르는가 (career.md §1).
+ *
+ * 마디 하나로 맞힌다 — 줄이 성만 부르는 것("외데고르가 새 감독을 잰다")이 오히려
+ * 보통이라 전체 이름을 요구하면 멀쩡한 줄이 떨어진다. 같은 마디를 나눠 가진 두 사람은
+ * 가르지 못하지만, 여기서 막는 것은 줄이 **아무도** 부르지 않는 경우다.
+ */
+export function lineNames(text: string, name: string): boolean {
+  if (text.includes(name)) return true;
+  return name
+    .split(/\s+/)
+    .filter((part) => part.length >= NAME_PART_MIN)
+    .some((part) => text.includes(part));
+}
+
+/** 닫힌 실마리가 서사 기억에 남는 무게 — 면담 한 건과 같은 줄이다 */
+export const OPENING_CLOSE_SALIENCE = 2;
+
+/** 감독이 한 일이 어디에 닿았는가 — 사람과 갈래 (career.md §1의 표) */
+export interface OpeningTouch {
+  /** 이 일이 닿은 사람 — 우리 선수의 id 또는 인물의 characterId */
+  subjectIds?: readonly string[];
+  /** **걸린 사람이 없는** 실마리를 닫는 갈래 */
+  kinds?: readonly OpeningKind[];
+}

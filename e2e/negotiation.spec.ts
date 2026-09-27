@@ -10,7 +10,7 @@ import { COLD_MS } from "./timeouts";
  * 무대가 방으로 갈리고(조건서 · 인내 · 건너편), 일어서면 평시로 돌아온다. 그 사이의
  * 턴은 메인 채팅에서 한 덩어리로 묶인다.
  *
- * ⚠️ **채팅에 치는 말은 mock 대본의 키다** (`packages/agents/src/mock-script.ts`). 글자가
+ * ⚠️ **채팅에 치는 말은 mock 대본의 키다** (`packages/agents/src/app/mock-script.ts`). 글자가
  * 하나만 달라도 그 턴은 아무 도구도 부르지 않는다. 상대는 픽스처가 고른다 —
  * `seedTransferTarget`이 코어에게 물어 성사 확률이 문턱을 넘는 이름을 준다.
  */

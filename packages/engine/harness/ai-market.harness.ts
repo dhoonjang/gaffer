@@ -6,7 +6,7 @@ import { playSeason } from "./season";
 import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
- * 한 시즌의 **시장 규모** — 시장이 도는지는 `packages/engine/test/ai-market.test.ts`가
+ * 한 시즌의 **시장 규모** — 시장이 도는지는 `packages/engine/test/negotiation/ai-market.test.ts`가
  * 보고, 여기서는 그 양이 실제 시장과 같은 자릿수인지를 본다.
  *
  * 우리 선수에게 선 **관심**도 같은 시즌에서 잰다 (transfer.md §1-2) — 사다리의 세

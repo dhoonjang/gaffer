@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { UsageAgentRow, UsageResponse } from "./types";
 
 /**
- * 계측 패널 — LLM 세션 장부를 세운다 (docs/llm/models.md §5-1).
+ * 계측 패널 — LLM 세션 장부를 세운다 (docs/common/llm/models.md §5-1).
  *
  * **여기서 계산하는 값은 없다.** 히트율도 예산 비율도 「프리픽스가 깨진 것으로
  * 보인다」도 라우트가 내고, 이 파일이 하는 일은 숫자에 자리를 주고 눈금을 붙이는

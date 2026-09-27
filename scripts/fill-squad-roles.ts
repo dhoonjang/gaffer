@@ -1,6 +1,7 @@
+import { sparql, UA } from "./wikidata";
 /**
  * 시드 완장·계약 지위 채움 — 위키가 공표한 사실만 적는다
- * (docs/data/sources.md §4.1).
+ * (docs/common/sources.md §4.1).
  *
  *   pnpm fill-squad-roles           리포트만 낸다 (기본값 — 아무것도 쓰지 않는다)
  *   pnpm fill-squad-roles --write   시드 파일에 완장·지위를 적는다
@@ -20,16 +21,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SQUAD_STATUS_STARTS, type SquadStatus } from "../packages/domain/src/squad-rules";
+import { SQUAD_STATUS_STARTS, type SquadStatus } from "../packages/domain/src/common/squad-rules";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
 const SEED_FILES = [
-  "packages/engine/src/data/epl-players.ts",
-  "packages/engine/src/data/eu-squads.ts",
+  "packages/engine/src/common/data/epl-players.ts",
+  "packages/engine/src/common/data/eu-squads.ts",
 ];
-
-const ENDPOINT = "https://query.wikidata.org/sparql";
-const UA = "story-fm-seed/1.0 (https://github.com/dhoonjang/story-fm)";
 
 /** 직전 시즌 — 계약 지위의 근거가 되는 시즌 문서 */
 const PREVIOUS_SEASON = "2025–26";
@@ -48,37 +46,6 @@ const ARTICLE_OVERRIDES: Record<string, string> = {
 };
 
 // ── 위키데이터 — 팀 id → 영어 위키 구단 문서 ──────────────────
-
-type SparqlValue = { value: string };
-type SparqlRow = Record<string, SparqlValue | undefined>;
-
-async function sparql(query: string): Promise<SparqlRow[]> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      const res = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: {
-          Accept: "application/sparql-results+json",
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": UA,
-        },
-        body: new URLSearchParams({ query }),
-      });
-      if (res.ok) {
-        const body: unknown = await res.json();
-        const bindings =
-          typeof body === "object" && body !== null && "results" in body
-            ? (body as { results: { bindings: unknown[] } }).results.bindings
-            : [];
-        return bindings.filter((b): b is SparqlRow => typeof b === "object" && b !== null);
-      }
-    } catch {
-      /* 네트워크 실패도 물러서기 대상이다 */
-    }
-    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-  }
-  throw new Error("위키데이터가 다섯 번 다 답하지 않았다");
-}
 
 /**
  * 클럽 문서는 **선수 소속으로 후보를 모으고, 명단으로 확인해서** 정한다.
@@ -517,7 +484,6 @@ const SEED_RE = /^\s*\{ nameEn: "((?:[^"\\]|\\.)*)"/;
 const NUMBER_RE = /squadNumber: (\d+)/;
 const QID_RE = /wikidataId: "(Q\d+)"/;
 /** 이미 적혀 있는 값 — 다시 돌 때 지우고 새로 적는다 (멱등) */
-const OLD_RE = /, (?:isCaptain|isViceCaptain): true|, squadStatus: "[a-z]+"/g;
 
 function readSeeds(file: string): { lines: string[]; seeds: SeedLine[] } {
   const lines = readFileSync(path.join(REPO, file), "utf8").split("\n");
@@ -578,10 +544,13 @@ function matchSeed(
 
 function withRoles(
   line: string,
-  role: { captain?: "captain" | "vice"; status?: SquadStatus } | undefined,
+  role: { captain?: "captain" | "vice" | null; status?: SquadStatus } | undefined,
 ): string {
-  const stripped = line.replace(OLD_RE, "");
-  if (role === undefined) return stripped;
+  if (role === undefined) return line;
+  let stripped = line;
+  if (role.captain !== undefined)
+    stripped = stripped.replace(/, (?:isCaptain|isViceCaptain): true/g, "");
+  if (role.status !== undefined) stripped = stripped.replace(/, squadStatus: "[a-z]+"/g, "");
   const fields =
     (role.captain === "captain" ? ", isCaptain: true" : "") +
     (role.captain === "vice" ? ", isViceCaptain: true" : "") +
@@ -593,7 +562,7 @@ function withRoles(
 // ── 실행 ───────────────────────────────────────────────────────
 
 interface Resolution {
-  captain?: "captain" | "vice";
+  captain?: "captain" | "vice" | null;
   status?: SquadStatus;
 }
 
@@ -624,7 +593,7 @@ async function main(): Promise<void> {
     // ── 완장 ──
     const found = armbandsOf(await wikitext(title));
     const seen = new Set<string>();
-    let gotArmband = false;
+    const armbands = new Map<string, "captain" | "vice">();
     for (const role of ["captain", "vice"] as const) {
       const first = found.find((a) => a.role === role);
       if (first === undefined) continue;
@@ -639,10 +608,16 @@ async function main(): Promise<void> {
         continue;
       }
       seen.add(key);
-      resolved.set(key, { ...resolved.get(key), captain: role });
-      gotArmband = true;
+      armbands.set(key, role);
     }
-    if (gotArmband) armbandTeams.push(teamId);
+    // 완장 둘을 모두 확인했을 때만 명단 전체의 옛 완장을 교체한다.
+    if (armbands.size === 2) {
+      for (const row of rows) {
+        const key = `${row.file}:${row.index}`;
+        resolved.set(key, { ...resolved.get(key), captain: armbands.get(key) ?? null });
+      }
+      armbandTeams.push(teamId);
+    }
 
     // ── 계약 지위 ──
     const season = await wikitext(`${PREVIOUS_SEASON} ${title} season`);

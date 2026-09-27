@@ -252,18 +252,21 @@ const dead = (seconds: number) => Math.round(seconds / LIVE_STEP);
 
 const sq = (v: number) => v * v;
 
-interface Ctx {
+interface PreparedInput {
+  params: Record<MatchSide, TeamParams>;
+  backLine: Record<MatchSide, number>;
+  tendency: Map<string, RoleTendency>;
+  slot: Map<string, LineupSlot>;
+  behavior: Map<string, LiveBehavior>;
+}
+
+interface Ctx extends PreparedInput {
   state: LiveMatchState;
   input: LiveInput;
   rng: () => number;
   events: MatchEvent[];
   stats: Record<string, MatchStatLine>;
-  params: Record<MatchSide, TeamParams>;
-  backLine: Record<MatchSide, number>;
-  tendency: Map<string, RoleTendency>;
-  slot: Map<string, LineupSlot>;
   factor: Map<string, number>;
-  behavior: Map<string, LiveBehavior>;
   /** 이 틱의 가치장 몫 — 편마다, 판단하는 말이 있을 때 한 번 */
   field: Partial<Record<MatchSide, SideField>>;
   /** 이 틱에 이미 세운 히트맵 — 말 id → 그 말의 지금 국면 히트맵 */
@@ -429,11 +432,25 @@ function synchronize(ctx: Ctx): void {
 // ── 한 틱 ───────────────────────────────────────────────────────────────────
 
 export function stepLive(previous: LiveMatchState, input: LiveInput): LiveStepResult {
+  return createLiveStepper(input)(previous);
+}
+
+/** 입력은 이 함수의 수명 동안 고정이다. 전술·명단·시트가 바뀌면 새 실행기를 만든다. */
+export function createLiveStepper(input: LiveInput): (state: LiveMatchState) => LiveStepResult {
+  const prepared = prepareInput(input);
+  return (state) => stepPrepared(state, input, prepared);
+}
+
+function stepPrepared(
+  previous: LiveMatchState,
+  input: LiveInput,
+  prepared: PreparedInput,
+): LiveStepResult {
   if (previous.interval) return { state: previous, events: [], stats: {} };
   const state: LiveMatchState = cloneState(previous);
   state.tick += 1;
   state.seconds = Math.round((previous.seconds + LIVE_STEP) * 1000) / 1000;
-  const ctx = buildContext(state, input);
+  const ctx = buildContext(state, input, prepared);
   synchronize(ctx);
   refreshLines(ctx);
 
@@ -477,39 +494,45 @@ function cloneState(s: LiveMatchState): LiveMatchState {
   };
 }
 
-function buildContext(state: LiveMatchState, input: LiveInput): Ctx {
+function prepareInput(input: LiveInput): PreparedInput {
   const params = {
     home: teamParamsOf(input.home.tactics, input.home.uptake, input.sheet.cohesion.home),
     away: teamParamsOf(input.away.tactics, input.away.uptake, input.sheet.cohesion.away),
   };
   const tendency = new Map<string, RoleTendency>();
   const slot = new Map<string, LineupSlot>();
-  const factor = new Map<string, number>();
   for (const side of ["home", "away"] as const) {
     for (const s of sideInputOf(input, side).slots) {
       slot.set(s.player.id, s);
       tendency.set(s.player.id, roleTendencyOf(s.position, s.roleId));
     }
   }
+  const behavior = new Map<string, LiveBehavior>();
+  for (const b of input.sheet.behaviors) behavior.set(b.player, b);
+  return {
+    params,
+    backLine: { home: backLineOf(input.home.slots), away: backLineOf(input.away.slots) },
+    tendency,
+    slot,
+    behavior,
+  };
+}
+
+function buildContext(state: LiveMatchState, input: LiveInput, prepared: PreparedInput): Ctx {
+  const factor = new Map<string, number>();
   for (const p of state.players) {
-    const s = slot.get(p.id);
+    const s = prepared.slot.get(p.id);
     if (!s) continue;
     factor.set(p.id, matchFactor(s, p.condition, input.sheet.edge[p.id] ?? 0));
   }
-  const behavior = new Map<string, LiveBehavior>();
-  for (const b of input.sheet.behaviors) behavior.set(b.player, b);
   return {
     state,
     input,
     rng: makeRng(input.seed, `live:${input.matchId}:${state.tick}`),
     events: [],
     stats: {},
-    params,
-    backLine: { home: backLineOf(input.home.slots), away: backLineOf(input.away.slots) },
-    tendency,
-    slot,
+    ...prepared,
     factor,
-    behavior,
     field: {},
     zones: new Map(),
     defensiveLine: { home: 12, away: 12 },
@@ -2011,15 +2034,27 @@ function passSuccess(
   return clamp(p, 0.02, 0.98);
 }
 
-function offsideAt(ctx: Ctx, receiver: LivePlayer, side: MatchSide): boolean {
-  const { state } = ctx;
-  const line = ctx.defensiveLine[otherSide(side)];
-  const receiverDepth = depthOf(receiver.x, side);
-  const ballDepth = depthOf(state.ball.x, side);
+export function isOffsidePosition(
+  receiverX: number,
+  ballX: number,
+  opponentsX: readonly number[],
+  side: MatchSide,
+): boolean {
+  const depths = opponentsX.map((x) => depthOf(x, otherSide(side))).sort((a, b) => a - b);
+  const line = depths[1] ?? 0;
+  const receiverDepth = depthOf(receiverX, side);
   return (
     receiverDepth > FIELD.length / 2 &&
     receiverDepth > FIELD.length - line + 0.3 &&
-    receiverDepth > ballDepth + 0.3
+    receiverDepth > depthOf(ballX, side) + 0.3
+  );
+}
+function offsideAt(ctx: Ctx, receiver: LivePlayer, side: MatchSide): boolean {
+  return isOffsidePosition(
+    receiver.x,
+    ctx.state.ball.x,
+    ctx.state.players.filter((p) => p.side !== side).map((p) => p.x),
+    side,
   );
 }
 

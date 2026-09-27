@@ -4,7 +4,7 @@
  * 단언도, 돌렸을 때의 표도, `pnpm balance --list`도 전부 이 표에서 읽는다. 문서
  * (`docs/simulation/*.md`)는 **왜 그 구간인가**를 적고 숫자는 여기를 가리킨다 —
  * 같은 값이 두 곳에 적히면 갈리고, 갈린 채로 오래 산다
- * (→ `docs/simulation/balance-harness.md`).
+ * (→ `docs/common/balance-harness.md`).
  */
 
 import { appendFileSync } from "node:fs";
@@ -129,7 +129,7 @@ function pad(text: string, width: number): string {
 
 /**
  * 측정값을 파일로도 남길 자리 — 주간 워크플로가 `pnpm balance --report`로 준다
- * (→ `docs/simulation/balance-harness.md` §5).
+ * (→ `docs/common/balance-harness.md` §5).
  *
  * 비어 있으면 아무것도 쓰지 않는다. 손으로 돌리는 자리는 표만 읽으면 되고, 파일을
  * 남기는 것은 그 표를 사람 없이 판정해야 하는 자리 하나뿐이다.
@@ -147,7 +147,7 @@ export interface ReadingLine {
    *
    * **건너뛴 것은 보고한 것이다.** 이 줄이 없으면 리포트가 그 하네스를 「돌지
    * 못했다」(`missing`) 이탈로 세어 주간 워크플로가 이슈를 연다 — 키가 없어 돌지
-   * 않은 것은 이탈이 아니다 (→ `docs/simulation/balance-harness.md` §5).
+   * 않은 것은 이탈이 아니다 (→ `docs/common/balance-harness.md` §5).
    */
   readonly skipped?: true;
   readonly bands: ReadonlyArray<Band & { value: number | null; outside: boolean }>;
@@ -182,7 +182,7 @@ function appendReport(harness: Harness, rows: readonly Verdict[], label: string)
 
 /**
  * 돌 조건이 없어 건너뛴 하네스 — **보고는 남기고** 사람이 읽을 한 줄을 돌려준다
- * (→ `docs/simulation/balance-harness.md` §3 「키가 필요한 하네스」).
+ * (→ `docs/common/balance-harness.md` §3 「키가 필요한 하네스」).
  *
  * `reportOf`와 같은 자리다: 하네스 본체가 리포트 줄을 손으로 적으면 다음 하네스가
  * 그것을 빠뜨리고, 빠뜨린 하네스는 이탈로 읽힌다.

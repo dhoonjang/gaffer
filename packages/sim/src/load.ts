@@ -1,5 +1,11 @@
 import type { LiveLoad, TacticsSpec } from "@story-fm/domain";
-import { CONDITION_MAX, RATING_MAX, TACTIC_SCALE_NEUTRAL, weightSlotOf } from "@story-fm/domain";
+import {
+  dexp,
+  CONDITION_MAX,
+  RATING_MAX,
+  TACTIC_SCALE_NEUTRAL,
+  weightSlotOf,
+} from "@story-fm/domain";
 import type { WeightSlot } from "@story-fm/domain";
 
 /**
@@ -77,27 +83,7 @@ export function conditionAfterLoad(
 ): number {
   const units = loadUnits(added) * staminaRelief(stamina) * legs;
   const now = Math.max(0, Math.min(CONDITION_MAX, condition));
-  return now * decay(LOAD_DECAY * units);
-}
-
-/**
- * e^(−x)의 결정적 근사 — 실시간 경기가 클라이언트와 서버에서 같은 답을 내야 한다
- * (live-match.md §8.2). x는 한 틱의 부하라 아주 작고, 간이 시뮬의 90분치도 2를 넘지 않는다.
- * 구간 [0, 4]에서 상대 오차 1e-9 안쪽인 급수(항 14개)를 쓴다. 그 위는 반으로 갈라 제곱한다.
- */
-function decay(x: number): number {
-  if (x <= 0) return 1;
-  if (x > 4) {
-    const half = decay(x / 2);
-    return half * half;
-  }
-  let term = 1;
-  let sum = 1;
-  for (let k = 1; k <= 14; k++) {
-    term *= -x / k;
-    sum += term;
-  }
-  return sum;
+  return now * dexp(-Math.max(0, LOAD_DECAY * units));
 }
 
 // ── 기대 부하표 — 간이 시뮬의 입력 (match.md §6) ────────────────────────────

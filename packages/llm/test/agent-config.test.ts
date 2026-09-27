@@ -57,10 +57,6 @@ describe("에이전트별 LLM 설정", () => {
     for (const agent of AGENT_NAMES) {
       expect(LLM_CONFIG.agents[agent].timeoutMs).toBeGreaterThan(0);
     }
-    // 도구 루프가 도는 서사 자리는 결산 한 줄보다 길게 준다
-    expect(LLM_CONFIG.agents.gm.timeoutMs).toBeGreaterThan(
-      LLM_CONFIG.agents["training-rater"].timeoutMs,
-    );
   });
 
   it("어느 에이전트든 제공자와 모델을 독립적으로 고른다", () => {

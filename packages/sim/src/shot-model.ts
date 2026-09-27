@@ -1,3 +1,4 @@
+import { dlog, dsigmoid } from "@story-fm/domain";
 import type { Player } from "@story-fm/domain";
 
 /** 슈팅 가중 리그 평균 75가 기회 xG를 그대로 실현하는 기준점. */
@@ -19,12 +20,12 @@ export const BLOCKED_SHARE = 0.38;
 /** 부동소수점 로그의 정의역만 지키는 수치 안전값 — 밸런스 상·하한이 아니다. */
 const PROBABILITY_EPSILON = Number.EPSILON;
 
-const sigmoid = (z: number): number => 1 / (1 + Math.exp(-z));
+const sigmoid = dsigmoid;
 
 /** 기회 xG를 실제 슈터가 찼을 때의 골 확률로 바꾼다. */
 export function finishingGoalProbability(xg: number, finishing: number): number {
   const q = Math.min(1 - PROBABILITY_EPSILON, Math.max(PROBABILITY_EPSILON, xg));
-  const logit = Math.log(q / (1 - q));
+  const logit = dlog(q / (1 - q));
   const finishingDelta = (finishing - FINISHING_PIVOT) / FINISHING_SCALE;
   return sigmoid(logit + FINISHING_LOGIT_WEIGHT * finishingDelta);
 }
@@ -164,7 +165,7 @@ export function keeperSkill(p: Player | null): number {
  * 이 킥의 성공 확률 — 키커와 골키퍼의 기량 차가 정한다.
  *
  * ⚠️ **양쪽 다 막는다.** 대역(0.62~0.80)은 문서가 쥔 값이고, 페널티가 실력이 덜
- * 갈리는 무대라는 설계가 거기 들어 있다 (→ docs/data/competition.md §6).
+ * 갈리는 무대라는 설계가 거기 들어 있다 (→ docs/match/competition.md §6).
  *
  * 경기 중 페널티는 이 값이 곧 그 슛의 `xg`이자 `goalProbability`다 — 결정력을 한 번
  * 더 얹지 않는다. `penaltySkill`이 이미 결정력 0.5를 싣고 있어 두 번 세는 것이 된다.

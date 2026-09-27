@@ -3,11 +3,11 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LeagueListSkeleton } from "@/components/skeleton";
-import { Loading } from "@/components/loading";
+import { LeagueListSkeleton } from "@/domains/common/ui/skeleton";
+import { Loading } from "@/domains/common/ui/loading";
 import type { ClubColours } from "@story-fm/domain";
-import { Crest, clubStyle } from "@/components/crest";
-import { HelpPopover } from "@/components/help-popover";
+import { Crest, clubStyle } from "@/domains/common/ui/crest";
+import { HelpPopover } from "@/domains/common/ui/help-popover";
 
 interface TeamEntry {
   id: string;
@@ -45,7 +45,7 @@ const STEPS = [
 ] as const;
 type Step = (typeof STEPS)[number]["key"];
 
-/** 강팀부터 — 보드 기대가 곧 난이도의 지형이다. 묶지는 않는다, 순서가 말한다 */
+/** 강팀부터 — 구단 경쟁 기준가 곧 난이도의 지형이다. 묶지는 않는다, 순서가 말한다 */
 const byTier = (a: TeamEntry, b: TeamEntry) => a.tier - b.tier;
 
 /**
@@ -230,7 +230,7 @@ export default function NewGamePage() {
           </p>
           <h1>어느 팀을 맡습니까?</h1>
           {/* 강팀부터 선다 — 팀을 고르는 일이 곧 어떤 요구를 안는 일이라 카드마다
-              보드 기대가 붙는다. 줄로 갈라 묶지는 않는다, 순서가 이미 말한다 */}
+              구단 경쟁 기준가 붙는다. 줄로 갈라 묶지는 않는다, 순서가 이미 말한다 */}
           <div className="team-grid" data-testid="team-grid">
             {leagueTeams.map((t) => (
               /* 카드마다 자기 구단의 `--club*`가 선다 — 띠와 문장이 그 색이다. 고른 카드는
@@ -261,7 +261,7 @@ export default function NewGamePage() {
             <span>
               <div className="appointment-club">{team.name}</div>
               <div className="tier">
-                {league?.name ?? ""} · 보드 기대: {team.expectation}
+                {league?.name ?? ""} · 구단 경쟁 기준: {team.expectation}
               </div>
             </span>
           </div>
@@ -282,10 +282,8 @@ export default function NewGamePage() {
               <label className="field-label" htmlFor="manager-background">
                 이력
               </label>
-              {/* 능력치의 출처는 규칙이지 조작법이 아니다 — 적기 전에 알아야 하지만
-                  화면에 펼쳐 두면 안내 문구가 된다 (design-system.md §1 조작) */}
               <HelpPopover label="이력이 무엇을 정하는지">
-                여기 적으신 이력이 감독의 초기 능력치가 됩니다.
+                이 이력을 바탕으로 부임 첫날의 사건과 인물들의 반응이 만들어집니다.
               </HelpPopover>
             </span>
             <textarea

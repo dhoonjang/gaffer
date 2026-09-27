@@ -43,7 +43,9 @@ const flag = (name: string): string | undefined => {
 const dry = argv.includes("--dry");
 const showEvents = argv.includes("--events");
 const seed = Number(flag("seed") ?? 42);
-const games = Math.max(1, Number(flag("games") ?? 1));
+const games = Number(flag("games") ?? (argv.includes("--games") ? NaN : 1));
+if (!Number.isSafeInteger(games) || games < 1)
+  throw new Error("--games must be a positive integer");
 
 // ---- 픽스처 ----
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -186,7 +188,7 @@ for (let i = 0; i < games; i++) {
   const fatigue = matchFatigueOf(match);
   const drained = Object.values(fatigue);
   console.log(
-    `  체력 소모 평균 ${(drained.reduce((a, b) => a + b, 0) / Math.max(1, drained.length)).toFixed(1)} · digest ${liveDigest(match.state, match.ledger)}`,
+    `  체력 소모 평균 ${(drained.reduce((a, b) => a + b, 0) / Math.max(1, drained.length)).toFixed(1)} · digest ${liveDigest(match)}`,
   );
   if (showEvents) for (const e of match.ledger.events) console.log(eventLine(e));
 }

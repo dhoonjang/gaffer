@@ -1,6 +1,7 @@
+import { sparql } from "./wikidata";
 /**
  * 시드 국적 채움 — 위키데이터가 정하고, 갈리면 대표팀 기록이 가른다
- * (docs/data/sources.md §4.1).
+ * (docs/common/sources.md §4.1).
  *
  *   pnpm fill-nationality           리포트만 낸다 (기본값 — 아무것도 쓰지 않는다)
  *   pnpm fill-nationality --write   시드 파일에 `nationality`를 적는다
@@ -17,13 +18,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ASSOCIATIONS, isAssociation } from "../packages/domain/src/nationality";
+import { ASSOCIATIONS, isAssociation } from "../packages/domain/src/common/nationality";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
 const SEED_FILES = [
-  "packages/engine/src/data/epl-players.ts",
-  "packages/engine/src/data/eu-squads.ts",
-  "packages/engine/src/data/market-leagues.ts",
+  "packages/engine/src/common/data/epl-players.ts",
+  "packages/engine/src/common/data/eu-squads.ts",
+  "packages/engine/src/common/data/market-leagues.ts",
 ];
 
 // ── 위키데이터 항목 → 협회 코드 ────────────────────────────────
@@ -176,48 +177,7 @@ const OVERRIDES: Record<string, { nationality: string; secondNationality?: strin
 
 // ── 위키데이터 조회 ────────────────────────────────────────────
 
-const ENDPOINT = "https://query.wikidata.org/sparql";
-const UA = "story-fm-seed/1.0 (https://github.com/dhoonjang/story-fm)";
-/** `VALUES` 한 묶음의 크기 — 생년월일 절차와 같은 눈금 (sources.md §4.1) */
 const BATCH = 250;
-
-interface SparqlValue {
-  value: string;
-}
-type SparqlRow = Record<string, SparqlValue | undefined>;
-
-function isSparqlRow(x: unknown): x is SparqlRow {
-  return typeof x === "object" && x !== null;
-}
-
-/** SPARQL 한 번 — 502가 흔한 엔드포인트라 물러서며 다시 묻는다 */
-async function sparql(query: string): Promise<SparqlRow[]> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      const res = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: {
-          Accept: "application/sparql-results+json",
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": UA,
-        },
-        body: new URLSearchParams({ query }),
-      });
-      if (res.ok) {
-        const body: unknown = await res.json();
-        const bindings =
-          typeof body === "object" && body !== null && "results" in body
-            ? (body as { results: { bindings: unknown[] } }).results.bindings
-            : [];
-        return bindings.filter(isSparqlRow);
-      }
-    } catch {
-      /* 네트워크 실패도 물러서기 대상이다 */
-    }
-    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-  }
-  throw new Error("위키데이터가 다섯 번 다 답하지 않았다");
-}
 
 const idOf = (uri: string): string => uri.slice(uri.lastIndexOf("/") + 1);
 const rankOf = (uri: string): string => uri.slice(uri.lastIndexOf("#") + 1);
@@ -432,8 +392,8 @@ function readSeeds(file: string): { lines: string[]; seeds: SeedLine[] } {
 
 /** 시드 한 줄에 국적을 얹는다 — 자리는 `position` 바로 앞 */
 function withNationality(line: string, r: Resolution | undefined): string {
+  if (r?.nationality === undefined) return line;
   const stripped = line.replace(OLD_RE, "");
-  if (r?.nationality === undefined) return stripped;
   const field =
     `, nationality: "${r.nationality}"` +
     (r.secondNationality === undefined ? "" : `, secondNationality: "${r.secondNationality}"`);

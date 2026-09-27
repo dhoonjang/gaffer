@@ -24,7 +24,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
  * 전환을 열다섯 번 되풀이한 뒤에도 **구단이 선발 XI와 계약을 세우는가**
- * (→ `docs/simulation/season.md` §6).
+ * (→ `docs/common/season.md` §6).
  *
  *   pnpm balance squad-longevity
  *

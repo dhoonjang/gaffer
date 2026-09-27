@@ -9,7 +9,6 @@ import {
   createGame,
   historyEnd,
   historyStart,
-  interpretBackgroundHeuristic,
   peaceTurns,
   planHistoryFold,
   type GameState,
@@ -24,7 +23,7 @@ import { outOfBand, reportOf, type Readings } from "../../engine/harness/harness
 
 /**
  * 평시 이력의 창 — **상한과 잔량이 실제 대화에서 몇 턴인가**, 창이 얼마나 자주
- * 미끄러지는가, 압축이 약속한 잔량 안으로 들어오는가 (→ docs/llm/agents.md §5-1).
+ * 미끄러지는가, 압축이 약속한 잔량 안으로 들어오는가 (→ docs/common/llm/agents.md §5-1).
  *
  *   pnpm balance history-window
  *
@@ -64,7 +63,6 @@ function build(): GameState {
     userTeamId: "arsenal",
     managerName: "김감독",
     background,
-    attributes: interpretBackgroundHeuristic(background),
   });
 }
 

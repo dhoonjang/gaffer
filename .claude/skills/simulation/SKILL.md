@@ -155,17 +155,11 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
 
 ### 4-1. 기자회견
 
-회견은 세계가 먼저 말을 거는 자리다 — 경기마다(친선 제외), 무승 3–4경기,
-개막 · 더비 전야, 큰 이적, 시즌 마지막 리그 경기 뒤. 스탠스별 대가(career.md
-§4): 감싸기 −보드 −언론 +선수단 · 책임 인정 +보드 +언론 +선수단 · 공개 비판
-+언론 −선수단 · 도발 +언론 −보드 · 말 아끼기 −언론 · 불참 −언론 크게.
+회견은 경기·계약·선수단 사실을 두고 기자와 대화하는 자리다. GM이 맥락에 맞는
+연속 반응을 내며 코어가 대상과 효과 누계를 제한한다. 태도별 고정 효과표는 없다.
 
-- 이겼으면 대체로 **책임 인정이나 도발**(공은 선수에게, 말은 당당하게), 졌으면
-  **책임 인정**, 선수가 표적이면 **감싸기**를 쓰되 한 달에 몇 번으로 제한한다.
-  한 시즌 같은 스탠스로 가지 않는다 — 언론 평판이 45 아래로 내려가면 감싸기를
-  끊는다.
-- 답은 회견 안건이 선 **바로 그 턴이나 다음 턴**에 한다. 시간을 흘려 불참으로
-  닫히게 두지 않는다.
+- 감독의 의도와 실제 장부를 근거로 답한다. 특정 태도를 반복해 평판을 최적화하지 않는다.
+- 답할 안건은 저널에 남기고 처리한다. 시간이 지나 닫힌 회견과 실제로 답한 회견을 구분한다.
 
 ## 5. 경기일
 
@@ -256,7 +250,7 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
   붙은 선수는 남의 구단이 반년 전에 데려갈 수 있다. **답이 오면 그날 서명한다** —
   서명 전엔 계약이 아니다.
 - **재정**: `state.sh finance` — 잔고 · 주급 여력 · 보드 요청(`board`) · 예산
-  동결. 보드 요청은 기한 전에 이행하거나 한 번 되묻는다(불이행 −6, 이행 +3).
+  동결. 자금 요청의 조건·기한과 `boardAgenda`의 기대·평가를 구분해 확인한다.
 - **평판**: `state.sh reputation`.
 
 ### 6-3. 이적창 (여름 7/1–9/1 · 겨울 1/1–2/1)
@@ -346,9 +340,9 @@ GM이 "확정됐다"고 써도 `views`에 없으면 **되지 않은 것**이다 
   `POST /api/games/:id/turn/stream` · `POST /api/games/:id/lineup` ·
   `GET /api/games/:id/player/:playerId` · `GET /api/games/:id/match-report/:matchId`
 - 설계: [overview.md](../../../docs/overview.md) §2–§4 ·
-  [season.md](../../../docs/simulation/season.md) §5(시간) ·
-  [match.md](../../../docs/simulation/match.md) §2(교체) ·
-  [transfer.md](../../../docs/simulation/transfer.md) §1 · §5 · §9 ·
-  [career.md](../../../docs/simulation/career.md) §4–§5 ·
-  [people.md](../../../docs/data/people.md) §4 · §8
+  [season.md](../../../docs/common/season.md) §5(시간) ·
+  [match.md](../../../docs/match/match.md) §2(교체) ·
+  [transfer.md](../../../docs/negotiation/transfer.md) §1 · §5 · §9 ·
+  [career.md](../../../docs/story/career.md) §4–§5 ·
+  [people.md](../../../docs/story/people.md) §4 · §8
 - 기록: `pnpm log` · `pnpm log <turn-id>` · `pnpm log --facts <kind> --game <id>`

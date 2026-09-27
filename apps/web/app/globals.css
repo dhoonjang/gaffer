@@ -6,23 +6,23 @@
  * 한다 — 뷰가 공용 규칙을 덮는 쪽이지 그 반대가 아니다.
  */
 /* 서체 선언이 맨 앞이다 — 토큰이 서체를 부르기 전에 @font-face가 먼저 서 있어야 한다 */
-@import "./styles/fonts.css";
+@import "../domains/common/styles/fonts.css";
 /* 화면 단계 토큰이 그다음이다 — 뒤의 모든 파일이 이 넷 중에서 고른다 */
-@import "./styles/breakpoints.css";
-@import "./styles/shell.css";
-@import "./styles/shared.css";
-@import "./styles/office/squad.css";
-@import "./styles/office/calendar.css";
-@import "./styles/office/finance.css";
-@import "./styles/office/career.css";
-@import "./styles/office/competitions.css";
+@import "../domains/common/styles/breakpoints.css";
+@import "../domains/common/styles/shell.css";
+@import "../domains/common/styles/shared.css";
+@import "../domains/match/styles/squad.css";
+@import "../domains/story/styles/calendar.css";
+@import "../domains/negotiation/styles/finance.css";
+@import "../domains/story/styles/career.css";
+@import "../domains/match/styles/competitions.css";
 /* 경기의 문 — 킥오프 게이트 한 장. 아래의 반응형이 이 값을 덮는다 */
-@import "./styles/match-gate.css";
-@import "./styles/negotiation.css";
-@import "./styles/responsive.css";
-@import "./styles/match.css";
+@import "../domains/match/styles/match-gate.css";
+@import "../domains/negotiation/styles/negotiation.css";
+@import "../domains/common/styles/responsive.css";
+@import "../domains/match/styles/match.css";
 /* 경기 리포트 — 달력 상세와 종료 카드가 같이 쓰는 한 벌이라 뷰 파일 밖에 선다 */
-@import "./styles/match-report.css";
+@import "../domains/match/styles/match-report.css";
 /* 선수 카드 — 이름이 서는 모든 화면에서 열리므로 역시 뷰 파일 밖이다 */
-@import "./styles/player-card.css";
-@import "./styles/proposal.css";
+@import "../domains/common/styles/player-card.css";
+@import "../domains/negotiation/styles/proposal.css";

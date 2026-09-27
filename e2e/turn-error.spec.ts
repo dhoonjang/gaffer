@@ -13,7 +13,7 @@ const PERMANENT_ERROR = "요청이나 설정이 잘못됐습니다 — 서버 �
  * 아무것도 남기지 않는다: 유저 발화도, 사과 대사를 읊는 모델 턴도.
  *
  * 턴 응답을 502로 가로채 재현한다 (서버가 세이브를 건드리지 않는 것은
- * apps/web/test/turn-error.test.ts가 검증한다).
+ * apps/web/test/app/turn-error.test.ts가 검증한다).
  */
 test("LLM 실패 배너", async ({ page }) => {
   await page.goto("/new");
@@ -82,7 +82,7 @@ test("LLM 실패 배너", async ({ page }) => {
  *
  * 그리고 그 배너는 "취소"라고 말하지 않는다: 서버는 연결이 끊겨도 턴을 끝까지 돌려
  * 저장하므로 입력도 되돌아오지 않는다 — 되돌리면 재시도가 같은 지시를 두 번 태운다
- * (docs/llm/models.md §1-1).
+ * (docs/common/llm/models.md §1-1).
  */
 test("멎은 턴도 실패로 끝나고 다음 턴을 막지 않는다", async ({ page }) => {
   await page.goto("/new");

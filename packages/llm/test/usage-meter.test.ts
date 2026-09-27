@@ -4,6 +4,7 @@ import {
   TokenBudgetExceededError,
   addUsage,
   beginGameUsage,
+  withGameUsage,
   billedTokens,
   budgetVerdict,
   cacheAlerts,
@@ -379,7 +380,40 @@ describe("meterLlm — 계약이 같으므로 부르는 쪽은 감싼 줄 모른
  * 예산의 단위는 **게임**이다 — 프로세스 누적으로 세면 한 게임이 상한을 넘긴 뒤로
  * 재시작 전까지 모든 게임의 결산이 꺼진다 (models.md §4).
  */
-describe("beginGameUsage — 장부는 한 번에 게임 하나를 담는다", () => {
+describe("beginGameUsage — 게임별 누적 장부를 선택한다", () => {
+  it("overlapping games retain their own success, failure and budget totals", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const a = withGameUsage("A", async () => {
+      const llm = meterLlm(
+        {
+          async runTurn(req) {
+            await gate;
+            req.onUsage?.(usageOf({ inputTokens: 70 }));
+            throw new Error("failed-A");
+          },
+        },
+        "gm",
+      );
+      await expect(llm.runTurn(request)).rejects.toThrow("failed-A");
+      await meterLlm(stubLlm(usageOf({ inputTokens: 30 })), "gm").runTurn(request);
+      return llmUsage();
+    });
+    const b = withGameUsage("B", async () => {
+      await meterLlm(stubLlm(usageOf({ inputTokens: 5 })), "gm").runTurn(request);
+      release();
+      return llmUsage();
+    });
+    const [one, two] = await Promise.all([a, b]);
+    expect(one.usage.inputTokens).toBe(100);
+    expect(one.calls).toBe(2);
+    expect(two.usage.inputTokens).toBe(5);
+    expect(two.calls).toBe(1);
+    expect(withGameUsage("A", () => llmUsage().usage.inputTokens)).toBe(100);
+    expect(withGameUsage("B", () => budgetVerdict(llmUsage(), 10).over)).toBe(false);
+  });
   it("같은 게임이면 이어서 센다", async () => {
     const llm = meterLlm(stubLlm(usageOf({ inputTokens: 100, outputTokens: 20 })), "gm");
     beginGameUsage("save-1");

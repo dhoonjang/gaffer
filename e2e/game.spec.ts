@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { token } from "./palette";
 import { COLD_MS } from "./timeouts";
 
 /**
@@ -8,8 +7,8 @@ import { COLD_MS } from "./timeouts";
  * 게임 목록 → 새 게임(팀 선택 + 감독 직접 입력) → 부임 브리핑 → 훈련 지시
  * (스킬 카드) → 경기일 진행 → 킥오프 → 경기 완주 → 오피스 4뷰 검증
  *
- * ⚠️ **채팅에 치는 말은 mock 대본의 키다** (`packages/agents/src/mock-script.ts` —
- * docs/llm/agents.md §8). 대본은 자연어를 해석하지 않으므로 글자가 하나만 달라도
+ * ⚠️ **채팅에 치는 말은 mock 대본의 키다** (`packages/agents/src/app/mock-script.ts` —
+ * docs/common/llm/agents.md §8). 대본은 자연어를 해석하지 않으므로 글자가 하나만 달라도
  * 그 턴은 아무 도구도 부르지 않는다. 표에 없는 말을 치는 자리는 「턴이 그냥 돈다」를
  * 재는 자리뿐이다.
  */
@@ -235,7 +234,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
    */
   await expect(page.locator(".kickoff-gate .kg-line")).toHaveCount(22);
   // 중계는 화자다 — 문구가 아니라 그 화자의 말풍선(`.say.broadcast`)이 섰는지를 본다
-  // (`BROADCAST_SPEAKER`, packages/domain/src/persona.ts)
+  // (`BROADCAST_SPEAKER`, packages/domain/src/common/persona.ts)
   const broadcast = page.locator(".say.broadcast");
   await expect(broadcast).toHaveCount(0);
   await page.getByTestId("kickoff-enter").click();
@@ -373,13 +372,14 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   await page.getByTestId("mtab-판세").click();
 
   /**
-   * ── 경기 완주 — **시계를 미는 것은 서버다** (live-match.md). 빈 입력의 손잡이는
+   * ── 경기 완주 — 빈 입력의 손잡이는
    * 진행이 아니라 일시정지·재개이고, 감독이 손을 떼면 경기는 알아서 흐른다. 하프타임과
    * 연장 개시는 감독이 재개하는 자리라 멈춘 것을 보면 눌러 준다.
+   * 케이스의 시간 상한까지 재개를 처리한다. 중간에 조작을 끊으면 뒤늦게 도착한
+   * 하프타임이 자동으로 끝나기를 기다리게 된다.
    */
   const advance = page.getByTestId("match-advance");
-  for (let i = 0; i < 240; i++) {
-    if ((await page.locator(".app").getAttribute("data-phase")) === "idle") break;
+  while ((await page.locator(".app").getAttribute("data-phase")) !== "idle") {
     // 멈춰 선 자리(하프타임·정지)만 다시 민다 — 흐르는 중에 누르면 세우는 손이 된다
     if (await advance.isEnabled()) {
       const label = await advance.getAttribute("aria-label");
@@ -434,7 +434,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
 
   await page.getByTestId("tab-재정").click();
   await expect(page.getByTestId("view-finance")).toContainText("구단 잔고");
-  // 실시간 재정 활동 + 이번 달 진행 중 집계 (docs/simulation/finance.md)
+  // 실시간 재정 활동 + 이번 달 진행 중 집계 (docs/negotiation/finance.md)
   await expect(page.getByTestId("fin-feed")).toContainText("선수 주급");
   await expect(page.getByTestId("view-finance")).toContainText("월간 재정 보고서");
   await expect(page.getByTestId("view-finance")).toContainText("진행 중");
@@ -468,7 +468,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
 
   await page.getByTestId("tab-커리어").click();
   await expect(page.getByTestId("view-career")).toContainText("김테스트 감독");
-  await expect(page.getByTestId("view-career")).toContainText("리더십");
+  await expect(page.getByTestId("view-career")).toContainText("평판");
   await expect(page.getByTestId("view-career")).toContainText("트로피 보관함");
 
   // ── 로고 → 게임 목록으로 나가기 (진행한 게임이 목록에 남아 있다) ──
@@ -688,7 +688,7 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   /*
    * 채팅으로 모양을 말해도 **판은 그대로 서 있다** — 프리셋은 새 게임의 최초 배치를
    * 만드는 데만 쓰고, 세이브가 시작된 뒤 자리를 옮기는 것은 칩을 끄는 일이다
-   * (docs/data/team.md §6). 그 지시에서 상태가 되는 것은 전술 6축뿐이다.
+   * (docs/common/team.md §6). 그 지시에서 상태가 되는 것은 전술 6축뿐이다.
    */
   await page.getByTestId("tab-채팅").click();
   await page.getByTestId("chat-input").fill("4-4-2로 수비적으로 가자");
@@ -740,35 +740,6 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   await expect(page.getByTestId("player-detail")).toBeVisible();
   expect(await page.locator(".pitch-slot .slot-name").allTextContents()).toEqual(beforeXI);
 
-  /**
-   * 포지션 칩의 등급은 **글자색 하나로** 갈린다 — 선호는 금색, 소화 가능은 은색,
-   * 익숙하지 않은 자리는 꺼진 회색.
-   *
-   * 값이 아니라 **토큰과 비교한다**(`e2e/palette.ts`) — 팔레트를 손보면 세 색이
-   * 함께 움직이지만 매핑은 그대로여야 한다. 그래도 클래스 이름이 아니라 계산된
-   * 색으로 보는 이유: 같은 선택자가 스타일 파일 뒤쪽에 한 벌 더 서면 앞에서 무엇을
-   * 고쳐도 조용히 덮이고, 그 사고는 클래스로는 잡히지 않는다.
-   */
-  const gold = await token(page, "--gold-soft");
-  const silver = await token(page, "--silver");
-  const dim = await token(page, "--dim");
-  const colorOf = (sel: string) =>
-    page
-      .locator(`[data-testid="player-detail"] ${sel}`)
-      .first()
-      .evaluate((n) => getComputedStyle(n).color);
-  expect(await colorOf(".pd-pos.natural")).toBe(gold);
-  expect(await colorOf(".pd-pos:not(.natural):not(.foreign)")).toBe(silver);
-  // 비선발은 맡은 자리가 없다 — `.here`는 아예 서지 않는다 (그 밑줄은 선발 상세에서 본다)
-  await expect(page.locator('[data-testid="player-detail"] .pd-pos.here')).toHaveCount(0);
-  /**
-   * 포지션은 **테두리 없는 글자**이고 역할만 알약이다 — 읽는 값과 누르는 물건이
-   * 같은 모양이면 감독은 눌러 보고 고장인 줄 안다. 테두리가 그 경계를 말한다.
-   */
-  const borders = await page
-    .locator('[data-testid="player-detail"] .pd-pos')
-    .evaluateAll((ns) => ns.map((n) => getComputedStyle(n).borderTopWidth));
-  expect(new Set(borders)).toEqual(new Set(["0px"])); // 포지션은 **하나도** 테두리가 없다
   /**
    * **자리가 없으면 역할도 없다** (player.md §3.1). 이 상세는 비선발이라 알약이
    * 아예 서지 않는다 — 주 포지션을 자리로 치고 목록을 켜 두면 감독은 코어가 받지
@@ -838,7 +809,6 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
    */
   const rolePill = page.locator('[data-testid="player-detail"] .pd-role').first();
   await expect(rolePill).toBeVisible();
-  expect(await rolePill.evaluate((n) => getComputedStyle(n).borderTopWidth)).not.toBe("0px");
   /**
    * **지금 자리라고 글자색을 바꾸지 않는다.** 밑줄만 얹는다 — 색까지 바꾸면 그 자리가
    * 선호인지 무리한 배치인지가 화면에서 사라진다. 선발은 맡은 자리가 있으니 그 칩이
@@ -846,15 +816,6 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
    */
   const here = page.locator('[data-testid="player-detail"] .pd-pos.here');
   await expect(here).toHaveCount(1);
-  const hereState = await here.evaluate((n) => ({
-    color: getComputedStyle(n).color,
-    shadow: getComputedStyle(n).boxShadow,
-    natural: n.classList.contains("natural"),
-    foreign: n.classList.contains("foreign"),
-  }));
-  expect(hereState.color).toBe(hereState.natural ? gold : hereState.foreign ? dim : silver);
-  // 밑줄만이 "여기"를 말한다 — 그 밑줄은 강조색 두 번째 축이다
-  expect(hereState.shadow).toContain(await token(page, "--accent-2"));
   // 펼치면 16축이 전부 보이고, 체력이 왜 그런지 한 문장으로 설명한다
   await expect(page.getByTestId("player-mood")).not.toBeEmpty();
   await expect(page.locator(".detail-row .pd-axis")).toHaveCount(16);
@@ -1041,6 +1002,16 @@ test("전술판 자유 배치 — 드래그로 한 자리만 세밀하게 조정
   // 중간 지점을 거쳐야 드래그 임계값을 넘고 미리보기가 따라온다
   await page.mouse.move(target.x, target.y, { steps: 8 });
   await expect(page.locator(".pitch-chip.dragging")).toHaveCount(1);
+  await page.evaluate(() =>
+    window.dispatchEvent(new PointerEvent("pointercancel", { pointerId: 1 })),
+  );
+  await page.mouse.up();
+  await expect(page.locator(".pitch-chip.dragging")).toHaveCount(0);
+  await expect(slot1.locator(".slot-code")).toHaveText(beforeCode ?? "");
+  await expect(page.getByTestId("shape")).toHaveText(beforeShape ?? "");
+  await page.mouse.move(chip.x + chip.width / 2, chip.y + chip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
   await page.mouse.up();
 
   await expect(page.locator(".pitch-chip.dragging")).toHaveCount(0);

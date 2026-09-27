@@ -1,19 +1,18 @@
-import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
+import { HISTORY_CHAR_KEEP } from "../src/common/core/history-window";
 import { defineHarness, type Harness } from "./harness";
 
 /**
- * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/simulation/balance-harness.md`).
+ * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/common/balance-harness.md`).
  *
  * `why`는 그 구간이 왜 그 자리인지의 한 줄이고, 긴 근거는 `doc`이 가리키는 문서 절이
  * 쥔다. 여기에 없는 숫자를 하네스 본체가 직접 적으면 기댓값이 다시 두 곳으로 갈린다.
  */
 
-const MATCH = "docs/simulation/match.md §7";
-const FINANCE = "docs/simulation/finance.md §10";
-const HISTORY = "docs/llm/agents.md §5-1";
-const PROMPTS = "docs/llm/prompts.md §7";
-const TOOL_CONTRACT = "docs/llm/prompts.md §2";
-const CAREER = "docs/simulation/career.md §4";
+const MATCH = "docs/match/match.md §7";
+const FINANCE = "docs/negotiation/finance.md §10";
+const HISTORY = "docs/common/llm/agents.md §5-1";
+const PROMPTS = "docs/common/llm/prompts.md §7";
+const TOOL_CONTRACT = "docs/common/llm/prompts.md §2";
 
 export const WORLD_SEASON = defineHarness({
   id: "world-season",
@@ -138,7 +137,7 @@ export const ASSIST_RATE = defineHarness({
 export const LIVE_MATCH_STATS = defineHarness({
   id: "live-match-stats",
   what: "실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·거리의 평균·중간값·sd",
-  doc: "docs/simulation/football-reference.md",
+  doc: "docs/match/football-reference.md",
   cost: "시드 세계 셋 × 리그 12경기 = 36경기 · 10분",
   // prettier-ignore
   bands: [
@@ -192,7 +191,7 @@ export const LIVE_MATCH_STATS = defineHarness({
 export const LIVE_PLAYER_LOAD = defineHarness({
   id: "live-player-load",
   what: "풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표에 서는가",
-  doc: "docs/simulation/football-reference.md §7",
+  doc: "docs/match/football-reference.md §7",
   cost: "시드 세계 둘 × 리그 8경기 = 16경기 · 5분",
   // prettier-ignore
   bands: [
@@ -217,7 +216,7 @@ export const LIVE_PLAYER_LOAD = defineHarness({
 export const LIVE_TACTICS = defineHarness({
   id: "live-tactics",
   what: "홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가",
-  doc: "docs/simulation/live-match.md §6",
+  doc: "docs/match/live-match.md §6",
   cost: "시드 둘 × 리그 12경기 × 팔 다섯 = 120경기 · 30분",
   // prettier-ignore
   bands: [
@@ -239,7 +238,7 @@ export const LIVE_TACTICS = defineHarness({
 export const SIM_PARITY = defineHarness({
   id: "sim-parity",
   what: "같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·홈 이점·전력 기울기가 같은 눈금인가",
-  doc: "docs/simulation/match.md §8.5",
+  doc: "docs/match/match.md §8.5",
   cost: "시드 세계 셋 × 리그 24경기 = 72경기 + 간이 1440판 · 20분",
   // prettier-ignore
   bands: [
@@ -337,7 +336,7 @@ export const FINANCE_MULTI_SEASON = defineHarness({
 export const FINANCE_SECOND_TIER = defineHarness({
   id: "finance-second-tier",
   what: "리그전을 굴리지 않는 2부의 한 시즌 수지",
-  doc: "docs/simulation/finance.md §9.5",
+  doc: "docs/negotiation/finance.md §9.5",
   cost: "전체 세계 한 시즌 · 수 분",
   // prettier-ignore
   bands: [
@@ -377,7 +376,7 @@ export const AI_FITNESS = defineHarness({
 export const AI_BENCH = defineHarness({
   id: "ai-bench",
   what: "감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래",
-  doc: "docs/simulation/match.md §2",
+  doc: "docs/match/match.md §2",
   cost: "시드당 수십 초 × 2시드",
   // prettier-ignore
   bands: [
@@ -398,7 +397,7 @@ export const AI_BENCH = defineHarness({
 export const AI_MARKET = defineHarness({
   id: "ai-market",
   what: "한 시즌의 AI↔AI 시장 규모, 그리고 우리 선수에게 선 관심이 오퍼가 되는 비율",
-  doc: "docs/simulation/transfer.md §6 · §1-2",
+  doc: "docs/negotiation/transfer.md §6 · §1-2",
   cost: "전체 세계 한 시즌 · 수 분",
   // prettier-ignore
   bands: [
@@ -418,7 +417,7 @@ export const AI_MARKET = defineHarness({
 export const INCOMING_OFFERS = defineHarness({
   id: "incoming-offers",
   what: "한 시즌 우리 선수에게 온 매각 오퍼 — 수 · 마감 주 비중 · 큰 무대 비중 · 시장가 대비 값",
-  doc: "docs/simulation/transfer.md §1-3",
+  doc: "docs/negotiation/transfer.md §1-3",
   cost: "전체 세계 한 시즌 · 수 분",
   // prettier-ignore
   bands: [
@@ -434,7 +433,7 @@ export const INCOMING_OFFERS = defineHarness({
 export const MANAGER_MARKET = defineHarness({
   id: "manager-market",
   what: "한 시즌에 감독을 바꾸는 1부 구단 수 · 그 자리를 무직 감독 풀이 채운 비중 · 재직 감독에게 온 접근",
-  doc: "docs/simulation/transfer.md §7 · career.md §5.1",
+  doc: "docs/negotiation/transfer.md §7 · career.md §5.1",
   cost: "전체 세계 한 시즌 · 수 분",
   // prettier-ignore
   bands: [
@@ -451,7 +450,7 @@ export const MANAGER_MARKET = defineHarness({
 export const SQUAD_LONGEVITY = defineHarness({
   id: "squad-longevity",
   what: "15시즌을 넘긴 뒤에도 구단이 선발 XI·계약을 세우는가 · 리그 체급의 드리프트",
-  doc: "docs/simulation/season.md §6·§9",
+  doc: "docs/common/season.md §6·§9",
   cost: "세계 하나 · 월간 성장 180번 + 전환 15번 · 약 30초",
   // prettier-ignore
   bands: [
@@ -481,15 +480,24 @@ export const SQUAD_LONGEVITY = defineHarness({
 
 /**
  * 유스 육성 — **2군 리그가 돌고, 감독의 선택이 유망주의 성장 속도를 가르는가**
- * (`docs/simulation/season.md` §2 2군 리그).
+ * (`docs/common/season.md` §2 2군 리그).
  */
 export const YOUTH_DEVELOPMENT = defineHarness({
   id: "youth-development",
   what: "2군 경기 수 · 출전·집중 육성·멘토링·임대가 가르는 성장 격차",
-  doc: "docs/simulation/season.md §2",
+  doc: "docs/common/season.md §2",
   cost: "세계 하나 · 한 시즌 완주 · 수 분",
   // prettier-ignore
   bands: [
+    { metric: "동일 곡선 축 빈도 최대비", role: "reference", max: 1.3, why: "8000시드에서 같은 노화 곡선 축의 선택 빈도" },
+    { metric: "개인 결정력 훈련 선택비", role: "reference", min: 1.5, why: "3000시드 겨냥/기본 선택 횟수" },
+    { metric: "개인 훈련 나머지 필드 선택비", role: "reference", max: 1, why: "겨냥한 만큼 나머지 축에서 걷는다" },
+    { metric: "멘토 정신축 선택비", role: "reference", min: 1, why: "1500시드 멘토/기본 정신축 선택 횟수" },
+    { metric: "19세 축당 시즌 기대", role: "reference", min: 2, max: 3, why: "여유가 찬 유망주의 기본 성장 눈금" },
+    { metric: "18세 집중육성 시즌 기대", role: "reference", min: 3.5, max: 5, why: "출전과 집중육성 최대 배율" },
+    { metric: "기본 훈련 축 빈도비", role: "reference", max: 3, why: "시즌 달력의 훈련 축 최대/최소 빈도" },
+    { metric: "비스페인 AI 바이아웃 비율", role: "reference", max: 0.5, why: "의무 조항이 아닌 리그의 계약 분포" },
+
     { metric: "2군 경기 수", role: "guard", min: 15, max: 23, unit: "count", why: "리그 상대 싱글 라운드로빈(20팀이면 19경기)이 실제로 편성돼 돈다" },
     { metric: "결과 없는 2군 경기", role: "guard", max: 0, unit: "count", why: "시즌 종료 판정은 2군 리그를 기다리지 않는다 — 일정이 늦으면 조용히 안 치러진 채 남는다" },
     { metric: "2군 평균 출전", role: "guard", min: 5, unit: "count", why: "출전이 쌓여야 '2군 선수의 시즌 기록에 경기가 쌓인다'가 성립한다" },
@@ -515,7 +523,7 @@ export const YOUTH_DEVELOPMENT = defineHarness({
     { metric: "직업의식 격차", role: "reference", min: 0, unit: "score", why: "성실 − 게으름. 배율이 없는 표본이라 남는 차이는 원형뿐이다 — 0 이하면 계수가 세계에 닿지 않았다 (people.md §6)" },
     { metric: "아카데미 활용도", role: "guard", min: 0.3, max: 1, unit: "ratio", why: "그 시즌 우리 2군 출전 중 21세 이하의 몫 (season.md §6) — 다음 여름 인테이크의 수와 여지가 여기서 나온다. 하한은 '2군이 유망주의 자리로 돌아가고 있다'를 가르는 자리다: 그 아래면 2군이 늙은 백업의 대기실이라는 뜻이고, 그러면 아래 두 줄이 재는 것이 감독의 선택이 아니라 그 사실 하나가 된다" },
     { metric: "다음 여름 유스 후보", role: "guard", min: 3, unit: "count", why: "감독 앞에 선 후보 수 — 고를 것이 한둘이면 인테이크는 결정이 아니라 통보다" },
-    { metric: "유스 후보 천장 — 평균", role: "reference", min: 82, max: 92, unit: "score", why: "후보의 `potential` 평균 — **인테이크의 무게 중심이다** (season.md §6). 우리 팀은 1등급이라 체급 기준선 `TIER_BASE[1]`(84)에 활용도 항이 얹힌 자리에 서야 한다. 밴드가 그보다 넓은 것은 후보 열몇의 평균이라 천장의 흩어짐(`YOUTH_CEILING_SPREAD`)이 그만큼 흔들기 때문이고, 평균 자체가 기준선에 서는지는 `world.test.ts`가 표본 수천으로 지킨다" },
+    { metric: "유스 후보 천장 — 평균", role: "reference", min: 82, max: 92, unit: "score", why: "후보의 `potential` 평균 — **인테이크의 무게 중심이다** (season.md §6). 우리 팀은 1등급이라 체급 기준선 `TIER_BASE[1]`(84)에 활용도 항이 얹힌 자리에 서야 한다. 밴드가 그보다 넓은 것은 후보 열몇의 평균이라 천장의 흩어짐(`YOUTH_CEILING_SPREAD`)이 그만큼 흔들기 때문이고, 평균 자체와 기준선의 차이는 youth-intake-tail의 체급 코호트가 잰다" },
     { metric: "유스 후보 잠재력 여지 — 평균", role: "reference", min: 13, max: 23, unit: "score", why: "후보의 `potential − overall` 평균. 세계 생성과 같은 나이별 표에서 나오므로(`sampleGapFor`) 열일곱~열아홉의 표 평균 17.7 둘레에 선다 — 밴드를 벗어나면 인테이크가 그 표를 안 읽고 있는 것이다" },
     { metric: "유스 후보 잠재력 여지 — 최대", role: "measure", unit: "score", why: "그해 인테이크에서 가장 덜 자란 아이 — 여지가 큰 쪽이 그해 가장 먼 길을 갈 아이다" },
   ],
@@ -523,7 +531,7 @@ export const YOUTH_DEVELOPMENT = defineHarness({
 
 /**
  * 유스 인테이크의 **꼬리** — 한 여름 세계 전체가 낳은 잠재력·종합의 위 끝이
- * 시드 세계의 그것과 같은 자리에 서는가 (`docs/simulation/season.md` §6).
+ * 시드 세계의 그것과 같은 자리에 서는가 (`docs/common/season.md` §6).
  *
  * `squad-longevity`가 재는 것은 **평균**이다 — 리그 체급이 세대마다 가라앉는가.
  * 평균은 멎어 있는데 위 끝만 부풀 수 있고, 그때 세계의 엘리트가 해마다 합성 유스로
@@ -537,10 +545,14 @@ export const YOUTH_DEVELOPMENT = defineHarness({
 export const YOUTH_INTAKE_TAIL = defineHarness({
   id: "youth-intake-tail",
   what: "한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히",
-  doc: "docs/simulation/season.md §6",
+  doc: "docs/common/season.md §6",
   cost: "세계 넷 × 두 여름 · 약 20초",
   // prettier-ignore
   bands: [
+    { metric: "체급 코호트 천장 평균 최대 편차", role: "reference", max: 1.5, unit: "score", why: "체급별 1500명 평균과 TIER_BASE의 가장 큰 절대 차이" },
+    { metric: "체급 코호트 현재 실력 최대 편차", role: "reference", max: -12, unit: "score", why: "체급별 현재 실력 평균에서 TIER_BASE를 뺀 값 중 최댓값" },
+    { metric: "아카데미 활용 천장 평균 이동", role: "reference", min: 2.5, max: 3.5, unit: "score", why: "같은 tier 3 코호트에 활용도 보너스 3을 준 차이" },
+
     { metric: "한 여름 인테이크 인원", role: "guard", min: 200, unit: "count", why: "표본이 없으면 아래 꼬리 줄이 전부 공허하게 통과한다 — 168 클럽이 은퇴·만료를 메우는 수보다 넉넉히 아래" },
     { metric: "잠재력 ≥95 — 여름당", role: "guard", max: 2, unit: "count", why: "**세계가 쥔 95+의 재고는 인테이크가 정한다.** 시드 세계의 95+는 열 몇이고 한 선수가 세계에 머무는 햇수는 평균 열다섯이므로(선수 수 ÷ 한 여름 인테이크), 재고를 그 자리에 두는 유입은 여름에 하나다. 일곱이던 동안 첫 여름에 세계의 95+가 절반 넘게 불었다" },
     { metric: "잠재력 ≥90 — 여름당", role: "guard", min: 6, max: 18, unit: "count", why: "같은 셈의 한 칸 아래 — 아래 「시드 세계 ≥90 — 여름 환산」이 그 자리다. 위끝이 그 환산보다 반쯤 두꺼운 것은 인테이크의 무게 중심이 시드 세계보다 한 칸 위에 서기 때문이고(§6 닫힌 세계), 그 한 칸이 폭으로 번지면 안 된다는 것이 상한이다. **하한도 가드다**: 꼬리를 더 좁히면 세계에 진짜 물건이 나지 않아 리그 상위권이 세대마다 얇아진다" },
@@ -560,7 +572,7 @@ export const YOUTH_INTAKE_TAIL = defineHarness({
 });
 
 /**
- * 2군 강등이 낳는 불만 — **문턱이 로테이션과 방치를 가르는가** (`docs/data/people.md` §5).
+ * 2군 강등이 낳는 불만 — **문턱이 로테이션과 방치를 가르는가** (`docs/story/people.md` §5).
  *
  * 상수 하나(21일)가 두 가지 플레이를 동시에 정한다: 짧으면 선수를 잠깐 내렸다
  * 올리는 로테이션이 곧 반란이 되고, 길면 강등이 지금처럼 **비용 0인 손잡이**로
@@ -573,7 +585,7 @@ export const YOUTH_INTAKE_TAIL = defineHarness({
 export const NEGOTIATION = defineHarness({
   id: "negotiation",
   what: "재계약·해지·영입의 성사 확률 분포 — 기대치를 맞춘 제안이 자동 통과인가",
-  doc: "docs/simulation/transfer.md §3",
+  doc: "docs/negotiation/transfer.md §3",
   cost: "세계 하나 · 수 초",
   // prettier-ignore
   bands: [
@@ -589,17 +601,13 @@ export const NEGOTIATION = defineHarness({
     { metric: "영입 기대치 · 중앙값", role: "measure", unit: "score", why: "호가·희망 주급을 그대로 맞춘 4년 오퍼의 성사 확률" },
     { metric: "영입 기대치 · p90−p10", role: "guard", min: 20, unit: "score", why: "선수 관문이 구단 관문 뒤에 숨은 도장이 아니다" },
     { metric: "영입 기대치 · 90% 이상 비율", role: "guard", max: 0.2, unit: "ratio", why: "호가를 맞췄다고 선수까지 자동으로 오지 않는다" },
-    { metric: "영입 · 원형별 중앙값 폭", role: "guard", min: 5, max: 35, unit: "score", why: "대리인의 `askingLift`가 확률에 실제로 걸리는가 — **중립 오퍼**(원형을 걷어 낸 값)를 원형별로 잰 중앙값의 최대−최소. 감독이 실제로 겪는 폭이 아니다: `suggest_terms`가 이미 원형이 얹힌 값을 부르므로 그 자리의 확률은 원형과 무관하다. 0이면 원형이 죽었고, 너무 넓으면 같은 돈이 대리인 추첨이 된다 (transfer.md §3)" },
-    { metric: "영입 · 승부사형 중앙값", role: "measure", unit: "score", why: "값을 가장 높이 부르는 원형 — 중립 오퍼가 가장 안 통하는 자리다" },
-    { metric: "영입 · 제국형 중앙값", role: "measure", unit: "score", why: "배수가 1인 원형 — 「영입 기대치 · 중앙값」 근처에 서야 셈이 맞는다" },
-    { metric: "영입 · 법률가형 중앙값", role: "measure", unit: "score", why: "값을 가장 낮게 부르는 원형 — 같은 오퍼가 가장 잘 통한다" },
   ],
 });
 
 export const DEMOTION_GRIEVANCE = defineHarness({
   id: "demotion-grievance",
   what: "한 시즌 2군 강등이 낳는 불만 — 로테이션은 공짜고 방치는 값을 치르는가",
-  doc: "docs/data/people.md §5",
+  doc: "docs/story/people.md §5",
   cost: "축소 세계 한 시즌 · 약 10초",
   // prettier-ignore
   bands: [
@@ -618,79 +626,7 @@ export const DEMOTION_GRIEVANCE = defineHarness({
 });
 
 /**
- * 한 시즌을 한 말투로 보낸 감독을 세계가 어떻게 보는가 (`docs/simulation/career.md` §4).
- *
- * 회견 하나의 폭은 코드를 읽으면 나오지만, **시즌 마흔여덟 번의 누계가 성적 옆에서
- * 어느 크기인가**는 굴려야 나온다. 목줄이 없던 동안 그 답은 「스무 배」였고, 리그
- * 2위·21승 감독의 언론 평판이 0이었다. 여기가 재는 것은 목줄이 그 독점을 끊으면서도
- * 스탠스를 무료로 만들지는 않았는가다.
- */
-export const PRESS_REPUTATION = defineHarness({
-  id: "press-reputation",
-  what: "한 시즌 회견을 한 말투로 보낸 감독의 평판 3축 — 성적의 몫과 스탠스의 몫",
-  doc: CAREER,
-  cost: "축소 세계 한 시즌 + 손으로 세운 1부 규모 한 시즌 · 약 15초",
-  // prettier-ignore
-  bands: [
-    { metric: "축소 세계 시즌 회견 수", role: "measure", unit: "count", why: "축소 세계는 리그전이 열넷이라 1부의 마흔여덟에 닿지 않는다 — 아래 「1부 규모」 팔이 그 자리를 맡고, 이 줄은 회견이 실제로 열리기는 하는지의 표본이다" },
-    { metric: "축소 세계 경기당 회견 수", role: "reference", min: 0.8, max: 2, unit: "ratio", why: "실측 세이브는 시즌 48회 · 대회 경기 50경기 남짓이라 경기당 1 언저리다. 축소 세계는 부임·시즌 마디 회견이 같은 분자에 얹혀 조금 위에 선다 — 여기가 0.8 아래면 감싸는 감독이 회견을 만나지 못한 것이라 아래 줄들이 공허하다" },
-    { metric: "축소 세계 시즌 끝 언론", role: "measure", unit: "score", why: "1부 규모 쪽과 나란히 읽는다 — 회견 수가 다르므로 값이 아니라 방향이 같아야 한다" },
-    { metric: "축소 세계 시즌 중 세 축의 바닥", role: "guard", min: 20, unit: "score", why: "끝값만 보면 중간에 바닥을 지나온 것을 놓친다. **「관망」 문턱은 여기가 아니라 아래 1부 규모 팔의 것이다** — 축소 세계는 리그전이 열넷이라 성적이 옮기는 값도 1부의 3분의 1뿐이고, 그 판에서 부진한 구간의 감독이 「싸늘」을 지나는 것은 눈금이 아니라 설계다. 이 줄이 막는 것은 이슈 #787의 실패 모양 그 자체다: 회견 열여섯 번이 축을 0 언저리로 못박는가. 목줄이 없던 눈금이면 여기가 한 자리로 내려온다" },
-    { metric: "축소 세계 스탠스가 옮긴 최대 폭", role: "guard", max: 20, unit: "score", why: "`STANCE_SEASON_CAP`. 목줄은 축마다 따로 걸리므로 세 축 중 가장 멀리 간 축도 이 안이어야 한다 — 넘으면 누계가 새거나 시즌 경계에서 초기화가 어긋난 것이다" },
-    { metric: "1부 규모 스탠스가 옮긴 최대 폭", role: "guard", max: 20, unit: "score", why: "위와 같은 목줄을 마흔여덟 번으로 민 자리 — 회견 수를 세 배로 늘려도 같은 값에서 서야 목줄이 목줄이다" },
-    { metric: "1부 규모 스탠스 몫 — 언론", role: "guard", min: -20, max: -8, unit: "score", why: "**스탠스가 무료가 되면 안 된다.** 감싸기 마흔여덟 번이 언론에 아무 값도 남기지 않으면 「공짜인 스탠스는 없다」가 표에만 남는다. 위끝 −8은 회견 하나의 폭(무게 2에서 −3)의 세 걸음쯤 — 그보다 얕으면 목줄이 첫 회견부터 조인 것이다" },
-    { metric: "1부 규모 성적 몫 — 축당", role: "guard", min: 30, unit: "score", why: "2위 다툼(26승 7무 5패)이 한 축에 남기는 값. 언론 축이 성적을 놓치면 이 줄이 아니라 아래 두 줄이 무너지지만, 여기가 먼저 눈금을 보여 준다 — `MATCH_REPUTATION_SWING`을 좁히면 스탠스의 몫이 상대적으로 커진다" },
-    { metric: "1부 규모 시즌 끝 언론", role: "guard", min: 45, unit: "score", why: "**이 하네스의 본론이자 이슈 #787의 완료 조건.** 우승을 다투며 선수를 감싼 감독의 언론 평판이 「관망」(45) 위에 서야 한다. 여기가 0이었던 것이 이슈이고, 여기가 다시 45 아래로 내려오면 목줄이 성적을 이긴 것이다" },
-    { metric: "1부 규모 시즌 끝 세 축의 바닥", role: "guard", min: 45, unit: "score", why: "언론만 구제하면 보드가 대신 앉는다 — 셋 다 「관망」 위여야 영입 협상 `(언론+보드)/2`와 재계약 `(언론+선수단)/2`가 성적을 읽는다 (career.md §4)" },
-  ],
-});
-
-/**
- * 다가옴의 건수 — **세계가 얼마나 자주 먼저 말을 거는가** (`docs/data/people.md` §8).
- *
- * 임계·증가량은 코드를 읽어서는 정할 수 없는 값이다. 낮으면 감독이 매주 감독실 문을
- * 열어 주다 지치고, 높으면 "세계는 감독 없이도 움직인다"가 사기 숫자로만 남는다.
- * 한 시즌을 **아무것도 하지 않는 감독**으로 굴려 건수와 채널 분포를 잰다 — 방치의
- * 상한이 곧 이 기능의 소음 상한이다.
- */
-export const APPROACH_RATE = defineHarness({
-  id: "approach-rate",
-  what: "한 시즌 다가옴 건수 · 채널 분포 · 소음의 문이 실제로 서는가",
-  doc: "docs/data/people.md §8",
-  cost: "축소 세계 한 시즌 · 약 10초",
-  // prettier-ignore
-  bands: [
-    { metric: "시즌 다가옴 건수", role: "guard", min: 3, max: 36, unit: "count", why: "**방치만 하는 감독의 상한**이다. 아래끝은 세계가 조용한 것이고, 위끝은 열흘에 한 번 — 그보다 잦으면 답하는 감독에게도 소음이 된다" },
-    { metric: "선수 채널", role: "measure", unit: "count", why: "자기 일로 온 사람 — 불만 수를 따라간다" },
-    { metric: "에이전트 채널", role: "measure", unit: "count", why: "대리인이 온 자리 — 계약 만료·타 구단 관심·이적 요청" },
-    { metric: "주장 채널", role: "measure", unit: "count", why: "라커룸이 식은 구간이 있었는가" },
-    { metric: "구단주 채널", role: "measure", unit: "count", why: "순위가 기대 아래에 머문 구간 — 보드 요청" },
-    { metric: "보드 요청(발행)", role: "guard", max: 4, unit: "count", why: "**구단주가 한 시즌에 거는 조건의 상한**이다 (career.md §5.2). 창마다 하나(여름·겨울)와 시즌마다 하나가 서고 프리시즌 꼬리가 다음 여름 창을 스치므로 넷까지다 — 그보다 잦으면 자리 열쇠(`windowId`)가 새서 같은 창이나 같은 시즌에 두 번 선 것이다" },
-    { metric: "보드 요청 시즌 갈래", role: "guard", max: 1, unit: "count", why: "**시즌마다 하나**다 — 창 밖의 기용 요청(`field-player`)은 다섯 경기짜리라 판정되는 대로 다시 서면 구단주가 매달 라인업을 지시하는 사람이 된다. 0도 정상이다: 덜 쓰이는 후보가 없으면 요청이 서지 않는다" },
-    { metric: "시즌 리뷰 자리", role: "guard", min: 1, max: 1, unit: "count", why: "**시즌당 정확히 한 번**이다 (career.md §5). 압력이 아니라 달력이 여는 자리라 눈금 문제가 아니다 — 0이면 창(7일)이나 소음의 문에 막혀 한 시즌에 한 번뿐인 보드 장면이 통째로 사라진 것이고, 2 이상이면 시즌당 한 번의 문이 샌 것이다" },
-    { metric: "출전 기회(minutes)", role: "measure", unit: "count", why: "지위 대비 출전으로 결정적으로 서는 불만이 몇 번 감독실 문을 두드리는가 (people.md §5) — 주사위를 걷은 뒤 이 줄이 위 합계를 밀어 올리는지가 재는 것이다" },
-    { metric: "어긴 약속(promise)", role: "measure", unit: "count", why: "아무 약속도 하지 않는 감독에게는 0이어야 한다 — 0이 아니면 약속을 하지 않은 자리에서 장부가 약속을 세운 것이다" },
-    { metric: "등번호(number)", role: "measure", unit: "count", why: "번호를 한 번도 옮기지 않는 감독에게는 0이어야 한다 (people.md §5) — 0이 아니면 감독이 손대지 않은 자리에서 장부가 번호를 옮긴 것이다. 원형별 무게 자체는 여기서 재지 않는다: 문턱이 결정적이라 분포가 없고, 경계는 `numberGrievanceStands` 단위 테스트가 지킨다" },
-    { metric: "계약 만료(contract)", role: "measure", unit: "count", why: "재계약을 한 번도 열지 않은 감독에게 에이전트가 몇 번 오는가" },
-    { metric: "타 구단 관심(interest)", role: "measure", unit: "count", why: "오퍼를 그냥 흘려보낸 뒤 대리인이 오는 빈도 — 창 14일 안에 임계를 넘어야 선다" },
-    { metric: "언론 유출(계단 4)", role: "guard", max: 8, unit: "count", why: "방치만 하는 감독의 상한. 자리가 아니라 사건이라 답할 곳이 없고 값은 다음 회견이 치른다 — 그보다 잦으면 회견이 유출 카드로만 채워진다" },
-    { metric: "이적 요청(계단 5)", role: "guard", max: 7, unit: "count", why: "사다리 끝까지 방치된 불만의 수. 한 시즌 스쿼드의 한 줌을 넘으면 방치의 대가가 아니라 스쿼드 붕괴다 — 사유가 넷에서 여덟이 되며(people.md §5) 끝까지 갈 수 있는 갈래도 두 배가 됐고, 43명 스쿼드에서 일곱은 여전히 한 줌이다" },
-    { metric: "이적 요청(장부)", role: "guard", max: 10, unit: "count", why: "사유 셋이 함께 세운 요청의 총합 (transfer.md §1-1). 사다리에서 오는 것만 세는 위 줄과 달리 시장이 세우는 둘까지 든다 — 43명 스쿼드에서 한 시즌 열 건이면 이미 스쿼드의 한 줌이고, 그보다 잦으면 감독이 답하는 것이 아니라 매일 답하게 된다" },
-    { metric: "요청 사유 grievance", role: "measure", unit: "count", why: "사다리에서 온 것 — 위의 계단 5 줄과 같은 사건을 장부 쪽에서 센다. 둘이 어긋나면 계단 5가 장부에 안 적혔거나 요청이 걷힌 뒤 다시 섰다는 뜻이다" },
-    { metric: "요청 사유 blocked-move", role: "measure", unit: "count", why: "값이 붙은 오퍼를 같은 창에서 두 번 막은 수 — 아무 오퍼도 판정하지 않는 감독에게는 0이어야 한다" },
-    { metric: "요청 사유 bigger-club", role: "measure", unit: "count", why: "`BIGGER_CLUB_CHANCE`가 창이 열린 날마다 굴린 결과. 축소 세계의 감독 팀은 그 세계에서 가장 큰 구단이라 「우리보다 큰 구애자」가 서지 않아 **0이 정상**이다 — 0이 아니면 조건이나 전력 눈금이 움직인 것이고, 그때 재는 값은 이 줄이 아니라 시즌당 몇 건인가다" },
-    { metric: "하루 두 건이 열린 날", role: "guard", max: 0, unit: "count", why: "하루 한 건의 문 (people.md §8)" },
-    { metric: "동시에 열린 자리", role: "guard", max: 0, unit: "count", why: "열려 있는 다가옴은 하나뿐" },
-    { metric: "같은 화자 7일 내 재개", role: "guard", max: 0, unit: "count", why: "같은 화자 쿨다운" },
-    { metric: "갓 열린 회견과 겹친 자리", role: "guard", max: 0, unit: "count", why: "한 번에 답을 요구하는 자리는 하나다 — 사흘 지난 회견은 세지 않는다" },
-    { metric: "가장 높이 오른 계단", role: "measure", unit: "count", why: "방치만 하는 감독이 사다리 끝까지 가는가 — 선수 주제는 5, 주장·구단주는 3이 꼭대기다" },
-    { metric: "첫 자리까지 걸린 날", role: "measure", unit: "count", why: "임계 100을 채우는 데 걸린 실제 날 수" },
-    { metric: "사이가 상한 선수", role: "measure", unit: "count", why: "시즌 끝에 감독과 `strained` 이하인 우리 선수 (people.md §6). 등급을 옮기는 자리가 이력 압축뿐이라 모델 없는 하네스에서는 **첫인상 그대로**여야 한다 — 0이 아니면 코어가 어딘가에서 사이를 옮기고 있다는 뜻이고, 그 자리가 곧 결정성 경계를 넘은 자리다" }
-  ],
-});
-
-/**
- * 종합 눈금 — **그 숫자가 굴리는 것들의 분포** (`docs/data/player.md` §4).
+ * 종합 눈금 — **그 숫자가 굴리는 것들의 분포** (`docs/common/player.md` §4).
  *
  * 종합은 화면의 숫자 하나가 아니라 시장가·주급 서열·잠재력 간격·등급 색이 함께 읽는
  * 눈금이다. 눈금을 옮기면 그 넷이 전부 따라 움직이는데, 얼마나 움직이는지는 코드를
@@ -700,7 +636,7 @@ export const APPROACH_RATE = defineHarness({
 export const OVERALL_SCALE = defineHarness({
   id: "overall-scale",
   what: "종합이 굴리는 것들의 분포 — 자리별 평균 · 축 범위 밖 · 시장가 · 주급 · 잠재력 간격",
-  doc: "docs/data/player.md §4",
+  doc: "docs/common/player.md §4",
   cost: "세계 하나 · 시드당 몇 초 × 2시드",
   // prettier-ignore
   bands: [
@@ -741,7 +677,7 @@ export const OVERALL_SCALE = defineHarness({
     { metric: "잠재력 간격 p50", role: "measure", unit: "score", why: "" },
     { metric: "잠재력 간격 p90", role: "measure", unit: "score", why: "" },
     { metric: "잠재력 간격 최대", role: "measure", unit: "score", why: "" },
-    { metric: "잠재력 대역 상한 초과 비율", role: "measure", unit: "ratio", why: "`docs/data/player.md` §6.5의 나이별 상한 — 못 박는 것은 `seed-join.test.ts`다" },
+    { metric: "잠재력 대역 상한 초과 비율", role: "measure", unit: "ratio", why: "`docs/common/player.md` §6.5의 나이별 참고 상한 — 시드의 성장 여지를 해석할 측정값이다" },
   ],
 });
 
@@ -756,7 +692,7 @@ export const OVERALL_SCALE = defineHarness({
 export const ATTRIBUTE_MODEL = defineHarness({
   id: "attribute-model",
   what: "자체 산정 모델이 낸 분포와 지금 시드 분포의 간격 — 체급·낙차·자리·나이·잠재력",
-  doc: "docs/data/player.md §13",
+  doc: "docs/common/player.md §13",
   cost: "세계를 세우지 않는다 — 시드 2,800명을 재고 같은 수를 합성한다, 수 초",
   // prettier-ignore
   bands: [
@@ -876,11 +812,32 @@ export const LIVE_SCHEMA = defineHarness({
 /**
  * `pnpm balance --list`가 읽는 목록.
  *
- * **`*.harness.ts`와 일대일이다** — 여기 없는 하네스는 돌면서도 리포트의 「몇 개가
+ * **파일 하나가 여러 서술자를 실행할 수 있다** — 여기 없는 하네스는 돌면서도 리포트의 「몇 개가
  * 보고했다」 분모에서 빠지고, 여기만 있는 서술자는 목록에 서면서 돌지 않는다. 둘 다
  * 조용해서 오래 사니 `harness-catalog.test.ts`가 그 짝을 못 박는다.
  */
+export const QUICK_OUTCOMES = defineHarness({
+  id: "quick-outcomes",
+  what: "간이 연장·퇴장 효과·상금 비중",
+  doc: "docs/match/match.md",
+  cost: "시드 3 · 연장 200 · 퇴장 대조 900 경기",
+  bands: [
+    { metric: "extraGoals", role: "reference", min: 0.3, max: 1.4, why: "연장 득점 빈도" },
+    { metric: "extraCards", role: "reference", min: 0.5, why: "연장 카드 빈도" },
+    { metric: "redConcededRatio", role: "reference", min: 1.1, why: "10명/11명 실점 비" },
+    { metric: "redScoredRatio", role: "reference", max: 0.9, why: "10명/11명 득점 비" },
+    {
+      metric: "prizeIncomeRatio",
+      role: "reference",
+      min: 0.2,
+      max: 0.4,
+      why: "우승 경로 상금/1부 기준 수입",
+    },
+  ],
+});
+
 export const HARNESSES: readonly Harness[] = [
+  QUICK_OUTCOMES,
   WORLD_SEASON,
   AI_ROTATION,
   LEAGUE_SPREAD,
@@ -904,8 +861,6 @@ export const HARNESSES: readonly Harness[] = [
   YOUTH_DEVELOPMENT,
   YOUTH_INTAKE_TAIL,
   DEMOTION_GRIEVANCE,
-  APPROACH_RATE,
-  PRESS_REPUTATION,
   OVERALL_SCALE,
   ATTRIBUTE_MODEL,
   HISTORY_WINDOW,

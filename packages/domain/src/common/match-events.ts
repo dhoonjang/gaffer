@@ -1,0 +1,264 @@
+import { z } from "zod";
+
+export const MatchSideSchema = z.enum(["home", "away"]);
+
+export type MatchSide = z.infer<typeof MatchSideSchema>;
+
+/** 경기 이벤트 타입 — 코어(구간·간이 시뮬)가 만들고 코어 장부가 검증한다 (match.md §5) */
+export const MatchEventTypeSchema = z.enum([
+  "kickoff",
+  "goal",
+  "shot",
+  "save",
+  "chance",
+  "foul",
+  "yellow_card",
+  "red_card",
+  "substitution",
+  "injury",
+  /**
+   * **벤치가 판을 옮겼다** — AI 팀의 6축 이동·모양 전환 (match.md §2·§4).
+   *
+   * 선수의 사건이 아니라 팀의 판단이라 `actors`는 비어 있다. 근거 태그
+   * (`source: "ai-shift"`) 하나가 갈래와 옮긴 뒤의 축 값, 갈아 낀 모양을 싣는다.
+   */
+  "tactical_shift",
+  "half_time",
+  /**
+   * **연장 개시** — 정규 90분이 끝났는데 승부가 남았다.
+   *
+   * `full_time`을 대신한다: 90분이 끝났다는 사실은 같지만 경기는 끝나지 않았다.
+   * 녹아웃의 마지막 다리에서 합계가 같을 때만 기록되고, 그 판정은 코어가 한다
+   * (`engine/competition/extra-time.ts`의 `needsExtraTime`).
+   */
+  "extra_time_start",
+  /** 연장 전반 종료 — 하프타임과 같은 정지점이다 */
+  "extra_half_time",
+  "full_time",
+]);
+
+export type MatchEventType = z.infer<typeof MatchEventTypeSchema>;
+
+/**
+ * 이벤트 분의 상한 — 연장 끝(`PHASE_END.extra_second` 120′)에 추가시간 여유를 더한 값.
+ * 장부가 받아들이는 마지막 분이지, 경기가 끝나는 분이 아니다.
+ */
+export const MATCH_MINUTE_MAX = 130;
+
+/**
+ * **슛의 출처** — 열린 플레이 · 코너 · 프리킥 · 페널티 (match.md §1.4).
+ *
+ * 죽은 공은 열린 플레이와 **같은 총량 안의 별도 채널**이라, 무엇이 그 슛을 만들었는지가
+ * 슛마다 붙는다. 세트피스 득점 비율은 이 칸 하나로 세어진다.
+ */
+export const SHOT_ORIGINS = ["open", "corner", "free_kick", "penalty"] as const;
+
+export const ShotOriginSchema = z.enum(SHOT_ORIGINS);
+
+export type ShotOrigin = z.infer<typeof ShotOriginSchema>;
+
+/**
+ * 벤치가 교체를 낸 이유 — **코드다.** 중계가 인용하는 문장은 이 코드를 읽는 쪽이
+ * 만든다 (match.md §4).
+ */
+export const SubCauseSchema = z.enum(["injury", "chase", "hold", "fatigue"]);
+
+export type SubCause = z.infer<typeof SubCauseSchema>;
+
+export const EVENT_CAUSE_CODES = [
+  // ── 골·슛이 나온 길 ──
+  /** 스루패스로 라인 뒤를 뚫었다 — [패서, 침투자] */
+  "through_ball",
+  /** 상대 진영에서 공을 뺏은 뒤 짧은 시간 안에 나왔다 — [뺏은 말] */
+  "high_turnover",
+  /** 공격 전환 중에 나왔다 */
+  "counter",
+  /** 크로스에서 나왔다 — [크로서] */
+  "cross",
+  /** 컷백 — 박스 옆에서 뒤로 내준 공 */
+  "cutback",
+  /** 코너·프리킥 전달에서 나왔다 — [키커] */
+  "set_piece",
+  /** 직접 프리킥 */
+  "direct_free_kick",
+  /** 페널티 */
+  "penalty",
+  /** 드리블로 수비를 제쳤다 — [제친 말, 제쳐진 말] */
+  "individual",
+  /** 나쁜 터치·패스 실수로 잃은 공에서 나왔다 — [실수한 말] */
+  "error",
+  /** 나온 골키퍼가 닿지 못했다 — [골키퍼] */
+  "keeper_out",
+  /** 긴 공을 공중볼로 따냈다 — [킥한 말, 따낸 말] */
+  "long_ball",
+  /** 헤더 */
+  "header",
+  /** 흘러나온 공을 다시 찼다 */
+  "rebound",
+  /** 시트의 `behavior`가 걸린 말이 관여했다 — `pointId`가 그 포인트 문장을 가리킨다 */
+  "marking",
+  // ── 파울·카드·부상의 성질 ──
+  /** 역습을 끊은 파울 */
+  "cynical_foul",
+  /** 늦은 태클 */
+  "late_tackle",
+  /** 공중볼 경합에서의 접촉 */
+  "aerial_contact",
+  /** 붙어 선 수비가 잡아채거나 민 파울 */
+  "holding",
+  /** 두 번째 경고 */
+  "second_yellow",
+  /** 명백한 득점 기회 저지 */
+  "dogso",
+  /** 위험한 태클 */
+  "reckless",
+  /** 접촉 부상 — [다친 말, 접촉한 말] */
+  "contact_injury",
+  /** 스프린트 중 근육 부상 */
+  "sprint_injury",
+  // ── 벤치의 판단 (`tactical_shift`) — `values`가 옮긴 뒤의 축 값 ──
+  "bench_chase",
+  "bench_hold",
+  "bench_counter",
+  "bench_press",
+] as const;
+
+export const EventCauseCodeSchema = z.enum(EVENT_CAUSE_CODES);
+
+export type EventCauseCode = z.infer<typeof EventCauseCodeSchema>;
+
+export const EventCauseSchema = z.object({
+  code: EventCauseCodeSchema,
+  /** 이름이 서는 말들 — 코드마다 순서가 뜻을 갖는다 (위 주석) */
+  playerIds: z.array(z.string()).default([]),
+  /** 코드에 딸린 수치 — 벤치 전환의 축 값, 스루패스의 거리 같은 것 */
+  values: z.record(z.string(), z.number()).optional(),
+  /** `marking`이 인용하는 전술 포인트 */
+  pointId: z.string().optional(),
+  /** 코드에 딸린 낱말 하나 — 벤치 전환이 갈아 낀 모양(`4-2-3-1`) */
+  note: z.string().optional(),
+});
+
+export type EventCause = z.infer<typeof EventCauseSchema>;
+
+export const MatchEventSchema = z.object({
+  /** 규정분 — 그 하프의 끝(45·90·105·120)을 넘지 않는다 */
+  minute: z.number().int().min(0).max(MATCH_MINUTE_MAX),
+  /**
+   * **추가시간의 분** — 규정분이 그 하프의 끝일 때만 선다 (`45+2′`의 2).
+   * 각 하프의 추가시간은 그 하프의 중단에서 계산한다 (live-match.md §1).
+   */
+  added: z.number().int().min(1).optional(),
+  type: MatchEventTypeSchema,
+  team: MatchSideSchema.optional(),
+  /** 선수 id — substitution은 [나가는 선수, 들어오는 선수] 순서 */
+  actors: z.array(z.string()).default([]),
+  /** 원인 — 이 사건을 만든 행동의 사슬 (`EventCause`) */
+  causes: z.array(EventCauseSchema).default([]),
+  /**
+   * 교체의 **갈래** — 한 경기에 쓸 수 있는 승부수·굳히기 장수를 세고 부상 교체를
+   * 먼저 세우는 것이 이 코드다. 근거 문구로 세던 자리라, 문구를 고치면 벤치의
+   * 판단이 조용히 달라졌다 (match.md §4).
+   */
+  subCause: SubCauseSchema.optional(),
+  detail: z.string().optional(),
+  /**
+   * **이 슛의 질** — 기대 득점 0~1. `shot`·`goal`에만 붙는다.
+   *
+   * 팀 단위 기대 득점(`homeExpectedGoals`)은 선수 기대치의 합이고, 이건 **실제로 만든 장면**의
+   * 값이다. 둘을 견주면 "기회를 얼마나 만들었나"와 "그걸 얼마나 넣었나"가 갈린다 —
+   * 0.08짜리를 넣은 경기와 0.6을 놓친 경기는 같은 스코어라도 다른 이야기다.
+   */
+  xg: z.number().min(0).max(1).optional(),
+  /** 결정력을 반영한 이 슛의 실제 골 확률. */
+  goalProbability: z.number().min(0).max(1).optional(),
+  /** 골도 독립 사건이 아니라 슈팅 결과다. */
+  shotOutcome: z.enum(["goal", "saved", "blocked", "off_target"]).optional(),
+  /**
+   * **이 슛이 어디서 나왔나** — 열린 플레이인가 죽은 공인가 (match.md §1.4).
+   *
+   * 죽은 공을 사건으로 따로 적지 않는 이유는 §4의 원칙이다: 코너는 경기당
+   * 스물한 개고 그것을 한 줄씩 적으면 구간 이벤트 상한에 훨씬 자주 닿아 벤치
+   * 정지점과 교체 총량이 조용히 움직인다. 갈래는 **그 슛의 성질**이라 여기 산다.
+   * `shot`·`goal`에만 붙고, 없으면 `open`으로 읽는다.
+   */
+  shotOrigin: ShotOriginSchema.optional(),
+});
+
+export type MatchEvent = z.infer<typeof MatchEventSchema>;
+
+/**
+ * **승부차기 한 발** — 코어가 굴리고 캐스터는 그것을 문장으로 옮긴다
+ * (competition.md §6 · match.md §2).
+ *
+ * `MatchEvent`가 아닌 이유는 시계다: 장부의 사건은 분을 갖고 국면 안에 서지만
+ * 승부차기는 120분이 끝난 뒤에 오고 분이라는 것이 없다. 그래서 결과에 매달린
+ * 별도의 목록으로 남는다 (`MatchResult.penalties.kicks`).
+ */
+export const SHOOTOUT_OUTCOMES = ["scored", "saved", "missed"] as const;
+
+export const ShootoutOutcomeSchema = z.enum(SHOOTOUT_OUTCOMES);
+
+export const ShootoutKickSchema = z.object({
+  /** 몇 번째 라운드인가 — 1부터. `SHOOTOUT_ROUNDS`를 넘으면 서든데스다 */
+  round: z.number().int().min(1),
+  team: MatchSideSchema,
+  /** 찬 선수 id */
+  taker: z.string().min(1),
+  /** 막아선 골키퍼 id — 온필드에 골키퍼가 없으면(퇴장) 빈다 */
+  keeper: z.string().min(1).optional(),
+  outcome: ShootoutOutcomeSchema,
+  /**
+   * 이 킥의 성공 확률 — **"왜 그렇게 됐나"의 근거다** (설계 원칙 2).
+   * 키커와 골키퍼의 기량이 만든 값이고, 중계·화면이 인용한다.
+   */
+  probability: z.number().min(0).max(1),
+});
+
+export type ShootoutKick = z.infer<typeof ShootoutKickSchema>;
+
+/**
+ * 선수 한 명의 **경기 중 누적 기록** — 사건으로 두지 않는 것들.
+ *
+ * 패스는 한 경기에 900회쯤 오간다. 그걸 전부 `MatchEvent`로 만들면 장부가
+ * 폭발하고(LLM 입력에도 못 들어간다) 정작 골·카드가 묻힌다. 그래서 **사건이 될
+ * 만한 것만 사건**이고(골·슛·선방·카드), 흐름의 양은 구간마다 굴려 여기 쌓는다.
+ *
+ * 골·도움·카드는 여기 두지 않는다 — 사건 목록이 원본이고, 두 벌로 두면 갈린다.
+ */
+export const MatchStatLineSchema = z.object({
+  passes: z.number().int().min(0),
+  /** 성공한 패스 — 성공률의 분자 */
+  passesCompleted: z.number().int().min(0),
+  /** 전진 패스 — 상대 골문 쪽으로 라인을 넘긴 패스 */
+  progressive: z.number().int().min(0),
+  /** 슛 수 (골 포함) — 사건에서도 세지만 여기 두면 한 번에 읽힌다 */
+  shots: z.number().int().min(0),
+  shotsOnTarget: z.number().int().min(0),
+  /** 그 선수가 만든 기대 득점의 합 */
+  xg: z.number().min(0),
+  /** 실제 슈터의 결정력을 반영한 골 확률 합 */
+  scoringExpectation: z.number().min(0),
+  saves: z.number().int().min(0),
+  /** 그 선수가 **찬 코너** — 얻는 것은 팀이지만 차는 것은 한 사람이다 */
+  corners: z.number().int().min(0),
+  /** 그 선수가 **범한 파울** */
+  fouls: z.number().int().min(0),
+  tackles: z.number().int().min(0),
+  tacklesWon: z.number().int().min(0),
+  interceptions: z.number().int().min(0),
+  dribbles: z.number().int().min(0),
+  dribblesWon: z.number().int().min(0),
+  crosses: z.number().int().min(0),
+  /** 공중볼 경합 승 */
+  aerialsWon: z.number().int().min(0),
+  /** 오프사이드에 걸린 수 */
+  offsides: z.number().int().min(0),
+  /** 뛴 거리 (m) · 고속 주행 19.8~25.2 km/h (m) · 스프린트 >25.2 km/h (m) · 스프린트 횟수 */
+  distance: z.number().min(0),
+  highSpeed: z.number().min(0),
+  sprint: z.number().min(0),
+  sprints: z.number().int().min(0),
+});
+
+export type MatchStatLine = z.infer<typeof MatchStatLineSchema>;

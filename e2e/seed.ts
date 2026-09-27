@@ -4,7 +4,6 @@ import {
   allMatchesDone,
   createGame,
   dealOdds,
-  interpretBackgroundHeuristic,
   isReserveMatch,
   settleQuickMatch,
   simulateOtherMatches,
@@ -40,7 +39,7 @@ process.env.STORY_FM_DATA_DIR = DATA_DIR;
  * 전체 세계는 한 시즌에 2,100여 경기를 굴려 25초를 쓴다. 리그 하나만 남기면 같은
  * 38라운드를 2.7초에 돈다 — 시즌 전환이 보는 것은 리그 순위표와 일정이므로 컵과 타
  * 리그는 그 판정에 들어가지 않는다. 컵을 지나는 전환은 유닛이 본다
- * (`packages/engine/test/season.test.ts`).
+ * (`packages/engine/test/app/season.test.ts`).
  */
 const ONE_LEAGUE: WorldScope = {
   leagues: ["epl"],
@@ -62,7 +61,7 @@ function appoint(opts: {
     userTeamId: opts.teamId,
     managerName: opts.managerName,
     background,
-    attributes: interpretBackgroundHeuristic(background, opts.teamId),
+
     ...(opts.world ? { world: opts.world } : {}),
   });
   const intro = buildOnboardingTurn(state);
@@ -118,7 +117,7 @@ export function seedFinishedSeason(teamId = "arsenal", seed = 406): string {
  * **오퍼 한 건이 성사되는 세이브** — 상대와 조건은 여기서 고르고, 넣는 것은 브라우저다.
  *
  * 상대의 답은 **코어 앵커가** 낸다 — mock은 교섭 상대를 부르지 않으므로 도착한 편지가
- * 서류대로 마감된다 (docs/llm/agents.md §4-1의 mock). 아무나 지목하면 그 답이 수락일지
+ * 서류대로 마감된다 (docs/common/llm/agents.md §4-1의 mock). 아무나 지목하면 그 답이 수락일지
  * 조정일지가 카탈로그에 달리므로, 스펙은 `if (수락이면)`을 쓰게 된다 — 그 조건문이 이
  * 픽스처가 지우는 것이다. 그래서 **확률이 문턱을 확실히 넘는 상대를 코어에게 물어서**
  * 고르고, 스펙은 그 이름 하나만 받아 조건 없이 단언한다.

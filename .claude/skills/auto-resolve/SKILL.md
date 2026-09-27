@@ -196,7 +196,7 @@ Nothing else parks. Not a balance number, not a conflict, not a design fork.
 One short line per tick — this arrives every ten minutes:
 
 ```
-틱 4 · 진행 3/4 · 대기 6 · #482 재촉(2회차) · #489 띄움(겹침: docs/simulation/match.md #486)
+틱 4 · 진행 3/4 · 대기 6 · #482 재촉(2회차) · #489 띄움(겹침: docs/match/match.md #486)
 ```
 
 A quiet tick is one line and nothing more. The long report belongs to §5.

@@ -2,6 +2,92 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import next from "@next/eslint-plugin-next";
+import ts from "typescript";
+import { URL, fileURLToPath } from "node:url";
+
+const browserImports = {
+  paths: [
+    {
+      name: "@story-fm/engine",
+      allowTypeImports: true,
+      message:
+        "화면은 엔진을 타입으로만 가져온다 — 값 import는 node:fs를 브라우저 번들에 끌어와 next build를 죽인다. 화면과 코어가 함께 쓰는 순수 규칙은 packages/domain에 두고 엔진이 re-export한다 (AGENTS.md 5장). 서버에서만 도는 모듈이면 eslint.config.js의 예외 목록에 그 파일을 올려라.",
+    },
+    {
+      // agents는 엔진을 값으로 부른다 — 화면이 값으로 가져오면 같은 일이 벌어진다
+      name: "@story-fm/agents",
+      allowTypeImports: true,
+      message:
+        "화면은 agents를 타입으로만 가져온다 — 값 import는 엔진을(그리고 node:fs를) 브라우저 번들에 끌어온다. 화면과 서버가 함께 쓰는 순수 값(`TurnOperation` 등)은 packages/domain에 두고 agents가 re-export한다 (AGENTS.md 5장).",
+    },
+  ],
+  patterns: [
+    {
+      group: [
+        "**/lib/store",
+        "**/lib/turn-runner",
+        "./store",
+        "./turn-runner",
+        "**/live-match-server",
+        "./live-match-server",
+      ],
+      allowTypeImports: true,
+      message:
+        "store.ts·turn-runner.ts는 서버에서만 돈다 — 값으로 부르면 엔진이 딸려 들어와 next build가 죽는다. 화면은 타입만 가져오고, 값이 필요하면 API 라우트를 거쳐라.",
+    },
+  ],
+};
+const domains = ["story", "negotiation", "match"];
+// 공개 배럴의 이름도 실제 선언 위치로 판정한다. 수동 목록은 export가 늘 때 경계를 놓친다.
+const packages = ["domain", "engine", "agents"];
+const entrypoints = packages.map((pkg) =>
+  fileURLToPath(new URL(`./packages/${pkg}/src/index.ts`, import.meta.url)),
+);
+const program = ts.createProgram(entrypoints, {
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  target: ts.ScriptTarget.ESNext,
+  skipLibCheck: true,
+});
+const checker = program.getTypeChecker();
+const exportsByPackage = entrypoints.map((entry, i) => {
+  const module = checker.getSymbolAtLocation(program.getSourceFile(entry));
+  return {
+    name: "@story-fm/" + packages[i],
+    exports: checker.getExportsOfModule(module).flatMap((symbol) => {
+      const declaration =
+        symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+      if (!(declaration.flags & ts.SymbolFlags.Value)) return [];
+      const file = declaration.declarations?.[0]?.getSourceFile().fileName ?? "";
+      const owner = file.match(
+        /packages\/(?:domain|engine|agents)\/src\/(common|story|negotiation|match|app)\//,
+      )?.[1];
+      return owner ? [{ name: symbol.name, owner }] : [];
+    }),
+  };
+});
+const publicImports = (owner, pkg) =>
+  exportsByPackage
+    .filter((entry) => entry.name !== "@story-fm/" + pkg)
+    .map((entry) => ({
+      name: entry.name,
+      importNames: entry.exports
+        .filter((item) => item.owner !== "common" && item.owner !== owner)
+        .map((item) => item.name),
+      allowTypeImports: true,
+      message: "공개 API도 선언의 소유 도메인을 따른다. 여러 도메인의 조립은 app에 둔다.",
+    }))
+    .filter((entry) => entry.importNames.length > 0);
+const domainImports = (owner) => ({
+  group: [
+    ...domains.filter((d) => d !== owner).map((d) => "**/" + d + "/**"),
+    "**/app/**",
+    "**/application/**",
+  ],
+  allowTypeImports: true,
+  message:
+    "실행 의존성은 common → 각 도메인 → app이다. 다른 도메인을 실행하는 함수는 app에서 조립한다.",
+});
 
 export default tseslint.config(
   {
@@ -64,41 +150,7 @@ export default tseslint.config(
   {
     files: ["apps/web/**/*.{ts,tsx}"],
     rules: {
-      "@typescript-eslint/no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            {
-              name: "@story-fm/engine",
-              allowTypeImports: true,
-              message:
-                "화면은 엔진을 타입으로만 가져온다 — 값 import는 node:fs를 브라우저 번들에 끌어와 next build를 죽인다. 화면과 코어가 함께 쓰는 순수 규칙은 packages/domain에 두고 엔진이 re-export한다 (AGENTS.md 5장). 서버에서만 도는 모듈이면 eslint.config.js의 예외 목록에 그 파일을 올려라.",
-            },
-            {
-              // agents는 엔진을 값으로 부른다 — 화면이 값으로 가져오면 같은 일이 벌어진다
-              name: "@story-fm/agents",
-              allowTypeImports: true,
-              message:
-                "화면은 agents를 타입으로만 가져온다 — 값 import는 엔진을(그리고 node:fs를) 브라우저 번들에 끌어온다. 화면과 서버가 함께 쓰는 순수 값(`TurnOperation` 등)은 packages/domain에 두고 agents가 re-export한다 (AGENTS.md 5장).",
-            },
-          ],
-          patterns: [
-            {
-              group: [
-                "**/lib/store",
-                "**/lib/turn-runner",
-                "./store",
-                "./turn-runner",
-                "**/live-match-server",
-                "./live-match-server",
-              ],
-              allowTypeImports: true,
-              message:
-                "store.ts·turn-runner.ts는 서버에서만 돈다 — 값으로 부르면 엔진이 딸려 들어와 next build가 죽는다. 화면은 타입만 가져오고, 값이 필요하면 API 라우트를 거쳐라.",
-            },
-          ],
-        },
-      ],
+      "@typescript-eslint/no-restricted-imports": ["error", browserImports],
     },
   },
   /**
@@ -109,23 +161,65 @@ export default tseslint.config(
   {
     files: [
       "apps/web/app/api/**/*.ts",
-      "apps/web/lib/store.ts",
-      "apps/web/lib/turn-runner.ts",
-      "apps/web/lib/live-match-server.ts",
+      "apps/web/application/lib/store.ts",
+      "apps/web/application/lib/turn-runner.ts",
+      "apps/web/application/lib/live-match-server.ts",
       "apps/web/test/**/*.ts",
       "apps/web/next.config.ts",
     ],
     rules: { "@typescript-eslint/no-restricted-imports": "off" },
   },
+  ...["common", ...domains].flatMap((owner) => [
+    ...["engine", "domain", "agents"].map((pkg) => ({
+      files: ["packages/" + pkg + "/src/" + owner + "/**/*.ts"],
+      rules: {
+        "@typescript-eslint/no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              ...publicImports(owner, pkg),
+              {
+                name: "@story-fm/" + pkg,
+                allowTypeImports: true,
+                message: "패키지 내부는 공개 배럴 대신 소유 모듈을 직접 참조한다.",
+              },
+            ],
+            patterns: [domainImports(owner)],
+          },
+        ],
+      },
+    })),
+    {
+      files: ["apps/web/domains/" + owner + "/**/*.{ts,tsx}"],
+      rules: {
+        "@typescript-eslint/no-restricted-imports": [
+          "error",
+          {
+            ...browserImports,
+            paths: [
+              ...browserImports.paths,
+              ...publicImports(owner).filter((entry) => entry.name === "@story-fm/domain"),
+            ],
+            patterns: [...browserImports.patterns, domainImports(owner)],
+          },
+        ],
+      },
+    },
+  ]),
   /**
    * 실시간 경기 엔진(`packages/sim/src/live`)은 브라우저가 굴린 결과를 서버가 **같은 코드로
-   * 다시 굴려** 검증한다 — 두 쪽이 비트까지 같아야 한다 (docs/simulation/live-match.md §8.2).
+   * 다시 굴려** 검증한다 — 두 쪽이 비트까지 같아야 한다 (docs/match/live-match.md §8.2).
    * 초월 `Math.*`는 ECMAScript가 결과를 정하지 않아 JS 엔진마다 마지막 비트가 다를 수 있고,
    * `**`는 `Math.pow`와 같은 구현이다. 그 자리는 `live/dmath.ts`의 결정적 구현이 맡는다.
    * `Math.sqrt`·`floor`·`abs`·`min`·`max`·`sign`·`fround`·`imul`은 IEEE가 결과를 정하므로 남긴다.
    */
   {
-    files: ["packages/sim/src/live/**/*.ts"],
+    files: [
+      "packages/sim/src/live/**/*.ts",
+      "packages/sim/src/load.ts",
+      "packages/domain/src/common/dmath.ts",
+      "packages/domain/src/common/log-curves.ts",
+    ],
     rules: {
       "no-restricted-properties": [
         "error",
@@ -156,7 +250,7 @@ export default tseslint.config(
         ].map((property) => ({
           object: "Math",
           property,
-          message: `Math.${property}은 JS 엔진마다 마지막 비트가 다를 수 있다 — 실시간 경기는 서버가 같은 코드로 다시 굴려 검증하므로 packages/sim/src/live/dmath.ts의 결정적 구현(dexp·dlog·datan2·dtanh·dhypot…)을 쓴다 (docs/simulation/live-match.md §8.2).`,
+          message: `Math.${property}은 JS 엔진마다 마지막 비트가 다를 수 있다 — 실시간 경기는 서버가 같은 코드로 다시 굴려 검증하므로 packages/sim/src/live/dmath.ts의 결정적 구현(dexp·dlog·dsigmoid·dhypot)을 쓴다 (docs/match/live-match.md §8.2).`,
         })),
       ],
       "no-restricted-syntax": [
@@ -164,12 +258,12 @@ export default tseslint.config(
         {
           selector: "BinaryExpression[operator='**']",
           message:
-            "`**`는 Math.pow와 같은 구현이라 JS 엔진마다 결과가 다를 수 있다 — 정수 거듭제곱은 곱셈으로 풀고, 그 밖은 packages/sim/src/live/dmath.ts(dexp·dlog)로 쓴다 (docs/simulation/live-match.md §8.2).",
+            "`**`는 Math.pow와 같은 구현이라 JS 엔진마다 결과가 다를 수 있다 — 정수 거듭제곱은 곱셈으로 풀고, 그 밖은 packages/sim/src/live/dmath.ts(dexp·dlog)로 쓴다 (docs/match/live-match.md §8.2).",
         },
         {
           selector: "AssignmentExpression[operator='**=']",
           message:
-            "`**=`는 Math.pow와 같은 구현이라 JS 엔진마다 결과가 다를 수 있다 — 정수 거듭제곱은 곱셈으로 풀고, 그 밖은 packages/sim/src/live/dmath.ts(dexp·dlog)로 쓴다 (docs/simulation/live-match.md §8.2).",
+            "`**=`는 Math.pow와 같은 구현이라 JS 엔진마다 결과가 다를 수 있다 — 정수 거듭제곱은 곱셈으로 풀고, 그 밖은 packages/sim/src/live/dmath.ts(dexp·dlog)로 쓴다 (docs/match/live-match.md §8.2).",
         },
       ],
     },

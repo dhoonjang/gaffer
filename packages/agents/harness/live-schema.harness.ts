@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildToolSpecs, outputAgents, type OutputAgent } from "@story-fm/agents";
-import { createGame, interpretBackgroundHeuristic, type GameState } from "@story-fm/engine";
+import { createGame, type GameState } from "@story-fm/engine";
 import {
   agentConfig,
   countOptionalProperties,
@@ -19,7 +19,7 @@ import { outOfBand, reportOf, skipOf, type Readings } from "../../engine/harness
 
 /**
  * 출력 스키마의 실모드 스모크 — **이 선언을 `outputSchema`로 싣고 부르면 제공자가 요청을
- * 받는가, 산출이 JSON으로 돌아오는가** (→ docs/llm/prompts.md §2).
+ * 받는가, 산출이 JSON으로 돌아오는가** (→ docs/common/llm/prompts.md §2).
  *
  *   pnpm balance live-schema
  *   LIVE_SCHEMA_TARGET=anthropic:<model> pnpm balance live-schema
@@ -142,7 +142,6 @@ function toolSpecs(): ReadonlyMap<string, GameToolSpec> {
     userTeamId: "arsenal",
     managerName: "김감독",
     background: BACKGROUND,
-    attributes: interpretBackgroundHeuristic(BACKGROUND),
   });
   return new Map(buildToolSpecs(state, []).map((tool) => [tool.name, tool] as const));
 }

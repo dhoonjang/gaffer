@@ -23,7 +23,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
  * 경기의 카드·부상은 말의 규칙에서 나오므로 `live-match-stats`가 실측과 맞댄다.
  *
  * 성향이 값으로 어떻게 움직이는지(오름·내림·상하한·균형식)는
- * `packages/engine/test/injury.test.ts`가 결정적으로 못 박고 있다.
+ * `packages/engine/test/common/injury.test.ts`가 결정적으로 못 박고 있다.
  *
  *   pnpm balance injury-rate
  */

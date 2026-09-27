@@ -1,0 +1,13 @@
+# 공유 정보와 기반
+
+선수·팀·구단 카탈로그와 기본 상태는 하나만 존재한다. 세 도메인은 같은 식별자와 사실을 사용하며 각자의 파생값과 판단만 소유한다.
+
+소유하는 책임: 선수·팀·능력·몸 상태·카탈로그, 날짜·난수·참조 해석, 공통 스키마와 표시 데이터. 선수의 출전·수상·성장·약속, 팀 전술, 감독 계약·평판의 저장된 사실도 공유 원장이다.
+
+새 게임·하루·시즌·저장·통합 화면은 app 조립 계층이 도메인들을 연결한다. common은 각 도메인의 판단이나 GM을 실행하지 않는다.
+
+코드는 `packages/domain/src/common`, `packages/engine/src/common`,
+`packages/agents/src/common`, `apps/web/domains/common`에서 찾는다.
+모델 제공자 기반은 `packages/llm`에 있다.
+
+[전체 문서 지도](../README.md) · [아키텍처](../architecture.md)

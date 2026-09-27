@@ -16,7 +16,7 @@ import { DEMOTION_GRIEVANCE } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
- * 2군 강등의 문턱이 **로테이션과 방치를 가르는가** (→ `docs/data/people.md` §5).
+ * 2군 강등의 문턱이 **로테이션과 방치를 가르는가** (→ `docs/story/people.md` §5).
  *
  *   pnpm balance demotion-grievance
  *

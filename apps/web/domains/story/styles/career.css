@@ -1,0 +1,305 @@
+/* ── 커리어 — 감독 신상 · 평판 · 트로피 ─────────────────────────── */
+
+.manager-card {
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.manager-card h3 {
+  margin-bottom: 6px;
+}
+.manager-card .bg {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  margin-bottom: 10px;
+}
+/**
+ * 감독 머리글 — **상자가 아니다.** 커리어 화면의 주인은 트로피·업적·시즌 기록이라
+ * 감독만 배경을 가지면 그쪽이 제일 중요해 보인다. 카드를 걷으면 폭 문제도 사라진다:
+ * 넓히면 가운데가 비고 좁히면 아래 섹션과 왼쪽 끝이 어긋나던 게 상자 때문이었다.
+ */
+.mgr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.mgr-head .mgr-info {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.mgr-head h3 {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.mgr-head .bg {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+/**
+ * 감독에게 딸린 값은 **두 갈래**고 생김새가 그것을 가른다: 견주는 눈금(평판·보드
+ * 경고)과 읽는 사실 한 줄(계약·지갑). 넷을 같은 상자로 나란히 세웠더니 무엇이
+ * 눈금이고 무엇이 사실인지 갈리지 않았고, 레이더와 폭을 나눠 쓰는 좁은 화면에서는
+ * 크기 제각각인 상자 넷이 2~4단으로 흩어졌다.
+ *
+ * 그래서 세로 세 단이다 — **눈금 상자 하나 · 사실 줄 · 지출 이력.**
+ */
+.mgr-meters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+}
+/**
+ * 눈금 묶음 — 감독에게 딸린 **견주는 수치**가 서는 면이다. 지금 담기는 것은 평판
+ * 하나이고, 한 단 밝은 면이 그 경계를 말하면 충분하다.
+ *
+ * ⚠️ `inline-flex`라 **내용 폭만큼만** 넓어진다. 블록으로 두면 왼쪽 열 끝까지
+ * 늘어나 상자 오른쪽이 통째로 비고, 그게 이 화면에서 카드를 걷어냈던 이유였다.
+ */
+.mgr-gauges {
+  display: inline-flex;
+  align-items: flex-start;
+  padding: 10px 14px 11px;
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+}
+/**
+ * 담긴 항목이 하나라 **제 내용 폭만** 갖는다 — 기준 폭(`200px`)을 주면 그보다 좁은
+ * 알맹이 옆이 비고, 그 폭은 옆에 설 것이 있을 때나 뜻이 있었다. 좁아지면 접히는 것은
+ * 상자가 아니라 안의 막대 줄이고(`.mgr-rep-items`), `min-width: 0`이 그것을 허락한다.
+ */
+.mgr-rep {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/**
+ * 눈금 묶음의 제목 — 섹션 제목과 **같은 결**로 쓴다(작게·굵게·자간 넓게·밝게).
+ * `--dim`으로 뒀더니 안의 항목 라벨(`보드`·`언론`)보다도 흐려서 제목이 아니라
+ * 딸린 꼬리표로 읽혔다. 한 눈금 작을 뿐(11 vs 12) 성격은 같은 제목이다 —
+ * 상자 테두리가 이미 "안쪽"임을 말하므로 색까지 낮출 이유가 없다.
+ */
+.mgr-rep-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--silver);
+  margin-bottom: 9px;
+}
+.mgr-rep-items {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 18px;
+  font-size: var(--fs-xs);
+}
+.rep-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+/* 라벨 폭을 맞춰 막대의 시작점이 항목마다 어긋나지 않게 (보드 2자 · 선수단 3자) */
+.rep-label {
+  min-width: 3.2em;
+  color: var(--text-2);
+}
+.rep-bar {
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+/* 채움은 분필 — 평판은 **감독이 쌓은 값**이라 구단이 바뀌어도 같은 자로 읽혀야 한다
+   (ui/design-system.md §2 충돌 규칙 1) */
+.rep-bar i {
+  display: block;
+  height: 100%;
+  background: var(--text);
+}
+.rep-item b {
+  min-width: 1.6em;
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/**
+ * 계약·지갑 — 눈금과 **같은 단의 다른 물건**이다. 견주는 값이 아니라 읽는 사실
+ * 한 줄이라 테두리를 주지 않는다: 라벨은 눈금 상자의 제목과 같은 결로 쓰되(작게·
+ * 굵게·자간 넓게) 값보다 흐려서, 상자 밖의 꼬리표라는 것이 색으로 읽힌다.
+ * ⚠️ 라벨을 `--dim`까지 낮추면 그 줄이 무엇의 값인지 말하는 유일한 글자가 배경에
+ * 묻는다 — 여기서 흐림의 바닥은 `--text-2`다.
+ */
+.mgr-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+}
+.mgr-fact {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.mgr-fact dt {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.mgr-fact dd {
+  color: var(--silver);
+  font-size: var(--fs-sm);
+}
+/* 비갱신 통보는 만료일이 곧 끝이라는 뜻이다 — 같은 줄에서 색으로 갈린다 */
+.mgr-nonrenewal {
+  color: var(--loss);
+}
+/**
+ * 지출 이력 — 지갑 줄 **아래 자기 줄**이다 (career.md §5.4). 지갑 칸 안에 품고
+ * 있었더니 그 칸만 높이가 튀고 나란히 선 칸들이 그 높이에 맞춰 빈 채로 늘어났다.
+ *
+ * 금액이 오른쪽 끝에 정렬되려면 줄에 정해진 폭이 있어야 한다 — 나열이 아니라
+ * 짧은 표라 폭을 하나 준다.
+ */
+.mgr-spending {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-self: stretch;
+  max-width: 340px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+.mgr-spend {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.mgr-spend b {
+  margin-left: auto;
+  color: var(--loss);
+  font-weight: 600;
+}
+.trophy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 트로피 행 — 금색 레일 하나. 둘러싸지 않고 왼쪽에 세운다 */
+.trophy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+}
+/* 트로피 아이콘 — 레일과 같은 금색이라 카드 하나가 한 색으로 읽힌다 */
+.trophy > svg {
+  flex-shrink: 0;
+  color: var(--gold);
+}
+.achv {
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+}
+.achv .desc {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+/* 보드 평가 — 시즌 기록 표에서 유일하게 문장인 칸이라 가라앉혀 둔다 */
+.career-verdict {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+/* 경질 이력 줄 — 무직 카드(.dismissed-head .when)와 같은 붉은 표식을 쓴다 */
+.career-sacked {
+  color: var(--loss);
+  font-size: var(--fs-sm);
+}
+/**
+ * **이직은 자리를 잃은 것이 아니다** (career.md §5.1) — 같은 이력 줄에 서지만
+ * 경고색으로 칠하면 다른 구단이 위약금을 물고 데려간 해가 잘린 해로 읽힌다.
+ */
+.career-sacked.career-moved {
+  color: var(--text-2);
+}
+/**
+ * 무직 — **경질 카드와 열린 제안.** 커리어 화면 맨 위에 선다.
+ *
+ * 경질은 붉게, 제안은 강조색으로 갈라 둔다: 하나는 끝난 일이고 하나는 아직
+ * 답할 수 있는 일이라, 같은 색이면 둘이 한 덩어리로 읽힌다. 제안은 **읽는
+ * 값이므로** 버튼 모양을 하지 않는다 — 수락은 감독이 말로 한다.
+ */
+.mgr-outofwork {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.dismissed {
+  background: var(--panel-2);
+  border-left: 3px solid var(--loss);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+}
+.dismissed-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.dismissed-head .when {
+  color: var(--loss);
+  font-size: var(--fs-sm);
+}
+.dismissed-why,
+.offer-why {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.offer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.offer {
+  background: var(--panel-2);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+}
+/* 공석 — 제안이 아니라 문이다: 답을 기다리는 강조 레일을 물려받지 않는다 */
+.offer.vacant {
+  border-left-color: var(--border);
+}
+.offer.vacant .offer-head .until {
+  color: var(--text-2);
+}
+.offer-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.offer-head .tier,
+.offer-head .until {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+/* 기한은 답이 사라지는 날이다 — 등급보다 앞으로 읽히게 오른쪽 끝에 세운다 */
+.offer-head .until {
+  margin-left: auto;
+  color: var(--accent-2);
+}
