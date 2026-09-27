@@ -7,7 +7,7 @@ import {
   SKILL_CATALOG,
   buildGmReference,
   buildGmStateNote,
-  buildTrainingPrompt,
+  buildTrainingRequest,
   parseSceneHeader,
   runGmTurn,
   sanitizeCasterText,
@@ -114,7 +114,7 @@ function trainingBriefChars(seed: number): number {
     if (moved.stopped === "blocked" || moved.stopped === "matchday") break;
   }
   const brief = buildTrainingBrief(state, sessions, { from, to: state.date });
-  return brief ? buildTrainingPrompt(brief).length : 0;
+  return brief ? JSON.stringify(buildTrainingRequest(brief)).length : 0;
 }
 
 /** 프리픽스 안정성 — 바이트까지 같으면 1, 아니면 0. 중간값이 없는 질문이다 */

@@ -2,7 +2,6 @@ import type { GenerativeAgentName, JsonObjectSchema } from "@story-fm/llm";
 import { FINALIZE_MATCH_SYSTEM, SETTLE_MATCH_INPUT } from "../match/finalize-match";
 import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../story/history-compactor";
 import { ONBOARDING_JUDGE_SYSTEM, REPORT_ONBOARDING_INPUT } from "../story/onboarding-judge";
-import { REPORT_TRAINING_INPUT, TRAINING_RATER_SYSTEM } from "../story/training-rater";
 
 /** 생성형 판정 호출의 실제 프롬프트·출력 스키마. 오프라인 검증과 실호출 하네스가 공유한다. */
 export interface OutputAgent {
@@ -17,7 +16,6 @@ export interface OutputAgent {
 export function outputAgents(): readonly OutputAgent[] {
   return [
     { agent: "finalize-match", system: FINALIZE_MATCH_SYSTEM, schema: SETTLE_MATCH_INPUT },
-    { agent: "training-rater", system: TRAINING_RATER_SYSTEM, schema: REPORT_TRAINING_INPUT },
     { agent: "onboarding-judge", system: ONBOARDING_JUDGE_SYSTEM, schema: REPORT_ONBOARDING_INPUT },
     { agent: "history-compactor", system: HISTORY_COMPACTOR_SYSTEM, schema: REPORT_DIGEST_INPUT },
   ];

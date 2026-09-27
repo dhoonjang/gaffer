@@ -18,13 +18,12 @@ import {
   parseOps,
   FINALIZE_MATCH_SYSTEM,
   REPORT_DIGEST_INPUT,
-  REPORT_TRAINING_INPUT,
   REPORT_ONBOARDING_INPUT,
   SETTLE_MATCH_INPUT,
   ONBOARDING_JUDGE_SYSTEM,
   SKILL_CATALOG,
   SKILL_NAMES,
-  TRAINING_RATER_SYSTEM,
+  TRAINING_RATER_RULES,
   agingDeclineLine,
   buildGmTools,
   buildToolSpecs,
@@ -60,8 +59,6 @@ import {
   TABLE_STANCE_KO,
   TABLE_STANCES,
   TACTIC_TOGGLES,
-  TRAINING_MARK_KO,
-  TRAINING_MARKS,
 } from "@story-fm/domain";
 import { AXIS_AGING, agingDelta, createGame } from "@story-fm/engine";
 
@@ -150,7 +147,7 @@ describe("규칙이 사는 자리", () => {
     expect(early.every((axis) => agingDelta(axis, age - 1) < 0)).toBe(false);
 
     expect(FINALIZE_MATCH_SYSTEM).toContain(line);
-    expect(TRAINING_RATER_SYSTEM).toContain(line);
+    expect(TRAINING_RATER_RULES).toContain(line);
   });
 
   /**
@@ -202,13 +199,6 @@ describe("규칙이 사는 자리", () => {
          */
         tables: [PROMISE_KIND_KO, PROMISE_KIND_MEANING] as Array<Record<string, string>>,
         reads: "",
-      },
-      {
-        where: "training-rater.results[].mark",
-        node: enumArg(OUTPUT_SCHEMAS, "training-rater", "mark"),
-        kinds: TRAINING_MARKS as readonly string[],
-        tables: [TRAINING_MARK_KO as Record<string, string>],
-        reads: TRAINING_RATER_SYSTEM,
       },
       {
         /**
@@ -480,13 +470,12 @@ function enumArg(
 }
 
 /**
- * 출력 스키마 넷은 GM 도구가 아니라 저마다의 호출이 요청에 싣는 산출의 꼴이다 — 카탈로그에도
+ * 출력 스키마 셋은 GM 도구가 아니라 저마다의 호출이 요청에 싣는 산출의 꼴이다 — 카탈로그에도
  * `buildGmTools`에도 서지 않고 이름은 에이전트의 것이다. 그래도 모델이 받는 입력이라 계약은 같다.
  */
 const OUTPUT_SCHEMAS = [
   { name: "finalize-match", inputSchema: SETTLE_MATCH_INPUT },
   { name: "onboarding-judge", inputSchema: REPORT_ONBOARDING_INPUT },
-  { name: "training-rater", inputSchema: REPORT_TRAINING_INPUT },
   { name: "history-compactor", inputSchema: REPORT_DIGEST_INPUT },
 ];
 

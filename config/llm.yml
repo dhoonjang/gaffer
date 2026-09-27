@@ -55,13 +55,6 @@ agents:
     # 3.8-flash는 minimal에 400을 낸다 — 이 자리만 minimal로 남아 있었다 (live-schema 실측)
     thinking_level: low
 
-  training-rater:
-    provider: google
-    model: gemini-3.5-flash-lite
-    max_tokens: 8000
-    timeout_ms: 30000
-    thinking_level: minimal
-
   # 새 게임의 배경을 읽고 지갑·능력치의 결·시작 사건을 판정한 뒤, 그 위에서 부임 첫날의
   # 첫 장면까지 쓴다 (docs/common/llm/agents.md §4-2). **싼 자리로 보내지 않는다** — 판정만 낼
   # 때는 앵커가 답을 받쳐 줬지만 첫 장면에는 앵커가 없고, 그것이 이 게임의 첫인상이다.
@@ -75,7 +68,7 @@ agents:
 
   # 접히는 평시 대화를 한 벌 요약으로 옮긴다 (docs/common/llm/agents.md §5-1). 결산과 같은
   # 계약이라 실패는 삼키지만 읽는 양이 다르다 — 한 번에 접히는 구간 전부를 읽고 거기
-  # 새로 선 인물까지 판정하므로 훈련 결산의 싼 자리로 보내지 않는다. 압축은 이력이 상한을
+  # 새로 선 인물까지 판정한다. 압축은 이력이 상한을
   # 넘을 때만이라 드물게 돈다.
   history-compactor:
     provider: google
@@ -84,7 +77,7 @@ agents:
     timeout_ms: 60000
     thinking_level: low
 
-# Jev interpreters run only behind GM instruction skills.
+# Jev interpreters run behind GM skills; training evaluation runs after a trained interval.
 # Shared defaults; expand a role mapping to configure it independently.
 # Direct TypeSafe API; TYPESAFE_API_KEY. Published input price, checked 2026-09-27.
 evaluators:
@@ -97,3 +90,4 @@ evaluators:
   market-orders: *jev
   table-orders: *jev
   match-reader: *jev
+  training-rater: *jev

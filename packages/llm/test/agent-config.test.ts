@@ -81,17 +81,12 @@ describe("에이전트별 LLM 설정", () => {
     model: gemini-final
     max_tokens: 250
     timeout_ms: 2500
-  training-rater:
+  history-compactor:
     provider: anthropic
-    model: claude-training
+    model: claude-compactor
     max_tokens: 400
     timeout_ms: 4000
     thinking_level: low
-  history-compactor:
-    provider: google
-    model: gemini-compactor
-    max_tokens: 600
-    timeout_ms: 6000
   onboarding-judge:
     provider: google
     model: gemini-judge
@@ -105,14 +100,14 @@ describe("에이전트별 LLM 설정", () => {
       provider: "openai",
       model: "gpt-custom",
     });
-    expect(config.agents["training-rater"]).toMatchObject({
+    expect(config.agents["history-compactor"]).toMatchObject({
       provider: "anthropic",
-      model: "claude-training",
+      model: "claude-compactor",
       thinkingLevel: "low",
     });
-    expect(config.agents["training-rater"].agent).toBe("training-rater");
-    expect(config.agents["training-rater"].maxTokens).toBe(400);
-    expect(config.agents["training-rater"].timeoutMs).toBe(4000);
+    expect(config.agents["history-compactor"].agent).toBe("history-compactor");
+    expect(config.agents["history-compactor"].maxTokens).toBe(400);
+    expect(config.agents["history-compactor"].timeoutMs).toBe(4000);
     expect(config.agents.gm.timeoutMs).toBe(1000);
   });
 
@@ -316,7 +311,7 @@ ${fields}`;
 
   it("rejects retired comparison roles in production configuration", () => {
     const agents = fullAgents();
-    for (const name of ["reader-baseline", "scout-rater"]) {
+    for (const name of ["reader-baseline", "scout-rater", "training-rater"]) {
       expect(() => parseLlmConfig(yamlOf({ ...agents, [name]: { ...AGENT_BLOCK } }))).toThrow();
     }
     expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();

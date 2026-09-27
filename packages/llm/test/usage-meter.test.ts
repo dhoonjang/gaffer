@@ -14,6 +14,8 @@ import {
   llmErrorKind,
   llmUsage,
   meterLlm,
+  createGameEvaluator,
+  recordEvaluationUsage,
   parseTokenBudget,
   recordSkip,
   recordUsage,
@@ -267,6 +269,25 @@ describe("상한 정책 — 게임 진행을 막지 않는다", () => {
     expect(agentAllowed("training-rater", verdict)).toBe(false);
     expect(agentAllowed("gm", verdict)).toBe(true);
     expect(agentAllowed("match-gm", verdict)).toBe(true);
+  });
+
+  it("typed training evaluation respects the budget before any provider call", async () => {
+    vi.stubEnv("LLM_TOKEN_BUDGET", "10");
+    const fetch = vi.spyOn(globalThis, "fetch");
+    try {
+      recordEvaluationUsage("gm", usageOf({ inputTokens: 20 }));
+      const evaluator = createGameEvaluator("training-rater");
+      await expect(
+        evaluator.evaluate({
+          state: "fixture",
+          questions: { trained: { type: "noul", instructions: "trained?" } },
+        }),
+      ).rejects.toBeInstanceOf(TokenBudgetExceededError);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(llmUsage().byAgent["training-rater"].skipped).toBe(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("상한 아래면 아무도 막지 않는다", () => {

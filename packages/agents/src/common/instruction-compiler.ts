@@ -17,6 +17,8 @@ const ABSENT = "absent";
 const UNCLEAR = "unclear";
 const OVERFLOW = "overflow";
 
+class UnresolvedInstruction extends Error {}
+
 type Schema = Record<string, unknown>;
 type Value = string | number | boolean | null | Value[] | { [key: string]: Value };
 interface Occurrence {
@@ -99,9 +101,11 @@ function choose(
   criteria: Record<string, string | null>,
   read: Query["read"],
 ): void {
-  if (Object.keys(criteria).length > MAX_CHOICES) throw new Error("선택 후보가 한도를 넘었습니다");
+  if (Object.keys(criteria).length > MAX_CHOICES)
+    throw new UnresolvedInstruction("선택 후보가 한도를 넘었습니다");
   queries.push({ question: { type: "choice", instructions, criteria }, read });
-  if (queries.length > MAX_QUESTIONS) throw new Error("지시 구조가 한도를 넘었습니다");
+  if (queries.length > MAX_QUESTIONS)
+    throw new UnresolvedInstruction("지시 구조가 한도를 넘었습니다");
 }
 
 async function evaluate(
@@ -116,12 +120,13 @@ async function evaluate(
   });
   const response = await request.evaluator.evaluate({ state, questions });
   if (Object.keys(response.answers).length !== queries.length)
-    throw new Error("평가 응답 개수가 다릅니다");
+    throw new UnresolvedInstruction("평가 응답 개수가 다릅니다");
   const choices = queries.map((query, i) => {
     const answer = validatedAnswer(query.question, response.answers[`q${i}`]);
-    if (answer?.type !== "choice") throw new Error("평가 응답이 후보와 일치하지 않습니다");
+    if (answer?.type !== "choice")
+      throw new UnresolvedInstruction("평가 응답이 후보와 일치하지 않습니다");
     const choice = majorityChoice(answer);
-    if (choice === undefined) throw new Error("평가 선택에 과반 지지가 없습니다");
+    if (choice === undefined) throw new UnresolvedInstruction("평가 선택에 과반 지지가 없습니다");
     return choice;
   });
   choices.forEach((choice, i) => queries[i]!.read(choice));
@@ -542,18 +547,7 @@ export async function interpretInstructions(
     return { ops };
   } catch (error) {
     // Provider errors retain their metering and cancellation semantics at the caller.
-    if (
-      !(error instanceof Error) ||
-      ![
-        "선택 후보가 한도를 넘었습니다",
-        "지시 구조가 한도를 넘었습니다",
-        "평가 응답 개수가 다릅니다",
-        "평가 응답이 후보를 벗어났습니다",
-        "평가 확률이 후보와 일치하지 않습니다",
-        "평가 선택에 과반 지지가 없습니다",
-      ].includes(error.message)
-    )
-      throw error;
+    if (!(error instanceof UnresolvedInstruction)) throw error;
     return unresolved();
   }
 }

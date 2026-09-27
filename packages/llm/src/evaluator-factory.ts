@@ -2,13 +2,13 @@ import { LLM_CONFIG, type EvaluatorName } from "./config";
 import type { GameEvaluator } from "./game-evaluator";
 import { TypesafeEvaluationError, TypesafeGameEvaluator } from "./typesafe-adapter";
 import { tapEvaluator } from "./turn-trace";
-import { recordEvaluationUsage } from "./usage-meter";
+import { assertAgentBudget, recordEvaluationUsage } from "./usage-meter";
 
 export function createGameEvaluator(name: EvaluatorName): GameEvaluator {
   const config = LLM_CONFIG.evaluators[name];
   if (!config) throw new Error(`Jev evaluator configuration is missing: ${name}`);
   const client = new TypesafeGameEvaluator(config);
-  return tapEvaluator(
+  const evaluator = tapEvaluator(
     {
       async evaluate(request) {
         try {
@@ -23,4 +23,10 @@ export function createGameEvaluator(name: EvaluatorName): GameEvaluator {
     },
     name,
   );
+  return {
+    async evaluate(request) {
+      assertAgentBudget(name);
+      return evaluator.evaluate(request);
+    },
+  };
 }
