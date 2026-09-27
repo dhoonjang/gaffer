@@ -24,6 +24,7 @@ import type {
 import { LlmCallError, LlmTimeoutError, TokenBudgetExceededError } from "@story-fm/llm";
 import { z } from "zod";
 import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src/common/retry";
+import { agreement, costUsd, durationStats } from "../../harness/match-reader-eval-metrics";
 import { runReaderPipeline } from "../../src/match/reader-pipeline";
 import { matchReaderOutputSchema } from "../../src/match/match-reader";
 import { runMatchReader } from "../../src/app/workflows/match/match-reader";
@@ -517,4 +518,58 @@ describe("reader pipeline — atomic probabilistic pilot", () => {
       expect(llm.runTurn).toHaveBeenCalledTimes(1);
     },
   );
+});
+
+describe("reader comparison metrics", () => {
+  it("empty measurements are unknown and percentiles use nearest rank", () => {
+    expect(durationStats([])).toEqual({ n: 0, p50Ms: null, p95Ms: null });
+    expect(durationStats([40, 10, 30, 20])).toEqual({ n: 4, p50Ms: 20, p95Ms: 40 });
+  });
+
+  it("missing prices and unsupported cache-write charges never look free", () => {
+    const usage = {
+      inputTokens: 1000,
+      outputTokens: 100,
+      cacheReadTokens: 200,
+      cacheWriteTokens: 0,
+    };
+    expect(costUsd(usage, { input: 1, output: 2 })).toBeNull();
+    expect(costUsd(usage, { input: 1, output: 2, cachedInput: 0.1 })).toBeCloseTo(0.00102);
+    expect(
+      costUsd({ ...usage, cacheWriteTokens: 1 }, { input: 1, output: 2, cachedInput: 0.1 }),
+    ).toBeNull();
+  });
+
+  it("pairs duplicate rows once and separates lexical agreement from step error", () => {
+    const row = {
+      pointId: "p",
+      target: { side: "home" as const, lane: "left" as const },
+      shape: "focus" as const,
+      sign: 1 as const,
+      step: 1,
+    };
+    const baseline = {
+      points: [{ id: "p", text: "same fact", about: [], importance: 1 as const }],
+      sheet: [row, row],
+      ops: { set_tactics: [{ pressing: 3, tempo: 2 }] },
+    };
+    const candidate = {
+      ...baseline,
+      sheet: [{ ...row, step: 1.5 }],
+      ops: { set_tactics: [{ tempo: 2, pressing: 3 }] },
+    };
+    expect(agreement(baseline, candidate)).toMatchObject({
+      matchedRows: 1,
+      unmatchedBaselineRows: 1,
+      structuralJaccard: 0.5,
+      stepMeanAbsoluteError: 0.5,
+      opsExact: true,
+    });
+    expect(
+      agreement(baseline, {
+        ...candidate,
+        points: [{ ...baseline.points[0]!, text: "different wording" }],
+      }),
+    ).toMatchObject({ matchedRows: 0, stepMeanAbsoluteError: null });
+  });
 });
