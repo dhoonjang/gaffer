@@ -15,19 +15,22 @@
 `provider`·`model`·`max_tokens`·`timeout_ms`·`thinking_level`·`operator_channel`을
 `parseLlmConfig`가 검증한다.
 
-| 설정 자리                  | 계약과 책임                                |
-| -------------------------- | ------------------------------------------ |
-| `agents.gm`                | 평시 장면·관계·사건·판정 스킬              |
-| `agents.match-gm`          | 확정 사건 중계·벤치 대화·경기 마무리       |
-| `agents.negotiation-gm`    | 현재 협상 방의 상대 대사·설득 판정         |
-| `agents.match-reader`      | 경기 포인트·연속 강도 시트. 명령 출력 없음 |
-| `agents.finalize-match`    | 경기 평점·성장·심경. 마무리 중계 없음      |
-| `agents.training-rater`    | 훈련 구간 결산                             |
-| `agents.scout-rater`       | 코어 스카우팅 사실에 한 줄 평              |
-| `agents.history-compactor` | 평시 이력 요약·인물 기억                   |
-| `agents.onboarding-judge`  | 초기 조건·사건·부임 첫 장면                |
-| `evaluators.instructions`  | GM 전 직접 지시의 실행 의도·명령 후보 선택 |
-| `evaluators.match-sheet`   | 비교 전용 시트 강도 평가. 운영 미채택      |
+| 설정 자리                    | 계약과 책임                                |
+| ---------------------------- | ------------------------------------------ |
+| `agents.gm`                  | 평시 장면·관계·사건·판정 스킬              |
+| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
+| `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정         |
+| `agents.match-reader`        | 경기 포인트·연속 강도 시트. 명령 출력 없음 |
+| `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음      |
+| `agents.training-rater`      | 훈련 구간 결산                             |
+| `agents.scout-rater`         | 코어 스카우팅 사실에 한 줄 평              |
+| `agents.history-compactor`   | 평시 이력 요약·인물 기억                   |
+| `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                |
+| `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석               |
+| `evaluators.training-orders` | 훈련·육성 스킬이 요청한 지시 해석          |
+| `evaluators.market-orders`   | 시장·재정 스킬이 요청한 지시 해석          |
+| `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석       |
+| `evaluators.match-sheet`     | 비교 전용 시트 강도 평가. 운영 미채택      |
 
 생성형 에이전트는 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를
 사용한다. 평가자는 `max_tokens`·대화 이력·도구 대신 질문을 받고 설정의 모델·전체
@@ -1024,7 +1027,7 @@ pnpm log --board --game game-f0o7              전술판 선반만 — 전술판
 
 ## 8. Jev — 직접 지시와 시트 평가의 경계
 
-`config/llm.yml`의 `evaluators.instructions`는 턴 앞에서 직접 지시를 선택한다.
+`config/llm.yml`의 네 해석기 설정은 해당 GM 스킬이 호출할 때만 Jev로 직접 지시를 선택한다.
 `evaluators.match-sheet`는 시트 강도 분리의 비교 전용이다. 운영 판독은 생성형 한 호출로
 포인트·시트를 내며 명령은 내지 않는다. 시트 비교에서는 산문 후보 뒤 Jev를 주입하지만,
 기록 입력 실측에서 평균 지연 개선이 없고 비용이 늘어 운영에는 주입하지 않는다.
