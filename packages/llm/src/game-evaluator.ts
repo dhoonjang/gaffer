@@ -7,9 +7,37 @@ export interface ScoreQuestion {
   criteria: string[];
 }
 
+export interface ChoiceQuestion {
+  type: "choice";
+  instructions: string;
+  criteria: Record<string, string | null>;
+}
+
+export interface NoulQuestion {
+  type: "noul";
+  instructions: string;
+  criteria?: { true?: string; false?: string };
+}
+
+export type EvaluationQuestion = ScoreQuestion | ChoiceQuestion | NoulQuestion;
+
+export interface ChoiceAnswer {
+  type: "choice";
+  choice: string;
+  probabilities: Record<string, number>;
+  confidence: number;
+}
+
+export interface NoulAnswer {
+  type: "noul";
+  noul: number;
+}
+
+export type EvaluationAnswer = ScoreAnswer | ChoiceAnswer | NoulAnswer;
+
 export interface EvaluationRequest {
   state: string;
-  questions: Record<string, ScoreQuestion>;
+  questions: Record<string, EvaluationQuestion>;
   signal?: AbortSignal;
 }
 
@@ -22,7 +50,7 @@ export interface ScoreAnswer {
 
 export interface EvaluationResult {
   model: string;
-  answers: Record<string, ScoreAnswer>;
+  answers: Record<string, EvaluationAnswer>;
   usage: TurnUsage;
   attempts?: number;
   usageComplete?: boolean;
