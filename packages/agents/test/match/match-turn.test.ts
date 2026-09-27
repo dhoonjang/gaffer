@@ -9,6 +9,7 @@ import {
   setPlayerTactic,
   advanceTime,
   BIG_CHANCE_XG,
+  type MatchRatingBrief,
   bindJournal,
   type JournalEntry,
   clockOf,
@@ -35,7 +36,6 @@ import {
   buildShootoutMessage,
   collectMatchMarks,
   eventsBlockOf,
-  FINALIZE_MATCH_SYSTEM,
   GmTurnFailure,
   TACTIC_CAPS,
   TACTIC_OPS,
@@ -50,7 +50,13 @@ import {
   type GmToolCall,
   type OpsOrders,
 } from "@story-fm/agents";
-import { type GameToolSpec, type TurnRequest } from "@story-fm/llm";
+import {
+  LlmCallError,
+  type EvaluationRequest,
+  type EvaluationResult,
+  type GameToolSpec,
+  type TurnRequest,
+} from "@story-fm/llm";
 import { ModelOutputError } from "../../src/common/retry";
 import type { MatchInstructionRequest } from "../../src/match/jev-match-reader";
 
@@ -197,16 +203,6 @@ function turn(state: GameState, intent: OpsOrders, calls: GmToolCall[] = []) {
     calls,
   };
 }
-
-/**
- * 출력 스키마를 실은 요청이 어느 에이전트의 것인가 — 도구 이름이 없으므로 시스템
- * 프롬프트가 가른다 (models.md §3-2). 도구를 쥔 GM 요청은 `undefined`다.
- */
-const outputAgentOf = (req: TurnRequest): "finalize-match" | undefined => {
-  if (req.outputSchema === undefined) return undefined;
-  if (req.system === FINALIZE_MATCH_SYSTEM) return "finalize-match";
-  return undefined;
-};
 
 /** 실모드로 돌리는 describe의 앞뒤 — 모델 자리는 `runTurn` 흉내다 */
 function realMode(): void {
@@ -689,69 +685,91 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
   });
 });
 
-/**
- * **경기 마감 — 도구 뒤의 에이전트가 결산과 마무리 중계를 쓴다** (agents.md §3 「경기 마감」).
- *
- * 마감 핸들러가 `finalizeMatch`로 앵커를 먼저 박고 마감 에이전트를 부른다 — 결산과
- * 마무리 중계가 산출 JSON 하나로 온다. GM이 마감을 부르지 않은 턴은 코어가 대신 부른다.
- */
-describe("경기 마감 — 결산은 도구 뒤의 에이전트가, 마무리는 장면의 끝에", () => {
+/** GM supplies prose in its existing tool call; Jev evaluates the numeric settlement. */
+describe("경기 마감 — GM의 메모와 Jev 결산", () => {
   realMode();
 
-  /** `<settlement>` 표의 행에서 id를 읽는다 — 모델이 돌려줘야 할 그 id다 */
-  const idsOfSettlement = (user: string): string[] => {
-    const block = user.slice(user.indexOf("<settlement>"), user.indexOf("</settlement>"));
-    return [...block.matchAll(/^- (\S+) \| /gmu)].map((m) => m[1]!);
+  const nearlyDone = (): GameState => late().state;
+  let finishedOrigin: GameState | undefined;
+  const finishedState = (): GameState => {
+    if (!finishedOrigin) {
+      finishedOrigin = nearlyDone();
+      playToEnd(finishedOrigin);
+    }
+    return structuredClone(finishedOrigin);
   };
 
-  const nearlyDone = (): GameState => late().state;
-
-  /** 마감 에이전트 흉내 — 앵커 위에 +0.5, 첫 선수에게 심경 한 줄 */
   function settler(
     state: GameState,
     matchId: string,
-    seen: { anchors: Record<string, number>; mood: string | null; commentary: string },
+    seen: { anchors: Record<string, number>; commentary: string },
   ) {
-    return async (req: TurnRequest) => {
-      // 산출은 JSON 하나다 — 도구는 없다 (models.md §3-2)
-      expect(req.outputSchema).toBeDefined();
-      expect(req.tools).toBeUndefined();
-      expect(req.user).toContain("<commentary>");
-      seen.commentary = req.user;
+    return async (req: EvaluationRequest): Promise<EvaluationResult> => {
+      const input = JSON.parse(req.state) as { brief: MatchRatingBrief; commentary: string };
+      expect(input.brief.matchId).toBe(matchId);
+      expect(input.brief.players.length).toBeGreaterThan(0);
+      seen.commentary = input.commentary;
       seen.anchors = { ...(state.matches.find((m) => m.id === matchId)?.result?.ratings ?? {}) };
-      const ids = idsOfSettlement(req.user);
-      expect(ids.length).toBeGreaterThan(0);
-      seen.mood = ids[0]!;
+      const answers: EvaluationResult["answers"] = {};
+      for (const [key, question] of Object.entries(req.questions)) {
+        if (question.type === "score") {
+          const level = key.endsWith("_rating") ? 4 : 1;
+          answers[key] = {
+            type: "score",
+            score: level,
+            confidence: 1,
+            probabilities: Object.fromEntries(
+              question.criteria.map((_, index) => [String(index), index === level ? 1 : 0]),
+            ),
+          };
+        } else if (question.type === "choice") {
+          answers[key] = {
+            type: "choice",
+            choice: "none",
+            confidence: 1,
+            probabilities: Object.fromEntries(
+              Object.keys(question.criteria).map((value) => [value, value === "none" ? 1 : 0]),
+            ),
+          };
+        }
+      }
       return {
-        ...answered(""),
-        output: {
-          ratings: ids.map((playerId) => ({
-            playerId,
-            rating: (seen.anchors[playerId] ?? 6) + 0.5,
-            note: "흐름을 쥐었다",
-          })),
-          moods: [{ playerId: seen.mood, text: "오늘은 발이 가벼웠다", acknowledgesIssue: true }],
-        },
+        model: "test-evaluator",
+        answers,
+        usage: answered("").usage,
+        attempts: 1,
+        usageComplete: true,
       };
     };
   }
 
-  it("GM이 finalize_match를 부르면 앵커 위에 결산이 서고 마무리 중계가 도구 결과로 온다", async () => {
+  it("GM 메모는 출전 선수에게만 남고 Jev 수치 결산은 코어 앵커 안에 선다", async () => {
     const state = nearlyDone();
     const matchId = state.pendingMatch!.matchId;
     const seen = {
       anchors: {} as Record<string, number>,
-      mood: null as string | null,
       commentary: "",
     };
-    const settle = settler(state, matchId, seen);
+    evaluate.mockImplementation(settler(state, matchId, seen));
+    const playerId = state.pendingMatch!.live.ledger[userSide(state)].onPitch[0]!;
+    const matchSquad = new Set(Object.keys(state.pendingMatch!.live.setup.players));
+    const outsider = state.players.find((player) => !matchSquad.has(player.id))!;
+    const outsiderMood = structuredClone(outsider.state.moodNote);
     let finalizeReply = "";
     runTurn.mockImplementation(async (req: TurnRequest) => {
-      if (outputAgentOf(req) === "finalize-match") return settle(req);
       const finalize = req.tools!.find((t) => t.name === "finalize_match")!;
       // 장부가 끝났으면 마감, 아니면 중계만
       if (state.pendingMatch?.live.ledger.phase === "finished") {
-        const reply = await finalize.handle({});
+        const reply = await finalize.handle({
+          notes: [
+            { playerId, note: "상대의 공격을 차분하게 막아냈다" },
+            { playerId: outsider.id, note: "출전하지 않은 선수의 평점 근거" },
+          ],
+          moods: [
+            { playerId, text: "오늘은 발이 가벼웠다", acknowledgesIssue: true },
+            { playerId: outsider.id, text: "출전하지 않은 선수의 심경", acknowledgesIssue: true },
+          ],
+        });
         expect(reply.ok).toBe(true);
         finalizeReply = reply.message;
         return answered(
@@ -789,10 +807,17 @@ describe("경기 마감 — 결산은 도구 뒤의 에이전트가, 마무리�
     for (const [id, anchor] of Object.entries(seen.anchors)) {
       expect(Math.abs(result.ratings![id]! - anchor)).toBeLessThanOrEqual(RATING_BAND);
     }
-    expect(state.players.find((p) => p.id === seen.mood)!.state.moodNote?.text).toContain(
+    expect(state.players.find((p) => p.id === playerId)!.state.moodNote?.text).toContain(
       "발이 가벼웠다",
     );
-    // 마감 에이전트는 이 경기의 중계를 읽었다
+    expect(result.ratingNotes?.[playerId]).toBe("상대의 공격을 차분하게 막아냈다");
+    expect(result.ratingNotes).not.toHaveProperty(outsider.id);
+    expect(state.players.find((player) => player.id === outsider.id)!.state.moodNote).toEqual(
+      outsiderMood,
+    );
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(createEvaluator).toHaveBeenCalledWith("finalize-match");
+    // 타입 평가도 이 경기의 중계를 읽었다
     expect(seen.commentary).toContain("경기가 이어집니다");
     // 마감 기록과 결산 기록이 함께 서고, 결산은 칩이 아니다
     expect(last.toolCalls.map((c) => c.name)).toContain("finalize_match");
@@ -800,28 +825,80 @@ describe("경기 마감 — 결산은 도구 뒤의 에이전트가, 마무리�
     expect(last.text).toContain("경기 종료 휘슬");
   });
 
-  it("GM이 마감을 부르지 않으면 코어가 대신 마감하고 마무리 중계를 장면 끝에 붙인다", async () => {
-    const state = nearlyDone();
+  it("GM이 마감을 빠뜨려도 추가 생성 호출이나 새 메모 없이 결산한다", async () => {
+    const state = finishedState();
     const matchId = state.pendingMatch!.matchId;
-    const seen = {
-      anchors: {} as Record<string, number>,
-      mood: null as string | null,
-      commentary: "",
-    };
-    const settle = settler(state, matchId, seen);
-    runTurn.mockImplementation(async (req: TurnRequest) => {
-      if (outputAgentOf(req) === "finalize-match") return settle(req);
-      return answered("[90']\n@중계: 휘슬이 울립니다.");
-    });
+    const moods = new Map(
+      state.players.map((player) => [player.id, structuredClone(player.state.moodNote)]),
+    );
+    const seen = { anchors: {} as Record<string, number>, commentary: "" };
+    evaluate.mockImplementation(settler(state, matchId, seen));
+    runTurn.mockResolvedValue(answered("[90']\n@중계: 휘슬이 울립니다."));
 
-    playToEnd(state);
     const last = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
+    const result = state.matches.find((match) => match.id === matchId)!.result!;
     expect(state.pendingMatch).toBeFalsy();
-    expect(state.matches.find((m) => m.id === matchId)!.result!.rated).toBe(true);
-    expect(last.toolCalls.map((c) => c.name)).toContain("finalize_match");
-    // 마무리 중계가 GM의 장면 뒤에 선다
+    expect(result.rated).toBe(true);
+    expect(result.ratingNotes ?? {}).toEqual({});
+    for (const player of state.players) expect(player.state.moodNote).toEqual(moods.get(player.id));
+    expect(last.toolCalls.map((call) => call.name)).toContain("finalize_match");
+    expect(runTurn).toHaveBeenCalledTimes(1);
+    expect(evaluate).toHaveBeenCalledTimes(1);
     expect(last.text).toContain("휘슬이 울립니다");
-    expect(last.text).not.toContain("마지막 휘슬");
+  });
+
+  it("수치 인자가 섞인 마감 도구는 검증 단계에서 거절하고 상태를 바꾸지 않는다", async () => {
+    const state = finishedState();
+    const calls: GmToolCall[] = [];
+    const tools = buildMatchTools(state, {
+      calls,
+      goals: [],
+      cards: [],
+      finalizeEvaluator: { evaluate },
+    });
+    const finalize = tools.find((tool) => tool.name === "finalize_match")!;
+    const before = structuredClone(state);
+    for (const args of [
+      { ratings: [{ playerId: "player", rating: 10 }] },
+      { notes: [{ playerId: "player", note: "근거", rating: 10 }] },
+      { notes: [{ playerId: "player", note: 10 }] },
+      { moods: [{ playerId: "player", text: "심경", rating: 10 }] },
+    ])
+      expect((await finalize.handle(args)).ok).toBe(false);
+    expect(state).toEqual(before);
+    expect(calls).toEqual([]);
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it("평가 오류 뒤에도 종료 결과와 코어 평점 앵커는 남고 마감을 중복 적용하지 않는다", async () => {
+    const state = finishedState();
+    const matchId = state.pendingMatch!.matchId;
+    const calls: GmToolCall[] = [];
+    let anchors: Record<string, number> = {};
+    evaluate.mockImplementation(async () => {
+      anchors = { ...state.matches.find((match) => match.id === matchId)!.result!.ratings };
+      throw new LlmCallError("overloaded", "evaluation unavailable");
+    });
+    const finalize = buildMatchTools(state, {
+      calls,
+      goals: [],
+      cards: [],
+      finalizeEvaluator: { evaluate },
+    }).find((tool) => tool.name === "finalize_match")!;
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect((await finalize.handle({})).ok).toBe(true);
+      expect(state.pendingMatch).toBeFalsy();
+      const result = state.matches.find((match) => match.id === matchId)!.result!;
+      expect(Object.keys(anchors).length).toBeGreaterThan(0);
+      expect(result.ratings).toEqual(anchors);
+      expect(result.rated).not.toBe(true);
+      expect((await finalize.handle({})).ok).toBe(false);
+      expect(calls.filter((call) => call.name === "finalize_match")).toHaveLength(1);
+      expect(evaluate).toHaveBeenCalledTimes(1);
+    } finally {
+      warning.mockRestore();
+    }
   });
 });
 
@@ -1170,7 +1247,7 @@ describe("시계 — 출처가 날짜의 주인을 정한다", () => {
    * 그쪽은 앵커가 남으므로 이 판의 시계와는 상관이 없다.
    */
   const scene = (text: string) => async (req: TurnRequest) =>
-    outputAgentOf(req) === undefined ? answered(text) : { ...answered(""), output: { ops: {} } };
+    req.outputSchema === undefined ? answered(text) : { ...answered(""), output: { ops: {} } };
 
   /** 시점 헤더 한 줄 — 읽히는 형식은 `[날짜 시간대 시:분]`이다 (prompts.md §1) */
   const header = (date: string, clock = "오후 3:20") => `[${date} ${clock}]`;

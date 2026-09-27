@@ -4,6 +4,7 @@ import { buildToolSpecs, dismissed } from "../../gm-tools";
 import { createInstructionTool } from "../instructions";
 import { type GameToolSpec } from "@story-fm/llm";
 import { finalizeMatchTurn } from "./finalize-match";
+import { MatchClosingSchema } from "../../../match/match-closing";
 
 /**
  * 이 턴의 경기 도구 — 감독 발화에는 지시·대화·마감, 손잡이 턴에는 마감. 킥오프 턴은 부르지 않는다.
@@ -31,14 +32,17 @@ export function buildMatchTools(
     );
   tools.push({
     ...finalize!,
-    handle: async () => {
+    handle: async (args: unknown) => {
+      const parsed = MatchClosingSchema.safeParse(args);
+      if (!parsed.success)
+        return { ok: false, message: "경기 마감에는 출전 선수의 평점 설명과 심경만 제출하세요" };
       const pending = state.pendingMatch;
       if (!pending) return { ok: false, message: "마감할 경기가 없습니다" };
       if (pending.live.ledger.phase !== "finished" || awaitingShootout(state)) {
         return { ok: false, message: "아직 경기가 끝나지 않았습니다" };
       }
       const minute = pending.live.ledger.minute;
-      const outcome = await finalizeMatchTurn(state, ctx.calls, ctx.finalizeLlm);
+      const outcome = await finalizeMatchTurn(state, ctx.calls, ctx.finalizeEvaluator, parsed.data);
       if (!outcome) return { ok: false, message: "마감할 경기가 없습니다" };
       ctx.onFinalized?.(minute);
       return {

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { type JsonObjectSchema, type GameLLM } from "@story-fm/llm";
+import { type JsonObjectSchema, type GameEvaluator } from "@story-fm/llm";
+import { MatchClosingSchema } from "./match-closing";
 import { toToolSchema } from "../common/tool-schema";
 import { type GmToolCall } from "../common/gm-types";
 import { type GoalMark, type CardMark } from "@story-fm/engine";
@@ -10,8 +11,8 @@ export { buildEventsBlock, buildShootoutMessage } from "./match-script";
 /**
  * 매치 GM — 경기 장면의 GM. 이 경기의 이력 전부를 쥔 채 감독의 말에 반응하고, 판을
  * 움직여야 할 때만 도구를 부른다 (agents.md §3). 사건은 말의 규칙이 만들고 GM은 그것을
- * 중계·연출·대화로 옮긴다 — **경기를 바꿀 도구도 시계를 미는 도구도 없다.** 도구 둘은
- * 코어를 부르는 손잡이이고 그 뒤에 마감 에이전트가 선다(`buildMatchTools`).
+ * 중계·연출·대화로 옮긴다 — **결과를 정하거나 시계를 미는 도구는 없다.** 지시·대화·마감
+ * 도구는 코어를 부르고, 마감 수치의 평가는 Jev가 맡는다(`buildMatchTools`).
  * 프롬프트는 코드처럼 버전 관리한다 (AGENTS.md 6-5).
  *
  * ⚠️ 골 문형의 스코어는 `formatScore`가 내는 글자 그대로다 — en dash 양옆의 hair
@@ -33,7 +34,7 @@ export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 �
 - 전술 실행 지시가 있을 때만 tactic_orders를 부른다. 그 결과와 장부를 읽고 코치가 짚을 것이 있으면 짚는다.
 - 선수나 코치를 부르기만 했거나 말만 건 턴은 도구 없이 장면만 쓴다 — 시간은 한 순간도 흐르지 않았고 슛도 찬스도 없다.
 - 「70분에 라야 빼」는 예약이 아니다 — 시계는 감독이 보고 있고, 그 분에 감독이 멈춰 말하면 된다. 그 사실은 픽션 안에서 말한다.
-- 경기가 끝났으면 마감한다. 마감된 장부를 근거로 마무리 중계를 직접 쓰고 벤치 한 줄로 닫는다.
+- 경기가 끝났으면 finalize_match에 출전 선수의 사실에 근거한 평점 설명(notes)과 심경(moods)을 함께 낸다. 수치 평점·성장은 제출하지 않는다. 마감된 장부를 근거로 마무리 중계를 직접 쓰고 벤치 한 줄로 닫는다.
 
 # 사건
 일어난 일은 이미 정해져 있다. <events>를 빠뜨리지 않고, 더하지 않고 생생한 중계로 옮긴다. 사건 사이의 흐름·분위기·관중·벤치의 반응은 당신의 재량이고, 그 여백이 이야기다.
@@ -101,8 +102,8 @@ export const MATCH_TOOL_DEFINITIONS: ReadonlyArray<{
   {
     name: FINALIZE_MATCH_TOOL,
     description:
-      "끝난 경기를 마감한다 — 장부가 종료 상태일 때만. 결과로 결산 요약이 온다. 장부를 근거로 마무리 중계를 직접 쓴다.",
-    inputSchema: toToolSchema(EmptySchema),
+      "끝난 경기를 마감한다 — 장부가 종료 상태일 때만. 출전 선수의 경기 사실에 근거한 평점 설명 notes와 심경 moods를 함께 낸다. 수치 평점·성장은 제출하지 않는다. 결산 요약을 받아 마무리 중계를 직접 쓴다.",
+    inputSchema: toToolSchema(MatchClosingSchema),
   },
 ];
 
@@ -113,8 +114,8 @@ export interface MatchToolContext {
   boardMoves?: readonly BoardMove[];
   goals: GoalMark[];
   cards: CardMark[];
-  /** 마감 에이전트를 부를 때 쓸 클라이언트 — 테스트가 갈아 끼운다 */
-  finalizeLlm?: GameLLM;
+  /** 마감 수치를 평가할 클라이언트 — 테스트가 갈아 끼운다 */
+  finalizeEvaluator?: GameEvaluator;
   /** 마감이 끝난 뒤 장부의 마지막 분 — 장부가 지워진 뒤 화면의 시각 줄이 읽는다 */
   onFinalized?: (minute: number) => void;
 }
