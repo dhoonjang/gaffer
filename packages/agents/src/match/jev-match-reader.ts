@@ -1,3 +1,4 @@
+import { validatedAnswer } from "../common/evaluation-answers";
 import { z } from "zod";
 import {
   PointSchema,
@@ -33,13 +34,6 @@ const PlanSchema = z.object({
     ),
 });
 
-const ScoreSchema = z.object({
-  type: z.literal("score"),
-  score: z.number().finite().min(0).max(6),
-  confidence: z.number().finite().min(0).max(1),
-  probabilities: z.record(z.number().finite().min(0).max(1)),
-});
-
 export interface MatchInstructionRequest extends Omit<InstructionRequest, "evaluator"> {
   evaluator: GameEvaluator;
   /** The caller owns stable IDs and supplies only the recent ten-minute match context. */
@@ -53,23 +47,6 @@ export type MatchInstructionResult = OpsOrders & {
 
 function unresolved(): MatchInstructionResult {
   return { ops: {}, unresolved: "경기 지시의 대상·효과·강도를 확인해야 합니다" };
-}
-
-function signedStrength(answer: unknown): number | undefined {
-  const parsed = ScoreSchema.safeParse(answer);
-  if (!parsed.success) return undefined;
-  const { probabilities, score } = parsed.data;
-  const keys = ["0", "1", "2", "3", "4", "5", "6"];
-  if (
-    Object.keys(probabilities).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(probabilities, key))
-  )
-    return undefined;
-  const total = keys.reduce((sum, key) => sum + probabilities[key]!, 0);
-  if (Math.abs(total - 1) > 1e-6) return undefined;
-  const expected = keys.reduce((sum, key) => sum + Number(key) * probabilities[key]!, 0);
-  if (Math.abs(expected - score) > 1e-6) return undefined;
-  return expected - 3;
 }
 
 function refineTargetSchema(
@@ -226,7 +203,12 @@ export async function interpretMatchInstructions(
   for (let index = 0; index < plan.sheet.length; index++) {
     const candidate = plan.sheet[index]!;
     // The core consumes behavior as a discrete instruction and ignores its sign/step.
-    const signed = candidate.shape === "behavior" ? 1 : signedStrength(answers[`line_${index}`]);
+    const answer =
+      candidate.shape === "behavior"
+        ? undefined
+        : validatedAnswer(questions[`line_${index}`]!, answers[`line_${index}`]);
+    const signed =
+      candidate.shape === "behavior" ? 1 : answer?.type === "score" ? answer.score - 3 : undefined;
     if (signed === undefined) return unresolved();
     const line = SheetLineSchema.safeParse({
       ...candidate,

@@ -21,7 +21,7 @@
 | `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
 | `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정         |
 | `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음      |
-| `agents.training-rater`      | 훈련 구간 결산                             |
+| `evaluators.training-rater`  | 훈련 구간 결산                             |
 | `agents.history-compactor`   | 평시 이력 요약·인물 기억                   |
 | `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                |
 | `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석               |
@@ -30,7 +30,7 @@
 | `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석       |
 | `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과 |
 
-운영은 생성형 7개와 타입 평가 역할 5개다. 비교 실험은 운영 에이전트를 추가하지 않는다.
+운영은 생성형 6개와 타입 평가 역할 6개다. 비교 실험은 운영 에이전트를 추가하지 않는다.
 생성형 에이전트는 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를
 사용한다. 평가자는 `max_tokens`·대화 이력·도구 대신 질문을 받고 설정의 모델·전체
 시한·입력 단가를 쓴다. 요청 단위 재시도 수는 최상위 `max_retries`에서 온다.
@@ -446,7 +446,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 
 ## 3-2. `outputSchema` — 도구 없이 JSON 하나로 답을 받기
 
-산출이 JSON 하나인 생성형 호출 열 — 경기 마감 · 훈련 결산 ·
+산출이 JSON 하나인 생성형 호출 열 — 경기 마감 ·
 이력 압축 · 온보딩 (agents.md §1) — 은 **도구를 들지 않는다.** 답의 꼴은 "이 꼴로만
 답한다"는 **프롬프트 문장이 아니라 요청 파라미터로** 강제한다: 요청에 `outputSchema`
 (제공자 중립 JSON Schema — 최상위는 객체)를 싣고, 어댑터가 자기 제공자의 구조화 출력으로

@@ -1,4 +1,5 @@
-import type { ChoiceQuestion, EvaluationAnswer, EvaluationQuestion } from "@story-fm/llm";
+import { validatedAnswer, majorityChoice } from "./evaluation-answers";
+import type { ChoiceQuestion, EvaluationQuestion } from "@story-fm/llm";
 import type {
   InstructionCommand,
   InstructionRequest,
@@ -117,36 +118,11 @@ async function evaluate(
   if (Object.keys(response.answers).length !== queries.length)
     throw new Error("평가 응답 개수가 다릅니다");
   const choices = queries.map((query, i) => {
-    const answer: EvaluationAnswer | undefined = response.answers[`q${i}`];
-    if (answer?.type !== "choice" || !Object.hasOwn(query.question.criteria, answer.choice)) {
-      throw new Error("평가 응답이 후보를 벗어났습니다");
-    }
-    const keys = Object.keys(query.question.criteria);
-    const probabilities = answer.probabilities;
-    if (
-      Object.keys(probabilities).length !== keys.length ||
-      keys.some(
-        (key) =>
-          !Object.hasOwn(probabilities, key) ||
-          !finite(probabilities[key]) ||
-          probabilities[key]! < 0 ||
-          probabilities[key]! > 1,
-      )
-    ) {
-      throw new Error("평가 확률이 후보와 일치하지 않습니다");
-    }
-    const total = keys.reduce((sum, key) => sum + probabilities[key]!, 0);
-    if (Math.abs(total - 1) > 1e-6) throw new Error("평가 확률이 후보와 일치하지 않습니다");
-    // A plurality cannot authorize one interpretation while most mass supports alternatives.
-    // This is a conservative abstention rule, not a calibrated accuracy claim.
-    const selected = probabilities[answer.choice]!;
-    if (
-      selected <= 0.5 ||
-      keys.some((key) => key !== answer.choice && probabilities[key]! >= selected)
-    ) {
-      throw new Error("평가 선택에 과반 지지가 없습니다");
-    }
-    return answer.choice;
+    const answer = validatedAnswer(query.question, response.answers[`q${i}`]);
+    if (answer?.type !== "choice") throw new Error("평가 응답이 후보와 일치하지 않습니다");
+    const choice = majorityChoice(answer);
+    if (choice === undefined) throw new Error("평가 선택에 과반 지지가 없습니다");
+    return choice;
   });
   choices.forEach((choice, i) => queries[i]!.read(choice));
 }

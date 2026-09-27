@@ -807,7 +807,7 @@ prompt-regression`, 밴드는 서술자가 쥔다
 | 테이블 명령 목록·문맥                                                        | `packages/agents/src/negotiation/table-orders.ts`                                                                     |
 | 매치 GM 프롬프트·경기 도구 둘 (`MATCH_GM_SYSTEM` · `buildMatchTools`)        | `packages/agents/src/match/match-gm.ts` · `packages/agents/src/app/workflows/match/match-gm.ts`                       |
 | 마감 프롬프트 (`FINALIZE_MATCH_SYSTEM`)                                      | `packages/agents/src/match/finalize-match.ts`                                                                         |
-| 훈련 결산 프롬프트                                                           | `packages/agents/src/story/training-rater.ts`                                                                         |
+| 훈련 결산 평가 질문                                                          | `packages/agents/src/story/training-rater.ts`                                                                         |
 | 경기 결산 절 (`FINALIZE_MATCH_SYSTEM` 안)                                    | `packages/agents/src/match/finalize-match.ts`                                                                         |
 | 이력 요약 프롬프트 (`HISTORY_COMPACTOR_SYSTEM`)                              | `packages/agents/src/story/history-compactor.ts`                                                                      |
 | 온보딩 프롬프트 (`ONBOARDING_JUDGE_SYSTEM`)                                  | `packages/agents/src/story/onboarding-judge.ts` · `packages/agents/src/app/workflows/story/onboarding-judge.ts`       |

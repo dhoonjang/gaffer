@@ -78,10 +78,10 @@ pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
 pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
   --logs /Users/dhoonjang/local/story-fm/apps/web/.log \
   --out /tmp/reader-eval-live \
-  --live --baseline-agent training-rater \
-  --input-usd-per-million 0.30 \
-  --output-usd-per-million 2.50 \
-  --cached-input-usd-per-million 0.03
+  --live --baseline-agent finalize-match \
+  --input-usd-per-million <현재-선택한-모델의-입력-단가> \
+  --output-usd-per-million <현재-선택한-모델의-출력-단가> \
+  --cached-input-usd-per-million <현재-선택한-모델의-캐시-단가>
 ```
 
 `--out`은 새 디렉터리를 사용한다. 원본 로그 안이나 그곳으로 향하는 심볼릭 링크
