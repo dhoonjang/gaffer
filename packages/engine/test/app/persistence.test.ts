@@ -1,3 +1,4 @@
+import { GameTablesSchema } from "../../src/app/save-schema";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   mkdirSync,
@@ -15,6 +16,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import {
   teamCatalog,
+  advanceTime,
+  startMatch,
+  advanceLiveMatch,
   acquireSaveLock,
   saveLockPath,
   dataDir,
@@ -792,5 +796,41 @@ describe("세이브 파일 락 — 프로세스 경계", () => {
     const next = await acquireSaveLock(game.id, 0);
     expect(next).not.toBeNull();
     next!.release();
+  });
+});
+
+describe("진행 중 경기의 흐름 저장 경계", () => {
+  const schema = GameTablesSchema.shape.pendingMatch;
+  it("실제 경기 흐름과 이어질 시뮬레이션을 저장 후 그대로 복원한다", () => {
+    const state = createTestGame(91);
+    for (let n = 0; state.phase !== "matchday" && n < 12; n++) advanceTime(state, "next_match");
+    expect(startMatch(state).ok).toBe(true);
+    advanceLiveMatch(state, 400);
+    expect(state.pendingMatch!.live.flow.buckets.length).toBeGreaterThan(0);
+    saveGame(state);
+    const restored = loadGame(state.id)!;
+    expect(restored.pendingMatch!.live.flow).toEqual(state.pendingMatch!.live.flow);
+    advanceLiveMatch(restored, 100);
+    advanceLiveMatch(state, 100);
+    expect(restored.pendingMatch!.live).toEqual(state.pendingMatch!.live);
+  });
+
+  it("새 흐름 필드가 없거나 확정 tick과 어긋나면 세이브를 받지 않는다", () => {
+    expect(schema.safeParse(undefined).success).toBe(true);
+    expect(schema.safeParse({ live: { state: { tick: 0 } } }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        live: { state: { tick: 1 }, flow: { startTick: 0, endTick: 0, buckets: [] } },
+      }).success,
+    ).toBe(false);
+    const parsed = schema.parse({
+      matchId: "m",
+      live: {
+        state: { tick: 0, seconds: 0 },
+        flow: { startTick: 0, endTick: 0, buckets: [] },
+        slots: {},
+      },
+    });
+    expect(parsed).toMatchObject({ matchId: "m", live: { state: { seconds: 0 } } });
   });
 });

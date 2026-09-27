@@ -1,14 +1,17 @@
 import { isOffsidePosition } from "../src/live/step";
+import { emptyRecentFlow, recordFlowTick, recordFlowEvents } from "../src/live/recent-flow";
 import { describe, expect, it } from "vitest";
 import {
   SheetStepSchema,
   type SheetLine,
   DEFAULT_TACTICS,
   FIELD,
+  LIVE_STEP,
   type WeightSlot,
 } from "@story-fm/domain";
 import {
   applySheet,
+  emptyStatLine,
   createLiveStepper,
   stepLive,
   liveInputOf,
@@ -29,9 +32,116 @@ import {
   liveFinished,
   matchFatigueOf,
   possessionOf,
+  recentFlowOf,
   LIVE_TICKS_PER_SECOND,
 } from "@story-fm/sim";
 import { makeLiveMatch } from "./helpers";
+
+describe("최근 흐름 — 실제 실행 구간만 집계한다", () => {
+  it("시작 직후 통계는 장부의 실제 증가분이고 휴식은 시간을 늘리지 않는다", () => {
+    const match = makeLiveMatch({ seed: 7 });
+    expect(recentFlowOf(match).observedSeconds).toBe(0);
+    advanceLive(match, LIVE_TICKS_PER_SECOND * 20);
+    const flow = recentFlowOf(match);
+    expect(flow.observedSeconds).toBe(20);
+    for (const side of ["home", "away"] as const) {
+      const ids = new Set(match.state.players.filter((p) => p.side === side).map((p) => p.id));
+      const stats = Object.entries(match.ledger.stats)
+        .filter(([id]) => ids.has(id))
+        .map(([, value]) => value);
+      for (const key of [
+        "shots",
+        "passes",
+        "passesCompleted",
+        "tackles",
+        "tacklesWon",
+        "fouls",
+      ] as const)
+        expect(flow[side][key]).toBe(stats.reduce((sum, row) => sum + row[key], 0));
+      expect(flow[side].xg).toBeCloseTo(
+        stats.reduce((sum, row) => sum + row.xg, 0),
+        5,
+      );
+      expect(flow[side].possessionSeconds).toBeCloseTo(match.state.possessionTime[side], 8);
+    }
+    expect(flow.events.map((entry) => entry.event)).toEqual(match.ledger.events);
+    match.state.interval = true;
+    advanceLive(match, LIVE_TICKS_PER_SECOND * 100);
+    expect(recentFlowOf(match)).toEqual(flow);
+  });
+
+  it("사건이 없어도 오래된 초를 버리며 남은 사건과 점유 시간만 합친다", () => {
+    const match = makeLiveMatch();
+    const flow = emptyRecentFlow();
+    const ticks = LIVE_TICKS_PER_SECOND * 600;
+    const shooter = match.state.players.find((p) => p.side === "home")!;
+    for (let tick = 1; tick <= ticks + 1; tick++) {
+      const before = {
+        ...match.state,
+        tick: tick - 1,
+        possessionTime: { home: (tick - 1) * LIVE_STEP, away: 0 },
+      };
+      const after = { ...before, tick, possessionTime: { home: tick * LIVE_STEP, away: 0 } };
+      recordFlowTick(
+        flow,
+        before,
+        after,
+        tick === 1 || tick === ticks
+          ? {
+              [shooter.id]: {
+                ...emptyStatLine(),
+                shots: 1,
+                xg: 0.1234567,
+                passes: 2,
+                passesCompleted: 1,
+                tackles: 1,
+                fouls: 1,
+              },
+            }
+          : {},
+      );
+      if (tick === 1 || tick === ticks)
+        recordFlowEvents(flow, tick, [
+          { minute: 0, type: "tactical_shift", team: "home", actors: [], causes: [] },
+        ]);
+      if (tick === ticks) expect(recentFlowOf({ flow }).observedSeconds).toBe(600);
+    }
+    const summary = recentFlowOf({ flow });
+    expect(flow.buckets).toHaveLength(600);
+    expect(summary.startTick).toBe(LIVE_TICKS_PER_SECOND);
+    expect(summary.endTick).toBe(ticks + 1);
+    expect(summary.observedSeconds).toBe(599 + LIVE_STEP);
+    expect(summary.home.possessionSeconds).toBe(summary.observedSeconds);
+    expect(summary.home).toMatchObject({
+      shots: 1,
+      xg: 0.123457,
+      passes: 2,
+      passesCompleted: 1,
+      tackles: 1,
+      fouls: 1,
+    });
+    expect(summary.events.map((entry) => entry.tick)).toEqual([ticks]);
+  });
+
+  it("추가시간 뒤 표시 시계가 되감겨도 실행 tick과 관측 길이는 이어진다", () => {
+    const match = makeLiveMatch();
+    match.state.seconds = 46 * 60 - LIVE_STEP;
+    match.state.half.added = 60;
+    advanceLive(match, 1);
+    expect(match.state.phase).toBe("second_half");
+    expect(match.state.seconds).toBe(45 * 60);
+    expect(recentFlowOf(match).observedSeconds).toBe(LIVE_STEP);
+    expect(
+      recentFlowOf(match).events.some(
+        ({ tick, event }) => tick === 1 && event.type === "half_time",
+      ),
+    ).toBe(true);
+    match.state.interval = false;
+    advanceLive(match, 1);
+    expect(recentFlowOf(match).endTick).toBe(2);
+    expect(recentFlowOf(match).observedSeconds).toBe(2 * LIVE_STEP);
+  });
+});
 
 /** 한 경기를 끝까지 — 휴식은 바로 재개한다 */
 function playOut(match: ReturnType<typeof makeLiveMatch>) {
@@ -112,6 +222,7 @@ describe("실시간 경기 — 결정성과 장부 계약 (live-match.md §8.2 �
     advanceLive(a, LIVE_TICKS_PER_SECOND * 300);
     for (let i = 0; i < 300; i++) advanceLive(b, LIVE_TICKS_PER_SECOND);
     expect(liveDigest(a)).toBe(liveDigest(b));
+    expect(recentFlowOf(a)).toEqual(recentFlowOf(b));
   });
 
   it("90분을 끝까지 굴리면 장부가 닫히고 반려는 없다", () => {
