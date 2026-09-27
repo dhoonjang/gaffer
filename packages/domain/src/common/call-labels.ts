@@ -36,8 +36,6 @@ export const CALL_LABELS = {
   adjust_transfer_budget: "이적 예산 조정",
   request_board: "보드에 요청",
   set_ticket_price: "티켓 가격",
-  fund_transfer_budget: "사재 출연",
-  pay_player_bonus: "사재 보너스",
   hire_staff: "스태프 고용",
   release_staff: "스태프 계약 해지",
   resign: "사임",

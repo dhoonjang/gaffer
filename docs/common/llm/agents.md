@@ -42,7 +42,7 @@
 | 시장·재정 / `market-orders` (Jev)   | `market_orders`               | 선수·오퍼·금융의 명령 선택                                                                |
 | 협상 조건 / `table-orders` (Jev)    | `negotiation_orders`          | 현재 방에 고정한 값·조건·수락·철회                                                        |
 | 경기 전술 / `match-reader` (Jev)    | 경기 `tactic_orders`          | 직접 명령과 복합 전술 효과. 원문 출처와 시트는 함께 검증·적용                             |
-| 경기 결산 / `finalize-match` (Jev)  | 마감 스킬 또는 마감 보장 경로 | 평점·성장, 코어 앵커 ± 한도. 근거·심경은 매치 GM                                      |
+| 경기 결산 / `finalize-match` (Jev)  | 마감 스킬 또는 마감 보장 경로 | 평점·성장, 코어 앵커 ± 한도. 근거·심경은 매치 GM                                          |
 | 훈련 결산 / `training-rater` (Jev)  | 날짜 진행                     | 훈련 구간 평가, 코어 앵커 ± 한도                                                          |
 | 이력 압축 / `history-compactor`     | 평시 이력 창 상한             | 요약·인물 기억, 실패하면 접지 않음                                                        |
 | 온보딩 / `onboarding-judge`         | 새 게임 생성                  | 초기 조건·사건·첫 장면, 실패하면 생성 중단                                                |
@@ -567,7 +567,7 @@ agent “조르제 멘데스” (에이전트) — 주급 · 계약 지위 · �
 - 시작 사건은 `MAX_OPENINGS` 이내이며 실제 인물만 대상으로 삼는다.
 - 첫 장면은 수석코치가 열고 감독의 대사는 대신 쓰지 않는다.
 - 출력과 장면을 검증한 뒤 상태를 함께 반영한다. 재시도 후에도 실패하면 게임을 저장하지 않는다.
-- mock은 지갑 0과 전용 대본으로 시작한다. 실제 호출 실패를 mock으로 대체하지 않는다.
+- mock은 전용 대본으로 시작한다. 실제 호출 실패를 mock으로 대체하지 않는다.
 
 감독에게 능력치나 XP가 없으므로 배경을 키워드 점수로 환산하지 않는다.
 
@@ -1034,7 +1034,6 @@ agent “조르제 멘데스” (에이전트) — 주급 · 계약 지위 · �
 | 교섭 서류·상황 (협상 방)              | `packages/agents/src/negotiation/counterparty-brief.ts` · `packages/agents/src/app/workflows/negotiation/counterparty-brief.ts` · `packages/agents/src/app/workflows/negotiation/table-situation.ts` |
 | 테이블 명령 목록·문맥                 | `packages/agents/src/negotiation/table-orders.ts`                                                                                                                                                    |
 | 온보딩 판정 프롬프트·호출             | `packages/agents/src/story/onboarding-judge.ts` · `packages/agents/src/app/workflows/story/onboarding-judge.ts`                                                                                      |
-| 시작 지갑 앵커·한도 (코어)            | `packages/engine/src/story/people/onboarding.ts`                                                                                                                                                     |
 | 교섭 앵커·한도 (코어)                 | `packages/engine/src/negotiation/market/counterparty.ts` · `negotiation/market/counter-bounds.ts`                                                                                                    |
 | 결산 한도·검사 (코어)                 | `packages/engine/src/story/players/training-report.ts` · `packages/engine/src/app/workflows/story/players/training-report.ts` · `match/flow/ratings.ts`                                              |
 | 심경 잔향 검사 (코어)                 | `packages/engine/src/story/players/mood.ts` · `packages/engine/src/app/workflows/story/players/mood.ts` (`applyMoodNotes`)                                                                           |

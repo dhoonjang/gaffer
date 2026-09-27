@@ -332,7 +332,7 @@ row, 지난 일 = 그대로 이력.**
 
 | 엔티티                                             | 무엇                                                                                                                          | 정의                                           |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `manager` `Manager`                                | 이름·배경 · 평판 3축 · 보드 경고 · 계약 · **지갑·지출 이력**                                                                  | `domain/manager.ts`                            |
+| `manager` `Manager`                                | 이름·배경 · 평판 3축 · 보드 경고 · 계약 · 개인 생활은 GM 서사                                                                 | `domain/manager.ts`                            |
 | `seasonRecords` `SeasonRecord`                     | 시즌 성적 — 감독에 소속(팀을 옮겨도 남는다)                                                                                   | `packages/domain/src/common/manager-career.ts` |
 | `trophies` `Trophy` · `achievements` `Achievement` | 우승 · 업적                                                                                                                   | `packages/domain/src/common/manager-career.ts` |
 | `awards` `SeasonAward`                             | 시상 — 코드·**대회**·수상자·근거 수치. 리그도 컵·대항전도, **세계 전체**에 쌓인다 ([season.md](season.md) §6)                 | `packages/domain/src/common/player-awards.ts`  |
@@ -468,7 +468,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 13`** (`app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다.
+**`SAVE_VERSION = 14`** (`app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 
 **마이그레이션은 없다.** 옛 모양의 세이브를 지금 모양으로 옮기는 코드를 두지 않는다 —

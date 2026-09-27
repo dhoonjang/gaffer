@@ -133,42 +133,6 @@ export const MANAGER_TERMS_BY_TIER: Record<
   4: { salary: 800_000, years: 2, budgetPledge: 2_000_000 },
 };
 
-/**
- * **지갑에서 나가는 갈래** (career.md §5.4).
- *
- * 갈래가 몇이든 잔고를 깎는 함수는 하나이므로(`spendFromWallet`), 여기 줄을 더하는
- * 것이 곧 지출처를 여는 것이다.
- */
-export const MANAGER_SPEND_KINDS = ["transfer-fund", "player-bonus", "buyout"] as const;
-export const ManagerSpendKindSchema = z.enum(MANAGER_SPEND_KINDS);
-export type ManagerSpendKind = z.infer<typeof ManagerSpendKindSchema>;
-
-/** 갈래의 이름 — 감독이 읽는 말은 여기서만 온다 */
-export const MANAGER_SPEND_KIND_KO: Record<ManagerSpendKind, string> = {
-  "transfer-fund": "이적 예산 사재 출연",
-  "player-bonus": "선수 사재 보너스",
-  buyout: "사임 위약금",
-};
-
-/**
- * **감독이 쓴 돈 한 줄** — 구단 원장이 아니라 **감독의 이력**이다 (career.md §5.4).
- *
- * 구단 원장은 구단의 것이라, 이 돈이 구단 원장에도 서는 것은 그 돈이 실제로 구단에
- * 들어갈 때뿐이다(사임 위약금 — finance.md §9.7). 여기 적히는 것은 **사실뿐**이고,
- * 감독이 왜 그 돈을 썼는지는 GM이 쓴다 (overview.md §1 철칙 4).
- */
-export const ManagerSpendSchema = z.object({
-  id: z.string().min(1),
-  on: DateString,
-  kind: ManagerSpendKindSchema,
-  amount: z.number().int().min(0),
-  /** 시즌 상한을 그 시즌 안에서만 세기 위한 자리 */
-  season: z.number().int(),
-  /** 갈래가 가리키는 대상 — 선수 보너스는 선수 id, 나머지는 구단 id */
-  ref: z.string().min(1).optional(),
-});
-export type ManagerSpend = z.infer<typeof ManagerSpendSchema>;
-
 export const ManagerSchema = z.object({
   name: z.string().min(1),
   /** 온보딩에서 유저가 직접 입력한 배경 서술 (career.md §1) */
@@ -181,22 +145,6 @@ export const ManagerSchema = z.object({
   reactionSeason: ReactionSeasonSchema,
   /** 감독 계약 — 없으면 무직이다 (경질·만료가 지운다, 연봉 지출도 없다) */
   contract: ManagerContractSchema.optional(),
-  /**
-   * **개인 지갑** (£) — 구단이 낸 연봉과 경질 위약금이 쌓이는 자리 (career.md §5.4).
-   *
-   * ⚠️ **구단 잔고와 다른 돈이다.** 지갑은 감독의 것이라 구단을 옮겨도 따라가고,
-   * 구단 장부는 `Finance.balance`가 따로 갖는다 — 섞으면 감독의 돈이 구단의 재정을
-   * 흔든다.
-   */
-  wallet: z.number().int().min(0),
-  /**
-   * **감독이 쓴 돈의 이력이자 시즌 상한의 장부** (career.md §5.4).
-   *
-   * 이번 시즌 항목은 전부 남는다 — 시즌 문(사재 출연 상한 · 보너스 선수당 1회·시즌
-   * 3명)이 여기서 누계를 세므로, 절단(`MANAGER_WALLET.KEPT`)은 지난 시즌 항목에만
-   * 걸린다. 화면의 "최근 몇 건"은 뷰가 자른다.
-   */
-  spending: z.array(ManagerSpendSchema),
 });
 export type Manager = z.infer<typeof ManagerSchema>;
 
@@ -232,8 +180,8 @@ export const DismissalSchema = z.object({
   expectationCode: BoardExpectationCodeSchema,
   /**
    * 위약금 (£) — **누가 물었는지는 `kind`가 안다** (career.md §5.4). 경질이면 구단이
-   * 물어 지갑에 들어온 돈이고, 사임이면 감독이 지갑에서 물어 옛 구단에 들어간 돈이며,
-   * 이적이면 **새 구단이 옛 구단에 문 보상금**이라 지갑을 지나지 않는다 (§5.1).
+   * 물어 구단 원장에 나간 돈이고, 사임이면 옛 구단의 수입이며,
+   * 이적이면 **새 구단이 옛 구단에 문 보상금**으로 구단 간에 정산한다 (§5.1).
    * 만료는 끝까지 간 계약이라 물 것이 없어 적지 않는다.
    */
   severance: z.number().int().min(0).optional(),
