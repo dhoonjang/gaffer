@@ -1,155 +1,146 @@
 import {
-  formLabel,
   TACTIC_GAIN_MIN,
   TACTIC_GAIN_MAX,
   TRAINING_ATTR_CAP,
   ATTR_STEP_MAX,
   ATTR_STEP_MIN,
   POSITION_TRAIN_MAX,
+  teamAxesOf,
+  allowedAxesFor,
   type TrainingBrief,
+  type TrainingOutcome,
+  type TrainingSubject,
 } from "@story-fm/engine";
 import {
-  josa,
-  ATTRIBUTE_AXES,
-  DateString,
-  TrainingMarkSchema,
+  attributeAxisOf,
   TRAINING_MARKS,
   TRAINING_MARK_KO,
   AXIS_KO,
+  type AttributeAxis,
 } from "@story-fm/domain";
+import type { EvaluationAnswer, EvaluationRequest, GameEvaluator } from "@story-fm/llm";
 import { agingDeclineLine } from "../common/aging-line";
-import { z } from "zod";
-import { toToolSchema } from "../common/tool-schema";
+import { validatedAnswer, majorityChoice } from "../common/evaluation-answers";
+import { ModelOutputError } from "../common/retry";
 
-/**
- * 훈련 결산 — advance_time이 넘긴 구간의 훈련을 한 묶음으로 판정한다.
- * 코어는 적응도를 건드리지 않는다 — 실제로 얼마나 스몄는지는 여기서만 정한다.
- * 세션마다 부르지 않는다 — 훈련엔 사건 목록이 없어 하루치로는 판단 거리가 없다.
- * 값의 폭은 코어가 좁게 물려 둬 모델이 무뎌도 게임이 흔들리지 않는다.
- *
- * ⚠️ **폭과 인원의 숫자는 전부 코어 상수에서 읽는다** — 프롬프트에도 스키마에도
- * 손으로 적지 않는다. 적으면 코어만 조여지고 판정자는 옛 밴드를 계속 믿는다
- * (docs/common/llm/agents.md §4).
- */
-export const TRAINING_RATER_SYSTEM = `당신은 축구 구단의 훈련장을 지켜본 코치다.
+export const TRAINING_RATER_RULES = `축구 구단의 지난 훈련 구간을 선수별로 평가한다.
+훈련 내용, 자리·나이·컨디션·폼·성장 여지, 개인 훈련과 멘토, 그 기간의 대화와 장부 사실을 근거로 삼는다.
+전술 적응도는 ${TACTIC_GAIN_MIN}~${TACTIC_GAIN_MAX}, 대부분 0~1이며 지친 선수를 굴려 흐트러졌다면 음수다.
+능력치는 구간 전체에서 0~${TRAINING_ATTR_CAP}명에게만 각 한 축 +${ATTR_STEP_MAX} 또는 ${ATTR_STEP_MIN}. 아무도 변하지 않는 구간이 정상이다. ${agingDeclineLine()}
+능력치 후보는 팀에서 훈련한 축과 해당 선수의 개인 훈련 축뿐이다. 다른 선수의 개인 훈련을 옮기지 않는다.
+자리 적응도는 전향 개인 훈련 중인 선수만 0~${POSITION_TRAIN_MAX}다.
+대화는 감독의 주문과 근거이며 장면의 말은 여러 사람의 것이다. 실제 실행은 facts의 장부 줄이 말한다.
+실제로 없었던 경험·성과·태도를 만들지 않는다. 갈래와 날짜가 불명확하면 특정하지 않는다.
+수치는 분포의 기대값이며 자신감을 성장량에 곱하지 않는다. 기간·멘토 배율·잠재력·인원 한도는 코어가 적용하므로 중복 적용하지 않는다.`;
 
-지난 며칠의 훈련이 선수 각자에게 얼마나 스몄는지를 매긴다.
+function attributeOptions(teamAxes: ReadonlySet<AttributeAxis>, subject: TrainingSubject) {
+  return [...allowedAxesFor(teamAxes, attributeAxisOf(subject.program?.axis))].flatMap((axis) =>
+    [ATTR_STEP_MIN, ATTR_STEP_MAX].map((step) => ({
+      key: `${axis}_${step < 0 ? "down" : "up"}`,
+      axis,
+      step,
+      label: `${AXIS_KO[axis]} ${step > 0 ? "+" : ""}${step}`,
+    })),
+  );
+}
 
-## 무엇을 보는가
-훈련 내용, 선수의 자리·나이·컨디션, 그 기간의 대화와 [장부] 줄, 걸려 있는 개인 지시.
-
-## 규칙
-- 전술 적응도는 ${TACTIC_GAIN_MIN} ~ ${TACTIC_GAIN_MAX} 중 하나다. 대부분은 0~1이고, ${josa(String(TACTIC_GAIN_MIN), "은/는")}
-  지친 선수를 굴려 오히려 흐트러졌을 때다.
-- 능력치는 0~${TRAINING_ATTR_CAP}명, 각 한 축 +${ATTR_STEP_MAX} 또는 −${-ATTR_STEP_MIN}, 그 기간에 실제로 훈련한 축만.
-  아무에게도 변화가 없는 구간이 정상이다. ${agingDeclineLine()}
-- 개인 훈련으로 자리를 배우는 선수(대상 표에 “전향 …”으로 표시)에게는
-  positionGain을 0~${josa(String(POSITION_TRAIN_MAX), "으로/로")} 적는다. 전향이 걸리지 않은 선수에게는 적지 않는다.
-- 대화에서는 감독이 무엇을 주문했는지와 그 근거만 읽는다. 장면의 말은 여러 사람의 것이고, 실제로 걸린 것은 [장부] 줄이 말한다.
-- 대상 전원을 빠뜨리지 마라.
-- date에 그 변화가 나온 훈련 날짜를 적는다. 위 훈련 목록의 날짜 중 하나여야 한다.
-- 근거는 한 문장, 30자 안팎. 그 기간에 실제로 있었던 일만 적는다.
-- 선수 id는 목록의 것을 그대로 쓴다. 이름으로 쓰지 않는다.`;
-
-/**
- * 스키마가 받아들이는 폭 — 코어 밴드(`TACTIC_GAIN_MIN`~`TACTIC_GAIN_MAX`,
- * `POSITION_TRAIN_MAX`)보다 넓게 열어 둔다. 벗어난 값은 파싱을 깨뜨리는 대신
- * 코어가 자르므로(`applyTrainingOutcomes`), 한 줄 때문에 결산 전체가 버려지지 않는다.
- */
-const ACCEPTED_GAIN_BOUND = 9;
-
-/** 한 번에 결산하는 인원 상한 — 한 구간의 훈련 대상은 1군·2군을 합쳐도 이 아래다 */
-const MAX_TRAINED_PLAYERS = 60;
-
-/** 근거 한 줄의 길이 상한 — 프롬프트는 30자 안팎을 요구하고, 여기는 그 여유다 */
-const NOTE_MAX = 200;
-
-const OutcomeSchema = z.object({
-  playerId: z.string().min(1).describe("대상 목록의 id 그대로"),
-  tacticGain: z
-    .number()
-    .min(-ACCEPTED_GAIN_BOUND)
-    .max(ACCEPTED_GAIN_BOUND)
-    .optional()
-    .describe(`전술 적응도 변화 — ${TACTIC_GAIN_MIN}~${TACTIC_GAIN_MAX} 중 하나`),
-  positionGain: z
-    .number()
-    .min(0)
-    .max(ACCEPTED_GAIN_BOUND)
-    .optional()
-    .describe(`전향 훈련이 올린 자리 적응도 — 0~${POSITION_TRAIN_MAX} (전향 중인 선수만)`),
-  attribute: z
-    .enum(ATTRIBUTE_AXES)
-    .nullish()
-    .describe(`움직일 능력치 축 (그 기간에 훈련한 축만, ${TRAINING_ATTR_CAP}명까지)`),
-  attributeStep: z
-    .number()
-    .min(ATTR_STEP_MIN)
-    .max(ATTR_STEP_MAX)
-    .nullish()
-    .describe(`그 축의 방향 — ${ATTR_STEP_MAX} 또는 ${ATTR_STEP_MIN}`),
-  date: DateString.optional().describe(
-    "이 변화가 나온 훈련 날짜 (YYYY-MM-DD, 위 훈련 목록 중 하나)",
-  ),
-  note: z.string().max(NOTE_MAX).optional().describe("한 문장 근거 (30자 안팎)"),
-  /**
-   * 훈련장에서 눈에 띈 갈래 — **수치가 안 움직인 선수도 이 자리는 가질 수 있다.**
-   * 갈래가 없으면 태만도 지쳐 흐트러진 것도 사실로 남지 않는다. 표 밖의 값은
-   * 코어가 잘라 낸다 (`applyTrainingOutcomes`).
-   */
-  mark: TrainingMarkSchema.nullish().describe(
-    `훈련 태도 — ${TRAINING_MARKS.map((m) => `${m}(${TRAINING_MARK_KO[m]})`).join(" · ")} 중 하나 (해당 없으면 비운다)`,
-  ),
-});
-
-/** 이 호출의 산출 — 도구 없이 출력 스키마로 받는다 (models.md §3-2) */
-export const TrainingReportSchema = z.object({
-  results: z.array(OutcomeSchema).max(MAX_TRAINED_PLAYERS),
-});
-
-/** 모델이 보는 출력 스키마 — 위 Zod 한 벌에서 파생한다 (prompts.md §2) */
-export const REPORT_TRAINING_INPUT = toToolSchema(TrainingReportSchema);
-
-/** 브리프를 프롬프트 본문으로 — 훈련 일지 + 대화 + 대상 표 */
-export function buildTrainingPrompt(brief: TrainingBrief): string {
-  const sessions = brief.sessions.map((s) => {
-    const focus = s.focus.map((f) => AXIS_KO[f as never] ?? f).join("·");
-    return `- ${s.date} ${s.slot === "am" ? "오전" : "오후"} | ${s.label} | ${focus || "—"}${
-      s.ordered ? " | 감독 지시" : ""
-    }`;
+/** One typed batch for the full interval; identities and candidates are supplied locally. */
+export function buildTrainingRequest(brief: TrainingBrief): EvaluationRequest {
+  if (new Set(brief.subjects.map((subject) => subject.playerId)).size !== brief.subjects.length)
+    throw new Error("훈련 대상이 중복되었습니다");
+  const dates = [...new Set(brief.sessions.map((session) => session.date))];
+  if (dates.length > 255) throw new Error("훈련 날짜 후보가 평가 한도를 넘었습니다");
+  const teamAxes = teamAxesOf(brief.sessions);
+  const questions: EvaluationRequest["questions"] = {};
+  brief.subjects.forEach((subject, index) => {
+    const who = `선수 ${subject.playerId} (${subject.name})`;
+    questions[`p${index}_tactic`] = {
+      type: "score",
+      instructions: `${who}의 이 구간 전술 적응도 변화. 전체 규칙과 해당 선수 사실로 평가한다.`,
+      criteria: Array.from({ length: TACTIC_GAIN_MAX - TACTIC_GAIN_MIN + 1 }, (_, i) =>
+        String(i + TACTIC_GAIN_MIN),
+      ),
+    };
+    if (subject.program?.position)
+      questions[`p${index}_position`] = {
+        type: "score",
+        instructions: `${who}의 전향 훈련(${subject.program.position}) 자리 적응도 변화.`,
+        criteria: Array.from({ length: POSITION_TRAIN_MAX + 1 }, (_, i) => String(i)),
+      };
+    questions[`p${index}_attribute`] = {
+      type: "choice",
+      instructions: `${who}의 능력치 변화 한 가지. 전체 구간 ${TRAINING_ATTR_CAP}명 상한과 보수적 성장 규칙을 따른다.`,
+      criteria: {
+        none: "능력치 변화 없음",
+        ...Object.fromEntries(
+          attributeOptions(teamAxes, subject).map(({ key, label }) => [key, label]),
+        ),
+      },
+    };
+    questions[`p${index}_mark`] = {
+      type: "choice",
+      instructions: `${who}가 실제 훈련에서 보인 태도. 근거가 없으면 none.`,
+      criteria: {
+        none: "특정할 태도 없음",
+        ...Object.fromEntries(TRAINING_MARKS.map((mark) => [mark, TRAINING_MARK_KO[mark]])),
+      },
+    };
+    questions[`p${index}_date`] = {
+      type: "choice",
+      instructions: `${who}의 변화·태도가 나타난 실제 훈련 날짜.`,
+      criteria: Object.fromEntries(dates.map((date, i) => [`d${i}`, date])),
+    };
   });
-  // 모델 턴은 「장면」이다 — 구단주·선수·기자의 말이 함께 있어 「코치」로 붙이면 남의 말이
-  // 코치의 지시로 읽힌다. 실제로 걸린 것은 그 턴의 장부 골격(`facts`)이 말한다 (agents.md §4).
-  const chat = brief.chat.flatMap((t) => [
-    `- ${t.at} ${t.role === "user" ? "감독" : "장면"}: ${t.text}`,
-    ...t.facts.map((f) => `  ${f}`),
-  ]);
-  const rows = brief.subjects.map((p) => {
-    const parts = [
-      `${p.playerId} | ${p.name} | ${p.position} | ${p.age}세`,
-      `OVR ${p.overall} (성장 여지 ${p.room})`,
-      `전술적응 ${p.familiarity}`,
-      `컨디션 ${p.condition} · 폼 ${formLabel(p.form)}`,
-      p.apps > 0 ? `시즌 ${p.apps}경기 평점 ${p.rating?.toFixed(1) ?? "—"}` : "출전 없음",
-    ];
-    if (p.program?.position) parts.push(`전향 ${p.program.position} 훈련 중`);
-    if (p.program?.axis)
-      parts.push(`개인훈련 ${AXIS_KO[p.program.axis as never] ?? p.program.axis}`);
-    return `- ${parts.join(" | ")}`;
+  return { state: JSON.stringify({ rules: TRAINING_RATER_RULES, brief }), questions };
+}
+
+export async function evaluateTraining(
+  brief: TrainingBrief,
+  evaluator: GameEvaluator,
+): Promise<TrainingOutcome[]> {
+  if (brief.subjects.length === 0 || brief.sessions.length === 0) return [];
+  const request = buildTrainingRequest(brief);
+  const result = await evaluator.evaluate(request);
+  const keys = Object.keys(request.questions);
+  if (
+    Object.keys(result.answers).length !== keys.length ||
+    keys.some((key) => !Object.hasOwn(result.answers, key))
+  )
+    throw new ModelOutputError("훈련 평가 응답 목록이 요청과 다릅니다");
+  const answers: Record<string, EvaluationAnswer> = {};
+  for (const key of keys) {
+    const answer = validatedAnswer(request.questions[key]!, result.answers[key]);
+    if (!answer) throw new ModelOutputError(`훈련 평가 응답이 유효하지 않습니다: ${key}`);
+    answers[key] = answer;
+  }
+  const score = (key: string): number => {
+    const answer = answers[key];
+    if (answer?.type !== "score") throw new ModelOutputError(`훈련 수치 응답이 없습니다: ${key}`);
+    return answer.score;
+  };
+  const choice = (key: string): string | undefined => {
+    const answer = answers[key];
+    if (answer?.type !== "choice") throw new ModelOutputError(`훈련 선택 응답이 없습니다: ${key}`);
+    return majorityChoice(answer);
+  };
+  const dates = [...new Set(brief.sessions.map((session) => session.date))];
+  const teamAxes = teamAxesOf(brief.sessions);
+  return brief.subjects.map((subject, index) => {
+    const selected = choice(`p${index}_attribute`);
+    const attribute = attributeOptions(teamAxes, subject).find(({ key }) => key === selected);
+    const selectedMark = choice(`p${index}_mark`);
+    const mark = TRAINING_MARKS.find((value) => value === selectedMark) ?? null;
+    const selectedDate = choice(`p${index}_date`);
+    const date = dates.find((_, i) => `d${i}` === selectedDate);
+    return {
+      playerId: subject.playerId,
+      tacticGain: score(`p${index}_tactic`) + TACTIC_GAIN_MIN,
+      positionGain: subject.program?.position ? score(`p${index}_position`) : null,
+      attribute: attribute?.axis ?? null,
+      attributeStep: attribute?.step ?? null,
+      mark,
+      note: "",
+      ...(date ? { date } : {}),
+    };
   });
-  const axes = brief.trainedAxes.map((a) => AXIS_KO[a]).join("·");
-  return [
-    `${brief.teamName} — ${brief.from} ~ ${brief.to}`,
-    "",
-    "## 이 기간의 훈련",
-    ...sessions,
-    "",
-    `능력치를 올릴 수 있는 축: ${axes || "없음 (전술·회복만 했다)"}`,
-    "",
-    "## 감독과 나눈 대화",
-    chat.length > 0 ? chat.join("\n") : "(없음)",
-    "",
-    "## 대상 (id | 이름 | 자리 | 나이 | OVR·성장 여지 | 전술적응 | 컨디션·폼 | 시즌 기록 | 개인지시)",
-    ...rows,
-  ].join("\n");
 }
