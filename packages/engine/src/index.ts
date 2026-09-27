@@ -45,7 +45,6 @@ export * from "./story/people/people-directory";
 export * from "./story/people/relations";
 export * from "./common/world/generate";
 export * from "./negotiation/economy/wages";
-export * from "./story/people/onboarding";
 export * from "./app/admin/admin";
 export * from "./app/admin/admin-team";
 export * from "./app/admin/admin-competition";
@@ -168,7 +167,6 @@ export * from "./story/world/approach";
 export * from "./app/workflows/story/world/approach";
 export * from "./negotiation/finance/board-request";
 export * from "./app/workflows/negotiation/finance/board-request";
-export * from "./negotiation/finance/manager-wallet";
 export * from "./app/workflows/story/world/board";
 
 // commands — 감독 지시(도구·해석기)가 닿는 코어 명령의 실행부

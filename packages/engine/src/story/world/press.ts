@@ -1434,8 +1434,8 @@ export function renewalCode(contract: ManagerContract): string {
 /**
  * **노크가 뉴스로 사는 날 수** — 두드린 그날부터 이레.
  *
- * 노크는 자리를 남기지 않고 지나가는 사실이라 창이 필요하고(사재의 창과 같은 결 —
- * `manager-fund`), 접근은 **제안이 열려 있는 동안** 서 있는 사실이라 창이 없다.
+ * 노크는 지나가는 사실이라 창이 필요하고, 접근은 **제안이 열려 있는 동안**
+ * 서 있는 사실이라 창이 없다.
  */
 export const JOB_LINK_PRESS_DAYS = 7;
 

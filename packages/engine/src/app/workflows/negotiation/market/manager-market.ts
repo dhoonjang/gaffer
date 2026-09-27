@@ -62,7 +62,6 @@ import { derbyOf } from "../../../../common/data/derbies";
 import { reportSacking, reportAppointment } from "../../../../story/world/media";
 import { boardExpectation } from "../../../../common/views/board-expectation";
 import { payManagerSeverance, recordFinance } from "../../../../negotiation/finance/finance";
-import { spendFromWallet, walletOf } from "../../../../negotiation/finance/manager-wallet";
 import { expirePendingPress } from "../../../../story/world/press";
 import { syncDefaultTraining } from "../../../../story/players/training-plan";
 import { openAppointmentPress } from "../../story/world/press";
@@ -340,10 +339,10 @@ function leaveClub(state: GameState, card: Dismissal, channel: string): void {
    * **위약금은 구단이 무는 구단의 지출이다** (career.md §5.4) — 계약을 지우기 전에
    * 잰다. 만료는 끝까지 간 계약이라 잔여가 0이다.
    *
-   * ⚠️ **사임과 이적은 여기 오지 않는다** — 사임은 감독이 지갑에서 무는 돈이고
+   * ⚠️ **사임과 이적은 여기 오지 않는다** — 사임은 옛 구단의 수입이고
    * (`resignPost`), 이적은 새 구단이 옛 구단에 무는 돈이라(`leaveForMove`) 둘 다
    * 방향이 반대다. 구단이 감독에게 무는 것은 경질뿐이고, 그 둘은 카드를 세우기
-   * **전에** 각자의 두 장부를 적는다.
+   * **전에** 각자의 구단 원장을 적는다.
    */
   if (contract && card.kind !== "resigned" && card.kind !== "moved") {
     const severance = managerSeveranceOf(contract, state.date);
@@ -404,11 +403,9 @@ function leaveClub(state: GameState, card: Dismissal, channel: string): void {
 /**
  * `resign` — **감독이 계약을 물고 스스로 떠난다** (career.md §5.4 · finance.md §9.7).
  *
- * 경질의 거울상이다: 금액은 같은 식(`managerSeveranceOf`)이고, 나가는 곳만 반대라
- * 지갑에서 빠져 옛 구단의 원장에 수입으로 선다. 그다음은 경질·만료와 **한 길**이다 —
+ * 경질의 거울상이다: 금액은 같은 식(`managerSeveranceOf`)이고,
+ * 옛 구단의 원장에 수입으로 선다. 그다음은 경질·만료와 **한 길**이다 —
  * `leaveClub`이 후임을 세우고 협상을 닫고 무직의 길을 연다.
- *
- * **지갑이 모자라면 못 나간다** — 물지 못하는 계약은 깨지지 않는다.
  */
 export function resignPost(state: GameState): CommandResult {
   const teamId = managedTeamId(state);
@@ -417,13 +414,6 @@ export function resignPost(state: GameState): CommandResult {
   const contract = state.manager.contract;
   const buyout = contract ? managerSeveranceOf(contract, state.date) : 0;
   if (buyout > 0) {
-    const spend = spendFromWallet(state, { kind: "buyout", amount: buyout, ref: teamId });
-    if (!spend.ok) {
-      return {
-        ok: false,
-        message: `${josa(teamNameIn(state, teamId), "과/와")}의 계약을 물려면 ${josa(formatMoney(buyout), "이/가")} 필요합니다 — 지갑엔 ${formatMoney(walletOf(state))}뿐입니다`,
-      };
-    }
     recordFinance(state, teamId, {
       kind: "income",
       category: "manager_buyout",
@@ -454,13 +444,12 @@ export function resignPost(state: GameState): CommandResult {
   pushNarrative(state, line, 5);
   return {
     ok: true,
-    message: `${line}. 지갑 ${formatMoney(walletOf(state))} — 이제 무직입니다`,
+    message: `${line}. 이제 무직입니다`,
     brief: {
       head: "사임",
       items: [
         item({ label: "구단", text: teamShortNameIn(state, teamId) }),
         ...(buyout > 0 ? [item({ label: "위약금", text: formatMoney(buyout) })] : []),
-        item({ label: "지갑", text: formatMoney(walletOf(state)) }),
       ],
     },
   };
@@ -693,7 +682,7 @@ export function acceptManagerOffer(state: GameState, ref: string): CommandResult
    * **새 구단이 문 보상금** (career.md §5.1 · finance.md §9.7) — `userTeamId`가 이미
    * 새 구단이라 이 줄은 새 구단 원장에 선다. 갈래가 `severance`인 것은 경질 위약금과
    * 같은 성질이기 때문이다: 감독 계약이 부르는 일회성 지출이라 급여 비중을 흔들지
-   * 않는다. 이적 예산 약속과 다른 지갑이라 부임 첫날의 예산은 그대로다.
+   * 않는다. 이적 예산 약속과 별개라 부임 첫날의 예산은 그대로다.
    */
   if (compensation > 0) {
     recordFinance(state, offer.teamId, {
@@ -789,7 +778,7 @@ export function acceptManagerOffer(state: GameState, ref: string): CommandResult
         ? `, 이적 예산 ${josa(formatMoney(pledge), "이/가")} 약속대로 더해졌습니다`
         : `입니다`) +
       (compensation > 0
-        ? `. 보상금 ${josa(formatMoney(compensation), "은/는")} ${teamNameIn(state, fromTeamId)}의 장부로 갔습니다 — 감독의 지갑은 그대로입니다`
+        ? `. 보상금 ${josa(formatMoney(compensation), "은/는")} ${teamNameIn(state, fromTeamId)}의 장부로 갔습니다`
         : ""),
     tone: "good",
     brief: {
