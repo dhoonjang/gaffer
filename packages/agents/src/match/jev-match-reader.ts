@@ -11,7 +11,11 @@ import { interpretInstructions } from "../common/instruction-compiler";
 import type { InstructionRequest } from "../common/instruction-contract";
 import type { OpsOrders } from "../common/orders-ops";
 import { toToolSchema } from "../common/tool-schema";
-import { SHEET_MAX } from "./match-reader";
+import { POINTS_MAX } from "@story-fm/engine";
+
+/** At most three effect rows per source point. */
+export const SHEET_LINES_PER_POINT = 3;
+export const SHEET_MAX = POINTS_MAX * SHEET_LINES_PER_POINT;
 
 const PLAN_COMMAND = "set_match_plan";
 const CandidateLineSchema = SheetLineSchema.omit({ pointId: true, sign: true, step: true });

@@ -28,14 +28,6 @@ agents:
     timeout_ms: 180000
     thinking_level: low
 
-  # 기록 비교 전용 생성형 판독기. 실제 게임 턴에서는 호출하지 않는다.
-  reader-baseline:
-    provider: google
-    model: gemini-3.5-flash-lite
-    max_tokens: 16000
-    timeout_ms: 60000
-    thinking_level: minimal
-
   # 경기의 GM — 이 경기의 이력 전부를 쥐고 반응·마감 스킬을 부른다 (docs/common/llm/agents.md §3).
   # 시한은 도구 뒤의 마감 호출까지 덮는다.
   match-gm:
@@ -54,8 +46,7 @@ agents:
     timeout_ms: 180000
     thinking_level: low
 
-  # 끝난 경기의 결산과 마무리 중계 — 이 경기의 중계 전부를 읽으므로 싼 자리로 보내지
-  # 않는다. 경기당 한 번이고 매치 GM의 도구 뒤에서 돈다.
+  # 끝난 경기의 평점·성장·심경 결산. 경기당 한 번, 코어 앵커와 한도 안에서 판정한다.
   finalize-match:
     provider: google
     model: gemini-3.8-flash
@@ -103,36 +94,16 @@ agents:
     timeout_ms: 60000
     thinking_level: low
 
-# Role interpreters run only behind GM skills. match-sheet is comparison-only.
+# Jev interpreters run only behind GM instruction skills.
+# Shared defaults; expand a role mapping to configure it independently.
 # Direct TypeSafe API; TYPESAFE_API_KEY. Published input price, checked 2026-09-27.
 evaluators:
-  match-sheet:
+  tactic-orders: &jev
     provider: typesafe
     model: jev-1.13.0
     timeout_ms: 10000
     input_usd_per_million: 0.042
-  tactic-orders:
-    provider: typesafe
-    model: jev-1.13.0
-    timeout_ms: 10000
-    input_usd_per_million: 0.042
-  training-orders:
-    provider: typesafe
-    model: jev-1.13.0
-    timeout_ms: 10000
-    input_usd_per_million: 0.042
-  market-orders:
-    provider: typesafe
-    model: jev-1.13.0
-    timeout_ms: 10000
-    input_usd_per_million: 0.042
-  table-orders:
-    provider: typesafe
-    model: jev-1.13.0
-    timeout_ms: 10000
-    input_usd_per_million: 0.042
-  match-reader:
-    provider: typesafe
-    model: jev-1.13.0
-    timeout_ms: 10000
-    input_usd_per_million: 0.042
+  training-orders: *jev
+  market-orders: *jev
+  table-orders: *jev
+  match-reader: *jev

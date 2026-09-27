@@ -2,8 +2,6 @@ export * from "./common/aging-line";
 export * from "./match/match-gm";
 export * from "./app/workflows/match/match-gm";
 export * from "./match/context";
-export * from "./match/match-reader";
-export * from "./app/workflows/match/match-reader";
 export * from "./match/match-script";
 export * from "./match/finalize-match";
 export * from "./app/workflows/match/finalize-match";

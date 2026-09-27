@@ -15,7 +15,6 @@ export const AGENT_NAMES = [
   "scout-rater",
   "history-compactor",
   "onboarding-judge",
-  "reader-baseline",
 ] as const;
 
 export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
@@ -26,10 +25,10 @@ export const INSTRUCTION_AGENT_NAMES = [
   "table-orders",
 ] as const;
 export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
-export const EVALUATOR_NAMES = [...INSTRUCTION_AGENT_NAMES, "match-reader", "match-sheet"] as const;
+export const EVALUATOR_NAMES = [...INSTRUCTION_AGENT_NAMES, "match-reader"] as const;
 export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
-/** Historical traces retain the experimental prepass author. */
-const RETIRED_AGENT_NAMES = ["instructions"] as const;
+/** Retain historical trace names without making them callable production roles. */
+const RETIRED_AGENT_NAMES = ["instructions", "reader-baseline", "match-sheet"] as const;
 export const RECORDED_AGENT_NAMES = [
   ...AGENT_NAMES,
   ...EVALUATOR_NAMES,
@@ -218,7 +217,6 @@ const LlmConfigFileSchema = z
         "market-orders": RawEvaluatorConfigSchema.optional(),
         "table-orders": RawEvaluatorConfigSchema.optional(),
         "match-reader": RawEvaluatorConfigSchema.optional(),
-        "match-sheet": RawEvaluatorConfigSchema.optional(),
       })
       .strict()
       .optional(),
@@ -232,7 +230,6 @@ const LlmConfigFileSchema = z
         "scout-rater": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,
-        "reader-baseline": RawAgentConfigSchema,
       })
       .strict(),
   })

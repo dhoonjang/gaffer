@@ -66,11 +66,6 @@ describe("에이전트별 LLM 설정", () => {
     model: claude-custom
     max_tokens: 100
     timeout_ms: 1000
-  reader-baseline:
-    provider: google
-    model: gemini-reader
-    max_tokens: 150
-    timeout_ms: 1500
   match-gm:
     provider: openai
     model: gpt-custom
@@ -317,12 +312,19 @@ describe("typed evaluators are separate from generative agents", () => {
     yamlWith(AGENT_YAML) +
     `
 evaluators:
-  match-sheet:
+  match-reader:
     provider: typesafe
     model: evaluation-fixture
     timeout_ms: 2000
     input_usd_per_million: 0.1
 ${fields}`;
+
+  it("rejects retired comparison roles in production configuration", () => {
+    const agents = fullAgents();
+    agents["reader-baseline"] = { ...AGENT_BLOCK };
+    expect(() => parseLlmConfig(yamlOf(agents))).toThrow();
+    expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();
+  });
 
   it("does not allow evaluation-only models to take a GM role", () => {
     const agents = fullAgents();
@@ -332,7 +334,7 @@ ${fields}`;
   });
 
   it("carries the shared retry policy and rejects unbounded timeout/negative prices", () => {
-    expect(parseLlmConfig(configWith("")).evaluators["match-sheet"]).toMatchObject({
+    expect(parseLlmConfig(configWith("")).evaluators["match-reader"]).toMatchObject({
       maxRetries: 2,
       timeoutMs: 2000,
     });

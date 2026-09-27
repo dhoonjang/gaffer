@@ -3,18 +3,17 @@ import {
   buildMatchView,
   managerTacticsOf,
   playerName,
-  type ReadingOccasion,
+  playerById,
 } from "@story-fm/engine";
-import { attributeLine, buildPointsBlock, stripTag } from "../../../match/match-reader";
-import { type BoardMove, type MatchEvent } from "@story-fm/domain";
-import {
-  buildMatchLogBlock,
-  buildLedgerNote,
-  buildMatchBrief,
-  buildBoardMovesBlock,
-} from "../../../match/context";
-import { eventsBlockOf } from "../../../match/context";
-import { tagged } from "../../../common/orders-ops";
+import { ATTRIBUTE_AXES, AXIS_KO } from "@story-fm/domain";
+
+function attributeLine(state: GameState, id: string, position: string): string {
+  const player = playerById(state, id);
+  if (!player) return "";
+  return ATTRIBUTE_AXES.filter((axis) => position === "GK" || axis !== "goalkeeping")
+    .map((axis) => `${AXIS_KO[axis]}${player.attributes[axis]}`)
+    .join(" ");
+}
 
 /**
  * `<facts>` — **판독기가 읽는 사실 전부.** 양 팀의 진짜 능력치와 지금 내는 전력, 선수별
@@ -86,35 +85,4 @@ export function buildFactsBlock(state: GameState): string[] {
     `${teamOf("away")} 벤치: ${benchNames("away")}`,
     `</facts>`,
   ];
-}
-
-/**
- * 판독기 한 호출의 사용자 층 — 때마다 무엇이 실리는가는 이 함수 하나가 정한다
- * (agents.md §3). 감독의 말은 맨 뒤 `@감독:` 한 줄이다.
- */
-export function buildReaderInput(
-  state: GameState,
-  options: {
-    occasion: ReadingOccasion;
-    said?: string;
-    boardMoves?: readonly BoardMove[];
-    /** 정지점 뒤의 판독이 읽는 사건 — 지난 판독 뒤 장부에 앉은 것 */
-    events?: readonly MatchEvent[];
-  },
-): string {
-  const matchLog = buildMatchLogBlock(state);
-  return [
-    buildLedgerNote(state, { withState: options.occasion !== "kickoff" }),
-    ...buildFactsBlock(state),
-    ...buildPointsBlock(state),
-    ...(options.events && options.events.length > 0 ? [eventsBlockOf(state, options.events)] : []),
-    ...(options.occasion === "kickoff"
-      ? tagged("pre_match", stripTag(buildMatchBrief(state)))
-      : []),
-    ...(matchLog.length > 0 ? [matchLog] : []),
-    ...buildBoardMovesBlock(state, options.boardMoves ?? []),
-    ...(options.said ? [``, `@감독: ${options.said}`] : []),
-  ]
-    .filter((line) => line.length > 0)
-    .join("\n");
 }

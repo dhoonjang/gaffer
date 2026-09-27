@@ -33,8 +33,7 @@ import {
   parseOrdersReport,
   type OpsOrders,
 } from "../../common/orders-ops";
-import { TACTIC_OPS, TACTIC_CAPS } from "../../match/tactic-orders";
-import { MATCH_OPS } from "../../match/match-reader";
+import { TACTIC_OPS, TACTIC_CAPS, MATCH_OPS } from "../../match/tactic-orders";
 import { TRAINING_OPS } from "../../story/training-orders";
 import { MARKET_OPS } from "../../negotiation/market-orders";
 import {
@@ -52,7 +51,7 @@ import { buildMarketContext } from "./negotiation/market-orders";
 import { buildBoardMovesBlock, buildLedgerNote } from "../../match/context";
 
 import { liveInputOf } from "@story-fm/sim";
-import { buildFactsBlock } from "./match/match-reader";
+import { buildFactsBlock } from "./match/match-facts";
 import { buildRecentFlowBlock } from "../../match/recent-flow";
 import { interpretMatchInstructions } from "../../match/jev-match-reader";
 
