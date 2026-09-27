@@ -15,23 +15,21 @@
 `provider`·`model`·`max_tokens`·`timeout_ms`·`thinking_level`·`operator_channel`을
 `parseLlmConfig`가 검증한다.
 
-| 설정 자리                    | 계약과 책임                                                |
-| ---------------------------- | ---------------------------------------------------------- |
-| `agents.gm`                  | 평시 장면·관계·사건·판정 스킬                              |
-| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리                       |
-| `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정                         |
-| `agents.reader-baseline`     | 기록 입력 비교 전용 생성형 기준. 게임 턴에서 호출하지 않음 |
-| `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음                      |
-| `agents.training-rater`      | 훈련 구간 결산                                             |
-| `agents.scout-rater`         | 코어 스카우팅 사실에 한 줄 평                              |
-| `agents.history-compactor`   | 평시 이력 요약·인물 기억                                   |
-| `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                                |
-| `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석                               |
-| `evaluators.training-orders` | 훈련·육성 스킬이 요청한 지시 해석                          |
-| `evaluators.market-orders`   | 시장·재정 스킬이 요청한 지시 해석                          |
-| `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석                       |
-| `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과                 |
-| `evaluators.match-sheet`     | 비교 전용 시트 강도 평가. 운영 미채택                      |
+| 설정 자리                    | 계약과 책임                                |
+| ---------------------------- | ------------------------------------------ |
+| `agents.gm`                  | 평시 장면·관계·사건·판정 스킬              |
+| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
+| `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정         |
+| `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음      |
+| `agents.training-rater`      | 훈련 구간 결산                             |
+| `agents.scout-rater`         | 코어 스카우팅 사실에 한 줄 평              |
+| `agents.history-compactor`   | 평시 이력 요약·인물 기억                   |
+| `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                |
+| `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석               |
+| `evaluators.training-orders` | 훈련·육성 스킬이 요청한 지시 해석          |
+| `evaluators.market-orders`   | 시장·재정 스킬이 요청한 지시 해석          |
+| `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석       |
+| `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과 |
 
 운영은 생성형 8개와 타입 평가 역할 5개다. 비교 전용 두 설정은 이 수에 포함하지 않는다.
 생성형 에이전트는 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를
@@ -1030,8 +1028,8 @@ pnpm log --board --game game-f0o7              전술판 선반만 — 전술판
 네 기존 지시 스킬이 평시 전술·훈련·시장·협상 조건의 Jev 역할을 필요할 때 호출한다.
 경기의 `tactic_orders`는 `evaluators.match-reader`를 사용해 직접 명령과 복합 전술 효과를
 함께 해석한다. 입력은 감독 원문·현재 사실·실제 최근 10분 흐름이며 포인트 산문은 생성하지 않는다.
-`agents.reader-baseline`과 `evaluators.match-sheet`는 산문 후보와 강도를 분리하는
-기록 비교 전용이다. 해당 실측은 평균 지연 개선이 없고 비용이 늘었으며, 새 운영
+산문 후보와 강도를 분리하는 기록 비교는 `harness/`에만 존재한다. 별도 운영 에이전트를
+등록하지 않으며 `--baseline-agent`로 선택한 생성형 설정과 `evaluators.match-reader`를 사용한다. 해당 실측은 평균 지연 개선이 없고 비용이 늘었으며, 새 운영
 지시 경로의 성능·품질 개선 증거로 재사용하지 않는다.
 
 TypeSafe의 [HTTP API](https://docs.typesafe.ai/api)는

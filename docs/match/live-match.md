@@ -679,7 +679,7 @@ flowchart LR
 
 ### 기록 입력의 강도 분리 비교
 
-`agents.reader-baseline`의 산문 후보와 `evaluators.match-sheet`의 강도 평가를 잇는
+`harness/`의 생성형 기준과 Jev 강도 평가를 잇는
 경로는 [기록 입력 비교](../common/llm/match-reader-evaluation.md) 전용이다. 해당
 비교는 평균 지연 개선을 보이지 않았고 운영에 채택하지 않는다. 감독 지시 때만 도는
 현재 타입 판독의 지연·품질 개선을 그 결과로 주장하지 않는다.

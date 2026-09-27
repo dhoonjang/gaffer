@@ -78,7 +78,7 @@ pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
 pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
   --logs /Users/dhoonjang/local/story-fm/apps/web/.log \
   --out /tmp/reader-eval-live \
-  --live \
+  --live --baseline-agent scout-rater \
   --input-usd-per-million 0.30 \
   --output-usd-per-million 2.50 \
   --cached-input-usd-per-million 0.03
