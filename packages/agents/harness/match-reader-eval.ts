@@ -18,8 +18,11 @@ import { z } from "zod";
 import {
   agentConfig,
   createGameLLM,
+  gameVersion,
   hasKey,
   keyNamesFor,
+  llmErrorKind,
+  type LlmErrorKind,
   LLM_CONFIG,
   type GameEvaluator,
   type GameLLM,
@@ -216,6 +219,7 @@ interface RunMeasurement {
   durationMs: number;
   proseCalls: number;
   proseCallDurationsMs: number[];
+  proseRequestHashes: Array<{ system: string; schema: string }>;
   proseUsage: TurnUsage;
   evaluatorUsage: TurnUsage;
   evaluatorAttempts: number;
@@ -224,6 +228,8 @@ interface RunMeasurement {
   reading?: MatchReaderOutput;
   evaluations?: unknown[];
   failure?: string;
+  failureKind?: LlmErrorKind;
+  evaluatorFailure?: string;
 }
 
 async function replay(
@@ -237,9 +243,15 @@ async function replay(
   let evaluatorUsage = emptyUsage();
   let usageComplete = true;
   let evaluatorAttempts = 0;
+  let evaluatorFailure: string | undefined;
   const proseCallDurationsMs: number[] = [];
+  const proseRequestHashes: Array<{ system: string; schema: string }> = [];
   const llm: GameLLM = {
     async runTurn(request) {
+      proseRequestHashes.push({
+        system: createHash("sha256").update(JSON.stringify(request.system)).digest("hex"),
+        schema: createHash("sha256").update(JSON.stringify(request.outputSchema)).digest("hex"),
+      });
       let observed = false;
       const began = performance.now();
       try {
@@ -273,6 +285,8 @@ async function replay(
       } catch (error) {
         const { TypesafeEvaluationError } = await import("../../llm/src/typesafe-adapter");
         if (error instanceof TypesafeEvaluationError) {
+          // This adapter builds its messages locally and never includes response/request bodies.
+          evaluatorFailure = error.message;
           evaluatorUsage = addUsage(evaluatorUsage, error.usage);
           evaluatorAttempts += error.attempts;
           usageComplete &&= error.usageComplete;
@@ -288,6 +302,7 @@ async function replay(
   let reading: MatchReaderOutput | undefined;
   let evaluations: unknown[] | undefined;
   let failure: string | undefined;
+  let failureKind: LlmErrorKind | undefined;
   try {
     const result = await runReaderPipeline({
       llm,
@@ -299,8 +314,9 @@ async function replay(
     reading = result.reading;
     evaluations = result.evaluations;
   } catch (error) {
-    // Provider error messages can contain request fragments; only retain the error class.
+    // Generic provider messages can contain request fragments; retain only class and kind.
     failure = error instanceof Error ? error.name : "UnknownError";
+    failureKind = llmErrorKind(error);
   }
   const proseCost = usageComplete ? costUsd(proseUsage, prices) : null;
   const evaluatorCost =
@@ -310,6 +326,7 @@ async function replay(
     durationMs: performance.now() - began,
     proseCalls: proseCallDurationsMs.length,
     proseCallDurationsMs,
+    proseRequestHashes,
     proseUsage,
     evaluatorUsage,
     evaluatorAttempts,
@@ -318,6 +335,8 @@ async function replay(
     reading,
     evaluations,
     failure,
+    failureKind,
+    evaluatorFailure,
   };
 }
 
@@ -381,6 +400,7 @@ async function main() {
     output: price("output-usd-per-million"),
     cachedInput: price("cached-input-usd-per-million"),
   };
+  const currentGameVersion = gameVersion();
   const data = inventory(root);
   const facts = readingFacts(root);
   const historicalUsage = data.calls.reduce(
@@ -500,8 +520,19 @@ async function main() {
         ) / matchedRows
       : null,
   };
+  const failureCounts: Record<string, number> = {};
+  for (const pair of pairs) {
+    for (const side of ["baseline", "candidate"] as const) {
+      const run = pair[side];
+      if (run.success) continue;
+      const label = `${side}: ${run.evaluatorFailure ?? run.failure ?? "UnknownError"} (${run.failureKind ?? "unknown"})`;
+      failureCounts[label] = (failureCounts[label] ?? 0) + 1;
+    }
+  }
   const live = {
     requested: values.live,
+    gameVersion: currentGameVersion,
+    failures: failureCounts,
     blockers,
     baselineModel: agentConfig("match-reader").model,
     evaluatorModel: LLM_CONFIG.matchSheet?.model,
@@ -547,6 +578,8 @@ async function main() {
     "| Measurement | Historical recorded calls | Current baseline | Current prose + Jev |",
     "| --- | ---: | ---: | ---: |",
     `| Observations (attempted) | ${historical.duration.n} | ${baseline.attempted} | ${candidate.attempted} |`,
+    `| Succeeded / failed | ${historical.recordedCalls - historical.failures} / ${historical.failures} | ${baseline.succeeded} / ${baseline.attempted - baseline.succeeded} | ${candidate.succeeded} / ${candidate.attempted - candidate.succeeded} |`,
+    `| Prose calls / evaluator attempts | n/a | ${baseline.proseCalls} / ${baseline.evaluatorAttempts} | ${candidate.proseCalls} / ${candidate.evaluatorAttempts} |`,
     `| Wall latency p50 ms | ${show(historical.duration.p50Ms)} | ${show(baseline.duration.p50Ms)} | ${show(candidate.duration.p50Ms)} |`,
     `| Wall latency p95 ms | ${show(historical.duration.p95Ms)} | ${show(baseline.duration.p95Ms)} | ${show(candidate.duration.p95Ms)} |`,
     `| Total cost USD | n/a | ${baseline.costUsd ?? "n/a"} | ${candidate.costUsd ?? "n/a"} |`,
@@ -566,6 +599,14 @@ async function main() {
     "",
     ...(blockers.length
       ? ["Live blockers:", "", ...blockers.map((blocker) => `- ${blocker}`), ""]
+      : []),
+    ...(Object.keys(failureCounts).length
+      ? [
+          "Observed failures:",
+          "",
+          ...Object.entries(failureCounts).map(([reason, count]) => `- ${count}: ${reason}`),
+          "",
+        ]
       : []),
     `Retained match.reading facts: ${facts.count}; occasions: ${Object.entries(facts.occasions)
       .map(([name, count]) => `${name}=${count}`)
