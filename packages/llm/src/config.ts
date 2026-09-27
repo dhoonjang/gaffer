@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import type { EvaluatorConfig } from "./game-evaluator";
 import type { LlmProvider } from "./game-llm";
 
 /** 실제로 LLM을 호출하는 단위 — 설정과 사용량 계측이 이 이름을 공유한다. */
@@ -188,6 +189,19 @@ const LlmConfigFileSchema = z
      * 셋이 같은 값을 든다 (models.md §1-1).
      */
     max_retries: z.number().int().min(0).optional(),
+    evaluators: z
+      .object({
+        "match-sheet": z
+          .object({
+            provider: z.literal("typesafe"),
+            model: z.string().trim().min(1),
+            timeout_ms: z.number().int().positive(),
+            input_usd_per_million: z.number().nonnegative(),
+          })
+          .strict(),
+      })
+      .strict()
+      .optional(),
     agents: z
       .object({
         gm: RawAgentConfigSchema,
@@ -214,6 +228,7 @@ export interface LlmConfig {
   version: 1;
   maxRetries: number;
   agents: Record<AgentName, AgentConfig>;
+  matchSheet?: EvaluatorConfig;
 }
 
 /**
@@ -277,6 +292,17 @@ export function parseLlmConfig(source: string, label = "config/llm.yml"): LlmCon
   return {
     version: parsed.data.version,
     maxRetries,
+    ...(parsed.data.evaluators
+      ? {
+          matchSheet: {
+            provider: parsed.data.evaluators["match-sheet"].provider,
+            model: parsed.data.evaluators["match-sheet"].model,
+            timeoutMs: parsed.data.evaluators["match-sheet"].timeout_ms,
+            inputUsdPerMillion: parsed.data.evaluators["match-sheet"].input_usd_per_million,
+            maxRetries,
+          },
+        }
+      : {}),
     agents: Object.fromEntries(
       AGENT_NAMES.map((agent) => [
         agent,

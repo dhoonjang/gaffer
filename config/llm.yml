@@ -179,3 +179,12 @@ agents:
     max_tokens: 8000
     timeout_ms: 60000
     thinking_level: low
+
+# Evaluation-only pilot; production match-reader remains a single generative call.
+# Direct TypeSafe API; TYPESAFE_API_KEY. Published input price, checked 2026-09-27.
+evaluators:
+  match-sheet:
+    provider: typesafe
+    model: jev-1.13.0
+    timeout_ms: 10000
+    input_usd_per_million: 0.042
