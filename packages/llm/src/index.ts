@@ -12,3 +12,4 @@ export * from "./structured-output";
 export * from "./turn-trace";
 export * from "./usage-meter";
 export * from "./game-evaluator";
+export * from "./typesafe-adapter";

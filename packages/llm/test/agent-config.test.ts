@@ -331,3 +331,38 @@ describe("게임 버전", () => {
     expect(gameVersion()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
+
+describe("typed evaluators are separate from generative agents", () => {
+  const configWith = (fields: string) =>
+    yamlWith(AGENT_YAML) +
+    `
+evaluators:
+  match-sheet:
+    provider: typesafe
+    model: evaluation-fixture
+    timeout_ms: 2000
+    input_usd_per_million: 0.1
+${fields}`;
+
+  it("does not allow evaluation-only models to take a GM role", () => {
+    const agents = fullAgents();
+    agents.gm!.provider = "typesafe";
+    expect(() => parseLlmConfig(yamlOf(agents))).toThrow();
+    expect(() => parseLlmConfig(configWith("    max_tokens: 10\n"))).toThrow();
+  });
+
+  it("carries the shared retry policy and rejects unbounded timeout/negative prices", () => {
+    expect(parseLlmConfig(configWith("")).matchSheet).toMatchObject({
+      maxRetries: 2,
+      timeoutMs: 2000,
+    });
+    expect(() =>
+      parseLlmConfig(configWith("").replace("timeout_ms: 2000", "timeout_ms: 0")),
+    ).toThrow();
+    expect(() =>
+      parseLlmConfig(
+        configWith("").replace("input_usd_per_million: 0.1", "input_usd_per_million: -1"),
+      ),
+    ).toThrow();
+  });
+});

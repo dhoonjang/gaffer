@@ -24,6 +24,8 @@ export interface EvaluationResult {
   model: string;
   answers: Record<string, ScoreAnswer>;
   usage: TurnUsage;
+  attempts?: number;
+  usageComplete?: boolean;
 }
 
 export interface GameEvaluator {
