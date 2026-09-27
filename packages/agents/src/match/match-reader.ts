@@ -53,7 +53,7 @@ export const MATCH_OPS: readonly string[] = [
 const SHEET_LINES_PER_POINT = 3;
 
 /** 시트 줄의 상한 — 포인트 상한 × 포인트당 줄 */
-const SHEET_MAX = POINTS_MAX * SHEET_LINES_PER_POINT;
+export const SHEET_MAX = POINTS_MAX * SHEET_LINES_PER_POINT;
 
 /** 모양의 부호가 무엇을 올리는가 — 낱말도 뜻도 `SHEET_SHAPES` 한 벌에서 온다 */
 const SHEET_SIGN_KO: Record<(typeof SHEET_SHAPES)[number], string> = {
@@ -68,6 +68,9 @@ const SHEET_SIGN_KO: Record<(typeof SHEET_SHAPES)[number], string> = {
 const SHEET_SHAPE_LINES = SHEET_SHAPES.map(
   (shape) => `${shape}(${SHEET_SHAPE_KO[shape]}) — +면 ${SHEET_SIGN_KO[shape]}, −면 그 반대`,
 ).join("\n- ");
+
+const SHEET_STRENGTH_INSTRUCTION =
+  "step은 0~3의 연속 강도다. 약한 영향과 불확실성은 소수로 반영한다. 0은 효과 없음이다.";
 
 export const MATCH_READER_SYSTEM = `당신은 경기를 읽는 판독기다. 이 경기가 지금 어떻게 돌아가는가를 전술 포인트로 쓰고, 그 판독의 수치 독해를 시트로 옮긴다. 감독이 말한 턴이면 그 말을 판독 위에서 읽어 명령의 인자도 함께 낸다. 중계도 대사도 쓰지 않는다.
 
@@ -89,7 +92,7 @@ export const MATCH_READER_SYSTEM = `당신은 경기를 읽는 판독기다. 이
 - ${SHEET_SHAPE_LINES}
 - target — behavior·edge·temper·legs는 선수 한 명(player). focus는 편(side)과 레인(lane). cohesion은 편(side).
 - behavior에는 action이 붙는다 — press(공 또는 targetPlayer 압박) · mark(targetPlayer 추적) · cover(표적 뒤 공간) · support(공 주변 지원) · run(지역 침투) · hold(기본 자리 유지). when은 attack(우리 소유)·defend(상대 소유)·always. 지역은 lane(left·center·right)과 band(defense·midfield·attack)다. 표적 없는 mark는 보내지 않는다.
-- step은 0~3의 연속 강도다. 약한 영향과 불확실성은 소수로 반영한다. 0은 효과 없음이다.
+- ${SHEET_STRENGTH_INSTRUCTION}
 - **이득만 있는 판독은 없다.** 마킹은 마커의 본업을 비우고, 오버랩은 뒤를 연다 — 이득 줄을 쓴 포인트에는 그 대가 줄도 쓴다.
 - 포인트가 없으면 시트도 없다. 좌표나 성공 확률을 만들지 않는다.
 
@@ -131,6 +134,16 @@ export const MATCH_READER_SYSTEM = `당신은 경기를 읽는 판독기다. 이
 
 # 자리별 역할 (set_player_tactic의 role)
 ${roleVocabularyText()}`;
+
+/** The pilot replaces scalar generation; both paths share the remaining instructions. */
+export function matchReaderSystem(probabilistic: boolean): string {
+  return probabilistic
+    ? MATCH_READER_SYSTEM.replace(
+        SHEET_STRENGTH_INSTRUCTION,
+        "시트에는 대상·모양·방향·동작만 적는다. 강도(step)는 쓰지 않는다.",
+      )
+    : MATCH_READER_SYSTEM;
+}
 
 /** 판독기가 내는 것 — 명령의 인자와, 이 경기의 포인트·시트 */
 export interface MatchReaderOutput {

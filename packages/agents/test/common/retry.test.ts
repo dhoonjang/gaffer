@@ -13,14 +13,33 @@ import {
   startMatch,
 } from "@story-fm/engine";
 import { CharacterMemorySchema } from "@story-fm/domain";
-import type { GameLLM, GameToolSpec, JsonObjectSchema, TurnResult } from "@story-fm/llm";
+import type {
+  EvaluationResult,
+  GameEvaluator,
+  GameLLM,
+  GameToolSpec,
+  JsonObjectSchema,
+  TurnResult,
+} from "@story-fm/llm";
 import { LlmCallError, LlmTimeoutError, TokenBudgetExceededError } from "@story-fm/llm";
 import { z } from "zod";
 import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src/common/retry";
+import { runReaderPipeline } from "../../src/match/reader-pipeline";
+import { matchReaderOutputSchema } from "../../src/match/match-reader";
 import { runMatchReader } from "../../src/app/workflows/match/match-reader";
 import { SettleMatchSchema, SETTLE_MATCH_INPUT } from "../../src/match/finalize-match";
 import { REPORT_TRAINING_INPUT, TrainingReportSchema } from "../../src/story/training-rater";
 import { REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
+
+const answered = (output: TurnResult["output"]): TurnResult => ({
+  text: "",
+  history: { version: 1, provider: "google", model: "test", messages: [] },
+  historyBase: 0,
+  usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  toolCallCount: 0,
+  stopReason: "completed",
+  output,
+});
 
 /**
  * 실패 계약 — **쓸 수 없는 산출만 한 번 더 부르고, 그다음은 갈린다** (agents.md §8).
@@ -84,15 +103,6 @@ describe("retryOnce — 폴백 대신 한 번의 재시도", () => {
  */
 describe("readOutput — 산출이 왔는가", () => {
   const schema = z.object({ n: z.number().int().min(0) });
-  const answered = (output: TurnResult["output"]): TurnResult => ({
-    text: "",
-    history: { version: 1, provider: "google", model: "test", messages: [] },
-    historyBase: 0,
-    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-    toolCallCount: 0,
-    stopReason: "completed",
-    output,
-  });
 
   it("스키마를 지난 산출은 그대로 돌려준다", () => {
     expect(readOutput("t", schema, answered({ n: 3 }))).toEqual({ n: 3 });
@@ -399,4 +409,112 @@ describe("결산 스키마의 수용 폭", () => {
       expect(schemaAt(REPORT_DIGEST_INPUT, path).maxLength, path).toBeGreaterThan(0);
     }
   });
+});
+
+describe("reader pipeline — atomic probabilistic pilot", () => {
+  const schema = matchReaderOutputSchema(new Map());
+  const point = { id: "p", text: "왼쪽 공격이 이어진다", about: ["home"], importance: 2 };
+  const candidate = {
+    pointId: "p",
+    target: { side: "home", lane: "left" },
+    shape: "focus",
+    sign: 1,
+  };
+  const evaluation = {
+    model: "fixture",
+    answers: {
+      line_0: {
+        type: "score" as const,
+        score: 1.25,
+        probabilities: { "0": 0, "1": 0.75, "2": 0.25, "3": 0 },
+        confidence: 0.3,
+      },
+    },
+    usage: { inputTokens: 12, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+
+  it("keeps fractional strength without multiplying confidence and removes scalar generation", async () => {
+    const llm = {
+      runTurn: vi.fn<GameLLM["runTurn"]>(async () =>
+        answered({ points: [point], sheet: [candidate] }),
+      ),
+    };
+    const evaluator = { evaluate: vi.fn(async () => evaluation) };
+    const result = await runReaderPipeline({
+      llm,
+      evaluator,
+      user: "recorded input",
+      schema,
+      hasSaid: false,
+    });
+    expect(result.reading.sheet[0]?.step).toBe(1.25);
+    expect(result.evaluations).toEqual([evaluation]);
+    expect(llm.runTurn).toHaveBeenCalledTimes(1);
+    expect(evaluator.evaluate).toHaveBeenCalledTimes(1);
+    const request = llm.runTurn.mock.calls[0]![0];
+    expect(JSON.stringify(request.outputSchema)).not.toContain('"step"');
+    expect(request.outputSchema?.properties).not.toHaveProperty("ops");
+  });
+
+  it("no manager utterance means no command, even if the model invents one", async () => {
+    const llm: GameLLM = {
+      runTurn: async () =>
+        answered({
+          points: [],
+          sheet: [],
+          ops: { substitute: [{ out: "a", in: "b" }] },
+          unresolved: "invented",
+        }),
+    };
+    const evaluator = { evaluate: vi.fn(async () => evaluation) };
+    const result = await runReaderPipeline({
+      llm,
+      evaluator,
+      user: "facts",
+      schema,
+      hasSaid: false,
+    });
+    expect(result.reading).toEqual({ points: [], sheet: [], ops: {} });
+    expect(evaluator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it("retry invalid point references before evaluating; never return partially translated commands", async () => {
+    const llm = {
+      runTurn: vi.fn(async () =>
+        answered({ points: [], sheet: [candidate], ops: { substitute: [{ out: "a", in: "b" }] } }),
+      ),
+    };
+    const evaluator = { evaluate: vi.fn(async () => evaluation) };
+    await expect(
+      runReaderPipeline({ llm, evaluator, user: "facts", schema, hasSaid: true }),
+    ).rejects.toThrow(ModelOutputError);
+    expect(llm.runTurn).toHaveBeenCalledTimes(2);
+    expect(evaluator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it.each(["missing", "out-of-range", "transport"])(
+    "%s evaluation fails without repeating prose",
+    async (failure) => {
+      const llm = {
+        runTurn: vi.fn<GameLLM["runTurn"]>(async () =>
+          answered({ points: [point], sheet: [candidate] }),
+        ),
+      };
+      const evaluator: GameEvaluator = {
+        evaluate: async (): Promise<EvaluationResult> => {
+          if (failure === "transport") throw new LlmCallError("auth", "missing key");
+          return failure === "missing"
+            ? { ...evaluation, answers: {} }
+            : {
+                ...evaluation,
+                answers: { line_0: { ...evaluation.answers.line_0, score: 3.1 } },
+              };
+        },
+      };
+      await expect(
+        runReaderPipeline({ llm, evaluator, user: "facts", schema, hasSaid: false }),
+      ).rejects.toThrow();
+      expect(llm.runTurn).toHaveBeenCalledTimes(1);
+    },
+  );
 });

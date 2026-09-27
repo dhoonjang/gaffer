@@ -12,9 +12,6 @@ import {
   stripTag,
   type MatchReaderOutput,
   matchReaderOutputSchema,
-  MATCH_READER_SYSTEM,
-  ReaderReportSchema,
-  MATCH_OPS,
   FAILED_NOTE,
 } from "../../../match/match-reader";
 import { type BoardMove, type MatchEvent } from "@story-fm/domain";
@@ -25,11 +22,11 @@ import {
   buildBoardMovesBlock,
 } from "../../../match/context";
 import { eventsBlockOf } from "../../../match/context";
-import { tagged, parseOps } from "../../../common/orders-ops";
+import { tagged } from "../../../common/orders-ops";
 import { type GameToolSpec, type GameLLM, createGameLLM, agentConfig } from "@story-fm/llm";
 import { mockReaderLlm } from "../../mock-gm";
-import { retryOnce, readOutput, ModelOutputError } from "../../../common/retry";
-import { TACTIC_CAPS } from "../../../match/tactic-orders";
+import { ModelOutputError } from "../../../common/retry";
+import { runReaderPipeline } from "../../../match/reader-pipeline";
 
 /**
  * `<facts>` — **판독기가 읽는 사실 전부.** 양 팀의 진짜 능력치와 지금 내는 전력, 선수별
@@ -173,43 +170,22 @@ export async function runMatchReader(
       ...rest,
     });
   try {
-    await retryOnce(
-      "match-reader",
-      async () => {
+    client ??= createGameLLM(agentConfig("match-reader"));
+    const result = await runReaderPipeline({
+      llm: client,
+      user,
+      schema,
+      hasSaid: Boolean(options.said?.trim()),
+      onAttempt: () => {
         attempts += 1;
-        client ??= createGameLLM(agentConfig("match-reader"));
-        const result = await client.runTurn({
-          system: MATCH_READER_SYSTEM,
-          history: [],
-          user,
-          outputSchema: schema,
-        });
-        const report = readOutput("match-reader", ReaderReportSchema, result);
-        const { ops, truncated } = parseOps(report.ops, MATCH_OPS, TACTIC_CAPS);
-        reading = {
-          ops,
-          ...(Object.keys(truncated).length > 0 ? { truncated } : {}),
-          points: report.points ?? [],
-          sheet: report.sheet ?? [],
-          ...(report.unresolved ? { unresolved: report.unresolved } : {}),
-        };
       },
-      () => reading !== null,
-    );
+    });
+    reading = result.reading;
   } catch (error) {
     const failure = error instanceof Error ? error.message : String(error);
-    if (reading === null && !(error instanceof ModelOutputError)) {
-      record({ ok: false, failure });
-      throw error;
-    }
+    record({ ok: false, failure });
+    if (!(error instanceof ModelOutputError)) throw error;
     console.warn(`[match-reader] 판독 호출이 실패했습니다:`, error);
-    if (reading === null) {
-      record({ ok: false, failure });
-      return { ok: false, message: FAILED_NOTE };
-    }
-  }
-  if (reading === null) {
-    record({ ok: false });
     return { ok: false, message: FAILED_NOTE };
   }
   record({ ok: true });

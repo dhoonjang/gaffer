@@ -211,6 +211,20 @@ export interface OpsOrders {
   unresolved?: string;
 }
 
+/** Shared normalization for order interpreters and the match reader. */
+export function parseOrdersReport(
+  report: { ops?: unknown; unresolved?: string },
+  names: readonly string[],
+  caps: OpsCaps = {},
+): OpsOrders {
+  const { ops, truncated } = parseOps(report.ops, names, caps);
+  return {
+    ops,
+    ...(Object.keys(truncated).length > 0 ? { truncated } : {}),
+    ...(report.unresolved ? { unresolved: report.unresolved } : {}),
+  };
+}
+
 /**
  * 해석기의 산출 — `ops`는 모양만 보고(`parseOps`가 목록의 이름과 배열만 남긴다) `unresolved`는
  * 여기서 잰다. 명령 인자의 검증은 적용 때 그 명령의 Zod가 한다.
@@ -278,12 +292,7 @@ export async function runOpsOrders(
           outputSchema: schema,
         });
         const report = readOutput(spec.agent, OpsReportSchema, result);
-        const { ops, truncated } = parseOps(report.ops, spec.ops, spec.caps);
-        orders = {
-          ops,
-          ...(Object.keys(truncated).length > 0 ? { truncated } : {}),
-          ...(report.unresolved ? { unresolved: report.unresolved } : {}),
-        };
+        orders = parseOrdersReport(report, spec.ops, spec.caps);
       },
       () => orders !== null,
     );
