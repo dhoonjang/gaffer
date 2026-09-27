@@ -1,0 +1,91 @@
+import { type GameState } from "../../../../common/core/state";
+import { type TickSink, type MatchStage } from "@story-fm/domain";
+import { cupCatalogById, stageLabel } from "../../../../common/data/cup-catalog";
+import { payPrize } from "./prize";
+
+/**
+ * 대항전 상금 — 참가비·리그 페이즈 성적·단계 진출·우승.
+ *
+ * 금액은 카탈로그(`CupCatalogEntry.prize`)가 갖고 여기서는 **언제 누구에게**만
+ * 정한다. 실제 대회처럼 참가만 해도 큰돈이 들어오고, 한 단계 올라갈 때마다
+ * 더해진다. 나선 클럽 전부에게 적용한다 — 정원의 절반 남짓을 채우는 **2부 클럽도
+ * 같은 참가비를 받는다**(competition.md §4). 그 돈이 그 클럽의 연 매출을 웃돌지만,
+ * 실제로도 작은 리그의 클럽에게 UEFA 배분이 그렇다 (finance.md §5.1.1).
+ *
+ * 중복 지급은 `FINANCE.prizesPaid`의 키가 막는다 — 원장이 아니다. 원장은 최근
+ * 3개월만 남기고 AI 팀은 아예 쌓지 않으므로(finance.md §4.4·§4.5) "원장이 곧 사실"이
+ * 성립하지 않는다.
+ */
+
+/**
+ * 리그 페이즈 정산 — 참가비 + 승/무 수당. 리그 페이즈가 끝난 뒤 한 번에 준다.
+ * (실제로는 경기마다 들어오지만, 원장을 경기 수만큼 부풀릴 이유가 없다.)
+ */
+export function payLeaguePhasePrizes(state: GameState, cupId: string, digest: TickSink): void {
+  const cup = cupCatalogById(cupId);
+  if (!cup) return;
+  const phase = state.matches.filter(
+    (m) => m.season === state.season && m.competitionId === cupId && m.stage === "league",
+  );
+  /**
+   * 참가비의 조건은 성적이 아니라 출전이다 — 그래서 **경기에 나선 팀 전원**이
+   * 0원 수당으로 먼저 오르고, 승/무만 그 위에 쌓인다. 성적으로 맵을 채우면
+   * 전패한 팀이 맵에 없어 참가비까지 함께 사라진다.
+   */
+  const earned = new Map<string, number>();
+  const add = (teamId: string, amount: number) =>
+    earned.set(teamId, (earned.get(teamId) ?? 0) + amount);
+  for (const m of phase) {
+    add(m.homeTeamId, 0);
+    add(m.awayTeamId, 0);
+    if (!m.result) continue;
+    const { homeGoals, awayGoals } = m.result;
+    if (homeGoals === awayGoals) {
+      add(m.homeTeamId, cup.prize.draw);
+      add(m.awayTeamId, cup.prize.draw);
+    } else {
+      add(homeGoals > awayGoals ? m.homeTeamId : m.awayTeamId, cup.prize.win);
+    }
+  }
+  for (const [teamId, bonus] of earned) {
+    const total = cup.prize.participation + bonus;
+    payPrize(
+      state,
+      { cup, teamId, kind: "league-phase", what: "리그 페이즈", amount: total },
+      digest,
+    );
+  }
+}
+
+/** 단계 진출 상금 — 그 단계에 오른 모든 팀에게 */
+export function payStagePrizes(
+  state: GameState,
+  cupId: string,
+  stage: MatchStage,
+  teams: string[],
+  digest: TickSink,
+): void {
+  const cup = cupCatalogById(cupId);
+  const amount = cup?.prize.stage[stage] ?? 0;
+  if (!cup || amount <= 0) return;
+  const what = `${stageLabel(stage, 1, false)} 진출`;
+  for (const teamId of new Set(teams)) {
+    payPrize(state, { cup, teamId, kind: `stage:${stage}`, what, amount }, digest);
+  }
+}
+
+/** 우승 상금 — 시즌 리뷰에서 (결승은 리그 종료 뒤에 열린다) */
+export function payWinnerPrize(
+  state: GameState,
+  cupId: string,
+  champion: string,
+  digest: TickSink,
+): void {
+  const cup = cupCatalogById(cupId);
+  if (!cup) return;
+  payPrize(
+    state,
+    { cup, teamId: champion, kind: "winner", what: "우승", amount: cup.prize.winner },
+    digest,
+  );
+}

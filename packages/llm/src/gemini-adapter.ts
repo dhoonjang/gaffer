@@ -86,13 +86,26 @@ async function sendWithRetry<T>(maxRetries: number, send: () => Promise<T>): Pro
   }
 }
 
-function withoutMaxItems(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutMaxItems);
+function withoutMaxItems(node: unknown, propertyMap = false): unknown {
+  if (Array.isArray(node)) return node.map((value) => withoutMaxItems(value));
   if (node === null || typeof node !== "object") return node;
   return Object.fromEntries(
     Object.entries(node as Record<string, unknown>)
-      .filter(([key]) => key !== "maxItems")
-      .map(([key, value]) => [key, withoutMaxItems(value)]),
+      .filter(([key]) => propertyMap || key !== "maxItems")
+      .map(([key, value]) => [
+        key,
+        withoutMaxItems(
+          value,
+          !propertyMap &&
+            [
+              "properties",
+              "$defs",
+              "definitions",
+              "patternProperties",
+              "dependentSchemas",
+            ].includes(key),
+        ),
+      ]),
   );
 }
 

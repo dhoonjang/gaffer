@@ -1,6 +1,6 @@
 /**
  * 가명 전환 파이프라인 — 라이선스 부채 원장의 **가명화 갈래를 실제로 수행한다**
- * (docs/data/sources.md §7).
+ * (docs/common/sources.md §7).
  *
  *   pnpm pseudonymize [--dry]             리포트만 낸다 (기본값 — 아무것도 쓰지 않는다)
  *   pnpm pseudonymize --out <dir>         가명본 시드를 그 디렉터리에 쓴다
@@ -24,21 +24,21 @@ import {
   pseudonymSquad,
   type ClubPseudonym,
   type PlayerPseudonym,
-} from "../packages/engine/src/data/pseudonym";
-import { slugifyName } from "../packages/engine/src/world/player-id";
-import { TEAM_CATALOG_SEED, DEFAULT_XI } from "../packages/engine/src/data/team-catalog";
-import { LEAGUE_CATALOG_SEED } from "../packages/engine/src/data/league-catalog";
-import { CLUB_PROFILES_SEED } from "../packages/engine/src/data/club-profile";
-import { REAL_SQUADS, type RealPlayerSeed } from "../packages/engine/src/data/epl-players";
-import { EU_SQUADS } from "../packages/engine/src/data/eu-squads";
-import { SAUDI_SQUADS, MLS_SQUADS } from "../packages/engine/src/data/market-leagues";
-import { HEAD_COACH_NAMES } from "../packages/engine/src/data/coach-seeds";
-import { OWNER_NAMES } from "../packages/engine/src/data/owner-seeds";
-import { WORLD_FIGURE_SEEDS } from "../packages/engine/src/data/world-figures";
-import { INJURY_HISTORY } from "../packages/engine/src/data/injury-history";
+} from "../packages/engine/src/common/data/pseudonym";
+import { slugifyName } from "../packages/engine/src/common/world/player-id";
+import { TEAM_CATALOG_SEED, DEFAULT_XI } from "../packages/engine/src/common/data/team-catalog";
+import { LEAGUE_CATALOG_SEED } from "../packages/engine/src/common/data/league-catalog";
+import { CLUB_PROFILES_SEED } from "../packages/engine/src/common/data/club-profile";
+import { REAL_SQUADS, type RealPlayerSeed } from "../packages/engine/src/common/data/epl-players";
+import { EU_SQUADS } from "../packages/engine/src/common/data/eu-squads";
+import { SAUDI_SQUADS, MLS_SQUADS } from "../packages/engine/src/common/data/market-leagues";
+import { HEAD_COACH_NAMES } from "../packages/engine/src/common/data/coach-seeds";
+import { OWNER_NAMES } from "../packages/engine/src/common/data/owner-seeds";
+import { WORLD_FIGURE_SEEDS } from "../packages/engine/src/common/data/world-figures";
+import { INJURY_HISTORY } from "../packages/engine/src/common/data/injury-history";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
-const SEED_DIR = path.join(REPO, "packages/engine/src/data");
+const SEED_DIR = path.join(REPO, "packages/engine/src/common/data");
 /** 저장소 안에서 유일하게 써도 되는 자리 — `.gitignore`에 올라 있다 */
 const DEFAULT_OUT = ".pseudonymized";
 
@@ -212,7 +212,7 @@ const BANNER = (source: string) =>
   [
     "// ⚠️ 자동 생성물 — `pnpm pseudonymize`가 시드에서 낸 가명본이다.",
     "// 손으로 고치지 말고 `scripts/pseudonymize.ts`를 고쳐 다시 낸다.",
-    `// 원본: packages/engine/src/data/${source}`,
+    `// 원본: packages/engine/src/common/data/${source}`,
     "",
   ].join("\n");
 
@@ -339,7 +339,7 @@ function generate(): { files: Generated[]; stats: Stats } {
 
 function report(stats: Stats, files: readonly Generated[], out: string | null): string {
   const lines: string[] = [
-    "가명 전환 파이프라인 (docs/data/sources.md §7 — 가명화 갈래)",
+    "가명 전환 파이프라인 (docs/common/sources.md §7 — 가명화 갈래)",
     "",
     "■ 바뀌는 것 — 표시 이름뿐. id는 하나도 손대지 않는다",
     `  선수      ${stats.players}명 (${SQUAD_TABLES.reduce((n, t) => n + Object.keys(t.squads).length, 0)}클럽) — nameKo·nameEn`,

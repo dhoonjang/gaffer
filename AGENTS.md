@@ -8,7 +8,7 @@
 This file is the single source for the project's **vision and development
 conventions**; both AI agents and human contributors work from it. `CLAUDE.md`
 points here. **How the game actually behaves lives in
-[docs/](./docs/README.md)** — start with [overview.md](./docs/overview.md).
+[docs/](docs/README.md)** — start with [overview.md](docs/overview.md).
 
 ---
 
@@ -17,8 +17,16 @@ points here. **How the game actually behaves lives in
 Traditional football managers are games of sliders and probability tables.
 story-fm turns that into a **game of language**: you direct the team by talking,
 players and owners and journalists react as characters with their own motives,
-and the story — dressing-room conflict, a prospect's arc, a rivalry that festers
-— matters more than the scoreline.
+and dressing-room conflict, a prospect's arc and a rivalry continue across matches.
+
+The game serves three experiences:
+
+1. **Life as a manager.** The main GM runs training, everyday scenes and press
+   conferences; choices accumulate into stories, memories and relationships.
+2. **Negotiation and stewardship.** The negotiation GM brings persuasion and
+   competing motives to transfers and renewals; finances and promises carry consequences.
+3. **Live football.** Team building and tactics meet in a spatial match that the
+   manager can interrupt and influence through natural language.
 
 ### Design principles
 
@@ -29,6 +37,10 @@ and the story — dressing-room conflict, a prospect's arc, a rivalry that feste
    state, rules and numbers deterministic.
 4. **Quality first, cost second.** Design calls without waste (caching, context
    hygiene), but never let cost cutting degrade the experience.
+5. **Give AI room to judge.** Prefer contextual, continuous judgments over extra
+   personality tables and scripted story stages. Keep validation, ledgers and match
+   physics deterministic. Player abilities, positions, roles, fitness, adaptation
+   and form remain readable information for the manager.
 
 ## 2. The game in one paragraph
 
@@ -39,7 +51,7 @@ core's spatial simulator in the live web match and xG simulator elsewhere**; the
 LLM only commentates, stages and adjudicates.
 A season starts on July 1 and runs preseason → league/cup/European competition →
 season rollover → next season. Data has two layers: catalog (immutable seed) and
-save (mutable state), model v6.
+save (mutable state), model v11.
 
 ## 3. Stack
 
@@ -47,33 +59,34 @@ save (mutable state), model v6.
 - **Runtime** — Next.js (App Router) + Node.js
 - **Packages** — pnpm monorepo workspaces
 - **LLM** — multi-provider, configured **per agent**. `config/llm.yml` is the
-  single source for providers and model IDs (→ [docs/llm/models.md](./docs/llm/models.md))
+  single source for providers and model IDs (→ [docs/common/llm/models.md](docs/common/llm/models.md))
 - **Validation** — Zod, enforcing structured LLM I/O
 - **Test** — Vitest + Playwright · **Lint** — ESLint + Prettier
 
 ### Layout
 
 ```
-docs/              # design spec — how the game works today (README.md is the map)
-  data/            #   what exists — players, teams, competitions, people, saves
-  simulation/      #   what happens — match, season, transfer, finance, career
-  llm/             #   how it speaks — models, agents, prompts
-config/            # llm.yml — provider and model per agent
+docs/              # present service, grouped by experience
+  story/           # everyday life, training, people, press, board and career
+  negotiation/     # persuasion, contracts, finance and promises
+  match/           # live match, tactics and competitions
+  common/          # shared players, teams, saves, AI infrastructure and UI
+config/            # providers, models and game version
 apps/
-  web/             # Next.js — chat UI · office views · API · /admin
-  match-cli/       # headless live match — runs a full match without a screen, prints the ledger
+  web/
+    app/           # Next routes and API transport
+    application/   # whole-game UI and turn orchestration
+    domains/       # story/ · negotiation/ · match/ · common/ (ui, lib, styles)
+  match-cli/       # headless live match
 packages/
-  domain/          # domain models + Zod schemas (player, tactics, records, schedule, persona)
-  sim/             # match sim core — seeded rng · live match (piece rules, browser-safe) · match ability · load · ledger · bench
-  engine/          # game engine — each folder is a domain:
-                   #   core/(state, save, tick, dates, rng) world/(catalog, generation, wages)
-                   #   competition/(calendar, league, cup, europe) match/(match flow, quick sim)
-                   #   squad/(form, morale, injury, training, scouting) market/(transfers, negotiation)
-                   #   club/(finance, press) commands/(manager instructions) views/(screens, queries)
-                   #   data/(catalog, seed)
-  agents/          # GM orchestrator · commentary · summary writers · mock GM
-  llm/             # provider-neutral GameLLM + Anthropic/Gemini/OpenAI adapters
-e2e/               # Playwright specs — onboarding · game · admin · turn errors
+  domain/src/      # browser-safe Zod models and pure rules, by the four domains
+  engine/src/      # deterministic commands and read models, by the four domains
+  agents/src/      # model calls, by the four domains
+                   # app/ in each package composes domains; it owns no duplicate rules
+  sim/             # match-only deterministic spatial core
+  llm/             # shared provider adapters and tracing
+packages/*/test/   # same domain ownership; app/ contains integration tests
+e2e/               # browser user journeys
 ```
 
 ## 4. Architecture
@@ -83,8 +96,8 @@ e2e/               # Playwright specs — onboarding · game · admin · turn er
   without an LLM. The core decides match results — the manager's match runs as 22
   pieces on the client and is verified by the server checkpoint by checkpoint; the
   manager's instructions reach it only through validated commands and a bounded sheet
-  (→ [docs/simulation/live-match.md](./docs/simulation/live-match.md) ·
-  [docs/simulation/match.md](./docs/simulation/match.md)).
+  (→ [docs/match/live-match.md](docs/match/live-match.md) ·
+  [docs/match/match.md](docs/match/match.md)).
 - **The live match is deterministic across engines.** `packages/sim/src/live/` uses
   only arithmetic, `Math.sqrt` and its own `dmath` — never `Math.exp/log/sin/cos/atan2/
 hypot/pow`, which differ in the last bit between JavaScript engines and would make the
@@ -106,6 +119,11 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
 - Functional and immutable by default; isolate side effects at the boundary
   (API/IO).
 - Domain types live in `packages/domain`; other packages import from there.
+- Runtime dependencies flow `common → {story, negotiation, match} → app`.
+  Domains never execute each other or import app values. Cross-domain workflows
+  live in `app/workflows`; shared player/team facts and pure queries live in
+  common. Type-only references may cross this boundary. ESLint enforces it.
+  Internal imports use the owning module, never the package's own public barrel.
 - **The screen imports `@story-fm/engine` for types only.** A value import pulls
   `node:fs` into the browser bundle and `next build` dies — `typecheck` passes, so
   **`pnpm lint` is what catches it**: `eslint.config.js` bans the value import
@@ -124,8 +142,8 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
 - **"Skill" names only what the LLM calls directly.** A tool in a GM's catalog is a
   skill; the JSON shape an agent returns is its **output schema**; the deterministic
   function the core invokes from that JSON is a **core command**
-  (`packages/engine/src/commands/`). Mixing the three makes the docs read as if an
-  interpreter agent held tools of its own (→ [docs/overview.md](./docs/overview.md) §0).
+  (`packages/engine/src/{story,negotiation,match}/commands/`). Mixing the three makes the docs read as if an
+  interpreter agent held tools of its own (→ [docs/overview.md](docs/overview.md) §0).
 - kebab-case files and directories, PascalCase types and components, camelCase
   values and functions.
 - Give numbers and formulas names — balance tuning should only need to read that
@@ -147,7 +165,7 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
   `config/game-version.yml`. Prompts, tool specs, snapshot builders and
   `config/llm.yml` are where it lives; screens, tests and docs never move it.
   Every traced LLM call records the version, so it is what makes a log from
-  months ago comparable to today's (→ [docs/llm/models.md](./docs/llm/models.md)
+  months ago comparable to today's (→ [docs/common/llm/models.md](docs/common/llm/models.md)
   §5-2; the digit rules and path map are the `game-version` skill).
 - Commit and push only when the user asks. When a unit of work is done, commit to
   **the branch already checked out** and `git push origin HEAD` — never switch
@@ -182,14 +200,14 @@ carries a descriptor (`packages/engine/harness/harness.ts`) that owns its band
 numbers; assertions, output and the listing all read from it, so a band is written
 in exactly one place. `pnpm balance --list` shows every harness and what it
 measures, `pnpm balance` runs them
-(→ [docs/simulation/balance-harness.md](./docs/simulation/balance-harness.md)).
+(→ [docs/common/balance-harness.md](docs/common/balance-harness.md)).
 
 **A test timeout breaks what has stopped; it does not measure speed.**
 `vitest.config.ts` owns the one number and the reasoning behind it. Never repeat
 that number on a case — restating the global is not headroom, and a tighter one
 is a hidden speed assertion that goes red before the assertion does. Give a case
 its own limit only to make it **more** generous
-(→ [balance-harness.md](./docs/simulation/balance-harness.md) §6).
+(→ [balance-harness.md](docs/common/balance-harness.md) §6).
 
 **Fixtures cost more than the logic they carry.** `createTestGame()` builds a
 whole world — a second per call. Call the pure function directly when the world
@@ -262,7 +280,7 @@ red change merged green. How the gate is sharded and what it runs on is
 
 1. **Never hard-code a model ID.** `config/llm.yml` owns provider and model per
    agent; `packages/llm` adapters absorb provider differences
-   (→ [docs/llm/models.md](./docs/llm/models.md)).
+   (→ [docs/common/llm/models.md](docs/common/llm/models.md)).
 2. **Validate structured output with Zod** and retry on failure. A parse failure
    never reaches game state.
 3. **Context hygiene** — stack input in three layers by change frequency (fixed /
@@ -285,26 +303,26 @@ red change merged green. How the gate is sharded and what it runs on is
 
 ## 7. Doc map
 
-**[docs/](./docs/README.md) is the single source for what the game does** — each
+**[docs/](docs/README.md) is the single source for what the game does** — each
 folder is a layer. Read the design doc for the domain you are touching before you
 start, and do not blur the boundary between the deterministic core and the
 non-deterministic LLM.
 
-| Folder        | What                                                     | Docs                                                                                                                                                                                                                                                                |
-| ------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| —             | Overall structure · the path of one turn · the game loop | [overview.md](./docs/overview.md)                                                                                                                                                                                                                                   |
-| `data/`       | What exists                                              | [game-state](./docs/data/game-state.md) · [player](./docs/data/player.md) · [team](./docs/data/team.md) · [competition](./docs/data/competition.md) · [people](./docs/data/people.md) · [sources](./docs/data/sources.md)                                           |
-| `simulation/` | What happens                                             | [match](./docs/simulation/match.md) · [season](./docs/simulation/season.md) · [transfer](./docs/simulation/transfer.md) · [finance](./docs/simulation/finance.md) · [career](./docs/simulation/career.md) · [balance-harness](./docs/simulation/balance-harness.md) |
-| `llm/`        | How it speaks                                            | [pipeline](./docs/llm/pipeline.md) · [agents](./docs/llm/agents.md) · [prompts](./docs/llm/prompts.md) · [models](./docs/llm/models.md)                                                                                                                             |
-| `ui/`         | What the screen draws, with which values                 | [design-system](./docs/ui/design-system.md)                                                                                                                                                                                                                         |
+| Folder         | What                                                                  | Start here                                                          |
+| -------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| —              | Whole game and ownership                                              | [overview](docs/overview.md) · [architecture](docs/architecture.md) |
+| `story/`       | Main GM, people, daily life, training, press and board                | [story](docs/story/README.md)                                       |
+| `negotiation/` | Negotiation GM, contracts, finance and promises                       | [negotiation](docs/negotiation/README.md)                           |
+| `match/`       | Match GM, tactics, live simulation and competitions                   | [match](docs/match/README.md)                                       |
+| `common/`      | Shared state, players, teams, season orchestration and infrastructure | [common](docs/common/README.md)                                     |
 
 ## Status
 
-🚧 **Playable prototype (data model v7, SAVE_VERSION 8).** Onboarding → chat
+🚧 **Playable prototype (data model v11, SAVE_VERSION 11).** Onboarding → chat
 instructions → match → season rollover → multi-season runs end to end. What is
-built and what is not is listed in [overview.md](./docs/overview.md) §7.
+built and what is not is listed in [overview.md](docs/overview.md) §7.
 
 - **No save migrations.** A save of another version is refused; there is no code
   that adapts an old shape. New fields are required in the schema unless absence
   carries meaning. When a change moves the shape or the meaning of stored values,
-  bump `SAVE_VERSION` (docs/data/game-state.md §6).
+  bump `SAVE_VERSION` (docs/common/game-state.md §6).

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { ATTRIBUTE_AXES } from "@story-fm/domain";
+import { CatalogPlayerEditSchema } from "@story-fm/domain";
 import {
   adminCatalog,
   adminEditCatalogPlayer,
@@ -8,43 +7,6 @@ import {
   isCatalogEdited,
 } from "@story-fm/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
-
-const attr = z.number().int().min(1).max(99).optional();
-/**
- * 주급 — 실측이고 없는 것이 기본이다 (game-state.md §2).
- * 실리지 않으면 손대지 않고, `null`이면 실측을 지워 모델 추정으로 되돌린다.
- */
-const wage = z.number().int().min(0).max(2_000_000).nullable().optional();
-/** 능력치 16축 — 도메인 상수에서 스키마를 펼친다 (축이 늘면 여기도 자동으로) */
-const axisFields = Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, attr]));
-const PatchSchema = z.object({
-  nameKo: z.string().min(1).max(40).optional(),
-  nameEn: z.string().min(1).max(60).optional(),
-  birthdate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "출생년월일 형식(YYYY-MM-DD)이 올바르지 않습니다")
-    .optional(),
-  position: z.string().min(1).optional(),
-  /** 국적 — 협회 코드. 둘째는 빈 문자열이 "지운다"는 뜻이라 `min(1)`이 아니다 */
-  nationality: z.string().length(3).optional(),
-  secondNationality: z.string().max(3).optional(),
-  /** 소속 팀 이동 — 방출은 `freeagents`로 옮기는 것이다 */
-  teamId: z.string().min(1).optional(),
-  ...axisFields,
-  potential: attr,
-  /** 실제 주급 (£/주) — 새 게임의 초기 계약에 그대로 쓰인다 */
-  weeklyWage: wage,
-  /** 가능 포지션 전체 교체 (멀티 포지션 편집) */
-  positions: z
-    .array(
-      z.object({
-        position: z.string().min(1),
-        proficiency: z.number().int().min(1).max(99),
-        isNatural: z.boolean(),
-      }),
-    )
-    .optional(),
-});
 
 /** 카탈로그 선수 편집 */
 export const PATCH = adminWrite(async function (
@@ -58,7 +20,7 @@ export const PATCH = adminWrite(async function (
   } catch {
     return NextResponse.json({ error: "잘못된 요청 본문입니다" }, { status: 400 });
   }
-  const body = PatchSchema.safeParse(raw);
+  const body = CatalogPlayerEditSchema.safeParse(raw);
   if (!body.success) {
     return NextResponse.json(
       { error: body.error.issues[0]?.message ?? "입력 오류" },

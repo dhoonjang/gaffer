@@ -95,7 +95,7 @@ Body, in Korean, only the sections that have content:
 PR 계획으로 옮기고 레인을 가른다.
 
 Do not paste large diffs or file contents — link `path/to/file.ts:42` instead.
-If a design doc governs the behavior, link it (`docs/simulation/match.md`).
+If a design doc governs the behavior, link it (`docs/match/match.md`).
 
 ## Steps
 

@@ -1,0 +1,93 @@
+import { z } from "zod";
+import { DateString } from "./date-string";
+
+/**
+ * ── 조작 — **손잡이가 보내는 것은 문장이 아니라 구조체다** ──────────────────
+ *
+ * 시간 이동·경기 진행은 감독의 발화가 아니라 화면의 손잡이다
+ * (→ docs/overview.md §3). 손잡이가 문장을 보내고 서버가 그것을 되읽으면
+ * **UI 문구가 곧 계약**이라 문구 한 글자에 실모드와 mock이 따로 깨진다.
+ *
+ * 화면은 이 구조체를 보내고, 프롬프트에 실리는 `<operator>…</operator>` 문구는 서버가
+ * 여기서 만든다(`operationLabel`) — 모델은 무엇이 눌렸는지 읽을 수 있어야 하기
+ * 때문이다. **되읽는 코드는 없다.**
+ *
+ * 화면과 코어가 함께 쓰므로 도메인에 산다 (AGENTS.md §5).
+ */
+export type TurnOperation =
+  /** 시간 이동 — 하루·일주일. 눈금은 화면이 정하고 코어는 일수만 본다 */
+  | { kind: "skip_days"; days: number }
+  /**
+   * 시간 이동 — 다음 경기까지. **날짜를 함께 보낸다**: 화면은 달력에서 그것을
+   * 이미 알고 있고, 모델에게 물어보면 한 번 더 왕복하고 틀릴 여지도 생긴다.
+   */
+  | { kind: "skip_to_next_match"; date: string }
+  /** 경기장에 들어선다 — 킥오프 게이트를 지난다. 그 턴은 킥오프의 말이고 시계는 서 있다 */
+  | { kind: "enter_match" }
+  /**
+   * 경기가 멈췄다 — 정지점(`STOP_EVENT_TYPES`)이 체크포인트로 확정된 자리. 판독기가 판을 다시
+   * 읽고 매치 GM이 그 사건을 중계한다. 시계는 실행기가 민다 (live-match.md §8.3)
+   */
+  | { kind: "match_stop" }
+  /**
+   * 협상 방에 앉는다 — `start_negotiation`이 세운 방의 게이트를 지난다. 그 턴은 자리에
+   * 앉는 첫 턴이고 도구가 없다 (docs/negotiation/transfer.md §12-2).
+   */
+  | { kind: "enter_negotiation" }
+  /** 협상에서 물러난다 — 협상은 열린 채 그 자리만 닫힌다 */
+  | { kind: "leave_negotiation" }
+  /**
+   * **제안 폼** — 화면이 정확한 값으로 낸 제안 (proposal.ts). 감독의 말이 없는 제안 턴은
+   * 이 손잡이로 선다: 서버가 코어 명령을 먼저 걸고 그 문장을 `label`에 담는다. 화면은
+   * 이 갈래를 보내지 않는다 — 요청에는 `proposal`이 따로 실리고 서버가 여기로 옮긴다
+   * (`TurnOperationSchema`에 없는 이유).
+   */
+  | { kind: "propose"; label: string };
+
+/**
+ * 한 번의 조작이 넘길 수 있는 최대 일수 — 한 시즌.
+ *
+ * 화면의 눈금은 1과 7뿐이지만 넘어오는 것은 요청 본문이라 상한이 있어야 한다.
+ * 코어의 `advanceTime`은 경기일·기한 앞에서 어차피 멈추므로 이 값은 "터무니없는
+ * 수를 거른다"까지만 한다.
+ */
+export const MAX_SKIP_DAYS = 366;
+
+/** 조작의 Zod 경계 — API가 이것만 통과시킨다 */
+export const TurnOperationSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("skip_days"),
+    days: z.number().int().min(1).max(MAX_SKIP_DAYS),
+  }),
+  z.object({ kind: z.literal("skip_to_next_match"), date: DateString }),
+  z.object({ kind: z.literal("enter_match") }),
+  z.object({ kind: z.literal("match_stop") }),
+  z.object({ kind: z.literal("enter_negotiation") }),
+  z.object({ kind: z.literal("leave_negotiation") }),
+]);
+
+/**
+ * 모델이 읽을 표시 문구 — **구조체에서 만든다.**
+ *
+ * 이 문장은 이력에 남고 프롬프트에 실리지만 아무도 되읽지 않는다. 눈금 이름
+ * (하루·일주일)을 여기서 붙이는 이유는 `7일`보다 감독이 누른 그것에 가깝기
+ * 때문이고, 그 밖의 일수는 그냥 숫자로 적는다.
+ */
+export function operationLabel(operation: TurnOperation): string {
+  switch (operation.kind) {
+    case "skip_days":
+      return `시간 진행 — ${operation.days === 1 ? "하루" : operation.days === 7 ? "일주일" : `${operation.days}일`}`;
+    case "skip_to_next_match":
+      return `시간 진행 — 다음 경기 (${operation.date})`;
+    case "enter_match":
+      return "경기장에 들어선다";
+    case "match_stop":
+      return "경기 중단";
+    case "enter_negotiation":
+      return "협상에 직접 나선다";
+    case "leave_negotiation":
+      return "협상에서 물러난다";
+    case "propose":
+      return operation.label;
+  }
+}

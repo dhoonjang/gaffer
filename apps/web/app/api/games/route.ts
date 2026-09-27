@@ -4,7 +4,6 @@ import {
   boardExpectationOfTier,
   catalogTierOf,
   createGame,
-  interpretBackgroundHeuristic,
   leagueTones,
   listGameSummaries,
   saveGame,
@@ -15,9 +14,9 @@ import {
 } from "@story-fm/engine";
 import { boardExpectationText } from "@story-fm/domain";
 import { runOnboarding } from "@story-fm/agents";
-import { beginGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@story-fm/llm";
-import { toPayload } from "@/lib/store";
-import { errorDetail, turnErrorMessage } from "@/lib/turn-runner";
+import { withGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@story-fm/llm";
+import { toPayload } from "@/application/lib/store";
+import { errorDetail, turnErrorMessage } from "@/application/lib/turn-runner";
 
 /** 보드 기대의 이름 — 코드와 목표 순위에서 만든다 (career.md §6) */
 const expectationLabel = (e: {
@@ -104,55 +103,50 @@ export async function POST(request: Request) {
     managerName,
     background,
     // 부임 구단도 판정에 넣는다 — 빅클럽이 뽑았다는 사실이 이력에 대한 정보다
-    attributes: interpretBackgroundHeuristic(background, teamId),
   });
 
   // 토큰 예산의 단위는 게임이다 — 새 게임의 장부는 첫 호출부터 센다 (models.md §4)
-  beginGameUsage(state.id);
 
-  /**
-   * **새 게임은 한 호출로 선다** — 시작 지갑·능력치의 결·시작 사건을 판정하고, 그 위에서
-   * 부임 첫날의 첫 장면을 쓴다 (career.md §1 · agents.md §4-2). `runOnboarding`이 한 번
-   * 재시도하고, 실패하면 **게임을 만들지 않는다** — 규칙 장면으로 열어 두면 유저는 그것이
-   * 이 게임의 첫 장면인 줄 알고, 다시 시작할 기회를 잃는다.
-   */
   // 첫 장면의 원문도 이 게임의 사이드카에 앉는다 — 묶는 것은 `traceTurn` 범위 안에서만 된다
-  const opened = await traceTurn(state.id, async () => {
-    noteTurn({
-      input: { kind: "onboarding", teamId, seed, managerName, background, date: state.date },
-      before: turnDigestOf(state),
-    });
-    try {
-      const intro = await runOnboarding(state, background);
-      state.chat.push({
-        role: "model",
-        text: intro.text,
-        toolCalls: intro.toolCalls,
-        at: state.date,
-      });
-      bindTurnTrace(state.id, state.chat.length - 1);
-      noteTurn({ outcome: { ok: true, saved: true }, after: turnDigestOf(state) });
-      return { ok: true as const };
-    } catch (error) {
-      console.error("[games] 온보딩 실패 — 게임을 만들지 않는다:", error);
+  const opened = await withGameUsage(state.id, () =>
+    traceTurn(state.id, async () => {
       noteTurn({
-        outcome: {
-          ok: false,
-          saved: false,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        after: turnDigestOf(state),
+        input: { kind: "onboarding", teamId, seed, managerName, background, date: state.date },
+        before: turnDigestOf(state),
       });
-      return { ok: false as const, error };
-    }
-  });
+      try {
+        const intro = await runOnboarding(state, background);
+        state.chat.push({
+          role: "model",
+          text: intro.text,
+          toolCalls: intro.toolCalls,
+          at: state.date,
+        });
+        bindTurnTrace(state.id, state.chat.length - 1);
+        const payload = toPayload(state);
+        const after = turnDigestOf(state);
+        saveGame(state);
+        noteTurn({ outcome: { ok: true, saved: true }, after });
+        return { ok: true as const, payload };
+      } catch (error) {
+        console.error("[games] 온보딩 실패 — 게임을 만들지 않는다:", error);
+        noteTurn({
+          outcome: {
+            ok: false,
+            saved: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          after: turnDigestOf(state),
+        });
+        return { ok: false as const, error };
+      }
+    }),
+  );
   if (!opened.ok) {
     return NextResponse.json(
       { error: turnErrorMessage(llmErrorKind(opened.error)), ...errorDetail(opened.error) },
       { status: 502 },
     );
   }
-  saveGame(state);
-
-  return NextResponse.json(toPayload(state));
+  return NextResponse.json(opened.payload);
 }

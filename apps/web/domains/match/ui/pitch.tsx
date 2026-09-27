@@ -1,0 +1,261 @@
+"use client";
+
+import { useCallback, useState, type KeyboardEvent } from "react";
+import type { CSSProperties, PointerEvent, ReactNode, Ref } from "react";
+import { nextInDirection, type MarkerDirection } from "@/domains/match/lib/pitch-layout";
+
+/**
+ * ── 전술판 ────────────────────────────────────────────────
+ *
+ * **우리 판과 상대 판은 같은 판이다.** 감독은 경기 중 두 화면을 번갈아 보며
+ * 견주므로, 칩 한 줄의 구성이 갈리면 같은 것을 두 번 배워야 한다. 두 파일이
+ * 각자 그리면 한쪽에만 들어간 손질이 다른 쪽에서는 빠진 채로 남는다.
+ *
+ * 여기가 **구조**를 갖는다 — 그라운드의 선, 칩의 세 줄. 상태(고른 칩·못 뛰는
+ * 선수·지친 상대)는 부르는 쪽이 클래스로 얹는다.
+ */
+
+/**
+ * 눈금은 **기본 배치의 칩 자리에 맞춰** 잡았다 — 보통(3)일 때 수비 라인은 센터백
+ * 높이(75%)에, 폭은 윙어 자리(14%/86%)에 선다. 선이 칩과 어긋나 있으면 그림이
+ * 배치를 설명하지 못하고 따로 도는 장식이 된다.
+ */
+const DEF_LINE_TOP = (v: number) => 87 - (v - 1) * 6;
+const PRESS_LINE_TOP = (v: number) => 70 - (v - 1) * 11;
+const WIDTH_INSET = (v: number) => 24 - (v - 1) * 5;
+
+/** 자리를 뜻하는 세 축 — 판 위에 선으로 앉는 것들 */
+export type PitchTacticsAxes = { defensiveLine: number; pressing: number; width: number };
+
+/**
+ * 판 위의 전술 선 — 수비 라인 · 압박 시작선 · 공격 폭.
+ *
+ * 여섯 축 중 셋만 긋는다. 이 셋은 **자리를 뜻하는 축**이라 판 위에 그대로 앉지만,
+ * 템포·패스는 공간이 아니라 속도와 거리라 선으로 그으면 뜻이 어긋난다. 멘탈리티는
+ * 칩이 어디 서 있는지가 이미 말한다.
+ *
+ * 압박선은 늘 수비 라인보다 위다 — 압박은 그 앞에서 시작하는 것이라, 눈금이
+ * 뒤집혀도(낮은 압박 + 높은 라인) 선이 교차하면 그림이 거짓말이 된다.
+ */
+function PitchTactics({ tactics }: { tactics: PitchTacticsAxes }) {
+  const def = DEF_LINE_TOP(tactics.defensiveLine);
+  const press = Math.min(PRESS_LINE_TOP(tactics.pressing), def - 6);
+  const inset = WIDTH_INSET(tactics.width);
+  return (
+    <div className="pitch-tactics" aria-hidden>
+      <span className="tac-width" style={{ left: `${inset}%`, right: `${inset}%` }} />
+      <span className="tac-block" style={{ top: `${def}%` }} />
+      <span className="tac-line press" style={{ top: `${press}%` }} />
+      <span className="tac-line def" style={{ top: `${def}%` }} />
+    </div>
+  );
+}
+
+/**
+ * 그라운드 — 선 · 박스 · 전술선 · 라인 이름. 칩은 `children`으로 얹는다.
+ *
+ * 판을 감싸는 `pitch-wrap`까지 여기서 그린다: 판은 남는 높이에 맞춰 줄어드는데
+ * 그 높이를 알려 주는 것이 이 칸이라, 둘이 갈리면 한쪽 판만 넘친다.
+ */
+export function PitchGround({
+  boardRef,
+  variant,
+  testId,
+  tactics,
+  children,
+}: {
+  boardRef?: Ref<HTMLDivElement>;
+  /** 판의 상태 클래스 — 편집 중(`editing`) 같은 것 */
+  variant?: string;
+  testId: string;
+  tactics: PitchTacticsAxes;
+  children: ReactNode;
+}) {
+  return (
+    <div className="pitch-wrap">
+      <div
+        ref={boardRef}
+        className={`pitch-board${variant ? ` ${variant}` : ""}`}
+        data-testid={testId}
+      >
+        <div className="pitch-lines" />
+        <div className="pitch-box top" />
+        <div className="pitch-box small top" />
+        <div className="pitch-box bottom" />
+        <div className="pitch-box small bottom" />
+        <PitchTactics tactics={tactics} />
+        <span className="pitch-zone" style={{ top: "6%" }}>
+          공격
+        </span>
+        <span className="pitch-zone" style={{ top: "46%" }}>
+          중원
+        </span>
+        <span className="pitch-zone" style={{ top: "84%" }}>
+          수비
+        </span>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** 역할 약칭 — 감독이 기본값 아닌 역할을 고른 칩에만 붙는다 */
+export type PitchRoleTag = { abbr: string; ko: string; desc: string };
+
+type PitchChipProps = {
+  /** 만질 수 있는 칩은 버튼이다 — 상대 팀 칩처럼 읽기만 하는 것은 `span` */
+  as?: "button" | "span";
+  /** 지금 서 있는 자리 (좌표에서 나온 코드) */
+  code: string | null;
+  squadNumber?: number | null;
+  roleTag?: PitchRoleTag | null;
+  /**
+   * 완장 — 주장·부주장이 같은 자리에 같은 크기로 선다 (people.md §5-1).
+   * 리더 그룹은 칩에 세우지 않는다: 열한 자리 중 다섯에 표식이 서면 그것은
+   * 표식이 아니라 배경이 된다. 서열은 명단 표가 낸다.
+   */
+  captain?: "captain" | "vice" | null;
+  /** 이름 — 칩에 그대로 선다(안 들어가면 접힌다). 빈 자리는 `null` */
+  name: string | null;
+  /** 이 자리에서 내는 전력 */
+  ovr: ReactNode;
+  /** 전력 뒤에 서는 표식 — 오차·부상·경고 */
+  metaExtra?: ReactNode;
+  /** 상태 클래스 (`g-mf` · `selected` · `theirs` …) — 구조는 여기가, 상태는 부르는 쪽이 */
+  variant?: string;
+  style?: CSSProperties;
+  title?: string;
+  testId?: string;
+  /** 방향키 묶음의 정지점인가 — `useRovingMarkers`가 낸 값 (버튼일 때만 뜻이 있다) */
+  tabIndex?: number;
+  /** 그 묶음이 자기를 되찾는 표식 — 같은 훅이 읽는다 */
+  markerId?: string;
+  onPointerDown?: (e: PointerEvent<HTMLElement>) => void;
+  onClick?: () => void;
+};
+
+/**
+ * 칩 — **세 줄.** (번호 · 자리 · 역할) / (Ⓒ 이름) / (전력 · 표식)
+ *
+ * 등번호는 **자리 줄**에 선다. 이름 옆에 붙이던 때는 칩 폭(13cqw)에서 두 글자를
+ * 빼앗아 다섯 자짜리 성이 통째로 잘렸다 — 자리 줄은 세 글자뿐이라 번호를 앉힐
+ * 자리가 있다. 순서(번호 → 자리)는 명단 표와 같다.
+ */
+export function PitchChip({
+  as = "span",
+  code,
+  squadNumber,
+  roleTag,
+  captain,
+  name,
+  ovr,
+  metaExtra,
+  variant,
+  style,
+  title,
+  testId,
+  tabIndex,
+  markerId,
+  onPointerDown,
+  onClick,
+}: PitchChipProps) {
+  const body = (
+    <>
+      <span className="slot-pos">
+        {squadNumber !== null && squadNumber !== undefined && (
+          <i className="shirt-no">{squadNumber}</i>
+        )}
+        {/* 자리 코드는 자기 요소를 갖는다 — 한 줄에 번호·역할이 함께 서므로
+            "이 칩의 자리"를 가리킬 자리가 하나 있어야 한다 */}
+        <span className="slot-code">{code}</span>
+        {roleTag && (
+          <em className="slot-role" title={`${roleTag.ko} — ${roleTag.desc}`}>
+            {roleTag.abbr}
+          </em>
+        )}
+      </span>
+      <span className="slot-name">
+        {captain && (
+          <b className="slot-cap" title={captain === "captain" ? "주장" : "부주장"}>
+            {captain === "captain" ? "Ⓒ" : "Ⓥ"}
+          </b>
+        )}
+        {name || "—"}
+      </span>
+      <span className="slot-meta">
+        <b>{ovr}</b>
+        {metaExtra}
+      </span>
+    </>
+  );
+  const className = `pitch-slot pitch-chip${variant ? ` ${variant}` : ""}`;
+  if (as === "button")
+    return (
+      <button
+        className={className}
+        style={style}
+        title={title}
+        data-testid={testId}
+        tabIndex={tabIndex}
+        data-marker={markerId}
+        onPointerDown={onPointerDown}
+        onClick={onClick}
+      >
+        {body}
+      </button>
+    );
+  return (
+    <span className={className} style={style} title={title} data-testid={testId}>
+      {body}
+    </span>
+  );
+}
+
+/**
+ * ── 판 위의 손잡이 묶음 — **정지점 하나, 안에서는 방향키** ────────
+ *
+ * 판 하나에 열 개 넘는 버튼이 서면 탭만으로는 판을 지날 수 없다(overview.md §5).
+ * 그래서 묶음이 탭 정지점 하나를 갖고(`tabIndexOf`), 그 안에서는 방향키가 자리를
+ * 옮긴다.
+ *
+ * **자리는 화면에서 읽는다** — 마커의 좌표는 겹침을 푼 뒤의 값이라 컴포넌트가 쥔
+ * 숫자와 실제로 그려진 자리가 다를 수 있고, 판마다 가로세로 비도 다르다. 눌린
+ * 순간의 `getBoundingClientRect()`가 두 사정을 한 번에 지운다.
+ *
+ * 쥔 것은 **id**다: 교체로 명단이 바뀌어도 정지점이 엉뚱한 자리로 옮겨 가지 않고,
+ * 그 선수가 판에서 사라지면 첫 마커가 정지점을 되받는다.
+ */
+export function useRovingMarkers(ids: readonly string[]): {
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+  tabIndexOf: (id: string) => 0 | -1;
+} {
+  const [held, setHeld] = useState<string | null>(null);
+  const stop = held !== null && ids.includes(held) ? held : (ids[0] ?? null);
+  const onKeyDown = useCallback((e: KeyboardEvent<HTMLElement>) => {
+    const dir = ARROW_DIRS[e.key];
+    if (!dir) return;
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-marker]")];
+    const from = items.indexOf(document.activeElement as HTMLElement);
+    if (from < 0) return;
+    const next = nextInDirection(items.map(centerOf), from, dir);
+    if (next === null) return;
+    // 판 위에서 방향키는 자리를 옮긴다 — 그 아래 패널이 함께 스크롤되면 판이 달아난다
+    e.preventDefault();
+    const target = items[next]!;
+    target.focus();
+    setHeld(target.dataset.marker ?? null);
+  }, []);
+  return { onKeyDown, tabIndexOf: (id) => (id === stop ? 0 : -1) };
+}
+
+const ARROW_DIRS: Record<string, MarkerDirection | undefined> = {
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+};
+
+const centerOf = (el: HTMLElement) => {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+};

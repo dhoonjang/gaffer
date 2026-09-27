@@ -13,7 +13,7 @@ export default defineConfig({
     // apps/web/test는 API 통합 테스트 (mock GM 모드)
     include: ["packages/*/test/**/*.test.ts", "apps/*/test/**/*.test.ts"],
     /**
-     * LLM 원문 기록(`.log`)은 **저장소 밖에 쌓는다** (docs/llm/models.md §5).
+     * LLM 원문 기록(`.log`)은 **저장소 밖에 쌓는다** (docs/common/llm/models.md §5).
      * 지금 스위트는 mock 경로라 기록을 남기지 않지만, 어느 케이스가 실 어댑터 문을
      * 지나게 되는 날 작업 트리에 창고가 생기는 것을 여기서 막는다. 제 창고가 필요한
      * 케이스는 이 값을 자기 임시 디렉터리로 덮는다(`turn-trace.test.ts`).
@@ -22,7 +22,7 @@ export default defineConfig({
     /**
      * 케이스 시간 상한 — **멈춘 것을 끊는 자**이지 속도를 재는 자가 아니다. 속도를
      * 재는 자리는 하네스이고(`vitest.balance.config.ts`), 회귀를 잡는 자는 케이스의
-     * 단언이다 (→ docs/simulation/balance-harness.md §6).
+     * 단언이다 (→ docs/common/balance-harness.md §6).
      *
      * ⚠️ 케이스에 상한을 따로 적지 마라. 이 값을 옮겨 적은 것은 여유가 아니고, 이
      * 값보다 낮은 것은 숨은 속도 단언이다 — 케이스가 자라면 단언이 아니라 상한이 먼저
@@ -62,7 +62,7 @@ export default defineConfig({
      * 러너와 같은 자리에 선다 — 로컬 185초 · CI 216초):
      *
      *   pool=forks(기본) 185초 · pool=threads 184초 — 차이가 노이즈 안이다
-     *   isolate=false     199초, import CPU는 15% 줄지만 `apps/web/test/api.test.ts`가
+     *   isolate=false     199초, import CPU는 15% 줄지만 `apps/web/test/app/api.test.ts`가
      *                     깨진다. 카탈로그와 세이브 저장소가 모듈 전역이라 파일
      *                     사이로 샌다 — 격리를 끄면 그 전제가 무너진다
      *   maxWorkers 6/8/12/16/24 → 222/185/183/191/184초. 여덟에서 이미 평평하다

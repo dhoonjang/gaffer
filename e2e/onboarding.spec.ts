@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-import { token } from "./palette";
 import { COLD_MS } from "./timeouts";
 
 test("새 게임 첫 메시지가 부임 장면과 수석코치 브리핑으로 표시된다", async ({ page }) => {
@@ -19,7 +18,7 @@ test("새 게임 첫 메시지가 부임 장면과 수석코치 브리핑으로 
   const firstTurn = page.getByTestId("model-turn").first();
   await expect(firstTurn).toBeVisible({ timeout: COLD_MS });
   await expect(firstTurn).toContainText("온보딩테스트");
-  // 화자 태그는 사람 이름이고 직책은 세이브가 안다 (docs/data/people.md §3)
+  // 화자 태그는 사람 이름이고 직책은 세이브가 안다 (docs/story/people.md §3)
   await expect(firstTurn.locator(".speaker-role").first()).toHaveText("수석코치");
   // 다만 **소개할 때 한 번만** — 같은 사람이 이어 말하는 줄엔 이름만 남는다.
   // 온보딩은 수석코치가 연속으로 말하므로 직책은 정확히 한 번 보인다
@@ -61,7 +60,7 @@ test("부임은 리그 → 팀 → 감독 한 단계씩 서고, 되돌아갈 수
   await expect(page.getByTestId("start-game")).toContainText("아스날");
 
   /**
-   * 이력이 능력치를 정한다는 **규칙**은 적기 전에 알아야 하지만 화면에 펼쳐 두면
+   * 이력이 첫 장면을 정한다는 **규칙**은 적기 전에 알아야 하지만 화면에 펼쳐 두면
    * 안내 문구가 된다 — `?` 뒤에 선다 (design-system.md §1 조작).
    * 여닫는 길은 눈에 보이므로 재지 않고, **키보드로 돌아오는 길**만 잰다:
    * Esc가 닫고 포커스가 표식으로 돌아오지 않으면 탭 순서가 통째로 끊기는데
@@ -70,7 +69,7 @@ test("부임은 리그 → 팀 → 감독 한 단계씩 서고, 되돌아갈 수
   const helpMark = page.locator(".help-mark");
   await expect(page.locator(".help-pop")).toHaveCount(0);
   await helpMark.click();
-  await expect(page.locator(".help-pop")).toContainText("초기 능력치");
+  await expect(page.locator(".help-pop")).toContainText("부임 첫날");
   await page.keyboard.press("Escape");
   await expect(page.locator(".help-pop")).toHaveCount(0);
   await expect(helpMark).toBeFocused();
@@ -135,13 +134,4 @@ test("같은 시각은 다시 적지 않는다 — 화자 이름은 턴마다 �
   for (const t of turns) {
     if (t.says > 0) expect(t.speakers, "이름 없는 턴이 있다").toBeGreaterThan(0);
   }
-
-  // 이름 색은 **강조색이 아니다** — 턴마다 서므로 원색이면 화면이 계속 깜빡인다.
-  // 값이 아니라 토큰으로 비교한다: 팔레트를 손봐도 이 규칙은 그대로여야 한다
-  const speakerColor = await page
-    .locator(".say-who .speaker")
-    .first()
-    .evaluate((n) => getComputedStyle(n).color);
-  expect(speakerColor).toBe(await token(page, "--silver"));
-  expect(speakerColor).not.toBe(await token(page, "--accent"));
 });

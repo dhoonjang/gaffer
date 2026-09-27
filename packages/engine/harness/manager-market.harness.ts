@@ -7,7 +7,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
  * 한 시즌에 벤치의 사람이 몇 번 바뀌고, **그중 몇이 아는 얼굴인가** — 규칙이 맞는지는
- * `packages/engine/test/manager-market.test.ts`가 보고, 여기서는 `SACK_CHANCE`와
+ * `packages/engine/test/negotiation/manager-market.test.ts`가 보고, 여기서는 `SACK_CHANCE`와
  * 문턱이 만든 **빈도**, 그리고 `POOL_HIRE_CHANCE`와 `POOL_RATING_BAND`가 만든
  * **재선임 비중**을 잰다 (transfer.md §7 「감독 풀」).
  *

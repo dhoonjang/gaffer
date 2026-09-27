@@ -10,6 +10,8 @@
  * (agents.md §4), 압축은 접지 않은 채 다음 기회를 기다린다(agents.md §5-1).
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { AGENT_NAMES, agentMinCacheableInput, type AgentName, type LlmEnv } from "./config";
 import type { GameLLM, TurnRequest, TurnResult, TurnUsage } from "./game-llm";
 import { LlmCallError } from "./llm-error";
@@ -214,58 +216,58 @@ export class TokenBudgetExceededError extends LlmCallError {
   }
 }
 
-/* ------------------------------------------------------------------ *
- * 런타임 장부 — 한 번에 **게임 하나**를 담는다 (models.md §4).
- *
- * 프로세스 누적으로 세면 한 게임이 상한을 넘긴 뒤로는 재시작 전까지 모든 게임의
- * 결산이 꺼진다 — 새 게임을 시작한 감독에게는 이유 없이 평점이 비는 일이다.
- * ------------------------------------------------------------------ */
+interface UsageSession {
+  gameId: string | null;
+  ledger: UsageLedger;
+  warned: Set<string>;
+}
+const sessions = new Map<string, UsageSession>();
+const scope = new AsyncLocalStorage<UsageSession>();
+const emptySession = (gameId: string | null): UsageSession => ({
+  gameId,
+  ledger: emptyLedger(),
+  warned: new Set(),
+});
+let latest = emptySession(null);
+const currentSession = (): UsageSession => scope.getStore() ?? latest;
 
-let sessionLedger = emptyLedger();
-/** 지금 장부가 담고 있는 게임 — 아무 게임도 열지 않았으면 null */
-let ledgerGameId: string | null = null;
-/** 같은 경고를 매 턴 반복하지 않기 위한 자리 — 리셋과 함께 비운다 */
-const warned = new Set<string>();
-
-/** 지금까지의 세션 누적 (스냅샷) */
+/** 현재 비동기 범위의 게임 사용량; 범위 밖의 관리 화면은 최근 연 게임을 읽는다. */
 export function llmUsage(): UsageLedger {
-  return sessionLedger;
+  return currentSession().ledger;
 }
-
-/**
- * 지금 장부가 담고 있는 게임 — 아무 게임도 열지 않았으면 null.
- *
- * 장부의 단위가 **게임 하나**라(§4) 계측을 세우는 자리는 그 수치가 어느 세이브의
- * 것인지를 함께 말해야 한다. 그 답이 없으면 다른 게임을 열고 온 사람이 0을 「모델을
- * 안 불렀다」로 읽는다.
- */
 export function llmUsageGameId(): string | null {
-  return ledgerGameId;
+  return currentSession().gameId;
 }
 
-/** 장부를 비운다 — 테스트의 시작점이자 게임을 갈아탈 때의 바닥 */
 export function resetLlmUsage(): void {
-  sessionLedger = emptyLedger();
-  ledgerGameId = null;
-  warned.clear();
+  sessions.clear();
+  scope.disable();
+  latest = emptySession(null);
 }
 
-/**
- * 이 게임의 장부를 연다 — 턴을 시작하는 자리가 부른다(`runTurnLocked`).
- *
- * 담고 있는 게임이 그대로면 아무 일도 하지 않는다. 다른 게임이면 거기서 비운다 —
- * 두 게임을 번갈아 열면 열 때마다 새로 센다. 상한이 세이브 하나에만 걸린다는
- * 뜻이고, 그래야 한 게임의 폭주가 다른 게임의 결산을 끄지 않는다.
- */
+function sessionFor(gameId: string): UsageSession {
+  let session = sessions.get(gameId);
+  if (!session) {
+    session = emptySession(gameId);
+    sessions.set(gameId, session);
+  }
+  latest = session;
+  return session;
+}
+
+/** 이 비동기 실행과 이어지는 호출을 게임별 장부에 연결한다. */
 export function beginGameUsage(gameId: string): void {
-  if (ledgerGameId === gameId) return;
-  resetLlmUsage();
-  ledgerGameId = gameId;
+  scope.enterWith(sessionFor(gameId));
 }
 
-function warnOnce(key: string, message: string): void {
-  if (warned.has(key)) return;
-  warned.add(key);
+/** 호출자 범위를 바꾸지 않고 이 처리와 비동기 후속 호출만 게임에 연결한다. */
+export function withGameUsage<T>(gameId: string, run: () => T): T {
+  return scope.run(sessionFor(gameId), run);
+}
+
+function warnOnce(session: UsageSession, key: string, message: string): void {
+  if (session.warned.has(key)) return;
+  session.warned.add(key);
   console.warn(message);
 }
 
@@ -278,10 +280,12 @@ function warnOnce(key: string, message: string): void {
 export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.env): GameLLM {
   return {
     async runTurn(req: TurnRequest): Promise<TurnResult> {
-      const verdict = budgetVerdict(sessionLedger, parseTokenBudget(env));
+      const session = currentSession();
+      const verdict = budgetVerdict(session.ledger, parseTokenBudget(env));
       if (!agentAllowed(agent, verdict)) {
-        sessionLedger = recordSkip(sessionLedger, agent);
+        session.ledger = recordSkip(session.ledger, agent);
         warnOnce(
+          session,
           `budget:${agent}`,
           `[llm] 토큰 예산 상한(${verdict.limit}) 초과 — ${agent} 호출을 건너뜁니다. 코어 앵커가 남습니다.`,
         );
@@ -289,6 +293,7 @@ export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.e
       }
       if (verdict.over) {
         warnOnce(
+          session,
           `budget-pass:${agent}`,
           `[llm] 토큰 예산 상한(${verdict.limit}) 초과 — 계속 실행합니다: ${agent} (누적 ${verdict.used}).`,
         );
@@ -311,14 +316,15 @@ export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.e
           // 즉시 끊긴 연결 오류가 `calls`를 부풀리면 `cacheAlerts`의 평균 입력이
           // 흐려진다.
           if (billedTokens(reported) > 0) {
-            sessionLedger = recordUsage(sessionLedger, agent, reported);
+            session.ledger = recordUsage(session.ledger, agent, reported);
           }
           throw error;
         });
       // 성공 경로는 어댑터가 돌려준 합계만 적는다 — 왕복 몫과 두 번 세지 않는다
-      sessionLedger = recordUsage(sessionLedger, agent, result.usage);
-      for (const broken of cacheAlerts(sessionLedger)) {
+      session.ledger = recordUsage(session.ledger, agent, result.usage);
+      for (const broken of cacheAlerts(session.ledger)) {
         warnOnce(
+          session,
           `cache:${broken}`,
           `[llm] ${broken} 에이전트의 캐시 히트율이 0입니다 — 프리픽스가 매 턴 무효화되는지 확인하세요.`,
         );

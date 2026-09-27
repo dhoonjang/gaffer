@@ -1,0 +1,420 @@
+import {
+  type PromiseKind,
+  type ManagerPromise,
+  diffDays,
+  type GamePlayer,
+  josa,
+  PROMISE_KIND_KO,
+  SQUAD_NUMBER_MIN,
+  SQUAD_NUMBER_MAX,
+  normalizePositionCode,
+  promiseKept,
+  positionGroupOf,
+  type TickSink,
+  type SquadStatus,
+  startShortfall,
+  SQUAD_STATUS_KO,
+} from "@story-fm/domain";
+import {
+  type GameState,
+  activeContract,
+  playerById,
+  pushNarrative,
+  clampReputation,
+  playersOf,
+  squadLevelOf,
+  openInjury,
+  isSuspended,
+} from "../../common/core/state";
+import { addDays } from "../../common/core/dates";
+import { buildSeasonCalendar } from "../../common/core/calendar";
+import { numberBlockText } from "../../common/players/numbers";
+import {
+  startsInWindow,
+  matchWindowOf,
+  squadStatusOf,
+  PROMISE_WINDOW_MATCHES,
+} from "../../common/players/contract-status";
+import { clampForm, moraleToForm } from "../../common/players/form";
+
+/**
+ * 판정에 필요한 **최소 경기 수** — 창 안에서 그가 설 수 있었던 경기가 이보다 적으면
+ * 비율이 표본이 아니다. 세울 경기가 없었던 것은 감독이 어긴 것이 아니다.
+ */
+export const PROMISE_MIN_MATCHES = 3;
+
+/**
+ * 갈래별 기본 기한(일) — **둘은 이 표가 정하지 않는다.** `transfer`는 다음 창
+ * 마감이고 `number`는 다음 시즌 개막일이라(people.md §5-2), 여기 적힌 값은
+ * 그 날짜를 찾지 못했을 때의 폴백뿐이다. 표에서 지우면 갈래 하나가 기한 없이
+ * 서므로 `Record<PromiseKind, number>`가 칸을 요구한다.
+ */
+export const PROMISE_DEFAULT_DAYS: Record<PromiseKind, number> = {
+  minutes: 56,
+  transfer: 180,
+  renewal: 30,
+  captain: 90,
+  number: 365,
+  // 추가 영입도 다음 창 마감이 기한이다 — 표의 값은 창을 찾지 못했을 때의 폴백뿐이다
+  signing: 180,
+};
+
+/** 감독이 기한을 좁힐 수 있는 폭 */
+export const PROMISE_DAYS_MIN = 7;
+
+export const PROMISE_DAYS_MAX = 365;
+
+/**
+ * 지킨 값과 어긴 값 — **한 표다** (people.md §5-2).
+ *
+ * 어긴 쪽이 큰 것은 규약이다: 지킨 약속은 감독이 **당연히 할 일**을 한 것이고, 어긴
+ * 약속은 하지 않은 일이다. 값이 같으면 남발하고 절반만 지키는 것이 아무것도
+ * 약속하지 않는 것보다 이득이 된다. 평판이 함께 움직이는 것은 약속이 **라커룸 전체가
+ * 보는 일**이기 때문이다 — 한 사람에게 한 말이 지켜지는지를 나머지가 센다.
+ */
+export const PROMISE = {
+  keptMorale: 6,
+  keptSquad: 2,
+  brokenMorale: -8,
+  brokenSquad: -4,
+} as const;
+
+// ── 약속을 연다 ────────────────────────────────────────────────
+
+/** 열려 있는 약속 — 판정 전인 것만 */
+export function openPromises(state: GameState, playerId?: string): ManagerPromise[] {
+  return state.promises.filter(
+    (p) => p.status === "open" && (playerId === undefined || p.gamePlayerId === playerId),
+  );
+}
+
+/**
+ * 감독 앞에 세우는 창(일) — **계약 만료(180)보다 훨씬 짧다** (people.md §5-2).
+ *
+ * 계약 만료는 반년 전부터 손을 쓸 수 있는 일이지만, 약속은 기한 그 주에 감독이 할 수
+ * 있는 일(선발로 세운다·리스트에 올린다·재계약을 연다·완장을 채운다)이 남아 있는
+ * 동안만 경고가 뜻을 갖는다. 한 달 전부터 매 턴 뜨면 그 줄은 배경음이 되고, 정작
+ * 기한 전날의 줄이 묻힌다.
+ *
+ * ⚠️ **창은 하나다.** GM 스냅샷의 주의 줄과 화면의 안건 띠가 같은 값을 읽는다 — 두
+ * 벌로 두면 한쪽만 조율되고, 판정이 기한 날 하루뿐이라 그 어긋남이 곧 사기 −8이다.
+ */
+export const PROMISE_ALERT_DAYS = 7;
+
+/**
+ * 기한이 다가온 약속 — **이른 기한이 앞이다** (people.md §5-2).
+ *
+ * 스냅샷의 주의 줄과 뷰의 안건 칩이 함께 부른다. 정렬까지 여기서 하는 것은 둘 다
+ * "가장 급한 하나"를 앞에서 집기 때문이다 — 두 곳에서 각자 정렬하면 같은 날짜의
+ * 약속 둘이 자리마다 다른 순서로 선다.
+ */
+export function duePromises(state: GameState, withinDays = PROMISE_ALERT_DAYS): ManagerPromise[] {
+  return openPromises(state)
+    .filter((p) => diffDays(state.date, p.dueOn) <= withinDays)
+    .sort((a, b) => (a.dueOn < b.dueOn ? -1 : a.dueOn > b.dueOn ? 1 : 0));
+}
+
+/**
+ * 이 갈래의 기한 — **날수가 아닌 갈래가 둘이다** (people.md §5-2).
+ * `transfer`는 다음 이적창 마감을, `number`는 다음 시즌 개막일을 본다.
+ */
+export function dueDateOf(state: GameState, kind: PromiseKind, days?: number): string {
+  if (days !== undefined) {
+    const bounded = Math.max(PROMISE_DAYS_MIN, Math.min(PROMISE_DAYS_MAX, Math.round(days)));
+    return addDays(state.date, bounded);
+  }
+  /**
+   * "다음 시즌엔 10번"이 이 약속의 자연스러운 모양이고, 그 번호가 비는 것도 대개
+   * 시즌 전환이다 — 날수로 재면 개막을 며칠 앞두고 판정이 떨어진다.
+   */
+  if (kind === "number") return buildSeasonCalendar(state.season + 1).start;
+  // 내보내는 약속도 데려오는 약속도 창이 닫히는 날 판정한다 — 그날까지가 시장이다
+  if (kind === "transfer" || kind === "signing") {
+    const next = state.windows
+      .filter((w) => w.leagueId === undefined && w.closesOn > state.date)
+      .map((w) => w.closesOn)
+      .sort()[0];
+    if (next) return next;
+  }
+  return addDays(state.date, PROMISE_DEFAULT_DAYS[kind]);
+}
+
+/**
+ * 이 약속을 지금 이 선수에게 할 수 있는가 — **지킬 것이 없는 약속은 장부에 서지
+ * 않는다** (people.md §5-2). 막혔으면 감독에게 돌려줄 이유를 낸다.
+ */
+export function promiseBlock(
+  state: GameState,
+  player: GamePlayer,
+  kind: PromiseKind,
+  /** `number` 갈래가 약속한 번호 — 다른 갈래는 갈래가 곧 약속이라 쓰지 않는다 */
+  number?: number,
+  /** `signing` 갈래가 약속한 자리 — 포지션 코드 */
+  position?: string,
+): string | null {
+  if (player.teamId !== state.userTeamId) {
+    return `${josa(player.name, "은/는")} 지금 우리가 쓰는 선수가 아닙니다`;
+  }
+  /**
+   * 빌려 온 선수에게 할 수 있는 약속은 **출전**뿐이다 — 임대의 조건서가 그것을 든다
+   * (transfer.md §12-3). 완장·번호·이적·재계약은 남의 계약 위에 서는 약속이다.
+   */
+  if (player.loan && kind !== "minutes") {
+    return `${josa(player.name, "은/는")} 빌려 온 선수라 ${PROMISE_KIND_KO[kind]} 약속을 할 수 없습니다`;
+  }
+  if (openPromises(state, player.id).some((p) => p.kind === kind)) {
+    return `${player.name}에게 한 ${PROMISE_KIND_KO[kind]} 약속이 아직 기한 전입니다`;
+  }
+  switch (kind) {
+    case "captain":
+      return player.isCaptain ? `${josa(player.name, "은/는")} 이미 주장입니다` : null;
+    case "transfer":
+      return state.transferList.some((l) => l.gamePlayerId === player.id)
+        ? `${josa(player.name, "은/는")} 이미 이적 리스트에 있습니다`
+        : null;
+    case "renewal": {
+      if (!activeContract(state, player.id)) {
+        return `${player.name}에게 열 계약이 없습니다`;
+      }
+      return state.negotiations.some(
+        (n) => n.kind === "renew" && n.gamePlayerId === player.id && n.status === "open",
+      )
+        ? `${player.name}의 재계약 협상은 이미 열려 있습니다`
+        : null;
+    }
+    case "number": {
+      /**
+       * **번호 없이는 지킬 것도 없다** (people.md §5-2) — 다른 넷은 갈래가 곧
+       * 약속이지만 번호는 **어느 번호인가**가 약속의 내용이라, 그것이 없으면
+       * 기한 날 이행을 판정할 자가 없다.
+       */
+      if (number === undefined) return `${player.name}에게 약속할 번호가 없습니다`;
+      if (!Number.isInteger(number) || number < SQUAD_NUMBER_MIN || number > SQUAD_NUMBER_MAX) {
+        // 반려 문구는 배정과 한 자리에서 나온다 — 같은 범위를 두 문장으로 말하지 않게
+        return numberBlockText({ code: "out-of-range", number });
+      }
+      return player.squadNumber === number
+        ? `${josa(player.name, "은/는")} 이미 ${number}번입니다`
+        : null;
+    }
+    case "minutes":
+      return null;
+    case "signing": {
+      // 자리 없이는 지킬 것도 없다 — 번호 약속과 같은 규약이다
+      if (position === undefined || normalizePositionCode(position) === null) {
+        return `${player.name}에게 약속할 자리가 없습니다 — 포지션 코드로 말해야 합니다`;
+      }
+      return null;
+    }
+  }
+}
+
+export interface PromiseOpened {
+  ok: boolean;
+  /** 열렸으면 장부에 선 줄 */
+  promise?: ManagerPromise;
+  /** 막혔으면 그 이유 한 줄 — 감독이 읽는다 */
+  message?: string;
+}
+
+/**
+ * 약속 하나를 장부에 세운다 — **같은 선수·같은 갈래는 하나다.**
+ *
+ * 열려 있는 동안 같은 약속을 다시 하면 반려된다. 기한이 매번 밀리면 약속이 다시
+ * 공짜가 되기 때문이다. ⚠️ **반려는 그 대화를 무르지 않는다** — 면담의 사기·정착
+ * 효과는 부르는 쪽이 이미 셈했고, 여기서 도는 것은 장부뿐이다.
+ */
+export function openPromise(
+  state: GameState,
+  playerId: string,
+  kind: PromiseKind,
+  days?: number,
+  /** `number` 갈래가 약속한 등번호 — 그 갈래에만 뜻이 있고 장부가 그대로 든다 */
+  number?: number,
+  /** `signing` 갈래가 약속한 자리 — 포지션 코드, 별칭은 여기서 정규화한다 */
+  position?: string,
+): PromiseOpened {
+  const player = playerById(state, playerId);
+  if (!player) return { ok: false, message: "그런 선수가 없습니다" };
+  const blocked = promiseBlock(state, player, kind, number, position);
+  if (blocked) return { ok: false, message: blocked };
+  const dueOn = dueDateOf(state, kind, days);
+  const code =
+    kind === "signing" && position !== undefined ? normalizePositionCode(position) : null;
+  const promise: ManagerPromise = {
+    id: `pr-${kind}-${player.id}-${state.date}`,
+    gamePlayerId: player.id,
+    kind,
+    madeOn: state.date,
+    dueOn,
+    status: "open",
+    ...(number === undefined ? {} : { number }),
+    ...(code === null ? {} : { position: code }),
+  };
+  state.promises.push(promise);
+  // 번호·자리는 갈래 이름에 담기지 않는다 — 서사에서 무엇이었는지가 사라지지 않게
+  const what =
+    PROMISE_KIND_KO[kind] +
+    (number === undefined ? "" : ` ${number}번`) +
+    (code === null ? "" : ` ${code}`);
+  pushNarrative(state, `${player.name}에게 ${what} 약속 (${dueOn}까지)`, 3);
+  return { ok: true, promise };
+}
+
+// ── 기한이 되면 장부가 판정한다 ────────────────────────────────
+
+/** 그 약속을 지켰는가 — **전부 다른 장부에서 나온다.** 문장은 어디서도 읽지 않는다 */
+export function verdictOf(state: GameState, promise: ManagerPromise, player: GamePlayer): boolean {
+  switch (promise.kind) {
+    case "minutes": {
+      const read = startsInWindow(state, player, { from: promise.madeOn });
+      // 세울 경기가 없었던 것은 감독이 어긴 것이 아니다
+      if (read.played < PROMISE_MIN_MATCHES) return true;
+      return promiseKept(read.share, "starter");
+    }
+    case "transfer": {
+      if (state.transferList.some((l) => l.gamePlayerId === player.id)) return true;
+      return state.transfers.some(
+        (t) =>
+          t.gamePlayerId === player.id &&
+          t.fromTeamId === state.userTeamId &&
+          t.date >= promise.madeOn,
+      );
+    }
+    case "renewal":
+      return state.negotiations.some(
+        (n) => n.kind === "renew" && n.gamePlayerId === player.id && n.openedOn >= promise.madeOn,
+      );
+    case "captain":
+      return player.isCaptain === true;
+    case "number":
+      // 기한 날 그가 그 번호를 달고 있는가 — 어떻게 받았는지는 묻지 않는다.
+      // 번호 없는 약속은 지킬 것이 없다: 둘 다 `undefined`인 것을 이행으로 읽지 않는다
+      return promise.number !== undefined && player.squadNumber === promise.number;
+    case "signing": {
+      /**
+       * 약속한 날 뒤에 **그 자리의 선수가 우리로 온 이적 행**이 있는가 — 완전 이적이든
+       * 임대든 자유계약이든 같다. 유스 승격은 데려온 것이 아니다 (transfer.md §12-3).
+       */
+      const code = promise.position;
+      if (code === undefined) return false;
+      return state.transfers.some((t) => {
+        if (t.toTeamId !== state.userTeamId || t.date < promise.madeOn || t.type === "youth") {
+          return false;
+        }
+        const arrived = playerById(state, t.gamePlayerId);
+        return arrived !== null && arrived.id !== player.id && playsPosition(arrived, code);
+      });
+    }
+  }
+}
+
+/**
+ * 그 자리의 선수인가 — 코드가 같거나, 주 포지션의 **그룹**이 같다. "윙어 하나 데려오겠다"는
+ * 말은 LW·RW를 가리지 않고, "스트라이커"는 CF·ST를 가리지 않는다.
+ */
+export function playsPosition(player: Pick<GamePlayer, "positions">, code: string): boolean {
+  const group = positionGroupOf(code);
+  return player.positions.some(
+    (pos) =>
+      pos.position === code ||
+      (pos.isNatural && group !== null && positionGroupOf(pos.position) === group),
+  );
+}
+
+/**
+ * 기한이 된 약속을 판정한다 — **tick이 매일 부른다.**
+ *
+ * 판정은 기한 **하루**뿐이다. 지난 약속은 `kept`·`broken`으로 남아 이력이 되고,
+ * 같은 선수에게 다시 약속할 수 있는 것은 그때부터다.
+ */
+export function tickPromises(state: GameState, digest: TickSink): void {
+  const due = openPromises(state).filter((p) => p.dueOn <= state.date);
+  if (due.length === 0) return;
+  for (const promise of due) {
+    const player = playerById(state, promise.gamePlayerId);
+    if (!player || player.teamId !== state.userTeamId) {
+      // 세계에서 사라진 상대의 약속은 판정하지 않고 걷는다 — 지킬 자리가 없다
+      state.promises = state.promises.filter((p) => p.id !== promise.id);
+      continue;
+    }
+    const kept = verdictOf(state, promise, player);
+    promise.status = kept ? "kept" : "broken";
+    const morale = kept ? PROMISE.keptMorale : PROMISE.brokenMorale;
+    player.state.form = clampForm(player.state.form + moraleToForm(morale));
+    state.manager.reputation.squad = clampReputation(
+      state.manager.reputation.squad + (kept ? PROMISE.keptSquad : PROMISE.brokenSquad),
+    );
+    const label = PROMISE_KIND_KO[promise.kind];
+    if (kept) {
+      digest.push(`${player.name} ${label} 약속을 지켰다 — 사기 +${PROMISE.keptMorale}`);
+      pushNarrative(state, `${player.name} ${label} 약속 이행`, 3);
+      continue;
+    }
+    /**
+     * 어긴 약속은 **다른 사유와 같은 사다리를 탄다** (people.md §5·§8). 이미 불만이
+     * 걸린 선수에게 한 줄을 더 얹지는 않는다 — 화면의 ⚠불만 줄이 같은 사람으로 찬다.
+     */
+    if (!state.issues.some((i) => i.gamePlayerId === player.id)) {
+      state.issues.push({
+        gamePlayerId: player.id,
+        kind: "unhappy",
+        reason: "promise",
+        since: state.date,
+      });
+    }
+    digest.push(
+      `${player.name} ${label} 약속을 어겼다 — ${diffDays(promise.madeOn, state.date)}일 전의 약속`,
+    );
+    pushNarrative(state, `${player.name} ${label} 약속 파기`, 4);
+  }
+}
+
+// ── 지위 대비 출전 — 불만이 서는 자리 ──────────────────────────
+
+export interface MinutesShortfall {
+  player: GamePlayer;
+  status: SquadStatus;
+  starts: number;
+  played: number;
+  /** 그 지위에 모자란 선발 수 — `PlayerIssue.count`가 든다 */
+  short: number;
+}
+
+/**
+ * 오늘 **출전 불만이 서는 선수들** — 주사위가 없다 (people.md §5).
+ *
+ * 지위가 부르는 선발 비율(`SQUAD_STATUS_STARTS`)에 최근 창이 못 미치면 걸린다.
+ * 백업·유망주의 기대는 0이라 그 자리로 온 선수는 벤치에 앉아도 불만을 내지 않는다 —
+ * 그가 어떤 자리로 왔는지가 계약에 적혀 있기 때문이다.
+ */
+export function minutesShortfalls(state: GameState): MinutesShortfall[] {
+  const rows: MinutesShortfall[] = [];
+  // 원장은 한 번만 훑는다 — 아래 루프가 1군 전원에게 같은 창을 묻는다
+  const pool = matchWindowOf(state);
+  for (const player of playersOf(state, state.userTeamId)) {
+    if (squadLevelOf(player) !== "first") continue;
+    if (player.loan) continue;
+    // 뛸 수 없는 사람이 출전 기회를 따지지 않는다
+    if (openInjury(state, player.id) || isSuspended(state, player.id)) continue;
+    if (state.issues.some((i) => i.gamePlayerId === player.id)) continue;
+    const status = squadStatusOf(state, player);
+    const read = startsInWindow(state, player, { pool });
+    // 창이 차기 전에는 비율이 표본이 아니다
+    if (read.played < PROMISE_WINDOW_MATCHES) continue;
+    if (promiseKept(read.share, status)) continue;
+    rows.push({
+      player,
+      status,
+      starts: read.starts,
+      played: read.played,
+      short: Math.max(1, startShortfall(read.starts, read.played, status)),
+    });
+  }
+  return rows;
+}
+
+/** 불만 줄에 적히는 한 조각 — 지위와 실제 선발 수 */
+export function shortfallText(row: MinutesShortfall): string {
+  return `${row.player.name} 출전 기회 불만 — ${SQUAD_STATUS_KO[row.status]} 지위, 최근 ${row.played}경기 중 선발 ${row.starts}회`;
+}

@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { ClubColours } from "@story-fm/domain";
-import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/components/icons";
-import { GameListSkeleton } from "@/components/skeleton";
-import { Crest, clubStyle } from "@/components/crest";
-import { humanDate } from "@/lib/dateline";
+import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/domains/common/ui/icons";
+import { GameListSkeleton } from "@/domains/common/ui/skeleton";
+import { Crest, clubStyle } from "@/domains/common/ui/crest";
+import { humanDate } from "@/domains/common/lib/dateline";
 
 interface GameSummary {
   id: string;

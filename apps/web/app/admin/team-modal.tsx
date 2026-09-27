@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { FORMATIONS, josa, type Formation } from "@story-fm/domain";
+import {
+  CatalogTeamInputSchema,
+  CatalogTeamEditSchema,
+  CATALOG_MAX_CAPACITY,
+  FORMATIONS,
+  josa,
+  type Formation,
+} from "@story-fm/domain";
 import { Modal } from "./modal";
 import {
   GRADES,
@@ -23,8 +30,7 @@ import {
  * 그대로 띄우고 창을 닫지 않는다 (고친 값을 잃지 않게).
  */
 
-const MAX_CAPACITY = 200_000;
-const ID_RE = /^[a-z0-9-]+$/;
+const MAX_CAPACITY = CATALOG_MAX_CAPACITY;
 
 type Mode = "create" | "edit";
 
@@ -34,7 +40,7 @@ interface TeamFields {
   shortName: string;
   leagueId: string;
   tier: Grade;
-  formation: Formation | undefined;
+  formation: Formation | null;
   tacticalStyle: TacticalStyle;
   stadium: string;
   capacity: number;
@@ -77,39 +83,23 @@ export function TeamModal({
     shortName: shortName.trim(),
     leagueId,
     tier,
-    formation: formation === "" ? undefined : (formation as Formation),
+    formation: formation === "" ? null : (formation as Formation),
     tacticalStyle,
     stadium: stadium.trim(),
     capacity: Math.round(capacity),
     commercialTier,
   };
 
-  /** 저장 전 검증 — 서버가 거절할 조합을 여기서 먼저 잡는다 */
-  function validate(): string | null {
-    if (mode === "create") {
-      if (!ID_RE.test(id.trim())) return "팀 id는 영소문자·숫자·하이픈만 쓸 수 있습니다";
-    }
-    if (!fields.name) return "팀 이름 없음";
-    if (!fields.shortName) return "짧은 이름 없음";
-    if (!fields.leagueId) return "소속 리그를 고르세요";
-    // 추가할 때 구장 이름은 비워 둘 수 있다 — 엔진이 체급에 맞는 기본 프로필로 채운다
-    if (mode === "edit" && !fields.stadium) return "구장 이름 없음";
-    if (fields.capacity < 1 || fields.capacity > MAX_CAPACITY) {
-      return `수용인원은 1~${MAX_CAPACITY.toLocaleString()} 사이여야 합니다`;
-    }
-    return null;
-  }
-
   async function save() {
-    const bad = validate();
-    if (bad) {
-      setFormError(bad);
-      return;
-    }
     let body: Record<string, unknown>;
     if (mode === "create") {
-      const { stadium: newStadium, ...rest } = fields;
-      body = { id: id.trim(), ...rest, ...(newStadium ? { stadium: newStadium } : {}) };
+      const { stadium: newStadium, formation: newFormation, ...rest } = fields;
+      body = {
+        id,
+        ...rest,
+        ...(newFormation === null ? {} : { formation: newFormation }),
+        ...(newStadium ? { stadium: newStadium } : {}),
+      };
     } else {
       const patch = changedFields<TeamFields>(
         {
@@ -117,7 +107,7 @@ export function TeamModal({
           shortName: team!.shortName,
           leagueId: team!.leagueId,
           tier: team!.tier,
-          formation: team!.formation,
+          formation: team!.formation ?? null,
           tacticalStyle: team!.tacticalStyle,
           stadium: team!.stadium,
           capacity: team!.capacity,
@@ -132,6 +122,13 @@ export function TeamModal({
       body = patch;
     }
 
+    const parsed = (mode === "create" ? CatalogTeamInputSchema : CatalogTeamEditSchema).safeParse(
+      body,
+    );
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? "입력 오류");
+      return;
+    }
     setFormError(null);
     setSaving(true);
     try {
@@ -140,7 +137,7 @@ export function TeamModal({
         {
           method: mode === "create" ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify(parsed.data),
         },
       );
       const data: TeamCatalogResponse = await res.json();

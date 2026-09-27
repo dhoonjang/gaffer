@@ -1,13 +1,13 @@
 /**
  * 하네스 리포트 — 측정값 파일(`readings.jsonl`)을 **읽을 표**와 **이탈 목록**으로
- * 접는다 (→ `docs/simulation/balance-harness.md` §5).
+ * 접는다 (→ `docs/common/balance-harness.md` §5).
  *
  * 이 파일에는 밴드 숫자가 없다. 구간도 판정도 측정값 줄이 서술자에서 그대로 실어
  * 온 것을 읽을 뿐이고(`ReadingLine`), 여기서 하는 일은 **누가 이탈했는가**를 세는
  * 것뿐이다 — 숫자를 다시 적으면 서술자와 갈린다.
  */
 
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { HARNESSES } from "./catalog";
 import { format, rangeOf, type Band, type ReadingLine } from "./harness";
@@ -106,9 +106,9 @@ export function breachesOf(lines: readonly ReadingLine[], expectAll: boolean): B
 
 export function summaryOf(lines: readonly ReadingLine[], breaches: readonly Breach[]): string {
   // 건너뛴 것은 보고한 것이다 — 분자에는 들되 「몇 개가 실제로 쟀는가」는 갈라 적는다 (§5)
-  const skipped = lines.filter((line) => line.skipped).length;
+  const skipped = new Set(lines.filter((line) => line.skipped).map((line) => line.id)).size;
   const counted =
-    `하네스 ${lines.length}/${HARNESSES.length}개가 보고했다` +
+    `하네스 ${new Set(lines.map((line) => line.id)).size}/${HARNESSES.length}개가 보고했다` +
     (skipped > 0 ? ` (건너뜀 ${skipped})` : "");
   const head =
     breaches.length === 0
@@ -147,10 +147,12 @@ export function readReadings(dir: string): ReadingLine[] {
 
 /** 빈 디렉터리를 세운다 — 지난 실행의 측정값이 남아 있으면 이번 판정에 섞인다 */
 export function prepareReportDir(dir: string): string {
-  rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  for (const name of [READINGS_FILE, SUMMARY_FILE, BREACHES_FILE]) {
+    rmSync(join(dir, name), { force: true });
+  }
   const file = join(dir, READINGS_FILE);
-  appendFileSync(file, "");
+  writeFileSync(file, "");
   return file;
 }
 
@@ -163,5 +165,5 @@ export function writeReport(
   const breaches = breachesOf(lines, expectAll);
   writeFileSync(join(dir, SUMMARY_FILE), summaryOf(lines, breaches));
   writeFileSync(join(dir, BREACHES_FILE), `${JSON.stringify(breaches, null, 2)}\n`);
-  return { breaches, reported: lines.length };
+  return { breaches, reported: new Set(lines.map((line) => line.id)).size };
 }

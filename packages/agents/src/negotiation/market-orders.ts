@@ -1,0 +1,87 @@
+import { type OpsAgentSpec, type OpsOrders } from "../common/orders-ops";
+
+/**
+ * 이적·재정 지시 해석 — **감독의 말을 시장·장부 명령의 인자로 옮긴다** (agents.md §1).
+ *
+ * 판 지시의 해석(`tactic-orders`)과 같은 자리다: 장면을 쓰는 GM은 `market_orders(orders)`
+ * 하나만 부르고, 오퍼·답·재계약·해지·리스트·되사기·임대 복귀·예산·보드 요청·사재·표값·
+ * 스태프 고용·해지·감독직 오퍼의 인자는 여기서 채운다. 이 호출은 장면도 판정도 쓰지
+ * 않는다 — 낼 것은 `{ ops, unresolved }` 하나다. 확률(`deal_odds`)을 보고 값을 정하는
+ * 것은 GM과 감독의 일이고, 여기 오는 것은 이미 정해진 말이다.
+ *
+ * **도구 설명이 갖던 판정 근거는 이 프롬프트가 가져야 한다** — 이 명령들은 GM에게
+ * 보이지 않아 카탈로그 설명이 실리지 않는다 (prompts.md §5).
+ */
+export const MARKET_ORDERS_SYSTEM = `당신은 감독의 말을 이적·재정 명령의 인자로 옮기는 해석기다. 장면도 대사도 판정도 쓰지 않는다.
+
+# 입력
+<negotiations>(진행 중인 협상 — id·상대·마지막 오퍼·답할 차례) · <interest>(우리 선수를 보는 구단과 우리가 노리는 선수의 경쟁 구단) · <buybacks>(행사할 수 있는 되사기) · <board>(보드에 건 요청) · <seat>(감독직 제안·공석) · <finance>(잔고·예산·주급 여력·표값) · <staff_pool>(자리를 찾는 코치·의료진·스카우트 — 이름·직책·원형·요구 연봉) · <recent_turns>(지난 다섯 턴) 뒤에 이번 턴 감독의 말이 @감독: 으로 온다.
+
+# 무엇을 고르나
+감독이 정한 것만 싣는다. 감독이 말하지 않은 액수·연수·상대는 지어내지 않는다 — 협상을 여는 셋(send_offer·open_renewal·open_release)은 액수 인자를 비운 채 부르고, 명령이 설 수 없는 말만 unresolved에 남긴다. 이름 없이 가리키면 <recent_turns>에서 가장 최근의 그 사람이다. 선수 인자에는 감독이 부른 이름을 그대로 적는다.
+
+# 명령
+- send_offer — 오퍼. kind: buy(기본)·sell·loan·loan_out. sell·loan_out은 teamId가 필요하다. 임대는 fee가 임대료. pitch는 감독이 실제로 든 논거를 {note} 자유 문장으로만 옮긴다. paymentYears는 분할을 말했을 때만. terms는 감독이 이 말에서 건 조건만(추가 영입·주장·등번호·바이아웃 조항·사이닝 보너스·공격 포인트 보너스·주급 인상 조항·그 밖). 「주전 보장」은 조건이 아니라 squadStatus다. 계약이 반년 이하 남은 타 구단 선수에게 fee=0이면 사전 계약이다.
+- respond_offer — 상대가 넣은 오퍼에 감독의 답(accept·counter·reject). counter는 받은 값 위로 되부르는 것. negotiationId는 <negotiations>의 id. 우리 제안 위로 상대가 되부른 조정을 받아들이는 말은 accept_deal이다.
+- accept_deal — 감독이 받아들이겠다고 한 협상. 합의된 협상은 확정하고, 상대의 조정이 서 있으면 그 조건 그대로 다시 제안한다.
+- withdraw_offer — 협상을 접는다.
+- delegate_negotiation — 협상을 단장에게 맡기는 말. 이름을 부르면("손흥민 재계약은 맡겨") 그 협상 하나, 이름 없이 갈래만 말하면("재계약은 앞으로 알아서") 그 갈래에 앞으로 열리는 자리까지 맡기는 방침이다. 한도(fee·weeklyWage·years)는 감독이 부른 값만 싣고, 말하지 않았으면 비운다. revoke_mandate — 맡긴 일을 도로 가져오는 말.
+- open_renewal — 재계약 제안. terms는 send_offer와 같다. open_release — 합의 해지 제안. release_player — 일방 해지(잔여 주급 전액) — 감독이 그것을 알고 말했을 때만.
+- offer_terms — 열린 협상에 조건을 걸거나 상대가 부른 요구를 들어주는 말(같은 갈래를 올리면 들어준 것이다). answer_term — 상대가 부른 요구에 답하는 말(granted·refused). propose_personal — 영입·임대에서 이적료 없이 주급·연수·지위만 먼저 제안하는 말. 마주 앉은 자리의 말은 여기가 아니다.
+- set_transfer_list — 팔겠다·리스트에서 뺀다. askingPrice는 말했을 때만. respond_transfer_request — 선수의 이적 요청에 accept·refuse.
+- exercise_buyback — 되사기 행사(<buybacks>에 선 선수만). recall_loan — 임대 복귀.
+- adjust_transfer_budget — 구단주가 예산을 움직인다(delta, 음수 가능). request_board — 보드에 요청(kind: transfer-budget·signing·wage-room·stadium, amount는 감독이 부른 값 그대로, signing은 playerId). fund_transfer_budget — 감독 사재를 예산에. pay_player_bonus — 사재 보너스. set_ticket_price — 표값(<finance>의 지금 값에서 "10% 올려"를 계산해 적는다).
+- hire_staff — 스태프 고용. name은 <staff_pool>의 이름, salary는 감독이 부른 연봉(£/년). release_staff — 스태프 계약 해지(name). 감독이 이름을 대고 연봉까지 말했을 때만 싣고, 연봉이 없으면 unresolved다.
+- accept_manager_offer · counter_manager_offer · apply_manager_job — 감독직 제안의 수락·흥정·지원. offer는 <seat>의 id 또는 구단 이름. 감독이 분명히 말했을 때만.
+
+# unresolved
+어느 명령에도 담기지 않은 말을 감독의 표현 그대로 남긴다. 전술·훈련의 말은 남기지 않는다.`;
+
+/**
+ * 해석기가 채우는 시장·장부 명령 — **적용 순서다.** 답할 것과 접을 것을 먼저, 새로
+ * 여는 것을 뒤에: 같은 선수의 협상을 접고 다시 여는 말이 한 턴에 올 수 있다.
+ */
+export const MARKET_OPS: readonly string[] = [
+  "respond_offer",
+  "accept_deal",
+  "respond_transfer_request",
+  "withdraw_offer",
+  // 도로 가져오는 말이 먼저다 — 걷고 나서 감독이 직접 답하는 말이 한 턴에 함께 온다
+  "revoke_mandate",
+  "set_transfer_list",
+  // 조건은 오퍼보다 앞이다 — 같은 말에 함께 오면 조건서가 먼저 서야 오퍼가 싣는다 (§12-3)
+  "answer_term",
+  "offer_terms",
+  "send_offer",
+  "open_renewal",
+  "propose_personal",
+  "open_release",
+  // 위임은 협상을 열 수도 있어 여는 셋 뒤다 (§12-4)
+  "delegate_negotiation",
+  "release_player",
+  "exercise_buyback",
+  "recall_loan",
+  "adjust_transfer_budget",
+  "request_board",
+  "fund_transfer_budget",
+  "pay_player_bonus",
+  "set_ticket_price",
+  // 자른 자리에 그 턴 안에 다시 앉힐 수 있게 — 자리 상한과 주급 여력을 해고가 먼저 비운다
+  "release_staff",
+  "hire_staff",
+  "accept_manager_offer",
+  "counter_manager_offer",
+  "apply_manager_job",
+];
+
+/** 이 해석기의 한 벌 — 출력 스키마 선언 열(`outputAgents`)도 이것을 읽는다 */
+export const MARKET_ORDERS_SPEC: OpsAgentSpec = {
+  agent: "market-orders",
+  system: MARKET_ORDERS_SYSTEM,
+  ops: MARKET_OPS,
+  opsHint: "부를 명령과 그 인자 — 감독이 정한 것만",
+  unresolvedHint: "어느 명령에도 담기지 않은 말",
+  emptyHint: "이 말에는 옮길 이적·재정 지시가 없습니다",
+};
+
+export type MarketOrders = OpsOrders;

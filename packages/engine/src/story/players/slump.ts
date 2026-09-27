@@ -1,0 +1,199 @@
+import { type GameState, playersOf, playerById } from "../../common/core/state";
+import { isFriendly } from "../../common/core/match-kinds";
+import { isReserveMatch, type GamePlayer } from "@story-fm/domain";
+import { clampForm } from "../../common/players/form";
+
+/**
+ * 최근 결과 — 새 경기가 앞이다.
+ *
+ * **연속 기록은 시즌의 것이다** — 프리시즌 친선은 세지 않는다(season.md §2).
+ * 몸을 만드는 중에 하위 팀에 진 것이 연패로 쌓이면 개막 첫 주에 이미 침체인
+ * 선수단이 되고, 점층 편성이 감독을 벌주는 장치가 된다. 그 경기가 폼에 남기는
+ * 것은 `formDeltaFromMatch`와 대패 페널티가 이미 정산한다.
+ *
+ * **승부차기를 보지 않는다** — 90분을 비긴 경기는 폼에도 무승부다. 승패 표기의
+ * 자(`outcomeFor`)와 결과가 갈리는 것은 그 때문이고, 합치면 폼이 움직인다.
+ */
+export function recentOutcomes(state: GameState, teamId: string, limit: number): MatchOutcome[] {
+  return state.matches
+    .filter(
+      (m) =>
+        m.result &&
+        m.season === state.season &&
+        !isFriendly(m) &&
+        // 2군 리그는 1군의 연속 기록이 아니다 — 섞이면 2군 2패 + 리그 1패가 3연패가 된다
+        !isReserveMatch(m) &&
+        (m.homeTeamId === teamId || m.awayTeamId === teamId),
+    )
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, limit)
+    .map((m) => {
+      const home = m.homeTeamId === teamId;
+      const ours = home ? m.result!.homeGoals : m.result!.awayGoals;
+      const theirs = home ? m.result!.awayGoals : m.result!.homeGoals;
+      return ours > theirs ? "win" : ours === theirs ? "draw" : "loss";
+    });
+}
+
+/**
+ * 경기 하나가 끝난 뒤 그 팀의 라커룸을 갱신한다.
+ *
+ * @param margin 우리 득점 − 실점
+ * @param played 그 경기에 뛴 선수 id — 대패의 대가는 그라운드에 있던 사람이 치른다
+ * @param derbyHeat 더비면 1\~3, 아니면 0 — 표가 정하는 사실이다 (team.md §3.2)
+ * @returns 감독에게 알릴 만한 연속 기록이 있으면 그 사실 (없으면 null)
+ */
+export function applyResultMood(
+  state: GameState,
+  teamId: string,
+  margin: number,
+  played: readonly string[],
+  derbyHeat = 0,
+): string | null {
+  const outcomes = recentOutcomes(state, teamId, Math.max(SLUMP_LOSSES, RUN_WINS) + STREAK_ROOM);
+  const losses = streakOf(outcomes, "loss");
+  const wins = streakOf(outcomes, "win");
+  const squad = playersOf(state, teamId);
+
+  /**
+   * 더비의 결과는 승점 3보다 무겁다 — 비기면 0이다. 연속 기록과 **같은 축(폼)**에
+   * 얹으므로 계단과 더비가 같은 눈금 하나로 라커룸을 움직인다.
+   */
+  const derbyShift =
+    derbyHeat > 0 && margin !== 0 ? Math.sign(margin) * DERBY_MOOD_STEP * derbyHeat : 0;
+
+  const shift = runBonus(wins) - slumpPenalty(losses) + derbyShift;
+  if (shift !== 0) {
+    for (const p of squad) p.state.form = clampForm(p.state.form + shift);
+  }
+
+  // 대패는 그날 뛴 선수가 더 치른다 — 벤치에서 본 것과 당한 것은 다르다
+  if (margin <= -HEAVY_DEFEAT_MARGIN) {
+    for (const id of played) {
+      const p = playerById(state, id);
+      if (p && p.teamId === teamId) {
+        p.state.form = clampForm(p.state.form - HEAVY_DEFEAT_PENALTY);
+      }
+    }
+  }
+
+  // `>=`가 아니라 `===`다 — 문턱을 넘는 경기 하나가 이름을 붙이고, 그 뒤의 패배는
+  // 폼만 깎는다. 매 경기 부르면 한 번의 붕괴가 주력을 통째로 불만으로 채운다.
+  if (losses === SLUMP_ISSUE_LOSSES) markSlumpIssue(state, teamId, squad, losses);
+
+  if (losses >= SLUMP_LOSSES) return `${losses}연패`;
+  if (wins >= RUN_WINS) return `${wins}연승`;
+  return null;
+}
+
+/**
+ * 길어진 침체는 **한 사람에게** 이름을 붙인다 — 폼이 가장 낮은 주력 자원.
+ * 무작위가 아닌 이유: 감독이 "왜 하필 이 선수인가"를 납득할 수 있어야 한다.
+ */
+function markSlumpIssue(
+  state: GameState,
+  teamId: string,
+  squad: readonly GamePlayer[],
+  losses: number,
+): void {
+  if (teamId !== state.userTeamId) return; // 남의 라커룸 불만은 장부에 남기지 않는다
+  const already = new Set(state.issues.map((i) => i.gamePlayerId));
+  const candidate = [...squad]
+    .filter((p) => !already.has(p.id) && p.attributes.overall >= SLUMP_VOICE_OVERALL)
+    .sort((a, b) => a.state.form - b.state.form)[0];
+  if (!candidate) return;
+  state.issues.push({
+    gamePlayerId: candidate.id,
+    kind: "unhappy",
+    reason: "losing-run",
+    count: losses,
+    since: state.date,
+  });
+}
+
+/**
+ * 결과가 라커룸에 남기는 것 — 연패는 갉고 연승은 채운다.
+ *
+ * 개인 평점이 각자의 폼을 올리고 내리지만(form.ts) 팀이 무너지는 국면은 개인
+ * 기록에 남지 않는다. 3연패 뒤의 라커룸과 3연승 뒤의 라커룸은 다른 곳이다.
+ * **리그 전체가 같은 규칙을 쓴다** — 감독 팀만 겪으면 순위표가 조용히 기운다.
+ *
+ * ⚠️ 움직이는 축은 **폼이지 체력이 아니다.** 체력에 걸면 연패한 팀이 회복까지
+ * 못 해 다시 지고, 그 악순환에서 빠져나올 길이 없다(회복 불변식도 깨진다 —
+ * "일주일이면 온전히 돌아온다"). 폼은 매일 평균으로 끌리므로 스스로 아문다.
+ */
+
+/** 침체로 보는 연패 수 — 이 아래는 그냥 진 경기다 */
+export const SLUMP_LOSSES = 3;
+
+/** 연패 한 경기마다 팀 전체가 잃는 폼 */
+export const SLUMP_PER_LOSS = 0.05;
+
+/** 연패로 잃을 수 있는 최대 폼 */
+export const SLUMP_MAX = 0.2;
+
+/** 대패로 보는 골 차 */
+export const HEAVY_DEFEAT_MARGIN = 3;
+
+/** 대패가 그날 뛴 선수에게서 더 빼는 폼 */
+export const HEAVY_DEFEAT_PENALTY = 0.08;
+
+/** 상승세로 보는 연승 수 */
+export const RUN_WINS = 3;
+
+/** 연승 한 경기마다 팀 전체가 얻는 폼 — 침체의 거울 */
+export const RUN_PER_WIN = 0.03;
+
+/** 연승으로 얻을 수 있는 최대 폼 — 이득을 손해보다 작게 둔다 */
+export const RUN_MAX = 0.12;
+
+/**
+ * 더비 승패가 그 팀 스쿼드 **전원**의 폼에 남기는 폭 — `heat` 한 계단마다 (match.md §6).
+ *
+ * ⚠️ 연속 기록과 달리 **대칭이다.** 연승의 이득을 연패의 손해보다 작게 두는 것은
+ * 계단이 길어질수록 한쪽으로만 굴러가기 때문이지만, 더비는 한 경기 안에서 두
+ * 라커룸이 정확히 반대로 갈린다 — 한쪽이 얻는 것을 다른 쪽이 잃는다.
+ */
+export const DERBY_MOOD_STEP = 0.02;
+
+/**
+ * 침체가 불만으로 번지는 연패 — 이 문턱을 **넘는 그 경기에서** 한 명이 등을 돌린다.
+ * 한 연속에 한 명이고, 이어지는 5·6연패는 새 이름을 올리지 않는다 (people.md §5).
+ */
+export const SLUMP_ISSUE_LOSSES = 4;
+
+/**
+ * 계단이 문턱을 넘어 얼마나 더 길어졌는지까지 보려고 창에 얹는 여유 —
+ * 문턱만큼만 읽으면 4연패도 3연패와 같은 폭이 된다.
+ */
+export const STREAK_ROOM = 3;
+
+export type MatchOutcome = "win" | "draw" | "loss";
+
+/** 맨 앞부터 같은 결과가 몇 번 이어지나 */
+export function streakOf(outcomes: readonly MatchOutcome[], kind: MatchOutcome): number {
+  let n = 0;
+  for (const o of outcomes) {
+    if (o !== kind) break;
+    n++;
+  }
+  return n;
+}
+
+/** 연패가 팀에서 빼는 폼 (문턱 아래면 0) */
+export function slumpPenalty(losses: number): number {
+  if (losses < SLUMP_LOSSES) return 0;
+  return Math.min(SLUMP_MAX, (losses - SLUMP_LOSSES + 1) * SLUMP_PER_LOSS);
+}
+
+/** 연승이 팀에 얹는 폼 (문턱 아래면 0) */
+export function runBonus(wins: number): number {
+  if (wins < RUN_WINS) return 0;
+  return Math.min(RUN_MAX, (wins - RUN_WINS + 1) * RUN_PER_WIN);
+}
+
+/**
+ * 목소리를 낼 만한 주력 자원인가 — **종합의 눈금을 탄다.**
+ * 옛 75와 같은 인원 비율(상위 25%)에 서는 값이다 (player.md §4).
+ */
+export const SLUMP_VOICE_OVERALL = 72;

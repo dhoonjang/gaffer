@@ -14,7 +14,7 @@ import {
   type GameState,
 } from "@story-fm/engine";
 import { createTestGame } from "../test/helpers";
-import { potentialGapBand } from "../src/world/synthesis";
+import { potentialGapBand } from "../src/common/world/synthesis";
 import { OVERALL_SCALE } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
 

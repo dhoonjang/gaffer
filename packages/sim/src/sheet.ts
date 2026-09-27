@@ -6,7 +6,7 @@ import type {
   SheetLine,
   SheetShape,
 } from "@story-fm/domain";
-import { RATING_MAX, sheetLineBenefits } from "@story-fm/domain";
+import { sheetLineBenefits } from "@story-fm/domain";
 
 /**
  * 시트 — **판독의 수치 독해가 말의 규칙에 닿는 자리** (live-match.md §6.2).
@@ -24,20 +24,8 @@ import { RATING_MAX, sheetLineBenefits } from "@story-fm/domain";
 /** 판독기가 드는 전술 포인트 줄 수의 상한 */
 export const POINTS_MAX = 8;
 
-/**
- * 감독의 분석이 GM에게 넘기는 포인트 줄 수 — `clamp(round(1 + 분석/99 × 7), 1, 8)`
- * (career.md §2). 중요한 줄부터 넘어가므로 눈이 어두워도 큰 판독은 닿는다.
- */
-export function pointsSeen(analysis: number): number {
-  return Math.max(
-    1,
-    Math.min(POINTS_MAX, Math.round(1 + (analysis / RATING_MAX) * (POINTS_MAX - 1))),
-  );
-}
-
-/** 감독의 분석이 허락한 포인트 — 중요도 높은 줄부터 `pointsSeen`만큼 */
-export function readPoints(points: readonly Point[], analysis: number): Point[] {
-  return [...points].sort((a, b) => b.importance - a.importance).slice(0, pointsSeen(analysis));
+export function readPoints(points: readonly Point[]): Point[] {
+  return [...points].sort((a, b) => b.importance - a.importance).slice(0, POINTS_MAX);
 }
 
 // ── 한도 — ⚠️ 시작값이다. `edge` 3.5%가 xG를 얼마나 움직이는지는 하네스가 잰다 ──
@@ -60,6 +48,7 @@ export const SHEET_LEGS_STEP = 1.1;
 export const SHEET_COHESION_STEP = 0.15;
 
 export type SheetDropCode =
+  | "invalid-step"
   | "no-point"
   | "no-player"
   | "wrong-side"
@@ -128,7 +117,7 @@ export function emptySheet(): LiveSheet {
  * 시트를 말의 규칙이 읽는 값으로 접는다 — 실재 · 한도 · 소화율.
  *
  * 걸리지 않은 줄은 `dropped`에 까닭과 함께 남는다 — 조용히 버리면 걸리지 않은 지시가
- * 걸린 줄 안다. 시트는 판독기가 매번 전체를 다시 쓰므로 선착순도 밀어내기도 없다.
+ * 걸린 줄 안다. 입력 순서가 우선순위이며 상쇄할 대가는 이득보다 먼저 놓는다.
  */
 export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): LiveSheet {
   const out = emptySheet();
@@ -148,6 +137,11 @@ export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): Live
       continue;
     }
     const step = line.step;
+    if (!Number.isFinite(step) || step < 0 || step > 3) {
+      drop(line, "invalid-step");
+      continue;
+    }
+    if (step === 0) continue;
     switch (line.shape) {
       case "behavior": {
         const player = line.target.player;
@@ -165,9 +159,11 @@ export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): Live
           drop(line, "duplicate");
           break;
         }
-        // 대상 선수는 실재해야 한다 — 없으면 대상 없는 지시로 건다
-        const target =
-          line.targetPlayer && sideOf(line.targetPlayer) ? line.targetPlayer : undefined;
+        if (line.targetPlayer && !sideOf(line.targetPlayer)) {
+          drop(line, "no-player");
+          break;
+        }
+        const target = line.targetPlayer;
         seen.add(key);
         out.behaviors.push({
           player,
@@ -203,7 +199,7 @@ export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): Live
         const benefits = sheetLineBenefits(line);
         const favours: MatchSide = benefits ? side : side === "home" ? "away" : "home";
         if (line.shape === "edge") {
-          const raw = (SHEET_STEP[step - 1] ?? SHEET_TARGET_CAP) * line.sign;
+          const raw = interpolateStep([0, ...SHEET_STEP], step) * line.sign;
           // 이득에는 소화율이 곱해지고 대가는 온전하다
           const scaled = raw > 0 ? raw * ctx.uptake[side] : raw;
           const current = out.edge[player] ?? 0;
@@ -233,7 +229,7 @@ export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): Live
         }
         seen.add(key);
         const base = line.shape === "temper" ? SHEET_TEMPER_STEP : SHEET_LEGS_STEP;
-        const factor = powInt(base, step * line.sign);
+        const factor = stepFactor(base, step * line.sign);
         if (line.shape === "temper") out.temper[player] = factor;
         else out.legs[player] = factor;
         out.applied.push({
@@ -302,12 +298,17 @@ export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): Live
   return out;
 }
 
-/** 정수 거듭제곱 — `**`·`Math.pow`는 실시간 경기 안에서 쓰지 않는다 (live-match.md §8.2) */
-function powInt(base: number, exponent: number): number {
-  let result = 1;
-  const n = Math.abs(exponent);
-  for (let i = 0; i < n; i++) result *= base;
-  return exponent < 0 ? 1 / result : result;
+/** Arithmetic interpolation keeps fractional strengths identical across JS engines. */
+function interpolateStep(values: readonly number[], step: number): number {
+  const lo = Math.floor(step);
+  const start = values[lo]!;
+  const end = values[Math.min(lo + 1, values.length - 1)]!;
+  return start + (end - start) * (step - lo);
+}
+
+function stepFactor(base: number, signedStep: number): number {
+  const factor = interpolateStep([1, base, base * base, base * base * base], Math.abs(signedStep));
+  return signedStep < 0 ? 1 / factor : factor;
 }
 
 const round4 = (v: number) => Math.round(v * 10000) / 10000;

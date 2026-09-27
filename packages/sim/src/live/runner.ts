@@ -46,7 +46,7 @@ import {
   planAiTacticalShift,
   planBenchSubs,
 } from "../bench";
-import { createLiveState, liveMinuteOf, startingCondition, stepLive } from "./step";
+import { createLiveState, liveMinuteOf, startingCondition, createLiveStepper } from "./step";
 import type { LiveInput, LiveSideInput } from "./types";
 import { ADDED_TIME_BASE, BENCH_INTERVAL_SECONDS, HEADLESS_CHUNK_TICKS } from "./tuning";
 
@@ -101,7 +101,7 @@ export interface LiveMatch {
   points: Point[];
   sheet: SheetLine[];
   /** 감독이 걸어 둔 교체 — 다음 중단에 실행된다 */
-  pendingSubs: Array<{ side: MatchSide; out: string; in: string }>;
+  pendingSubs: Array<{ side: MatchSide; out: string; in: string; slot?: LiveSlot }>;
   /** 선수 id → 이 경기에 실제로 밟은 자리 — 포지션 적응도의 원본 (match.md §7.3) */
   positionsPlayed: Record<string, string>;
   /** 선수 id → 킥오프(또는 투입) 때의 경기 체력 — 정산의 기준 */
@@ -319,6 +319,7 @@ export function applySubstitution(
   into: string,
   cause: MatchEvent["subCause"],
   rejected: string[],
+  incomingSlot?: LiveSlot,
 ): boolean {
   const at = currentMinute(match);
   const event: MatchEvent = {
@@ -341,16 +342,18 @@ export function applySubstitution(
   const player = match.setup.players[into];
   if (leaving && player) {
     const position = leaving.position;
-    match.slots[side][slotIndex] = {
-      playerId: into,
-      position,
-      ...(leaving.point ? { point: leaving.point } : {}),
-      // 자리에 걸려 있던 역할을 잇는다 — 들어온 선수의 역할 기억은 엔진이 판을 다시 세울 때 얹는다 (match.md §3.2)
-      ...(leaving.roleId ? { roleId: leaving.roleId } : {}),
-      proficiency: proficiencyOf(player, position),
-      // 전술 적응도는 배치의 것이라 여기 없다 — 나간 선수의 값을 잇고, 엔진이 판을 다시 세울 때 제 값으로 선다
-      familiarity: leaving.familiarity,
-    };
+    match.slots[side][slotIndex] = incomingSlot
+      ? { ...incomingSlot, playerId: into }
+      : {
+          playerId: into,
+          position,
+          ...(leaving.point ? { point: leaving.point } : {}),
+          // 자리에 걸려 있던 역할을 잇는다 — 들어온 선수의 역할 기억은 엔진이 판을 다시 세울 때 얹는다 (match.md §3.2)
+          ...(leaving.roleId ? { roleId: leaving.roleId } : {}),
+          proficiency: proficiencyOf(player, position),
+          // 전술 적응도는 배치의 것이라 여기 없다 — 나간 선수의 값을 잇고, 엔진이 판을 다시 세울 때 제 값으로 선다
+          familiarity: leaving.familiarity,
+        };
     match.positionsPlayed[into] = position;
     match.startCondition[into] = startingCondition(player, side);
   }
@@ -505,7 +508,8 @@ function runPendingSubs(match: LiveMatch, rejected: string[]): void {
   if (match.pendingSubs.length === 0) return;
   const queue = match.pendingSubs;
   match.pendingSubs = [];
-  for (const sub of queue) applySubstitution(match, sub.side, sub.out, sub.in, undefined, rejected);
+  for (const sub of queue)
+    applySubstitution(match, sub.side, sub.out, sub.in, undefined, rejected, sub.slot);
 }
 
 // ── 하프의 끝 ────────────────────────────────────────────────────────────────
@@ -609,10 +613,14 @@ export function advanceLive(
   const rejected: string[] = [];
   // 입력은 명단·전술·시트가 바뀔 때만 다시 접는다 — 틱마다 접으면 한 경기가 몇 배 느리다
   let input: LiveInput | null = null;
+  let step: ReturnType<typeof createLiveStepper> | null = null;
   for (let i = 0; i < ticks; i++) {
     if (match.state.interval || finished(match)) break;
-    input ??= liveInputOf(match);
-    const result = stepLive(match.state, input);
+    if (!input) {
+      input = liveInputOf(match);
+      step = createLiveStepper(input);
+    }
+    const result = step!(match.state);
     match.state = result.state;
     onTick?.(match.state, input);
     if (result.events.length > 0) {
@@ -679,9 +687,22 @@ export function applyLiveInput(
     }
     case "substitution": {
       if (match.state.restart || match.state.interval) {
-        applySubstitution(match, payload.side, payload.out, payload.in, undefined, rejected);
+        applySubstitution(
+          match,
+          payload.side,
+          payload.out,
+          payload.in,
+          undefined,
+          rejected,
+          payload.slot,
+        );
       } else {
-        match.pendingSubs.push({ side: payload.side, out: payload.out, in: payload.in });
+        match.pendingSubs.push({
+          side: payload.side,
+          out: payload.out,
+          in: payload.in,
+          ...(payload.slot ? { slot: payload.slot } : {}),
+        });
       }
       return;
     }

@@ -9,6 +9,8 @@ import {
   resumeLiveInterval,
   acceptDeal,
   acceptManagerOffer,
+  reviewBoard,
+  RENEWAL_NOTICE_DAYS,
   answerIncomingOffer,
   incomingOffer,
   advanceTime,
@@ -19,7 +21,6 @@ import {
   euroCompetitionOf,
   digestLines,
   finalizeMatch,
-  interpretBackgroundHeuristic,
   isInjured,
   isSettling,
   playerById,
@@ -35,7 +36,7 @@ import {
   assignmentsOf as assignmentsOfTeam,
   eventTexts,
 } from "@story-fm/engine";
-import type { GamePlayer, MatchResult } from "@story-fm/domain";
+import { diffDays, type GamePlayer, type MatchResult } from "@story-fm/domain";
 
 /** 간이 시뮬 입력 조립 — 배치 선발에서 가용 선수를 뽑는다 (테스트용) */
 export function simSquad(state: GameState, teamId: string) {
@@ -105,14 +106,14 @@ export function createMiniGame(seed = 42, teamId = "arsenal"): GameState {
       userTeamId: teamId,
       managerName: "김감독",
       background,
-      attributes: interpretBackgroundHeuristic(background, teamId),
+
       world: MINI_WORLD,
     });
   });
 }
 
 /**
- * 축소 세계에서 시즌 하나를 끝까지 돈다 — 유저 경기는 실시간 경기로 치른다.
+ * 축소 세계에서 시즌 원장·전환을 검증한다 — 유저 경기도 코어의 간이 결산을 쓴다.
  * @returns 시즌이 끝났으면 true (한도 안에 못 끝내면 false)
  */
 export function playFullSeason(state: GameState, limit = 400): boolean {
@@ -123,7 +124,7 @@ export function playFullSeason(state: GameState, limit = 400): boolean {
     if (advanced.stopped === "blocked") return false;
     if (advanced.stopped === "matchday") {
       drillUserTactics(state, 7);
-      playMockMatch(state);
+      settleMatchdayQuick(state);
     }
   }
   return false;
@@ -133,13 +134,29 @@ export function playFullSeason(state: GameState, limit = 400): boolean {
  * 인내하는 보드 — 측정용. 경질은 시계를 멈추므로(state.dismissal) 재정·시즌
  * 분포를 재는 하네스는 자리를 지킨 채 한 시즌을 다 돌아야 한다.
  *
- * 계약 만료도 같은 무게다 (career.md §5.4): 만료 90일 전 보드의 재계약 제안에
- * 답하지 않으면 무직이 되고, 유저 경기 없는 90일이 `stopped: "reached"`로
- * `advanceAndPlay`를 세운다. 그래서 열린 재계약 제안은 그 자리에서 받는다.
+ * 재계약을 판단할 수 있는 기간에는 보드 승인과 감독 수락을 명시적으로 실행한다.
+ * 제품의 자동 판단이 아니라 재임을 유지하기 위한 측정 조건이다.
  */
 export function keepSeat(state: GameState): void {
   state.manager.reputation.board = 60;
-  state.manager.boardWarnings = 0;
+  delete state.boardAgenda.warningOn;
+  const contract = state.manager.contract;
+  if (
+    !state.dismissal &&
+    contract &&
+    !contract.renewalDecidedOn &&
+    diffDays(state.date, contract.until) >= 0 &&
+    diffDays(state.date, contract.until) <= RENEWAL_NOTICE_DAYS
+  ) {
+    const reviewed = reviewBoard(state, {
+      assessment: "재임을 유지하는 측정 조건으로 다음 계약을 승인한다",
+      confidence: 0,
+      decision: "continue",
+      renewal: true,
+    });
+    if (!reviewed.ok) throw new Error(reviewed.message);
+  }
+
   const renewal = (state.managerOffers ?? []).find(
     (o) => o.via === "renewal" && o.status === "open" && o.teamId === state.userTeamId,
   );
@@ -147,7 +164,7 @@ export function keepSeat(state: GameState): void {
 }
 
 /**
- * 훈련하는 감독 — **결산 판정(LLM)의 대역**이다 (→ docs/simulation/balance-harness.md §4).
+ * 훈련하는 감독 — **결산 판정(LLM)의 대역**이다 (→ docs/common/balance-harness.md §4).
  *
  * 감독 팀의 전술 적응도를 움직이는 것은 훈련·경기 결산 판정 하나뿐이라(player.md §7)
  * 실제 플레이에서는 95·100까지 가지만, mock 모드에는 그 판정이 없다. 대역을 세우지
@@ -170,7 +187,6 @@ export function createTestGame(seed = 42, teamId = "arsenal"): GameState {
       managerName: "김감독",
       background,
       // 앱과 같은 경로 — 부임 구단의 격까지 넣어 판정한다
-      attributes: interpretBackgroundHeuristic(background, teamId),
     });
   });
 }
@@ -290,6 +306,7 @@ export function advanceAndPlay(state: GameState): void {
  * 리그·컵의 장부(시즌 기록·징계·순위표)를 보는 테스트는 여기를 먼저 지나야 한다.
  * 친선은 그 장부에 한 줄도 남기지 않으므로(season.md §2), 안 지나면 "경기를
  * 치렀는데 기록이 없다"를 보게 된다.
+ * 준비 단계는 간이 정산을 쓴다. 친선의 실제 물리·결산 검증은 `playMockMatch`를 쓴다.
  */
 export function playPreseason(state: GameState): void {
   const nextIsFriendly = (): boolean => {
@@ -302,7 +319,11 @@ export function playPreseason(state: GameState): void {
     return next !== undefined && isFriendly(next);
   };
   let guard = FRIENDLY_ROUNDS + 2;
-  while (guard-- > 0 && nextIsFriendly()) advanceAndPlay(state);
+  while (guard-- > 0 && nextIsFriendly()) {
+    advanceToMatchday(state);
+    drillUserTactics(state, 7);
+    settleMatchdayQuick(state);
+  }
 }
 
 /** N일을 소화할 때까지 advance (attention 정지 무시) — tick 검증용 */
@@ -317,12 +338,6 @@ export function advanceDays(state: GameState, days: number): void {
     consumed += diffDays(before, state.date);
     if (r.stopped === "matchday" || r.stopped === "season_end") return;
   }
-}
-
-function diffDays(a: string, b: string): number {
-  return Math.round(
-    (new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000,
-  );
 }
 
 /**

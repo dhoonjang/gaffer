@@ -2,9 +2,14 @@ import { z } from "zod";
 import { ProposalInputSchema } from "@story-fm/domain";
 import { TurnOperationSchema } from "@story-fm/agents";
 import { llmErrorKind } from "@story-fm/llm";
-import { errorDetail, runTurnLocked, turnErrorMessage, turnErrorRetry } from "@/lib/turn-runner";
+import {
+  errorDetail,
+  runTurnLocked,
+  turnErrorMessage,
+  turnErrorRetry,
+} from "@/application/lib/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
-import { MatchBoardOrderSchema } from "@/lib/match-orders";
+import { MatchBoardOrderSchema } from "@/domains/match/lib/match-orders";
 
 const TurnSchema = z
   .object({
@@ -16,7 +21,7 @@ const TurnSchema = z
     /**
      * 화면 조작(시간 이동·경기 진행 손잡이) — 감독의 발화로 취급하지 않는다.
      * **구조체다**: 문장을 되읽던 시절에는 UI 문구 한 글자가 곧 계약이었다
-     * (docs/llm/agents.md §2).
+     * (docs/common/llm/agents.md §2).
      */
     operation: TurnOperationSchema.optional(),
     /**

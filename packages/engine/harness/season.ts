@@ -47,7 +47,7 @@ function playWhile(
     if (state.phase === "matchday") playMockMatch(state, onFullTime);
     /**
      * **결산 판정(LLM)의 대역** — 흐른 날수만큼, 리그가 쓰는 그 규칙으로
-     * (→ docs/simulation/balance-harness.md §4). 세우지 않으면 리그만 매일 판을 익히고
+     * (→ docs/common/balance-harness.md §4). 세우지 않으면 리그만 매일 판을 익히고
      * 감독 팀은 기준선에 멎어, 적응도를 읽는 지표가 전부 판정의 부재를 재게 된다.
      */
     drillUserTactics(state, diffDays(before, state.date));

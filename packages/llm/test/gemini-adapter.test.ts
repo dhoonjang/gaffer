@@ -598,6 +598,7 @@ describe("GeminiGameLLM 출력 스키마", () => {
     const given = {
       type: "object" as const,
       properties: {
+        maxItems: { type: "string" },
         name: { type: "string", minLength: 1, maxLength: 40, pattern: "^[가-힣]+$" },
         rows: {
           type: "array",
@@ -623,6 +624,7 @@ describe("GeminiGameLLM 출력 스키마", () => {
     expect(chatConfig(stub).responseJsonSchema).toEqual({
       type: "object",
       properties: {
+        maxItems: { type: "string" },
         name: { type: "string", minLength: 1, maxLength: 40, pattern: "^[가-힣]+$" },
         rows: {
           type: "array",

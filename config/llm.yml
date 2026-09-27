@@ -3,22 +3,22 @@ version: 1
 # max_retries — 요청 **하나**를 다시 부르는 횟수다(최초 호출은 세지 않는다). 에이전트
 # 밖에 있는 이유: SDK 클라이언트가 제공자마다 프로세스에 하나라 자리별로 다른 값을
 # 들 곳이 없다. 적지 않으면 SDK 기본값이 Anthropic 2 · OpenAI 2 · Google 0으로 갈려,
-# 같은 설정이 제공자마다 다르게 돈다 (docs/llm/models.md §1-1).
+# 같은 설정이 제공자마다 다르게 돈다 (docs/common/llm/models.md §1-1).
 max_retries: 2
 
 # operator_channel — 휘발 상태 스냅샷을 오퍼레이터 롤 메시지로 넣을지다. 에이전트마다
 # 적고, 생략하면 거짓(감독 발화 뒤에 접어 넣는다 — 자리는 어느 쪽이든 발화 뒤다). Google에는 그 롤이 없어 참을 적으면
 # 시작할 때 거부된다 — Anthropic(`role:"system"`)·OpenAI(`role:"developer"`)로 옮기는
-# 자리에서, 그 모델이 그 롤을 받는지 확인한 뒤 켠다 (docs/llm/models.md §3-3).
+# 자리에서, 그 모델이 그 롤을 받는지 확인한 뒤 켠다 (docs/common/llm/models.md §3-3).
 
 # thinking_level — 제공자 중립 눈금(minimal·low·medium·high)이다. 어댑터 셋이 각자의
 # 파라미터로 옮긴다: Anthropic은 `thinking: adaptive` + `output_config.effort`,
 # Google은 `thinkingConfig.thinkingLevel`, OpenAI는 Responses의 `reasoning.effort`.
 # **적지 않으면 Anthropic·OpenAI는 그 파라미터를 아예 싣지 않는다** — 사고를 모르는
-# 모델도 400 없이 돈다. Google만 생략 시 minimal이다 (docs/llm/models.md §1-2).
+# 모델도 400 없이 돈다. Google만 생략 시 minimal이다 (docs/common/llm/models.md §1-2).
 #
 # ⚠️ 눈금을 받는 것은 제공자가 아니라 **모델**이다 — gemini-3.7-flash는 minimal에
-# 400을 낸다. 모델을 올릴 때 이 줄을 함께 본다 (docs/llm/models.md §1-2).
+# 400을 낸다. 모델을 올릴 때 이 줄을 함께 본다 (docs/common/llm/models.md §1-2).
 
 # ⚠️ **해석기 계열(tactic-orders·training-orders·market-orders·training-rater)의 캐시
 # 히트율 0은 프롬프트 탓이 아니다** — 이력 없이 system·도구·이번 턴 입력만 보내는 한 벌
@@ -26,7 +26,7 @@ max_retries: 2
 # 3.6-flash 10.5k · 3.5-flash-lite 17.6k를 넘어야 걸리기 시작한다(2026-09 실측).
 # 고정 블록을 contents 맨 앞으로 옮겨도, 요청을 글자까지 같게 되풀이해도 0이다. 이 자리의
 # 고정분을 캐시에 얹는 길은 명시 캐시(`cachedContents`) 하나뿐이다
-# (docs/llm/models.md §3 「Gemini」).
+# (docs/common/llm/models.md §3 「Gemini」).
 #
 # ⚠️ **그 명시 캐시는 쓰지 않는다 — 걸리지 않아서가 아니라 적자라서다.** 걸리는 것은
 # 확인했다(2026-09 실측: 이 자리의 고정분으로 cachedContents를 만들면 tactic-orders
@@ -85,7 +85,7 @@ agents:
     thinking_level: minimal
 
   # 감독의 이적·재정 지시를 시장·장부 명령의 인자로 옮긴다 — 판 지시의 해석과 같은 자리
-  # (docs/llm/agents.md §1). 분류라 가벼운 모델로 둔다.
+  # (docs/common/llm/agents.md §1). 분류라 가벼운 모델로 둔다.
   market-orders:
     provider: google
     model: gemini-3.5-flash-lite
@@ -94,7 +94,7 @@ agents:
     thinking_level: minimal
 
   # 테이블의 감독 말 한 줄을 **이 협상 하나**의 명령 인자로 옮긴다 — 값·조건·답·수락·철회
-  # (docs/llm/agents.md §4-1 · transfer.md §12-3). 시장 해석과 같은 분류라 같은 자리다.
+  # (docs/common/llm/agents.md §4-1 · transfer.md §12-3). 시장 해석과 같은 분류라 같은 자리다.
   table-orders:
     provider: google
     model: gemini-3.5-flash-lite
@@ -103,7 +103,7 @@ agents:
     thinking_level: minimal
 
   # 경기를 읽어 전술 포인트와 시트를 쓰고, 지시 턴이면 감독의 말을 그 판독 위에서 명령
-  # 인자로 옮긴다 (docs/llm/agents.md §3). 킥오프·지시 턴·구간 뒤 세 자리에서 돌아 해석기
+  # 인자로 옮긴다 (docs/common/llm/agents.md §3). 킥오프·지시 턴·구간 뒤 세 자리에서 돌아 해석기
   # 넷보다 자주 불리고, 산출이 짧은 구조 호출이라 매치 GM과 다른 빠른 모델을 붙인다.
   match-reader:
     provider: google
@@ -112,7 +112,7 @@ agents:
     timeout_ms: 60000
     thinking_level: minimal
 
-  # 경기의 GM — 이 경기의 이력 전부를 쥐고 도구 셋으로 경기를 진행한다 (docs/llm/agents.md §3).
+  # 경기의 GM — 이 경기의 이력 전부를 쥐고 도구 셋으로 경기를 진행한다 (docs/common/llm/agents.md §3).
   # 시한은 도구 뒤의 해석·마감 호출까지 덮는다.
   match-gm:
     provider: google
@@ -122,7 +122,7 @@ agents:
     thinking_level: low
 
   # 협상 방의 GM — 이 협상의 서류·상황·방의 대화만 읽고 상대가 되어 장면과 대사를 쓴다
-  # (docs/llm/agents.md §4-1). 도구 루프를 돌며 장면을 쓰는 머리라 매치 GM과 같은 자리다.
+  # (docs/common/llm/agents.md §4-1). 도구 루프를 돌며 장면을 쓰는 머리라 매치 GM과 같은 자리다.
   # 시한은 도구 뒤의 테이블 해석 호출까지 덮는다.
   negotiation-gm:
     provider: google
@@ -148,7 +148,7 @@ agents:
     timeout_ms: 30000
     thinking_level: minimal
 
-  # 도착한 스카우팅 보고서 한 묶음에 한 줄 평을 붙인다 (docs/llm/agents.md §4-4). 코어가
+  # 도착한 스카우팅 보고서 한 묶음에 한 줄 평을 붙인다 (docs/common/llm/agents.md §4-4). 코어가
   # 낸 사실만 읽고 문장 하나를 내는 자리라 훈련 결산과 같은 싼 자리다. 실패하면 사실 줄만
   # 남으므로 시한도 짧다.
   scout-rater:
@@ -159,7 +159,7 @@ agents:
     thinking_level: minimal
 
   # 새 게임의 배경을 읽고 지갑·능력치의 결·시작 사건을 판정한 뒤, 그 위에서 부임 첫날의
-  # 첫 장면까지 쓴다 (docs/llm/agents.md §4-2). **싼 자리로 보내지 않는다** — 판정만 낼
+  # 첫 장면까지 쓴다 (docs/common/llm/agents.md §4-2). **싼 자리로 보내지 않는다** — 판정만 낼
   # 때는 앵커가 답을 받쳐 줬지만 첫 장면에는 앵커가 없고, 그것이 이 게임의 첫인상이다.
   # 게임당 한 번뿐이라 이 자리의 값은 장부에 거의 서지 않는다.
   onboarding-judge:
@@ -169,7 +169,7 @@ agents:
     timeout_ms: 90000
     thinking_level: low
 
-  # 접히는 평시 대화를 한 벌 요약으로 옮긴다 (docs/llm/agents.md §5-1). 결산과 같은
+  # 접히는 평시 대화를 한 벌 요약으로 옮긴다 (docs/common/llm/agents.md §5-1). 결산과 같은
   # 계약이라 실패는 삼키지만 읽는 양이 다르다 — 한 번에 접히는 구간 전부를 읽고 거기
   # 새로 선 인물까지 판정하므로 훈련 결산의 싼 자리로 보내지 않는다. 압축은 이력이 상한을
   # 넘을 때만이라 드물게 돈다.

@@ -1,0 +1,306 @@
+import { josa, milestonePhrase, PLAYER_ARCHETYPE_LABEL, SQUAD_STATUS_KO } from "@story-fm/domain";
+import type { MentoringEnd, MilestoneCode } from "@story-fm/domain";
+import type { MoodFact, MoodRead } from "@story-fm/engine";
+
+/**
+ * **심경 한 줄을 쓰는 자리.** 코어는 사실 카드만 내고 문장은 여기서 만든다
+ * (docs/overview.md §1 철칙 4 · docs/story/people.md §5).
+ *
+ * 호출이 잔향으로 남긴 줄이 있으면 그것이 이긴다 — 맥락을 읽은 문장이라
+ * 규칙이 만든 문장보다 언제나 낫다. 없을 때만 카드를 옮겨 적는다.
+ */
+
+/** 며칠 전인가 — 사람이 세는 말로 */
+function dayWord(days: number): string {
+  return days === 0 ? "오늘" : days === 1 ? "어제" : `${days}일 전`;
+}
+
+/**
+ * 그 경기가 세운 기록 한 마디 — 코어가 주는 것은 코드와 눈금뿐이라
+ * (`milestoneTitle`) 문장은 여기서 만든다. 넷이 서로 다르게 읽혀야 한다:
+ * 데뷔전은 실감이 없고, 첫 골은 오래 기다린 것이고, 문턱은 쌓아 온 것이고,
+ * 해트트릭은 그날 하루의 일이다.
+ */
+function milestoneSentence(day: string, m: { code: MilestoneCode; value: number }): string {
+  // 무엇을 세웠는지의 말은 코어가 갖는다 — 여기서 만드는 것은 그 뒤의 문장이다
+  const what = milestonePhrase(m.code, m.value);
+  switch (m.code) {
+    case "debut":
+      return `${day} 데뷔전을 치렀다`;
+    case "first-goal":
+      return `${day} 이 구단에서의 첫 골을 넣었다`;
+    case "apps":
+    case "goals":
+      return `${day} ${josa(what, "을/를")} 채웠다`;
+    case "hat-trick":
+      return `${day} ${josa(what, "을/를")} 기록했다`;
+  }
+}
+
+/** 기록 뒤에 붙는 한 마디 — 같은 데뷔전도 이긴 날과 진 날이 다르다 */
+const MILESTONE_OUTCOME_TAIL: Record<"win" | "draw" | "loss", string> = {
+  win: "이긴 날이라 더 오래 남는다",
+  draw: "팀은 비겼다",
+  loss: "팀이 진 날이라 마음껏 웃지 못한다",
+};
+
+/**
+ * 경기의 여운 — **팀의 결과와 자기 경기가 따로 논다.**
+ * 이긴 경기에서 부진한 선수와 진 경기에서 제 몫을 한 선수는 마음이 다르다.
+ */
+function afterglowSentence(fact: Extract<MoodFact, { cause: "afterglow" }>): string {
+  const day = dayWord(fact.days);
+  /**
+   * 기록이 있으면 **그것이 먼저다.** 데뷔전을 치른 열여덟에게 그날의 마음은 팀의
+   * 승패보다 자기 기록이고, 평점은 그 앞에서 할 말이 못 된다. 승패는 뒤에 한
+   * 마디로만 붙는다 (people.md §5 — 새 카드가 아니라 여운의 일부다).
+   */
+  if (fact.milestone) {
+    return `${milestoneSentence(day, fact.milestone)} — ${MILESTONE_OUTCOME_TAIL[fact.outcome]}`;
+  }
+  // 평점이 없으면(기록이 안 남은 경기) 팀 결과만 말한다
+  if (fact.rating === null) {
+    return fact.outcome === "win"
+      ? `${day} 승리의 여운이 남아 있다`
+      : fact.outcome === "draw"
+        ? `${day} 무승부가 아쉽다`
+        : `${day} 패배가 마음에 남아 있다`;
+  }
+  if (fact.outcome === "win") {
+    if (fact.own === "good") return `${day} 이긴 경기에서 제 몫을 해내 어깨가 올라가 있다`;
+    if (fact.own === "poor") return `${day} 팀은 이겼지만 자기 경기가 마음에 걸린다`;
+    return `${day} 승리로 팀 분위기가 좋다`;
+  }
+  if (fact.outcome === "draw") {
+    if (fact.own === "good") return `${day} 비겼지만 자기 경기는 나쁘지 않았다`;
+    if (fact.own === "poor") return `${day} 무승부에 자기 몫도 못했다는 생각이다`;
+    return `${day} 무승부가 아쉽다`;
+  }
+  if (fact.own === "good") return `${day} 패배에도 자기 몫은 해냈다는 얼굴이다`;
+  if (fact.own === "poor") return `${day} 패배가 자기 탓 같아 말이 없다`;
+  return `${day} 패배가 마음에 남아 있다`;
+}
+
+/** 무엇에 불만인가 — 사유 코드에서 이름을 얻는다 */
+function grievanceSubject(fact: Extract<MoodFact, { cause: "grievance" }>): string {
+  switch (fact.reason) {
+    case "minutes":
+      return "출전 기회";
+    case "losing-run":
+      return fact.count === null ? "연패" : `${fact.count}연패`;
+    case "early-return":
+      return "휴가를 반납한 소집";
+    case "demotion":
+      return "2군 강등";
+    case "listed":
+      return "이적 리스트에 오른 것";
+    case "blocked-move":
+      return "감독이 막은 이적";
+    case "contract":
+      return "재계약 이야기가 없는 것";
+    case "out-of-position":
+      return fact.count === null ? "자리 밖 기용" : `${fact.count}경기 이어진 자리 밖 기용`;
+    case "promise":
+      // 감독 자신이 세운 원인이라 출전 부족과 다른 말이 된다 (people.md §5·§5-2).
+      // 어느 갈래의 약속이었는지는 카드가 들지 않는다 — 장부의 일이다
+      return "감독이 지키지 않은 약속";
+    default:
+      return "팀 상황";
+  }
+}
+
+/**
+ * 출전 불만은 **지위가 잰다** (people.md §5·§5-2) — "출전 기회에 불만"만 적으면
+ * 백업의 침묵과 핵심의 불만이 한 줄로 읽힌다. 코어가 그 불만을 세운 지위와 창의
+ * 수치를 함께 실어 줄 때만 그것으로 쓴다 (다른 사유·옛 카드에는 없다).
+ */
+function minutesSentence(fact: Extract<MoodFact, { cause: "grievance" }>): string | null {
+  const { status, starts, played } = fact;
+  if (status === undefined || starts === undefined || played === undefined) return null;
+  const seat = SQUAD_STATUS_KO[status];
+  return starts === 0
+    ? `${seat}인데 최근 ${played}경기에서 한 번도 선발로 서지 못했다`
+    : `${seat}인데 최근 ${played}경기 중 ${starts}경기만 선발이다`;
+}
+
+/**
+ * 폼이 말하는 것 — **대역은 코어의 `formLabel`이 갖는다.** "평소"는 말할 거리가
+ * 아니라 카드가 서지 않으므로 여기에도 오지 않는다.
+ */
+const FORM_SENTENCE: Record<Extract<MoodFact, { cause: "form" }>["label"], string> = {
+  절정: "경기력이 절정이라 무엇을 해도 되는 시기다",
+  상승세: "최근 경기력이 물올라 자신감이 붙었다",
+  평소: "특별한 기복 없이 지내고 있다",
+  침체: "최근 경기력이 가라앉아 스스로도 답답해한다",
+  바닥: "경기력이 바닥이라 스스로도 어쩔 줄 모른다",
+};
+
+/**
+ * 사이가 끝난 마음 — **사유가 무엇을 말할지 정한다** (people.md §5-3).
+ * 감독이 푼 것과 그 사람이 팀을 떠난 것은 라커룸에서 같은 말이 아니고, 멘토가
+ * 잃은 것과 멘티가 잃은 것도 같지 않다.
+ */
+const MENTORING_END_SENTENCE: Record<MentoringEnd, Record<"mentor" | "mentee", string>> = {
+  manager: {
+    mentor: "감독이 짝을 풀어 이제 그를 맡지 않는다",
+    mentee: "감독이 짝을 풀어 기댈 선배가 없어졌다",
+  },
+  departure: {
+    mentor: "챙기던 아이가 팀을 떠났다",
+    mentee: "따르던 선배가 팀을 떠나 빈자리가 크다",
+  },
+  squad: {
+    mentor: "2군으로 내려가면서 챙기던 아이와 아침이 갈렸다",
+    mentee: "따르던 선배가 2군으로 내려가 아침이 갈렸다",
+  },
+  age: {
+    mentor: "데리고 다니던 아이가 다 커서 손을 뗐다",
+    mentee: "이제 배울 만큼 배웠다 — 혼자 서는 자리다",
+  },
+};
+
+/** 감독이 붙여 준 사이 — 선 자리와 끝났는지가 넷으로 갈린다 (people.md §5-3) */
+function mentoringSentence(fact: Extract<MoodFact, { cause: "mentoring" }>): string {
+  if (fact.ended !== undefined) {
+    return `${dayWord(fact.days)} ${josa(fact.name, "과/와")}의 사이가 끝났다 — ${MENTORING_END_SENTENCE[fact.ended][fact.side]}`;
+  }
+  if (fact.side === "mentee") return `${fact.name}에게 붙어 배우는 중이다 (${fact.days}일째)`;
+  // 몇을 데리고 있는지는 하나를 넘을 때만 — 한 명이면 이름이 이미 그 수다
+  return fact.count !== undefined && fact.count > 1
+    ? `${josa(fact.name, "을/를")} 비롯해 ${fact.count}명을 뒤에서 챙기고 있다`
+    : `${josa(fact.name, "을/를")} 뒤에서 챙기고 있다 (${fact.days}일째)`;
+}
+
+/** 카드 한 장 → 한 마디 */
+function sentenceOf(fact: MoodFact): string {
+  switch (fact.cause) {
+    case "injury":
+      return fact.daysToReturn > 0
+        ? `${fact.bodyPart} 부상으로 재활 중 — 복귀까지 약 ${fact.daysToReturn}일`
+        : `${fact.bodyPart} 부상에서 막 복귀했다`;
+    case "suspension":
+      return `출장 정지 ${fact.matchesLeft}경기가 남아 몸이 근질거린다`;
+    case "retiring":
+      /**
+       * 사유마다 다른 마음이다 — 나이로 그만두는 것과 뛰지 못해 그만두는 것은
+       * 라커룸에서 같은 말이 아니다 (season.md §6).
+       */
+      return fact.reason === "idle"
+        ? "이번 시즌 뒤 그만둔다 — 마지막 해에 그라운드를 밟지 못했다"
+        : fact.reason === "decline"
+          ? "이번 시즌 뒤 그만둔다 — 몸이 예전 같지 않다는 걸 스스로 안다"
+          : "이번 시즌이 마지막이다 — 은퇴를 밝혔다";
+    case "grievance": {
+      // 누구의 불만인가를 함께 말한다 — 같은 사유라도 사람이 다르면 감독이 할 일이 다르다
+      const who = PLAYER_ARCHETYPE_LABEL[fact.archetype];
+      const minutes = fact.reason === "minutes" ? minutesSentence(fact) : null;
+      return minutes
+        ? `${minutes} (${who})`
+        : `${grievanceSubject(fact)}에 불만이 쌓여 있다 (${who})`;
+    }
+    case "demotion": {
+      /**
+       * 문턱은 사람마다 다르고 추첨이 없다 — 그래서 **감독이 날짜를 셀 수 있다**
+       * (people.md §5). 남은 날을 약속하는 것이 아니라 그의 한계를 적는 것이다.
+       */
+      const who = `${PLAYER_ARCHETYPE_LABEL[fact.archetype]} — ${fact.patienceDays}일까지 참는다`;
+      return fact.days === 0
+        ? `오늘 2군으로 내려갔다 (${who})`
+        : `2군에 내려간 지 ${fact.days}일째다 (${who})`;
+    }
+    case "settling":
+      // 남은 날짜를 말하지 않는다 — 얼마나 걸릴지는 감독이 앞으로 뭘 하느냐에 달렸다
+      return fact.matches === 0
+        ? "아직 새 팀에서 겉돈다 — 그라운드를 밟아 본 적이 없다"
+        : `새 팀에 녹아드는 중이다 (${fact.percent}%)`;
+    case "afterglow":
+      return afterglowSentence(fact);
+    case "no-minutes":
+      return fact.place === "bench"
+        ? "아직 출전 기회를 기다리고 있다"
+        : "명단 밖이라 존재감을 보여줄 자리가 없다";
+    case "form":
+      return FORM_SENTENCE[fact.label];
+    case "condition":
+      // 몸은 몸의 말로 — 여기서 감정을 읽으면 경기 다음 날 선수단 전원이 침울해진다
+      return fact.level === "heavy" ? "다리가 무겁다" : "몸이 가볍다";
+    case "familiarity":
+      /**
+       * 몸의 축이 아니라 **판의 축**이다 (player.md §7.4) — 잘 쉬었는데도 감독이 깐
+       * 판이 몸에 없는 상태다. 오래 훈련장을 떠나 있었으면 그렇게 된다.
+       */
+      return fact.tier === "alien" || fact.tier === "raw"
+        ? "오래 자리를 비워 전술이 몸에서 빠졌다"
+        : "전술이 아직 몸에 덜 붙었다";
+    case "fatigue":
+      /**
+       * 오늘 다리가 무거운 것과 다른 사실이다 — **시즌이 몸에 쌓아 둔 것**이라
+       * 하루 쉬어서 돌아오지 않는다 (player.md §5.5). 그래서 문장도 오늘이 아니라
+       * 기간을 말한다.
+       */
+      return fact.band === "overloaded"
+        ? "몇 주째 쉬지 못해 몸이 비어 간다"
+        : "시즌의 피로가 다리에 남아 있다";
+    case "injury-history": {
+      /**
+       * 오늘의 몸이 아니라 **이 몸이 겪은 것**이다 (player.md §5.3).
+       *
+       * ⚠️ **여기서 「위험하다」고 단정하지 않는다.** 코어가 등급을 세우지 않는 이유가
+       * 그것이고, 얼마나 위태로운지는 이 사실을 읽는 쪽(감독·GM)이 판단한다. 화면은
+       * 그 사실을 사람의 말로 옮기기만 한다.
+       */
+      const last = fact.history.last;
+      if (last !== null && last.open) return `${josa(last.bodyPart, "을/를")} 다쳐 재활 중이다`;
+      if (last !== null && last.daysAgo <= 30) {
+        return `${last.bodyPart} 부상에서 돌아온 지 ${last.daysAgo}일째다`;
+      }
+      return `두 시즌 동안 ${fact.history.count}번 다쳐 ${fact.history.daysOut}일을 결장했다`;
+    }
+    case "departure":
+      // 라커룸 전체가 같은 사실을 든다 — 누가 그와 가까웠는지는 아직 아무도 모른다
+      return `${dayWord(fact.days)} ${fact.name} 계약 해지 소식에 라커룸이 뒤숭숭하다`;
+    case "former-club":
+      /**
+       * 그날이 며칠 남았는가로 결이 갈린다 — 두 주 앞의 대진은 달력의 일이고,
+       * 전야는 그 사람의 일이다. 어떻게 떠났는지는 회견 카드의 것이라 여기 오지 않는다.
+       */
+      return fact.days === 0
+        ? `오늘 옛 소속 ${josa(fact.club, "을/를")} 상대한다`
+        : fact.days === 1
+          ? `내일 옛 소속 ${josa(fact.club, "과/와")} 만난다`
+          : `${fact.days}일 뒤 옛 소속 ${josa(fact.club, "과/와")}의 경기가 잡혀 있다`;
+    case "contract-ending":
+      return "계약이 반년 안에 끝난다";
+    case "leader":
+      // 완장 둘과 리더 그룹 — 서열은 감독이 채운 완장과 코어가 낸 순위 둘 다에서 온다
+      return fact.role === "captain"
+        ? "주장으로 라커룸을 이끈다"
+        : fact.role === "vice"
+          ? "부주장으로 주장 옆에 선다"
+          : "라커룸에서 목소리가 서는 축이다";
+    case "number":
+      /**
+       * 물려받은 셔츠에는 앞사람이 있고 뺏긴 셔츠에는 없다 — 계보가 있을 때만 이름을
+       * 말한다 (people.md §5). 아무도 달지 않았던 번호에 "앞서 아무도"를 붙이면
+       * 화면이 없는 과거를 말한다.
+       */
+      if (fact.event === "lost") return `${fact.number}번을 내주고 새 번호를 받았다`;
+      return fact.after === undefined
+        ? `${fact.number}번을 새로 달았다`
+        : `${josa(fact.after.name, "이/가")} ${fact.after.seasons}시즌 달던 ${fact.number}번을 ` +
+            `${fact.after.since}시즌 만에 물려받았다`;
+    case "mentoring":
+      return mentoringSentence(fact);
+    case "young":
+      return "아직 어리고 배울 게 많다";
+    case "steady":
+      return "특별한 기복 없이 지내고 있다";
+  }
+}
+
+/** 심경 한 줄 — 결산이 다시 쓴 문장이 있으면 그것, 없으면 카드를 옮겨 적는다 */
+export function moodSentence(mood: MoodRead): string {
+  if (mood.note !== null) return mood.note;
+  if (mood.facts.length === 0) return "특별한 기복 없이 지내고 있다.";
+  return `${mood.facts.map(sentenceOf).join(", ")}.`;
+}
