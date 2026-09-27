@@ -7,6 +7,8 @@ export interface InstructionCommand {
   description: string;
   inputSchema: JsonObjectSchema;
   limit: number;
+  /** Tactical effect fields may be inferred from the authorized instruction and observed facts. */
+  contextual?: boolean;
 }
 
 export interface InstructionCandidate {

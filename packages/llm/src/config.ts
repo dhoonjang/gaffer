@@ -10,7 +10,6 @@ export const AGENT_NAMES = [
   "gm",
   "match-gm",
   "negotiation-gm",
-  "match-reader",
   "finalize-match",
   "training-rater",
   "scout-rater",
@@ -19,15 +18,17 @@ export const AGENT_NAMES = [
 ] as const;
 
 export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
-export const EVALUATOR_NAMES = ["instructions", "match-sheet"] as const;
-export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
-/** Historical traces retain their original author names. */
-const RETIRED_AGENT_NAMES = [
+export const INSTRUCTION_AGENT_NAMES = [
   "tactic-orders",
   "training-orders",
   "market-orders",
   "table-orders",
 ] as const;
+export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
+export const EVALUATOR_NAMES = [...INSTRUCTION_AGENT_NAMES, "match-reader", "match-sheet"] as const;
+export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
+/** Historical traces retain the experimental prepass author. */
+const RETIRED_AGENT_NAMES = ["instructions"] as const;
 export const RECORDED_AGENT_NAMES = [
   ...AGENT_NAMES,
   ...EVALUATOR_NAMES,
@@ -211,7 +212,11 @@ const LlmConfigFileSchema = z
     max_retries: z.number().int().min(0).optional(),
     evaluators: z
       .object({
-        instructions: RawEvaluatorConfigSchema.optional(),
+        "tactic-orders": RawEvaluatorConfigSchema.optional(),
+        "training-orders": RawEvaluatorConfigSchema.optional(),
+        "market-orders": RawEvaluatorConfigSchema.optional(),
+        "table-orders": RawEvaluatorConfigSchema.optional(),
+        "match-reader": RawEvaluatorConfigSchema.optional(),
         "match-sheet": RawEvaluatorConfigSchema.optional(),
       })
       .strict()
@@ -221,7 +226,6 @@ const LlmConfigFileSchema = z
         gm: RawAgentConfigSchema,
         "match-gm": RawAgentConfigSchema,
         "negotiation-gm": RawAgentConfigSchema,
-        "match-reader": RawAgentConfigSchema,
         "finalize-match": RawAgentConfigSchema,
         "training-rater": RawAgentConfigSchema,
         "scout-rater": RawAgentConfigSchema,
@@ -238,8 +242,7 @@ export interface LlmConfig {
   version: 1;
   maxRetries: number;
   agents: Record<GenerativeAgentName, AgentConfig>;
-  matchSheet?: EvaluatorConfig;
-  instructions?: EvaluatorConfig;
+  evaluators: Partial<Record<EvaluatorName, EvaluatorConfig>>;
 }
 
 /**
@@ -307,9 +310,9 @@ export function parseLlmConfig(source: string, label = "config/llm.yml"): LlmCon
   return {
     version: parsed.data.version,
     maxRetries,
-    ...Object.fromEntries(
+    evaluators: Object.fromEntries(
       Object.entries(parsed.data.evaluators ?? {}).map(([name, raw]) => [
-        name === "match-sheet" ? "matchSheet" : name,
+        name,
         {
           provider: raw.provider,
           model: raw.model,

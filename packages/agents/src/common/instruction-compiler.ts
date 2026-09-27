@@ -220,7 +220,9 @@ function structural(node: Node, queries: Query[], next: Node[]): boolean {
     criteria[`n${count}`] = `명시적으로 지시한 항목 ${count}개`;
   choose(
     queries,
-    `${scope(node)} 원문이 지시한 항목만 세고 맥락의 기존 명단을 채우지 않는다. 0은 명시적으로 빈 배열을 지시했을 때만.`,
+    node.occurrence.command.contextual
+      ? `${scope(node)} 감독 지시를 실행할 전술 효과와 필요한 대가의 항목 수. 현재 사실에서 정하며 무관한 효과를 만들지 않는다.`
+      : `${scope(node)} 원문이 지시한 항목만 세고 맥락의 기존 명단을 채우지 않는다. 0은 명시적으로 빈 배열을 지시했을 때만.`,
     criteria,
     (answer) => {
       if (answer === UNCLEAR || answer === OVERFLOW) {
@@ -299,7 +301,7 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
   });
   choose(
     queries,
-    `${scope(node)} 이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear). 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 숫자는 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear.`,
+    `${scope(node)} ${node.occurrence.command.contextual ? "감독이 요청한 전술을 최근 흐름과 선수 사실에 맞춰 구현하는 값을 고른다. 필요한 대가도 해석하되 무관한 변경은 하지 않는다." : "이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear)."} 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 숫자는 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear.`,
     criteria,
     (answer) => {
       if (answer === UNCLEAR) {
