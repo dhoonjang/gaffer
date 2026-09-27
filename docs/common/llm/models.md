@@ -20,7 +20,7 @@
 | `agents.gm`                  | 평시 장면·관계·사건·판정 스킬              |
 | `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
 | `agents.negotiation-gm`      | 현재 협상 방의 상대 대사·설득 판정         |
-| `agents.finalize-match`      | 경기 평점·성장·심경. 마무리 중계 없음      |
+| `evaluators.finalize-match`  | 경기 평점·성장. 근거·심경은 매치 GM        |
 | `evaluators.training-rater`  | 훈련 구간 결산                             |
 | `agents.history-compactor`   | 평시 이력 요약·인물 기억                   |
 | `agents.onboarding-judge`    | 초기 조건·사건·부임 첫 장면                |

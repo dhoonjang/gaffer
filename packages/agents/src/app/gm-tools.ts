@@ -1,3 +1,4 @@
+import { moodLineArg, moodNotesArg } from "../common/mood-input";
 import { z } from "zod";
 import {
   POSITION_CODES,
@@ -38,7 +39,6 @@ import {
 import {
   EVENT_CREDIT,
   EVENT_BAND,
-  MOOD_NOTE_MAX,
   type GameState,
   formatMoney,
   quotedFee,
@@ -294,36 +294,6 @@ const settlingArg = z
     "새로 영입해 아직 적응 중인 선수에게 이 말이 남긴 무게. 생략하면 코어가 outcome·강도로 정한다. " +
       "적응을 겨냥한 이야기(자리·역할 약속, 라커룸 소개, 사는 문제)면 크게, 지나가는 말이면 작게.",
   );
-
-/**
- * 심경 잔향 — 그 선수와 있었던 일을 쓴 호출이 한 문장을 함께 남긴다 (agents.md §4-3).
- * 검사는 코어의 것이다(`applyMoodNotes`): 대상 밖의 선수는 버리고, 불만이 걸린 선수의
- * 문장은 `acknowledgesIssue`로 그 사실을 안아야 남는다 — 낱말을 세지 않는다.
- */
-const MOOD_LINE_HINT =
-  "이 일 뒤 그 선수의 심경 한 문장 (60자 안팎). 불만이 걸린 선수면 그 사실을 안았는지 acknowledgesIssue로";
-
-const moodLineArg = z
-  .object({
-    text: z.string().min(1).max(MOOD_NOTE_MAX),
-    acknowledgesIssue: z.boolean().optional(),
-  })
-  .optional()
-  .describe(MOOD_LINE_HINT);
-
-/** 대상이 여럿인 자리(팀토크·사건)의 심경 — 선수마다 한 줄, 상한은 그 자리가 정한다 */
-const moodNotesArg = (max: number) =>
-  z
-    .array(
-      z.object({
-        playerId: playerRef,
-        text: z.string().min(1).max(MOOD_NOTE_MAX),
-        acknowledgesIssue: z.boolean().optional(),
-      }),
-    )
-    .max(max)
-    .optional()
-    .describe(`${MOOD_LINE_HINT} — 이 일을 겪은 선수마다 한 줄, ${max}명까지`);
 
 /**
  * **감독이 이적료를 부르지 않은 오퍼가 되돌아오는 한 줄** (transfer.md §1).
