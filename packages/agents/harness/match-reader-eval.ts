@@ -321,7 +321,7 @@ async function replay(
   }
   const proseCost = usageComplete ? costUsd(proseUsage, prices) : null;
   const evaluatorCost =
-    (evaluatorUsage.inputTokens * (LLM_CONFIG.matchSheet?.inputUsdPerMillion ?? 0)) / 1_000_000;
+    (evaluatorUsage.inputTokens * (LLM_CONFIG.evaluators["match-sheet"]?.inputUsdPerMillion ?? 0)) / 1_000_000;
   return {
     success: reading !== undefined,
     durationMs: performance.now() - began,
@@ -456,16 +456,16 @@ async function main() {
     } catch {
       /* Environment-only invocation is supported. */
     }
-    const config = agentConfig("match-reader");
+    const config = agentConfig("reader-baseline");
     if (!process.env.TYPESAFE_API_KEY?.trim()) blockers.push("Missing TYPESAFE_API_KEY");
     if (!hasKey(config.provider))
       blockers.push(`Missing baseline credential: ${keyNamesFor(config.provider)}`);
-    if (!LLM_CONFIG.matchSheet) blockers.push("Missing evaluators.match-sheet configuration");
+    if (!LLM_CONFIG.evaluators["match-sheet"]) blockers.push("Missing evaluators.match-sheet configuration");
     if (!data.cases.length) blockers.push("No replayable recorded inputs");
-    if (!blockers.length && LLM_CONFIG.matchSheet) {
+    if (!blockers.length && LLM_CONFIG.evaluators["match-sheet"]) {
       const { TypesafeGameEvaluator } = await import("../../llm/src/typesafe-adapter");
       const client = createGameLLM(config);
-      const evaluator = new TypesafeGameEvaluator(LLM_CONFIG.matchSheet);
+      const evaluator = new TypesafeGameEvaluator(LLM_CONFIG.evaluators["match-sheet"]);
       for (const [index, input] of data.cases.slice(0, limit).entries()) {
         console.log(
           `Replaying pair ${index + 1}/${Math.min(limit ?? data.cases.length, data.cases.length)}`,
@@ -537,8 +537,8 @@ async function main() {
     gameVersion: currentGameVersion,
     failures: failureCounts,
     blockers,
-    baselineModel: agentConfig("match-reader").model,
-    evaluatorModel: LLM_CONFIG.matchSheet?.model,
+    baselineModel: agentConfig("reader-baseline").model,
+    evaluatorModel: LLM_CONFIG.evaluators["match-sheet"]?.model,
     prices,
     agreement: agreementSummary,
     baseline,

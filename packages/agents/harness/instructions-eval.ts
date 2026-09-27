@@ -1,9 +1,25 @@
 /** Opt-in synthetic evaluation with production catalogs; no save or trace scope is opened. */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import { createGame, tacticsOf } from "@story-fm/engine";
+import {
+  advanceLiveMatch,
+  advanceTime,
+  bindJournal,
+  createGame,
+  markEntered,
+  startMatch,
+  tacticsOf,
+  type JournalEntry,
+} from "@story-fm/engine";
 import {
   addUsage,
   agentConfig,
@@ -17,10 +33,12 @@ import {
   TypesafeEvaluationError,
   TypesafeGameEvaluator,
   withGameUsage,
+  type EvaluatorName,
   type GameEvaluator,
   type TurnUsage,
   type UsageLedger,
 } from "@story-fm/llm";
+import { LIVE_TICKS_PER_SECOND, recentFlowOf } from "@story-fm/sim";
 import { interpretInstructions } from "../src/common/instruction-compiler";
 import { instructionCommands, instructionCandidates } from "../src/app/workflows/instructions";
 import { buildToolSpecs } from "../src/app/gm-tools";
@@ -70,6 +88,7 @@ function failure(error: unknown) {
   };
 }
 interface Stage {
+  requestSha256: string;
   durationMs: number;
   questions: number;
   attempts: number;
@@ -78,8 +97,10 @@ interface Stage {
   model?: string;
   failure?: ReturnType<typeof failure>;
 }
+type InstructionRole = "tactic-orders" | "training-orders" | "market-orders";
 interface SyntheticResult {
   name: string;
+  role: InstructionRole;
   said: string;
   expected: unknown;
   output?: unknown;
@@ -101,6 +122,20 @@ interface TurnResult {
   durationMs: number;
   sceneCharacters: number;
   calls: string[];
+  gmAgent: "gm" | "match-gm";
+  flow?: ReturnType<typeof recentFlowOf>;
+  matchEffect?: { markerId: string; targetId: string; matched: boolean };
+  numericEffect?: { side: "home" | "away"; lane: "left"; matched: boolean; strengths: number[] };
+  modelRequests: { host: string; bodySha256: string | null }[];
+  diagnosticFacts: JournalEntry[];
+  evaluatorDiagnostics: {
+    status: number;
+    stateSha256: string | null;
+    questions: unknown;
+    answers: unknown;
+  }[];
+  evaluatorCalls: Partial<Record<EvaluatorName, number>>;
+  routingCorrect: boolean;
   usage: UsageLedger;
   costUsd: number | null;
   failure?: ReturnType<typeof failure>;
@@ -111,9 +146,15 @@ function ledgerCost(ledger: UsageLedger, gmPrices: Prices, failed: boolean): num
   let total = 0;
   for (const [agent, entry] of Object.entries(ledger.byAgent)) {
     if (entry.calls === 0) continue;
-    if (agent === "instructions" && LLM_CONFIG.instructions) {
-      total += (entry.usage.inputTokens * LLM_CONFIG.instructions.inputUsdPerMillion) / 1_000_000;
-    } else if (agent === "gm") {
+    const evaluator = LLM_CONFIG.evaluators[agent as EvaluatorName];
+    if (evaluator) {
+      total += (entry.usage.inputTokens * evaluator.inputUsdPerMillion) / 1_000_000;
+    } else if (
+      agent === "gm" ||
+      (agent === "match-gm" &&
+        agentConfig("match-gm").provider === agentConfig("gm").provider &&
+        agentConfig("match-gm").model === agentConfig("gm").model)
+    ) {
       const value = costUsd(entry.usage, gmPrices);
       if (value === null) return null;
       total += value;
@@ -122,12 +163,49 @@ function ledgerCost(ledger: UsageLedger, gmPrices: Prices, failed: boolean): num
   return total;
 }
 
+/** Hash the checked-out runtime sources, including uncommitted changes; never inspect env/data. */
+function sourceFingerprint() {
+  const root = resolve(import.meta.dirname, "../../..");
+  function files(folder: string): string[] {
+    return readdirSync(join(root, folder), { withFileTypes: true }).flatMap((entry) => {
+      const path = join(folder, entry.name);
+      return entry.isDirectory()
+        ? files(path)
+        : entry.isFile() && path.endsWith(".ts")
+          ? [path]
+          : [];
+    });
+  }
+  const paths = [
+    ...["agents", "llm", "engine", "domain", "sim"].flatMap((name) =>
+      files(`packages/${name}/src`),
+    ),
+    "config/llm.yml",
+    "config/game-version.yml",
+    "packages/agents/harness/instructions-eval.ts",
+  ].sort();
+  const sha256ByPath = Object.fromEntries(
+    paths.map((path) => [
+      path,
+      createHash("sha256")
+        .update(readFileSync(join(root, path)))
+        .digest("hex"),
+    ]),
+  );
+  return {
+    sha256: createHash("sha256").update(stableJson(sha256ByPath)).digest("hex"),
+    sha256ByPath,
+  };
+}
+
 async function main() {
   const { values } = parseArgs({
     options: {
       out: { type: "string" },
+      case: { type: "string" },
       live: { type: "boolean", default: false },
       turn: { type: "boolean", default: false },
+      "match-turn": { type: "boolean", default: false },
       "gm-input-usd-per-million": { type: "string" },
       "gm-output-usd-per-million": { type: "string" },
       "gm-cached-input-usd-per-million": { type: "string" },
@@ -153,43 +231,62 @@ async function main() {
   const state = freshGame();
   const player = state.players.find((item) => item.teamId === state.userTeamId);
   if (!player) throw new Error("Synthetic fixture has no own-team player");
-  const commands = instructionCommands(
-    new Map(buildToolSpecs(state, []).map((spec) => [spec.name, spec])),
-    [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS],
-  );
-  const context = [
-    ...buildPeaceContext(state),
-    ...buildTrainingContext(state, buildTrainingSchedule(state)),
-    ...buildMarketContext(state),
-  ].join("\n");
+  const specs = new Map(buildToolSpecs(state, []).map((spec) => [spec.name, spec]));
+  const scopes = {
+    "tactic-orders": {
+      commands: instructionCommands(specs, TACTIC_OPS),
+      context: buildPeaceContext(state).join("\n"),
+    },
+    "training-orders": {
+      commands: instructionCommands(specs, TRAINING_OPS),
+      context: buildTrainingContext(state, buildTrainingSchedule(state)).join("\n"),
+    },
+    "market-orders": {
+      commands: instructionCommands(specs, MARKET_OPS),
+      context: buildMarketContext(state).join("\n"),
+    },
+  };
+  const source = sourceFingerprint();
   const initial = tacticsOf(state, state.userTeamId).spec.pressing;
   const cases = [
     {
       name: "explicit-axis",
+      role: "tactic-orders" as const,
       said: "압박을 4로 설정해",
       expected: { set_tactics: [{ pressing: 4 }] },
     },
     {
       name: "relative-axis",
+      role: "tactic-orders" as const,
       said: "압박을 한 칸 더 올려",
       expected: { set_tactics: [{ pressing: Math.min(5, initial + 1) }] },
     },
     {
       name: "hypothetical-negative",
+      role: "tactic-orders" as const,
       said: "압박을 5로 올리면 어떨까? 아직 바꾸지는 마.",
       expected: {},
     },
     {
       name: "exact-korean-money",
+      role: "market-orders" as const,
       said: "내 사재에서 2억 3천만원을 이적 예산에 보탤게",
       expected: { fund_transfer_budget: [{ amount: 230_000_000 }] },
     },
     {
       name: "seed-player",
+      role: "training-orders" as const,
       said: `${player.name}에게 등번호 9번을 줘`,
       expected: { set_squad_number: [{ playerId: player.id, number: 9 }] },
     },
   ];
+  const availableCases = [
+    ...cases.map((testcase) => testcase.name),
+    ...(values.turn ? ["dialogue"] : []),
+    ...(values["match-turn"] ? ["match-explicit-axis", "match-mark", "match-left-focus"] : []),
+  ];
+  if (values.case && !availableCases.includes(values.case))
+    throw new Error("Unknown --case or missing --turn/--match-turn flag");
   const blockers: string[] = [];
   const results: SyntheticResult[] = [];
   const turns: TurnResult[] = [];
@@ -201,13 +298,16 @@ async function main() {
     }
     process.env.LLM_MODE = "real";
     if (!process.env.TYPESAFE_API_KEY?.trim()) blockers.push("Missing TYPESAFE_API_KEY");
-    if (!LLM_CONFIG.instructions) blockers.push("Missing evaluators.instructions configuration");
-    if (values.turn && !hasKey(agentConfig("gm").provider))
+    for (const role of Object.keys(scopes) as InstructionRole[]) {
+      if (!LLM_CONFIG.evaluators[role]) blockers.push(`Missing evaluators.${role} configuration`);
+    }
+    if ((values.turn || values["match-turn"]) && !hasKey(agentConfig("gm").provider))
       blockers.push(`Missing GM credential: ${keyNamesFor(agentConfig("gm").provider)}`);
-    if (blockers.length === 0 && LLM_CONFIG.instructions) {
-      const config = LLM_CONFIG.instructions;
-      const client = new TypesafeGameEvaluator(config);
-      for (const testcase of cases) {
+    if (blockers.length === 0) {
+      for (const testcase of cases.filter((item) => !values.case || item.name === values.case)) {
+        const config = LLM_CONFIG.evaluators[testcase.role]!;
+        const client = new TypesafeGameEvaluator(config);
+        const { commands, context } = scopes[testcase.role];
         console.log(`Evaluating synthetic ${testcase.name}`);
         const stages: Stage[] = [];
         const evaluator: GameEvaluator = {
@@ -216,6 +316,7 @@ async function main() {
             try {
               const result = await client.evaluate(request);
               stages.push({
+                requestSha256: createHash("sha256").update(stableJson(request)).digest("hex"),
                 durationMs: performance.now() - began,
                 questions: Object.keys(request.questions).length,
                 attempts: result.attempts ?? 1,
@@ -226,6 +327,7 @@ async function main() {
               return result;
             } catch (error) {
               stages.push({
+                requestSha256: createHash("sha256").update(stableJson(request)).digest("hex"),
                 durationMs: performance.now() - began,
                 questions: Object.keys(request.questions).length,
                 attempts: error instanceof TypesafeEvaluationError ? error.attempts : 1,
@@ -271,44 +373,211 @@ async function main() {
           ...(errorInfo ? { failure: errorInfo } : {}),
         });
       }
-      if (values.turn) {
-        for (const testcase of [cases[0]!, cases[2]!]) {
+      if (values.turn || values["match-turn"]) {
+        const turnCases = [
+          ...(values.turn
+            ? [
+                cases[0]!,
+                cases[2]!,
+                { name: "dialogue", said: "오늘 날씨가 좋네요. 잠깐 인사하러 왔어요." },
+              ]
+            : []),
+          ...(values["match-turn"]
+            ? [
+                { name: "match-explicit-axis", said: "압박을 4로 설정해" },
+                { name: "match-mark", said: "" },
+                {
+                  name: "match-left-focus",
+                  said: "이번 경기는 왼쪽 측면으로 공격을 집중해. 반대편에는 공격이 덜 가더라도 괜찮아.",
+                },
+              ]
+            : []),
+        ];
+        for (const testcase of turnCases.filter(
+          (item) => !values.case || item.name === values.case,
+        )) {
           console.log(`Evaluating full turn ${testcase.name}`);
           const game = freshGame();
+          const inMatch = testcase.name.startsWith("match-");
+          let said = testcase.said;
+          let mark: { markerId: string; targetId: string } | undefined;
+          let focusSide: "home" | "away" | undefined;
+          let flow: ReturnType<typeof recentFlowOf> | undefined;
+          if (inMatch) {
+            for (let guard = 0; guard < 40 && game.phase !== "matchday"; guard++)
+              advanceTime(game, "next_match");
+            const started = startMatch(game);
+            if (!started.ok || !game.pendingMatch) throw new Error("Synthetic match setup failed");
+            markEntered(game);
+            advanceLiveMatch(game, 600 * LIVE_TICKS_PER_SECOND);
+            const live = game.pendingMatch.live;
+            flow = recentFlowOf(live);
+            if (testcase.name === "match-left-focus")
+              focusSide = live.setup.sides.home.teamId === game.userTeamId ? "home" : "away";
+            if (testcase.name === "match-mark") {
+              const side = live.setup.sides.home.teamId === game.userTeamId ? "home" : "away";
+              const rival = side === "home" ? "away" : "home";
+              const marker = live.slots[side].find((slot) => slot.position !== "GK");
+              const target = live.slots[rival].find((slot) => slot.position !== "GK");
+              if (!marker || !target) throw new Error("Synthetic match has no outfield pair");
+              mark = { markerId: marker.playerId, targetId: target.playerId };
+              const name = (id: string) => game.players.find((player) => player.id === id)!.name;
+              said = `${name(marker.playerId)}에게 수비할 때 ${name(target.playerId)}를 맨마킹하도록 지시해. 마커가 원래 맡던 공간을 비우는 대가도 반영해.`;
+            }
+          }
+          // The web turn runner stores the user turn before runGmTurn builds its GM message.
+          game.chat.push({ role: "user", text: said, toolCalls: [], at: game.date });
           const beforePressing = tacticsOf(game, game.userTeamId).spec.pressing;
-          const expectedPressing = testcase.name === "explicit-axis" ? 4 : beforePressing;
+          const expectedPressing =
+            testcase.name === "explicit-axis" || testcase.name === "match-explicit-axis"
+              ? 4
+              : beforePressing;
           await withGameUsage(`instruction-eval-${Date.now()}-${testcase.name}`, async () => {
             const began = performance.now();
             let calls: string[] = [];
             let sceneCharacters = 0;
             let errorInfo: ReturnType<typeof failure> | undefined;
+            const modelRequests: { host: string; bodySha256: string | null }[] = [];
+            const diagnosticFacts: JournalEntry[] = [];
+            bindJournal((entry) => {
+              if (["orders.intent", "command", "match.reading"].includes(entry.kind))
+                diagnosticFacts.push(entry);
+            });
+            const evaluatorDiagnostics: TurnResult["evaluatorDiagnostics"] = [];
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input, init) => {
+              const url = input instanceof Request ? input.url : String(input);
+              const body =
+                typeof init?.body === "string"
+                  ? init.body
+                  : input instanceof Request
+                    ? await input.clone().text()
+                    : undefined;
+              modelRequests.push({
+                host: new URL(url).hostname,
+                bodySha256:
+                  body === undefined ? null : createHash("sha256").update(body).digest("hex"),
+              });
+              const response = await originalFetch(input, init);
+              if (new URL(url).hostname === "api.typesafe.ai" && body !== undefined) {
+                const request: unknown = JSON.parse(body);
+                const result: unknown = await response
+                  .clone()
+                  .json()
+                  .catch(() => null);
+                const row =
+                  request !== null && typeof request === "object"
+                    ? (request as Record<string, unknown>)
+                    : {};
+                const answer =
+                  result !== null && typeof result === "object"
+                    ? (result as Record<string, unknown>)
+                    : {};
+                evaluatorDiagnostics.push({
+                  status: response.status,
+                  stateSha256:
+                    typeof row.state === "string"
+                      ? createHash("sha256").update(row.state).digest("hex")
+                      : null,
+                  questions: row.questions ?? null,
+                  answers: answer.answers ?? null,
+                });
+              }
+              return response;
+            };
             try {
-              const result = await runGmTurn(game, testcase.said);
+              const result = await runGmTurn(game, said);
               calls = result.toolCalls.map((call) => call.name);
               sceneCharacters = result.text.length;
             } catch (error) {
               errorInfo = failure(error);
+            } finally {
+              globalThis.fetch = originalFetch;
+              bindJournal(null);
             }
             const afterPressing = tacticsOf(game, game.userTeamId).spec.pressing;
             const ledger = structuredClone(llmUsage());
-            const commandCorrect =
-              testcase.name === "explicit-axis"
-                ? calls.includes("set_tactics")
-                : !calls.includes("set_tactics");
+            const matched =
+              mark === undefined
+                ? undefined
+                : (game.pendingMatch?.live.sheet ?? []).some(
+                    (line) =>
+                      line.shape === "behavior" &&
+                      line.action === "mark" &&
+                      line.target.player === mark.markerId &&
+                      line.targetPlayer === mark.targetId &&
+                      line.step > 0,
+                  );
+            const strengths =
+              focusSide === undefined
+                ? []
+                : (game.pendingMatch?.live.sheet ?? [])
+                    .filter(
+                      (line) =>
+                        line.shape === "focus" &&
+                        line.target.side === focusSide &&
+                        line.target.lane === "left",
+                    )
+                    .map((line) => line.sign * line.step);
+            const focusMatched = strengths.some(
+              (strength) => Number.isFinite(strength) && strength > 0,
+            );
+            const commandCorrect = focusSide
+              ? focusMatched && calls.includes("tactic_orders")
+              : mark
+                ? matched === true && calls.includes("tactic_orders")
+                : testcase.name === "explicit-axis" || inMatch
+                  ? calls.includes("set_tactics")
+                  : !calls.includes("set_tactics");
+            const evaluatorCalls = Object.fromEntries(
+              Object.keys(LLM_CONFIG.evaluators).map((role) => [
+                role,
+                ledger.byAgent[role as EvaluatorName]?.calls ?? 0,
+              ]),
+            );
+            const totalEvaluatorCalls = Object.values(evaluatorCalls).reduce(
+              (sum, calls) => sum + calls,
+              0,
+            );
+            const expectedEvaluator = inMatch ? "match-reader" : "tactic-orders";
+            const routingCorrect =
+              testcase.name === "explicit-axis" || inMatch
+                ? (evaluatorCalls[expectedEvaluator] ?? 0) > 0 &&
+                  totalEvaluatorCalls === evaluatorCalls[expectedEvaluator]
+                : totalEvaluatorCalls === 0;
             turns.push({
               name: testcase.name,
-              said: testcase.said,
+              said,
               expectedPressing,
               beforePressing,
               afterPressing,
               passed:
                 !errorInfo &&
                 commandCorrect &&
+                routingCorrect &&
                 afterPressing === expectedPressing &&
                 sceneCharacters > 0,
               durationMs: performance.now() - began,
               sceneCharacters,
               calls,
+              gmAgent: inMatch ? "match-gm" : "gm",
+              ...(flow ? { flow } : {}),
+              ...(mark ? { matchEffect: { ...mark, matched: matched === true } } : {}),
+              ...(focusSide
+                ? {
+                    numericEffect: {
+                      side: focusSide,
+                      lane: "left" as const,
+                      matched: focusMatched,
+                      strengths,
+                    },
+                  }
+                : {}),
+              modelRequests,
+              diagnosticFacts,
+              evaluatorDiagnostics,
+              evaluatorCalls,
+              routingCorrect,
               usage: ledger,
               costUsd: ledgerCost(ledger, gmPrices, errorInfo !== undefined),
               ...(errorInfo ? { failure: errorInfo } : {}),
@@ -322,14 +591,25 @@ async function main() {
     generatedAt: new Date().toISOString(),
     gameVersion: gameVersion(),
     mode: values.live ? "live" : "offline",
+    selectedCase: values.case ?? null,
     turnRequested: values.turn,
+    matchTurnRequested: values["match-turn"],
     scope:
-      "Synthetic full peace catalog/context; interpretation-only cases plus optional isolated full GM turns. No recorded corpus or baseline comparison.",
-    evaluator: LLM_CONFIG.instructions,
+      "Role-scoped synthetic compiler cases plus optional GM skill-routing turns. No all-turn prepass, recorded corpus or baseline comparison.",
+    source,
+    sourceAtEndSha256: sourceFingerprint().sha256,
+    evaluators: LLM_CONFIG.evaluators,
     gm: { provider: agentConfig("gm").provider, model: agentConfig("gm").model, prices: gmPrices },
-    commandCount: commands.length,
-    contextCharacters: context.length,
-    contextSha256: createHash("sha256").update(context).digest("hex"),
+    scopes: Object.fromEntries(
+      Object.entries(scopes).map(([role, scope]) => [
+        role,
+        {
+          commandCount: scope.commands.length,
+          contextCharacters: scope.context.length,
+          contextSha256: createHash("sha256").update(scope.context).digest("hex"),
+        },
+      ]),
+    ),
     cases,
     blockers,
     results,
@@ -337,7 +617,7 @@ async function main() {
     syntheticDuration: durationStats(results.map((item) => item.durationMs)),
     limitations: [
       "Five synthetic expectations do not establish production quality or improvement.",
-      "Interpretation cases do not apply commands; full turns check only pressing behavior and scene presence, not narrative quality.",
+      "Interpretation cases do not apply commands; full turns check skill routing, pressing behavior and scene presence, not narrative quality.",
       "All provider-reported failed attempt usage is retained. Unreported failure usage and hidden retries cannot be inferred.",
       "Full-turn ledger calls are logical calls, not HTTP attempts. Complete per-attempt accounting is available for direct synthetic evaluator stages only.",
       "Costs are supplied list-price estimates, not billed amounts; additional unpriced agents or failed turns have unknown total cost.",
@@ -347,20 +627,25 @@ async function main() {
   const summary = [
     "# Direct instruction evaluation",
     "",
-    `Mode: ${report.mode}; game version ${report.gameVersion}; ${commands.length} production peace commands; ${context.length} context characters.`,
+    `Mode: ${report.mode}; game version ${report.gameVersion}; role-scoped production catalogs.`,
+    `Source SHA-256: ${source.sha256}`,
+    ...Object.entries(report.scopes).map(
+      ([role, scope]) =>
+        `${role}: ${scope.commandCount} commands; ${scope.contextCharacters} context characters.`,
+    ),
     "",
-    "| Synthetic case | Exact expected ops | Wall ms | Stages / attempts | Input / output tokens | USD estimate |",
+    "| Synthetic case / role | Exact expected ops | Wall ms | Stages / attempts | Input / output tokens | USD estimate |",
     "| --- | --- | ---: | ---: | ---: | ---: |",
     ...results.map(
       (item) =>
-        `| ${item.name} | ${item.exactAgreement} | ${item.durationMs.toFixed(2)} | ${item.stages.length} / ${item.stages.reduce((sum, stage) => sum + stage.attempts, 0)} | ${item.usage.inputTokens} / ${item.usage.outputTokens} | ${show(item.costUsd)} |`,
+        `| ${item.name} / ${item.role} | ${item.exactAgreement} | ${item.durationMs.toFixed(2)} | ${item.stages.length} / ${item.stages.reduce((sum, stage) => sum + stage.attempts, 0)} | ${item.usage.inputTokens} / ${item.usage.outputTokens} | ${show(item.costUsd)} |`,
     ),
     "",
-    "| Full-turn case | State + command + scene check | Wall ms | Logical calls | Input / output tokens | USD estimate |",
+    "| Full-turn case | State + routing + scene check | Wall ms | Evaluator calls / all logical calls | Input / output tokens | USD estimate |",
     "| --- | --- | ---: | ---: | ---: | ---: |",
     ...turns.map(
       (item) =>
-        `| ${item.name} | ${item.passed} | ${item.durationMs.toFixed(2)} | ${item.usage.calls} | ${item.usage.usage.inputTokens} / ${item.usage.usage.outputTokens} | ${show(item.costUsd)} |`,
+        `| ${item.name} | ${item.passed} | ${item.durationMs.toFixed(2)} | ${Object.values(item.evaluatorCalls).reduce((sum, calls) => sum + (calls ?? 0), 0)} / ${item.usage.calls} | ${item.usage.usage.inputTokens} / ${item.usage.usage.outputTokens} | ${show(item.costUsd)} |`,
     ),
     "",
     ...(blockers.length ? ["Blockers:", "", ...blockers.map((item) => `- ${item}`), ""] : []),
