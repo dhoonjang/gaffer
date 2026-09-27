@@ -30,7 +30,7 @@
 | `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석       |
 | `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과 |
 
-운영은 생성형 6개와 타입 평가 역할 6개다. 비교 실험은 운영 에이전트를 추가하지 않는다.
+운영은 생성형 5개와 타입 평가 역할 7개다. 비교 실험은 운영 에이전트를 추가하지 않는다.
 생성형 에이전트는 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를
 사용한다. 평가자는 `max_tokens`·대화 이력·도구 대신 질문을 받고 설정의 모델·전체
 시한·입력 단가를 쓴다. 요청 단위 재시도 수는 최상위 `max_retries`에서 온다.
@@ -1055,7 +1055,7 @@ API가 점수와 확률을 독립 반올림하는 범위는 어댑터가 검증�
 값·키·합계 오류는 재시도 또는 실패다. confidence를 강도에 다시 곱하지 않는다.
 확률과 모델 응답 버전·시도·보고된 토큰은 평가 결과에 남는다. 시트 `step: 0..3`의
 범위는 유지하지만 `Point`가 감독 원문 출처가 되고 `live.flow`가 필수로 저장되므로
-SAVE_VERSION은 12다. 모델 입력·스킬·설정의 이 변경은 game-version 12의 한 주요 버전으로 묶는다.
+이 변경과 스카우트 추천문 필드 제거를 포함한 SAVE_VERSION은 13이다. 모델 입력·스킬·설정의 이 변경은 game-version 12의 한 주요 버전으로 묶는다.
 
 재생 명령, 확보한 기록의 범위와 채택 상태는
 [판독기 비교](match-reader-evaluation.md)에 있다.

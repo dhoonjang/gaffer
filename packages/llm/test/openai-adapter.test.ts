@@ -10,7 +10,7 @@ import {
 } from "@story-fm/llm";
 
 const testConfig = {
-  agent: "finalize-match" as const,
+  agent: "history-compactor" as const,
   provider: "openai" as const,
   model: "gpt-test",
   maxTokens: 1024,
@@ -155,7 +155,7 @@ describe("OpenAI 어댑터", () => {
       user: "안녕",
     });
     expect(sent[0]?.store).toBe(false);
-    expect(sent[0]?.prompt_cache_key).toBe("finalize-match");
+    expect(sent[0]?.prompt_cache_key).toBe("history-compactor");
     expect(sent[0]).not.toHaveProperty("previous_response_id");
   });
 
@@ -762,7 +762,7 @@ describe("OpenAiGameLLM 출력 스키마", () => {
     // `strict: false`는 도구와 같은 이유다 — 중립 스키마는 strict 부분집합이 아니다.
     // 이름 칸은 에이전트다: 캐시 키와 같은 단위
     expect(sent[0]?.text).toEqual({
-      format: { type: "json_schema", name: "finalize-match", schema, strict: false },
+      format: { type: "json_schema", name: "history-compactor", schema, strict: false },
     });
     expect(sent[0]).not.toHaveProperty("tools");
     expect(sent[0]).not.toHaveProperty("tool_choice");

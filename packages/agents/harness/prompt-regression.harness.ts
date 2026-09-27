@@ -3,7 +3,7 @@ import {
   GM_SYSTEM,
   MATCH_GM_SYSTEM,
   buildMatchTools,
-  SETTLE_MATCH_INPUT,
+  FINALIZE_MATCH_RULES,
   SKILL_CATALOG,
   buildGmReference,
   buildGmStateNote,
@@ -81,13 +81,9 @@ function gmSystemParts(): { map: number; guide: number; example: number } {
   };
 }
 
-/**
- * 경기 마감의 고정층 — 마감 에이전트가 요청에 싣는 출력 스키마(결산 규칙은 시스템
- * 프롬프트로 옮겨 갔다 — models.md §3-2). 경기당 한 번 실리므로 고정층 예산과는 다른
- * 눈금이다 (agents.md §3).
- */
+/** 경기 결산 Jev 요청의 공통 규칙. 선수별 질문과 사실은 변동층이다. */
 function settlementLayer(): number {
-  return JSON.stringify(SETTLE_MATCH_INPUT).length;
+  return FINALIZE_MATCH_RULES.length;
 }
 
 /** 경기의 고정층 — 매치 GM 프롬프트 + 경기 도구 둘. 매 경기 턴의 캐시 프리픽스다 */

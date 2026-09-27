@@ -490,10 +490,10 @@ Zod와 다른 JSON 스키마를 갖지 않는다.** 그 열의 선언(설정 이
 | 경기 스킬 (`buildMatchTools`)               | `finalize_match`·`team_talk` — 마감과 대화 판정의 입력·호출 조건                                                                                                                                |
 | 협상 스킬 (`buildNegotiationTools`)         | `counterparty_reply`·`leave_negotiation` — 상대의 판정과 방을 닫는 조건                                                                                                                         |
 | 협상 GM 프롬프트 (`NEGOTIATION_GM_SYSTEM`)  | 방의 화자 — 건너편 사람들의 말을 어떻게 쓰는가 · 블록을 읽는 법 · 장면의 길이 · **그 자리가 어디인지는 장면이 정한다** 한 줄. 판정의 폭은 `<table>`이 싣는다. 예시 장면은 없다 (agents.md §4-1) |
-| 마감 프롬프트 (`FINALIZE_MATCH_SYSTEM`)     | 평점·성장·심경 판정 · `<commentary>`·`<settlement>`를 읽는 법                                                                                                                                   |
+| 마감 평가 규칙 (`FINALIZE_MATCH_RULES`)     | Jev 평점·성장 판정 · 경기 브리프와 중계를 읽는 법                                                                                                                                   |
 | 직접 지시 질문 (`instruction-compiler.ts`)  | 원문·상태와 현재 국면의 코어 명령 스키마에서 실행 의도·필드·후보를 선택한다. 산문이나 도구 호출을 요구하지 않는다                                                                               |
 | 훈련 결산 · 압축                            | 무엇을 보는가 · 규칙. 폭과 인원은 코어 상수에서 읽는다 (agents.md §4)                                                                                                                           |
-| 마감 프롬프트의 결산 절                     | 무엇을 매기고 어디까지 벗어날 수 있는가 — 폭·인원·노화 문장은 코어 상수에서 (agents.md §3)                                                                                                      |
+| 마감 평가 규칙의 결산 절                     | 무엇을 매기고 어디까지 벗어날 수 있는가 — 폭·인원·노화 문장은 코어 상수에서 (agents.md §3)                                                                                                      |
 | 데이터 블록 (카드 · 구단·감독 · 스냅샷)     | 사실, 범례 한 줄, 그 턴만의 오퍼레이터 지시 (원칙 7)                                                                                                                                            |
 | 온보딩 프롬프트 (`ONBOARDING_JUDGE_SYSTEM`) | 무엇을 판정하는가 · 첫 장면을 누가 어떻게 여는가 · 그 장면의 출력 문법 (agents.md §4-2)                                                                                                         |
 
@@ -806,9 +806,9 @@ prompt-regression`, 밴드는 서술자가 쥔다
 | 경기 지시 타입 출력·관측 문맥                                                | `packages/agents/src/match/jev-match-reader.ts` · `packages/agents/src/match/recent-flow.ts`                          |
 | 테이블 명령 목록·문맥                                                        | `packages/agents/src/negotiation/table-orders.ts`                                                                     |
 | 매치 GM 프롬프트·경기 도구 둘 (`MATCH_GM_SYSTEM` · `buildMatchTools`)        | `packages/agents/src/match/match-gm.ts` · `packages/agents/src/app/workflows/match/match-gm.ts`                       |
-| 마감 프롬프트 (`FINALIZE_MATCH_SYSTEM`)                                      | `packages/agents/src/match/finalize-match.ts`                                                                         |
+| 마감 평가 규칙 (`FINALIZE_MATCH_RULES`)                                      | `packages/agents/src/match/finalize-match.ts`                                                                         |
 | 훈련 결산 평가 질문                                                          | `packages/agents/src/story/training-rater.ts`                                                                         |
-| 경기 결산 절 (`FINALIZE_MATCH_SYSTEM` 안)                                    | `packages/agents/src/match/finalize-match.ts`                                                                         |
+| 경기 결산 절 (`FINALIZE_MATCH_RULES` 안)                                    | `packages/agents/src/match/finalize-match.ts`                                                                         |
 | 이력 요약 프롬프트 (`HISTORY_COMPACTOR_SYSTEM`)                              | `packages/agents/src/story/history-compactor.ts`                                                                      |
 | 온보딩 프롬프트 (`ONBOARDING_JUDGE_SYSTEM`)                                  | `packages/agents/src/story/onboarding-judge.ts` · `packages/agents/src/app/workflows/story/onboarding-judge.ts`       |
 | 도구 설명·그룹·표시 이름 (`SKILL_CATALOG`)                                   | `packages/agents/src/app/skill-descriptions.ts`                                                                       |

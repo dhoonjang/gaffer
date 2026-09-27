@@ -78,7 +78,7 @@ pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
 pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
   --logs /Users/dhoonjang/local/story-fm/apps/web/.log \
   --out /tmp/reader-eval-live \
-  --live --baseline-agent finalize-match \
+  --live --baseline-agent history-compactor \
   --input-usd-per-million <현재-선택한-모델의-입력-단가> \
   --output-usd-per-million <현재-선택한-모델의-출력-단가> \
   --cached-input-usd-per-million <현재-선택한-모델의-캐시-단가>

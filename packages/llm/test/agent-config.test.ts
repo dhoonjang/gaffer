@@ -76,11 +76,6 @@ describe("에이전트별 LLM 설정", () => {
     model: gpt-room
     max_tokens: 200
     timeout_ms: 2000
-  finalize-match:
-    provider: google
-    model: gemini-final
-    max_tokens: 250
-    timeout_ms: 2500
   history-compactor:
     provider: anthropic
     model: claude-compactor
@@ -311,7 +306,7 @@ ${fields}`;
 
   it("rejects retired comparison roles in production configuration", () => {
     const agents = fullAgents();
-    for (const name of ["reader-baseline", "scout-rater", "training-rater"]) {
+    for (const name of ["reader-baseline", "scout-rater", "training-rater", "finalize-match"]) {
       expect(() => parseLlmConfig(yamlOf({ ...agents, [name]: { ...AGENT_BLOCK } }))).toThrow();
     }
     expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();

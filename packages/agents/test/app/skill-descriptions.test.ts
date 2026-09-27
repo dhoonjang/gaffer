@@ -16,10 +16,9 @@ import {
   instructionCommands,
   applyOps,
   parseOps,
-  FINALIZE_MATCH_SYSTEM,
+  FINALIZE_MATCH_RULES,
   REPORT_DIGEST_INPUT,
   REPORT_ONBOARDING_INPUT,
-  SETTLE_MATCH_INPUT,
   ONBOARDING_JUDGE_SYSTEM,
   SKILL_CATALOG,
   SKILL_NAMES,
@@ -146,7 +145,7 @@ describe("규칙이 사는 자리", () => {
     expect(early.every((axis) => agingDelta(axis, age) < 0)).toBe(true);
     expect(early.every((axis) => agingDelta(axis, age - 1) < 0)).toBe(false);
 
-    expect(FINALIZE_MATCH_SYSTEM).toContain(line);
+    expect(FINALIZE_MATCH_RULES).toContain(line);
     expect(TRAINING_RATER_RULES).toContain(line);
   });
 
@@ -470,11 +469,10 @@ function enumArg(
 }
 
 /**
- * 출력 스키마 셋은 GM 도구가 아니라 저마다의 호출이 요청에 싣는 산출의 꼴이다 — 카탈로그에도
+ * 출력 스키마 둘은 GM 도구가 아니라 저마다의 호출이 요청에 싣는 산출의 꼴이다 — 카탈로그에도
  * `buildGmTools`에도 서지 않고 이름은 에이전트의 것이다. 그래도 모델이 받는 입력이라 계약은 같다.
  */
 const OUTPUT_SCHEMAS = [
-  { name: "finalize-match", inputSchema: SETTLE_MATCH_INPUT },
   { name: "onboarding-judge", inputSchema: REPORT_ONBOARDING_INPUT },
   { name: "history-compactor", inputSchema: REPORT_DIGEST_INPUT },
 ];

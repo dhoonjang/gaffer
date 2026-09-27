@@ -1165,7 +1165,7 @@ describe("게임 잠금 — 겹친 요청", () => {
  */
 describe("계측 라우트 — 히트율의 문턱", () => {
   /** 사용량만 돌려주는 가짜 호출 — 장부는 `meterLlm`을 지나야만 움직인다 */
-  function call(agent: "gm" | "finalize-match", usage: TurnResult["usage"]) {
+  function call(agent: "gm" | "history-compactor", usage: TurnResult["usage"]) {
     const llm = meterLlm(
       {
         async runTurn(): Promise<TurnResult> {
@@ -1194,8 +1194,8 @@ describe("계측 라우트 — 히트율의 문턱", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     });
-    // finalize-match도 Google이지만 이쪽은 문턱을 넘겨 부른다
-    await call("finalize-match", {
+    // history-compactor도 Google이지만 이쪽은 문턱을 넘겨 부른다
+    await call("history-compactor", {
       inputTokens: 20_000,
       outputTokens: 200,
       cacheReadTokens: 8_000,
@@ -1205,7 +1205,7 @@ describe("계측 라우트 — 히트율의 문턱", () => {
     const body = (await (await usageGet()).json()) as UsageResponse;
     expect(body.gameId).toBe("usage-test");
     const gm = body.agents.find((a) => a.agent === "gm")!;
-    const rater = body.agents.find((a) => a.agent === "finalize-match")!;
+    const rater = body.agents.find((a) => a.agent === "history-compactor")!;
     expect(gm.avgInput).toBe(1000);
     expect(gm.cacheHitRate).toBeNull();
     expect(rater.cacheHitRate).toBeCloseTo(0.4, 6);

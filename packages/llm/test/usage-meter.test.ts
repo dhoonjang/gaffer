@@ -271,12 +271,12 @@ describe("상한 정책 — 게임 진행을 막지 않는다", () => {
     expect(agentAllowed("match-gm", verdict)).toBe(true);
   });
 
-  it("typed training evaluation respects the budget before any provider call", async () => {
+  it.each(["training-rater", "finalize-match"] as const)("typed %s respects the budget before any provider call", async (agent) => {
     vi.stubEnv("LLM_TOKEN_BUDGET", "10");
     const fetch = vi.spyOn(globalThis, "fetch");
     try {
       recordEvaluationUsage("gm", usageOf({ inputTokens: 20 }));
-      const evaluator = createGameEvaluator("training-rater");
+      const evaluator = createGameEvaluator(agent);
       await expect(
         evaluator.evaluate({
           state: "fixture",
@@ -284,7 +284,7 @@ describe("상한 정책 — 게임 진행을 막지 않는다", () => {
         }),
       ).rejects.toBeInstanceOf(TokenBudgetExceededError);
       expect(fetch).not.toHaveBeenCalled();
-      expect(llmUsage().byAgent["training-rater"].skipped).toBe(1);
+      expect(llmUsage().byAgent[agent].skipped).toBe(1);
     } finally {
       vi.unstubAllEnvs();
     }

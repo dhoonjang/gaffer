@@ -27,7 +27,7 @@
 설정 키와 실제 모델은 `config/llm.yml`, 스킬의 정확한 선언은 `SKILL_CATALOG`와
 `MATCH_TOOL_DEFINITIONS`·`NEGOTIATION_TOOL_DEFINITIONS`가 소유한다.
 
-운영 설정과 호출 목록은 **생성형 6개와 타입 평가 역할 6개**만 갖는다. 비교 전용
+운영 설정과 호출 목록은 **생성형 5개와 타입 평가 역할 7개**만 갖는다. 비교 전용
 생성형 판독기의 프롬프트·파이프라인은 `harness/`에 두며 운영 출력 목록에 등록하지 않는다.
 비교 실행은 `--baseline-agent`로 기존 생성형 역할의 모델 설정을 명시적으로 선택하고,
 강도 평가에는 `evaluators.match-reader` 설정을 사용한다. 비교 역할 이름은 과거 로그를 읽는 용도로만 남는다.
@@ -42,7 +42,7 @@
 | 시장·재정 / `market-orders` (Jev)   | `market_orders`               | 선수·오퍼·금융의 명령 선택                                                                |
 | 협상 조건 / `table-orders` (Jev)    | `negotiation_orders`          | 현재 방에 고정한 값·조건·수락·철회                                                        |
 | 경기 전술 / `match-reader` (Jev)    | 경기 `tactic_orders`          | 직접 명령과 복합 전술 효과. 원문 출처와 시트는 함께 검증·적용                             |
-| 경기 결산 / `finalize-match` (Jev)  | 마감 스킬 또는 마감 보장 경로 | 평점·성장·심경, 코어 앵커 ± 한도. 실패하면 앵커 유지                                      |
+| 경기 결산 / `finalize-match` (Jev)  | 마감 스킬 또는 마감 보장 경로 | 평점·성장, 코어 앵커 ± 한도. 근거·심경은 매치 GM                                      |
 | 훈련 결산 / `training-rater` (Jev)  | 날짜 진행                     | 훈련 구간 평가, 코어 앵커 ± 한도                                                          |
 | 이력 압축 / `history-compactor`     | 평시 이력 창 상한             | 요약·인물 기억, 실패하면 접지 않음                                                        |
 | 온보딩 / `onboarding-judge`         | 새 게임 생성                  | 초기 조건·사건·첫 장면, 실패하면 생성 중단                                                |

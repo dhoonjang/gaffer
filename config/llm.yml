@@ -46,15 +46,6 @@ agents:
     timeout_ms: 180000
     thinking_level: low
 
-  # 끝난 경기의 평점·성장·심경 결산. 경기당 한 번, 코어 앵커와 한도 안에서 판정한다.
-  finalize-match:
-    provider: google
-    model: gemini-3.8-flash
-    max_tokens: 16000
-    timeout_ms: 90000
-    # 3.8-flash는 minimal에 400을 낸다 — 이 자리만 minimal로 남아 있었다 (live-schema 실측)
-    thinking_level: low
-
   # 새 게임의 배경을 읽고 지갑·능력치의 결·시작 사건을 판정한 뒤, 그 위에서 부임 첫날의
   # 첫 장면까지 쓴다 (docs/common/llm/agents.md §4-2). **싼 자리로 보내지 않는다** — 판정만 낼
   # 때는 앵커가 답을 받쳐 줬지만 첫 장면에는 앵커가 없고, 그것이 이 게임의 첫인상이다.
@@ -77,7 +68,7 @@ agents:
     timeout_ms: 60000
     thinking_level: low
 
-# Jev interpreters run behind GM skills; training evaluation runs after a trained interval.
+# Jev interpreters run behind GM skills; settlements run after trained intervals or finished matches.
 # Shared defaults; expand a role mapping to configure it independently.
 # Direct TypeSafe API; TYPESAFE_API_KEY. Published input price, checked 2026-09-27.
 evaluators:
@@ -91,3 +82,4 @@ evaluators:
   table-orders: *jev
   match-reader: *jev
   training-rater: *jev
+  finalize-match: *jev

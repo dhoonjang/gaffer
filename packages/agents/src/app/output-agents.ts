@@ -1,5 +1,4 @@
 import type { GenerativeAgentName, JsonObjectSchema } from "@story-fm/llm";
-import { FINALIZE_MATCH_SYSTEM, SETTLE_MATCH_INPUT } from "../match/finalize-match";
 import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../story/history-compactor";
 import { ONBOARDING_JUDGE_SYSTEM, REPORT_ONBOARDING_INPUT } from "../story/onboarding-judge";
 
@@ -15,7 +14,6 @@ export interface OutputAgent {
 
 export function outputAgents(): readonly OutputAgent[] {
   return [
-    { agent: "finalize-match", system: FINALIZE_MATCH_SYSTEM, schema: SETTLE_MATCH_INPUT },
     { agent: "onboarding-judge", system: ONBOARDING_JUDGE_SYSTEM, schema: REPORT_ONBOARDING_INPUT },
     { agent: "history-compactor", system: HISTORY_COMPACTOR_SYSTEM, schema: REPORT_DIGEST_INPUT },
   ];
