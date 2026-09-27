@@ -4,7 +4,7 @@
  *
  * 줄에서 꺼낸 것과 카드로 선 것이 갈리면 보고서가 없어진다
  * (docs/common/player.md §9.4-1 · docs/common/llm/agents.md §6). 규칙과 상한(`MAX_REPORT_CARDS`)이
- * 한 자리에 살아야 그 짝이 어긋나지 않으므로, 조립·상한·빈 자리 표식·한 줄 평을 이
+ * 한 자리에 살아야 그 짝이 어긋나지 않으므로, 조립·상한·빈 자리 표식을 이
  * 모듈이 함께 갖는다.
  */
 import {
@@ -15,7 +15,6 @@ import {
   type GameState,
 } from "@story-fm/engine";
 import type { MissionReportCard, ScoutReportCard } from "@story-fm/domain";
-import { rateScoutReports } from "../negotiation/scout-rater";
 
 /** 한 턴에 세우는 스카우팅 보고서 카드 상한 — 화면이 카드로 덮이면 장면이 안 읽힌다 */
 export const MAX_REPORT_CARDS = 3;
@@ -41,9 +40,6 @@ export const NO_CARDS: ArrivedCards = { reports: [], missions: [] };
  * 그 턴의 모델이 **금액을 읽는 자리**는 갈린다 — 손잡이로 도착한 것은 「그 사이 벌어진
  * 일」이, 헤더 뒤에 도착한 것은 **다음 턴의 도착 블록**이 싣는다 (agents.md §6).
  *
- * ⚠️ **한 줄 평은 카드가 선 뒤에 붙는다** — 판정이 실패해도 카드는 그대로 서고 줄에서
- * 빠진다. 평이 없는 보고서는 16축에서 그대로 닫힌다 (agents.md §4-4).
- *
  * ⚠️ **줄에서 빠지는 것은 카드가 실제로 선 것뿐이다.** 조립이 `null`을 주면(그 사이
  * 은퇴해 `state.players`에서 빠진 선수) 그 id는 줄에 남고 `stuck`에 적혀 이번 턴에
  * 다시 집히지 않는다 — 영영 못 세울 것은 tick의 `pruneReportCards`가 사실을 남기며
@@ -54,11 +50,11 @@ export const NO_CARDS: ArrivedCards = { reports: [], missions: [] };
  * id와 임무 id가 섞여 온다 — 갈래마다 따로 꺼내면 앞의 호출이 줄을 비워 뒤는 언제나
  * 빈손이다. 임무 표(`state.scoutMissions`)에서 찾히는 id가 임무다.
  */
-export async function takeArrivedReports(
+export function takeArrivedReports(
   state: GameState,
   limit: number,
   stuck: Set<string> = new Set(),
-): Promise<ArrivedCards> {
+): ArrivedCards {
   const missionIds = new Set(state.scoutMissions.map((m) => m.id));
   const cards: ArrivedCards = { reports: [], missions: [] };
   const stood: string[] = [];
@@ -74,7 +70,5 @@ export async function takeArrivedReports(
     stood.push(id);
   }
   consumeReportCards(state, stood);
-  // 이번 턴에 도착한 보고서 전부가 한 호출이다 — 선수마다 부르면 기다림이 그 배다
-  await rateScoutReports(state, cards.reports);
   return cards;
 }

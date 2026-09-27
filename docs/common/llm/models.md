@@ -30,7 +30,7 @@
 | `evaluators.table-orders`    | 현재 협상 방 스킬이 요청한 지시 해석       |
 | `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과 |
 
-운영은 생성형 8개와 타입 평가 역할 5개다. 비교 전용 두 설정은 이 수에 포함하지 않는다.
+운영은 생성형 7개와 타입 평가 역할 5개다. 비교 실험은 운영 에이전트를 추가하지 않는다.
 생성형 에이전트는 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를
 사용한다. 평가자는 `max_tokens`·대화 이력·도구 대신 질문을 받고 설정의 모델·전체
 시한·입력 단가를 쓴다. 요청 단위 재시도 수는 최상위 `max_retries`에서 온다.

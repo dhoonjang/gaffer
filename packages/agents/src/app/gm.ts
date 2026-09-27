@@ -333,7 +333,7 @@ async function openTurn(
    * ⚠️ 손잡이가 시계를 옮기기 **전에** 꺼낸다: 그 뒤에 도착하는 것은 「그 사이 벌어진
    * 일」이 따로 실으므로, 여기 섞이면 한 프롬프트에 같은 값이 두 번 실린다 (agents.md §6).
    */
-  const carried = peace ? await takeArrivedReports(state, MAX_REPORT_CARDS, stuckCards) : NO_CARDS;
+  const carried = peace ? takeArrivedReports(state, MAX_REPORT_CARDS, stuckCards) : NO_CARDS;
   // 손잡이로 넘긴 시간은 모델보다 먼저 흐른다 — 코어가 먼저 굴리고 "그 사이
   // 벌어진 일"을 상태에 실어, 모델은 도착한 자리에서 보고한다
   const pendingBeforeSkip = new Set(pendingVerdicts(state).map((v) => v.negotiation.id));
@@ -347,7 +347,7 @@ async function openTurn(
     noteTraining(state, ledger, skipped, from);
   }
   const skippedCards = skipped
-    ? await takeArrivedReports(
+    ? takeArrivedReports(
         state,
         MAX_REPORT_CARDS - carried.reports.length - carried.missions.length,
         stuckCards,
@@ -735,7 +735,7 @@ async function closeTurn(
    */
   const headerCards =
     peace && scenePoint
-      ? await takeArrivedReports(
+      ? takeArrivedReports(
           state,
           MAX_REPORT_CARDS -
             opening.carried.reports.length -
@@ -746,7 +746,8 @@ async function closeTurn(
         )
       : NO_CARDS;
   /**
-   * 훈련 결산 — 코어 앵커 위에 LLM이 맥락을 더한다 (실패해도 앵커가 남는다).
+   * 훈련 결산 — LLM이 구간의 성장·적응을 판정하고 코어가 대상·한도를 검증한다.
+   * 실패하면 그 구간은 성장 없는 빈 결산을 남긴다.
    *
    * 내부 판정이라 칩으로 세우지 않는다. 결과는 **장부의 결산 카드**가 갖는다
    * (`state.trainingReports`) — 달력 일지가 그 카드를 문장으로 펼치고, 다음 턴의

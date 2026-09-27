@@ -12,7 +12,6 @@ export const AGENT_NAMES = [
   "negotiation-gm",
   "finalize-match",
   "training-rater",
-  "scout-rater",
   "history-compactor",
   "onboarding-judge",
 ] as const;
@@ -28,7 +27,12 @@ export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
 export const EVALUATOR_NAMES = [...INSTRUCTION_AGENT_NAMES, "match-reader"] as const;
 export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
 /** Retain historical trace names without making them callable production roles. */
-const RETIRED_AGENT_NAMES = ["instructions", "reader-baseline", "match-sheet"] as const;
+const RETIRED_AGENT_NAMES = [
+  "instructions",
+  "reader-baseline",
+  "match-sheet",
+  "scout-rater",
+] as const;
 export const RECORDED_AGENT_NAMES = [
   ...AGENT_NAMES,
   ...EVALUATOR_NAMES,
@@ -227,7 +231,6 @@ const LlmConfigFileSchema = z
         "negotiation-gm": RawAgentConfigSchema,
         "finalize-match": RawAgentConfigSchema,
         "training-rater": RawAgentConfigSchema,
-        "scout-rater": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,
       })

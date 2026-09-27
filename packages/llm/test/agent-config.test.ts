@@ -87,11 +87,6 @@ describe("에이전트별 LLM 설정", () => {
     max_tokens: 400
     timeout_ms: 4000
     thinking_level: low
-  scout-rater:
-    provider: google
-    model: gemini-scout
-    max_tokens: 300
-    timeout_ms: 3000
   history-compactor:
     provider: google
     model: gemini-compactor
@@ -321,8 +316,9 @@ ${fields}`;
 
   it("rejects retired comparison roles in production configuration", () => {
     const agents = fullAgents();
-    agents["reader-baseline"] = { ...AGENT_BLOCK };
-    expect(() => parseLlmConfig(yamlOf(agents))).toThrow();
+    for (const name of ["reader-baseline", "scout-rater"]) {
+      expect(() => parseLlmConfig(yamlOf({ ...agents, [name]: { ...AGENT_BLOCK } }))).toThrow();
+    }
     expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();
   });
 

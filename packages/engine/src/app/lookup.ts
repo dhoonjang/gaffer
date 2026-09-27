@@ -1164,9 +1164,7 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
       `스카우트 보고서: ${lastReport.completedOn} 도착 · ` +
         `시장가 ${formatMoney(observedMarketValue(state, p))} · ` +
         `요구액 ${formatMoney(askingPriceFor(state, p))} · ` +
-        `기대 주급 ${formatMoney(wageExpectationOf(state, p))}` +
-        // 스카우트가 남긴 한 줄 — 감독의 모달이 읽는 그 문장이다 (agents.md §4-4)
-        (lastReport.verdict ? ` · “${lastReport.verdict}”` : ""),
+        `기대 주급 ${formatMoney(wageExpectationOf(state, p))}`,
     );
   }
 

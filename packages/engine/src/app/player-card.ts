@@ -231,8 +231,6 @@ export interface PlayerCardView {
     on: string;
     askingPrice: number;
     wageExpectation: number;
-    /** 스카우트가 쓴 한 줄 — 판정이 실패했거나 옛 보고서면 null */
-    verdict: string | null;
   } | null;
 
   /** 지금 부상 (없으면 null) — 공개 기록이라 남의 선수도 그대로 선다 */
