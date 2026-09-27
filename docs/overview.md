@@ -402,25 +402,25 @@ flowchart LR
 
 ## 문서 지도
 
-|                | 문서                                                       | 다루는 것                                                                |
-| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| **데이터**     | [common/game-state.md](common/game-state.md)               | 2-레이어 · 엔티티와 관계 · 파생 · 세이브 정책                            |
-|                | [common/player.md](common/player.md)                       | 능력치 16축 · 역할 · 폼 · 체력 · 성장 · 적응도 · 안개                    |
-|                | [common/team.md](common/team.md)                           | 구단 체급 · 프로필 · 1·2군과 등록 명단 · 팀의 종류                       |
-|                | [match/competition.md](match/competition.md)               | 리그 · 국내 컵 · 유럽 대항전 · 승강의 규정                               |
-|                | [story/people.md](story/people.md)                         | 페르소나 · 화자 규칙 · 기자회견 · 심경                                   |
-|                | [common/sources.md](common/sources.md)                     | 선수·팀 데이터의 출처와 라이선스 부채                                    |
-| **시뮬레이션** | [match/live-match.md](match/live-match.md)                 | 실시간 경기 — 말의 규칙 · 전술 · 시트 · 부하 · 클라이언트 시뮬과 검증    |
-|                | [match/match.md](match/match.md)                           | 경기 능력 · 장부 · 벤치 · 경기 후 반영 · 간이 시뮬 · 상수와 근거         |
-|                | [match/football-reference.md](match/football-reference.md) | 실제 축구 통계 — 밸런스의 기준점                                         |
-|                | [common/season.md](common/season.md)                       | 달력 편성 · tick · 훈련 계획 · 시즌 전환                                 |
-|                | [negotiation/transfer.md](negotiation/transfer.md)         | 협상 · 설득 · 메디컬 · AI 시장 · 주급                                    |
-|                | [negotiation/finance.md](negotiation/finance.md)           | 수입·지출 · 상각 · PSR · 강등의 타격                                     |
-|                | [story/career.md](story/career.md)                         | 감독 기록 · 평판 · 보드 · 트로피                                         |
-|                | [common/balance-harness.md](common/balance-harness.md)     | 밸런스 하네스 — 무엇을 재고 어느 대역을 지키는가                         |
-| **LLM**        | [common/llm/pipeline.md](common/llm/pipeline.md)           | 한 턴의 파이프라인 — 입력 조립 · 출력 파싱 · 도구 세 겹 · 실패 (mermaid) |
-|                | [common/llm/agents.md](common/llm/agents.md)               | 열세 에이전트의 계약 · 결산과 교섭 · 입력 층 · 스냅샷 · 조회             |
-|                | [common/llm/prompts.md](common/llm/prompts.md)             | 프롬프트 원칙 · 입력의 해부 · 출력 문법 · 도구 표면                      |
-|                | [common/llm/models.md](common/llm/models.md)               | 에이전트별 모델 설정 · 어댑터 · 실패 종류 · 토큰 예산                    |
+|                | 문서                                                       | 다루는 것                                                                       |
+| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **데이터**     | [common/game-state.md](common/game-state.md)               | 2-레이어 · 엔티티와 관계 · 파생 · 세이브 정책                                   |
+|                | [common/player.md](common/player.md)                       | 능력치 16축 · 역할 · 폼 · 체력 · 성장 · 적응도 · 안개                           |
+|                | [common/team.md](common/team.md)                           | 구단 체급 · 프로필 · 1·2군과 등록 명단 · 팀의 종류                              |
+|                | [match/competition.md](match/competition.md)               | 리그 · 국내 컵 · 유럽 대항전 · 승강의 규정                                      |
+|                | [story/people.md](story/people.md)                         | 페르소나 · 화자 규칙 · 기자회견 · 심경                                          |
+|                | [common/sources.md](common/sources.md)                     | 선수·팀 데이터의 출처와 라이선스 부채                                           |
+| **시뮬레이션** | [match/live-match.md](match/live-match.md)                 | 실시간 경기 — 말의 규칙 · 전술 · 시트 · 부하 · 클라이언트 시뮬과 검증           |
+|                | [match/match.md](match/match.md)                           | 경기 능력 · 장부 · 벤치 · 경기 후 반영 · 간이 시뮬 · 상수와 근거                |
+|                | [match/football-reference.md](match/football-reference.md) | 실제 축구 통계 — 밸런스의 기준점                                                |
+|                | [common/season.md](common/season.md)                       | 달력 편성 · tick · 훈련 계획 · 시즌 전환                                        |
+|                | [negotiation/transfer.md](negotiation/transfer.md)         | 협상 · 설득 · 메디컬 · AI 시장 · 주급                                           |
+|                | [negotiation/finance.md](negotiation/finance.md)           | 수입·지출 · 상각 · PSR · 강등의 타격                                            |
+|                | [story/career.md](story/career.md)                         | 감독 기록 · 평판 · 보드 · 트로피                                                |
+|                | [common/balance-harness.md](common/balance-harness.md)     | 밸런스 하네스 — 무엇을 재고 어느 대역을 지키는가                                |
+| **LLM**        | [common/llm/pipeline.md](common/llm/pipeline.md)           | 한 턴의 파이프라인 — 입력 조립 · 출력 파싱 · 직접 지시·GM 스킬 · 실패 (mermaid) |
+|                | [common/llm/agents.md](common/llm/agents.md)               | 열세 에이전트의 계약 · 결산과 교섭 · 입력 층 · 스냅샷 · 조회                    |
+|                | [common/llm/prompts.md](common/llm/prompts.md)             | 프롬프트 원칙 · 입력의 해부 · 출력 문법 · 도구 표면                             |
+|                | [common/llm/models.md](common/llm/models.md)               | 에이전트별 모델 설정 · 어댑터 · 실패 종류 · 토큰 예산                           |
 
 > 비전과 개발 규약은 저장소 루트의 [AGENTS.md](../AGENTS.md).
