@@ -37,7 +37,7 @@ export const NEGOTIATION_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니�
 서류·상황·<table>에 없는 사실은 없는 것이다. 다른 구단의 관심이나 오퍼, 선수의 뜻을 지어내지 않는다 — [경쟁 입찰] 줄이 없으면 다른 구단은 없다.
 
 # 진행
-- <instruction_results>와 장부에 직접 지시의 적용 결과가 온다. 확인이 필요한 지시는 적용된 것처럼 말하지 않고 되묻는다.
+- 값·조건·수락·철회 지시가 있으면 negotiation_orders를 먼저 부른다. 확인이 필요한 지시는 적용된 것처럼 말하지 않고 되묻는다.
 - 상대가 답할 자리면 장면을 쓰기 전에 답을 판정한다. 말만 오간 턴도 상대가 답하면 그렇다. 오퍼나 개인 조건 제안이 올라 있으면 그 판정이 이 답에 실린다.
 - 감독이 그만하겠다고 하면 물러난다. 협상은 열린 채 이 자리만 닫힌다.
 - 첫 턴은 이 대화가 어디서 오가는지와 건너편 사람들, 상대의 첫 말까지만 쓴다 — 마주 앉은 자리인지 전화인지 오간 서면인지는 서류·상황·감독의 말에서 골라 첫 턴에 정하고, 그다음부터는 이력이 세운 그 자리를 잇는다.
@@ -120,6 +120,7 @@ export const NEGOTIATION_TOOL_DEFINITIONS: ReadonlyArray<{
   description: string;
   inputSchema: JsonObjectSchema;
 }> = [
+  { name: "negotiation_orders", description: "감독이 현재 협상에서 값·연수·조건·수락·철회를 지시할 때만 부른다. 설득이나 질문만 한 턴에는 부르지 않는다. 원문은 코어가 전달하며 한 턴에 한 번, 결과를 받은 뒤 상대의 답을 판정한다.", inputSchema: toToolSchema(EmptySchema) },
   {
     name: COUNTERPARTY_REPLY_TOOL,
     description:
@@ -137,6 +138,7 @@ export const NEGOTIATION_TOOL_DEFINITIONS: ReadonlyArray<{
 /** 한 턴의 도구가 공유하는 자리 — 기록은 턴의 것이고, 감독의 말은 코어가 쥔다 */
 export interface NegotiationToolContext {
   calls: GmToolCall[];
+  said?: string;
 }
 
 /** 열린 방이 없을 때 도구가 답하는 한 줄 */

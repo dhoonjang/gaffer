@@ -4,15 +4,11 @@ import {
   managerTacticsOf,
   playerName,
   type ReadingOccasion,
-  journal,
 } from "@story-fm/engine";
 import {
   attributeLine,
   buildPointsBlock,
   stripTag,
-  type MatchReaderOutput,
-  matchReaderOutputSchema,
-  FAILED_NOTE,
 } from "../../../match/match-reader";
 import { type BoardMove, type MatchEvent } from "@story-fm/domain";
 import {
@@ -23,10 +19,6 @@ import {
 } from "../../../match/context";
 import { eventsBlockOf } from "../../../match/context";
 import { tagged } from "../../../common/orders-ops";
-import { type GameLLM, createGameLLM, agentConfig } from "@story-fm/llm";
-import { mockReaderLlm } from "../../mock-gm";
-import { ModelOutputError } from "../../../common/retry";
-import { runReaderPipeline } from "../../../match/reader-pipeline";
 
 /**
  * `<facts>` — **판독기가 읽는 사실 전부.** 양 팀의 진짜 능력치와 지금 내는 전력, 선수별
@@ -131,62 +123,3 @@ export function buildReaderInput(
     .join("\n");
 }
 
-// ── 호출 ─────────────────────────────────────────────────
-
-/**
- * 경기를 읽는다 — **킥오프 · 지시 턴 · 골·퇴장 뒤 · 하프타임** (agents.md §3).
- *
- * 산출 없이 두 번 실패하면 `ok: false`다. 그 뒤가 때마다 갈린다: 지시 턴은 도구가
- * 반려로 답하고, 정지점 뒤는 삼켜 지난 시트가 남고, 킥오프는 빈 포인트로 시작한다 —
- * 그 판정은 부르는 쪽이 한다.
- */
-export async function runMatchReader(
-  state: GameState,
-  options: {
-    occasion: ReadingOccasion;
-    /** 이번 턴 감독의 말 — 지시 턴에만 선다 */
-    said?: string;
-    /** 이번 턴 전술판이 이미 움직인 것 — 되풀이를 가릴 근거다 */
-    boardMoves?: readonly BoardMove[];
-    /** 정지점 뒤의 판독이 읽는 사건 */
-    events?: readonly MatchEvent[];
-    llm?: GameLLM;
-  },
-): Promise<{ ok: true; reading: MatchReaderOutput } | { ok: false; message: string }> {
-  const { occasion } = options;
-  let reading: MatchReaderOutput | null = null;
-  let client = options.llm ?? mockReaderLlm(state, options);
-  let attempts = 0;
-  const user = buildReaderInput(state, options);
-  const schema = matchReaderOutputSchema();
-  const record = (rest: { ok: boolean; failure?: string }): void =>
-    journal({
-      kind: "match.reading",
-      occasion,
-      points: reading?.points ?? [],
-      sheet: reading?.sheet ?? [],
-      retried: attempts > 1,
-      ...rest,
-    });
-  try {
-    client ??= createGameLLM(agentConfig("match-reader"));
-    const result = await runReaderPipeline({
-      llm: client,
-      user,
-      schema,
-      hasSaid: Boolean(options.said?.trim()),
-      onAttempt: () => {
-        attempts += 1;
-      },
-    });
-    reading = result.reading;
-  } catch (error) {
-    const failure = error instanceof Error ? error.message : String(error);
-    record({ ok: false, failure });
-    if (!(error instanceof ModelOutputError)) throw error;
-    console.warn(`[match-reader] 판독 호출이 실패했습니다:`, error);
-    return { ok: false, message: FAILED_NOTE };
-  }
-  record({ ok: true });
-  return { ok: true, reading };
-}

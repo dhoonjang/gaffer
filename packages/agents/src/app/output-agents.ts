@@ -1,7 +1,7 @@
+import { MATCH_READER_SPEC } from "../match/match-reader";
 import type { GenerativeAgentName, JsonObjectSchema } from "@story-fm/llm";
 import { FINALIZE_MATCH_SYSTEM, SETTLE_MATCH_INPUT } from "../match/finalize-match";
 import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../story/history-compactor";
-import { MATCH_READER_SPEC } from "../match/match-reader";
 import { ONBOARDING_JUDGE_SYSTEM, REPORT_ONBOARDING_INPUT } from "../story/onboarding-judge";
 import { REPORT_SCOUT_INPUT, SCOUT_RATER_SYSTEM } from "../negotiation/scout-rater";
 import { REPORT_TRAINING_INPUT, TRAINING_RATER_SYSTEM } from "../story/training-rater";
@@ -18,11 +18,7 @@ export interface OutputAgent {
 
 export function outputAgents(): readonly OutputAgent[] {
   return [
-    {
-      agent: MATCH_READER_SPEC.agent,
-      system: MATCH_READER_SPEC.system,
-      schema: MATCH_READER_SPEC.schema(),
-    },
+    { agent: MATCH_READER_SPEC.agent, system: MATCH_READER_SPEC.system, schema: MATCH_READER_SPEC.schema() },
     { agent: "finalize-match", system: FINALIZE_MATCH_SYSTEM, schema: SETTLE_MATCH_INPUT },
     { agent: "training-rater", system: TRAINING_RATER_SYSTEM, schema: REPORT_TRAINING_INPUT },
     { agent: "scout-rater", system: SCOUT_RATER_SYSTEM, schema: REPORT_SCOUT_INPUT },

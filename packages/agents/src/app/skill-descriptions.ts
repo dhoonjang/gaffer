@@ -22,10 +22,45 @@ export interface SkillCatalogEntry {
  *
  * 한 도구의 사용법은 여기에만 산다 — 언제 부르고, 인자를 어떻게 채우고, 결과를
  * 장면에 어떻게 옮기는가. `GM_SYSTEM`은 도구와 무관한 규칙만 갖는다
- * (docs/common/llm/prompts.md §5). 경기 중에는 이 설명이 실리지 않으므로 경기에서도 필요한
- * 판정 근거는 `TACTIC_ORDERS_SYSTEM`이 따로 갖는다 — 그 겹침은 중복이 아니다.
+ * (docs/common/llm/prompts.md §5). 경기 스킬은 match-gm의 별도 카탈로그에 산다.
  */
 export const SKILL_CATALOG = [
+  {
+    name: "tactic_orders",
+    label: CALL_LABELS.tactic_orders,
+    group: "전술·훈련",
+    readOnly: false,
+    description:
+      "감독이 판을 세우는 지시를 했을 때 — 라인업·1·2군 이동·팀 전술 6축과 갈래·선수의 자리·역할·개인 지시·세트피스 키커와 인원·지역 플랜·약점 공략·완장. " +
+      "한 턴에 한 번 호출하고 적용·반려 결과를 따른다. " +
+      "미반영 지시와 필요한 결정을 이번 장면에서 감독에게 알린다. " +
+      '감독이 정하지 않고 맡긴 말("알아서 짜세요")에는 부르지 않는다 — 코치의 안을 장면으로 내놓고 감독이 못 박은 턴에 부른다. ' +
+      "훈련·육성은 training_orders, 이적·재정은 market_orders다. 회견·대화는 각자의 도구가 있다.",
+  },
+
+  {
+    name: "training_orders",
+    label: CALL_LABELS.training_orders,
+    group: "전술·훈련",
+    readOnly: false,
+    description:
+      "감독이 훈련이나 육성을 지시했을 때 — 훈련 일정 등록·비우기·개인 훈련·집중 육성·멘토링·2군 훈련 방침·등번호·유스 첫 계약. " +
+      "한 턴에 한 번 부른다. 결과로 무엇이 걸렸고 무엇이 반려됐는지가 온다. " +
+      "라인업·전술은 tactic_orders다.",
+  },
+
+  {
+    name: "market_orders",
+    label: CALL_LABELS.market_orders,
+    group: "이적",
+    readOnly: false,
+    description:
+      "감독이 시장과 장부를 움직이는 지시를 했을 때 — 오퍼·들어온 오퍼에 답·계약 확정·철회·재계약·해지·이적 리스트·이적 요청 답·되사기·임대 복귀·이적 예산·보드 요청·사재 출연·보너스·표값·스태프 고용·계약 해지·감독직 수락·흥정·지원. " +
+      "한 턴에 한 번 부른다. 조건(추가 영입·주장·등번호·바이아웃 조항·사이닝 보너스·공격 포인트 보너스·주급 인상 조항·그 밖)도 오퍼·재계약에 실린다. 오퍼 전에는 deal_odds로 확률을 보고 감독과 값을 정한 턴에 부른다. 결과로 무엇이 걸렸고 무엇이 반려됐는지가 온다. " +
+      "협상을 단장에게 맡기는 말과 도로 가져오는 말도 여기다 — 맡긴 자리는 감독 턴 없이 굴러가고 그 진행은 다이제스트로 온다. " +
+      "감독이 직접 나서서 주고받는 자리는 여기가 아니다 — start_negotiation이 연다.",
+  },
+
   {
     name: "start_match",
     label: CALL_LABELS.start_match,

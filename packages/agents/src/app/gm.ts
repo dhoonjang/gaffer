@@ -46,11 +46,7 @@ import type { BoardMove, CharacterEntry, MatchEvent, TickEvent } from "@story-fm
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
 import { MAX_REPORT_CARDS, NO_CARDS, takeArrivedReports, type ArrivedCards } from "./report-cards";
 import { reportTraining } from "./workflows/story/training-rater";
-import {
-  buildMatchTools,
-  readMatchAfterStop,
-  readMatchAfterInstructions,
-} from "./workflows/match/match-gm";
+import { buildMatchTools } from "./workflows/match/match-gm";
 import { eventsBlockOf } from "../match/context";
 import { KICKOFF_BLOCK, MATCH_GM_SYSTEM, type MatchToolContext } from "../match/match-gm";
 import { finalizeMatchTurn } from "./workflows/match/finalize-match";
@@ -61,7 +57,6 @@ import {
   type NegotiationToolContext,
 } from "../negotiation/negotiation-gm";
 import { buildNegotiationTools } from "./workflows/negotiation/negotiation-gm";
-import { runInstructions } from "./workflows/instructions";
 import { mockGmLlm } from "./mock-gm";
 import { retryOnce } from "../common/retry";
 import { GM_SYSTEM } from "../story/gm-prompt";
@@ -366,14 +361,6 @@ async function openTurn(
       : [],
   );
   /**
-   * 정지점 턴(`match_stop`) — 판이 사건으로 바뀌었다. 판독기가 그 사건으로 포인트와 시트를
-   * 먼저 다시 쓰고, 매치 GM은 다시 쓴 판 위에서 그 사건을 중계한다 (agents.md §3).
-   */
-  if (inMatch && !kickoff && operation?.kind === "match_stop") {
-    const stopped = unseenEvents(state);
-    if (stopped.length > 0) await readMatchAfterStop(state, stopped);
-  }
-  /**
    * **이 턴이 서술할 사건** — 지난 턴 뒤 장부에 앉은 것 (`<events>`). 킥오프 턴은 아무
    * 사건도 없다.
    */
@@ -424,7 +411,6 @@ async function callGm(
   onText: ((delta: string) => void) | undefined,
   operatorOrders: readonly string[] | undefined,
   boardMoves: readonly BoardMove[] | undefined,
-  instructionNotes: readonly string[],
 ): Promise<GmCall> {
   const { inMatch, kickoff, inNegotiation, seating, leaving, operator } = shape;
   const peace = !inMatch && !inNegotiation;
@@ -477,7 +463,7 @@ async function callGm(
    * **경기 통계는 공이 구른 뒤에만 싣는다** — 킥오프 턴은 아직 아무 일도 일어나지
    * 않았는데 통계를 쥐여 주면 첫 마디부터 우열을 읊는다 (agents.md §5).
    */
-  const stateSnapshot = inMatch
+  const stateNote = inMatch
     ? buildLedgerNote(state, { withState: !kickoff })
     : inNegotiation
       ? // 방의 스냅샷은 테이블이다 — 오퍼 이력·조건서·인내·앵커 (agents.md §4-1)
@@ -494,17 +480,6 @@ async function callGm(
           opening.carried.reports,
           opening.carried.missions,
         );
-  const stateNote = [
-    stateSnapshot,
-    ...(instructionNotes.length
-      ? [
-          "<instruction_results>",
-          ...instructionNotes,
-          "이미 적용한 지시를 다시 실행하지 않는다. 적용하지 못한 부분은 감독에게 확인한다.",
-          "</instruction_results>",
-        ]
-      : []),
-  ].join("\n");
   /**
    * 이번 장면에 설 인물 — **평시만이다.** 경기 중에는 벤치의 코치 한 사람이
    * 레퍼런스에 상주하고(`buildMatchReference`), 중계가 읽을 것은 판이지 인물지가 아니다.
@@ -951,22 +926,15 @@ export async function runGmTurn(
     calls: ledger.calls,
     goals: ledger.goals,
     cards: ledger.cards,
+    ...(shape.operator ? {} : { said: message }),
+    ...(boardMoves ? { boardMoves } : {}),
     onFinalized: (minute) => (ledger.finalMinute = minute),
   };
   const negotiationCtx: NegotiationToolContext = {
     calls: ledger.calls,
+    ...(shape.operator ? {} : { said: message }),
   };
   const opening = await openTurn(state, message, shape, operation, ledger);
-  const instructions =
-    !shape.operator && !shape.kickoff && !shape.seating
-      ? await runInstructions(state, ledger.calls, message, {
-          boardMoves,
-          deferNegotiationIds: opening.deferNegotiationIds,
-        })
-      : { notes: [], rejected: false, applied: 0 };
-  if (!shape.operator && !shape.kickoff && shape.inMatch && instructions.analysisRequested) {
-    await readMatchAfterInstructions(state, message);
-  }
   const call = await callGm(
     state,
     message,
@@ -978,7 +946,6 @@ export async function runGmTurn(
     onText,
     operatorOrders,
     boardMoves,
-    instructions.notes,
   );
   return closeTurn(state, shape, opening, ledger, call);
 }

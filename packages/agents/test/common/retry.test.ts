@@ -7,10 +7,6 @@ import {
   RATING_MAX,
   TACTIC_GAIN_MAX,
   TACTIC_GAIN_MIN,
-  advanceTime,
-  createGame,
-  markEntered,
-  startMatch,
 } from "@story-fm/engine";
 import { CharacterMemorySchema } from "@story-fm/domain";
 import type {
@@ -26,7 +22,6 @@ import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src
 import { agreement, costUsd, durationStats } from "../../harness/match-reader-eval-metrics";
 import { runReaderPipeline } from "../../src/match/reader-pipeline";
 import { matchReaderOutputSchema } from "../../src/match/match-reader";
-import { runMatchReader } from "../../src/app/workflows/match/match-reader";
 import { SettleMatchSchema, SETTLE_MATCH_INPUT } from "../../src/match/finalize-match";
 import { REPORT_TRAINING_INPUT, TrainingReportSchema } from "../../src/story/training-rater";
 import { REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
@@ -117,177 +112,6 @@ describe("readOutput — 산출이 왔는가", () => {
 
   it("스키마를 못 지난 산출도 ModelOutputError이고, 어디가 틀렸는지 적는다", () => {
     expect(() => readOutput("t", schema, answered({ n: -1 }))).toThrow(/n: /);
-  });
-});
-
-/**
- * 판독기의 실패 계약 — 산출은 JSON 하나로 오므로 "산출 뒤의 실패"라는 자리는 없다.
- * 남는 갈래는 셋이다: 산출이 왔다 · 산출이 없다(한 번 더) · 호출 자체가 실패했다(그대로).
- *
- * 경기 중 명단이 없는 상태라 `buildLedgerNote`도 `<facts>`도 빈 줄을 낸다 — 이
- * 테스트가 보는 것은 프롬프트가 아니라 실패와 산출이 만나는 자리다.
- */
-describe("runMatchReader — 산출과 실패", () => {
-  /** 이 경기의 지난 중계 턴 하나 — 판독기가 `<match_log>`로 읽는다 (agents.md §3) */
-  // 장부 없는 경기 상태 — 입력 조립이 경기 갈래로 가되 실을 것이 없다
-  /**
-   * 킥오프에 선 실제 경기 한 판 — 판독기는 실시간 경기의 장부와 통계를 읽으므로 손으로 세운
-   * 조각으로는 입력이 서지 않는다. 한 번 세워 케이스가 나눠 쓴다(판독은 상태를 바꾸지 않는다).
-   */
-  const emptyState = (() => {
-    const background = "K리그에서 뛰다 은퇴한 수비수 출신 분석가";
-    const state = createGame({
-      seed: 5,
-      userTeamId: "arsenal",
-      managerName: "김감독",
-      background,
-    });
-    for (let guard = 0; guard < 40 && state.phase !== "matchday"; guard++) {
-      advanceTime(state, "next_match");
-    }
-    expect(startMatch(state).ok).toBe(true);
-    markEntered(state);
-    state.chat.push({
-      role: "model",
-      text: "@중계: 브루노가 절뚝이며 터치라인으로 나옵니다.",
-      toolCalls: [],
-      at: state.date,
-      inMatch: true,
-    });
-    return state;
-  })();
-
-  /** 산출 JSON 하나로 답하는 모델 — 실모드에서 어댑터가 `output`에 세우는 그 모양이다 */
-  const answering =
-    (output: TurnResult["output"], text = ""): GameLLM["runTurn"] =>
-    () =>
-      Promise.resolve({
-        text,
-        history: { version: 1, provider: "google", model: "test", messages: [] },
-        historyBase: 0,
-        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-        toolCallCount: 0,
-        stopReason: "completed",
-        output,
-      });
-
-  it("산출이 오면 그것으로 진행한다 — 요청은 도구 없이 출력 스키마 하나다", async () => {
-    const llm: GameLLM = {
-      runTurn: answering({ points: [], sheet: [], ops: { set_tactics: [{ pressing: 4 }] } }),
-    };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    const result = await runMatchReader(emptyState, {
-      occasion: "orders",
-      said: "압박 올려",
-      llm,
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.reading.ops).toEqual({});
-    expect(spy).toHaveBeenCalledTimes(1);
-    const request = spy.mock.calls[0]![0];
-    expect(request.outputSchema).toBeDefined();
-    expect(request.tools).toBeUndefined();
-  });
-
-  it.each(["", "   "])(
-    "판독기에 예전 명령 산출이 섞여 와도 실행 명령으로 내보내지 않는다 (%j)",
-    async (unresolved) => {
-      const runTurn = vi.fn(
-        answering({ points: [], sheet: [], ops: { set_tactics: [{ pressing: 4 }] }, unresolved }),
-      );
-      const result = await runMatchReader(emptyState, {
-        occasion: "orders",
-        said: "압박 올려",
-        llm: { runTurn },
-      });
-      expect(result.ok && result.reading.ops).toEqual({});
-      expect(result.ok && result.reading.unresolved).toBeUndefined();
-      expect(runTurn).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it.each([false, 3, "a".repeat(201)])(
-    "판독기 책임 밖의 예전 지시 필드는 판독을 오염시키지 않는다",
-    async (unresolved) => {
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-      try {
-        const runTurn = vi.fn(
-          answering({ points: [], sheet: [], ops: { set_tactics: [{ pressing: 4 }] }, unresolved }),
-        );
-        const result = await runMatchReader(emptyState, {
-          occasion: "orders",
-          said: "압박 올려",
-          llm: { runTurn },
-        });
-        expect(result.ok).toBe(true);
-        expect(runTurn).toHaveBeenCalledTimes(1);
-      } finally {
-        warn.mockRestore();
-      }
-    },
-  );
-
-  /**
-   * 출력 스키마를 실었는데도 산문으로 답하는 경우 — 예외가 없어 `retryOnce`가 그냥
-   * 지나가면, 해석은 **한 번** 실패에 턴이 취소되고 결산은 로그 한 줄 없이 앵커로
-   * 떨어진다 (agents.md §8).
-   */
-  it("산출 없이 본문만 답하면 다시 부르고, 그래도 없으면 ok:false다", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const llm: GameLLM = { runTurn: answering(null, "왼쪽을 두껍게 하겠습니다.") };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    const result = await runMatchReader(emptyState, {
-      occasion: "orders",
-      said: "왼쪽을 두껍게",
-      llm,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(spy).toHaveBeenCalledTimes(2);
-    // 요청이 산출의 꼴을 강제했는지 — 프롬프트 문장만으로는 이 자리가 비어 있었다
-    expect(spy.mock.calls[0]![0].outputSchema).toBeDefined();
-    // 이 경기의 지난 턴이 장부 뒤·감독 발화 앞에 선다 — "걔 빼"가 가리킬 대상이 여기 있다
-    const user = spy.mock.calls[0]![0].user;
-    expect(user).toContain("<match_log>\n@중계: 브루노가 절뚝이며");
-    expect(user.indexOf("</match_log>")).toBeLessThan(user.indexOf("@감독: 왼쪽을 두껍게"));
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  /** 모양이 틀린 산출도 쓸 수 없는 산출이다 — `ops`가 배열이면 명령 이름이 없다 */
-  it("스키마를 못 지난 산출도 다시 부르고, 그래도 어긋나면 ok:false다", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const llm: GameLLM = { runTurn: answering({ ops: [] }) };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    const result = await runMatchReader(emptyState, {
-      occasion: "orders",
-      said: "왼쪽을 두껍게",
-      llm,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(spy).toHaveBeenCalledTimes(2);
-    warn.mockRestore();
-  });
-
-  /**
-   * 혼잡은 다시 불러도 같은 답이다 — 한 번에 끝낸다. 그리고 **삼키지 않는다**:
-   * 시한·혼잡을 "다시 말씀해 주세요"로 바꾸면 감독은 자기 말이 잘못된 줄 알고 같은
-   * 말을 다시 쳐서 같은 시한을 한 번 더 기다린다 (agents.md §8, models.md §1-1).
-   */
-  it("의도 없이 혼잡으로 실패하면 한 번만 부르고 그대로 올린다", async () => {
-    const thrown = new LlmCallError("overloaded", "529");
-    const llm: GameLLM = { runTurn: () => Promise.reject(thrown) };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    await expect(
-      runMatchReader(emptyState, { occasion: "orders", said: "왼쪽을 두껍게", llm }),
-    ).rejects.toBe(thrown);
-    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 

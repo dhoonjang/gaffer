@@ -24,6 +24,7 @@ import {
 } from "../../../negotiation/negotiation-gm";
 import { type GameToolSpec } from "@story-fm/llm";
 import { inputError } from "../../../common/tool-schema";
+import { createInstructionTool } from "../instructions";
 import { recordCall } from "../../../common/gm-types";
 
 // ── 입력 — 레퍼런스와 스냅샷 ─────────────────────────────────
@@ -79,10 +80,13 @@ export function buildNegotiationTools(
   state: GameState,
   ctx: NegotiationToolContext,
 ): GameToolSpec[] {
-  const [reply, leave] = NEGOTIATION_TOOL_DEFINITIONS;
+  const reply = NEGOTIATION_TOOL_DEFINITIONS.find((tool) => tool.name === "counterparty_reply")!;
+  const leave = NEGOTIATION_TOOL_DEFINITIONS.find((tool) => tool.name === "leave_negotiation")!;
   /** 답은 한 턴에 하나다 — 두 번째 판정은 인내를 두 번 깎는다 */
   let replied = false;
   return [
+    createInstructionTool(state, ctx.calls, { name: "negotiation_orders", agent: "table-orders", said: ctx.said,
+      description: NEGOTIATION_TOOL_DEFINITIONS.find((tool) => tool.name === "negotiation_orders")!.description }),
     {
       ...reply!,
       handle: async (input: unknown) => {

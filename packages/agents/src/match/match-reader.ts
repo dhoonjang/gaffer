@@ -1,3 +1,4 @@
+/** Recorded generative baseline and shared match command/schema definitions. Production uses jev-match-reader. */
 import { POINTS_MAX, type GameState, playerById } from "@story-fm/engine";
 import {
   SHEET_SHAPES,
@@ -145,7 +146,7 @@ export function matchReaderOutputSchema(): JsonObjectSchema {
 
 /** 이 호출의 한 벌 — 출력 스키마 선언 열(`outputAgents`)도 이것을 읽는다 */
 export const MATCH_READER_SPEC = {
-  agent: "match-reader",
+  agent: "reader-baseline",
   system: MATCH_READER_SYSTEM,
   schema: matchReaderOutputSchema,
 } as const;

@@ -63,7 +63,7 @@ export async function runReaderPipeline(options: {
   let attempts = 0;
   const probabilistic = options.evaluator !== undefined;
   const schema = readerRequestSchema(options.schema, { hasSaid: options.hasSaid, probabilistic });
-  const report = await retryOnce("match-reader", async () => {
+  const report = await retryOnce("reader-baseline", async () => {
     attempts++;
     options.onAttempt?.();
     const result = await options.llm.runTurn({
@@ -72,8 +72,8 @@ export async function runReaderPipeline(options: {
       user: options.user,
       outputSchema: schema,
     });
-    if (!probabilistic) return readOutput("match-reader", ReaderReportSchema, result);
-    const candidate = readOutput("match-reader", CandidateReportSchema, result);
+    if (!probabilistic) return readOutput("reader-baseline", ReaderReportSchema, result);
+    const candidate = readOutput("reader-baseline", CandidateReportSchema, result);
     const pointIds = new Set(candidate.points.map((point) => point.id));
     if (
       pointIds.size !== candidate.points.length ||

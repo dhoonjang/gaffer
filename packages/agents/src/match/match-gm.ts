@@ -3,7 +3,7 @@ import { type JsonObjectSchema, type GameLLM } from "@story-fm/llm";
 import { toToolSchema } from "../common/tool-schema";
 import { type GmToolCall } from "../common/gm-types";
 import { type GoalMark, type CardMark } from "@story-fm/engine";
-import { type Point, type SheetLine } from "@story-fm/domain";
+import { type BoardMove, type Point, type SheetLine } from "@story-fm/domain";
 
 export { buildEventsBlock, buildShootoutMessage } from "./match-script";
 
@@ -17,7 +17,7 @@ export { buildEventsBlock, buildShootoutMessage } from "./match-script";
  * ⚠️ 골 문형의 스코어는 `formatScore`가 내는 글자 그대로다 — en dash 양옆의 hair
  * space를 `\u200a`로 적는 이유는 그것뿐이다 (design-system.md §3).
  */
-export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 경기 마스터다. 그라운드에서 일어난 일을 중계하고 벤치의 대화를 연출하며, 이미 반영된 감독 지시와 장부를 읽는다. 경기의 결과를 바꾸거나 시계를 미는 도구는 없다 — 경기는 감독이 말을 멈추면 스스로 구른다.
+export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 경기 마스터다. 그라운드에서 일어난 일을 중계하고 벤치의 대화를 연출하며, 감독의 전술 지시는 tactic_orders로 해석하고 적용 결과를 읽는다. 경기의 결과를 바꾸거나 시계를 미는 도구는 없다 — 경기는 감독이 말을 멈추면 스스로 구른다.
 
 # 입력
 매 턴 이런 블록이 이 순서로 온다.
@@ -27,10 +27,10 @@ export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 �
 - <events> — 지난 턴 뒤 그라운드에서 일어난 일. 골·슛·카드·교체·부상·상대 벤치의 전환이 시각과 함께 선다. 비어 있으면 그 사이 아무 일도 없었다.
 - <kickoff> — 감독이 경기장에 들어선 첫 턴에만. 도구가 없다.
 - <ledger> — 스코어·시각·국면·온필드와 벤치·교체 횟수. <standing> — 우리 전술. <match_state> — 지금까지의 경기 통계. <points> — 지금 이 경기가 어떻게 읽히는가. 장부가 유일한 진실이다 — 스코어는 계산하지 않고 읽는다.
-- <instruction_results> — 직접 지시의 적용 또는 확인 필요 결과. 도구 결과 — 반응 판정과 마감 결과.
+- 도구 결과 — 전술 지시의 적용·확인 필요, 반응 판정과 마감 결과.
 
 # 진행
-- 이미 반영된 지시와 확인이 필요한 부분을 읽고 코치가 짚을 것이 있으면 짚는다.
+- 전술 실행 지시가 있을 때만 tactic_orders를 부른다. 그 결과와 장부를 읽고 코치가 짚을 것이 있으면 짚는다.
 - 선수나 코치를 부르기만 했거나 말만 건 턴은 도구 없이 장면만 쓴다 — 시간은 한 순간도 흐르지 않았고 슛도 찬스도 없다.
 - 「70분에 라야 빼」는 예약이 아니다 — 시계는 감독이 보고 있고, 그 분에 감독이 멈춰 말하면 된다. 그 사실은 픽션 안에서 말한다.
 - 경기가 끝났으면 마감한다. 마감된 장부를 근거로 마무리 중계를 직접 쓰고 벤치 한 줄로 닫는다.
@@ -92,6 +92,7 @@ export const MATCH_TOOL_DEFINITIONS: ReadonlyArray<{
   description: string;
   inputSchema: JsonObjectSchema;
 }> = [
+  { name: "tactic_orders", description: "감독이 전술 실행을 지시할 때만 부른다. 교체·자리·역할·팀 전술·마킹·공간 공략을 최근 10분 경기 흐름에서 해석한다. 질문·대화·단순 관전에는 부르지 않는다. 원문은 코어가 전달한다. 한 턴에 한 번이며 적용·반려 결과를 따른다.", inputSchema: toToolSchema(EmptySchema) },
   {
     name: FINALIZE_MATCH_TOOL,
     description:
@@ -103,6 +104,8 @@ export const MATCH_TOOL_DEFINITIONS: ReadonlyArray<{
 /** 한 턴의 도구가 공유하는 자리 — 기록·골·카드는 턴의 것이고, 마감은 한 번뿐이다 */
 export interface MatchToolContext {
   calls: GmToolCall[];
+  said?: string;
+  boardMoves?: readonly BoardMove[];
   goals: GoalMark[];
   cards: CardMark[];
   /** 마감 에이전트를 부를 때 쓸 클라이언트 — 테스트가 갈아 끼운다 */

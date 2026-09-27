@@ -49,7 +49,6 @@ import {
   PROMISE_DAYS_MIN,
   PROMISE_DAYS_MAX,
   journal,
-  applyMatchReading,
   startMatch,
   startNegotiation,
   setLineup,
@@ -143,14 +142,12 @@ import { type GmToolCall, type CommandReturn, recordCall } from "../common/gm-ty
 import { type GameToolSpec, type ToolCallContext } from "@story-fm/llm";
 import { skillDescriptions } from "./skill-descriptions";
 import { toToolSchema, inputError } from "../common/tool-schema";
-import { runMatchReader } from "./workflows/match/match-reader";
+import { createInstructionTool } from "./workflows/instructions";
 import { sideTeamName } from "../match/context";
 
 /**
- * **GM에게 보이지 않는 코어 명령** — 판을 세우는 열과 훈련 여섯, 시장 스물여섯. 감독의 전술 지시는
- * Jev 사전 해석이 타입 인자로 옮기고 코어가 이 명령들을
- * 부른다 (agents.md §1). 설명은 모델에게 가지 않으므로 이름만 든다 — 판정 근거는
- * `TACTIC_ORDERS_SYSTEM`의 것이다.
+ * GM의 역할별 지시 스킬 안에서 Jev가 타입 인자를 선택한다.
+ * 이 코어 명령들은 GM 도구 카탈로그에 직접 노출하지 않는다.
  */
 export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "set_lineup",
@@ -527,7 +524,7 @@ function writtenLines(text: string): number {
  * **무직인 감독의 문** — 한 문장이 한 자리에만 산다. `wrap`도 손으로 지은 명령도 손잡이도
  * 같은 함수를 지나므로, 새 자리가 생겨도 이 문구를 다시 적을 일이 없다 (career.md §5.1).
  */
-function dismissed(state: GameState, applies: boolean): { ok: false; message: string } | null {
+export function dismissed(state: GameState, applies: boolean): { ok: false; message: string } | null {
   if (!applies || !state.dismissal) return null;
   return {
     ok: false,
@@ -651,33 +648,12 @@ export function buildToolSpecs(
     },
   });
 
-  /**
-   * 문이 열린 자리에서 **판독기가 이 경기의 첫 포인트와 시트를 쓴다** (match.md §2 ①).
-   *
-   * 실패는 빈 판독이다 — 아무것도 저장하지 않고 코어 로직만으로 굴러가는 경기가 된다.
-   * 문이 열린 것은 이미 일어난 일이라 되돌리지 않는다.
-   */
-  const readAtKickoff = async (): Promise<void> => {
-    try {
-      const read = await runMatchReader(state, { occasion: "kickoff" });
-      if (read.ok) applyMatchReading(state, read.reading);
-    } catch (error) {
-      console.warn("[match-reader] 킥오프 판독을 건너뜁니다 — 빈 포인트로 시작합니다:", error);
-    }
-  };
   const startMatchTool = wrap("start_match", descriptions.start_match, z.object({}), () =>
     startMatch(state),
   );
 
   const tools: GameToolSpec[] = [
-    {
-      ...startMatchTool,
-      async handle(input: unknown, context?: ToolCallContext) {
-        const opened = await startMatchTool.handle(input, context);
-        if (opened.ok) await readAtKickoff();
-        return opened;
-      },
-    },
+    startMatchTool,
     /**
      * **협상 방을 세운다** — 경기의 `start_match`와 같은 자리다 (transfer.md §12-2). 문을 열
      * 뿐이고, 자리에 앉은 뒤의 턴은 협상 GM의 것이다(`negotiation-gm.ts`).
@@ -1874,17 +1850,20 @@ export function collectMatchMarks(
   }
 }
 
-/** Scene skills and read-only queries; direct commands have already run before the GM. */
+/** Existing skills request only their interpreter; normal dialogue invokes none. */
 export function buildGmTools(
   state: GameState,
   calls: GmToolCall[],
-  options?: {
-    said?: string;
-    deferNegotiationIds?: ReadonlySet<string>;
-    boardMoves?: readonly BoardMove[];
-  },
+  options?: { said?: string; deferNegotiationIds?: ReadonlySet<string>; boardMoves?: readonly BoardMove[] },
 ): GameToolSpec[] {
-  return buildToolSpecs(state, calls, options).filter((tool) => !CORE_COMMANDS.has(tool.name));
+  const descriptions = skillDescriptions();
+  const visible = buildToolSpecs(state, calls, options).filter((tool) => !CORE_COMMANDS.has(tool.name));
+  return [...visible, ...([
+    ["tactic_orders", "tactic-orders"], ["training_orders", "training-orders"], ["market_orders", "market-orders"],
+  ] as const).map(([name, agent]) => createInstructionTool(state, calls, {
+    ...options, name, agent, description: descriptions[name],
+    allowed: () => agent === "market-orders" ? undefined : dismissed(state, true) ?? undefined,
+  }))];
 }
 
 /**

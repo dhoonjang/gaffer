@@ -125,17 +125,11 @@ describe("규칙이 사는 자리", () => {
     expect(total).toBeLessThanOrEqual(7_400);
   });
 
-  it("장면 GM의 도구에는 직접 지시의 코어 명령이나 재해석 손잡이가 없다", () => {
-    const retired = new Set([
-      "tactic_orders",
-      "training_orders",
-      "market_orders",
-      "negotiation_orders",
-    ]);
+  it("GM은 직접 명령 대신 역할별 해석 스킬을 받는다", () => {
     for (const tool of [...TOOLS, ...MATCH_TOOL_DEFINITIONS, ...NEGOTIATION_TOOL_DEFINITIONS]) {
       expect(CORE_COMMANDS.has(tool.name), tool.name).toBe(false);
-      expect(retired.has(tool.name), tool.name).toBe(false);
     }
+    expect(TOOLS.map((tool) => tool.name)).toEqual(expect.arrayContaining(["tactic_orders", "training_orders", "market_orders"]));
   });
 
   /**

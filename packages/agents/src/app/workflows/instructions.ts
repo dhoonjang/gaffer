@@ -1,8 +1,10 @@
 import {
+  applyMatchReading,
   captureJournal,
   journal,
   roomNegotiationOf,
   syncLiveTactics,
+  userSide,
   type GameState,
 } from "@story-fm/engine";
 import {
@@ -10,16 +12,19 @@ import {
   POSITION_CODES,
   rolesFor,
   roleChoiceText,
+  type Point,
+  type SheetLine,
   type BoardMove,
 } from "@story-fm/domain";
 import {
   createGameEvaluator,
   resolveLlmMode,
+  type InstructionAgentName,
   type GameEvaluator,
   type GameToolSpec,
   type JsonObjectSchema,
 } from "@story-fm/llm";
-import type { GmToolCall } from "../../common/gm-types";
+import { recordCall, type GmToolCall } from "../../common/gm-types";
 import { interpretInstructions } from "../../common/instruction-compiler";
 import type { InstructionCandidate, InstructionCommand } from "../../common/instruction-contract";
 import {
@@ -45,6 +50,14 @@ import { buildPeaceContext } from "./match/tactic-orders";
 import { buildTrainingContext } from "./story/training-orders";
 import { buildMarketContext } from "./negotiation/market-orders";
 import { buildBoardMovesBlock, buildLedgerNote } from "../../match/context";
+
+import { liveInputOf } from "@story-fm/sim";
+import { buildFactsBlock } from "./match/match-reader";
+import { buildRecentFlowBlock } from "../../match/recent-flow";
+import { interpretMatchInstructions } from "../../match/jev-match-reader";
+
+export type InterpreterAgent = InstructionAgentName | "match-reader";
+type Reading = { points: Point[]; sheet: SheetLine[] };
 
 /** Empty lists explicitly mean clear; absence must never select a destructive core default. */
 const CLEAR_LISTS: Readonly<Record<string, string>> = {
@@ -246,7 +259,6 @@ export interface InstructionOutcome {
   notes: string[];
   rejected: boolean;
   applied: number;
-  analysisRequested?: boolean;
 }
 
 /** Every command in one utterance commits together, through existing Zod/core handlers. */
@@ -255,7 +267,7 @@ export function applyInstructionBatch(
   calls: GmToolCall[],
   orders: OpsOrders,
   names: readonly string[],
-  options: { deferNegotiationIds?: ReadonlySet<string> } = {},
+  options: { deferNegotiationIds?: ReadonlySet<string>; reading?: Reading; source?: string } = {},
 ): InstructionOutcome {
   if (orders.unresolved)
     return {
@@ -263,7 +275,8 @@ export function applyInstructionBatch(
       rejected: true,
       applied: 0,
     };
-  if (Object.keys(orders.ops).length === 0) return { notes: [], rejected: false, applied: 0 };
+  if (Object.keys(orders.ops).length === 0 && !options.reading)
+    return { notes: [], rejected: false, applied: 0 };
   const draft = structuredClone(state);
   const draftCalls: GmToolCall[] = [];
   const room = roomNegotiationOf(draft);
@@ -330,7 +343,35 @@ export function applyInstructionBatch(
     ]),
   );
   const notes: string[] = [];
-  const transaction = captureJournal(() => applyOps(specs, orders, names, notes));
+  const transaction = captureJournal(() => {
+    const applied = applyOps(specs, orders, names, notes);
+    if (applied.rejected > 0) return applied;
+    syncLiveTactics(draft);
+    if (options.reading) {
+      const stored = applyMatchReading(draft, options.reading);
+      if (!stored || !draft.pendingMatch) return { ...applied, rejected: 1 };
+      const folded = liveInputOf(draft.pendingMatch.live).sheet;
+      if (stored.droppedPoints > 0 || folded.dropped.length > 0) {
+        notes.push("전술 효과가 경기의 실재·대가·한도를 충족하지 못했습니다");
+        return { ...applied, rejected: 1 };
+      }
+      const message = `경기 전술 효과 ${stored.sheet.length}개를 적용했습니다`;
+      notes.push(message);
+      recordCall(
+        draftCalls,
+        "tactic_orders",
+        { ok: true, message },
+        {
+          silent: true,
+          input: {
+            source: options.source ?? options.reading.points.map((point) => point.text).join("\n"),
+          },
+        },
+      );
+      return { ...applied, applied: applied.applied + 1 };
+    }
+    return applied;
+  });
   if (transaction.value.rejected > 0) {
     return {
       notes: ["지시 묶음을 적용하지 않았습니다. 함께 요청한 변경은 모두 그대로입니다.", ...notes],
@@ -338,7 +379,6 @@ export function applyInstructionBatch(
       applied: 0,
     };
   }
-  syncLiveTactics(draft);
   for (const key of Object.keys(state)) {
     if (!Object.hasOwn(draft, key)) delete (state as unknown as Record<string, unknown>)[key];
   }
@@ -353,69 +393,140 @@ export async function runInstructions(
   calls: GmToolCall[],
   said: string,
   options: {
+    agent: InterpreterAgent;
     evaluator?: GameEvaluator;
     boardMoves?: readonly BoardMove[];
     deferNegotiationIds?: ReadonlySet<string>;
-  } = {},
+  },
 ): Promise<InstructionOutcome> {
   if (!said.trim()) return { notes: [], rejected: false, applied: 0 };
+  const { agent } = options;
   const room = roomNegotiationOf(state);
+  if (agent === "table-orders" && !room)
+    return { notes: ["열린 협상 자리가 없습니다"], rejected: true, applied: 0 };
+  if (agent === "match-reader" && !state.pendingMatch)
+    return { notes: ["진행 중인 경기가 없습니다"], rejected: true, applied: 0 };
   const names =
-    state.phase === "match"
-      ? MATCH_OPS.filter((n) => n !== "team_talk")
-      : room
-        ? TABLE_OPS
-        : [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS];
+    agent === "match-reader"
+      ? MATCH_OPS
+      : agent === "tactic-orders"
+        ? TACTIC_OPS
+        : agent === "training-orders"
+          ? TRAINING_OPS
+          : agent === "table-orders"
+            ? TABLE_OPS
+            : MARKET_OPS;
   const specs = new Map(buildToolSpecs(state, [], options).map((spec) => [spec.name, spec]));
+  const live = state.pendingMatch?.live;
+  const droppedEffects = new Set(
+    live ? liveInputOf(live).sheet.dropped.map((drop) => drop.line) : [],
+  );
+  const activeEffects =
+    live?.sheet.filter((line) => line.step > 0 && !droppedEffects.has(line)) ?? [];
   const context =
-    state.phase === "match"
-      ? [buildLedgerNote(state, { withState: true })]
-      : room
+    agent === "match-reader"
+      ? [
+          buildLedgerNote(state, { withState: true }),
+          ...buildFactsBlock(state),
+          buildRecentFlowBlock(state),
+          `<active_effects>${JSON.stringify(activeEffects)}</active_effects>`,
+        ]
+      : agent === "table-orders" && room
         ? buildTableOrdersContext(state, room)
-        : [
-            ...buildPeaceContext(state),
-            ...buildTrainingContext(state, buildTrainingSchedule(state)),
-            ...buildMarketContext(state),
-          ];
-  let orders: OpsOrders;
+        : agent === "training-orders"
+          ? buildTrainingContext(state, buildTrainingSchedule(state))
+          : agent === "market-orders"
+            ? buildMarketContext(state)
+            : buildPeaceContext(state);
+  const rules =
+    "전술판에서 이미 바꾼 값은 반복 적용하지 않는다. 서로 자리 교환은 양쪽을 지정하고 한 선수의 position과 move를 함께 지정하지 않는다. 상대 오퍼에 답하기와 우리 딜 확정은 구분한다. 감독이 명시하지 않은 위임·수락은 하지 않는다.";
+  let orders: OpsOrders & { reading?: Reading };
   if (!options.evaluator && resolveLlmMode() === "mock") {
     orders = parseOrdersReport(ordersScript(state, said).output ?? {}, names, TACTIC_CAPS);
   } else {
-    orders = await interpretInstructions({
+    const request = {
       said,
-      context: [...context, ...buildBoardMovesBlock(state, options.boardMoves ?? [])].join("\n"),
-      commands: [
-        ...instructionCommands(specs, names),
-        ...(state.phase === "match"
-          ? [
-              {
-                name: "analyse_match",
-                description:
-                  "상대 약점 공략, 맨마킹, 공간을 덮기 등 전술판의 자리·역할·6축 밖의 구체적 경기 지시를 판독한다. 단순한 대화·질문·관전은 제외.",
-                inputSchema: { type: "object" as const, properties: {} },
-                limit: 1,
-              },
-            ]
-          : []),
-      ],
+      context: [rules, ...context, ...buildBoardMovesBlock(state, options.boardMoves ?? [])].join(
+        "\n",
+      ),
+      commands: instructionCommands(specs, names),
       candidates: instructionCandidates(state, said),
-      evaluator: options.evaluator ?? createGameEvaluator("instructions"),
-    });
+      evaluator: options.evaluator ?? createGameEvaluator(agent),
+    };
+    if (agent === "match-reader" && state.pendingMatch) {
+      const live = state.pendingMatch.live;
+      // A combined substitution and instruction can target the incoming player. The
+      // atomic application validates the completed lineup before applying any effect.
+      const people = [
+        ...new Set([
+          ...live.ledger.home.onPitch,
+          ...live.ledger.away.onPitch,
+          ...live.ledger[userSide(state)].bench,
+        ]),
+      ].map((id) => ({
+        label: `${state.players.find((p) => p.id === id)?.name ?? id} (${id})`,
+        value: id,
+      }));
+      request.candidates["set_match_plan.player"] = people;
+      request.candidates["set_match_plan.targetPlayer"] = people;
+      orders = await interpretMatchInstructions({
+        ...request,
+        pointId: `order-${live.state.tick}`,
+      });
+    } else orders = await interpretInstructions(request);
   }
   journal({
     kind: "orders.intent",
-    agent: "instructions",
+    agent,
     raw: said,
     retried: false,
     ok: !orders.unresolved,
-    ...orders,
+    ops: orders.ops,
+    ...(orders.unresolved ? { unresolved: orders.unresolved } : {}),
   });
-  const analysisRequested = (orders.ops.analyse_match?.length ?? 0) > 0;
-  const ops = { ...orders.ops };
-  delete ops.analyse_match;
-  const applied = applyInstructionBatch(state, calls, { ...orders, ops }, names, options);
+  return applyInstructionBatch(state, calls, orders, names, {
+    ...options,
+    source: said,
+    ...(orders.reading ? { reading: orders.reading } : {}),
+  });
+}
+
+/** One invocation per existing skill and turn; the model never rewrites the director's utterance. */
+export function createInstructionTool(
+  state: GameState,
+  calls: GmToolCall[],
+  options: {
+    name: string;
+    agent: InterpreterAgent;
+    description: string;
+    said?: string;
+    boardMoves?: readonly BoardMove[];
+    deferNegotiationIds?: ReadonlySet<string>;
+    allowed?: () => { ok: boolean; message: string } | undefined;
+  },
+): GameToolSpec {
+  let used = false;
   return {
-    ...applied,
-    analysisRequested: !applied.rejected && (analysisRequested || applied.applied > 0),
+    name: options.name,
+    description: options.description,
+    inputSchema: { type: "object", properties: {} },
+    async handle() {
+      if (!options.said?.trim())
+        return { ok: false, message: "이번 턴에는 감독의 직접 지시가 없습니다" };
+      if (used)
+        return {
+          ok: false,
+          message: "이번 턴의 이 지시는 이미 해석했습니다 — 앞선 결과를 사용하세요",
+        };
+      const blocked = options.allowed?.();
+      if (blocked) return blocked;
+      used = true;
+      const result = await runInstructions(state, calls, options.said, options);
+      return {
+        ok: !result.rejected && result.applied > 0,
+        message:
+          result.notes.join("\n") || "적용할 지시가 없습니다. 필요한 대상·값을 확인해 주세요",
+      };
+    },
   };
 }

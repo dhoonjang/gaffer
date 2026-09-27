@@ -76,10 +76,7 @@ import {
 import { awardTitle, normalizeSpeaker, SCOUT_DAYS } from "@story-fm/domain";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@story-fm/llm";
 
-// 이 파일은 장면 입력과 시계를 잰다. 지시 해석은 별도 검증하며 외부 평가를 부르지 않는다.
-vi.mock("../../src/app/workflows/instructions", () => ({
-  runInstructions: async () => ({ notes: [], rejected: false, applied: 0 }),
-}));
+
 
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
 const { stubRunTurn } = vi.hoisted(() => ({ stubRunTurn: vi.fn() }));
