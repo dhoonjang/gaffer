@@ -314,7 +314,7 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
   });
   choose(
     queries,
-    `${scope(node)} ${node.occurrence.command.contextual ? "감독이 요청한 전술을 최근 흐름과 선수 사실에 맞춰 구현하는 값을 고른다. 필요한 대가와 유지할 active_effects도 포함한다. 선택지의 수치 부호는 스키마가 정의한 효과 방향으로 해석한다." : "이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear). 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 숫자는 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear."}`,
+    `${scope(node)} ${node.occurrence.command.contextual ? "감독이 요청한 전술을 최근 흐름과 선수 사실에 맞춰 구현하는 값을 고른다. 필요한 대가와 유지할 active_effects도 포함한다. 선택지의 수치 부호는 스키마가 정의한 효과 방향으로 해석한다." : "이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear). 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 원문의 뜻과 후보 설명을 대응해 고른다. 금액·수량은 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear."}`,
     criteria,
     (answer) => {
       if (answer === UNCLEAR) {
@@ -454,15 +454,15 @@ export async function interpretInstructions(
       )
         return unresolved();
       const criteria: Record<string, string> = {
-        n0: "이 명령을 실행하라는 지시가 아니다. 질문·가정·인용·부정·상대의 제안·상태 설명도 여기다",
-        unclear: "실행 지시인지 모호하다",
-        overflow: `명시적 실행 지시가 ${command.limit}건을 넘는다`,
+        n0: "No requested action of this kind; discussion, quotation, hypothetical or explicitly withheld execution.",
+        unclear: "Cannot determine whether an action is requested.",
+        overflow: `More than ${command.limit} distinct requested actions of this kind.`,
       };
       for (let n = 1; n <= command.limit; n++)
-        criteria[`n${n}`] = `이 명령을 실행하라는 직접 지시 ${n}건`;
+        criteria[`n${n}`] = `${n} requested action${n === 1 ? "" : "s"} of this kind.`;
       choose(
         route,
-        `감독 원문에서 ${command.name} (${command.description}) 실행을 직접 지시한 횟수. 참고 맥락은 실행 권한이 아니다. 감독이 지정하지 않은 작업을 추가하지 않는다.`,
+        `How many distinct actions of "${command.description}" (${command.name}) does the manager request in state.instruction? Match the meaning of the request, not mentions of internal command names or numerical settings. Use state.reference only to identify the context, never as a source of new requests.`,
         criteria,
         (answer) => {
           if (answer === UNCLEAR || answer === OVERFLOW) {

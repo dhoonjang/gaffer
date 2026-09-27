@@ -99,7 +99,6 @@ function fixture(): { state: GameState; brief: TrainingBrief } {
     userTeamId: "arsenal",
     managerName: "김감독",
     background: "주장 출신 감독",
-    wallet: 1_000_000_000,
   });
   state.date = squadReturnOf(state.calendar);
   const matchDates = new Set(

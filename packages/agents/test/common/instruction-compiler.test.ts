@@ -335,8 +335,8 @@ describe("source-grounded instruction compiler", () => {
 
   it("rejects repeated identical command instances instead of applying a financial instruction twice", async () => {
     const command: InstructionCommand = {
-      name: "fund_transfer_budget",
-      description: "사재 출연",
+      name: "request_board",
+      description: "보드 예산 요청",
       limit: 4,
       inputSchema: {
         type: "object",
@@ -348,7 +348,7 @@ describe("source-grounded instruction compiler", () => {
       stage === 1 ? "n2" : select(criteria, "= 30000000"),
     );
     const output = await interpretInstructions(
-      request([command], model, { said: "3천만원을 보탤게" }),
+      request([command], model, { said: "보드에 이적 예산 3천만원을 더 요청해" }),
     );
     expect(output.ops).toEqual({});
     expect(output.unresolved).toBeDefined();

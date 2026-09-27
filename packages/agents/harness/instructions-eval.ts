@@ -58,7 +58,6 @@ function freshGame() {
     userTeamId: "arsenal",
     managerName: "김감독",
     background: "주장 출신 감독",
-    wallet: 1_000_000_000,
   });
 }
 function canonical(path: string): string {
@@ -78,6 +77,27 @@ function safeOutput(raw: string): string {
   mkdirSync(dirname(actual), { recursive: true });
   mkdirSync(actual);
   return actual;
+}
+function object(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+function directionalTactics(
+  name: string,
+  changes: Record<string, unknown>,
+  pressing: number,
+  line: number,
+): boolean {
+  if (!Object.keys(changes).every((key) => ["pressing", "defensiveLine"].includes(key)))
+    return false;
+  const p = changes.pressing ?? pressing,
+    d = changes.defensiveLine ?? line;
+  if (typeof p !== "number" || typeof d !== "number" || !Number.isFinite(p) || !Number.isFinite(d))
+    return false;
+  return name === "high-press"
+    ? p > pressing && d >= line
+    : p <= pressing && d <= line && (p < pressing || d < line);
 }
 function failure(error: unknown) {
   return {
@@ -102,9 +122,9 @@ interface SyntheticResult {
   name: string;
   role: InstructionRole;
   said: string;
-  expected: unknown;
+  criterion: string;
   output?: unknown;
-  exactAgreement: boolean;
+  semanticCheck: boolean;
   durationMs: number;
   stages: Stage[];
   usage: TurnUsage;
@@ -115,7 +135,9 @@ interface SyntheticResult {
 interface TurnResult {
   name: string;
   said: string;
-  expectedPressing: number;
+  criterion: string;
+  semanticCheck: boolean;
+  noUnrelatedOps: boolean;
   beforePressing: number;
   afterPressing: number;
   passed: boolean;
@@ -231,6 +253,7 @@ async function main() {
   const state = freshGame();
   const player = state.players.find((item) => item.teamId === state.userTeamId);
   if (!player) throw new Error("Synthetic fixture has no own-team player");
+  const playerId = player.id;
   const specs = new Map(buildToolSpecs(state, []).map((spec) => [spec.name, spec]));
   const scopes = {
     "tactic-orders": {
@@ -250,40 +273,73 @@ async function main() {
   const initial = tacticsOf(state, state.userTeamId).spec.pressing;
   const cases = [
     {
-      name: "explicit-axis",
+      name: "high-press",
       role: "tactic-orders" as const,
-      said: "압박을 4로 설정해",
-      expected: { set_tactics: [{ pressing: 4 }] },
+      said: "상대가 편하게 공을 돌리지 못하게 앞에서부터 강하게 압박해.",
+      criterion: "Increase pressing; optional defensive-line increase; no other tactical changes.",
     },
     {
-      name: "relative-axis",
+      name: "protect-space",
       role: "tactic-orders" as const,
-      said: "압박을 한 칸 더 올려",
-      expected: { set_tactics: [{ pressing: Math.min(5, initial + 1) }] },
+      said: "무리하게 쫓아가지 말고 내려서서 공간부터 지켜.",
+      criterion:
+        "Reduce pressing and/or defensive line, without increasing either; no other tactical changes.",
     },
     {
-      name: "hypothetical-negative",
+      name: "discuss-pressing",
       role: "tactic-orders" as const,
-      said: "압박을 5로 올리면 어떨까? 아직 바꾸지는 마.",
-      expected: {},
+      said: "앞에서부터 압박하면 어떨까? 아직 바꾸지는 말고 의견만 들려줘.",
+      criterion: "Discussion only; no commands.",
     },
     {
-      name: "exact-korean-money",
+      name: "club-budget-request",
       role: "market-orders" as const,
-      said: "내 사재에서 2억 3천만원을 이적 예산에 보탤게",
-      expected: { fund_transfer_budget: [{ amount: 230_000_000 }] },
+      said: "여름에 수비수를 보강해야 해. 구단주에게 이적 예산 천만 파운드를 더 요청해 줘.",
+      criterion:
+        "Request the board for £10m transfer budget; no direct ledger adjustment or unrelated commands.",
     },
     {
-      name: "seed-player",
+      name: "squad-number",
       role: "training-orders" as const,
       said: `${player.name}에게 등번호 9번을 줘`,
-      expected: { set_squad_number: [{ playerId: player.id, number: 9 }] },
+      criterion: "Assign the named player shirt number 9; no unrelated commands.",
     },
   ];
+  function semanticOps(name: string, ops: Record<string, unknown[]>): boolean {
+    const keys = Object.keys(ops).filter((key) => ops[key]!.length > 0);
+    if (name === "discuss-pressing") return keys.length === 0;
+    const command =
+      name === "club-budget-request"
+        ? "request_board"
+        : name === "squad-number"
+          ? "set_squad_number"
+          : "set_tactics";
+    if (keys.length !== 1 || keys[0] !== command || ops[command]?.length !== 1) return false;
+    const row = object(ops[command][0]);
+    if (!row) return false;
+    if (name === "club-budget-request")
+      return (
+        Object.keys(row).every((key) => ["kind", "amount"].includes(key)) &&
+        row.kind === "transfer-budget" &&
+        row.amount === 10_000_000
+      );
+    if (name === "squad-number")
+      return (
+        Object.keys(row).every((key) => ["playerId", "number"].includes(key)) &&
+        row.playerId === playerId &&
+        row.number === 9
+      );
+    return directionalTactics(
+      name,
+      row,
+      initial,
+      tacticsOf(state, state.userTeamId).spec.defensiveLine,
+    );
+  }
   const availableCases = [
     ...cases.map((testcase) => testcase.name),
     ...(values.turn ? ["dialogue"] : []),
-    ...(values["match-turn"] ? ["match-explicit-axis", "match-mark", "match-left-focus"] : []),
+    ...(values["match-turn"] ? ["match-high-press", "match-mark", "match-left-focus"] : []),
   ];
   if (values.case && !availableCases.includes(values.case))
     throw new Error("Unknown --case or missing --turn/--match-turn flag");
@@ -341,7 +397,7 @@ async function main() {
         };
         const began = performance.now();
         let output: unknown;
-        let exactAgreement = false;
+        let semanticCheck = false;
         let errorInfo: ReturnType<typeof failure> | undefined;
         try {
           const answer = await interpretInstructions({
@@ -352,8 +408,7 @@ async function main() {
             evaluator,
           });
           output = answer;
-          exactAgreement =
-            !answer.unresolved && stableJson(answer.ops) === stableJson(testcase.expected);
+          semanticCheck = !answer.unresolved && semanticOps(testcase.name, answer.ops);
         } catch (error) {
           errorInfo = failure(error);
         }
@@ -362,7 +417,7 @@ async function main() {
         results.push({
           ...testcase,
           output,
-          exactAgreement,
+          semanticCheck,
           durationMs: performance.now() - began,
           stages,
           usage,
@@ -379,12 +434,12 @@ async function main() {
             ? [
                 cases[0]!,
                 cases[2]!,
-                { name: "dialogue", said: "오늘 날씨가 좋네요. 잠깐 인사하러 왔어요." },
+                { name: "dialogue", said: "선수들 표정이 좋아 보이네. 오늘 분위기는 어때?" },
               ]
             : []),
           ...(values["match-turn"]
             ? [
-                { name: "match-explicit-axis", said: "압박을 4로 설정해" },
+                { name: "match-high-press", said: cases[0]!.said },
                 { name: "match-mark", said: "" },
                 {
                   name: "match-left-focus",
@@ -422,16 +477,15 @@ async function main() {
               if (!marker || !target) throw new Error("Synthetic match has no outfield pair");
               mark = { markerId: marker.playerId, targetId: target.playerId };
               const name = (id: string) => game.players.find((player) => player.id === id)!.name;
-              said = `${name(marker.playerId)}에게 수비할 때 ${name(target.playerId)}를 맨마킹하도록 지시해. 마커가 원래 맡던 공간을 비우는 대가도 반영해.`;
+              said = `${name(marker.playerId)}에게 수비할 때 ${name(target.playerId)}를 붙어서 따라다니게 해. 쉽게 돌아서지 못하게 막아.`;
             }
           }
           // The web turn runner stores the user turn before runGmTurn builds its GM message.
           game.chat.push({ role: "user", text: said, toolCalls: [], at: game.date });
           const beforePressing = tacticsOf(game, game.userTeamId).spec.pressing;
-          const expectedPressing =
-            testcase.name === "explicit-axis" || testcase.name === "match-explicit-axis"
-              ? 4
-              : beforePressing;
+          const beforeSpec = structuredClone(tacticsOf(game, game.userTeamId).spec);
+          const pressureInstruction =
+            testcase.name === "high-press" || testcase.name === "match-high-press";
           await withGameUsage(`instruction-eval-${Date.now()}-${testcase.name}`, async () => {
             const began = performance.now();
             let calls: string[] = [];
@@ -526,7 +580,7 @@ async function main() {
               ? focusMatched && calls.includes("tactic_orders")
               : mark
                 ? matched === true && calls.includes("tactic_orders")
-                : testcase.name === "explicit-axis" || inMatch
+                : pressureInstruction || inMatch
                   ? calls.includes("set_tactics")
                   : !calls.includes("set_tactics");
             const evaluatorCalls = Object.fromEntries(
@@ -541,21 +595,61 @@ async function main() {
             );
             const expectedEvaluator = inMatch ? "match-reader" : "tactic-orders";
             const routingCorrect =
-              testcase.name === "explicit-axis" || inMatch
+              pressureInstruction || inMatch
                 ? (evaluatorCalls[expectedEvaluator] ?? 0) > 0 &&
                   totalEvaluatorCalls === evaluatorCalls[expectedEvaluator]
                 : totalEvaluatorCalls === 0;
+            const afterSpec = tacticsOf(game, game.userTeamId).spec;
+            const changedSpec = Object.fromEntries(
+              Object.entries(afterSpec).filter(
+                ([key, value]) =>
+                  stableJson(value) !== stableJson(beforeSpec[key as keyof typeof beforeSpec]),
+              ),
+            );
+            const allowedOps = pressureInstruction
+              ? ["set_tactics"]
+              : inMatch
+                ? ["set_match_plan"]
+                : [];
+            const noUnrelatedOps = diagnosticFacts.every(
+              (fact) =>
+                (fact.kind !== "orders.intent" ||
+                  Object.entries(fact.ops ?? {}).every(
+                    ([name, rows]) => rows.length === 0 || allowedOps.includes(name),
+                  )) &&
+                (fact.kind !== "command" ||
+                  !TACTIC_OPS.includes(fact.name) ||
+                  allowedOps.includes(fact.name)),
+            );
+            const semanticCheck = pressureInstruction
+              ? directionalTactics(
+                  "high-press",
+                  changedSpec,
+                  beforePressing,
+                  beforeSpec.defensiveLine,
+                )
+              : stableJson(beforeSpec) === stableJson(afterSpec) &&
+                (focusSide ? focusMatched : mark ? matched === true : true);
             turns.push({
               name: testcase.name,
               said,
-              expectedPressing,
+              criterion: pressureInstruction
+                ? cases[0]!.criterion
+                : focusSide
+                  ? "Positive own-team left attacking focus, unchanged base tactics."
+                  : mark
+                    ? "Named player marks the named opponent, unchanged base tactics."
+                    : "Conversation only; no tactical change or evaluator call.",
+              semanticCheck,
+              noUnrelatedOps,
               beforePressing,
               afterPressing,
               passed:
                 !errorInfo &&
                 commandCorrect &&
                 routingCorrect &&
-                afterPressing === expectedPressing &&
+                semanticCheck &&
+                noUnrelatedOps &&
                 sceneCharacters > 0,
               durationMs: performance.now() - began,
               sceneCharacters,
@@ -592,6 +686,7 @@ async function main() {
     gameVersion: gameVersion(),
     mode: values.live ? "live" : "offline",
     selectedCase: values.case ?? null,
+    availableCases,
     turnRequested: values.turn,
     matchTurnRequested: values["match-turn"],
     scope:
@@ -616,7 +711,9 @@ async function main() {
     turns,
     syntheticDuration: durationStats(results.map((item) => item.durationMs)),
     limitations: [
-      "Five synthetic expectations do not establish production quality or improvement.",
+      "Five synthetic semantic checks do not establish production quality or improvement. Directional checks permit model-selected intensity, not an exact numerical target.",
+      "A failed or partial directional check is reported as failure, not accepted merely because a tool was called. Manual review remains necessary for legitimate alternative tactics.",
+      "Earlier numeric-slider and personal-funding reports are historical artifacts, not results for these coach-language cases. The previous left-focus failure remains unresolved evidence until a fresh measured run succeeds.",
       "Interpretation cases do not apply commands; full turns check skill routing, pressing behavior and scene presence, not narrative quality.",
       "All provider-reported failed attempt usage is retained. Unreported failure usage and hidden retries cannot be inferred.",
       "Full-turn ledger calls are logical calls, not HTTP attempts. Complete per-attempt accounting is available for direct synthetic evaluator stages only.",
@@ -634,11 +731,11 @@ async function main() {
         `${role}: ${scope.commandCount} commands; ${scope.contextCharacters} context characters.`,
     ),
     "",
-    "| Synthetic case / role | Exact expected ops | Wall ms | Stages / attempts | Input / output tokens | USD estimate |",
+    "| Synthetic case / role | Semantic criterion | Wall ms | Stages / attempts | Input / output tokens | USD estimate |",
     "| --- | --- | ---: | ---: | ---: | ---: |",
     ...results.map(
       (item) =>
-        `| ${item.name} / ${item.role} | ${item.exactAgreement} | ${item.durationMs.toFixed(2)} | ${item.stages.length} / ${item.stages.reduce((sum, stage) => sum + stage.attempts, 0)} | ${item.usage.inputTokens} / ${item.usage.outputTokens} | ${show(item.costUsd)} |`,
+        `| ${item.name} / ${item.role} | ${item.semanticCheck} | ${item.durationMs.toFixed(2)} | ${item.stages.length} / ${item.stages.reduce((sum, stage) => sum + stage.attempts, 0)} | ${item.usage.inputTokens} / ${item.usage.outputTokens} | ${show(item.costUsd)} |`,
     ),
     "",
     "| Full-turn case | State + routing + scene check | Wall ms | Evaluator calls / all logical calls | Input / output tokens | USD estimate |",
@@ -658,7 +755,7 @@ async function main() {
   if (
     values.live &&
     (blockers.length > 0 ||
-      results.some((item) => !item.exactAgreement) ||
+      results.some((item) => !item.semanticCheck) ||
       turns.some((item) => !item.passed))
   )
     process.exitCode = 1;

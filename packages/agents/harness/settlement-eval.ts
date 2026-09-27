@@ -98,7 +98,6 @@ function fixture() {
     userTeamId: "arsenal",
     managerName: "김감독",
     background: "주장 출신 감독",
-    wallet: 1_000_000_000,
   });
   for (let guard = 0; guard < 30; guard++) {
     const advanced = advanceTime(state, "next_match");
