@@ -25,5 +25,8 @@ export const MoodNoteSchema = z.object({
 
 /** 대상이 여럿인 자리(팀토크·사건)의 심경 — 선수마다 한 줄, 상한은 그 자리가 정한다 */
 export const moodNotesArg = (max: number) =>
-  z.array(MoodNoteSchema).max(max).optional()
+  z
+    .array(MoodNoteSchema)
+    .max(max)
+    .optional()
     .describe(`${MOOD_LINE_HINT} — 이 일을 겪은 선수마다 한 줄, ${max}명까지`);
