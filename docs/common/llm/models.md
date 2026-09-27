@@ -1068,3 +1068,31 @@ pnpm log --board --game game-f0o7              전술판 선반만 — 전술판
 | 모드 해석 (`LLM_MODE`)              | `packages/llm/src/config.ts` (`resolveLlmMode`)                                                                                                                              |
 | 대본 어댑터 (§2-1)                  | `packages/llm/src/scripted-adapter.ts`                                                                                                                                       |
 | mock 대본 (발화 → 도구 표)          | `packages/agents/src/app/mock-script.ts` · 어댑터 선택은 `mock-gm.ts`                                                                                                        |
+
+## 6. Jev 시범 — 생성과 확률 평가의 경계
+
+`match-sheet`는 `config/llm.yml`의 `evaluators`에 둔 실험용 평가자다. 기본 경기
+경로는 `match-reader` 한 호출이며, 비교 하네스가 평가자를 명시적으로 주입할 때만
+산문 판독 → 강도 평가 두 요청을 실행한다. 채택에는 같은 기록 입력에서 **두 요청과
+재시도를 합한 지연·비용**, 시트·명령 일치율, 한국어 품질 검토가 필요하다.
+키가 없거나 비교가 끝나지 않은 것은 개선의 증거가 아니다.
+
+TypeSafe의 [HTTP API](https://docs.typesafe.ai/api)는
+`POST https://api.typesafe.ai/v1/systemone`에 `state`, `questions`, `model`을 받는다.
+Choice는 유한 선택지, Score는 순서 있는 눈금, Noul은 참일 확률이다. 임의 JSON
+스키마나 문자열 생성, 도구 실행, 대화 이력을 지원하는 `GameLLM.runTurn` 계약과
+다르므로 `GameEvaluator.evaluate`로 제한한다. 응답도 Zod로 검증하며 질문 키·확률
+키·합계·유한값을 확인한다. 타입 보장이 축구 판독의 정확성을 보장하지 않는다.
+
+[공식 모델 문서](https://docs.typesafe.ai/models)에 공개된 직접 API 가격은 입력
+백만 토큰당 $0.042, 출력 무료다(2026-09-27 확인). 문맥 한도는 전체 64k,
+state와 가장 긴 질문 합 32k다. 한국어는 영어보다 정확도가 낮을 수 있다고 명시한다.
+70–500ms는 [출시 글](https://typesafe.ai/blog/introducing-system-one-models-and-jev)의
+제공자 주장이지 이 게임의 정지점 실측이 아니다.
+[Vercel 공식 안내](https://vercel.com/kb/jev-from-typesafe-ai)는 AI SDK의 experimental
+평가 API와 Gateway를 지원한다. 이 시범 구현은 직접 API 한 경로만 사용하며
+`TYPESAFE_API_KEY`를 읽는다. 키·원문 입력은 비교 보고서에 싣지 않는다.
+
+확률 원본과 모델 응답 버전·토큰은 평가 결과에 남고, 시트에는 검증된 기대 강도만
+넘긴다. 저장된 시트의 의미와 모양은 기존 `step: 0..3` 그대로라 SAVE_VERSION은
+바뀌지 않는다. 실험 입력·설정 추가는 game-version을 올린다.
