@@ -1,7 +1,4 @@
-import {
-  type GameState,
-  awaitingShootout,
-} from "@story-fm/engine";
+import { type GameState, awaitingShootout } from "@story-fm/engine";
 import { type MatchToolContext, MATCH_TOOL_DEFINITIONS } from "../../../match/match-gm";
 import { buildToolSpecs, dismissed } from "../../gm-tools";
 import { createInstructionTool } from "../instructions";
@@ -20,11 +17,18 @@ export function buildMatchTools(
   const tools: GameToolSpec[] = options.operator
     ? []
     : buildToolSpecs(state, ctx.calls).filter((tool) => tool.name === "team_talk");
-  if (!options.operator) tools.push(createInstructionTool(state, ctx.calls, {
-    name: "tactic_orders", agent: "match-reader", said: ctx.said, boardMoves: ctx.boardMoves,
-    allowed: () => dismissed(state, true) ?? undefined,
-    description: MATCH_TOOL_DEFINITIONS.find((tool) => tool.name === "tactic_orders")!.description,
-  }));
+  if (!options.operator)
+    tools.push(
+      createInstructionTool(state, ctx.calls, {
+        name: "tactic_orders",
+        agent: "match-reader",
+        said: ctx.said,
+        boardMoves: ctx.boardMoves,
+        allowed: () => dismissed(state, true) ?? undefined,
+        description: MATCH_TOOL_DEFINITIONS.find((tool) => tool.name === "tactic_orders")!
+          .description,
+      }),
+    );
   tools.push({
     ...finalize!,
     handle: async () => {

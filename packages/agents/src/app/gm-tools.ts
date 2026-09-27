@@ -524,7 +524,10 @@ function writtenLines(text: string): number {
  * **무직인 감독의 문** — 한 문장이 한 자리에만 산다. `wrap`도 손으로 지은 명령도 손잡이도
  * 같은 함수를 지나므로, 새 자리가 생겨도 이 문구를 다시 적을 일이 없다 (career.md §5.1).
  */
-export function dismissed(state: GameState, applies: boolean): { ok: false; message: string } | null {
+export function dismissed(
+  state: GameState,
+  applies: boolean,
+): { ok: false; message: string } | null {
   if (!applies || !state.dismissal) return null;
   return {
     ok: false,
@@ -1854,16 +1857,35 @@ export function collectMatchMarks(
 export function buildGmTools(
   state: GameState,
   calls: GmToolCall[],
-  options?: { said?: string; deferNegotiationIds?: ReadonlySet<string>; boardMoves?: readonly BoardMove[] },
+  options?: {
+    said?: string;
+    deferNegotiationIds?: ReadonlySet<string>;
+    boardMoves?: readonly BoardMove[];
+  },
 ): GameToolSpec[] {
   const descriptions = skillDescriptions();
-  const visible = buildToolSpecs(state, calls, options).filter((tool) => !CORE_COMMANDS.has(tool.name));
-  return [...visible, ...([
-    ["tactic_orders", "tactic-orders"], ["training_orders", "training-orders"], ["market_orders", "market-orders"],
-  ] as const).map(([name, agent]) => createInstructionTool(state, calls, {
-    ...options, name, agent, description: descriptions[name],
-    allowed: () => agent === "market-orders" ? undefined : dismissed(state, true) ?? undefined,
-  }))];
+  const visible = buildToolSpecs(state, calls, options).filter(
+    (tool) => !CORE_COMMANDS.has(tool.name),
+  );
+  return [
+    ...visible,
+    ...(
+      [
+        ["tactic_orders", "tactic-orders"],
+        ["training_orders", "training-orders"],
+        ["market_orders", "market-orders"],
+      ] as const
+    ).map(([name, agent]) =>
+      createInstructionTool(state, calls, {
+        ...options,
+        name,
+        agent,
+        description: descriptions[name],
+        allowed: () =>
+          agent === "market-orders" ? undefined : (dismissed(state, true) ?? undefined),
+      }),
+    ),
+  ];
 }
 
 /**

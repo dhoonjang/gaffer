@@ -85,8 +85,13 @@ export function buildNegotiationTools(
   /** 답은 한 턴에 하나다 — 두 번째 판정은 인내를 두 번 깎는다 */
   let replied = false;
   return [
-    createInstructionTool(state, ctx.calls, { name: "negotiation_orders", agent: "table-orders", said: ctx.said,
-      description: NEGOTIATION_TOOL_DEFINITIONS.find((tool) => tool.name === "negotiation_orders")!.description }),
+    createInstructionTool(state, ctx.calls, {
+      name: "negotiation_orders",
+      agent: "table-orders",
+      said: ctx.said,
+      description: NEGOTIATION_TOOL_DEFINITIONS.find((tool) => tool.name === "negotiation_orders")!
+        .description,
+    }),
     {
       ...reply!,
       handle: async (input: unknown) => {

@@ -336,7 +336,11 @@ export function peaceScript(
   const header = pointOf(state, line);
   const calls = hit?.line.gm?.({ state, named: hit.named }) ?? [];
   const ops = hit?.line.ops?.({ state, named: hit.named }) ?? {};
-  for (const [tool, names] of [["tactic_orders", TACTIC_OPS], ["training_orders", TRAINING_OPS], ["market_orders", MARKET_OPS]] as const) {
+  for (const [tool, names] of [
+    ["tactic_orders", TACTIC_OPS],
+    ["training_orders", TRAINING_OPS],
+    ["market_orders", MARKET_OPS],
+  ] as const) {
     if (names.some((name) => (ops[name]?.length ?? 0) > 0)) calls.unshift({ tool, input: {} });
   }
   const stands = options.recorded || calls.length > 0 || line?.skip !== undefined;
@@ -427,7 +431,8 @@ export function negotiationScript(
   }
   const hit = findLine(options.message);
   const planned = hit?.line.gm?.({ state, named: hit.named }) ?? [ROOM_REPLY];
-  if (hit?.line.ops && Object.keys(hit.line.ops({ state, named: hit.named })).length > 0) planned.unshift({ tool: "negotiation_orders", input: {} });
+  if (hit?.line.ops && Object.keys(hit.line.ops({ state, named: hit.named })).length > 0)
+    planned.unshift({ tool: "negotiation_orders", input: {} });
   return {
     calls: planned.filter((call) => has(call.tool)),
     text: [header, `@${who}: 검토해 보겠습니다.`, suggestLine(ROOM_SUGGESTION)].join("\n"),
@@ -617,5 +622,10 @@ export function matchScript(
   lines.push(suggested);
   const hit = options.message ? findLine(options.message) : null;
   const commands = hit?.line.ops?.({ state, named: hit.named }) ?? {};
-  return { text: lines.join("\n"), ...(!options.operator && Object.keys(commands).length > 0 ? { calls: [{ tool: "tactic_orders", input: {} }] } : {}) };
+  return {
+    text: lines.join("\n"),
+    ...(!options.operator && Object.keys(commands).length > 0
+      ? { calls: [{ tool: "tactic_orders", input: {} }] }
+      : {}),
+  };
 }

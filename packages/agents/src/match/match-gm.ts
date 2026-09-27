@@ -92,7 +92,12 @@ export const MATCH_TOOL_DEFINITIONS: ReadonlyArray<{
   description: string;
   inputSchema: JsonObjectSchema;
 }> = [
-  { name: "tactic_orders", description: "감독이 전술 실행을 지시할 때만 부른다. 교체·자리·역할·팀 전술·마킹·공간 공략을 최근 10분 경기 흐름에서 해석한다. 질문·대화·단순 관전에는 부르지 않는다. 원문은 코어가 전달한다. 한 턴에 한 번이며 적용·반려 결과를 따른다.", inputSchema: toToolSchema(EmptySchema) },
+  {
+    name: "tactic_orders",
+    description:
+      "감독이 전술 실행을 지시할 때만 부른다. 교체·자리·역할·팀 전술·마킹·공간 공략을 최근 10분 경기 흐름에서 해석한다. 질문·대화·단순 관전에는 부르지 않는다. 원문은 코어가 전달한다. 한 턴에 한 번이며 적용·반려 결과를 따른다.",
+    inputSchema: toToolSchema(EmptySchema),
+  },
   {
     name: FINALIZE_MATCH_TOOL,
     description:

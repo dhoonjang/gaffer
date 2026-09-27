@@ -129,7 +129,9 @@ describe("규칙이 사는 자리", () => {
     for (const tool of [...TOOLS, ...MATCH_TOOL_DEFINITIONS, ...NEGOTIATION_TOOL_DEFINITIONS]) {
       expect(CORE_COMMANDS.has(tool.name), tool.name).toBe(false);
     }
-    expect(TOOLS.map((tool) => tool.name)).toEqual(expect.arrayContaining(["tactic_orders", "training_orders", "market_orders"]));
+    expect(TOOLS.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(["tactic_orders", "training_orders", "market_orders"]),
+    );
   });
 
   /**

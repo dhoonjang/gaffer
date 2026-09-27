@@ -5,11 +5,7 @@ import {
   playerName,
   type ReadingOccasion,
 } from "@story-fm/engine";
-import {
-  attributeLine,
-  buildPointsBlock,
-  stripTag,
-} from "../../../match/match-reader";
+import { attributeLine, buildPointsBlock, stripTag } from "../../../match/match-reader";
 import { type BoardMove, type MatchEvent } from "@story-fm/domain";
 import {
   buildMatchLogBlock,
@@ -122,4 +118,3 @@ export function buildReaderInput(
     .filter((line) => line.length > 0)
     .join("\n");
 }
-

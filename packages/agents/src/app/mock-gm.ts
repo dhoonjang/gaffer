@@ -11,12 +11,7 @@ import {
   type GameState,
 } from "@story-fm/engine";
 import { josaOf } from "@story-fm/domain";
-import {
-  ScriptedGameLLM,
-  resolveLlmMode,
-  type AgentConfig,
-  type GameLLM,
-} from "@story-fm/llm";
+import { ScriptedGameLLM, resolveLlmMode, type AgentConfig, type GameLLM } from "@story-fm/llm";
 import type { GmTurnResult } from "../common/gm-types";
 import { matchScript, negotiationScript, peaceScript } from "./mock-script";
 
@@ -56,7 +51,11 @@ export function mockGmLlm(
   if (resolveLlmMode() !== "mock") return undefined;
   return new ScriptedGameLLM(config, (req) =>
     turn.inMatch
-      ? matchScript(state, { kickoff: turn.kickoff, operator: turn.operator, message: turn.message })
+      ? matchScript(state, {
+          kickoff: turn.kickoff,
+          operator: turn.operator,
+          message: turn.message,
+        })
       : turn.inNegotiation
         ? negotiationScript(state, {
             seating: turn.seating,

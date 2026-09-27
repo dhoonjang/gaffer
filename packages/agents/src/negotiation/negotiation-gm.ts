@@ -120,7 +120,12 @@ export const NEGOTIATION_TOOL_DEFINITIONS: ReadonlyArray<{
   description: string;
   inputSchema: JsonObjectSchema;
 }> = [
-  { name: "negotiation_orders", description: "감독이 현재 협상에서 값·연수·조건·수락·철회를 지시할 때만 부른다. 설득이나 질문만 한 턴에는 부르지 않는다. 원문은 코어가 전달하며 한 턴에 한 번, 결과를 받은 뒤 상대의 답을 판정한다.", inputSchema: toToolSchema(EmptySchema) },
+  {
+    name: "negotiation_orders",
+    description:
+      "감독이 현재 협상에서 값·연수·조건·수락·철회를 지시할 때만 부른다. 설득이나 질문만 한 턴에는 부르지 않는다. 원문은 코어가 전달하며 한 턴에 한 번, 결과를 받은 뒤 상대의 답을 판정한다.",
+    inputSchema: toToolSchema(EmptySchema),
+  },
   {
     name: COUNTERPARTY_REPLY_TOOL,
     description:

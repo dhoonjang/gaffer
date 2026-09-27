@@ -76,8 +76,6 @@ import {
 import { awardTitle, normalizeSpeaker, SCOUT_DAYS } from "@story-fm/domain";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@story-fm/llm";
 
-
-
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
 const { stubRunTurn } = vi.hoisted(() => ({ stubRunTurn: vi.fn() }));
 vi.mock("@story-fm/llm", async (importOriginal) => {

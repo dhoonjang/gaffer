@@ -321,7 +321,8 @@ async function replay(
   }
   const proseCost = usageComplete ? costUsd(proseUsage, prices) : null;
   const evaluatorCost =
-    (evaluatorUsage.inputTokens * (LLM_CONFIG.evaluators["match-sheet"]?.inputUsdPerMillion ?? 0)) / 1_000_000;
+    (evaluatorUsage.inputTokens * (LLM_CONFIG.evaluators["match-sheet"]?.inputUsdPerMillion ?? 0)) /
+    1_000_000;
   return {
     success: reading !== undefined,
     durationMs: performance.now() - began,
@@ -460,7 +461,8 @@ async function main() {
     if (!process.env.TYPESAFE_API_KEY?.trim()) blockers.push("Missing TYPESAFE_API_KEY");
     if (!hasKey(config.provider))
       blockers.push(`Missing baseline credential: ${keyNamesFor(config.provider)}`);
-    if (!LLM_CONFIG.evaluators["match-sheet"]) blockers.push("Missing evaluators.match-sheet configuration");
+    if (!LLM_CONFIG.evaluators["match-sheet"])
+      blockers.push("Missing evaluators.match-sheet configuration");
     if (!data.cases.length) blockers.push("No replayable recorded inputs");
     if (!blockers.length && LLM_CONFIG.evaluators["match-sheet"]) {
       const { TypesafeGameEvaluator } = await import("../../llm/src/typesafe-adapter");
