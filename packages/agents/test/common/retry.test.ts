@@ -17,7 +17,6 @@ import type {
   EvaluationResult,
   GameEvaluator,
   GameLLM,
-  GameToolSpec,
   JsonObjectSchema,
   TurnResult,
 } from "@story-fm/llm";
@@ -158,19 +157,6 @@ describe("runMatchReader — 산출과 실패", () => {
     return state;
   })();
 
-  /** 판독기가 인자를 옮길 명령의 스펙 — 이 갈래의 시험에는 스키마만 있으면 된다 */
-  const SPECS = new Map<string, GameToolSpec>([
-    [
-      "set_tactics",
-      {
-        name: "set_tactics",
-        description: "팀 전술 6축과 갈래",
-        inputSchema: { type: "object", properties: {} },
-        handle: () => ({ ok: true, message: "" }),
-      },
-    ],
-  ]);
-
   /** 산출 JSON 하나로 답하는 모델 — 실모드에서 어댑터가 `output`에 세우는 그 모양이다 */
   const answering =
     (output: TurnResult["output"], text = ""): GameLLM["runTurn"] =>
@@ -186,48 +172,57 @@ describe("runMatchReader — 산출과 실패", () => {
       });
 
   it("산출이 오면 그것으로 진행한다 — 요청은 도구 없이 출력 스키마 하나다", async () => {
-    const llm: GameLLM = { runTurn: answering({ ops: { set_tactics: [{ pressing: 4 }] } }) };
+    const llm: GameLLM = {
+      runTurn: answering({ points: [], sheet: [], ops: { set_tactics: [{ pressing: 4 }] } }),
+    };
     const spy = vi.spyOn(llm, "runTurn");
 
-    const result = await runMatchReader(emptyState, SPECS, {
+    const result = await runMatchReader(emptyState, {
       occasion: "orders",
       said: "압박 올려",
       llm,
     });
 
     expect(result.ok).toBe(true);
-    expect(result.ok && result.reading.ops.set_tactics).toEqual([{ pressing: 4 }]);
+    expect(result.ok && result.reading.ops).toEqual({});
     expect(spy).toHaveBeenCalledTimes(1);
     const request = spy.mock.calls[0]![0];
     expect(request.outputSchema).toBeDefined();
     expect(request.tools).toBeUndefined();
   });
 
-  it.each(["", "   "])("미해석 내용이 %j여도 함께 온 명령을 버리지 않는다", async (unresolved) => {
-    const runTurn = vi.fn(answering({ ops: { set_tactics: [{ pressing: 4 }] }, unresolved }));
-    const result = await runMatchReader(emptyState, SPECS, {
-      occasion: "orders",
-      said: "압박 올려",
-      llm: { runTurn },
-    });
-    expect(result.ok && result.reading.ops.set_tactics).toEqual([{ pressing: 4 }]);
-    expect(result.ok && result.reading.unresolved).toBeUndefined();
-    expect(runTurn).toHaveBeenCalledTimes(1);
-  });
+  it.each(["", "   "])(
+    "판독기에 예전 명령 산출이 섞여 와도 실행 명령으로 내보내지 않는다 (%j)",
+    async (unresolved) => {
+      const runTurn = vi.fn(
+        answering({ points: [], sheet: [], ops: { set_tactics: [{ pressing: 4 }] }, unresolved }),
+      );
+      const result = await runMatchReader(emptyState, {
+        occasion: "orders",
+        said: "압박 올려",
+        llm: { runTurn },
+      });
+      expect(result.ok && result.reading.ops).toEqual({});
+      expect(result.ok && result.reading.unresolved).toBeUndefined();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each([false, 3, "a".repeat(201)])(
-    "미해석 내용의 잘못된 타입과 길이는 계속 반려한다",
+    "판독기 책임 밖의 예전 지시 필드는 판독을 오염시키지 않는다",
     async (unresolved) => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       try {
-        const runTurn = vi.fn(answering({ ops: { set_tactics: [{ pressing: 4 }] }, unresolved }));
-        const result = await runMatchReader(emptyState, SPECS, {
+        const runTurn = vi.fn(
+          answering({ points: [], sheet: [], ops: { set_tactics: [{ pressing: 4 }] }, unresolved }),
+        );
+        const result = await runMatchReader(emptyState, {
           occasion: "orders",
           said: "압박 올려",
           llm: { runTurn },
         });
-        expect(result.ok).toBe(false);
-        expect(runTurn).toHaveBeenCalledTimes(2);
+        expect(result.ok).toBe(true);
+        expect(runTurn).toHaveBeenCalledTimes(1);
       } finally {
         warn.mockRestore();
       }
@@ -244,7 +239,7 @@ describe("runMatchReader — 산출과 실패", () => {
     const llm: GameLLM = { runTurn: answering(null, "왼쪽을 두껍게 하겠습니다.") };
     const spy = vi.spyOn(llm, "runTurn");
 
-    const result = await runMatchReader(emptyState, SPECS, {
+    const result = await runMatchReader(emptyState, {
       occasion: "orders",
       said: "왼쪽을 두껍게",
       llm,
@@ -268,7 +263,7 @@ describe("runMatchReader — 산출과 실패", () => {
     const llm: GameLLM = { runTurn: answering({ ops: [] }) };
     const spy = vi.spyOn(llm, "runTurn");
 
-    const result = await runMatchReader(emptyState, SPECS, {
+    const result = await runMatchReader(emptyState, {
       occasion: "orders",
       said: "왼쪽을 두껍게",
       llm,
@@ -290,7 +285,7 @@ describe("runMatchReader — 산출과 실패", () => {
     const spy = vi.spyOn(llm, "runTurn");
 
     await expect(
-      runMatchReader(emptyState, SPECS, { occasion: "orders", said: "왼쪽을 두껍게", llm }),
+      runMatchReader(emptyState, { occasion: "orders", said: "왼쪽을 두껍게", llm }),
     ).rejects.toBe(thrown);
     expect(spy).toHaveBeenCalledTimes(1);
   });
@@ -413,7 +408,7 @@ describe("결산 스키마의 수용 폭", () => {
 });
 
 describe("reader pipeline — atomic probabilistic pilot", () => {
-  const schema = matchReaderOutputSchema(new Map());
+  const schema = matchReaderOutputSchema();
   const point = { id: "p", text: "왼쪽 공격이 이어진다", about: ["home"], importance: 2 };
   const candidate = {
     pointId: "p",

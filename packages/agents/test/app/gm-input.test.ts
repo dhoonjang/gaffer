@@ -71,11 +71,15 @@ import {
   recordCharacterInjection,
   runGmTurn,
   runOnboarding,
-  runTacticOrders,
   type GmToolCall,
 } from "@story-fm/agents";
 import { awardTitle, normalizeSpeaker, SCOUT_DAYS } from "@story-fm/domain";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@story-fm/llm";
+
+// 이 파일은 장면 입력과 시계를 잰다. 지시 해석은 별도 검증하며 외부 평가를 부르지 않는다.
+vi.mock("../../src/app/workflows/instructions", () => ({
+  runInstructions: async () => ({ notes: [], rejected: false, applied: 0 }),
+}));
 
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
 const { stubRunTurn } = vi.hoisted(() => ({ stubRunTurn: vi.fn() }));
@@ -2163,32 +2167,6 @@ describe("<board_moves> — 이번 턴 판이 움직인 것", () => {
 
   it("움직인 것이 없으면 블록이 서지 않는다 — 빈 태그를 세우지 않는다", () => {
     expect(buildBoardMovesBlock(game(), [])).toEqual([]);
-  });
-
-  it("해석기가 보낸 입력에 그 블록이 감독의 말 앞에 선다", async () => {
-    const state = game();
-    let sent: TurnRequest | undefined;
-    const llm: GameLLM = {
-      runTurn: (req) => {
-        sent = req;
-        return Promise.resolve({
-          text: "",
-          history: { version: 1, provider: "google", model: "test", messages: [] },
-          historyBase: 0,
-          usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
-          toolCallCount: 0,
-          stopReason: "completed" as StopReason,
-          output: { ops: {} },
-        });
-      },
-    };
-    await runTacticOrders(state, new Map(), "라인 한 칸 내립니다", {
-      llm,
-      boardMoves: [{ kind: "tactic", axis: "defensiveLine", from: 4, to: 3 }],
-    });
-    const user = sent!.user;
-    expect(user).toContain("<board_moves>");
-    expect(user.indexOf("<board_moves>")).toBeLessThan(user.indexOf("@감독:"));
   });
 });
 

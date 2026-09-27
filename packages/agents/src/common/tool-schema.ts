@@ -21,8 +21,8 @@ import type { JsonObjectSchema } from "@story-fm/llm";
 type JsonSchemaNode = Record<string, unknown>;
 
 /** 도구 하나의 입력 — 최상위는 항상 객체다 (제공자 계약) */
-export function toToolSchema(schema: z.ZodTypeAny): JsonObjectSchema {
-  const node = derive(schema);
+export function toToolSchema(schema: z.ZodTypeAny, preserveNulls = false): JsonObjectSchema {
+  const node = derive(schema, preserveNulls);
   if (node.type !== "object") {
     throw new Error(`도구 입력은 객체여야 합니다 — ${JSON.stringify(node.type)}`);
   }
@@ -34,8 +34,9 @@ function described(node: JsonSchemaNode, schema: z.ZodTypeAny): JsonSchemaNode {
   return schema.description === undefined ? node : { ...node, description: schema.description };
 }
 
-function derive(schema: z.ZodTypeAny): JsonSchemaNode {
-  if (schema instanceof z.ZodOptional) return described(derive(schema.unwrap()), schema);
+function derive(schema: z.ZodTypeAny, preserveNulls = false): JsonSchemaNode {
+  if (schema instanceof z.ZodOptional)
+    return described(derive(schema.unwrap(), preserveNulls), schema);
   /**
    * `null`과 기본값은 **관용이지 선택지가 아니다.** `.nullish()`는 없는 것을 `null`로
    * 적어 보내는 모델을 반려하지 않으려고 있고, `.default()`는 빠진 자리를 Zod가 채운다
@@ -43,17 +44,30 @@ function derive(schema: z.ZodTypeAny): JsonSchemaNode {
    * 제공자마다 받는 스키마 부분집합이 달라, 그 한 줄이 도구 전체를 거절당하게 한다.
    * 모델이 볼 것은 안쪽 갈래 하나이고, 빼도 된다는 것은 `required`가 말한다.
    */
-  if (schema instanceof z.ZodNullable) return described(derive(schema.unwrap()), schema);
-  if (schema instanceof z.ZodDefault) return described(derive(schema.removeDefault()), schema);
+  if (schema instanceof z.ZodNullable) {
+    const inner = derive(schema.unwrap(), preserveNulls);
+    return described(
+      preserveNulls
+        ? {
+            ...inner,
+            type: [inner.type, "null"],
+            ...(Array.isArray(inner.enum) ? { enum: [...inner.enum, null] } : {}),
+          }
+        : inner,
+      schema,
+    );
+  }
+  if (schema instanceof z.ZodDefault)
+    return described(derive(schema.removeDefault(), preserveNulls), schema);
   if (schema instanceof z.ZodString) return described(stringNode(schema), schema);
   if (schema instanceof z.ZodNumber) return described(numberNode(schema), schema);
   if (schema instanceof z.ZodBoolean) return described({ type: "boolean" }, schema);
   if (schema instanceof z.ZodEnum) {
     return described({ type: "string", enum: [...schema.options] }, schema);
   }
-  if (schema instanceof z.ZodArray) return described(arrayNode(schema), schema);
-  if (schema instanceof z.ZodObject) return described(objectNode(schema), schema);
-  if (schema instanceof z.ZodUnion) return described(unionNode(schema), schema);
+  if (schema instanceof z.ZodArray) return described(arrayNode(schema, preserveNulls), schema);
+  if (schema instanceof z.ZodObject) return described(objectNode(schema, preserveNulls), schema);
+  if (schema instanceof z.ZodUnion) return described(unionNode(schema, preserveNulls), schema);
   if (schema instanceof z.ZodLiteral) return described(literalNode(schema.value), schema);
   throw new Error(`도구 스키마로 옮길 수 없는 갈래입니다: ${schema.constructor.name}`);
 }
@@ -76,8 +90,8 @@ function numberNode(schema: z.ZodNumber): JsonSchemaNode {
   return node;
 }
 
-function arrayNode(schema: z.ZodArray<z.ZodTypeAny>): JsonSchemaNode {
-  const node: JsonSchemaNode = { type: "array", items: derive(schema.element) };
+function arrayNode(schema: z.ZodArray<z.ZodTypeAny>, preserveNulls: boolean): JsonSchemaNode {
+  const node: JsonSchemaNode = { type: "array", items: derive(schema.element, preserveNulls) };
   const def = schema._def;
   if (def.exactLength !== null) {
     node.minItems = def.exactLength.value;
@@ -89,11 +103,11 @@ function arrayNode(schema: z.ZodArray<z.ZodTypeAny>): JsonSchemaNode {
   return node;
 }
 
-function objectNode(schema: z.ZodObject<z.ZodRawShape>): JsonSchemaNode {
+function objectNode(schema: z.ZodObject<z.ZodRawShape>, preserveNulls: boolean): JsonSchemaNode {
   const properties: Record<string, JsonSchemaNode> = {};
   const required: string[] = [];
   for (const [key, value] of Object.entries(schema.shape)) {
-    properties[key] = derive(value);
+    properties[key] = derive(value, preserveNulls);
     if (!omittable(value)) required.push(key);
   }
   return { type: "object", properties, ...(required.length > 0 ? { required } : {}) };
@@ -108,10 +122,14 @@ function omittable(schema: z.ZodTypeAny): boolean {
  * 리터럴만 모인 합집합은 **열거**다 — `intensity: 1|2|3`이 그것이다. `anyOf`로 펴면
  * 같은 제약이 모델에게 세 갈래 스키마로 보인다.
  */
-function unionNode(schema: z.ZodUnion<readonly [z.ZodTypeAny, ...z.ZodTypeAny[]]>): JsonSchemaNode {
+function unionNode(
+  schema: z.ZodUnion<readonly [z.ZodTypeAny, ...z.ZodTypeAny[]]>,
+  preserveNulls: boolean,
+): JsonSchemaNode {
   const options: readonly z.ZodTypeAny[] = schema.options;
   const literals = options.filter((o): o is z.ZodLiteral<unknown> => o instanceof z.ZodLiteral);
-  if (literals.length !== options.length) return { anyOf: options.map(derive) };
+  if (literals.length !== options.length)
+    return { anyOf: options.map((option) => derive(option, preserveNulls)) };
   const values = literals.map((l) => l.value);
   const first = literalNode(values[0]);
   return { type: first.type, enum: values };

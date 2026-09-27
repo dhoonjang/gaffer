@@ -145,18 +145,10 @@ import { skillDescriptions } from "./skill-descriptions";
 import { toToolSchema, inputError } from "../common/tool-schema";
 import { runMatchReader } from "./workflows/match/match-reader";
 import { sideTeamName } from "../match/context";
-import { ordersGate, applyOps } from "../common/orders-ops";
-import { runTacticOrders } from "./workflows/match/tactic-orders";
-import { applyTacticOrders } from "../match/tactic-apply";
-import { runTrainingOrders } from "./workflows/story/training-orders";
-import { buildTrainingSchedule } from "./gm-input";
-import { TRAINING_OPS } from "../story/training-orders";
-import { runMarketOrders } from "./workflows/negotiation/market-orders";
-import { MARKET_OPS } from "../negotiation/market-orders";
 
 /**
  * **GM에게 보이지 않는 코어 명령** — 판을 세우는 열과 훈련 여섯, 시장 스물여섯. 감독의 전술 지시는
- * `tactic_orders`(평시·경기)·`training_orders`·`market_orders` 뒤의 해석이 JSON으로 옮기고 코어가 이 명령들을
+ * Jev 사전 해석이 타입 인자로 옮기고 코어가 이 명령들을
  * 부른다 (agents.md §1). 설명은 모델에게 가지 않으므로 이름만 든다 — 판정 근거는
  * `TACTIC_ORDERS_SYSTEM`의 것이다.
  */
@@ -589,6 +581,7 @@ export function buildToolSpecs(
     name,
     description,
     inputSchema: toToolSchema(schema),
+    instructionSchema: toToolSchema(schema, true),
     handle(input: unknown, context?: ToolCallContext) {
       /**
        * 명령 하나가 기록에 한 줄 — **반려도 남는다** (models.md §5-3). 화면의 칩
@@ -649,6 +642,7 @@ export function buildToolSpecs(
     name,
     description,
     inputSchema: toToolSchema(schema),
+    instructionSchema: toToolSchema(schema, true),
     readOnly: true,
     handle(input: unknown) {
       const parsed = schema.safeParse(input);
@@ -664,9 +658,8 @@ export function buildToolSpecs(
    * 문이 열린 것은 이미 일어난 일이라 되돌리지 않는다.
    */
   const readAtKickoff = async (): Promise<void> => {
-    const specs = new Map(tools.map((t) => [t.name, t] as const));
     try {
-      const read = await runMatchReader(state, specs, { occasion: "kickoff" });
+      const read = await runMatchReader(state, { occasion: "kickoff" });
       if (read.ok) applyMatchReading(state, read.reading);
     } catch (error) {
       console.warn("[match-reader] 킥오프 판독을 건너뜁니다 — 빈 포인트로 시작합니다:", error);
@@ -913,6 +906,7 @@ export function buildToolSpecs(
       name: "set_training",
       description: CORE_COMMAND_LABELS.set_training!,
       inputSchema: toToolSchema(TRAINING_INPUT),
+      instructionSchema: toToolSchema(TRAINING_INPUT, true),
       handle(input: unknown, context?: ToolCallContext) {
         const blocked = dismissed(state, true);
         if (blocked) return blocked;
@@ -1880,123 +1874,17 @@ export function collectMatchMarks(
   }
 }
 
-/** 손잡이 셋의 인자 — 없다. 부르는 것이 곧 라우팅이다 (agents.md §1) */
-const NoArgsSchema = z.object({});
-
-/**
- * **평시 GM이 받는 도구** — 코어 명령 전부에서 판을 세우는 것들(`CORE_COMMANDS`)을
- * 빼고 `tactic_orders` 하나를 얹는다 (agents.md §1·§2). 그 하나의 핸들러 뒤에서 지시
- * 해석이 감독의 말을 JSON으로 옮기고 코어가 코어 명령을 부른다 — 기록은 코어 명령의
- * 이름으로 남아 칩과 말풍선이 그대로 선다.
- */
+/** Scene skills and read-only queries; direct commands have already run before the GM. */
 export function buildGmTools(
   state: GameState,
   calls: GmToolCall[],
   options?: {
-    /**
-     * 이번 턴 감독의 말 — 손잡이 셋이 해석기에 넘기는 원문이다 (agents.md §1). 턴 러너가
-     * 채팅에 넣은 그 문자열이고, 손잡이 턴에는 없다.
-     */
     said?: string;
     deferNegotiationIds?: ReadonlySet<string>;
-    /** 이번 턴 전술판이 이미 움직인 것 — 해석기가 되풀이를 가릴 근거다 (agents.md §3) */
     boardMoves?: readonly BoardMove[];
   },
 ): GameToolSpec[] {
-  const descriptions = skillDescriptions();
-  /**
-   * 명령 배선은 **한 번만 짓는다** — 손잡이 셋이 각자 다시 지으면 같은 상태를 두고 스펙
-   * 쉰여섯 벌이 턴마다 네 번 만들어지고, 그중 하나가 `options`를 빠뜨리면 조용히 갈린다.
-   */
-  const specList = buildToolSpecs(state, calls, options);
-  const specs = new Map(specList.map((t) => [t.name, t] as const));
-  const visible = specList.filter((t) => !CORE_COMMANDS.has(t.name));
-  /**
-   * **손잡이 셋은 인자가 없다** — 부르는 것이 곧 라우팅이고, 이번 턴 감독의 말은 코어가
-   * 쥔 `options.said`가 해석기에 간다 (agents.md §1). 문은 셋이 함께 지난다: 감독의 말이
-   * 없는 턴에는 열리지 않고, 같은 손잡이의 두 번째 호출은 같은 말을 다시 옮기므로 닫힌다.
-   */
-  const gate = ordersGate(options?.said);
-  const tactics: GameToolSpec = {
-    name: "tactic_orders",
-    description: descriptions.tactic_orders,
-    inputSchema: toToolSchema(NoArgsSchema),
-    async handle() {
-      const blocked = dismissed(state, true);
-      if (blocked) return blocked;
-      const opened = gate("tactic_orders");
-      if (!opened.ok) return opened;
-      const intent = await runTacticOrders(state, specs, opened.said, {
-        ...(options?.boardMoves ? { boardMoves: options.boardMoves } : {}),
-      });
-      if (!intent.ok) return { ok: false, message: intent.message };
-      const applied = applyTacticOrders(state, intent.intent, specs);
-      /**
-       * **아무 명령도 걸리지 않은 턴은 성공이 아니다** (agents.md §3). `ops`가 빈 채
-       * 돌아온 응답에 ok를 주면 GM은 "조정했습니다"로 장면을 닫고, 감독은 걸리지 않은
-       * 지시 위에 다음 경기를 맞는다 — 그때 결과에 실려 오는 것은 옮기지 못한 말뿐이다.
-       */
-      return {
-        ok: applied.applied > 0,
-        message: applied.notes.length > 0 ? applied.notes.join("\n") : "지시를 판에 걸었습니다",
-      };
-    },
-  };
-  /**
-   * **훈련·육성 지시** — 전술과 같은 무늬다 (agents.md §1). 코어가 쥔 감독의 말이 넘어가고
-   * 도구 뒤의 해석기가 선수단 운영 명령의 인자를 채운다.
-   */
-  const training: GameToolSpec = {
-    name: "training_orders",
-    description: descriptions.training_orders,
-    inputSchema: toToolSchema(NoArgsSchema),
-    async handle() {
-      const blocked = dismissed(state, true);
-      if (blocked) return blocked;
-      const opened = gate("training_orders");
-      if (!opened.ok) return opened;
-      const parsedOrders = await runTrainingOrders(
-        state,
-        specs,
-        buildTrainingSchedule(state),
-        opened.said,
-      );
-      if (!parsedOrders.ok) return { ok: false, message: parsedOrders.message };
-      const notes: string[] = [];
-      const outcomes = applyOps(specs, parsedOrders.orders, TRAINING_OPS, notes);
-      return {
-        ok: outcomes.applied > 0,
-        message: notes.length > 0 ? notes.join("\n") : "훈련을 걸었습니다",
-      };
-    },
-  };
-  /**
-   * **이적·재정 지시** — 판 지시와 같은 무늬다 (agents.md §1). 코어가 쥔 감독의 말이 넘어가고
-   * 도구 뒤의 해석기가 시장·장부 명령의 인자를 채운다. 명령 자체는 GM에게 보이지 않는다.
-   */
-  const market: GameToolSpec = {
-    name: "market_orders",
-    description: descriptions.market_orders,
-    inputSchema: toToolSchema(NoArgsSchema),
-    async handle() {
-      const opened = gate("market_orders");
-      if (!opened.ok) return opened;
-      /**
-       * 무직의 문은 여기서 열지 않는다 — 감독의 말을 되읽어 가르지 않고, 해석기가 낸
-       * 명령마다 그 명령의 `wrap`이 판정한다(`OUT_OF_WORK_TOOLS`). 감독직을 두드리는
-       * 명령은 지나고 나머지는 그 자리에서 무직의 문구로 반려된다.
-       */
-      const parsedOrders = await runMarketOrders(state, specs, opened.said);
-      if (!parsedOrders.ok) return { ok: false, message: parsedOrders.message };
-      const notes: string[] = [];
-      const outcomes = applyOps(specs, parsedOrders.orders, MARKET_OPS, notes);
-      return {
-        ok: outcomes.applied > 0,
-        message: notes.length > 0 ? notes.join("\n") : "장부에 걸었습니다",
-      };
-    },
-  };
-  return [...visible, tactics, training, market];
+  return buildToolSpecs(state, calls, options).filter((tool) => !CORE_COMMANDS.has(tool.name));
 }
 
 /**

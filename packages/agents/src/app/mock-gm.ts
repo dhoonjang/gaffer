@@ -17,17 +17,10 @@ import {
   agentConfig,
   resolveLlmMode,
   type AgentConfig,
-  type AgentName,
   type GameLLM,
 } from "@story-fm/llm";
 import type { GmTurnResult } from "../common/gm-types";
-import {
-  matchScript,
-  negotiationScript,
-  ordersScript,
-  peaceScript,
-  readerScript,
-} from "./mock-script";
+import { matchScript, negotiationScript, peaceScript, readerScript } from "./mock-script";
 
 /**
  * **mock 모드가 어느 어댑터를 세우는가** — 그것뿐인 층이다 (docs/common/llm/agents.md §8).
@@ -77,22 +70,6 @@ export function mockGmLlm(
           })
         : peaceScript(state, turn.message, { recorded: turn.recorded() }),
   );
-}
-
-/**
- * 해석기(전술·훈련·시장·테이블) 자리의 대본 어댑터 — 실모드면 `undefined`.
- *
- * 감독의 말이 표의 **같은 줄**에서 명령의 인자를 받는다. 코어가 그 말을 해석기에
- * 그대로 넘기므로(실모드와 같다 — 손잡이는 인자가 없다) 두 걸음이 서로 다른 말을 볼
- * 일이 없다. 답은 실모드와 같이 산출 JSON 하나다 (models.md §3-2).
- */
-export function mockOrdersLlm(
-  state: GameState,
-  spec: { agent: AgentName },
-  said: string,
-): GameLLM | undefined {
-  if (resolveLlmMode() !== "mock") return undefined;
-  return new ScriptedGameLLM(agentConfig(spec.agent), () => ordersScript(state, said));
 }
 
 /**

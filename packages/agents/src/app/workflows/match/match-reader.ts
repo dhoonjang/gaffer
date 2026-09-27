@@ -23,7 +23,7 @@ import {
 } from "../../../match/context";
 import { eventsBlockOf } from "../../../match/context";
 import { tagged } from "../../../common/orders-ops";
-import { type GameToolSpec, type GameLLM, createGameLLM, agentConfig } from "@story-fm/llm";
+import { type GameLLM, createGameLLM, agentConfig } from "@story-fm/llm";
 import { mockReaderLlm } from "../../mock-gm";
 import { ModelOutputError } from "../../../common/retry";
 import { runReaderPipeline } from "../../../match/reader-pipeline";
@@ -142,7 +142,6 @@ export function buildReaderInput(
  */
 export async function runMatchReader(
   state: GameState,
-  specs: ReadonlyMap<string, GameToolSpec>,
   options: {
     occasion: ReadingOccasion;
     /** 이번 턴 감독의 말 — 지시 턴에만 선다 */
@@ -159,7 +158,7 @@ export async function runMatchReader(
   let client = options.llm ?? mockReaderLlm(state, options);
   let attempts = 0;
   const user = buildReaderInput(state, options);
-  const schema = matchReaderOutputSchema(specs);
+  const schema = matchReaderOutputSchema();
   const record = (rest: { ok: boolean; failure?: string }): void =>
     journal({
       kind: "match.reading",

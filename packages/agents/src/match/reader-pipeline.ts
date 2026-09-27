@@ -7,24 +7,19 @@ import {
   type ScoreQuestion,
 } from "@story-fm/llm";
 import { z } from "zod";
-import { parseOrdersReport, UnresolvedSchema } from "../common/orders-ops";
 import { ModelOutputError, readOutput, retryOnce } from "../common/retry";
 import { toToolSchema } from "../common/tool-schema";
 import {
-  MATCH_OPS,
   matchReaderSystem,
   ReaderReportSchema,
   SHEET_MAX,
   type MatchReaderOutput,
 } from "./match-reader";
-import { TACTIC_CAPS } from "./tactic-orders";
 
 const SheetCandidateSchema = SheetLineSchema.omit({ step: true });
 const CandidateReportSchema = z.object({
   points: z.array(PointSchema),
   sheet: z.array(SheetCandidateSchema).max(SHEET_MAX),
-  ops: z.record(z.unknown()).optional(),
-  unresolved: UnresolvedSchema.optional(),
 });
 
 export function readerRequestSchema(
@@ -45,10 +40,8 @@ export function readerRequestSchema(
     "sheet",
     toToolSchema(options.probabilistic ? SheetCandidateSchema : SheetLineSchema),
   );
-  if (!options.hasSaid) {
-    delete properties.ops;
-    delete properties.unresolved;
-  }
+  delete properties.ops;
+  delete properties.unresolved;
   const required = (schema.required ?? []).filter((key) => key in properties);
   if (options.probabilistic) required.push("points", "sheet");
   return { ...schema, properties, required: [...new Set(required)] };
@@ -90,7 +83,7 @@ export async function runReaderPipeline(options: {
     }
     return candidate;
   });
-  const orders = options.hasSaid ? parseOrdersReport(report, MATCH_OPS, TACTIC_CAPS) : { ops: {} };
+  const orders = { ops: {} };
   const points = report.points ?? [];
   const evaluations: EvaluationResult[] = [];
   let sheet = report.sheet ?? [];
@@ -116,6 +109,7 @@ export async function runReaderPipeline(options: {
     }
     sheet = sheet.map((line, index) => {
       const answer = evaluation.answers[`line_${index}`]!;
+      if (answer.type !== "score") throw new ModelOutputError("match-sheet: expected score");
       return { ...line, step: answer.score };
     });
   }

@@ -46,7 +46,11 @@ import type { BoardMove, CharacterEntry, MatchEvent, TickEvent } from "@story-fm
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
 import { MAX_REPORT_CARDS, NO_CARDS, takeArrivedReports, type ArrivedCards } from "./report-cards";
 import { reportTraining } from "./workflows/story/training-rater";
-import { buildMatchTools, readMatchAfterStop } from "./workflows/match/match-gm";
+import {
+  buildMatchTools,
+  readMatchAfterStop,
+  readMatchAfterInstructions,
+} from "./workflows/match/match-gm";
 import { eventsBlockOf } from "../match/context";
 import { KICKOFF_BLOCK, MATCH_GM_SYSTEM, type MatchToolContext } from "../match/match-gm";
 import { finalizeMatchTurn } from "./workflows/match/finalize-match";
@@ -57,6 +61,7 @@ import {
   type NegotiationToolContext,
 } from "../negotiation/negotiation-gm";
 import { buildNegotiationTools } from "./workflows/negotiation/negotiation-gm";
+import { runInstructions } from "./workflows/instructions";
 import { mockGmLlm } from "./mock-gm";
 import { retryOnce } from "../common/retry";
 import { GM_SYSTEM } from "../story/gm-prompt";
@@ -419,6 +424,7 @@ async function callGm(
   onText: ((delta: string) => void) | undefined,
   operatorOrders: readonly string[] | undefined,
   boardMoves: readonly BoardMove[] | undefined,
+  instructionNotes: readonly string[],
 ): Promise<GmCall> {
   const { inMatch, kickoff, inNegotiation, seating, leaving, operator } = shape;
   const peace = !inMatch && !inNegotiation;
@@ -471,7 +477,7 @@ async function callGm(
    * **경기 통계는 공이 구른 뒤에만 싣는다** — 킥오프 턴은 아직 아무 일도 일어나지
    * 않았는데 통계를 쥐여 주면 첫 마디부터 우열을 읊는다 (agents.md §5).
    */
-  const stateNote = inMatch
+  const stateSnapshot = inMatch
     ? buildLedgerNote(state, { withState: !kickoff })
     : inNegotiation
       ? // 방의 스냅샷은 테이블이다 — 오퍼 이력·조건서·인내·앵커 (agents.md §4-1)
@@ -488,6 +494,17 @@ async function callGm(
           opening.carried.reports,
           opening.carried.missions,
         );
+  const stateNote = [
+    stateSnapshot,
+    ...(instructionNotes.length
+      ? [
+          "<instruction_results>",
+          ...instructionNotes,
+          "이미 적용한 지시를 다시 실행하지 않는다. 적용하지 못한 부분은 감독에게 확인한다.",
+          "</instruction_results>",
+        ]
+      : []),
+  ].join("\n");
   /**
    * 이번 장면에 설 인물 — **평시만이다.** 경기 중에는 벤치의 코치 한 사람이
    * 레퍼런스에 상주하고(`buildMatchReference`), 중계가 읽을 것은 판이지 인물지가 아니다.
@@ -641,9 +658,9 @@ async function closeTurn(
   const { text: rawText, suggestion } = takeSuggestion(result.text);
   /**
    * **GM이 마감을 부르지 않았으면 코어가 대신 부른다** (agents.md §3 「경기 마감」) —
-   * 경기가 끝났는데 열려 있는 세이브는 없다. 마무리 중계는 장면 끝에 붙는다.
+   * 경기가 끝났는데 열려 있는 세이브는 없다.
    */
-  let closingTail = "";
+  let closedByCore = false;
   if (
     inMatch &&
     state.pendingMatch &&
@@ -651,8 +668,8 @@ async function closeTurn(
     !awaitingShootout(state)
   ) {
     ledger.finalMinute = state.pendingMatch.live.ledger.minute;
-    const outcome = await finalizeMatchTurn(state, ledger.calls);
-    if (outcome && outcome.closing.length > 0) closingTail = outcome.closing;
+    await finalizeMatchTurn(state, ledger.calls);
+    closedByCore = true;
   }
 
   // 도구 앞에 흘린 작업 서술과 값이 같은 반복 헤더를 걷어낸다 — 중계에는 헤더 규칙을
@@ -788,8 +805,6 @@ async function closeTurn(
   // 경기 장면의 헤더는 모델의 것이 아니라 장부의 분이다 (스트리밍에 나간 것과 같다)
   let body = humanizePlayerIds(state, scene.body);
   let header = scene.header;
-  // 코어가 대신 마감한 턴 — 마감 에이전트의 마무리 중계가 장면 끝에 선다
-  if (closingTail.length > 0) body = `${body.trimEnd()}\n${humanizePlayerIds(state, closingTail)}`;
   /**
    * **장면이 비어 돌아온 턴** — 왕복 상한을 도구로 채우면(`stopReason === "tool_use"`)
    * 모델은 "확인하겠습니다" 한 줄만 남기거나 아무것도 쓰지 못한다. 도구는 이미 돌아
@@ -864,7 +879,7 @@ async function closeTurn(
     moved: movedFact,
     stalled: clockStalled,
     emptyScene,
-    closedByCore: closingTail.length > 0,
+    closedByCore,
     suggested: suggestion !== undefined,
     textChars: text.length,
   });
@@ -936,17 +951,22 @@ export async function runGmTurn(
     calls: ledger.calls,
     goals: ledger.goals,
     cards: ledger.cards,
-    // 지시 도구가 해석기에 넘길 원문 — 감독이 친 말일 때만이다 (agents.md §3)
-    ...(shape.operator ? {} : { said: message }),
-    ...(boardMoves && boardMoves.length > 0 ? { boardMoves } : {}),
     onFinalized: (minute) => (ledger.finalMinute = minute),
   };
   const negotiationCtx: NegotiationToolContext = {
     calls: ledger.calls,
-    // 방의 손잡이가 해석기에 넘길 원문 — 감독이 친 말일 때만이다 (agents.md §1)
-    ...(shape.operator ? {} : { said: message }),
   };
   const opening = await openTurn(state, message, shape, operation, ledger);
+  const instructions =
+    !shape.operator && !shape.kickoff && !shape.seating
+      ? await runInstructions(state, ledger.calls, message, {
+          boardMoves,
+          deferNegotiationIds: opening.deferNegotiationIds,
+        })
+      : { notes: [], rejected: false, applied: 0 };
+  if (!shape.operator && !shape.kickoff && shape.inMatch && instructions.analysisRequested) {
+    await readMatchAfterInstructions(state, message);
+  }
   const call = await callGm(
     state,
     message,
@@ -958,6 +978,7 @@ export async function runGmTurn(
     onText,
     operatorOrders,
     boardMoves,
+    instructions.notes,
   );
   return closeTurn(state, shape, opening, ledger, call);
 }

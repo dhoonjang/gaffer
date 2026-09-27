@@ -11,14 +11,8 @@ import {
   ATTRIBUTE_AXES,
   AXIS_KO,
 } from "@story-fm/domain";
-import { PLAYER_POSITION_INSTRUCTION, TACTIC_CAPS } from "./tactic-orders";
-import {
-  type OpsInput,
-  buildOpsSchema,
-  unresolvedProperty,
-  UnresolvedSchema,
-} from "../common/orders-ops";
-import { type GameToolSpec, type JsonObjectSchema } from "@story-fm/llm";
+import { type OpsInput } from "../common/orders-ops";
+import { type JsonObjectSchema } from "@story-fm/llm";
 import { toToolSchema } from "../common/tool-schema";
 import { z } from "zod";
 
@@ -46,7 +40,6 @@ export const MATCH_OPS: readonly string[] = [
   "set_set_piece_takers",
   "set_set_piece_routine",
   "set_shootout_order",
-  "team_talk",
 ];
 
 /** 한 포인트가 데리고 갈 수 있는 시트 줄 — 넘겨 와도 코어의 한도가 먼저 자른다 */
@@ -72,13 +65,11 @@ const SHEET_SHAPE_LINES = SHEET_SHAPES.map(
 const SHEET_STRENGTH_INSTRUCTION =
   "step은 0~3의 연속 강도다. 약한 영향과 불확실성은 소수로 반영한다. 0은 효과 없음이다.";
 
-export const MATCH_READER_SYSTEM = `당신은 경기를 읽는 판독기다. 이 경기가 지금 어떻게 돌아가는가를 전술 포인트로 쓰고, 그 판독의 수치 독해를 시트로 옮긴다. 감독이 말한 턴이면 그 말을 판독 위에서 읽어 명령의 인자도 함께 낸다. 중계도 대사도 쓰지 않는다.
+export const MATCH_READER_SYSTEM = `당신은 경기를 읽는 판독기다. 이 경기가 지금 어떻게 돌아가는가를 전술 포인트로 쓰고, 그 판독의 수치 독해를 시트로 옮긴다. 감독의 직접 지시는 이미 코어를 지났다. 변경된 판 위에서 전술적 의미와 대가를 읽는다. 중계도 대사도 쓰지 않는다.
 
 # 무엇을 내나
 - points — 이 경기의 전술 포인트 **전체**. 매번 처음부터 다시 쓴다. ${POINTS_MAX}줄까지.
 - sheet — 포인트마다의 시트 줄. 한 포인트에 많아야 ${SHEET_LINES_PER_POINT}줄, 모두 합쳐 ${SHEET_MAX}줄까지.
-- ops — 감독이 말한 턴에만. 부를 명령 이름 아래 그 인자를 배열로.
-- unresolved — 어느 자리에도 담기지 않은 감독의 말.
 
 # 전술 포인트
 사실 몇 개를 하나의 뜻으로 묶은 한 줄이다 — "발 빠른 래쉬포드를 맨마킹하는 반다이크", "거친 플레이에 흔들리는 마이누", "왼쪽으로 몰리는 상대의 공격".
@@ -97,42 +88,15 @@ export const MATCH_READER_SYSTEM = `당신은 경기를 읽는 판독기다. 이
 - 포인트가 없으면 시트도 없다. 좌표나 성공 확률을 만들지 않는다.
 
 # 감독의 말
-- "붙어서 지워" · "그 뒤를 덮어" · "왼쪽으로 몰아"는 포인트·시트로 옮긴다.
-- 자리·역할·교체·6축·키커·대화는 ops로 실행한다. 말하지 않은 축·역할은 보내지 않는다.
-- 옮길 수 있는 것은 다 싣고 막힌 말만 unresolved에 남긴다. 감독이 정하지 않고 맡긴 말("알아서 하세요")에는 채울 것이 없다 — 지어내지 않고 unresolved에 남긴다.
-- 훈련·육성·이적의 말은 여기서 옮기지 않고 unresolved에도 남기지 않는다.
-
-# 판에서 이미 움직인 것
-<board_moves>의 축·선수·자리를 가리키는 말은 그 줄의 앞 값에 대 본다.
-판이 간 곳과 같으면 감독이 방금 판에서 한 일을 말로 설명한 것이다 — 그 명령을 싣지 않는다.
-다른 곳을 가리키면(더 멀리·반대로) <standing>의 지금 값에서 움직여 싣는다.
-
-# 대화 (team_talk)
-감독이 그 사람에게 건넨 말이 있을 때만 싣고, 그 말이 어떻게 닿았는지를 라벨로 고른다.
-- 판정은 의미 있는 대화가 마무리된 턴에 한 번이다 — 감독이 자리를 뜨거나 화제가 닫히거나 장면이 넘어갈 때. 대화 도중에는 싣지 않는다.
-- 이름을 부르기만 한 말(“브루노 일루와봐”, “잠깐 와봐”)은 부름이지 대화가 아니다 — 비운다.
-- players에 이름을 적으면 그 사람들, 비우면 선수단 전체다. 이름 없이 가리키면 <match_log>에서 가장 최근에 그 자리에 있던 사람이다. 지시가 앞 턴의 대화를 잇는 말이면 그 대화가 근거다.
-- outcome은 감독 발화의 (a) 맥락 적합성 (b) 설득 근거 (c) 대상 수용성으로 판정한다. inspired는 드물다 — 말이 그 사람의 처지에 정확히 닿고 근거가 섰을 때만이고, 평범한 격려는 encouraged다.
-- intensity 1~3 — 말의 세기. occasion은 킥오프 전 pre · 하프타임 half · 종료 후 post · 그 밖 daily · 굴러가던 중 정지점의 짧은 외침 shout(“정신 차려”, “머리 들어”).
-- promise는 이번 턴에 감독이 그 사람에게 못 박은 약속(출전·이적 허용·재계약·주장·등번호)만. 지난 턴의 약속을 다시 싣지 않고, 이미 말해 뒀다는 말과 선발에서 빼는 말에는 약속이 없다.
-- 그 사람의 심경이 한 줄로 남을 만하면 moods에 적는다.
-
-# 판을 바꾸는 명령
-- substitute — 교체 한 건. out/in은 <ledger>의 id. 여럿이면 배열에 여럿.
-- set_tactics — 6축(1~5)과 갈래 중 감독이 말한 것만.
-- set_player_tactic — 그라운드에 있는 한 선수의 자리와 역할.
-  - ${PLAYER_POSITION_INSTRUCTION}
-  - role은 그 자리의 역할이다 — 감독이 시키는 일이 「자리별 역할」의 한 종이면 그것을 적는다. 이름·id·약어 어느 표기든 걸린다. 표에 없는 말은 포인트와 시트로 옮긴다.
-- set_set_piece_takers — 세트피스 키커. corner·freeKick·penalty 중 감독이 말한 자리만 싣고, 지정을 풀라는 말이면 그 자리에 null을 넣는다.
-- set_set_piece_routine — 세트피스에 몇 명이 서는가. 감독이 말한 축만.
-- set_shootout_order — 승부차기 키커 순서. 감독이 이름을 든 사람만.
+- 감독의 말을 판독의 근거로 읽는다. 실행되지 않은 교체·자리·전술 변경을 이미 일어난 사실로 쓰지 않는다.
+- 판독은 <facts>와 코어가 적용한 <standing>에 근거한다. 대화의 감정과 약속은 GM의 몫이다.
 
 # 입력
 - <ledger> 스코어·시각·온필드와 벤치·교체 횟수 · <standing> 우리가 걸어 둔 전술 · <match_state> 지금까지의 경기 통계 · <facts> 양 팀의 능력치와 선수별 경기 통계·체력·카드 · <points> 지금 서 있는 전술 포인트 · <match_log> 이 경기의 지난 턴 · <board_moves> 이번 턴 감독이 전술판에서 움직인 것.
 - <events> 지난 판독 뒤 일어난 사건. <pre_match> 경기 전 감독이 한 말.
 - @감독: 이번 턴 감독의 말. 없으면 판독만 다시 쓴다.
 
-# 자리별 역할 (set_player_tactic의 role)
+# 자리별 역할
 ${roleVocabularyText()}`;
 
 /** The pilot replaces scalar generation; both paths share the remaining instructions. */
@@ -160,13 +124,11 @@ export interface MatchReaderOutput {
  * `ops`의 인자는 명령의 도구 정의에서 그대로 오고(`buildOpsSchema`), 포인트와 시트는
  * 도메인의 Zod에서 파생한다. 상한은 설명 문장으로 간다 — 지키는 것은 코어다.
  */
-export function matchReaderOutputSchema(
-  specs: ReadonlyMap<string, GameToolSpec>,
-): JsonObjectSchema {
+export function matchReaderOutputSchema(): JsonObjectSchema {
   return {
     type: "object",
+    required: ["points", "sheet"],
     properties: {
-      ops: buildOpsSchema(specs, MATCH_OPS, "부를 명령과 그 인자 — 감독이 말한 것만", TACTIC_CAPS),
       points: {
         type: "array",
         items: toToolSchema(PointSchema),
@@ -177,9 +139,6 @@ export function matchReaderOutputSchema(
         items: toToolSchema(SheetLineSchema),
         description: `포인트마다의 시트 줄 — 한 포인트에 ${SHEET_LINES_PER_POINT}줄까지, 모두 합쳐 ${SHEET_MAX}줄까지`,
       },
-      unresolved: unresolvedProperty(
-        "어느 명령에도, 어느 포인트에도 담기지 않은 감독의 말. 남은 말이 없으면 생략하거나 빈 문자열",
-      ),
     },
   };
 }
@@ -193,10 +152,8 @@ export const MATCH_READER_SPEC = {
 
 /** 모델이 낸 판독 — 포인트와 시트는 도메인의 Zod가 그대로 잰다 */
 export const ReaderReportSchema = z.object({
-  ops: z.record(z.unknown()).optional(),
-  points: z.array(PointSchema).optional(),
-  sheet: z.array(SheetLineSchema).optional(),
-  unresolved: UnresolvedSchema.optional(),
+  points: z.array(PointSchema).max(POINTS_MAX),
+  sheet: z.array(SheetLineSchema).max(SHEET_MAX),
 });
 
 // ── 입력 블록 ─────────────────────────────────────────────

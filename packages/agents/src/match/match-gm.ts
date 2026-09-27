@@ -3,7 +3,7 @@ import { type JsonObjectSchema, type GameLLM } from "@story-fm/llm";
 import { toToolSchema } from "../common/tool-schema";
 import { type GmToolCall } from "../common/gm-types";
 import { type GoalMark, type CardMark } from "@story-fm/engine";
-import { type BoardMove, type Point, type SheetLine } from "@story-fm/domain";
+import { type Point, type SheetLine } from "@story-fm/domain";
 
 export { buildEventsBlock, buildShootoutMessage } from "./match-script";
 
@@ -11,13 +11,13 @@ export { buildEventsBlock, buildShootoutMessage } from "./match-script";
  * 매치 GM — 경기 장면의 GM. 이 경기의 이력 전부를 쥔 채 감독의 말에 반응하고, 판을
  * 움직여야 할 때만 도구를 부른다 (agents.md §3). 사건은 말의 규칙이 만들고 GM은 그것을
  * 중계·연출·대화로 옮긴다 — **경기를 바꿀 도구도 시계를 미는 도구도 없다.** 도구 둘은
- * 코어를 부르는 손잡이이고 그 뒤에 판독기·마감 에이전트가 선다(`buildMatchTools`).
+ * 코어를 부르는 손잡이이고 그 뒤에 마감 에이전트가 선다(`buildMatchTools`).
  * 프롬프트는 코드처럼 버전 관리한다 (AGENTS.md 6-5).
  *
  * ⚠️ 골 문형의 스코어는 `formatScore`가 내는 글자 그대로다 — en dash 양옆의 hair
  * space를 `\u200a`로 적는 이유는 그것뿐이다 (design-system.md §3).
  */
-export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 경기 마스터다. 그라운드에서 일어난 일을 중계하고 벤치의 대화를 연출하며, 감독의 지시를 도구로 판에 건다. 경기의 결과를 바꾸거나 시계를 미는 도구는 없다 — 경기는 감독이 말을 멈추면 스스로 구른다.
+export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 경기 마스터다. 그라운드에서 일어난 일을 중계하고 벤치의 대화를 연출하며, 이미 반영된 감독 지시와 장부를 읽는다. 경기의 결과를 바꾸거나 시계를 미는 도구는 없다 — 경기는 감독이 말을 멈추면 스스로 구른다.
 
 # 입력
 매 턴 이런 블록이 이 순서로 온다.
@@ -27,13 +27,13 @@ export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 �
 - <events> — 지난 턴 뒤 그라운드에서 일어난 일. 골·슛·카드·교체·부상·상대 벤치의 전환이 시각과 함께 선다. 비어 있으면 그 사이 아무 일도 없었다.
 - <kickoff> — 감독이 경기장에 들어선 첫 턴에만. 도구가 없다.
 - <ledger> — 스코어·시각·국면·온필드와 벤치·교체 횟수. <standing> — 우리 전술. <match_state> — 지금까지의 경기 통계. <points> — 지금 이 경기가 어떻게 읽히는가. 장부가 유일한 진실이다 — 스코어는 계산하지 않고 읽는다.
-- 도구 결과 — <core_replies> 지시가 판에 걸렸는지, 그리고 그 뒤의 <ledger>·<standing>.
+- <instruction_results> — 직접 지시의 적용 또는 확인 필요 결과. 도구 결과 — 반응 판정과 마감 결과.
 
 # 진행
-- 감독의 지시는 판에 건다. 결과로 오는 판을 읽고 코치가 짚을 것이 있으면 짚는다.
+- 이미 반영된 지시와 확인이 필요한 부분을 읽고 코치가 짚을 것이 있으면 짚는다.
 - 선수나 코치를 부르기만 했거나 말만 건 턴은 도구 없이 장면만 쓴다 — 시간은 한 순간도 흐르지 않았고 슛도 찬스도 없다.
 - 「70분에 라야 빼」는 예약이 아니다 — 시계는 감독이 보고 있고, 그 분에 감독이 멈춰 말하면 된다. 그 사실은 픽션 안에서 말한다.
-- 경기가 끝났으면 마감한다. 마감 결과에 실린 마무리 중계를 장면의 끝으로 옮기고 벤치 한 줄로 닫는다.
+- 경기가 끝났으면 마감한다. 마감된 장부를 근거로 마무리 중계를 직접 쓰고 벤치 한 줄로 닫는다.
 
 # 사건
 일어난 일은 이미 정해져 있다. <events>를 빠뜨리지 않고, 더하지 않고 생생한 중계로 옮긴다. 사건 사이의 흐름·분위기·관중·벤치의 반응은 당신의 재량이고, 그 여백이 이야기다.
@@ -79,8 +79,6 @@ export const KICKOFF_BLOCK = "<kickoff>감독이 경기장에 들어섰다 — �
 
 // ── 경기 도구 셋 — 코어를 부르는 손잡이 ──────────────────────
 
-export const TACTIC_ORDERS_TOOL = "tactic_orders";
-
 export const FINALIZE_MATCH_TOOL = "finalize_match";
 
 const EmptySchema = z.object({});
@@ -95,15 +93,9 @@ export const MATCH_TOOL_DEFINITIONS: ReadonlyArray<{
   inputSchema: JsonObjectSchema;
 }> = [
   {
-    name: TACTIC_ORDERS_TOOL,
-    description:
-      "감독의 지시를 판에 건다 — 교체·전술·자리와 역할·세트피스·대화, 그리고 말로 판을 움직이는 주문. 감독이 지시한 턴에 한 번 부른다. 결과로 무엇이 걸렸고 무엇이 반려됐는지와 그 뒤의 장부가 온다 — 경기는 그 판으로 이어진다.",
-    inputSchema: toToolSchema(EmptySchema),
-  },
-  {
     name: FINALIZE_MATCH_TOOL,
     description:
-      "끝난 경기를 마감한다 — 장부가 종료 상태일 때만. 결과로 결산 요약과 마무리 중계가 온다. 그 중계를 장면의 끝으로 옮긴다.",
+      "끝난 경기를 마감한다 — 장부가 종료 상태일 때만. 결과로 결산 요약이 온다. 장부를 근거로 마무리 중계를 직접 쓴다.",
     inputSchema: toToolSchema(EmptySchema),
   },
 ];
@@ -113,13 +105,6 @@ export interface MatchToolContext {
   calls: GmToolCall[];
   goals: GoalMark[];
   cards: CardMark[];
-  /**
-   * 이번 턴 감독의 말 — `tactic_orders`가 판독기에 넘기는 원문이다 (agents.md §3). 턴
-   * 러너가 채팅에 넣은 그 문자열이고, 손잡이 턴에는 없다.
-   */
-  said?: string;
-  /** 이번 턴 전술판이 이미 움직인 것 — 판독기가 되풀이를 가릴 근거다 (agents.md §3) */
-  boardMoves?: readonly BoardMove[];
   /** 마감 에이전트를 부를 때 쓸 클라이언트 — 테스트가 갈아 끼운다 */
   finalizeLlm?: GameLLM;
   /** 마감이 끝난 뒤 장부의 마지막 분 — 장부가 지워진 뒤 화면의 시각 줄이 읽는다 */

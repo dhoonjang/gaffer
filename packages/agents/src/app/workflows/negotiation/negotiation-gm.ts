@@ -17,17 +17,11 @@ import { describeSeatAnchor } from "../../../negotiation/counterparty-brief";
 import {
   type NegotiationToolContext,
   NEGOTIATION_TOOL_DEFINITIONS,
-  NEGOTIATION_ORDERS_TOOL,
   NO_ROOM,
   CounterpartyReplySchema,
   COUNTERPARTY_REPLY_TOOL,
   LEAVE_NEGOTIATION_TOOL,
 } from "../../../negotiation/negotiation-gm";
-import { type Negotiation } from "@story-fm/domain";
-import { buildToolSpecs } from "../../gm-tools";
-import { runTableOrders } from "./table-orders";
-import { applyOps, ordersGate } from "../../../common/orders-ops";
-import { TABLE_OPS } from "../../../negotiation/table-orders";
 import { type GameToolSpec } from "@story-fm/llm";
 import { inputError } from "../../../common/tool-schema";
 import { recordCall } from "../../../common/gm-types";
@@ -79,56 +73,16 @@ export function buildTableNote(state: GameState, negotiationId: string): string 
 }
 
 /**
- * 감독의 말 → 이 협상의 명령. 해석기가 두 번 실패하면 **반려로 답한다** — 턴은 이어지고 GM은
- * 반려된 대로 쓴다 (agents.md §1). 호출 실패(시한·혼잡)는 그대로 올라간다.
- */
-async function runTableOrdersTool(
-  state: GameState,
-  ctx: NegotiationToolContext,
-  negotiation: Negotiation,
-  said: string,
-  specs: ReadonlyMap<string, GameToolSpec>,
-): Promise<{ ok: boolean; message: string }> {
-  const moved = await runTableOrders(state, specs, negotiation, said);
-  if (!moved.ok) return { ok: false, message: moved.message };
-  const notes: string[] = [];
-  const outcomes = applyOps(specs, moved.orders, TABLE_OPS, notes);
-  const replies =
-    notes.length > 0 ? ["<core_replies>", ...notes.map((n) => `- ${n}`), "</core_replies>"] : [];
-  return {
-    // 아무 명령도 걸리지 않은 턴은 성공이 아니다 — 장부는 그대로이고 GM은 반려된 대로 쓴다
-    ok: outcomes.applied > 0,
-    message: [...replies, buildTableNote(state, negotiation.id)].join("\n"),
-  };
-}
-
-/**
  * 이 턴의 협상 도구 — 진행 턴은 셋. 감독이 나선 첫 턴과 물러나는 손잡이 턴은 부르지 않는다.
  */
 export function buildNegotiationTools(
   state: GameState,
   ctx: NegotiationToolContext,
 ): GameToolSpec[] {
-  const [orders, reply, leave] = NEGOTIATION_TOOL_DEFINITIONS;
-  const specs = new Map(buildToolSpecs(state, ctx.calls).map((t) => [t.name, t] as const));
-  /**
-   * 손잡이는 인자가 없다 — 이번 턴 감독의 말은 `ctx.said`가 쥔다 (agents.md §1). 같은 턴의
-   * 두 번째 호출은 같은 말을 다시 옮기므로 문이 닫는다.
-   */
-  const gate = ordersGate(ctx.said);
+  const [reply, leave] = NEGOTIATION_TOOL_DEFINITIONS;
   /** 답은 한 턴에 하나다 — 두 번째 판정은 인내를 두 번 깎는다 */
   let replied = false;
   return [
-    {
-      ...orders!,
-      handle: async () => {
-        const opened = gate(NEGOTIATION_ORDERS_TOOL);
-        if (!opened.ok) return opened;
-        const room = roomNegotiationOf(state);
-        if (!room) return NO_ROOM;
-        return runTableOrdersTool(state, ctx, room, opened.said, specs);
-      },
-    },
     {
       ...reply!,
       handle: async (input: unknown) => {

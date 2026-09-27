@@ -65,9 +65,6 @@ interface ScriptLine {
   ops?: (ctx: ScriptContext) => OpsInput;
 }
 
-/** 손잡이 하나 — 인자가 없다. 감독의 말은 코어가 해석기에 넘긴다 (실모드와 같다) */
-const orders = (tool: string): ScriptedCall[] => [{ tool }];
-
 /**
  * **감독의 다음 말 하나** — 실모드의 GM이 장면 마지막 줄에 태그로 내는 것을 대본도 매 턴
  * 낸다 (agents.md §8 · prompts.md §1). 글은 전부 표의 키다: Tab으로 받아 그대로 보내면 그
@@ -103,37 +100,30 @@ const RENEWAL_YEARS = 3;
 const SCRIPT: readonly ScriptLine[] = [
   {
     say: "훈련 잡아줘",
-    gm: () => orders("training_orders"),
     ops: () => weekly(WEEKDAYS, "빌드업", ["passing", "vision"]),
   },
   {
     say: "평일 오전은 세트피스 반복 훈련 잡아줘",
-    gm: () => orders("training_orders"),
     ops: () => weekly(WEEKDAYS, "세트피스", ["kicking", "finishing"]),
   },
   {
     say: "월요일 오전은 세트피스 반복 훈련 잡아줘",
-    gm: () => orders("training_orders"),
     ops: () => weekly([1], "세트피스", ["kicking", "finishing"]),
   },
   {
     say: "훈련 쉬자",
-    gm: () => orders("training_orders"),
     ops: ({ state }) => ({ set_training: [{ clear: { from: state.date, rest: true } }] }),
   },
   {
     say: "4-4-2로 바꾸고 공격적으로 가자",
-    gm: () => orders("tactic_orders"),
     ops: () => ({ set_tactics: [{ mentality: 4 }] }),
   },
   {
     say: "4-4-2로 수비적으로 가자",
-    gm: () => orders("tactic_orders"),
     ops: () => ({ set_tactics: [{ mentality: 2 }] }),
   },
   {
     say: `${NAME_SLOT} 주장 시키자`,
-    gm: () => orders("tactic_orders"),
     ops: ({ named }) => ({ set_captain: [{ playerId: named }] }),
   },
   {
@@ -172,7 +162,6 @@ const SCRIPT: readonly ScriptLine[] = [
   { say: "하루 넘기자", skip: 1 },
   {
     say: "계약 만료 다가오는 선수 재계약 하자",
-    gm: () => orders("market_orders"),
     ops: ({ state }): OpsInput => {
       const who = expiringContracts(state, RENEWAL_HORIZON_DAYS)[0]?.player;
       if (!who) return {};
@@ -186,15 +175,15 @@ const SCRIPT: readonly ScriptLine[] = [
   {
     // 단장에게 맡긴다 — 협상이 없으면 이 명령이 코어의 자로 연다 (transfer.md §12-4)
     say: `${NAME_SLOT} 재계약은 맡겨`,
-    gm: () => orders("market_orders"),
     ops: ({ state, named }): OpsInput => {
       const who = state.players.find((p) => p.name === named && p.teamId === state.userTeamId);
-      return who ? { delegate_negotiation: [{ playerId: who.id, kind: "renew" }] } : {};
+      return who
+        ? { delegate_negotiation: [{ playerId: who.id, kind: "renew", scope: "player" }] }
+        : {};
     },
   },
   {
     say: `${NAME_SLOT} 영입하자`,
-    gm: () => orders("market_orders"),
     /**
      * 이적료는 **코어가 부르는 자**를 그대로 쓴다(`suggestTerms`) — 감독이 액수를
      * 말하지 않은 오퍼는 실모드에서 나가지 않으므로(`missingFeeNote`), 대본이 그
@@ -250,7 +239,6 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: "이적 건 마무리하자",
-    gm: () => orders("market_orders"),
     ops: ({ state }): OpsInput => {
       const agreed = state.negotiations.find((n) => n.status === "agreed");
       return agreed ? { accept_deal: [{ negotiationId: agreed.id }] } : {};
@@ -501,9 +489,7 @@ export function negotiationScript(
     };
   }
   const hit = findLine(options.message);
-  const planned =
-    hit?.line.gm?.({ state, named: hit.named }) ??
-    (hit?.line.ops ? [{ tool: "negotiation_orders" }, ROOM_REPLY] : [ROOM_REPLY]);
+  const planned = hit?.line.gm?.({ state, named: hit.named }) ?? [ROOM_REPLY];
   return {
     calls: planned.filter((call) => has(call.tool)),
     text: [header, `@${who}: 검토해 보겠습니다.`, suggestLine(ROOM_SUGGESTION)].join("\n"),

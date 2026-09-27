@@ -2,26 +2,20 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import * as agents from "@story-fm/agents";
 import {
   DEFAULT_SKILL_DESCRIPTIONS,
-  GM_SYSTEM,
   CORE_COMMANDS,
   MARKET_OPS,
   MATCH_OPS,
-  MATCH_READER_SYSTEM,
   MATCH_TOOL_DEFINITIONS,
-  NEGOTIATION_GM_SYSTEM,
   NEGOTIATION_TOOL_DEFINITIONS,
   TACTIC_CAPS,
   TACTIC_OPS,
   TABLE_OPS,
-  TABLE_ORDERS_SYSTEM,
   TRAINING_OPS,
-  buildOpsSchema,
+  instructionCommands,
   applyOps,
   parseOps,
-  TACTIC_ORDERS_SYSTEM,
   FINALIZE_MATCH_SYSTEM,
   REPORT_DIGEST_INPUT,
   REPORT_TRAINING_INPUT,
@@ -56,7 +50,6 @@ import {
   INCIDENT_KINDS,
   OPENING_KIND_KO,
   OPENING_KINDS,
-  POSITION_CODES,
   PROMISE_KIND_KO,
   PROMISE_KIND_MEANING,
   PROMISE_KINDS,
@@ -69,8 +62,6 @@ import {
   TACTIC_TOGGLES,
   TRAINING_MARK_KO,
   TRAINING_MARKS,
-  roleVocabularyText,
-  rolesFor,
 } from "@story-fm/domain";
 import { AXIS_AGING, agingDelta, createGame } from "@story-fm/engine";
 
@@ -120,42 +111,6 @@ describe("스킬 설명 — 코드가 유일한 원본이다", () => {
  * 수 없는 것을 부르라는 말이 된다.
  */
 describe("규칙이 사는 자리", () => {
-  /** `substitutions`가 `substitute`로 잡히지 않게 — 이름 전체가 서야 중복이다 */
-  const mentions = (prompt: string, name: string) => new RegExp(`\\b${name}\\b`).test(prompt);
-
-  it("어느 프롬프트 층도 부를 수 없는 도구의 이름을 적지 않는다", () => {
-    /**
-     * GM의 프롬프트에는 도구 이름이 한 번도 서지 않는다 — 언제 부르고 인자를 어떻게
-     * 채우는지는 그 도구의 `description`이 갖는다 (prompts.md §5).
-     *
-     * 해석기는 다르다: **자기가 채울 명령의 이름은 적어야 한다**(`ops`의 열쇠다).
-     * 그래서 여기서 막는 것은 «그 해석기가 부를 수 없는 이름»뿐이다 — 적혀 있으면
-     * 모델은 낼 수 없는 자리를 배운다.
-     *
-     * **코어 명령의 이름도 센다.** GM은 `accept_deal`·`send_offer`를 도구로 갖지
-     * 않고 `market_orders`에 감독의 말을 넘길 뿐이다 — 코어의 결과 줄이 그 이름으로
-     * 다음에 할 일을 적으므로(`describePending`) 규칙을 적는 자리에도 같은 이름을
-     * 적고 싶어지는데, 그러면 GM이 부를 수 없는 도구를 아는 것이 된다.
-     */
-    // 협상 GM의 도구 셋 — 그 사용법도 도구 설명의 것이라 프롬프트에는 이름이 서지 않는다
-    const roomTools = NEGOTIATION_TOOL_DEFINITIONS.map((t) => t.name);
-    for (const name of [...SKILL_NAMES, ...CORE_COMMANDS, ...roomTools]) {
-      expect(mentions(GM_SYSTEM, name), `GM_SYSTEM: ${name}`).toBe(false);
-      expect(mentions(NEGOTIATION_GM_SYSTEM, name), `NEGOTIATION_GM_SYSTEM: ${name}`).toBe(false);
-      if (roomTools.includes(name)) continue;
-      // 테이블 해석기도 자기 목록 밖의 이름은 적지 않는다 (transfer.md §12-2)
-      if (!TABLE_OPS.includes(name)) {
-        expect(mentions(TABLE_ORDERS_SYSTEM, name), `TABLE_ORDERS_SYSTEM: ${name}`).toBe(false);
-      }
-      // 판독기도 자기 목록 밖의 이름은 적지 않는다 (agents.md §3)
-      if (!MATCH_OPS.includes(name)) {
-        expect(mentions(MATCH_READER_SYSTEM, name), `MATCH_READER_SYSTEM: ${name}`).toBe(false);
-      }
-      if (TACTIC_OPS.includes(name)) continue;
-      expect(mentions(TACTIC_ORDERS_SYSTEM, name), `TACTIC_ORDERS_SYSTEM: ${name}`).toBe(false);
-    }
-  });
-
   /**
    * 설명은 고정층에 매 턴 실린다 — 길이 예산이 없으면 규칙 하나를 지울 때마다 설명
    * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈6,770자)에 한 도구
@@ -170,21 +125,17 @@ describe("규칙이 사는 자리", () => {
     expect(total).toBeLessThanOrEqual(7_400);
   });
 
-  /**
-   * **손잡이 셋은 인자가 없다** (agents.md §1). 인자가 하나라도 서면 GM이 감독의 말을
-   * 옮겨 적을 자리가 생기고, 그 문장이 해석기의 근거가 된다 — 화면에는 걸린 지시만 보여
-   * 갈린 말은 아무도 보지 못한다. 경기 도구의 지시 손잡이도 같다.
-   */
-  it("손잡이 셋은 인자가 없다 — 감독의 말은 코어가 넘긴다", () => {
-    for (const name of ["tactic_orders", "training_orders", "market_orders"]) {
-      const tool = TOOLS.find((t) => t.name === name)!;
-      expect(Object.keys(tool.inputSchema.properties ?? {}), name).toEqual([]);
+  it("장면 GM의 도구에는 직접 지시의 코어 명령이나 재해석 손잡이가 없다", () => {
+    const retired = new Set([
+      "tactic_orders",
+      "training_orders",
+      "market_orders",
+      "negotiation_orders",
+    ]);
+    for (const tool of [...TOOLS, ...MATCH_TOOL_DEFINITIONS, ...NEGOTIATION_TOOL_DEFINITIONS]) {
+      expect(CORE_COMMANDS.has(tool.name), tool.name).toBe(false);
+      expect(retired.has(tool.name), tool.name).toBe(false);
     }
-    const match = MATCH_TOOL_DEFINITIONS.find((t) => t.name === "tactic_orders")!;
-    expect(Object.keys(match.inputSchema.properties ?? {})).toEqual([]);
-    // 협상 방의 손잡이도 같다 — 방 안의 말은 전부 건너편에게 하는 말이라 가를 것이 없다
-    const table = NEGOTIATION_TOOL_DEFINITIONS.find((t) => t.name === "negotiation_orders")!;
-    expect(Object.keys(table.inputSchema.properties ?? {})).toEqual([]);
   });
 
   /**
@@ -413,64 +364,28 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
         SET_PIECE_ROUTINE_NEUTRAL,
       );
     }
-    // 낱말을 가르치는 것은 해석 프롬프트 하나다 — 손으로 적으면 낱말표를 고쳐도 남는다
-    expect(TACTIC_ORDERS_SYSTEM).toContain(SET_PIECE_ROUTINE_NEUTRAL);
   });
 
-  /**
-   * **역할 50종의 낱말도 해석 프롬프트가 든다** (agents.md §3). `set_player_tactic.role`은
-   * 자리마다 목록이 달라 열거로 서지 못하는 자유 문자열이라, 표가 빠지면 "안쪽으로
-   * 파고들어"가 어느 명령에도 담기지 못하고 `unresolved`로 떨어진다 — 갈래 넷과 같은
-   * 실패고, 화면에는 드러나지 않는다.
-   */
-  it("해석 프롬프트가 자리별 역할 표를 통째로 싣는다", () => {
-    expect(TACTIC_ORDERS_SYSTEM).toContain(roleVocabularyText());
-    // 표가 비어도 위 줄은 통과한다 — 50종이 실제로 실렸는지는 역할마다 본다
-    for (const position of POSITION_CODES) {
-      for (const def of rolesFor(position)) {
-        expect(TACTIC_ORDERS_SYSTEM, `${position}: ${def.id}`).toContain(def.id);
-      }
+  it("직접 지시의 명령은 코어 스키마를 공유하고 명령별 상한을 보존한다", () => {
+    const specs = new Map(SKILL_TOOLS.map((tool) => [tool.name, tool] as const));
+    const before = JSON.stringify(SKILL_TOOLS.map((tool) => tool.inputSchema));
+    const names = [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS];
+    const commands = instructionCommands(specs, names);
+    expect(commands.map((command) => command.name)).toEqual(names);
+    // 해제 목록의 명시성처럼 별도 구조가 필요한 명령을 제외한 스키마는 코어의 것을 그대로 쓴다.
+    for (const name of ["substitute", "set_tactics", "set_training", "send_offer"]) {
+      const spec = specs.get(name)!;
+      expect(commands.find((command) => command.name === name)?.inputSchema, name).toBe(
+        spec.instructionSchema ?? spec.inputSchema,
+      );
     }
-  });
-
-  /**
-   * **인자 스키마는 한 벌이다** (agents.md §1). 해석기가 모델에게 보이는 `ops`의 항목은
-   * 그 명령의 도구 정의 그대로다 — 손으로 한 벌 더 적던 시절에 공략 상한이 2와 4로
-   * 갈려 감독이 부른 지점이 말없이 잘렸다.
-   */
-  it("해석기의 ops 항목은 그 명령의 입력 스키마 그대로다", () => {
-    const specs = new Map(SKILL_TOOLS.map((t) => [t.name, t] as const));
-    for (const [label, list, caps] of [
-      ["tactic", TACTIC_OPS, TACTIC_CAPS],
-      ["training", TRAINING_OPS, {}],
-      ["market", MARKET_OPS, {}],
-    ] as const) {
-      const ops = buildOpsSchema(specs, list, "인자", caps).properties as Record<
-        string,
-        { items?: unknown; maxItems?: number; description?: string }
-      >;
-      for (const name of list) {
-        // 이름이 어긋나면 그 자리가 스키마에서 조용히 사라져 모델이 부를 길을 잃는다
-        expect(specs.has(name), `${label}: ${name}`).toBe(true);
-        expect(ops[name]?.items, `${label}: ${name}`).toBe(specs.get(name)!.inputSchema);
-        /**
-         * ⚠️ **상한은 `maxItems`로 가지 않는다** (models.md §3-2). 해석기는 강제 도구로
-         * 부르는데 Gemini는 그 모드에서 `maxItems: n`을 항목 스키마 n벌로 펼쳐 디코딩
-         * 문법을 만들고, 명령 열셋이면 그 문법이 한도를 넘어 요청이 통째로 400이 된다.
-         */
-        expect(ops[name]?.maxItems, `${label}: ${name}`).toBeUndefined();
-      }
-    }
-    // 상한은 한 벌(`TACTIC_CAPS`)이고, 모델에는 문장으로 가고 코어(`parseOps`)가 자른다
-    const tactic = buildOpsSchema(specs, TACTIC_OPS, "판", TACTIC_CAPS).properties as Record<
-      string,
-      { description?: string }
-    >;
-    expect(tactic.substitute?.description).toContain(`최대 ${TACTIC_CAPS.substitute}건`);
+    expect(JSON.stringify(SKILL_TOOLS.map((tool) => tool.inputSchema))).toBe(before);
+    expect(commands.find((command) => command.name === "substitute")?.limit).toBe(
+      TACTIC_CAPS.substitute,
+    );
     const over = Array.from({ length: TACTIC_CAPS.substitute! + 2 }, () => ({}));
     const parsed = parseOps({ substitute: over }, TACTIC_OPS, TACTIC_CAPS);
     expect(parsed.ops.substitute).toHaveLength(TACTIC_CAPS.substitute!);
-    // 자른 것은 조용히 사라지지 않는다 — 잘린 수가 `applyOps`의 줄로 돌아간다 (§1)
     expect(parsed.truncated.substitute).toBe(2);
   });
 
@@ -505,7 +420,9 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
      * 판독기도 판 해석의 부분집합이다 — 적용은 `TACTIC_OPS`의 순서를 지나므로
      * (`applyTacticOrders`), 그 목록에 없는 이름은 판독기가 채워도 조용히 버려진다.
      */
-    for (const name of MATCH_OPS) expect(TACTIC_OPS.includes(name), name).toBe(true);
+    for (const name of MATCH_OPS.filter((name) => CORE_COMMANDS.has(name))) {
+      expect(TACTIC_OPS.includes(name), name).toBe(true);
+    }
     // 거꾸로, 목록에 있는데 코어 명령도 카탈로그 스킬도 아닌 이름은 없다
     const known = new Set([...CORE_COMMANDS, ...SKILL_CATALOG.map((s) => s.name)]);
     for (const name of lists) expect(known.has(name), name).toBe(true);
@@ -718,7 +635,7 @@ describe("액수는 감독이 부른 것만 실린다", () => {
  * 제공자로 옮길 수 있으므로, 지금 어디로 나가는가가 아니라 어디로 나가도 지나는가를 본다.
  */
 describe("출력 스키마는 제공자의 문을 지난다", () => {
-  const DECLARED = outputAgents(new Map(SKILL_TOOLS.map((tool) => [tool.name, tool] as const)));
+  const DECLARED = outputAgents();
 
   /**
    * 제공자가 **구조화 출력에서 받지 못하는 스키마 열쇠** — 한 줄이 한 제공자다.
@@ -788,17 +705,6 @@ describe("출력 스키마는 제공자의 문을 지난다", () => {
         required: ["a"],
       }),
     ).toBe(2);
-    // 해석기 넷과 판독기는 한도 밖이고 나머지 다섯은 안이다 — 실측(2026-09)과 같은 그림이어야 한다
-    const over = DECLARED.filter((entry) => countOptionalProperties(entry.schema) > 24).map(
-      (entry) => entry.agent,
-    );
-    expect(over.sort()).toEqual([
-      "market-orders",
-      "match-reader",
-      "table-orders",
-      "tactic-orders",
-      "training-orders",
-    ]);
   });
 
   /** 어댑터의 설정 — 제공자만 갈아 끼운다. 모델 문자열은 스텁이 읽지 않는다 */
@@ -990,16 +896,6 @@ describe("출력 스키마는 제공자의 문을 지난다", () => {
    * 재게 한다. 이름이 없으므로 짝은 **에이전트 이름**이다 — `agentConfig("…")`가 그 자리다.
    */
   const SRC = join(import.meta.dirname, "..", "..", "src");
-  const EXPORTED = new Map<string, unknown>(Object.entries(agents));
-
-  /** 해석기 스펙 — 에이전트 이름을 파라미터로 받는 자리(`runOpsOrders`)가 도는 것들 */
-  function isOpsSpec(value: unknown): value is { agent: string } {
-    if (typeof value !== "object" || value === null) return false;
-    const spec = value as { agent?: unknown; ops?: unknown };
-    return typeof spec.agent === "string" && Array.isArray(spec.ops);
-  }
-  const OPS_AGENTS = [...EXPORTED.values()].filter(isOpsSpec).map((spec) => spec.agent);
-
   it("출력 스키마를 요청하는 자리마다 그 에이전트가 목록에 있고, 목록의 에이전트는 전부 요청한다", () => {
     const listed = new Set<string>(DECLARED.map((entry) => entry.agent));
     const seen = new Set<string>();
@@ -1009,8 +905,10 @@ describe("출력 스키마는 제공자의 문을 지난다", () => {
       const source = readFileSync(join(SRC, file), "utf8");
       if (!source.includes("outputSchema:")) continue;
       const names = [...source.matchAll(/agentConfig\("([a-z-]+)"\)/g)].map((m) => m[1]!);
-      // 해석기 넷은 한 함수를 지난다 — 스펙이 하나 늘면 그 이름도 여기서 함께 늘어 목록과 대조된다
-      if (/agentConfig\(spec\.agent\)/.test(source)) names.push(...OPS_AGENTS);
+      // 주입받은 클라이언트를 쓰는 판독 파이프라인은 출력 검증의 호출 이름을 따른다.
+      if (names.length === 0) {
+        names.push(...[...source.matchAll(/readOutput\("([a-z-]+)"/g)].map((match) => match[1]!));
+      }
       // 못 읽은 자리는 목록에 있는지조차 말할 수 없다 — 재지 못한 자리다
       if (names.length === 0) unread.push(basename(file));
       for (const name of names) seen.add(name);
