@@ -130,6 +130,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             type: "error",
             error: outcome.error,
             retry: outcome.retry,
+            saved: outcome.saved === true,
             ...(outcome.detail ? { detail: outcome.detail } : {}),
           });
       } catch (error) {

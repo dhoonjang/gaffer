@@ -15,8 +15,7 @@ import type {
   TransferRequest,
   TransferRequestReason,
   PositionGroup,
-  MissionReportCard,
-  ScoutReportCard,
+  ScoutingReport,
   TickEvent,
   SeasonStat,
   SeasonStatTotal,
@@ -183,15 +182,7 @@ export interface ChatTurn {
    * 남기면 화면에 뜨지 않는다 — 며칠을 기다려 얻은 정보를 보러 선수 검색을
    * 다시 해야 한다.
    */
-  reports?: ScoutReportCard[];
-  /**
-   * 이 턴에 도착한 **스카우트 임무 보고** — 조건으로 나간 파견이 데려온 후보 목록.
-   *
-   * 보고서(`reports`)와 같은 이유로 턴에 남는다(tick의 사건이라 호출 칩이 없다).
-   * 카드의 모양이 아예 달라 같은 배열에 섞지 않는다 — 한쪽은 선수 하나의 16축이고
-   * 다른 쪽은 다섯 줄의 목록이다.
-   */
-  missions?: MissionReportCard[];
+  reports?: ScoutingReport[];
   /**
    * 이 턴 앞에서 **코어가 굴린 시간이 남긴 사건들** — 화면이 사건 하나를 카드 하나로
    * 세운다 (overview.md §2 · ui/design-system.md §6).
@@ -229,6 +220,8 @@ export interface ChatTurn {
   inNegotiation?: boolean;
   /** 어느 협상인가 (`Negotiation.id`) — `inNegotiation`인 턴에만 있다 */
   negotiationId?: string;
+  negotiationContactId?: string;
+  negotiationExchangeId?: string;
   /**
    * GM이 이 턴 끝에 낸 **감독의 다음 말 한 줄** — 입력창의 placeholder가 된다
    * (docs/common/llm/agents.md §2 · docs/common/ui/design-system.md §6).
@@ -376,6 +369,8 @@ export type GamePhase = "idle" | "matchday" | "match" | "negotiation";
  */
 export interface PendingNegotiation {
   negotiationId: string;
+  exchangeId: string;
+  method: "meeting" | "phone" | "proposal";
   /**
    * 감독이 자리에 앉았는가 — **들어서는 것은 두 걸음이다.** `start_negotiation`은 방을
    * 세울 뿐이고(게이트가 선다), 감독이 앉으면 협상 GM이 도구 없이 자리에 앉는 턴 하나를
@@ -521,11 +516,11 @@ export interface GameState extends GameTables {
    *
    * ⚠️ **`pendingNews`와 비우는 조건이 다르다.** 저쪽은 실린 턴에 무조건 비워지고,
    * 이 줄은 **카드가 실제로 선 것만** 비운다(`peekReportCards` → `consumeReportCards`).
-   * 조립에 실패한 id는 줄에 남고, 영영 못 세울 것만 `pruneReportCards`가 닫는다 —
+   * 조립에 실패한 id는 재시도를 위해 줄에 남는다 —
    * 사무실에 스카우팅 화면이 없어 이 줄에서 사라진 보고서는 되찾을 자리가 없다
    * (→ [docs/common/player.md](../../../../docs/common/player.md) §9.4-1). 없으면 빈 줄이다.
    */
-  pendingReportCards?: string[];
+  pendingReportCards: string[];
   chat: ChatTurn[];
 }
 
@@ -1654,28 +1649,10 @@ export function takeMedia(state: GameState): MediaFact[] {
   return media;
 }
 
-/**
- * 카드를 기다리는 보고서 수 상한 — 경기가 여러 턴 이어지는 동안처럼 아무도 꺼내지
- * 않는 구간에서 줄이 무한히 자라지 않게. 평시 턴은 실모드도 mock도 매 턴 꺼내므로
- * 파견 한도(3) 위로 잘 가지 않는다.
- */
-export const PENDING_REPORT_CARD_LIMIT = 12;
-
-/**
- * 아직 카드로 세우지 않은 보고서를 줄에 세운다 — 도착한 순서대로.
- *
- * 넘치면 **뒤에서** 자르고 잘린 id를 돌려준다. 앞에서 자르면 가장 오래 기다린
- * 보고서가 카드 한 번 없이 사라지는데, 그것이 카드에 가장 가까운 한 장이다.
- * 방금 도착한 것은 그 값이 이번 턴 다이제스트에 이미 실려 모델이 읽은 뒤다.
- * 부르는 쪽은 돌려받은 것을 반드시 사실로 남긴다 (player.md §9.4-1).
- */
-export function pushReportCards(state: GameState, ids: readonly string[]): string[] {
-  if (ids.length === 0) return [];
+/** 완료한 보고서 ID만 보관한다. 표시 상한은 보관 기간이나 큐의 한도가 아니다. */
+export function pushReportCards(state: GameState, ids: readonly string[]): void {
   const queue = (state.pendingReportCards ??= []);
   for (const id of ids) if (!queue.includes(id)) queue.push(id);
-  return queue.length > PENDING_REPORT_CARD_LIMIT
-    ? queue.splice(PENDING_REPORT_CARD_LIMIT, queue.length - PENDING_REPORT_CARD_LIMIT)
-    : [];
 }
 
 /**
@@ -1709,24 +1686,6 @@ function removeReportCards(state: GameState, ids: readonly string[]): void {
 /** 카드가 **실제로 선** id만 줄에서 지운다 — 줄에서 빼는 두 자리 중 하나 */
 export function consumeReportCards(state: GameState, ids: readonly string[]): void {
   removeReportCards(state, ids);
-}
-
-/**
- * 영영 못 세울 보고서를 줄에서 닫는다 — 줄에서 빼는 나머지 한 자리, tick 전용.
- *
- * 되돌려 봐야 다음 턴도 실패하는 것만 닫는다: 카드를 조립할 선수가 장부에 없고
- * (은퇴로 `state.players`에서 빠졌다) 완료된 임무도 아닌 id다. 닫은 id를 돌려주므로
- * 부르는 쪽이 그 사실을 감독에게 닿는 자리에 남긴다 (player.md §9.4-1).
- */
-export function pruneReportCards(state: GameState): string[] {
-  const queue = state.pendingReportCards ?? [];
-  if (queue.length === 0) return [];
-  const done = new Set(state.scoutMissions.filter((m) => m.completedOn !== null).map((m) => m.id));
-  // 명단은 한 번만 훑는다 — tick이 하루에 한 번 부르는 자리라 줄 길이만큼 되훑지 않는다
-  const alive = new Set(state.players.map((p) => p.id));
-  const dead = queue.filter((id) => !done.has(id) && !alive.has(id));
-  removeReportCards(state, dead);
-  return dead;
 }
 
 /** 지금 클럽을 떠나 있는 소집 — 없으면 null */

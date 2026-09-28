@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { loadGame } from "@story-fm/engine";
 
 import { COLD_MS } from "./timeouts";
 
@@ -604,11 +605,7 @@ test("면담 시나리오 — 판정형 스킬과 사기 반영", async ({ page 
   expect(fits.lastBtnRight).toBeLessThanOrEqual(fits.barRight);
 });
 
-/**
- * 협상은 **카드**다 — 진행 중인 흥정은 어느 장부에도 실리지 않아서 레일이 알릴
- * 수 없고, 금액 두 벌(제시·요구)과 확률은 칩 속에 접어 두면 매번 펼쳐야 한다.
- */
-test("협상은 카드로 선다 — 재계약 제안", async ({ page }) => {
+test("재계약 제안서 문의는 조건을 임의로 채우지 않고 재접속 후에도 남는다", async ({ page }) => {
   await page.goto("/new");
   await expect(page.getByTestId("league-list")).toBeVisible({ timeout: COLD_MS });
   await page.getByTestId("league-epl").click();
@@ -618,22 +615,23 @@ test("협상은 카드로 선다 — 재계약 제안", async ({ page }) => {
   await page.getByTestId("manager-background").fill("스카우트 출신");
   await page.getByTestId("start-game").click();
   await expect(page.getByTestId("chat-scroll")).toContainText("협테스트", { timeout: COLD_MS });
-
-  // 계약이 급한 선수에게 재계약 제안 — mock GM이 코어의 기대 주급으로 연다
   const input = page.getByTestId("chat-input");
   await input.fill("계약 만료 다가오는 선수 재계약 하자");
   await page.getByTestId("chat-send").click();
-
-  const card = page.getByTestId("market-renewal").first();
-  await expect(card).toBeVisible();
-  // 카드가 조건과 기한을 함께 갖는다 — 금액 두 벌과 답할 기한을 펼치지 않고 읽는다
-  await expect(card).toContainText("주급");
-  await expect(card).toContainText("기간");
-  await expect(card).toContainText("답");
-  // 같은 사실이 칩으로 또 서지 않는다 — 카드가 칩의 부연처럼 읽히면 안 된다
-  await expect(page.getByTestId("tool-open_renewal")).toHaveCount(0);
-  // 카드는 말풍선이 아니다 — 협상은 어느 장부에도 실리지 않는다
-  await expect(page.locator(".rail-hints")).toHaveCount(0);
+  const gameId = new URL(page.url()).pathname.split("/").at(-1)!;
+  await expect.poll(() => loadGame(gameId)?.negotiationExchanges.length).toBe(1);
+  await expect(input).toBeEnabled();
+  await expect(page.locator(".app")).toHaveAttribute("data-phase", "idle");
+  await page.reload();
+  await expect(input).toBeEnabled();
+  const saved = loadGame(gameId)!;
+  expect(saved.negotiations).toHaveLength(1);
+  expect(saved.negotiations[0]).toMatchObject({ kind: "renew", status: "open", rounds: [] });
+  expect(saved.negotiations[0]!.personal).toBeUndefined();
+  expect(saved.negotiationExchanges).toHaveLength(1);
+  expect(saved.negotiationExchanges[0]).toMatchObject({ method: "proposal", party: "agent" });
+  expect(saved.negotiationExchanges[0]!.closedOn).not.toBeNull();
+  expect(saved.negotiationContacts[0]!.lines.some((line) => line.by === "us")).toBe(true);
 });
 
 test("달력 상세와 전술판 라인업 편집", async ({ page }) => {

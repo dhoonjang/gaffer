@@ -19,6 +19,7 @@ import {
   domesticCupWinners,
   domesticCupsOf,
   domesticStageMatches,
+  syncCupRounds,
   europeanEntrants,
   isPostponable,
   isTopFlight,
@@ -31,7 +32,7 @@ import {
 } from "@story-fm/engine";
 import type { MatchRecord, MatchStage } from "@story-fm/domain";
 import { isReserveMatch } from "@story-fm/domain";
-import { createTestGame, keepSeat, settleMatchdayQuick } from "../helpers";
+import { createTestGame, keepSeat, settleMatchdayQuick, resultOf } from "../helpers";
 
 /**
  * 국내 컵 (FA컵·리그컵·코파·포칼·쿠프) — 32강 순수 녹아웃.
@@ -52,8 +53,6 @@ function pendingFor(state: GameState, cupId: string) {
  */
 interface PendingWatch {
   violations: string[];
-  /** 1라운드를 이기고 **다음** 라운드 예정이 열리는 장면을 실제로 봤나 */
-  sawSecond: boolean;
 }
 
 function watchPending(state: GameState, watch: PendingWatch): void {
@@ -72,7 +71,6 @@ function watchPending(state: GameState, watch: PendingWatch): void {
     if (domesticStageMatches(state, cup.id, stage as never).length > 0) {
       watch.violations.push(`${state.date} ${cup.id}/${stage}: 뽑힌 라운드에 예정이 남았다`);
     }
-    if (stage !== DOMESTIC_STAGES[0]) watch.sawSecond = true;
   }
 }
 
@@ -111,7 +109,7 @@ function seasonOf(seed: number): GameState {
   const cached = seasons.get(seed);
   if (cached) return cached;
   const state = createTestGame(seed);
-  const watch: PendingWatch = { violations: [], sawSecond: false };
+  const watch: PendingWatch = { violations: [] };
   playSeason(state, watch);
   seasons.set(seed, state);
   watches.set(seed, watch);
@@ -359,12 +357,6 @@ describe("추첨 전에도 라운드 날짜는 달력에 있다 — 단, 확보�
     expect(pendingFor(state, "eflcup")).toHaveLength(0);
   });
 
-  /**
-   * ⚠️ **"다음 자리가 열렸다"는 우리가 1라운드를 이겼을 때만 볼 수 있다** — 시드 하나에
-   * 매면 체력·전력 밸런스를 만질 때마다 이 테스트가 결과 운으로 깜빡인다. 불변식
-   * (예정은 많아야 하나 · 살아 있을 때만 · 뽑히기 전까지만)은 모든 시드에서 재고,
-   * 다음 자리가 열리는 장면은 시드 하나에서 보이면 된다.
-   */
   it("시즌 내내 컵당 예정은 많아야 하나 — 직전 라운드를 이겨야 다음이 열린다", () => {
     for (const seed of SEEDS) {
       expect(watchOf(seed).violations, `시드 ${seed}`).toEqual([]);
@@ -375,10 +367,27 @@ describe("추첨 전에도 라운드 날짜는 달력에 있다 — 단, 확보�
         expect(pendingFor(state, cup.id), `시드 ${seed} ${cup.id} 탈락 후 예정`).toHaveLength(0);
       }
     }
-    expect(
-      SEEDS.some((seed) => watchOf(seed).sawSecond),
-      "어느 시드에서도 1라운드를 이기고 다음 자리가 열리지 않았다",
-    ).toBe(true);
+  });
+  it("같은 대진에서 승리만 다음 라운드를 확보하고 패배는 예정을 지운다", () => {
+    const state = createTestGame(7);
+    const played = seasonOf(7).matches.find(
+      (m) =>
+        m.competitionId === "eflcup" &&
+        m.stage === "r32" &&
+        (m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId),
+    )!;
+    const match = { ...structuredClone(played), result: null } as MatchRecord;
+    state.date = match.date;
+    state.matches = [...state.matches.filter((m) => m.competitionId !== "eflcup"), match];
+    syncCupRounds(state);
+    expect(pendingFor(state, "eflcup")).toHaveLength(0);
+    const home = match.homeTeamId === state.userTeamId;
+    match.result = resultOf({ homeGoals: home ? 1 : 0, awayGoals: home ? 0 : 1 });
+    syncCupRounds(state);
+    expect(pendingFor(state, "eflcup").map((entry) => entry.refId)).toEqual(["eflcup:r16"]);
+    match.result = resultOf({ homeGoals: home ? 0 : 1, awayGoals: home ? 1 : 0 });
+    syncCupRounds(state);
+    expect(pendingFor(state, "eflcup")).toHaveLength(0);
   });
 });
 

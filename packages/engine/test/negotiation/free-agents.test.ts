@@ -1,5 +1,3 @@
-import * as rngModule from "../../src/common/core/rng";
-import { describe, expect, it, vi } from "vitest";
 import type { GamePlayer } from "@story-fm/domain";
 import {
   FREE_AGENT_TEAM,
@@ -8,31 +6,32 @@ import {
   activeContract,
   addDays,
   admitUnsignedYouth,
-  respondOffer,
-  dealOdds,
+  dropStaleYouthFreeAgents,
   freeAgents,
   isClubTeam,
   loanPlayer,
+  marketValueOf,
   offerPlayerOut,
   openNegotiationFor,
   pendingVerdicts,
-  marketValueOf,
   playerById,
   playersOf,
   releasePlayer,
+  respondOffer,
   runAiRenewals,
   sendOffer,
   signFreeAgents,
-  dropStaleYouthFreeAgents,
   unsignedYouthOriginOf,
   userPlayers,
-  youthFreeAgents,
   wageExpectationOf,
   weeklyWagesOf,
   windowOpenOn,
   withdrawOffer,
+  youthFreeAgents,
   type GameState,
 } from "@story-fm/engine";
+import { describe, expect, it, vi } from "vitest";
+import * as rngModule from "../../src/common/core/rng";
 import { completeDeal, createTestGame } from "../helpers";
 
 const spare = (state: GameState) => {
@@ -143,22 +142,11 @@ describe("무소속 — 클럽이 아니라 클럽이 없는 상태", () => {
     releasePlayer(state, { playerId: target.id });
     expect(target.teamId).toBe(FREE_AGENT_TEAM);
 
-    /**
-     * **옛 계약 주급이 아니라 기대 주급을 부른다.** 방출 전 주급은 그 구단이
-     * 매기던 값이라 선수의 기대치와 무관하다 — 어린 유망주는 둘이 크게 벌어져,
-     * 옛 주급으로 부르면 성사 확률 0%가 나오고 시드가 바뀔 때마다 흔들린다.
-     */
-    const wage = dealOdds(state, {
-      playerId: target.id,
-      fee: 0,
-      weeklyWage: 0,
-      years: 2,
-      kind: "buy",
-    }).wageExpectation;
+    const wage = 10_000;
     const offered = sendOffer(state, { playerId: target.id, fee: 0, weeklyWage: wage, years: 2 });
     expect(offered.ok, offered.message).toBe(true);
     const negotiation = openNegotiationFor(state, target.id)!;
-    state.date = negotiation.rounds[0]!.respondsOn!;
+    state.date = negotiation.rounds[0]!.respondsOn ?? state.date;
     const verdict = respondOffer(state, { negotiationId: negotiation.id, verdict: "accept" });
     expect(verdict.ok, verdict.message).toBe(true);
 
@@ -187,7 +175,7 @@ describe("무소속 — 클럽이 아니라 클럽이 없는 상태", () => {
     expect(sendOffer(state, { ...offer, fee: 0 }).ok).toBe(true);
   });
 
-  it("창이 닫힌 날의 결렬은 30일이면 식는다 — 창으로 재면 영구 배제가 된다", () => {
+  it("철회 뒤에도 이력을 남기고 새 제안을 보낼 수 있다", () => {
     const state = createTestGame(11);
     state.date = "2026-11-15";
     expect(windowOpenOn(state.windows, state.date)).toBeNull();
@@ -198,7 +186,7 @@ describe("무소속 — 클럽이 아니라 클럽이 없는 상태", () => {
 
     expect(sendOffer(state, offer).ok).toBe(true);
     withdrawOffer(state, openNegotiationFor(state, target.id)!.id);
-    expect(sendOffer(state, offer).ok, "아직 식지 않았다").toBe(false);
+    expect(sendOffer(state, offer).ok).toBe(true);
 
     state.date = "2026-12-20";
     expect(windowOpenOn(state.windows, state.date)).toBeNull();
@@ -229,7 +217,7 @@ describe("임대 영입 — 사는 게 아니라 빌리는 것", () => {
     const negotiation = openNegotiationFor(state, target.id)!;
     expect(negotiation.kind).toBe("loan");
 
-    state.date = negotiation.rounds[0]!.respondsOn!;
+    state.date = negotiation.rounds[0]!.respondsOn ?? state.date;
     const verdict = respondOffer(state, { negotiationId: negotiation.id, verdict: "accept" });
     expect(verdict.ok, verdict.message).toBe(true);
 
@@ -316,7 +304,7 @@ describe("임대 내보내기도 흥정이다 — 상대가 받아 줘야 한다
     const negotiation = openNegotiationFor(state, target.id)!;
     expect(negotiation.kind).toBe("loan_out");
 
-    state.date = negotiation.rounds[0]!.respondsOn!;
+    state.date = negotiation.rounds[0]!.respondsOn ?? state.date;
     const verdict = respondOffer(state, { negotiationId: negotiation.id, verdict: "accept" });
     expect(verdict.ok, verdict.message).toBe(true);
     const done = completeDeal(state, negotiation.id);
@@ -357,7 +345,6 @@ describe("판정을 기다리는 협상은 눈에 띈다", () => {
     const waiting = pendingVerdicts(state);
     expect(waiting).toHaveLength(1);
     expect(waiting[0]!.action).toBe("accept_deal");
-    expect(waiting[0]!.label).toContain("되불렀습니다");
   });
 
   it("합의된 협상은 확정을 기다린다", () => {
@@ -366,7 +353,7 @@ describe("판정을 기다리는 협상은 눈에 띈다", () => {
     const { player: target, fee } = outgoing(state, "sell");
     offerPlayerOut(state, { playerId: target.id, teamId: "chelsea", fee });
     const negotiation = openNegotiationFor(state, target.id)!;
-    state.date = negotiation.rounds[0]!.respondsOn!;
+    state.date = negotiation.rounds[0]!.respondsOn ?? state.date;
     const answered = respondOffer(state, { negotiationId: negotiation.id, verdict: "accept" });
     expect(answered.ok, answered.message).toBe(true);
     const waiting = pendingVerdicts(state);

@@ -11,12 +11,10 @@ import {
   acceptManagerOffer,
   reviewBoard,
   RENEWAL_NOTICE_DAYS,
-  answerIncomingOffer,
-  incomingOffer,
   advanceTime,
   assignmentsOf,
   createGame,
-  runMedicals,
+  resolveMedical,
   cupCatalogById,
   euroCompetitionOf,
   digestLines,
@@ -417,27 +415,66 @@ export function afterSquadReturn(state: GameState): GameState {
 export function completeDeal(state: GameState, negotiationId: string) {
   const negotiation = state.negotiations.find((n) => n.id === negotiationId);
   if (!negotiation) return { ok: false, message: `협상 "${negotiationId}"을 찾지 못했습니다` };
-  // 이미 검진이 잡혀 있으면 다시 부르지 않는다 — "결과를 기다리는 중"만 돌아온다
-  let result = negotiation.medical ? { ok: true, message: "" } : acceptDeal(state, negotiationId);
-  if (!result.ok) return result;
   const medical = negotiation.medical;
-  if (medical && medical.status === "scheduled") {
+  if (medical?.status === "scheduled") {
     if (state.date < medical.onDate) state.date = medical.onDate;
-    const digest: string[] = [];
-    runMedicals(state, digest);
-    // 통과했으면 runMedicals가 이미 계약까지 옮겼다
-    if (negotiation.status === "completed") return { ok: true, message: digest.join(" · ") };
-    /**
-     * 우리가 파는 쪽이면 소견을 본 상대가 값을 깎아 다시 불렀다 — 협상이
-     * `open`으로 돌아와 감독의 답을 기다린다. 테스트는 그 값을 받는 쪽으로 민다.
-     */
-    if (negotiation.status === "open" && incomingOffer(negotiation)) {
-      const answered = answerIncomingOffer(state, { negotiationId, verdict: "accept" });
-      if (!answered.ok) return answered;
-    }
-    if (negotiation.status !== "agreed") return { ok: false, message: digest.join(" · ") };
-    // 소견이 붙었다 — 감독이 강행한다
-    result = acceptDeal(state, negotiationId);
+    const player = playerById(state, negotiation.gamePlayerId);
+    if (!player) return { ok: false, message: "선수가 없습니다" };
+    const result = resolveMedical(state, negotiation, player);
+    if (!result.passed) return { ok: false, message: "메디컬 소견의 명시적 재평가가 필요합니다" };
   }
-  return result;
+  return acceptDeal(state, negotiationId);
+}
+
+/** A dated observation fixture, not an automatic knowledge upgrade from elapsed time. */
+export function recordTestScouting(state: GameState, playerId: string) {
+  const player = playerById(state, playerId)!;
+  const report: import("@story-fm/domain").ScoutingReport = {
+    id: `report-fixture-${playerId}-${state.scoutReports.length}`,
+    requestId: `request-fixture-${playerId}`,
+    revision: 1,
+    requestedOn: state.date,
+    completedOn: state.date,
+    evidenceOn: state.date,
+    question: "선수 관측 기록",
+    plan: {
+      status: "ready",
+      days: 0,
+      depth: "match_review",
+      focus: ["ability"],
+      expectations: [],
+      evidenceRefs: [],
+      limitations: [],
+    },
+    candidates: [
+      {
+        evidence: {
+          playerId,
+          name: player.name,
+          teamId: player.teamId,
+          team: player.teamId,
+          age: 23,
+          position: player.positions[0]!.position,
+          positions: player.positions.map((p) => p.position),
+          contractUntil: null,
+          weeklyWage: null,
+          listed: false,
+          marketEstimate: null,
+          sources: [{ id: "match:fixture", date: state.date, text: "공개 경기 관측" }],
+        },
+        assessment: {
+          playerId,
+          fit: "consider",
+          overall: { low: 60, high: 80 },
+          potential: { low: 65, high: 90 },
+          attributes: {},
+          evidenceRefs: ["match:fixture"],
+          strengths: [],
+          concerns: [],
+        },
+      },
+    ],
+  };
+  state.scoutReports.push(report);
+  return report;
 }

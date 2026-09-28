@@ -37,16 +37,7 @@ import {
 import type { PlayerCardView, ProposalView } from "@story-fm/engine";
 import { IconClose } from "@/domains/common/ui/icons";
 
-/**
- * **제안 폼** — 값과 조건을 정확한 숫자로 내는 자리 (transfer.md §12-3).
- *
- * 채팅이 유일한 인터페이스지만 「£38.5M에 4년, 주급 £120k, 바이아웃 £80M」을 타이핑으로
- * 정확히 부르기는 어렵다. 그래서 폼이 구조체를 만들고 서버가 그것을 손잡이로 받아 코어
- * 명령으로 먼저 건다 — 전술판과 같은 길이라 채팅으로 낸 제안과 같은 문을 지난다.
- *
- * 폼이 미리 채우는 값은 전부 **코어가 낸 자**(`PlayerCardView.proposal`)다. 화면은 값을
- * 다시 재지 않는다 — 요구가·기대 주급·예산·주급 여력이 여기서 오고, 감독이 고친다.
- */
+/** Explicit terms become a draft attachment; unfilled money and duration stay unfilled. */
 
 export interface ProposalHandle {
   /** 폼을 연다 — 카드에서 열 때는 그 카드의 조건을 미리 채운다 */
@@ -263,10 +254,10 @@ function MoneyInput({
   tail,
   testId,
 }: {
-  value: number;
+  value: number | null;
   unit: MoneyUnit;
   step: number;
-  onChange: (value: number) => void;
+  onChange: (value: number | null) => void;
   locked: boolean;
   label: string;
   hero?: boolean;
@@ -274,7 +265,7 @@ function MoneyInput({
   tail?: string;
   testId?: string;
 }) {
-  const shown = shownOf(value, unit);
+  const shown = value === null ? "" : shownOf(value, unit);
   return (
     <span className={hero ? "pf-money hero" : "pf-money"}>
       <b className="pf-money-cur">{CURRENCY}</b>
@@ -288,6 +279,10 @@ function MoneyInput({
         // 숫자만큼만 — 눈금 글자가 숫자 옆에 붙어 선다 (소수점은 한 자보다 좁다)
         style={{ width: `calc(${Math.max(1, String(shown).length)}ch + 3px)` }}
         onChange={(e) => {
+          if (e.target.value === "") {
+            onChange(null);
+            return;
+          }
           const next = poundsOf(e.target.value, unit, step);
           if (next !== null) onChange(next);
         }}
@@ -314,7 +309,7 @@ function Chips<T extends string | number>({
   locked,
 }: {
   label: string;
-  value: T;
+  value: T | null;
   options: ReadonlyArray<{ value: T; label: string }>;
   onPick: (value: T) => void;
   locked: boolean;
@@ -348,8 +343,6 @@ function AmountField({
   step,
   unit,
   chips,
-  anchor,
-  anchorLabel,
   tail,
   hint,
   onChange,
@@ -358,17 +351,14 @@ function AmountField({
 }: {
   label: string;
   /** 파운드 — 상태의 값 그대로 */
-  value: number;
+  value: number | null;
   /** 코어의 눈금 — 칸에 적은 값은 이 눈금으로 되돌린다 */
   step: number;
   unit: MoneyUnit;
   chips: readonly number[];
-  /** 코어가 낸 자 — 칩 하나가 이 값으로 되돌린다 */
-  anchor: number;
-  anchorLabel: string;
   tail?: string;
   hint?: string;
-  onChange: (value: number) => void;
+  onChange: (value: number | null) => void;
   locked: boolean;
   testId: string;
 }) {
@@ -391,20 +381,12 @@ function AmountField({
           <button
             key={delta}
             type="button"
-            onClick={() => onChange(Math.max(0, value + delta))}
-            disabled={locked || (delta < 0 && value <= 0)}
+            onClick={() => onChange(Math.max(0, (value ?? 0) + delta))}
+            disabled={locked || (delta < 0 && (value === null || value <= 0))}
           >
             {deltaLabel(delta)}
           </button>
         ))}
-        <button
-          type="button"
-          className={value === anchor ? "on" : ""}
-          onClick={() => onChange(anchor)}
-          disabled={locked}
-        >
-          {anchorLabel} {formatMoney(anchor)}
-        </button>
       </div>
       {hint && <span className="pf-hint">{hint}</span>}
     </div>
@@ -445,22 +427,16 @@ function ProposalBody({
       ? (prefill.kind as OfferKind)
       : kinds[0]!;
   const [kind, setKind] = useState<OfferKind>(initialKind);
-  const [fee, setFee] = useState<number>(
-    prefill?.fee ?? view.fee[kind === "loan" ? "loan" : "buy"],
-  );
+  const [fee, setFee] = useState<number | null>(prefill?.fee ?? null);
   const [paymentYears, setPaymentYears] = useState<number>(prefill?.paymentYears ?? 1);
-  const [weeklyWage, setWeeklyWage] = useState<number>(
-    prefill?.weeklyWage ??
-      (kind === "renew"
-        ? (view.renewalWage ?? view.weeklyWage)
-        : (view.personal?.weeklyWage ?? view.weeklyWage)),
+  const [weeklyWage, setWeeklyWage] = useState<number | null>(
+    prefill?.weeklyWage ?? view.personal?.weeklyWage ?? null,
   );
-  const [years, setYears] = useState<number>(
-    prefill?.years ??
-      (kind === "renew" ? view.years.renew : (view.personal?.contractYears ?? view.years.buy)),
+  const [years, setYears] = useState<number | null>(
+    prefill?.years ?? view.personal?.contractYears ?? null,
   );
-  const [squadStatus, setSquadStatus] = useState<SquadStatus>(
-    prefill?.squadStatus ?? view.personal?.squadStatus ?? view.squadStatus,
+  const [squadStatus, setSquadStatus] = useState<SquadStatus | null>(
+    prefill?.squadStatus ?? view.personal?.squadStatus ?? null,
   );
   const [terms, setTerms] = useState<TermDraft[]>(
     (prefill?.terms ?? []).map((term, i) => ({ ...term, id: i + 1 })),
@@ -470,9 +446,9 @@ function ProposalBody({
   /** 갈래를 바꾸면 자도 바뀐다 — 코어가 낸 그 갈래의 값으로 되돌린다 */
   const pickKind = (next: OfferKind) => {
     setKind(next);
-    setFee(view.fee[next === "loan" ? "loan" : "buy"]);
-    setWeeklyWage(next === "renew" ? (view.renewalWage ?? view.weeklyWage) : view.weeklyWage);
-    setYears(next === "renew" ? view.years.renew : view.years.buy);
+    setFee(null);
+    setWeeklyWage(null);
+    setYears(null);
   };
 
   /**
@@ -505,9 +481,6 @@ function ProposalBody({
     party === "agent" && (kind === "buy" || kind === "loan") ? "personal" : kind;
   const termKinds = view.termKinds[kind === "buy" ? (precontract ? "precontract" : "buy") : kind];
   const countable = terms.filter((t) => t.kind !== "other").length;
-  const feeAnchor = view.fee[kind === "loan" ? "loan" : "buy"];
-  const wageAnchor = kind === "renew" ? (view.renewalWage ?? view.weeklyWage) : view.weeklyWage;
-
   const tabled = (termKind: DealTermKind) => terms.find((t) => t.kind === termKind);
   const toggleTerm = (termKind: DealTermKind) => {
     const standing = tabled(termKind);
@@ -520,23 +493,18 @@ function ProposalBody({
     setNextId(nextId + 1);
     switch (termKind) {
       case "buyout":
-        base.fee = Math.max(FEE_STEP, Math.round((view.marketValue * 1.5) / FEE_STEP) * FEE_STEP);
         break;
       case "bonus":
-        base.fee = Math.round((weeklyWage * 12) / WAGE_STEP) * WAGE_STEP;
         break;
       case "points":
-        base.fee = Math.max(WAGE_STEP, Math.round((weeklyWage * 0.1) / WAGE_STEP) * WAGE_STEP);
         break;
       case "escalator":
         base.trigger = "europe";
-        base.pct = 20;
         break;
       case "signing":
         base.position = card.position;
         break;
       case "number":
-        base.number = 10;
         break;
       case "other":
         base.note = "";
@@ -550,7 +518,7 @@ function ProposalBody({
     setTerms(terms.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
   const draft = () => {
-    if (busy) return;
+    if (busy || !complete) return;
     const cleaned: DealTerm[] = terms.map((row) => {
       const term: DealTerm & { id?: number } = { ...row };
       delete term.id;
@@ -564,19 +532,19 @@ function ProposalBody({
           ...(agreed.squadStatus ? { squadStatus: agreed.squadStatus } : {}),
         }
       : {
-          weeklyWage: Math.max(0, Math.round(weeklyWage)),
-          years,
-          ...(kind !== "loan" ? { squadStatus } : {}),
+          ...(weeklyWage === null ? {} : { weeklyWage: Math.max(0, Math.round(weeklyWage)) }),
+          ...(years === null ? {} : { years }),
+          ...(kind !== "loan" && squadStatus !== null ? { squadStatus } : {}),
         };
     const input: ProposalInput = {
       playerId: card.id,
       kind: effective,
-      ...(clubSide ? { fee: Math.max(0, Math.round(fee)) } : {}),
+      ...(clubSide ? { fee: Math.max(0, Math.round(fee!)) } : {}),
       // 이적료가 이미 합의된 협상의 오퍼는 그 값 그대로 실린다
       ...(view.feeAgreed && effective !== "personal" ? { fee: view.feeAgreed.fee } : {}),
       ...(view.freeAgent && kind === "buy" ? { fee: 0 } : {}),
       ...(clubSide && kind === "buy" && paymentYears > 1 ? { paymentYears } : {}),
-      ...personal,
+      ...(agentSide || agreed ? personal : {}),
       ...(cleaned.length > 0 ? { terms: cleaned } : {}),
     };
     /** 칩의 요약 — 갈래와 값. 값이 없는 칸은 적지 않는다 */
@@ -588,8 +556,8 @@ function ProposalBody({
               (input.paymentYears !== undefined ? ` ${input.paymentYears}년 분할` : ""),
           ]
         : []),
-      `주급 ${formatMoney(personal.weeklyWage)}`,
-      `${personal.years}년`,
+      ...(input.weeklyWage === undefined ? [] : [`주급 ${formatMoney(input.weeklyWage)}`]),
+      ...(input.years === undefined ? [] : [`${input.years}년`]),
       ...(cleaned.length > 0 ? [`조건 ${cleaned.length}`] : []),
     ].join(" · ");
     onDraft({
@@ -599,16 +567,26 @@ function ProposalBody({
       summary,
       prefill: {
         kind,
-        ...(clubSide ? { fee, paymentYears } : {}),
-        weeklyWage,
-        years,
-        squadStatus,
+        ...(clubSide && fee !== null ? { fee, paymentYears } : {}),
+        ...(weeklyWage === null ? {} : { weeklyWage }),
+        ...(years === null ? {} : { years }),
+        ...(squadStatus === null ? {} : { squadStatus }),
         terms: cleaned,
       },
     });
     onClose();
   };
 
+  const complete =
+    (!clubSide || fee !== null) &&
+    (!agentSide || agreed !== null || (weeklyWage !== null && years !== null)) &&
+    terms.every((term) => {
+      if (["buyout", "bonus", "points"].includes(term.kind)) return term.fee !== undefined;
+      if (term.kind === "escalator") return term.pct !== undefined;
+      if (term.kind === "number") return term.number !== undefined;
+      if (term.kind === "other") return Boolean(term.note?.trim());
+      return true;
+    });
   const locked = busy;
   return (
     <form
@@ -644,8 +622,8 @@ function ProposalBody({
           <b>{formatMoney(view.wageRoom)}/주</b>
         </span>
         <span className="pf-fact">
-          <em>시장가</em>
-          <b>{formatMoney(view.marketValue)}</b>
+          <em>최근 기록 이적료</em>
+          <b>{view.marketValue === null ? "미확인" : formatMoney(view.marketValue)}</b>
         </span>
       </div>
 
@@ -704,8 +682,6 @@ function ProposalBody({
               step={FEE_STEP}
               unit={MILLIONS}
               chips={FEE_CHIPS}
-              anchor={feeAnchor}
-              anchorLabel={kind === "loan" ? "임대료 자" : "요구가"}
               {...(precontract ? { hint: "사전 계약 — 이적료 없이 여름에 합류한다" } : {})}
               onChange={setFee}
               locked={locked}
@@ -758,8 +734,6 @@ function ProposalBody({
                   step={WAGE_STEP}
                   unit={THOUSANDS}
                   chips={WAGE_CHIPS}
-                  anchor={wageAnchor}
-                  anchorLabel="기대 주급"
                   tail="/주"
                   onChange={setWeeklyWage}
                   locked={locked}
@@ -844,7 +818,12 @@ function ProposalBody({
       </div>
 
       <footer className="pf-foot">
-        <button type="submit" className="pf-submit" disabled={locked} data-testid="proposal-submit">
+        <button
+          type="submit"
+          className="pf-submit"
+          disabled={locked || !complete}
+          data-testid="proposal-submit"
+        >
           제안서 작성
         </button>
       </footer>
@@ -891,10 +870,10 @@ function TermRow({
       </div>
       {money && (
         <MoneyInput
-          value={term.fee ?? 0}
+          value={term.fee ?? null}
           unit={term.kind === "buyout" ? MILLIONS : THOUSANDS}
           step={term.kind === "buyout" ? FEE_STEP : WAGE_STEP}
-          onChange={(fee) => onChange({ fee })}
+          onChange={(fee) => onChange({ fee: fee ?? undefined })}
           locked={locked}
           label={`${DEAL_TERM_KO[term.kind]} 금액`}
           {...(term.kind === "points" ? { tail: "/P" } : {})}
@@ -918,9 +897,11 @@ function TermRow({
               min={ESCALATOR_PCT_MIN}
               max={ESCALATOR_PCT_MAX}
               step={5}
-              value={term.pct ?? 20}
-              style={{ width: `calc(${String(term.pct ?? 20).length}ch + 3px)` }}
-              onChange={(e) => onChange({ pct: Number(e.target.value) })}
+              value={term.pct ?? ""}
+              style={{ width: `calc(${String(term.pct ?? "").length}ch + 3px)` }}
+              onChange={(e) =>
+                onChange({ pct: e.target.value === "" ? undefined : Number(e.target.value) })
+              }
               disabled={locked}
               aria-label="인상 폭 (%)"
             />
@@ -945,9 +926,11 @@ function TermRow({
             inputMode="numeric"
             min={SQUAD_NUMBER_MIN}
             max={SQUAD_NUMBER_MAX}
-            value={term.number ?? 10}
-            style={{ width: `calc(${String(term.number ?? 10).length}ch + 3px)` }}
-            onChange={(e) => onChange({ number: Number(e.target.value) })}
+            value={term.number ?? ""}
+            style={{ width: `calc(${String(term.number ?? "").length}ch + 3px)` }}
+            onChange={(e) =>
+              onChange({ number: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
             disabled={locked}
             aria-label="등번호"
           />

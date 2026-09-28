@@ -1,18 +1,15 @@
 "use client";
 
-import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import {
   formatMoney,
   marketDirectionKo,
   type MarketCard,
   type MarketTerms,
-  type MissionReportCard,
 } from "@story-fm/domain";
 import { IconFinance, IconInsight, IconPerson, IconTrash } from "@/domains/common/ui/icons";
 import { useProposal } from "@/domains/negotiation/ui/proposal-form";
 import type { ProposalPrefill } from "@story-fm/domain";
-import { humanDate, humanMonthYear } from "@/domains/common/lib/dateline";
-import { ratingTone } from "@/domains/common/lib/scout-report-display";
+import { humanDate } from "@/domains/common/lib/dateline";
 
 /**
  * **협상·스카우트 카드** — 갈 화면이 없는 호출의 결과가 서는 자리.
@@ -193,13 +190,6 @@ export function MarketCardView({ card, propose = true }: { card: MarketCard; pro
         {card.counterpart !== card.playerName && (
           <span className="mc-counterpart">{card.counterpart}</span>
         )}
-        {/* 답이 남은 카드에만 선다 — 값이 없으면 이름표도 서지 않는다 */}
-        {card.odds && (
-          <span className="mc-odds">
-            <em>성사 가능성</em>
-            <b>{card.odds}</b>
-          </span>
-        )}
       </div>
 
       {/* 두 줄이 한 그리드다 — 이름표 열이 가장 긴 이름표에 맞춰 늘어나 값이 같은 자리에서 시작한다 */}
@@ -263,84 +253,6 @@ export function MarketCardView({ card, propose = true }: { card: MarketCard; pro
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/**
- * **스카우트 임무 보고** — 조건 한 벌이 데려온 후보들이 나란히 서는 표.
- *
- * 보고서(`ScoutReport`)와 묻는 것이 다르다. 저쪽은 「이 선수가 어떤가」라 한 명을
- * 놓고 16축을 펴고, 이쪽은 「누가 있나」라 여러 명을 **세로로 견준다** — 그래서
- * 값이 열에 맞춰 서고 이름표는 머리에 한 번만 붙는다. 줄마다 이름표를 달면 다섯
- * 줄이 다섯 장의 카드로 읽혀 견줄 수가 없다.
- *
- * 후보는 아직 안개가 걷히지 않은 눈금이라 종합에 ±가 붙고 시장가도 흐린 값이다
- * (→ docs/common/player.md §10). 여기 서는 것은 그 사실들뿐이고, **왜 이 다섯인가는
- * GM이 쓴다.**
- *
- * 곳(`scope`)과 조건(`brief`)이 다른 자리에 서는 것은 코어가 둘을 따로 만들기
- * 때문이다 — 한 줄로 붙이면 같은 대회 이름이 두 번 선다.
- */
-export function MissionReportCardView({ card }: { card: MissionReportCard }) {
-  return (
-    <div className="mission-report" data-testid="mission-report">
-      <div className="mn-head">
-        <span className="mn-icon" aria-hidden>
-          <IconInsight size={14} />
-        </span>
-        <span className="mn-badge">스카우트 임무</span>
-        <b className="mn-brief">{card.brief}</b>
-        <span className="mn-scope">{card.scope}</span>
-        {/* 나간 날과 돌아온 날 — 며칠을 기다린 서류인지가 카드마다 같은 자리에 선다 */}
-        <span className="mn-when">
-          <b>{humanDate(card.requestedOn, { weekday: false })}</b>
-          {/* 구간은 en dash — 화살표 글리프는 쓰지 않는다 (design-system.md §3) */}
-          <i aria-hidden>–</i>
-          <b>{humanDate(card.completedOn, { weekday: false })}</b>
-        </span>
-      </div>
-
-      {card.candidates.length === 0 ? (
-        <p className="mn-empty">조건에 맞는 후보 0명</p>
-      ) : (
-        /* 여덟 열은 좁은 화면의 폭에 들어가지 않는다 — 표만 가로로 흐르고 머리는 접힌다 */
-        <div className="mn-table-wrap">
-          <div className="mn-table">
-            <div className="mn-row head">
-              <em className="mn-who">선수</em>
-              <em className="mn-team">구단</em>
-              <em>나이</em>
-              <em>자리</em>
-              <em className="mn-ovr">종합</em>
-              <em className="mn-pot">성장 가능성</em>
-              <em className="mn-val">시장가</em>
-              <em className="mn-until">계약 만료</em>
-            </div>
-            {card.candidates.map((c) => (
-              <div className="mn-row" key={c.playerId}>
-                <b className="mn-who">{c.name}</b>
-                <span className="mn-team">{c.team}</span>
-                <span>{c.age}</span>
-                <span>{c.position}</span>
-                {/* 등급 색의 경계는 보고서와 같은 자를 쓴다(`ratingTone`) — 여기서 다시 자르면 같은 72가 두 색이 된다 */}
-                <span className="mn-ovr" data-rating={ratingTone(c.overall.value)}>
-                  {c.overall.value}
-                  {c.overall.margin > 0 && <i>±{c.overall.margin}</i>}
-                </span>
-                <span className="mn-pot">
-                  <GrowthOutlook overall={c.overall.value} potential={c.potential} />
-                </span>
-                <span className="mn-val">{formatMoney(c.marketValue)}</span>
-                {/* 머리가 「계약 만료」라 「까지」 없이 달만 — `2027년 6월` */}
-                <span className="mn-until">
-                  {c.contractUntil === null ? "자유계약" : humanMonthYear(c.contractUntil)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

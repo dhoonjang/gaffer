@@ -1,17 +1,14 @@
 import type { ChatTurn } from "@story-fm/engine";
 import type { Negotiation } from "@story-fm/domain";
 
-/**
- * 협상 방에는 그 협상의 턴만 놓는다 — 경기의 `chatForActiveMatch`와 같은 갈림
- * (transfer.md §12-2). 평시와 지난 협상의 이력은 장부다.
- */
+/** All exchanges with this counterparty, without including another party to the same deal. */
 export function chatForActiveNegotiation(
   chat: readonly ChatTurn[],
-  activeNegotiationId: string | null,
+  activeContactId: string | null,
 ): readonly ChatTurn[] {
-  if (activeNegotiationId === null) return chat;
+  if (activeContactId === null) return chat;
   return chat.filter(
-    (turn) => turn.inNegotiation === true && turn.negotiationId === activeNegotiationId,
+    (turn) => turn.inNegotiation === true && turn.negotiationContactId === activeContactId,
   );
 }
 

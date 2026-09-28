@@ -18,6 +18,7 @@ type TurnStreamEvent = {
   payload?: GamePayload;
   error?: string;
   retry?: boolean;
+  saved?: boolean;
   detail?: string;
 };
 
@@ -168,7 +169,7 @@ export async function streamTurn(
           failure = {
             reason: evt.error ?? "턴을 처리하지 못했습니다",
             detail: evt.detail,
-            settled: true,
+            settled: evt.saved !== true,
             retry: evt.retry !== false,
           };
           closed = true;

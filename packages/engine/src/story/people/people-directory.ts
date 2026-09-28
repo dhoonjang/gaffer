@@ -449,7 +449,7 @@ export const CLOSED_NEGOTIATION = new Set<string>([
 const DEPTH_OF_KNOWLEDGE: Record<Knowledge, CharacterDepth> = {
   own: "full",
   adapting: "full",
-  scouted: "outline",
+  scouted: "rumour",
   seen: "outline",
   rumoured: "rumour",
 };

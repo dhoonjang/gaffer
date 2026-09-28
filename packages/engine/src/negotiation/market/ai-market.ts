@@ -1,26 +1,15 @@
 import {
+  FIRST_TEAM_LIMIT,
   ageOf,
   josa,
-  normalizedLogCurve,
-  FIRST_TEAM_LIMIT,
   type Contract,
   type GamePlayer,
-  type Transfer,
   type TickSink,
+  type Transfer,
 } from "@story-fm/domain";
 import { windowOpenOn } from "../../common/core/calendar";
 import { addDays, contractUntil, diffDays, seasonYear } from "../../common/core/dates";
-import { isClubTeam, leagueOfTeam } from "../../common/data/team-catalog";
-import { isMarketOnlyLeague } from "../../common/data/league-catalog";
 import { isTopFlightIn, leagueOfTeamIn } from "../../common/core/league-membership";
-import { AGENT_FEE_RATE, formatMoney, settlePlayerFee } from "../finance/finance";
-import {
-  DEADLINE_RUSH,
-  isDeadlineWeek,
-  marketBiasOf,
-  marketValueOf,
-  windowOpenForTeam,
-} from "./market";
 import { makeRng } from "../../common/core/rng";
 import {
   activeContract,
@@ -35,12 +24,15 @@ import {
   weeklyWagesOf,
   type GameState,
 } from "../../common/core/state";
-import { WAGE_HEADROOM, clubWageBudget, estimateWeeklyWage, wageSubjectOf } from "../economy/wages";
+import { isMarketOnlyLeague } from "../../common/data/league-catalog";
+import { isClubTeam, leagueOfTeam } from "../../common/data/team-catalog";
 import { assignSquadNumber } from "../../common/players/numbers";
 import { admitOnLoan } from "../../common/players/registration";
+import { WAGE_HEADROOM, clubWageBudget, estimateWeeklyWage, wageSubjectOf } from "../economy/wages";
+import { AGENT_FEE_RATE, formatMoney, settlePlayerFee } from "../finance/finance";
+import { runBuyBacks, settleSellOn } from "./clauses";
 import { clearDepartedState } from "./departures";
-import { attachClauses, runBuyBacks, settleSellOn } from "./clauses";
-import { attachAiBuyout } from "./buyout";
+import { marketBiasOf, marketValueOf, windowOpenForTeam } from "./market";
 
 /**
  * 남의 팀끼리의 이적 시장 — **세계가 감독 없이도 돈다.**
@@ -265,7 +257,7 @@ function moveClub(
     fee: input.fee,
   };
   // 조항은 유저의 딜과 같은 함수가 붙인다 — 한쪽만 붙이면 규칙이 갈라진다 (§5-3)
-  attachClauses(state, transfer, player);
+
   state.transfers.push(transfer);
   // 파는 구단이 무는 셀온은 이 이적으로 발동한다
   settleSellOn(state, {
@@ -291,7 +283,7 @@ function moveClub(
   };
   state.contracts.push(signed);
   // 새 계약에는 조항이 붙을 수 있다 — 유저의 딜과 같은 세계다 (transfer.md §12-3)
-  attachAiBuyout(state, signed, player);
+
   /**
    * **새 계약이 다음 시즌을 덮으므로 예약은 설 자리가 없다** (transfer.md §1-4).
    * 우리 예약이 걷히는 자리라 그날 일지에 오른다 — 반년을 기다린 영입이 남의
@@ -651,11 +643,7 @@ function planWeek(state: GameState, rng: () => number): { deals: AiDeal[]; throu
   const closesOn = planHorizon(state);
   const lastDay = closesOn ? minDate(closesOn, addDays(state.date, WEEK - 1)) : state.date;
   const span = Math.max(0, diffDays(state.date, lastDay));
-  // 마감이 든 주에는 시도가 배로 늘고 날짜도 뒤로 쏠린다 — 우리에게 오는 오퍼가
-  // 타는 것과 **같은 배수**다 (transfer.md §1-3)
-  const deadlineWeek = closesOn !== null && isDeadlineWeek(state.date, closesOn);
-
-  const attempts = Math.round(ATTEMPTS_PER_DAY * WEEK * (deadlineWeek ? DEADLINE_RUSH : 1));
+  const attempts = ATTEMPTS_PER_DAY * WEEK;
   const deals: AiDeal[] = [];
   for (let i = 0; i < attempts; i++) {
     const deal =
@@ -665,10 +653,7 @@ function planWeek(state: GameState, rng: () => number): { deals: AiDeal[]; throu
     if (!deal) continue;
     /** 날짜 배분 — 마감 주에는 정규화 로그로 뒤쪽에 몰린다. */
     const u = rng();
-    const offset = Math.min(
-      span,
-      Math.floor((deadlineWeek ? normalizedLogCurve(u, DEADLINE_LOG_SCALE) : u) * (span + 1)),
-    );
+    const offset = Math.min(span, Math.floor(u * (span + 1)));
     deals.push({ ...deal, date: addDays(state.date, offset) });
   }
   return { deals, through: lastDay };
@@ -694,8 +679,6 @@ function planHorizon(state: GameState): string | null {
 }
 
 const WEEK = 7;
-/** 마감 주 거래일 분포의 로그 눈금 — 기존 데드라인 집중도를 유지한다. */
-const DEADLINE_LOG_SCALE = 8;
 
 function minDate(a: string, b: string): string {
   return a < b ? a : b;

@@ -1,13 +1,15 @@
+import { evaluateNegotiation } from "./workflows/negotiation/evaluation";
+import { requestScouting } from "./workflows/negotiation/scouting";
 import { moodLineArg, moodNotesArg } from "../common/mood-input";
 import { z } from "zod";
 import {
   POSITION_CODES,
   PLAYER_ISSUE_REASONS,
   DateString,
+  ScoutingInputSchema,
   SEARCH_MIN_AGE,
   SEARCH_MAX_AGE,
   type GamePlayer,
-  josa,
   PROMISE_KINDS,
   PROMISE_KIND_KO,
   PROMISE_KIND_MEANING,
@@ -41,16 +43,16 @@ import {
   EVENT_BAND,
   type GameState,
   formatMoney,
-  quotedFee,
   KIND_KO,
-  renewalExpectation,
-  severanceOf,
   unilateralSeveranceOf,
   PROMISE_DAYS_MIN,
   PROMISE_DAYS_MAX,
   journal,
   startMatch,
   startNegotiation,
+  openIncomingTalks,
+  closeNegotiation,
+  recordExchangeLine,
   setLineup,
   setSquadLevels,
   setCaptain,
@@ -100,24 +102,16 @@ import {
   leagueView,
   matchReport,
   opponentReport,
-  scoutPlayer,
-  scoutMission,
   pickAnyPlayer,
-  suggestTerms,
-  pickTeam,
-  dealOdds,
   openNegotiationFor,
-  describeOdds,
   describeNegotiation,
   describeNegotiations,
   offerPlayerOut,
   sendOffer,
-  wageExpectationOf,
   answerIncomingOffer,
   acceptDeal,
   pickSignedPlayer,
   openRenewal,
-  renewalYearsExpectation,
   openRelease,
   setTransferList,
   respondTransferRequest,
@@ -140,7 +134,7 @@ import { type GmToolCall, type CommandReturn, recordCall } from "../common/gm-ty
 import { type GameToolSpec, type ToolCallContext } from "@story-fm/llm";
 import { skillDescriptions } from "./skill-descriptions";
 import { toToolSchema, inputError } from "../common/tool-schema";
-import { createInstructionTool } from "./workflows/instructions";
+import { createInstructionTool, runInstructions } from "./workflows/instructions";
 import { sideTeamName } from "../match/context";
 
 /**
@@ -289,53 +283,21 @@ const settlingArg = z
       "적응을 겨냥한 이야기(자리·역할 약속, 라커룸 소개, 사는 문제)면 크게, 지나가는 말이면 작게.",
   );
 
-/**
- * **감독이 이적료를 부르지 않은 오퍼가 되돌아오는 한 줄** (transfer.md §1).
- *
- * 코어가 아는 사실만 싣는다 — 무엇이 비었는지와 그 갈래의 자(`quotedFee`). 되묻는
- * 문장은 GM이 쓴다 (agents.md §0). 자를 함께 싣지 않으면 감독은 값을 부르기 위해
- * 확률 조회를 한 번 더 거쳐야 한다.
- */
+/** Explicit proposals need the manager's terms; inquiries can leave them open. */
 function missingFeeNote(
-  state: GameState,
   player: GamePlayer,
   kind: "buy" | "sell" | "loan" | "loan_out" | undefined,
 ): string {
   const loan = kind === "loan" || kind === "loan_out";
-  const quoted = formatMoney(quotedFee(state, player, kind));
-  const scale = loan ? "기준 임대료" : kind === "sell" ? "이 선수의 호가" : "요구가";
-  return (
-    `${player.name} ${KIND_KO[kind ?? "buy"]} 오퍼에 실을 ${loan ? "임대료" : "이적료"}를 ` +
-    `감독이 부르지 않았습니다 — ${josa(scale, "은/는")} ${quoted}입니다`
-  );
+  return `${player.name} ${KIND_KO[kind ?? "buy"]} 제안의 ${loan ? "임대료" : "이적료"}가 없습니다. 조건을 먼저 문의하려면 start_negotiation을 사용하십시오`;
 }
 
-/**
- * **감독이 주급을 부르지 않은 재계약 제안이 되돌아오는 한 줄** (transfer.md §1).
- *
- * 재계약의 자는 이적 주급이 아니라 `renewalExpectation`이다 — 남아 달라는 쪽이 우리라
- * 기준이 높고 만료가 가까울수록 오른다. 연수는 코어가 아는 값이 있어 빠져도 제안이
- * 나가므로 이 줄은 주급만 묻는다.
- */
-function missingRenewalWageNote(state: GameState, player: GamePlayer): string {
-  return (
-    `${player.name} 재계약 제안에 실을 주급을 감독이 부르지 않았습니다 — ` +
-    `재계약 기대 주급은 ${formatMoney(renewalExpectation(state, player))}/주입니다`
-  );
+function missingRenewalWageNote(player: GamePlayer): string {
+  return `${player.name} 재계약 제안의 주급이 없습니다. 조건을 먼저 문의하려면 start_negotiation을 사용하십시오`;
 }
 
-/**
- * **감독이 정산금을 부르지 않은 해지 제안이 되돌아오는 한 줄** (transfer.md §1).
- *
- * 자가 둘이다 — 합의의 앵커(`severanceOf`)와, 합의가 깨졌을 때 무는 전액
- * (`unilateralSeveranceOf`). 흥정의 폭이 그 사이라 한쪽만으로는 값을 부를 수 없다.
- */
 function missingSeveranceNote(state: GameState, player: GamePlayer): string {
-  return (
-    `${player.name} 계약 해지 제안에 실을 정산금을 감독이 부르지 않았습니다 — ` +
-    `기대 정산금은 ${formatMoney(severanceOf(state, player.id))}이고 ` +
-    `합의가 안 되면 일방 해지는 ${formatMoney(unilateralSeveranceOf(state, player.id))}입니다`
-  );
+  return `${player.name} 합의 해지 제안의 정산금이 없습니다. 일방 해지의 계약상 정산금은 ${formatMoney(unilateralSeveranceOf(state, player.id))}입니다`;
 }
 
 /**
@@ -503,9 +465,17 @@ export function dismissed(
 export function buildToolSpecs(
   state: GameState,
   calls: GmToolCall[],
-  options?: { deferNegotiationIds?: ReadonlySet<string> },
+  options?: {
+    said?: string;
+    deferNegotiationIds?: ReadonlySet<string>;
+    onCheckpoint?: (
+      state: GameState,
+      scope: "opening" | "scouting" | "negotiation",
+    ) => void | Promise<void>;
+  },
 ): GameToolSpec[] {
   const descriptions = skillDescriptions();
+  const handledNegotiationRequests = new Map<string, CommandReturn>();
   const record = (
     name: string,
     result: CommandReturn,
@@ -540,7 +510,7 @@ export function buildToolSpecs(
     name: string,
     description: string,
     schema: z.ZodType<T>,
-    run: (input: T) => CommandReturn,
+    run: (input: T) => CommandReturn | Promise<CommandReturn>,
   ): GameToolSpec => ({
     name,
     description,
@@ -579,20 +549,23 @@ export function buildToolSpecs(
         });
         return rejected;
       }
+      const complete = (result: CommandReturn) => {
+        journal({
+          kind: "command",
+          name,
+          input: parsed.data,
+          ok: result.ok,
+          message: result.message,
+          source: "tool",
+          ...((result as { unchanged?: boolean }).unchanged === true ? { unchanged: true } : {}),
+          ...(result.tone === undefined ? {} : { tone: result.tone }),
+          ...(result.brief === undefined ? {} : { brief: result.brief }),
+          ...(result.payload === undefined ? {} : { payload: result.payload }),
+        });
+        return record(name, result, parsed.data, context);
+      };
       const result = run(parsed.data);
-      journal({
-        kind: "command",
-        name,
-        input: parsed.data,
-        ok: result.ok,
-        message: result.message,
-        source: "tool",
-        ...((result as { unchanged?: boolean }).unchanged === true ? { unchanged: true } : {}),
-        ...(result.tone === undefined ? {} : { tone: result.tone }),
-        ...(result.brief === undefined ? {} : { brief: result.brief }),
-        ...(result.payload === undefined ? {} : { payload: result.payload }),
-      });
-      return record(name, result, parsed.data, context);
+      return result instanceof Promise ? result.then(complete) : complete(result);
     },
   });
 
@@ -624,13 +597,84 @@ export function buildToolSpecs(
      * **협상 방을 세운다** — 경기의 `start_match`와 같은 자리다 (transfer.md §12-2). 문을 열
      * 뿐이고, 자리에 앉은 뒤의 턴은 협상 GM의 것이다(`negotiation-gm.ts`).
      */
-    wrap("start_negotiation", descriptions.start_negotiation, StartNegotiationArgsSchema, (input) =>
-      startNegotiation(state, {
-        ...(input.negotiationId === undefined ? {} : { negotiationId: input.negotiationId }),
-        ...(input.playerId === undefined ? {} : { playerId: input.playerId }),
-        ...(input.kind === undefined ? {} : { kind: input.kind }),
-        ...(input.party === undefined ? {} : { party: input.party }),
+    wrap(
+      "start_negotiation",
+      descriptions.start_negotiation,
+      StartNegotiationArgsSchema,
+      async (input) => {
+        if (!options?.said?.trim())
+          return { ok: false, message: "감독의 접촉 요청 원문이 없습니다" };
+        const requestKey = JSON.stringify(input);
+        const previous =
+          input.mode === "request" ? handledNegotiationRequests.get(requestKey) : undefined;
+        if (previous) return previous;
+        const opened = startNegotiation(state, input);
+        if (!opened.ok) return opened;
+        const room = state.pendingNegotiation;
+        if (!room) return opened;
+        if (options?.said?.trim()) recordExchangeLine(state, room.exchangeId, "us", options.said);
+        if (input.mode !== "request") return opened;
+        const orders = await runInstructions(state, calls, options?.said ?? "", {
+          agent: "table-orders",
+        });
+        const completed =
+          state.negotiations.find((negotiation) => negotiation.id === room.negotiationId)
+            ?.status === "completed";
+        if (completed) {
+          closeNegotiation(state, "closed");
+          await options?.onCheckpoint?.(state, "negotiation");
+          const result = {
+            ok: true,
+            message: orders.notes.join("\n") || "승인된 계약을 확정했습니다",
+          };
+          handledNegotiationRequests.set(requestKey, result);
+          return result;
+        }
+        const evaluated = await evaluateNegotiation(state, {
+          negotiationId: room.negotiationId,
+          party: room.party,
+          exchangeId: room.exchangeId,
+          ending: true,
+          said: options?.said ?? "",
+        });
+        closeNegotiation(state, "left");
+        await options?.onCheckpoint?.(state, "negotiation");
+        const result = { ...evaluated, message: [...orders.notes, evaluated.message].join("\n") };
+        handledNegotiationRequests.set(requestKey, result);
+        return result;
+      },
+    ),
+    wrap(
+      "receive_market_contact",
+      descriptions.receive_market_contact,
+      z.object({
+        playerId: playerRef,
+        counterpartTeamId: z.string().min(1),
+        kind: z.enum(["sell", "loan_out"]),
+        trigger: z.enum(["listing", "contract"]),
+        method: z.enum(["meeting", "phone", "proposal"]),
       }),
+      async (input) => {
+        const incoming = openIncomingTalks(state, input);
+        if (!incoming.ok || !incoming.opened) return incoming;
+        const opened = startNegotiation(state, {
+          negotiationId: incoming.negotiation.id,
+          party: "club",
+          method: input.method,
+          mode: "request",
+        });
+        if (!opened.ok) return opened;
+        const room = state.pendingNegotiation!;
+        const evaluated = await evaluateNegotiation(state, {
+          negotiationId: room.negotiationId,
+          party: room.party,
+          exchangeId: room.exchangeId,
+          ending: true,
+        });
+        closeNegotiation(state, "left");
+        await options?.onCheckpoint?.(state, "negotiation");
+        return evaluated;
+      },
     ),
     wrap(
       "set_lineup",
@@ -1274,94 +1318,12 @@ export function buildToolSpecs(
         .partial(),
       (input) => opponentReport(state, input),
     ),
-    wrap("scout_player", descriptions.scout_player, z.object({ playerId: playerRef }), (input) =>
-      scoutPlayer(state, input.playerId),
-    ),
-    wrap(
-      "scout_mission",
-      descriptions.scout_mission,
-      z.object({
-        competition: z
-          .string()
-          .min(1)
-          .optional()
-          .describe("뒤질 대회 — 감독이 부른 이름·약어·id. 생략하면 5대 리그 1·2부 전체"),
-        position: z
-          .string()
-          .min(1)
-          .optional()
-          .describe("찾는 자리의 포지션 코드 (GK·CB·LB·RB·DM·CM·AM·LW·RW·ST …)"),
-        minAge: ageArg.optional().describe("나이 하한 (세)"),
-        maxAge: ageArg.optional().describe("나이 상한 (세)"),
-        maxValue: money(MONEY_MAX).optional().describe("관측 시장가 상한 (£)"),
-      }),
-      (input) => scoutMission(state, input),
-    ),
+    wrap("request_scouting", descriptions.request_scouting, ScoutingInputSchema, async (input) => {
+      const result = await requestScouting(state, input, options?.said ?? "");
+      await options?.onCheckpoint?.(state, "scouting");
+      return result;
+    }),
 
-    // ── 이적 협상 — 확률은 코어가, 판정은 GM이 (docs/negotiation/transfer.md) ──
-    read(
-      "deal_odds",
-      descriptions.deal_odds,
-      z.object({
-        playerId: playerRef,
-        fee: money(MONEY_MAX).optional(),
-        weeklyWage: money(WAGE_MAX).optional(),
-        years: z.number().int().min(1).max(6).optional(),
-        paymentYears: z
-          .number()
-          .int()
-          .min(1)
-          .max(MAX_PAYMENT_YEARS)
-          .optional()
-          .describe("분할 연수 — 늦게 오는 돈은 깎여 보이므로 확률이 그만큼 낮게 잡힌다"),
-        kind: z
-          .enum(["buy", "sell", "renew", "loan", "loan_out", "release"])
-          .optional()
-          .describe(
-            "buy=영입(기본) · sell=매각 · renew=재계약 · loan=임대 영입 · loan_out=임대 송출 · release=합의 해지(fee가 제시 정산금)",
-          ),
-        teamId: z
-          .string()
-          .min(1)
-          .optional()
-          .describe(
-            "sell·loan_out의 상대 구단 id — 그 협회의 이적창으로 판정한다. 사우디·MLS는 우리보다 늦게 닫히므로 빠뜨리면 확률이 틀린다",
-          ),
-        pitch: z
-          .array(PitchClaimSchema)
-          .max(MAX_PITCH_CLAIMS)
-          .optional()
-          .describe("감독이 실제로 든 설득 논거 — 상대의 판단 맥락으로 보존한다"),
-      }),
-      (input) => {
-        // 감독이 부른 이름이 그대로 실려 온다 — 정확한 id를 요구하면 부를 수 없는 도구가 된다
-        const picked = pickAnyPlayer(state, input.playerId);
-        if (!picked.ok) return { ok: false, message: picked.message };
-        const player = picked.player;
-        // 금액을 말하지 않았으면 기본값(갈래의 자·주급 기대치)으로 본다
-        const suggested = suggestTerms(state, player.id);
-        if (!suggested) {
-          return { ok: false, message: `“${input.playerId}” 선수를 찾지 못했습니다` };
-        }
-        const fee = quotedFee(state, player, input.kind);
-        // 감독이 부른 구단 이름이 그대로 실려 온다 (core/team-ref.ts)
-        const counterpart = input.teamId ? pickTeam(state, input.teamId) : null;
-        if (counterpart && !counterpart.ok) return { ok: false, message: counterpart.message };
-        const odds = dealOdds(state, {
-          ...suggested,
-          fee,
-          ...(input.fee !== undefined ? { fee: input.fee } : {}),
-          ...(input.weeklyWage !== undefined ? { weeklyWage: input.weeklyWage } : {}),
-          ...(input.years !== undefined ? { years: input.years } : {}),
-          ...(input.kind ? { kind: input.kind } : {}),
-          ...(input.paymentYears === undefined ? {} : { paymentYears: input.paymentYears }),
-          ...(counterpart?.ok ? { counterpartTeamId: counterpart.teamId } : {}),
-          ...(input.pitch ? { pitch: input.pitch } : {}),
-          pitched: openNegotiationFor(state, player.id)?.pitched ?? [],
-        });
-        return { ok: true, message: describeOdds(odds) };
-      },
-    ),
     read(
       "list_negotiations",
       descriptions.list_negotiations,
@@ -1397,7 +1359,7 @@ export function buildToolSpecs(
         weeklyWage: money(WAGE_MAX)
           .optional()
           .describe(
-            "감독이 부른 주급 (£/주) — 말하지 않았으면 비운다. 코어가 선수의 기대치를 싣는다",
+            "감독이 부른 주급 (£/주) — 말하지 않았으면 비운다. 빠진 조건은 문의·초안으로 남긴다",
           ),
         years: z.number().int().min(1).max(6).optional(),
         paymentYears: z
@@ -1424,11 +1386,10 @@ export function buildToolSpecs(
         /**
          * **감독이 부르지 않은 이적료는 오퍼가 되지 않는다** (transfer.md §1).
          * 지어낼 기본값이 없는 자리다 — 0은 £0 매각이고, 시장가를 대신 넣는 것은
-         * 감독이 하지 않은 결정을 장부에 올리는 것이다. 대신 코어가 그 갈래의 자를
-         * 함께 돌려줘, 감독이 한 마디로 답하면 다음 턴에 오퍼가 나간다.
+         * 감독이 하지 않은 결정을 장부에 올리는 것이다.
          */
         if (input.fee === undefined) {
-          return { ok: false, message: missingFeeNote(state, player, input.kind) };
+          return { ok: false, message: missingFeeNote(player, input.kind) };
         }
         // 내보내는 방향(매각·임대)은 입구가 다르다 — 우리가 값을 부르고 상대가 판정한다
         if (input.kind === "sell" || input.kind === "loan_out") {
@@ -1454,12 +1415,19 @@ export function buildToolSpecs(
         const agreed = openNegotiationFor(state, player.id)?.personal;
         const personal = agreed?.agreedOn !== undefined ? agreed : undefined;
         const squadStatus = input.squadStatus ?? personal?.squadStatus;
+        const weeklyWage = input.weeklyWage ?? personal?.weeklyWage;
+        const years = input.years ?? personal?.contractYears;
+        if (weeklyWage === undefined || years === undefined)
+          return {
+            ok: false,
+            message:
+              "주급과 계약 연수가 정해지지 않았습니다. start_negotiation으로 문의하거나 명시된 조건을 제안하십시오",
+          };
         return sendOffer(state, {
           playerId: player.id,
           fee: input.fee,
-          // 주급은 선수가 부르는 값이다 — 감독이 말하지 않으면 기대치가 실리고 오퍼 줄에 선다
-          weeklyWage: input.weeklyWage ?? personal?.weeklyWage ?? wageExpectationOf(state, player),
-          years: input.years ?? personal?.contractYears ?? 4,
+          weeklyWage,
+          years,
           ...(input.kind === "loan" ? { kind: "loan" as const } : {}),
           ...(input.paymentYears === undefined ? {} : { paymentYears: input.paymentYears }),
           ...(input.pitch ? { pitch: input.pitch } : {}),
@@ -1525,7 +1493,9 @@ export function buildToolSpecs(
           .min(1)
           .max(6)
           .optional()
-          .describe("감독이 부른 계약 연수 — 말하지 않았으면 비운다. 코어가 기대 연수를 싣는다"),
+          .describe(
+            "감독이 부른 계약 연수 — 말하지 않았으면 비운다. 확정되지 않은 조건은 문의로 남긴다",
+          ),
         squadStatus: squadStatusArg,
         terms: termsArg,
       }),
@@ -1539,13 +1509,17 @@ export function buildToolSpecs(
          * 출발점으로 세우는 것이다 — 되부르기 상한도 선수 관문도 그 값에서 잰다.
          */
         if (input.weeklyWage === undefined) {
-          return { ok: false, message: missingRenewalWageNote(state, player) };
+          return { ok: false, message: missingRenewalWageNote(player) };
         }
+        if (input.years === undefined)
+          return {
+            ok: false,
+            message: "계약 연수가 정해지지 않았습니다. 문의하거나 명시된 조건을 제안하십시오",
+          };
         return openRenewal(state, {
           playerId: player.id,
           weeklyWage: input.weeklyWage,
-          // 연수는 선수가 부르는 값이 있다 — 빠지면 기대 연수가 실리고 제안 줄에 선다
-          years: input.years ?? renewalYearsExpectation(state, player),
+          years: input.years,
           ...(input.squadStatus === undefined ? {} : { squadStatus: input.squadStatus }),
           ...(input.terms && input.terms.length > 0 ? { terms: input.terms } : {}),
         });
@@ -1806,6 +1780,10 @@ export function buildGmTools(
     said?: string;
     deferNegotiationIds?: ReadonlySet<string>;
     boardMoves?: readonly BoardMove[];
+    onCheckpoint?: (
+      state: GameState,
+      scope: "opening" | "scouting" | "negotiation",
+    ) => void | Promise<void>;
   },
 ): GameToolSpec[] {
   const descriptions = skillDescriptions();
@@ -1838,6 +1816,8 @@ export function buildGmTools(
  * (transfer.md §12-2). 감독의 말은 싣지 않는다 — 방 안의 말은 코어가 협상 GM에게 넘긴다.
  */
 const StartNegotiationArgsSchema = z.object({
+  method: z.enum(["meeting", "phone", "proposal"]).optional(),
+  mode: z.enum(["continue", "request"]).optional(),
   negotiationId: z
     .string()
     .min(1)
@@ -1847,11 +1827,12 @@ const StartNegotiationArgsSchema = z.object({
     .optional()
     .describe("협상이 없을 때 마주 앉을 선수 — 감독이 부른 이름 그대로"),
   kind: z
-    .enum(["buy", "renew", "loan"])
+    .enum(["buy", "renew", "loan", "sell", "loan_out", "release"])
     .optional()
     .describe(
-      "자리를 새로 열 때의 갈래 — buy=영입 · renew=재계약 · loan=임대 영입. 비우면 소속으로 고른다",
+      "자리를 새로 열 때의 갈래 — buy=영입 · renew=재계약 · loan=임대 영입 · sell=매각 · loan_out=임대 방출 · release=계약 해지. 비우면 소속으로 고른다",
     ),
+  counterpartTeamId: z.string().min(1).optional().describe("매각·임대 방출 문의를 보낼 상대 구단"),
   party: z
     .enum(["club", "agent"])
     .optional()

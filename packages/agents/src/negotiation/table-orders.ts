@@ -16,6 +16,7 @@ export const TABLE_OPS: readonly string[] = [
   "offer_terms",
   "send_offer",
   "open_renewal",
+  "open_release",
   "propose_personal",
 ];
 
@@ -23,10 +24,12 @@ const TABLE_LOG_TAIL = 6;
 
 export function buildTableOrdersContext(state: GameState, negotiation: Negotiation): string[] {
   const party = roomPartyOf(state) ?? defaultPartyOf(state, negotiation);
-  const log = (tableOf(negotiation, party)?.lines ?? []).slice(-TABLE_LOG_TAIL).map((line) => {
-    const who = line.by === "us" ? "@감독" : "[장부]";
-    return `${line.date} ${who}: ${line.text}`;
-  });
+  const log = (tableOf(state, negotiation, party)?.lines ?? [])
+    .slice(-TABLE_LOG_TAIL)
+    .map((line) => {
+      const who = line.by === "us" ? "@감독" : "[장부]";
+      return `${line.date} ${who}: ${line.text}`;
+    });
   return [
     ...tagged("negotiation", describeNegotiation(state, negotiation.id)),
     ...tagged("table_log", log.join("\n")),
@@ -42,4 +45,9 @@ export const BY_NEGOTIATION = new Set([
   "propose_personal",
 ]);
 
-export const BY_PLAYER = new Set(["send_offer", "open_renewal", "propose_personal"]);
+export const BY_PLAYER = new Set([
+  "send_offer",
+  "open_renewal",
+  "open_release",
+  "propose_personal",
+]);

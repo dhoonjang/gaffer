@@ -3,7 +3,6 @@ import {
   buildPaymentInstallments,
   addYearsTo,
   isReserveMatch,
-  effectiveFeeOf,
   FINANCE_CATEGORY_KO,
   MAX_PAYMENT_YEARS,
   type FinanceCategory,
@@ -1898,18 +1897,6 @@ describe("지급 일정 — 분할은 표를 타고 나간다", () => {
     expect(
       buildPaymentInstallments(40_000_001, 9, FIRST_DUE).reduce((s, p) => s + p.amount, 0),
     ).toBe(40_000_001);
-  });
-
-  it("유효 이적료는 일시금이면 그대로, 분할이 길수록 단조 감소한다", () => {
-    const fee = 50_000_000;
-    expect(effectiveFeeOf(fee, 1)).toBe(fee);
-    expect(effectiveFeeOf(fee)).toBe(fee);
-    const byYears = [1, 2, 3, 4].map((y) => effectiveFeeOf(fee, y));
-    for (let i = 1; i < byYears.length; i += 1) {
-      expect(byYears[i]).toBeLessThan(byYears[i - 1]!);
-    }
-    // 깎여도 총액 밑의 양수다 — 분할이 공짜 신용도, 몰수도 아니다
-    expect(byYears[3]).toBeGreaterThan(0);
   });
 
   /** 잔액·이적 예산 두 축을 한 번에 뜬다 */

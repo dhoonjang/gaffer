@@ -1,34 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   advanceTime,
-  deferredScouts,
-  diffDays,
-  knowledgeNote,
   knowledgeOf,
   loanPlayer,
   potentialMargin,
-  scoutingSummary,
-  observationOf,
-  observedOverall,
   observedRating,
   playersOf,
   POTENTIAL_FLOOR,
   settlingOf,
-  POTENTIAL_MARGIN,
-  POTENTIAL_SCOUT_FLOOR,
-  SCOUT_REPEAT_LIMIT,
   potentialBand,
-  scoutMission,
-  scoutPlayer,
   scoutedAttributes,
-  activeMissions,
-  waitingMissions,
-  freeScoutSlots,
-  missionReportCard,
-  missionReportLine,
-  observationMargin,
-  observedMarketValue,
-  teamsInCompetition,
   userPlayers,
   AXIS_OBSERVABILITY,
   OBSERVATION_MARGIN,
@@ -38,38 +19,22 @@ import {
   type GameState,
   playerById,
   buildOfficeViews,
-  formatMoney,
-  peekReportCards,
-  consumeReportCards,
-  pruneReportCards,
-  pushReportCards,
-  PENDING_REPORT_CARD_LIMIT,
-  ratingLabel,
-  ratingTier,
+  changeScoutingRequest,
+  applyScoutingPlan,
+  captureScoutingEvidence,
+  completeScoutingReport,
+  scoutingEvidence,
+  failScouting,
+  scoutingLookup,
   scoutReportCard,
-  scoutReportLine,
-  eventTexts,
+  addDays,
 } from "@story-fm/engine";
-import {
-  ageOf,
-  MISSION_CANDIDATES,
-  MISSION_DAYS,
-  SCOUT_CONCURRENT_LIMIT,
-  SCOUT_DAYS,
-  SCOUT_DEFER_DAYS,
-} from "@story-fm/domain";
+import { type ScoutingPlan, type ScoutingRequest, type ScoutingAssessment } from "@story-fm/domain";
 import { GASSED_CONDITION } from "@story-fm/sim";
-import { advanceAndPlay, createTestGame, playMockMatch, settleFully } from "../helpers";
-
-/**
- * 정보 비대칭(안개) — 우리 선수는 정확히, 타 팀은 흐릿하게.
- * 핵심 불변식: (1) 오차는 결정적이다 (2) 코어 수치는 오염되지 않는다.
- */
-
+import { createTestGame, advanceAndPlay, settleFully } from "../helpers";
 function anyOpponent(state: GameState) {
   return playersOf(state, "chelsea")[0]!;
 }
-
 describe("지식 수준 파생", () => {
   it("우리 선수는 own — 능력치는 정확하지만 잠재력은 구간으로만 안다", () => {
     const state = createTestGame(11);
@@ -187,33 +152,6 @@ describe("지식 수준 파생", () => {
     expect(knowledgeOf(state, someone)).toBe("rumoured");
   });
 
-  it("스카우팅을 마쳐도 판단 계열 축은 오차가 남는다 (히든 레이어 대체물)", () => {
-    const state = createTestGame(11);
-    const target = anyOpponent(state);
-    expect(scoutPlayer(state, target.id).ok).toBe(true);
-    expect(knowledgeOf(state, target.id)).toBe("rumoured"); // 아직 파견 중
-
-    advanceTime(state, { days: SCOUT_DAYS });
-    expect(knowledgeOf(state, target.id)).toBe("scouted");
-    // 관측형(실행 계열)도 ±1 — 리포트는 정답 공개가 아니라 오차를 좁히는 행위다
-    for (const attr of scoutedAttributes(state, target)) {
-      expect(attr.exact, `${attr.key}는 스카우팅으로도 확정되지 않는다`).toBeNull();
-      const observed = observedRating(
-        state,
-        target.id,
-        attr.key,
-        target.attributes[attr.key],
-        "scouted",
-      );
-      const limit = AXIS_OBSERVABILITY[attr.key] === "observable" ? 1 : 3;
-      expect(Math.abs(observed - target.attributes[attr.key])).toBeLessThanOrEqual(limit);
-    }
-    // 스카우트 한 번으로는 잠재력을 "대강" 잡을 뿐이다
-    const band = potentialBand(state, target);
-    expect(band).not.toBeNull();
-    expect(band!.margin).toBe(POTENTIAL_MARGIN.scouted);
-  });
-
   it("분석형 축이 관측형보다 넓게 틀린다 — 계층이 실제로 다르게 작동한다", () => {
     const state = createTestGame(11);
     const errorOf = (layer: "observable" | "analytical", knowledge: "seen" | "rumoured") => {
@@ -279,218 +217,6 @@ describe("관측 오차", () => {
     scoutedAttributes(state, other);
     observedRating(state, other.id, "pace", other.attributes.pace);
     expect(other.attributes).toEqual(before);
-  });
-});
-
-describe("스카우트 파견 규칙", () => {
-  it("우리 선수에게는 보낼 수 없다", () => {
-    const state = createTestGame(11);
-    const mine = userPlayers(state)[0]!;
-    const res = scoutPlayer(state, mine.id);
-    expect(res.ok).toBe(false);
-    expect(res.message).toContain("우리 선수");
-  });
-
-  it("같은 선수에게 두 번 보내지 않는다", () => {
-    const state = createTestGame(11);
-    const target = anyOpponent(state);
-    expect(scoutPlayer(state, target.id).ok).toBe(true);
-    const again = scoutPlayer(state, target.id);
-    expect(again.ok).toBe(false);
-    expect(again.message).toContain("이미");
-  });
-
-  /** 셋을 채우고 넷째를 부른다 — 한도에 막힌 그 넷째를 돌려준다 */
-  function fillAndOverflow(state: GameState) {
-    const pool = playersOf(state, "chelsea");
-    for (let i = 0; i < SCOUT_CONCURRENT_LIMIT; i++) {
-      expect(scoutPlayer(state, pool[i]!.id).ok).toBe(true);
-    }
-    const fourth = pool[SCOUT_CONCURRENT_LIMIT]!;
-    return { pool, fourth, result: scoutPlayer(state, fourth.id) };
-  }
-
-  it("동시 파견 한도를 넘기면 무엇이 나갔고 무엇이 안 나갔는지 말한다", () => {
-    const state = createTestGame(11);
-    const { pool, fourth, result } = fillAndOverflow(state);
-    expect(result.ok).toBe(false);
-    // 한도만 알려 주면 감독은 지목한 넷 중 누가 빠졌는지 알 수 없다
-    expect(result.message).toContain(fourth.name);
-    expect(result.message).toContain(pool[0]!.name);
-    expect(result.message).toContain(`한도 ${SCOUT_CONCURRENT_LIMIT}`);
-  });
-
-  it("못 나간 요청은 대기로 남아 다음 턴 스카우팅 줄에 실린다", () => {
-    const state = createTestGame(11);
-    const { fourth } = fillAndOverflow(state);
-    expect(deferredScouts(state).map((d) => d.gamePlayerId)).toEqual([fourth.id]);
-    // 같은 이름을 다시 불러도 대기는 하나다
-    scoutPlayer(state, fourth.id);
-    expect(deferredScouts(state)).toHaveLength(1);
-    const summary = scoutingSummary(state).join("\n");
-    expect(summary).toContain(fourth.name);
-    expect(summary).toContain("빈 자리 없음");
-  });
-
-  it("자리가 나는 날에도 대기는 살아 있고, 다시 보내면 지워진다", () => {
-    const state = createTestGame(11);
-    const { fourth } = fillAndOverflow(state);
-    // 보고가 들어와 자리가 나는 그날 — 대기가 사라지면 감독은 넷째를 잊는다
-    advanceTime(state, { days: SCOUT_DAYS });
-    expect(deferredScouts(state)).toHaveLength(1);
-    expect(scoutingSummary(state).join("\n")).toContain(`지금 자리 ${SCOUT_CONCURRENT_LIMIT}`);
-    expect(scoutPlayer(state, fourth.id).ok).toBe(true);
-    // 나간 파견이 "아직 안 나갔다"로 남으면 한 화면이 두 말을 한다
-    expect(deferredScouts(state)).toHaveLength(0);
-    expect(state.deferredScouts).toHaveLength(0);
-  });
-
-  it("대기 기간을 넘긴 요청은 지운다 — 그 안에 자리는 반드시 난다", () => {
-    const state = createTestGame(11);
-    const requestedOn = state.date;
-    fillAndOverflow(state);
-    advanceTime(state, { days: SCOUT_DEFER_DAYS + 1 });
-    // 시계가 실제로 그만큼 넘어갔는지 — 중간에 멈췄으면 아래 단언이 뜻을 잃는다
-    expect(diffDays(requestedOn, state.date)).toBeGreaterThan(SCOUT_DEFER_DAYS);
-    expect(deferredScouts(state)).toHaveLength(0);
-    // 읽는 쪽이 걸러 준 게 아니라 tick이 지웠다
-    expect(state.deferredScouts).toHaveLength(0);
-    expect(scoutingSummary(state).join("\n")).not.toContain("미파견");
-  });
-
-  it("완료되면 다이제스트로 보고된다", () => {
-    const state = createTestGame(11);
-    const target = anyOpponent(state);
-    scoutPlayer(state, target.id);
-    const outcome = advanceTime(state, { days: SCOUT_DAYS });
-    expect(eventTexts(outcome.events).join("\n")).toContain("스카우트 보고서 도착");
-  });
-
-  it("없는 선수는 반려한다", () => {
-    const state = createTestGame(11);
-    expect(scoutPlayer(state, "ghost-player").ok).toBe(false);
-  });
-});
-
-describe("스카우트 임무 — 조건으로 나가는 파견", () => {
-  /** 「EPL 센터백 30세 이하」 — 한 파일이 쓰는 조건 한 벌 */
-  const BRIEF = { competition: "epl", position: "CB", maxAge: 30 } as const;
-
-  function dispatchAndReport(state: GameState) {
-    expect(scoutMission(state, { ...BRIEF }).ok).toBe(true);
-    advanceTime(state, { days: MISSION_DAYS });
-    const mission = (state.scoutMissions ?? [])[0]!;
-    return mission;
-  }
-
-  it("같은 상태·같은 조건이면 같은 다섯이 온다 — 추첨이 아니다", () => {
-    const a = dispatchAndReport(createTestGame(11));
-    const b = dispatchAndReport(createTestGame(11));
-    expect(a.candidates?.length).toBeGreaterThan(0);
-    expect(a.candidates).toEqual(b.candidates);
-  });
-
-  it("후보는 조건을 지난 남의 선수뿐이고 관측 종합 순으로 선다", () => {
-    const state = createTestGame(11);
-    const mission = dispatchAndReport(state);
-    const ids = mission.candidates ?? [];
-    expect(ids.length).toBeLessThanOrEqual(MISSION_CANDIDATES);
-    const ours = new Set(userPlayers(state).map((p) => p.id));
-    const eplTeams = new Set(teamsInCompetition(state, "epl"));
-    let previous = Number.POSITIVE_INFINITY;
-    for (const id of ids) {
-      const p = playerById(state, id)!;
-      expect(ours.has(id)).toBe(false);
-      expect(eplTeams.has(p.teamId)).toBe(true);
-      expect(p.positions.some((x) => x.position === "CB")).toBe(true);
-      expect(ageOf(p.birthdate, state.date)).toBeLessThanOrEqual(30);
-      // **줄을 세운 값이 카드가 찍는 값이다** (player.md §10)
-      const shown = observedOverall(p.attributes.overall, observationOf(state, p.id));
-      expect(shown).toBeLessThanOrEqual(previous);
-      previous = shown;
-    }
-  });
-
-  it("예산 조건은 참값이 아니라 흐린 시장가로 거른다", () => {
-    const state = createTestGame(11);
-    const cap = 20_000_000;
-    expect(scoutMission(state, { competition: "epl", maxValue: cap }).ok).toBe(true);
-    advanceTime(state, { days: MISSION_DAYS });
-    const ids = (state.scoutMissions ?? [])[0]!.candidates ?? [];
-    expect(ids.length).toBeGreaterThan(0);
-    for (const id of ids) {
-      expect(observedMarketValue(state, playerById(state, id)!)).toBeLessThanOrEqual(cap);
-    }
-  });
-
-  it("후보 다섯은 seen으로 오르고 안개 폭이 그 수준이 된다", () => {
-    const state = createTestGame(11);
-    const before = playersOf(state, "chelsea")[0]!;
-    expect(knowledgeOf(state, before.id)).toBe("rumoured");
-    const mission = dispatchAndReport(state);
-    for (const id of mission.candidates ?? []) {
-      expect(knowledgeOf(state, id)).toBe("seen");
-      expect(observationMargin(state, id, "overall")).toBe(OBSERVATION_MARGIN.analytical.seen);
-      expect(observationMargin(state, id, "pace")).toBe(OBSERVATION_MARGIN.observable.seen);
-      // 잠재력은 짐작이 서되 지목만큼 좁지 않다
-      expect(potentialMargin(state, id)).toBe(POTENTIAL_MARGIN.seen);
-    }
-  });
-
-  it("카드와 모델에 가는 줄이 같은 값을 낸다 — 줄이 카드에서 파생한다", () => {
-    const state = createTestGame(11);
-    const mission = dispatchAndReport(state);
-    const card = missionReportCard(state, mission.id)!;
-    const line = missionReportLine(state, mission.id)!;
-    expect(card.candidates.length).toBe((mission.candidates ?? []).length);
-    for (const c of card.candidates) {
-      expect(line).toContain(c.name);
-      expect(line).toContain(formatMoney(c.marketValue));
-    }
-  });
-
-  it("자리는 지목과 나눠 쓴다 — 임무 하나에 지목 둘이면 넷째는 못 나간다", () => {
-    const state = createTestGame(11);
-    const pool = playersOf(state, "chelsea");
-    expect(scoutMission(state, { ...BRIEF }).ok).toBe(true);
-    for (let i = 0; i < SCOUT_CONCURRENT_LIMIT - 1; i++) {
-      expect(scoutPlayer(state, pool[i]!.id).ok).toBe(true);
-    }
-    expect(freeScoutSlots(state)).toBe(0);
-    const overflow = scoutPlayer(state, pool[SCOUT_CONCURRENT_LIMIT]!.id);
-    expect(overflow.ok).toBe(false);
-    // 반려 문구가 임무를 이름 대신 조건으로 말한다
-    expect(overflow.message).toContain("임무");
-  });
-
-  it("한도가 차면 임무도 대기로 남아 다음 턴 요약에 실린다", () => {
-    const state = createTestGame(11);
-    const pool = playersOf(state, "chelsea");
-    for (let i = 0; i < SCOUT_CONCURRENT_LIMIT; i++) {
-      expect(scoutPlayer(state, pool[i]!.id).ok).toBe(true);
-    }
-    const blocked = scoutMission(state, { ...BRIEF });
-    expect(blocked.ok).toBe(false);
-    expect(waitingMissions(state)).toHaveLength(1);
-    expect(activeMissions(state)).toHaveLength(0);
-    expect(scoutingSummary(state).join("\n")).toContain("임무:");
-    // 같은 조건을 다시 불러도 대기는 하나다
-    expect(scoutMission(state, { ...BRIEF }).ok).toBe(false);
-    expect(waitingMissions(state)).toHaveLength(1);
-    const missionId = waitingMissions(state)[0]!.id;
-    advanceTime(state, { days: SCOUT_DAYS });
-    expect(scoutMission(state, { ...BRIEF }).ok).toBe(true);
-    expect(waitingMissions(state)).toHaveLength(0);
-    expect(activeMissions(state)).toHaveLength(1);
-    expect(activeMissions(state)[0]!.id).toBe(missionId);
-  });
-
-  it("조건이 뒤집혔거나 없는 자리면 두 주를 기다리기 전에 반려한다", () => {
-    const state = createTestGame(11);
-    expect(scoutMission(state, { minAge: 25, maxAge: 20 }).ok).toBe(false);
-    expect(scoutMission(state, { position: "왼쪽풀백" }).ok).toBe(false);
-    expect(scoutMission(state, { competition: "없는리그" }).ok).toBe(false);
-    expect(state.scoutMissions ?? []).toHaveLength(0);
   });
 });
 
@@ -565,132 +291,6 @@ describe("영입 직후 — 안개는 날짜가 아니라 정착으로 걷힌다
   });
 });
 
-describe("잠재력 — 누구도 단정하지 못한다 (구간으로만 안다)", () => {
-  const opponentOf = (state: GameState) => playersOf(state, "chelsea")[0]!;
-
-  /**
-   * 보고서가 닫힐 때까지 하루씩 — advanceTime은 부상·불만에 걸려 일찍 멈춘다.
-   * 프리시즌에도 경기가 있으므로(친선) 경기일에 걸리면 치르고 간다 — 안 그러면
-   * 시계가 경기일에 멎어 보고서가 영영 안 닫힌다.
-   */
-  const awaitReport = (state: GameState, playerId: string) => {
-    for (let i = 0; i < SCOUT_DAYS * 3; i++) {
-      const pending = state.scoutReports.some(
-        (r) => r.gamePlayerId === playerId && r.completedOn === null,
-      );
-      if (!pending) return;
-      if (state.phase === "matchday") playMockMatch(state);
-      else advanceTime(state, { days: 1 });
-    }
-    throw new Error("스카우트 보고서가 닫히지 않았다");
-  };
-
-  it("참값은 언제나 추정 구간 안에 있다 — 안개는 거짓말이 아니다", () => {
-    const state = createTestGame(11);
-    const ours = userPlayers(state).slice(0, 12);
-    expect(ours.length, "우리 선수를 못 찾았다").toBe(12);
-    for (const p of ours) {
-      const band = potentialBand(state, p);
-      expect(band, `${p.name} 구간이 없다`).not.toBeNull();
-      expect(band!.low, `${p.name} 하한`).toBeLessThanOrEqual(p.attributes.potential);
-      expect(band!.high, `${p.name} 상한`).toBeGreaterThanOrEqual(p.attributes.potential);
-      // 하한이 현재 실력 아래로 내려가지 않는다 — 이미 가진 것을 못 가질 수는 없다
-      expect(band!.low).toBeLessThanOrEqual(band!.high);
-    }
-    // 스카우팅 전의 타 팀 선수는 구간 자체가 없다 — 짐작할 근거가 없으면 "미지"다
-    for (const p of playersOf(state, "chelsea").slice(0, 12)) {
-      expect(potentialBand(state, p), `${p.name}`).toBeNull();
-    }
-  });
-
-  it("하한은 감독이 아는 현재 실력 아래로 내려가지 않는다 — 이미 가진 것을 못 가질 수는 없다", () => {
-    const state = createTestGame(11);
-    const scouted = opponentOf(state);
-    scoutPlayer(state, scouted.id);
-    awaitReport(state, scouted.id);
-    expect(knowledgeOf(state, scouted.id)).toBe("scouted");
-
-    for (const p of [...userPlayers(state), scouted]) {
-      const band = potentialBand(state, p)!;
-      // 기준은 **관측** 종합이다 — 참 종합을 쓰면 하한이 그 숫자를 그대로 부른다
-      const known = observedOverall(p.attributes.overall, observationOf(state, p.id));
-      // 안개가 종합을 참 잠재력 위로 부풀렸으면 참값이 이긴다 (구간 안 불변식이 먼저)
-      expect(band.low, `${p.name} 하한`).toBeGreaterThanOrEqual(
-        Math.min(known, p.attributes.potential),
-      );
-      expect(band.low, `${p.name} 하한은 참값 아래`).toBeLessThanOrEqual(p.attributes.potential);
-      expect(band.high, `${p.name} 상한은 참값 위`).toBeGreaterThanOrEqual(p.attributes.potential);
-    }
-  });
-
-  it("같은 선수를 몇 번을 물어도 같은 구간이 나온다 — 결정적", () => {
-    const state = createTestGame(11);
-    const p = userPlayers(state)[0]!;
-    expect(potentialBand(state, p)).toEqual(potentialBand(state, p));
-  });
-
-  it("만난 적 없는 선수는 짐작조차 못 한다", () => {
-    const state = createTestGame(11);
-    const unknown = opponentOf(state);
-    expect(potentialBand(state, unknown)).toBeNull();
-    // 안내문도 같은 말을 한다 — 구간이 없으면 구간을 약속하지 않는다
-    expect(knowledgeNote(state, unknown.id)).toContain("짐작할 근거가 없다");
-  });
-
-  it("우리 선수는 **데리고 뛸수록** 좁아지고, 끝까지 ±2는 남는다", () => {
-    const state = createTestGame(11);
-    const p = userPlayers(state)[0]!;
-    const before = potentialBand(state, p)!.margin;
-    expect(before).toBe(POTENTIAL_MARGIN.own);
-
-    state.seasonStats.push({
-      gamePlayerId: p.id,
-      season: state.season,
-      teamId: state.userTeamId,
-      competitionId: "epl",
-      apps: 40,
-      goals: 0,
-    });
-    const after = potentialBand(state, p)!.margin;
-    expect(after).toBeLessThan(before);
-    expect(after).toBe(POTENTIAL_FLOOR);
-  });
-
-  it("타 팀은 스카우트를 거듭 보내야 좁아진다 — 한 번으로는 대강일 뿐", () => {
-    const state = createTestGame(11);
-    const target = opponentOf(state);
-    const margins: number[] = [];
-    for (let i = 0; i < SCOUT_REPEAT_LIMIT; i++) {
-      expect(scoutPlayer(state, target.id).ok, `${i + 1}번째 파견`).toBe(true);
-      awaitReport(state, target.id);
-      margins.push(potentialBand(state, target)!.margin);
-    }
-    // 안내문이 "알 수 없다"고 하면 모델이 손에 든 구간을 버린다
-    expect(knowledgeNote(state, target.id)).toContain("구간으로만");
-    expect(margins[0]).toBe(POTENTIAL_MARGIN.scouted);
-    expect(margins[margins.length - 1]).toBe(POTENTIAL_SCOUT_FLOOR);
-    for (let i = 1; i < margins.length; i++) expect(margins[i]!).toBeLessThan(margins[i - 1]!);
-    // 훈련장을 못 보는 한 우리 선수만큼은 못 좁힌다
-    expect(POTENTIAL_SCOUT_FLOOR).toBeGreaterThan(POTENTIAL_FLOOR);
-  });
-
-  it("한도를 넘겨 보내면 반려한다 — 더 봐도 새로 알 게 없다", () => {
-    const state = createTestGame(11);
-    const target = opponentOf(state);
-    for (let i = 0; i < SCOUT_REPEAT_LIMIT; i++) {
-      expect(scoutPlayer(state, target.id).ok).toBe(true);
-      awaitReport(state, target.id);
-    }
-    const over = scoutPlayer(state, target.id);
-    expect(over.ok).toBe(false);
-    expect(over.message).toContain("새로 알 게 없");
-  });
-});
-
-/**
- * 체력 안개 — 능력치와 **다른 자**를 쓴다. 리포트가 아니라 눈으로 읽는 것이라
- * 스카우팅 5단계가 아니라 "출발점을 아는가 · 얼마나 뛰었나 · 감독의 분석"이 가른다.
- */
 describe("체력 안개", () => {
   it("우리 선수도 값 하나로 서지 않는다 — 다만 폭이 좁다", () => {
     const state = createTestGame(11);
@@ -768,178 +368,192 @@ describe("체력 안개", () => {
   });
 });
 
-// ─── 스카우팅 보고서 카드 (scout-report-card.test.ts에서 옮겨 왔다) ───
-/**
- * 스카우팅 보고서 카드 — 며칠을 기다려 얻은 것이라 **한 장으로 펴서** 보여준다.
- * 안개는 값이 아니라 `exact`로 드러난다: 화면이 흐리게 그릴 근거다.
- */
-
-const isKeeper = (p: { positions: { position: string }[] }) =>
-  p.positions.some((x) => x.position === "GK");
-
-const target = (state: GameState) =>
-  playersOf(state, "chelsea").find((p) => p.teamId !== state.userTeamId && !isKeeper(p))!;
-
-const keeper = (state: GameState) => playersOf(state, "chelsea").find(isKeeper)!;
-
-describe("보고서 한 장", () => {
-  /** 필드 플레이어의 골키핑은 어디에도 쓰이지 않는다 — 보고서에 두면 줄만 잡아먹는다 */
-  it("골키핑은 골키퍼의 보고서에만 실린다", () => {
+describe("scouting request, due evidence and report ledger", () => {
+  const plan: ScoutingPlan = {
+    status: "ready",
+    days: 2,
+    depth: "match_review",
+    focus: ["ability"],
+    expectations: [],
+    evidenceRefs: [],
+    limitations: [],
+  };
+  function request(state: GameState): ScoutingRequest {
+    const result = changeScoutingRequest(
+      state,
+      { action: "request", question: "주전 골키퍼로 적합한가", playerIds: [anyOpponent(state).id] },
+      "이 선수를 조사해줘",
+    );
+    if (!result.ok) throw new Error(result.message);
+    return result.request;
+  }
+  function assessments(r: ScoutingRequest): ScoutingAssessment[] {
+    return r.evidence.map((e) => ({
+      playerId: e.playerId,
+      fit: "unknown",
+      overall: null,
+      potential: null,
+      attributes: {},
+      evidenceRefs: [],
+      strengths: [],
+      concerns: ["insufficient_evidence"],
+    }));
+  }
+  it("does not complete at dispatch, freezes on the selected day, and commits once", () => {
     const state = createTestGame(11);
-    const hasGk = (id: string) =>
-      scoutReportCard(state, id)!.attributes.some((a) => a.key === "goalkeeping");
-
-    expect(hasGk(target(state).id)).toBe(false);
-    expect(hasGk(keeper(state).id)).toBe(true);
+    const r = request(state);
+    expect(applyScoutingPlan(state, r.id, r.revision, plan)).toBe(true);
+    captureScoutingEvidence(state);
+    expect(r.status).toBe("scheduled");
+    state.date = addDays(state.date, 2);
+    captureScoutingEvidence(state);
+    expect(r.status).toBe("ready");
+    expect(state.scoutReports).toHaveLength(0);
+    const report = completeScoutingReport(state, r.id, r.revision, assessments(r))!;
+    expect(completeScoutingReport(state, r.id, r.revision, [])).toBeNull();
+    expect(state.pendingReportCards).toEqual([report.id]);
+    expect(state.scoutReports).toHaveLength(1);
   });
-
-  /**
-   * 종합·잠재력은 **등급으로 말한다** — 스카우트가 가져온 숫자에는 늘 ±가 붙는데
-   * 또렷한 숫자 하나로 그리면 감독이 그걸 사실로 읽는다.
-   */
-  it("종합과 잠재력은 등급이다", () => {
+  it("rejects stale results after revision or cancellation", () => {
     const state = createTestGame(11);
-    const card = scoutReportCard(state, target(state).id)!;
-
-    expect(card.overall.margin).toBeGreaterThan(0);
-    // 등급은 관측값에서 나온다 — 화면이 따로 계산하면 같은 값이 두 말을 한다
-    expect(card.overall.label).toBe(ratingLabel(card.overall.value));
-    expect(card.overall.tier).toBe(ratingTier(card.overall.value));
-    if (card.potential) {
-      expect(card.potential.low.value).toBeLessThanOrEqual(card.potential.high.value);
+    const r = request(state);
+    const oldRevision = r.revision;
+    changeScoutingRequest(
+      state,
+      { action: "revise", requestId: r.id, question: "재계약 정보만" },
+      "조사 내용을 바꿔줘",
+    );
+    expect(applyScoutingPlan(state, r.id, oldRevision, plan)).toBe(false);
+    applyScoutingPlan(state, r.id, r.revision, { ...plan, days: 0 });
+    captureScoutingEvidence(state);
+    const current = r.revision;
+    const result = assessments(r);
+    changeScoutingRequest(state, { action: "cancel", requestId: r.id }, "취소해줘");
+    expect(completeScoutingReport(state, r.id, current, result)).toBeNull();
+    expect(state.scoutReports).toHaveLength(0);
+  });
+  it("keeps failed evidence across dates and permits retry without recreating it", () => {
+    const state = createTestGame(11);
+    const r = request(state);
+    applyScoutingPlan(state, r.id, r.revision, { ...plan, days: 0 });
+    captureScoutingEvidence(state);
+    const frozen = structuredClone(r.evidence);
+    const on = r.evidenceOn;
+    failScouting(state, r.id, r.revision, "network");
+    state.date = addDays(state.date, 10);
+    anyOpponent(state).name = "changed";
+    captureScoutingEvidence(state);
+    expect(r.evidence).toEqual(frozen);
+    expect(r.evidenceOn).toBe(on);
+    const report = completeScoutingReport(state, r.id, r.revision, assessments(r))!;
+    expect(report.evidenceOn).toBe(on);
+    expect(report.completedOn).toBe(state.date);
+    expect(report.candidates[0]!.evidence.name).not.toBe("changed");
+  });
+  it("never consults hidden attributes to form the evidence pool", () => {
+    const state = createTestGame(11);
+    const r = request(state);
+    const before = scoutingEvidence(state, r);
+    const p = anyOpponent(state);
+    p.attributes.overall = 1;
+    p.attributes.potential = 99;
+    p.attributes.pace = 1;
+    expect(scoutingEvidence(state, r)).toEqual(before);
+    expect(JSON.stringify(before)).not.toContain('"attributes"');
+  });
+  it("rejects fabricated evidence and ability guesses without observed performance", () => {
+    const state = createTestGame(11);
+    const r = request(state);
+    applyScoutingPlan(state, r.id, r.revision, { ...plan, days: 0 });
+    captureScoutingEvidence(state);
+    const result = assessments(r);
+    result[0]!.evidenceRefs = ["invented"];
+    expect(() => completeScoutingReport(state, r.id, r.revision, result)).toThrow("evidence");
+    result[0]!.evidenceRefs = [r.evidence[0]!.sources[0]!.id];
+    result[0]!.overall = { low: 80, high: 90 };
+    expect(() => completeScoutingReport(state, r.id, r.revision, result)).toThrow("observation");
+    expect(state.scoutReports).toHaveLength(0);
+    expect(r.status).toBe("ready");
+  });
+  it("archives a report after a player leaves the world and read calls do not mutate it", () => {
+    const state = createTestGame(11);
+    const r = request(state);
+    applyScoutingPlan(state, r.id, r.revision, { ...plan, days: 0 });
+    captureScoutingEvidence(state);
+    const report = completeScoutingReport(state, r.id, r.revision, assessments(r))!;
+    const snapshot = structuredClone(report);
+    state.players = state.players.filter((p) => p.id !== report.candidates[0]!.evidence.playerId);
+    state.date = addDays(state.date, 20);
+    expect(scoutReportCard(state, report.id)).toEqual(snapshot);
+    const read = scoutingLookup(state, { reportId: report.id });
+    read.reports[0]!.question = "mutated response";
+    expect(state.scoutReports[0]).toEqual(snapshot);
+  });
+  it("does not impose a dispatch count or delete queued reports", () => {
+    const state = createTestGame(11);
+    for (let i = 0; i < 15; i++) {
+      const changed = changeScoutingRequest(
+        state,
+        { action: "request", question: `질문 ${i}`, playerIds: [anyOpponent(state).id] },
+        `의뢰 ${i}`,
+      );
+      if (!changed.ok) throw new Error(changed.message);
+      const r = changed.request;
+      applyScoutingPlan(state, r.id, r.revision, { ...plan, days: 0 });
+      captureScoutingEvidence(state);
+      completeScoutingReport(state, r.id, r.revision, assessments(r));
     }
+    expect(state.scoutingRequests).toHaveLength(15);
+    expect(state.pendingReportCards).toHaveLength(15);
   });
-
-  it("스카우팅이 안개를 좁힌다 — 다만 0으로 만들지는 않는다", () => {
+  it("stops the pure date runner at the due day before later facts can leak", () => {
     const state = createTestGame(11);
-    const p = target(state);
-    const spread = (card: NonNullable<ReturnType<typeof scoutReportCard>>) =>
-      card.attributes.reduce((sum, a) => sum + a.margin, 0);
-
-    const before = spread(scoutReportCard(state, p.id)!);
-    expect(scoutPlayer(state, p.id).ok).toBe(true);
-    for (let i = 0; i < SCOUT_DAYS * 3 && !state.scoutReports[0]?.completedOn; i++) {
-      advanceTime(state, { days: 1 });
-    }
-    const after = spread(scoutReportCard(state, p.id)!);
-
-    /**
-     * 리포트는 **정답 공개가 아니라 오차를 좁히는 행위**다 — 관측형 ±1 ·
-     * 분석형 ±3이 끝까지 남는다 (player.md §9).
-     */
-    expect(after).toBeLessThan(before);
-    expect(after).toBeGreaterThan(0);
+    const r = request(state);
+    applyScoutingPlan(state, r.id, r.revision, plan);
+    advanceTime(state, { days: 10 });
+    expect(state.date).toBe(r.dueOn);
+    expect(r.evidenceOn).toBe(r.dueOn);
+    expect(r.status).toBe("ready");
   });
-
-  /**
-   * 카드는 모델이 장면을 **쓴 뒤에** 붙어 화면에만 간다. 모델이 읽는 것은 도착 줄뿐이라
-   * 두 값이 갈리면 카드는 £34.9M인데 대사는 4,000만이 된다 (agents.md §6).
-   */
-  it("도착 다이제스트가 카드와 같은 값을 낸다", () => {
+  it("processes an offseason due date before a season rollover", () => {
     const state = createTestGame(11);
-    const p = target(state);
-    expect(scoutPlayer(state, p.id).ok).toBe(true);
-
-    let arrival = "";
-    for (let i = 0; i < SCOUT_DAYS * 3 && !arrival; i++) {
-      arrival =
-        eventTexts(advanceTime(state, { days: 1 }).events).find((d) =>
-          d.startsWith("스카우트 보고서 도착"),
-        ) ?? "";
-    }
-    const card = scoutReportCard(state, p.id)!;
-    expect(arrival).toBe(`스카우트 보고서 도착 — ${scoutReportLine(state, p.id)}`);
-    expect(arrival).toContain(formatMoney(card.marketValue));
-    expect(arrival).toContain(formatMoney(card.wageExpectation));
-    expect(arrival).toContain(`종합 ${card.overall.value}`);
+    state.date = "2027-06-27";
+    state.matches = [];
+    const r = request(state);
+    applyScoutingPlan(state, r.id, r.revision, plan);
+    advanceTime(state, { days: 10 });
+    expect(state.date).toBe("2027-06-29");
+    expect(r.evidenceOn).toBe("2027-06-29");
   });
-
-  /**
-   * 카드는 **모델이 그 값을 읽은 턴에만** 선다 — 시계가 장면 뒤에 구른 턴(모델 헤더)의
-   * 도착은 줄에 남아 다음 턴에 실린다. 도착과 동시에 카드를 세우면 그 턴의 모델은
-   * 금액을 못 읽은 채 카드 옆에서 지어낸다 (agents.md §6).
-   */
-  it("도착한 보고서는 카드로 꺼내 갈 때까지 줄에 남는다", () => {
+  it("holds a plan beyond the requested deadline at the core boundary", () => {
     const state = createTestGame(11);
-    const p = target(state);
-    expect(scoutPlayer(state, p.id).ok).toBe(true);
-    for (let i = 0; i < SCOUT_DAYS * 3 && !state.scoutReports[0]?.completedOn; i++) {
-      advanceTime(state, { days: 1 });
-    }
-
-    expect(state.pendingReportCards).toEqual([p.id]);
-    // 며칠이 더 흘러도 사라지지 않는다 — 아직 아무도 읽지 않았다
-    advanceTime(state, { days: 3 });
-    expect(state.pendingReportCards).toEqual([p.id]);
-
-    expect(peekReportCards(state, 3)).toEqual([p.id]);
-    // 보는 것만으로는 안 빠진다 — 카드가 선 것만 소비한다 (player.md §9.4-1)
-    expect(state.pendingReportCards).toEqual([p.id]);
-    consumeReportCards(state, [p.id]);
-    expect(peekReportCards(state, 3)).toEqual([]);
-  });
-
-  /** 상한을 넘긴 만큼은 **버리지 않고 남긴다** — 며칠을 기다려 산 카드다 */
-  it("한 턴 상한을 넘으면 남은 것은 다음 턴 몫으로 남는다", () => {
-    const state = createTestGame(11);
-    pushReportCards(state, ["a", "b", "c", "d"]);
-    const first = peekReportCards(state, 3);
-    expect(first).toEqual(["a", "b", "c"]);
-    consumeReportCards(state, first);
-    expect(peekReportCards(state, 3)).toEqual(["d"]);
-  });
-
-  /**
-   * 조립에 실패한 id는 **줄에 남는다** — 꺼내면서 지우면 그 보고서는 화면에 한 번도
-   * 안 서고, 사무실에 스카우팅 화면이 없어 되찾을 자리도 없다 (player.md §9.4-1).
-   */
-  it("카드가 선 것만 줄에서 빠진다 — 실패한 id는 남는다", () => {
-    const state = createTestGame(11);
-    pushReportCards(state, ["ghost", "b", "c"]);
-    // "ghost"는 조립이 안 된다(선수가 없다) — 나머지 둘만 소비한다
-    consumeReportCards(state, ["b", "c"]);
-    expect(state.pendingReportCards).toEqual(["ghost"]);
-    // 같은 턴에 줄을 다시 봐도 실패한 것을 또 집지 않는다
-    expect(peekReportCards(state, 3, new Set(["ghost"]))).toEqual([]);
-  });
-
-  /**
-   * 자를 거면 **새 것부터**다. 앞에서 자르면 가장 오래 기다린 보고서가 카드 한 번
-   * 없이 사라진다 — 그것이 카드에 가장 가까운 한 장이다 (player.md §9.4-1).
-   */
-  it("줄이 넘치면 오래 기다린 것이 아니라 새로 온 것이 잘린다", () => {
-    const state = createTestGame(11);
-    const ids = Array.from({ length: PENDING_REPORT_CARD_LIMIT }, (_, i) => `old-${i}`);
-    expect(pushReportCards(state, ids)).toEqual([]);
-    expect(pushReportCards(state, ["fresh"])).toEqual(["fresh"]);
-    expect(state.pendingReportCards).toEqual(ids);
-  });
-
-  /**
-   * 되돌려도 영영 안 서는 것은 tick이 닫는다 — **줄에서 조용히 지우는 자는 여기
-   * 하나뿐이고**, 닫은 id를 돌려주므로 부르는 쪽이 사실로 남긴다.
-   */
-  it("영영 못 세울 id만 닫힌다 — 완료된 임무와 살아 있는 선수는 남는다", () => {
-    const state = createTestGame(11);
-    const p = target(state);
-    state.scoutMissions = [
+    const changed = changeScoutingRequest(
+      state,
       {
-        id: "mission-live",
-        requestedOn: state.date,
-        dueOn: state.date,
-        completedOn: state.date,
-        candidates: [p.id],
+        action: "request",
+        question: "오늘 확인",
+        playerIds: [anyOpponent(state).id],
+        deadline: state.date,
       },
-    ];
-    pushReportCards(state, [p.id, "mission-live", "ghost"]);
-    expect(pruneReportCards(state)).toEqual(["ghost"]);
-    expect(state.pendingReportCards).toEqual([p.id, "mission-live"]);
-    // 닫을 것이 없으면 아무 일도 하지 않는다
-    expect(pruneReportCards(state)).toEqual([]);
+      "오늘 확인",
+    );
+    if (!changed.ok) throw new Error(changed.message);
+    const r = changed.request;
+    expect(applyScoutingPlan(state, r.id, r.revision, plan)).toBe(true);
+    expect(r.status).toBe("held");
+    expect(r.dueOn).toBeNull();
+    expect(r.plan?.status).toBe("needs_revision");
   });
-
-  it("없는 선수는 null — 화면이 빈 카드를 그리지 않는다", () => {
+  it("reuses an identical in-turn request and rejects invalid scope without mutation", () => {
     const state = createTestGame(11);
-    expect(scoutReportCard(state, "ghost")).toBeNull();
+    const r = request(state);
+    expect(request(state).id).toBe(r.id);
+    const result = changeScoutingRequest(
+      state,
+      { action: "revise", requestId: r.id, minAge: 30, maxAge: 20 },
+      "바꿔줘",
+    );
+    expect(result.ok).toBe(false);
+    expect(r.revision).toBe(1);
   });
 });

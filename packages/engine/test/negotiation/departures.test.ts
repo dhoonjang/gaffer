@@ -1,12 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LOAN_WAGE_SHARE,
-  departureSquadMorale,
   MIN_SQUAD_AFTER_SALE,
-  SEVERANCE_RATE,
-  SEVERANCE_WEEKS_CAP,
   activeContract,
   addDays,
+  departureSquadMorale,
   groupOf,
   loanPlayer,
   loanedOut,
@@ -24,6 +21,7 @@ import {
   weeklyWagesOf,
   type GameState,
 } from "@story-fm/engine";
+import { describe, expect, it } from "vitest";
 import { createTestGame } from "../helpers";
 
 /**
@@ -56,12 +54,12 @@ describe("일방 해지 — 전액을 물고 자리를 비운다", () => {
    * **일방 해지의 값이 협상의 바깥값이다** (transfer.md §2·§11). 합의 앵커와 같은
    * 값을 물면 흥정할 이유가 사라지고, 선수가 무엇을 받아들일 까닭도 없어진다.
    */
-  it("협상 없이 끊으면 잔여 급여 전액을 문다 — 합의 앵커의 두 배", () => {
+  it("협상 없이 끊으면 잔여 급여 전액을 문다", () => {
     const state = createTestGame(11);
     const target = spare(state);
     const anchor = severanceOf(state, target.id);
     const full = unilateralSeveranceOf(state, target.id);
-    expect(full).toBe(Math.round(anchor / SEVERANCE_RATE));
+    expect(full).toBe(anchor);
 
     const balanceBefore = state.finances.find((f) => f.teamId === state.userTeamId)!.balance;
     expect(releasePlayer(state, { playerId: target.id }).ok).toBe(true);
@@ -365,17 +363,15 @@ describe("해지 값의 양 끝", () => {
     return severanceOf(state, target.id);
   };
 
-  it("잔여 주 수 × 주급 × 절반이다", () => {
-    expect(severanceWith(addDays(state.date, 70))).toBe(
-      Math.round(contract.weeklyWage * 10 * SEVERANCE_RATE),
-    );
+  it("잔여 주 수 × 주급이다", () => {
+    expect(severanceWith(addDays(state.date, 70))).toBe(Math.round(contract.weeklyWage * 10));
   });
 
-  it("아무리 긴 계약도 104주까지만 센다", () => {
-    const capped = Math.round(contract.weeklyWage * SEVERANCE_WEEKS_CAP * SEVERANCE_RATE);
-    expect(severanceWith(addDays(state.date, 7 * SEVERANCE_WEEKS_CAP))).toBe(capped);
+  it("긴 계약도 실제 잔여 급여를 모두 센다", () => {
+    const capped = Math.round(contract.weeklyWage * 104);
+    expect(severanceWith(addDays(state.date, 7 * 104))).toBe(capped);
     // 그 너머는 한 푼도 더 붙지 않는다
-    expect(severanceWith(addDays(state.date, 7 * SEVERANCE_WEEKS_CAP * 3))).toBe(capped);
+    expect(severanceWith(addDays(state.date, 7 * 104 * 3))).toBe(capped * 3);
   });
 
   it("이미 끝난 계약은 0이다 — 음수 주 수가 돈을 만들지 않는다", () => {
@@ -386,8 +382,8 @@ describe("해지 값의 양 끝", () => {
   it("일방 해지도 같은 양 끝을 쓴다 — 비율만 다르다", () => {
     contract.until = addDays(state.date, 70);
     expect(unilateralSeveranceOf(state, target.id)).toBe(contract.weeklyWage * 10);
-    contract.until = addDays(state.date, 7 * SEVERANCE_WEEKS_CAP * 3);
-    expect(unilateralSeveranceOf(state, target.id)).toBe(contract.weeklyWage * SEVERANCE_WEEKS_CAP);
+    contract.until = addDays(state.date, 7 * 104 * 3);
+    expect(unilateralSeveranceOf(state, target.id)).toBe(contract.weeklyWage * 104 * 3);
     contract.until = addDays(state.date, -700);
     expect(unilateralSeveranceOf(state, target.id)).toBe(0);
   });

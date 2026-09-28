@@ -82,6 +82,7 @@ export function PlayerCardProvider({
   stamp,
   inMatch,
   onPropose,
+  renderReports,
   children,
 }: {
   gameId: string;
@@ -91,6 +92,7 @@ export function PlayerCardProvider({
   /** 경기가 굴러가는 중인가 — 심경 한 줄은 지난 경기까지의 것이라 그동안 서지 않는다 */
   inMatch: boolean;
   onPropose?: (playerId: string) => void;
+  renderReports?: (card: PlayerCardView) => ReactNode;
   children: ReactNode;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export function PlayerCardProvider({
           playerId={openId}
           stamp={stamp}
           inMatch={inMatch}
+          renderReports={renderReports}
           onPropose={onPropose}
           onClose={() => setOpenId(null)}
         />
@@ -191,6 +194,7 @@ function PlayerCardOverlay({
   stamp,
   inMatch,
   onPropose,
+  renderReports,
   onClose,
 }: {
   gameId: string;
@@ -198,6 +202,7 @@ function PlayerCardOverlay({
   stamp: string;
   inMatch: boolean;
   onPropose?: (playerId: string) => void;
+  renderReports?: (card: PlayerCardView) => ReactNode;
   onClose: () => void;
 }) {
   const [card, setCard] = useState<PlayerCardView | null>(() =>
@@ -255,7 +260,7 @@ function PlayerCardOverlay({
             <span className="skel pc-skel short" aria-hidden />
           </div>
         ) : (
-          <PlayerCardBody card={card} inMatch={inMatch} />
+          <PlayerCardBody card={card} inMatch={inMatch} renderReports={renderReports} />
         )}
         {/**
          * **제안** — 부를 명령이 있는 선수에게만 선다 (transfer.md §12-3). 조작이 뜻을 갖지
@@ -305,7 +310,15 @@ function Fact({ label, title, children }: { label: string; title?: string; child
  * 남의 선수에게 없는 칸은 아예 서지 않는다(`card.ours`가 null이다) — 「모름」으로
  * 채우면 없는 자리를 있는 것처럼 그린다 (player.md §9.5).
  */
-function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: boolean }) {
+function PlayerCardBody({
+  card,
+  inMatch,
+  renderReports,
+}: {
+  card: PlayerCardView;
+  inMatch: boolean;
+  renderReports?: (card: PlayerCardView) => ReactNode;
+}) {
   const ours = card.ours;
   const season = card.season;
   /**
@@ -336,6 +349,8 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
         </span>
       </header>
 
+      {renderReports?.(card)}
+
       {/* 지금 심경 한 줄 — 아래 숫자들이 왜 그런지 (우리 선수만 아는 사실이다).
           경기 중에는 서지 않는다 — 지난 경기까지의 마음이라 지금 경기와 어긋난다 */}
       {ours && !inMatch && <p className="pc-mood">{moodSentence(ours.mood)}</p>}
@@ -345,33 +360,11 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
           <GrowthOutlook overall={card.overall} potential={card.potential} />
         </Fact>
         <Fact
-          label="시장가"
-          title={
-            card.ours
-              ? "우리 계약이라 흐림 폭이 0이다"
-              : "관측 시장가 — 지식 수준만큼 흐리다 (player.md §9)"
-          }
+          label="최근 기록 이적료"
+          title="공개 이적 원장의 참고 금액이며 현재 요구가가 아닙니다"
         >
-          {formatMoney(card.marketValue)}
+          {card.marketValue === null ? "미확인" : formatMoney(card.marketValue)}
         </Fact>
-        {/**
-         * 보고서가 실어 온 세 값 — **데려오는 데 드는 돈**과 그 값이 언제 것인지.
-         * 요구액은 몸값이 아니라 상대가 부를 값이고(코치의 대사도 이 숫자다),
-         * 기대 주급은 **데려오려면 줘야 할** 돈이라 아래 「현 주급」과 다른 물음이다.
-         */}
-        {card.scoutReport && (
-          <>
-            <Fact label="요구액" title="상대 구단이 부를 값 — 몸값이 아니라 협상이 시작되는 자리다">
-              {formatMoney(card.scoutReport.askingPrice)}
-            </Fact>
-            <Fact label="기대 주급" title="데려오려면 줘야 할 주급 — 지금 받는 돈이 아니다">
-              {formatMoney(card.scoutReport.wageExpectation)}/주
-            </Fact>
-            <Fact label="보고서" title="스카우팅 보고서가 도착한 날">
-              {humanDate(card.scoutReport.on, { weekday: false })}
-            </Fact>
-          </>
-        )}
         {card.weeklyWage !== null && <Fact label="현 주급">{formatMoney(card.weeklyWage)}/주</Fact>}
         {card.contractUntil !== null && (
           <Fact label="계약">{contractUntil(card.contractUntil)}</Fact>

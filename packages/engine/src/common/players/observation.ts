@@ -4,7 +4,7 @@ import {
   ATTRIBUTE_AXES,
   ageOf,
   naturalPositionOf,
-  type ScoutReport,
+  type ScoutingReport,
   isReserveMatch,
   RATING_MAX,
   type GamePlayer,
@@ -17,34 +17,7 @@ import { settlingOf, isSettling } from "./settling";
 import { hashChannel } from "../core/rng";
 import { GASSED_CONDITION } from "@story-fm/sim";
 
-/**
- * 스카우팅 지식 — 정보 비대칭(안개)의 단일 소스.
- *
- * 규약 (선수 단위 5단계 × 축 단위 2계층 — player.md §9):
- * | 수준       | 조건                                   | 관측형 | 분석형 | 잠재력 |
- * | own       | 우리 계약 선수 (임대 송출 포함)          | 정확   | 정확   | ±6→±2 |
- * | adapting  | 영입 후 아직 적응 중                     | ±1→0  | ±3→0  | ±9→±2 |
- * | scouted   | 스카우트 리포트 완료                      | ±1    | ±3    | ±12→±6 |
- * | seen      | 우리와의 경기에 **실제로 출전**한 걸 봤다    | ±3    | ±6    | ±16   |
- * | rumoured  | 그 외 (리그 평판·소문)                    | ±6    | ±10   | 미지   |
- *
- * **잠재력은 누구도 단정하지 못한다** — 숫자가 아니라 폭으로만 안다. 우리 선수도
- * 데리고 뛰어 봐야 좁혀지고(출전 표본), 타 팀 선수는 스카우트를 거듭 보내야
- * 대강이라도 잡힌다. 끝까지 ±2는 남는다 — 성장은 예언이 아니다.
- *
- * 히든 능력치를 두지 않는 대신 **축마다 좁힐 수 있는 한계**를 다르게 준다.
- * 그래서 "데려와 봐야 확실히 아는 선수"가 생긴다.
- *
- * 두 가지를 엄격히 지킨다.
- * 1. **결정적** — 오차는 (seed, playerId, 능력치) 해시에서 나온다. 같은 질문에
- *    항상 같은 답이 나와야 스카우팅 정보를 신뢰할 수 있다. 호출마다 새로
- *    뽑으면 GM이 어제 한 말과 오늘 한 말이 달라진다.
- * 2. **표현 계층 전용** — 코어(장부·판정·경기 시뮬)는 언제나 참값으로 계산한다.
- *    여기서 만든 관측값이 게임 상태에 반영되는 경로는 없다.
- *
- * 지식 수준은 저장하지 않고 기록(MATCH 출전 명단 · SCOUT_REPORT)에서 파생한다.
- */
-
+/** Shared display of club observations and dated investigation results. */
 export type Knowledge = "own" | "adapting" | "scouted" | "seen" | "rumoured";
 
 export const KNOWLEDGE_KO: Record<Knowledge, string> = {
@@ -85,15 +58,11 @@ export const AXIS_OBSERVABILITY: Record<AttributeAxis, Observability> = {
   leadership: "analytical",
 };
 
-/**
- * 지식 수준 × 관측 계층 → 관측 오차 (0 = 정확).
- * **스카우팅은 완벽하지 않다** — 관측형도 ±1이 남고, 분석형은 ±3이 남는다.
- * 리포트는 정답 공개가 아니라 오차를 좁히는 행위다.
- */
+/** Club and public display uncertainty. Recorded scouting ranges take precedence per field. */
 export const OBSERVATION_MARGIN: Record<Observability, Record<Knowledge, number>> = {
-  // adapting은 **출발 폭**이다 — 스카우트 수준에서 시작해 적응 진행도만큼 걷힌다
-  observable: { own: 0, adapting: 1, scouted: 1, seen: 3, rumoured: 6 },
-  analytical: { own: 0, adapting: 3, scouted: 3, seen: 6, rumoured: 10 },
+  // Settling changes internal club knowledge; a report does not unlock unknown axes.
+  observable: { own: 0, adapting: 1, scouted: 6, seen: 3, rumoured: 6 },
+  analytical: { own: 0, adapting: 3, scouted: 10, seen: 6, rumoured: 10 },
 };
 
 /**
@@ -119,6 +88,8 @@ export function observationMargin(
   axis: string,
   knowledge = knowledgeOf(state, playerId),
 ): number {
+  const recorded = knowledge === "scouted" ? observedRange(state, playerId, axis) : null;
+  if (recorded) return (recorded.high - recorded.low) / 2;
   const base = marginFor(axis, knowledge);
   if (knowledge !== "adapting") return base;
   const a = settlingOf(state, playerId);
@@ -128,13 +99,26 @@ export function observationMargin(
 
 // ── 지식 수준 파생 ──────────────────────────────────────
 
-export function scoutReportOf(state: GameState, playerId: string): ScoutReport | null {
-  return state.scoutReports.find((r) => r.gamePlayerId === playerId) ?? null;
+export function scoutReportOf(state: GameState, playerId: string): ScoutingReport | null {
+  return (
+    [...state.scoutReports]
+      .reverse()
+      .find((r) => r.candidates.some((c) => c.evidence.playerId === playerId)) ?? null
+  );
+}
+
+function recordedAssessment(state: GameState, playerId: string) {
+  return scoutReportOf(state, playerId)?.candidates.find((c) => c.evidence.playerId === playerId)
+    ?.assessment;
+}
+
+function observedRange(state: GameState, playerId: string, axis: string) {
+  const assessment = recordedAssessment(state, playerId);
+  return axis === "overall" ? assessment?.overall : assessment?.attributes[axis];
 }
 
 export function isScouted(state: GameState, playerId: string): boolean {
-  const r = scoutReportOf(state, playerId);
-  return r !== null && r.completedOn !== null;
+  return scoutReportOf(state, playerId) !== null;
 }
 
 /**
@@ -156,16 +140,6 @@ export function hasSeenPlay(state: GameState, playerId: string): boolean {
   return false;
 }
 
-/**
- * **임무가 골라 온 후보인가** — `hasSeenPlay` 옆의 같은 파생이다.
- *
- * 저장하는 것은 임무가 적은 후보 목록뿐이고 지식 수준은 거기서 나온다 (player.md §9.4).
- * 출전 명단이 `seen`을 만드는 것과 같은 자리라, 임무 표를 지우면 눈금도 함께 사라진다.
- */
-export function pickedByMission(state: GameState, playerId: string): boolean {
-  return state.scoutMissions.some((m) => m.candidates?.includes(playerId) === true);
-}
-
 export function knowledgeOf(state: GameState, playerId: string): Knowledge {
   const player = playerById(state, playerId);
   if (!player) return "rumoured";
@@ -179,8 +153,7 @@ export function knowledgeOf(state: GameState, playerId: string): Knowledge {
     return isSettling(state, playerId) ? "adapting" : "own";
   }
   if (isScouted(state, playerId)) return "scouted";
-  // 임무가 골라 온 후보도 스카우트가 **가서 본** 선수다 (player.md §9.4)
-  if (hasSeenPlay(state, playerId) || pickedByMission(state, playerId)) return "seen";
+  if (hasSeenPlay(state, playerId)) return "seen";
   return "rumoured";
 }
 
@@ -204,6 +177,8 @@ export function observedRating(
   trueValue: number,
   knowledge = knowledgeOf(state, playerId),
 ): number {
+  const recorded = knowledge === "scouted" ? observedRange(state, playerId, attr) : null;
+  if (recorded) return Math.round((recorded.low + recorded.high) / 2);
   const margin = observationMargin(state, playerId, attr, knowledge);
   if (margin === 0) return trueValue;
   const offset = offsetFor(state.seed, playerId, attr, margin);
@@ -241,31 +216,29 @@ export function observationOf(state: GameState, playerId: string): Observation {
   return observationAt(state, playerId, knowledgeOf(state, playerId));
 }
 
-/**
- * **지식 수준을 지정한** 관측 오프셋 — 「그 눈금이면 이 선수가 어떻게 보이는가」.
- *
- * 스카우트 임무가 이것을 쓴다: 후보를 고르는 눈은 **다녀온 뒤의 눈금**이어야 하고,
- * 그 눈금은 아직 지금 아는 수준이 아니다 (player.md §9.4). 오프셋은 폭에서 나오므로
- * 눈금이 달라지면 값도 달라진다 — 고를 때와 보일 때의 눈금이 갈리면 「£10M 이하로
- * 찾아 와」에 £20M짜리가 서게 된다.
- */
+/** Use the dated report estimate when available, otherwise retain existing public observations. */
 export function observationAt(
   state: GameState,
   playerId: string,
   knowledge: Knowledge,
 ): Observation {
   const margin = observationMargin(state, playerId, "overall", knowledge);
+  const recorded = knowledge === "scouted" ? observedRange(state, playerId, "overall") : null;
+  const player = playerById(state, playerId);
   return {
     knowledge,
     label: KNOWLEDGE_KO[knowledge],
     margin,
-    overallOffset: offsetFor(state.seed, playerId, "overall", margin),
+    overallOffset:
+      recorded && player
+        ? Math.round((recorded.low + recorded.high) / 2) - player.attributes.overall
+        : offsetFor(state.seed, playerId, "overall", margin),
   };
 }
 
 /**
  * 잠재력 — **아무도 단정하지 못한다.** 구간 + 확신의 정도로 말한다.
- * 우리 선수는 데리고 뛸수록, 타 팀 선수는 스카우트를 거듭 보낼수록 좁아진다.
+ * 우리 선수는 데리고 뛸수록, 타 팀 선수는 근거가 담긴 새 보고서에서만 달라진다.
  */
 /** 추정 폭이 이 안이면 그 말로 부른다 — 넘으면 "대강 짐작"이다 */
 export const CONFIDENCE_MARGIN = { 거의확실: 3, 대체로신뢰: 6 } as const;
@@ -323,28 +296,16 @@ export const POTENTIAL_MARGIN: Record<Knowledge, number | null> = {
   own: 6,
   // 계약서에 사인해도 훈련장에서 본 게 전부다 — 출전이 쌓이면 우리 선수와 같아진다
   adapting: 9,
-  scouted: 12,
-  seen: 16,
+  scouted: null,
+  seen: null,
   rumoured: null,
 };
 
 /** 아무리 봐도 이 아래로는 못 좁힌다 — 성장 여력은 끝까지 단정할 수 없다 */
 export const POTENTIAL_FLOOR = 2;
 
-/** 스카우트를 거듭 보내도 남는 폭 — 훈련장을 못 보는 한계 */
-export const POTENTIAL_SCOUT_FLOOR = 6;
-
-/** 출전 이 만큼마다 우리 선수의 추정 폭이 1 좁아진다 */
+/** Club appearances narrow internal development observations. */
 export const POTENTIAL_APPS_PER_STEP = 10;
-
-/** 리포트를 한 번 더 받을 때마다 좁아지는 폭 */
-export const POTENTIAL_REPORT_STEP = 3;
-
-/** 완료된 스카우트 리포트 수 — 거듭 보낼수록 잠재력 추정이 좁아진다 */
-export function completedScoutReports(state: GameState, playerId: string): number {
-  return state.scoutReports.filter((r) => r.gamePlayerId === playerId && r.completedOn !== null)
-    .length;
-}
 
 /**
  * **우리 셔츠로** 뛴 총 경기 수 — 잠재력을 좁히는 표본 (시즌을 넘어 누적).
@@ -364,15 +325,15 @@ export function potentialMargin(
   playerId: string,
   knowledge = knowledgeOf(state, playerId),
 ): number | null {
+  if (knowledge !== "own" && knowledge !== "adapting") {
+    const band = recordedAssessment(state, playerId)?.potential;
+    return band ? (band.high - band.low) / 2 : null;
+  }
   const base = POTENTIAL_MARGIN[knowledge];
   if (base === null) return null;
   if (knowledge === "own" || knowledge === "adapting") {
     const narrowed = base - Math.floor(appsForUs(state, playerId) / POTENTIAL_APPS_PER_STEP);
     return Math.max(POTENTIAL_FLOOR, narrowed);
-  }
-  if (knowledge === "scouted") {
-    const extra = Math.max(0, completedScoutReports(state, playerId) - 1);
-    return Math.max(POTENTIAL_SCOUT_FLOOR, base - extra * POTENTIAL_REPORT_STEP);
   }
   return base;
 }
@@ -390,24 +351,18 @@ export interface PotentialBand {
   confidence: string;
 }
 
-/**
- * 잠재력 추정 구간 — 불변식 둘 (player.md §9.1).
- *
- * 1. **참값은 항상 이 안에 있다.** 중심을 참값에서 ±margin/2만큼 결정적으로 흔들고
- *    거기서 ±margin을 펼친다 — 같은 선수를 몇 번을 물어도 같은 구간이 나오고,
- *    감독의 추정이 낙관적일 수도 비관적일 수도 있으면서, 진실을 벗어나지 않는다.
- * 2. **하한은 현재 실력 아래로 안 내려간다** — 이미 가진 것을 못 가질 수는 없다.
- *    기준은 **관측** 종합이다. 참 종합을 기준에 쓰면 하한이 그 숫자를 그대로 불러
- *    안개가 뚫린다.
- *
- * 둘이 부딪히면 1이 이긴다 — 그래서 `floor`가 참값에서 잘린다. 안개가 종합을 참
- * 잠재력 위로 부풀린 선수(잠재력 = 종합인데 관측이 후한 경우)가 여기에 걸린다.
- */
+/** External estimates are stored observations; club development observations remain internal. */
 export function potentialBand(
   state: GameState,
   player: GamePlayer,
   knowledge = knowledgeOf(state, player.id),
 ): PotentialBand | null {
+  if (knowledge !== "own" && knowledge !== "adapting") {
+    const band = recordedAssessment(state, player.id)?.potential;
+    return band
+      ? { ...band, margin: (band.high - band.low) / 2, confidence: "조사 근거에 따른 추정" }
+      : null;
+  }
   const margin = potentialMargin(state, player.id, knowledge);
   if (margin === null) return null;
   const truth = player.attributes.potential;

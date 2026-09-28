@@ -1,12 +1,17 @@
 import {
   acquireSaveLock,
   applyProposal,
+  openNegotiationFor,
+  startNegotiation,
+  closeNegotiation,
   bindJournal,
   journal,
   loadGame,
   playerName,
   proposalCommandName,
   saveGame,
+  scoutingEvidence,
+  selectNegotiationMethod,
   setPlayerTactic,
   setSetPieceTakers,
   setTactics,
@@ -20,6 +25,7 @@ import {
 } from "@story-fm/engine";
 import {
   GmTurnFailure,
+  evaluateNegotiation,
   compactHistory,
   operationLabel,
   runGmTurn,
@@ -249,7 +255,7 @@ export type TurnOutcome =
    * 하나로 「다시 시도」를 세울지 정한다. 서버가 사실을 적어 보내므로 화면이 문구나
    * 상태 코드를 읽어 짐작하지 않는다 (`busyResponse`가 409에 쓰는 것과 같은 말).
    */
-  | { ok: false; status: number; error: string; retry: boolean; detail?: string };
+  | { ok: false; status: number; error: string; retry: boolean; detail?: string; saved?: boolean };
 
 /**
  * LLM 실패를 감독에게 보일 한 줄과, 그 배너에 「다시 시도」를 세울지 — **게임 밖의
@@ -356,6 +362,72 @@ export function runTurnLocked(
             retry: false,
           };
 
+        const durableFacts = (value: GameState) =>
+          JSON.stringify({
+            date: value.date,
+            phase: value.phase,
+            requests: value.scoutingRequests,
+            reports: value.scoutReports,
+            evaluations: value.negotiationEvaluations,
+            followups: value.negotiationFollowups,
+            exchanges: value.negotiationExchanges,
+          });
+        const initialFacts = durableFacts(state);
+        let checkpointBase: GameState | null = null;
+        let durableCheckpoint: GameState | null = null;
+        const checkpoint = (current: GameState, scope: "opening" | "scouting" | "negotiation") => {
+          if (scope === "opening") {
+            checkpointBase = structuredClone(current);
+            if (durableFacts(current) !== initialFacts) durableCheckpoint = checkpointBase;
+            return;
+          }
+          if (!checkpointBase || current.date !== checkpointBase.date) return;
+          const next = structuredClone(durableCheckpoint ?? checkpointBase);
+          if (scope === "negotiation") {
+            const fields = [
+              "negotiations",
+              "negotiationContacts",
+              "negotiationExchanges",
+              "negotiationEvaluations",
+              "negotiationFollowups",
+              "pendingNegotiation",
+              "phase",
+            ] as const;
+            const allowed = new Set<string>([...fields, "narrative"]);
+            // Narrative summaries stay at the opening checkpoint; contact lines own the durable exchange.
+            // Every other saved field is a source or ledger boundary. Future fields default to protected.
+            const sourceFacts = (value: GameState) =>
+              JSON.stringify(
+                Object.fromEntries(Object.entries(value).filter(([key]) => !allowed.has(key))),
+              );
+            if (sourceFacts(current) !== sourceFacts(next)) return;
+            for (const key of fields) Object.assign(next, { [key]: structuredClone(current[key]) });
+            durableCheckpoint = next;
+            return;
+          }
+          if (current.phase !== next.phase) return;
+          for (const request of current.scoutingRequests) {
+            const prior = next.scoutingRequests.find((entry) => entry.id === request.id);
+            if (
+              request.evidenceOn === null ||
+              (prior?.evidenceOn === request.evidenceOn &&
+                JSON.stringify(prior.evidence) === JSON.stringify(request.evidence))
+            )
+              continue;
+            if (
+              request.evidenceOn !== next.date ||
+              JSON.stringify(scoutingEvidence(next, request)) !== JSON.stringify(request.evidence)
+            )
+              return;
+          }
+          next.scoutingRequests = structuredClone(current.scoutingRequests);
+          next.scoutReports = structuredClone(current.scoutReports);
+          next.pendingReportCards = [
+            ...new Set([...(next.pendingReportCards ?? []), ...(current.pendingReportCards ?? [])]),
+          ];
+          durableCheckpoint = next;
+        };
+
         /**
          * 경기 턴인가 — **턴을 시작할 때** 본다. 이 턴에서 경기가 끝나더라도 감독이
          * 말을 건 상대는 중계였으므로 그 턴은 경기 이력에 속하고, 반대로 이 턴에
@@ -371,10 +443,19 @@ export function runTurnLocked(
          */
         const inNegotiation = state.phase === "negotiation";
         const negotiationId = state.pendingNegotiation?.negotiationId;
+        const exchange = state.negotiationExchanges.find(
+          (entry) => entry.id === state.pendingNegotiation?.exchangeId,
+        );
         const mark = inMatch
           ? { inMatch: true as const, ...(matchId ? { matchId } : {}) }
           : inNegotiation
-            ? { inNegotiation: true as const, ...(negotiationId ? { negotiationId } : {}) }
+            ? {
+                inNegotiation: true as const,
+                ...(negotiationId ? { negotiationId } : {}),
+                ...(exchange
+                  ? { negotiationContactId: exchange.contactId, negotiationExchangeId: exchange.id }
+                  : {}),
+              }
             : {};
         /**
          * 턴 기록의 겉 — 감독이 무엇을 보냈고 그때 세계가 어디 있었나 (models.md §5-3).
@@ -488,6 +569,29 @@ export function runTurnLocked(
               detail: result.message,
             };
           }
+          const deal = openNegotiationFor(state, proposal.playerId);
+          if (deal) {
+            const wasInRoom = state.pendingNegotiation !== null;
+            if (!wasInRoom)
+              startNegotiation(state, {
+                negotiationId: deal.id,
+                method: "proposal",
+                mode: "request",
+                ...(proposal.kind === "personal" ? { party: "agent" as const } : {}),
+              });
+            const room = state.pendingNegotiation;
+            if (room?.negotiationId === deal.id) {
+              const response = await evaluateNegotiation(state, {
+                negotiationId: deal.id,
+                party: room.party,
+                exchangeId: room.exchangeId,
+                ending: !wasInRoom,
+                said: proposalLabel(proposal, playerName(state, proposal.playerId)),
+              });
+              result.message += ` · ${response.message}`;
+              if (!wasInRoom) closeNegotiation(state, "left");
+            }
+          }
           recordCall(seedCalls, name, result, {
             input: proposal,
             ...(result.payload === undefined ? { silent: true } : {}),
@@ -513,6 +617,11 @@ export function runTurnLocked(
          * 모델이 읽을 한 줄 — 조작이면 **구조체에서 만든다.** 감독이 친 말이 아니라
          * 손잡이라, 이 문장은 표시일 뿐이고 되읽는 코드가 없다 (agents.md §2).
          */
+        if (operation?.kind === "enter_negotiation" && operation.method !== undefined) {
+          const result = selectNegotiationMethod(state, operation.method);
+          if (!result.ok)
+            return { ok: false as const, status: 400, error: result.message, retry: false };
+        }
         const handle = operation ?? (message === undefined ? proposed : undefined);
         const said = handle ? operationLabel(handle) : (message ?? "");
         state.chat.push({
@@ -531,6 +640,7 @@ export function runTurnLocked(
             appliedOrders,
             boardMoves,
             seedCalls,
+            checkpoint,
           );
           state.chat.push({
             role: "model",
@@ -540,7 +650,6 @@ export function runTurnLocked(
             ...(turn.goals && turn.goals.length > 0 ? { goals: turn.goals } : {}),
             ...(turn.cards && turn.cards.length > 0 ? { cards: turn.cards } : {}),
             ...(turn.reports && turn.reports.length > 0 ? { reports: turn.reports } : {}),
-            ...(turn.missions && turn.missions.length > 0 ? { missions: turn.missions } : {}),
             // 넘긴 시간이 남긴 사건들 — 화면이 하나를 카드 하나로 세운다 (design-system.md §6)
             ...(turn.events && turn.events.length > 0 ? { events: turn.events } : {}),
             // GM이 낸 감독의 다음 말 — 입력창의 placeholder다. 모델 입력은 이 칸을 읽지 않는다 (agents.md §2)
@@ -577,6 +686,8 @@ export function runTurnLocked(
           noteTurn({ outcome: { ok: true, saved: true }, after });
           return { ok: true as const, payload };
         } catch (error) {
+          const saved = durableCheckpoint !== null;
+          if (durableCheckpoint !== null) saveGame(durableCheckpoint);
           const kind = llmErrorKind(error);
           console.error(`[turn] GM 턴 실패 (game=${id}, kind=${kind}):`, error);
           /**
@@ -589,10 +700,10 @@ export function runTurnLocked(
           noteTurn({
             outcome: {
               ok: false,
-              saved: false,
+              saved,
               error: shown,
               kind,
-              retry: turnErrorRetry(kind),
+              retry: saved ? false : turnErrorRetry(kind),
               ...detail,
             },
             after: turnDigestOf(state),
@@ -600,8 +711,9 @@ export function runTurnLocked(
           return {
             ok: false as const,
             status: 502,
+            saved,
             error: shown,
-            retry: turnErrorRetry(kind),
+            retry: saved ? false : turnErrorRetry(kind),
             ...detail,
           };
         }

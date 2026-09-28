@@ -43,13 +43,8 @@ import { squadStatusOf, startsInWindow } from "../../../../common/players/contra
 import { formLabel } from "../../../../common/players/form";
 import { leaderGroupOf, leaderRoleOf } from "../../../../common/players/hierarchy";
 import { type MoodLine, applyMoodNotes } from "../../../../common/players/mood-notes";
-import { SQUAD_CORE_SIZE } from "../../../../common/players/squad-depth";
 import { settleInterview } from "../../../../negotiation/market/manager-market";
-import {
-  isSeriousOffer,
-  renewalExpectation,
-  windowOpenForTeam,
-} from "../../../../negotiation/market/market";
+import { windowOpenForTeam } from "../../../../negotiation/market/market";
 import { openPromise } from "../../../../negotiation/players/promises";
 import { type PromiseInput, promisePiece, recordIncident } from "../../../../story/commands/talk";
 import { recentOutcomes } from "../../../../story/players/slump";
@@ -71,20 +66,9 @@ import {
   recentSellOffers,
   topFeeOf,
 } from "../../../../story/world/approach";
-import { betterThanInSquad, pendingPress } from "../../../../story/world/press";
+import { pendingPress } from "../../../../story/world/press";
 
-/**
- * 최근 `INTEREST_WINDOW_DAYS` 안에 거절·만료로 끝난 **우리 선수를 향한 매각 오퍼**.
- *
- * 대상은 우리 스쿼드 상위 `SQUAD_CORE_SIZE`명뿐이고, **값이 붙은 오퍼만** 센다
- * (`isSeriousOffer` — `blocked-move`와 같은 자다). 헐값이 흘러간 것은 에이전트가
- * 감독을 찾아올 일이 아니고, 그것까지 세면 이적창마다 감독실 문이 열린다.
- *
- * ⚠️ **`blocked-move` 불만과 함께 설 수 있다.** 감독이 값이 붙은 오퍼를 물리면 둘 다
- * 참이다 — 선수는 자기 이적이 막힌 것을 말하고 에이전트는 구단들이 물어본 것을
- * 말한다. 다른 사실이고 다른 화자다. 한쪽을 죽이면 감독이 실제로 오퍼를 거절한
- * 시즌에만 열리는 자리가 통째로 사라진다.
- */
+/** 실제로 기록된 최근 연락을 사실로 전달한다. 가격·선수 등급으로 동기를 대신 정하지 않는다. */
 function interestOf(
   state: GameState,
   player: GamePlayer,
@@ -92,8 +76,7 @@ function interestOf(
 ): Interest | null {
   const closed = index.get(player.id);
   if (!closed || closed.length === 0) return null;
-  if (betterThanInSquad(state, player) >= SQUAD_CORE_SIZE) return null;
-  const recent = closed.filter((n) => isSeriousOffer(state, player, topFeeOf(n)));
+  const recent = closed;
   if (recent.length === 0) return null;
   const top = recent.reduce<{ fee: number; teamId: string | null }>(
     (best, n) => {
@@ -160,11 +143,6 @@ function playerFacts(
         };
       }
       case "contract": {
-        /**
-         * 에이전트가 들고 오는 것은 **남은 일수와 요구 주급**이다 (people.md §8).
-         * 요구는 협상의 눈금(`renewalExpectation`) 그대로다 — 자리마다 다른 값을
-         * 부르면 감독이 그 값에 맞춰 열어도 테이블이 다른 말을 한다.
-         */
         const contract = activeContract(state, player.id);
         return {
           kind: "contract-demand",
@@ -172,7 +150,6 @@ function playerFacts(
             values: {
               days: contract ? Math.max(0, diffDays(state.date, contract.until)) : 0,
               wage: contract?.weeklyWage ?? 0,
-              asking: renewalExpectation(state, player),
             },
           },
           about: player.id,

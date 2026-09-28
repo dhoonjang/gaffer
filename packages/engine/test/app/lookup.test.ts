@@ -1,3 +1,4 @@
+import { recordTestScouting } from "../helpers";
 import { describe, expect, it } from "vitest";
 import {
   activeContract,
@@ -9,13 +10,10 @@ import {
   leagueOfTeamIn,
   historyView,
   leagueView,
-  marketValueOf,
-  observedMarketValue,
   playerById,
   playerCard,
   playersOf,
   scheduleView,
-  scoutPlayer,
   loanPlayer,
   searchPlayers,
   seasonStatOf,
@@ -25,7 +23,7 @@ import {
   userPlayers,
   type GameState,
 } from "@story-fm/engine";
-import { SCOUT_DAYS, isReserveMatch } from "@story-fm/domain";
+import { isReserveMatch } from "@story-fm/domain";
 import { createTestGame, resultOf } from "../helpers";
 
 /**
@@ -203,34 +201,38 @@ describe("search_players", () => {
     expect(order.indexOf(onDay.id)).toBeLessThan(order.indexOf(dayAfter.id));
   });
 
-  /**
-   * 값도 노출이다 (player.md §10) — 참값으로 세우거나 거르면 행을 흐린 것이
-   * 무의미해진다. 세우는 자·거르는 자·`deal_odds`가 부르는 값이 한 벌이어야 한다.
-   */
-  it("값은 참값이 아니라 흐린 시장가로 세우고 거른다", () => {
+  it("금액 검색은 공개 이적료만 읽고 미확인 후보를 남긴다", () => {
     const state = createTestGame(21);
-    const pool = playersOf(state, "chelsea");
-    const top = (key: (p: (typeof pool)[number]) => number): string[] =>
-      [...pool]
-        .sort((a, b) => key(b) - key(a))
-        .slice(0, 15)
-        .map((p) => p.id);
-    const shown = rowIds(
-      searchPlayers(state, { team: "chelsea", sortBy: "value", limit: 15 }).message,
-      pool,
-    );
-    expect(shown).toEqual(top((p) => observedMarketValue(state, p)));
-    expect(shown).not.toEqual(top((p) => marketValueOf(state, p)));
-
-    // 참값은 선 위인데 흐린 값이 선 아래인 선수 — 거르는 자가 무엇인지 여기서 갈린다
-    const under = pool.find((p) => observedMarketValue(state, p) < marketValueOf(state, p))!;
-    const line = observedMarketValue(state, under);
-    const inside = searchPlayers(state, { team: "chelsea", maxValue: line, limit: 15 });
-    expect(rowIds(inside.message, pool)).toContain(under.id);
-    const outside = searchPlayers(state, { team: "chelsea", maxValue: line - 1, limit: 15 });
-    expect(rowIds(outside.message, pool)).not.toContain(under.id);
-    // 행도 같은 값을 찍는다 — 계약 만료일과 함께
-    expect(inside.message).toContain(`계약 ${activeContract(state, under.id)!.until}`);
+    const pool = playersOf(state, "chelsea").slice(0, 3);
+    state.players = pool;
+    state.transfers = pool.slice(0, 2).map((player, i) => ({
+      id: `reference-${i}`,
+      gamePlayerId: player.id,
+      windowId: null,
+      fromTeamId: "arsenal",
+      toTeamId: "chelsea",
+      date: state.date,
+      type: "transfer" as const,
+      fee: (i + 1) * 1000000,
+    }));
+    const search = (maxValue?: number) =>
+      rowIds(
+        searchPlayers(state, {
+          team: "chelsea",
+          sortBy: "value",
+          limit: 15,
+          ...(maxValue === undefined ? {} : { maxValue }),
+        }).message,
+        pool,
+      );
+    expect(search()).toEqual([pool[1]!.id, pool[0]!.id, pool[2]!.id]);
+    expect(search(1000000)).toEqual([pool[0]!.id, pool[2]!.id]);
+    expect(search(999999)).toEqual([pool[2]!.id]);
+    for (const player of pool) {
+      player.attributes.overall = 99;
+      player.attributes.potential = 99;
+    }
+    expect(search(1000000)).toEqual([pool[0]!.id, pool[2]!.id]);
   });
 
   /**
@@ -292,34 +294,15 @@ describe("playerCard — 선수 상세", () => {
     expect(leaksTrueRatings(res.message, other.id, other.attributes)).toBe(false);
   });
 
-  it("스카우팅을 마치면 오차가 좁혀지지만 여전히 라벨로 말한다", () => {
+  it("reads the archived observation after current attributes change", () => {
     const state = createTestGame(21);
     const other = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, other.id);
-    advanceTime(state, { days: SCOUT_DAYS });
-    const res = playerCard(state, other.id);
-    expect(res.message).toContain("스카우팅 완료");
-    // 우리 선수가 아니면 숫자를 주지 않는다 — 오차가 ±1이라도 단정하지 않는다
-    expect(leaksTrueRatings(res.message, other.id, other.attributes)).toBe(false);
-    // 스카우트 한 번은 잠재력을 "대강 짐작" 수준까지만 열어 준다
-    expect(res.message).toMatch(/잠재력: \d+~\d+ \(대강 짐작/);
-  });
-
-  /**
-   * 이슈 #647 — 채팅 카드는 한 번 지나가면 끝이라, 도착한 보고서를 **다시 읽는
-   * 자리**가 여기다 (player.md §9.4-1). 파견 중에는 아직 설 것이 없다.
-   */
-  it("도착한 보고서는 선수 카드에서 다시 읽힌다 — 파견 중에는 안 선다", () => {
-    const state = createTestGame(21);
-    const other = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, other.id);
-    expect(playerCard(state, other.id).message).not.toContain("스카우트 보고서:");
-
-    advanceTime(state, { days: SCOUT_DAYS });
-    const arrived = playerCard(state, other.id).message;
-    expect(arrived).toContain(`스카우트 보고서: ${state.scoutReports[0]!.completedOn} 도착`);
-    expect(arrived).toContain("요구액");
-    expect(arrived).toContain("기대 주급");
+    const report = recordTestScouting(state, other.id);
+    other.attributes.potential = 1;
+    const response = playerCard(state, other.id);
+    expect(response.message).toContain(report.id);
+    expect(response.message).toContain("65~90");
+    expect(response.message).not.toContain("기대 주급");
   });
 
   it("없는 id는 반려한다", () => {

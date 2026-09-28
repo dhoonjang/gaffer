@@ -1,9 +1,8 @@
-import { describe, expect, it } from "vitest";
+import type { GamePlayer, MarketCard, Negotiation } from "@story-fm/domain";
 import {
   addDays,
-  answerIncomingOffer,
   adjustTransferBudget,
-  askingPriceFor,
+  answerIncomingOffer,
   incomingOffers,
   listingOf,
   offerPlayerOut,
@@ -16,7 +15,7 @@ import {
   wageExpectationOf,
   type GameState,
 } from "@story-fm/engine";
-import type { GamePlayer, MarketCard, Negotiation } from "@story-fm/domain";
+import { describe, expect, it } from "vitest";
 import { completeDeal, createTestGame } from "../helpers";
 
 /**
@@ -29,12 +28,12 @@ const sellable = (state: GameState) =>
   userPlayers(state).sort((a, b) => b.attributes.overall - a.attributes.overall)[3]!;
 
 describe("이적 리스트 — 값을 부르며 내놓는다", () => {
-  it("등재하면 호가와 함께 남는다 — 생략하면 코어 요구가", () => {
+  it("등재하면 호가와 함께 남는다 — 생략하면 호가를 정하지 않는다", () => {
     const state = createTestGame(11);
     const target = sellable(state);
     const res = setTransferList(state, { playerId: target.id, listed: true });
     expect(res.ok, res.message).toBe(true);
-    expect(listingOf(state, target.id)!.askingPrice).toBeGreaterThan(0);
+    expect(listingOf(state, target.id)!.askingPrice).toBeUndefined();
 
     const priced = setTransferList(state, {
       playerId: target.id,
@@ -112,34 +111,7 @@ describe("매각 제안 — 특정 구단에 직접 묻는다", () => {
     // 우리가 파는 쪽이므로 상대는 선수의 지금 소속(우리)이 아니라 **사려는 구단**이다
     expect(card.counterpart).toBe(teamName(buyer.id));
     expect(card.counterpart).not.toBe(teamName(state.userTeamId));
-    expect(card.dueOn).toBe(openNegotiationFor(state, target.id)!.rounds[0]!.respondsOn);
-  });
-
-  it("사는 쪽의 조정은 **깎아 부르는 것**이다 — 올려 부를 수 없다", () => {
-    const state = createTestGame(11);
-    state.date = "2026-08-01";
-    const target = sellable(state);
-    // 값을 박아 두면 안 된다 — 하한이 그 선수의 시장가에 붙어 있어서, 스쿼드가
-    // 바뀌면 "하한이 우리 호가보다 높은" 빈 구간이 나온다
-    const ask = askingPriceFor(state, target);
-    offerPlayerOut(state, { playerId: target.id, teamId: buyerOf(state).id, fee: ask });
-    const negotiation = openNegotiationFor(state, target.id)!;
-    state.date = negotiation.rounds[0]!.respondsOn!;
-
-    const raised = respondOffer(state, {
-      negotiationId: negotiation.id,
-      verdict: "counter",
-      fee: Math.round(ask * 1.2),
-    });
-    expect(raised.ok).toBe(false);
-    expect(raised.message).toContain("미만");
-
-    const cut = respondOffer(state, {
-      negotiationId: negotiation.id,
-      verdict: "counter",
-      fee: Math.round(ask * 0.9),
-    });
-    expect(cut.ok, cut.message).toBe(true);
+    expect(card.dueOn).toBeUndefined();
   });
 
   it("수락 → 확정이면 선수·이적료·리스트가 함께 움직인다", () => {
@@ -158,7 +130,7 @@ describe("매각 제안 — 특정 구단에 직접 묻는다", () => {
     // 상대가 응할 만한 값 — 낮게 불러 확률을 올린다
     offerPlayerOut(state, { playerId: target.id, teamId: buyer.id, fee: 1_000_000 });
     const negotiation = openNegotiationFor(state, target.id)!;
-    state.date = negotiation.rounds[0]!.respondsOn!;
+    state.date = negotiation.rounds[0]!.respondsOn ?? state.date;
     // 시장가 한참 아래로 불렀으므로 확률이 하한(5%)에 걸릴 일이 없다
     const verdict = respondOffer(state, { negotiationId: negotiation.id, verdict: "accept" });
     expect(verdict.ok, verdict.message).toBe(true);
@@ -238,7 +210,7 @@ describe("AI가 먼저 노리는 길도 남아 있다", () => {
           weeklyWage: wageExpectationOf(state, player),
           contractYears: 4,
           respondsOn: null,
-          probability: 60,
+
           verdict: null,
         },
       ],

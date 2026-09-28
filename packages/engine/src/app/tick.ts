@@ -29,16 +29,9 @@ import { type TrainedSession } from "../story/players/training-report";
 import { restingOn, trainsWithFirstTeam } from "../story/players/training-report";
 import {
   type GameState,
-  playerName,
-  pushNews,
-  pruneReportCards,
   playerById,
   teamNameIn,
-  pushReportCards,
-  PENDING_REPORT_CARD_LIMIT,
   pushNarrative,
-  activeContract,
-  pendingContractOf,
   managedTeamId,
   userPlayers,
   openInjuryIds,
@@ -59,29 +52,17 @@ import {
   DAY_START,
   activeSuspensionFor,
 } from "../common/core/state";
+import { dueNegotiationFollowups } from "../negotiation/market/evaluation";
+import { captureScoutingEvidence } from "../negotiation/commands/scouting";
 import {
-  missionLabel,
-  pruneDeferredScouts,
-  pruneWaitingMissions,
-} from "../negotiation/players/scouting";
-import { scoutReportLine, missionReportLine } from "../negotiation/views/scouting";
-import { rankMissionCandidates } from "../negotiation/players/scout-mission";
-import {
-  listingOf,
   expireNegotiations,
-  runAiPrecontracts,
-  expiringContracts,
   pendingVerdicts,
+  expiringContracts,
 } from "../negotiation/market/negotiation";
-import { diffDays, dayOfWeek, addDays, MONDAY } from "../common/core/dates";
-import {
-  listedPatienceDaysOf,
-  demotionPatienceDaysOf,
-  overloadPatienceDaysOf,
-} from "../match/squad/demotion";
+import { diffDays, dayOfWeek, addDays, MONDAY, seasonYear } from "../common/core/dates";
+import { demotionPatienceDaysOf, overloadPatienceDaysOf } from "../match/squad/demotion";
 import { betterThanInSquad, declinePendingPress } from "../story/world/press";
 import { SQUAD_CORE_SIZE } from "../common/players/squad-depth";
-import { wageByRating } from "../negotiation/market/market";
 import { makeRng } from "../common/core/rng";
 import {
   returnDueLoans,
@@ -138,19 +119,12 @@ import {
 } from "../negotiation/finance/finance";
 import { applyMonthlyDevelopment } from "../story/players/development";
 import { tickPromises, minutesShortfalls, shortfallText } from "../negotiation/players/promises";
-import { settleArrivedResponses } from "../negotiation/market/counterparty";
-import { runMandates } from "./workflows/negotiation/market/mandate";
-import {
-  runMedicals,
-  runAiRenewals,
-  generateIncomingOffers,
-} from "./workflows/negotiation/market/negotiation";
+import { runAiRenewals } from "./workflows/negotiation/market/negotiation";
 import { runAiTransfers } from "../negotiation/market/ai-market";
 import {
   runManagerMarket,
   reviewManagerContract,
 } from "./workflows/negotiation/market/manager-market";
-import { tickInterests } from "../negotiation/market/interest";
 import { openEvePress } from "./workflows/story/world/press";
 import { tickBoardRequests } from "../negotiation/finance/board-request";
 import { tickApproaches } from "./workflows/story/world/approach";
@@ -206,6 +180,8 @@ export interface AdvanceOutcome {
    * 창구다. 판정이 없어도 게임은 완결된다.
    */
   trained?: { sessions: TrainedSession[] };
+  /** Async date work is the only reason for this stop; the app may resume after processing. */
+  pendingDateEvents?: boolean;
   /**
    * attention = **오늘 결정하지 않으면 사라지는 일**에서 멈춤 (협상 기한 당일).
    * 부상·불만·오퍼 도착은 여기에 들지 않는다 — digest로 쌓여 끝난 뒤 보고된다.
@@ -239,157 +215,6 @@ function sessionById(state: GameState, id: string): TrainingSession | null {
  */
 function isHardSession(session: TrainingSession): boolean {
   return !(session.focus.length > 0 && session.focus.every((f) => f === "recovery"));
-}
-
-/** 도착 줄에 선 id 하나를 부르는 이름 — 임무면 조건 한 줄, 아니면 선수 이름 */
-function reportCardLabel(state: GameState, id: string): string {
-  const mission = state.scoutMissions.find((m) => m.id === id);
-  return mission ? `임무 「${missionLabel(mission)}」` : playerName(state, id);
-}
-
-/**
- * 카드로 세우지 못한 보고서 — **소식으로 남긴다.**
- *
- * 다이제스트로는 감독에게 닿지 않는다: 모델의 장면 헤더가 시계를 옮긴 턴의
- * 다이제스트는 화면에 서지 않는 `silent` 기록이다 (agents.md §6). 소식은 다음 평시
- * 턴의 스냅샷 `<news>`에 실려 GM이 감독에게 말한다 — 며칠을 기다려 산 정보가 아무
- * 말 없이 없어지지 않는 것이 이 줄의 계약이다 (player.md §9.4-1).
- */
-function reportCardLost(state: GameState, ids: readonly string[], why: string): void {
-  if (ids.length === 0) return;
-  pushNews(
-    state,
-    ids.map((id) => `${reportCardLabel(state, id)} 스카우트 보고서 — ${why}`),
-  );
-}
-
-/**
- * 스카우트 파견 완료 — dueOn에 도달한 리포트를 닫고 보고한다.
- * 완료 이후 그 선수의 능력치 안개가 걷힌다 (scouting.ts).
- */
-function resolveScouting(state: GameState, digest: TickSink): void {
-  // 한도에 막혀 못 나간 요청은 대기 기간이 지나면 뜻이 지나간다 (player.md §9.4)
-  pruneDeferredScouts(state);
-  pruneWaitingMissions(state);
-  /**
-   * 카드를 영영 못 세울 것을 닫는다 — **줄에서 조용히 지우는 자는 여기 하나뿐이다.**
-   * 꺼내는 쪽(GM 턴)은 조립에 실패하면 되돌리므로, 그 실패가 영구적일 때 줄이
-   * 막히지 않게 하는 자리가 필요하다 (player.md §9.4-1).
-   */
-  reportCardLost(state, pruneReportCards(state), "그 선수가 세계를 떠나 카드를 세우지 못했다");
-  resolveMissions(state, digest);
-  for (const report of state.scoutReports) {
-    if (report.completedOn !== null) continue;
-    if (state.date < report.dueOn) continue;
-    report.completedOn = state.date;
-    const player = playerById(state, report.gamePlayerId);
-    if (!player) {
-      // 파견 나간 사이에 은퇴했다 — 보고서는 닫히되 세울 카드가 없다. 조용히
-      // 넘기면 감독은 며칠을 기다린 파견이 어떻게 됐는지 알 길이 없다
-      reportCardLost(state, [report.gamePlayerId], "보고가 돌아오기 전에 그 선수가 은퇴했다");
-      continue;
-    }
-    /**
-     * 값을 함께 낸다 — 카드는 프롬프트에 가지 않으므로 도착 사건의 사실이 모델에
-     * 닿는 통로는 이 줄이다 (agents.md §6).
-     */
-    digest.push(
-      `스카우트 보고서 도착 — ${
-        scoutReportLine(state, player.id) ?? `${player.name} (${teamNameIn(state, player.teamId)})`
-      }`,
-    );
-    // 카드는 모델이 그 줄을 읽은 턴에 선다 — 이 다이제스트가 장면 뒤에 굴러온
-    // 것일 수 있어서다 (`peekReportCards` — agents.md §6)
-    reportCardLost(
-      state,
-      pushReportCards(state, [player.id]),
-      `대기 줄이 가득 찼다 (${PENDING_REPORT_CARD_LIMIT}장)`,
-    );
-    pushNarrative(state, `${player.name} 스카우트 보고서 입수`, 2);
-  }
-}
-
-/**
- * 스카우트 임무 완료 — `dueOn`에 도달한 임무에 **그날의 상태로** 후보를 적는다.
- *
- * ⚠️ **줄을 세운 뒤에 적는다.** 후보로 적히는 순간 그 다섯의 지식 수준이 `seen`으로
- * 오르므로(`pickedByMission`), 적은 뒤에 다시 세우면 관측값이 달라져 카드와 어긋난다.
- * 그래서 후보는 **한 번만** 적고 카드는 적힌 목록을 읽는다 (player.md §9.4).
- */
-function resolveMissions(state: GameState, digest: TickSink): void {
-  for (const mission of state.scoutMissions) {
-    if (mission.dueOn === null || mission.completedOn !== null) continue;
-    if (state.date < mission.dueOn) continue;
-    mission.candidates = rankMissionCandidates(state, mission);
-    mission.completedOn = state.date;
-    /**
-     * 후보의 값을 함께 낸다 — 카드는 프롬프트에 가지 않으므로 도착 사건의 사실이
-     * 모델에 닿는 통로는 이 줄이다 (agents.md §6).
-     */
-    digest.push(
-      `스카우트 임무 보고 도착 — ${missionReportLine(state, mission.id) ?? missionLabel(mission)}`,
-    );
-    // 카드는 모델이 그 줄을 읽은 턴에 선다 — 보고서와 같은 줄에 세운다
-    reportCardLost(
-      state,
-      pushReportCards(state, [mission.id]),
-      `대기 줄이 가득 찼다 (${PENDING_REPORT_CARD_LIMIT}장)`,
-    );
-    pushNarrative(state, `스카우트 임무 보고 입수 — ${missionLabel(mission)}`, 2);
-  }
-}
-
-/**
- * 서열 대비 주급이 **밀려 있는** 선수가 재계약을 묻기 시작하는 잔여 일수 — 반년
- * 전이다 (→ docs/story/people.md §5).
- */
-export const CONTRACT_DEMAND_DAYS = 180;
-
-/** 서열대로 받고 있으면 급할 것이 없다 — 그 절반에서 묻는다 */
-export const CONTRACT_DEMAND_PAID_DAYS = 90;
-
-/**
- * 오늘 이 선수에게 **등재 불만이 설 자리인가** (→ docs/story/people.md §5).
- *
- * 문턱은 `LISTED_PATIENCE_DAYS`(14일)에 그 사람의 `patience`를 곱한 날이고, 대상은
- * 우리 스쿼드에서 그보다 나은 선수가 `SQUAD_CORE_SIZE` 미만인 자원뿐이다 — 백업
- * 정리까지 반란이 되면 리스트가 못 쓰는 손잡이가 된다. 추첨은 없다: 문턱을 넘으면
- * 걸리므로 감독이 날짜를 셀 수 있다.
- */
-export function listedGrievanceDue(state: GameState, player: GamePlayer): boolean {
-  const listing = listingOf(state, player.id);
-  if (!listing) return false;
-  // 문턱은 사람마다 다르다 — 등재의 대가도 시간의 결과이되 그 시간은 그의 것이다
-  if (diffDays(listing.listedOn, state.date) < listedPatienceDaysOf(state, player)) return false;
-  if (state.issues.some((i) => i.gamePlayerId === player.id)) return false;
-  // 백업 정리는 조용하다 — 자격은 회견이 쥔 그 자다 (`betterThanInSquad`)
-  return betterThanInSquad(state, player) < SQUAD_CORE_SIZE;
-}
-
-/**
- * 오늘 이 선수에게 **계약 만료 불만이 설 자리인가** (→ docs/story/people.md §5).
- *
- * 문턱이 둘인 이유는 서열대로 받는 선수는 급할 것이 없어서다 — 주급이 그의 기량이
- * 부르는 값(`wageByRating`)에 못 미치면 반년 전부터 묻고, 아니면 그 절반에서 묻는다.
- * 자격은 등재와 같은 자다. 이미 만료된 계약에는 서지 않고, **열린 재계약 협상이
- * 있으면** 서지 않는다 — 감독이 이미 문을 연 일이다.
- */
-export function contractGrievanceDue(state: GameState, player: GamePlayer): boolean {
-  const contract = activeContract(state, player.id);
-  if (!contract) return false;
-  // 이미 갈 곳을 정한 사람에게는 요구할 것이 없다 (people.md §8 · transfer.md §1-4)
-  if (pendingContractOf(state, player.id)) return false;
-  const days = diffDays(state.date, contract.until);
-  // 이미 만료된 계약에는 불만이 설 자리가 없다 — 남은 것은 떠나는 일뿐이다
-  if (days < 0) return false;
-  const paid = contract.weeklyWage >= wageByRating(player.attributes.overall);
-  if (days > (paid ? CONTRACT_DEMAND_PAID_DAYS : CONTRACT_DEMAND_DAYS)) return false;
-  if (state.issues.some((i) => i.gamePlayerId === player.id)) return false;
-  if (betterThanInSquad(state, player) >= SQUAD_CORE_SIZE) return false;
-  // 협상을 여는 것은 불만을 세우지 않는다 — 지우는 것은 성사뿐이다 (people.md §5)
-  return !state.negotiations.some(
-    (n) => n.gamePlayerId === player.id && n.kind === "renew" && n.status === "open",
-  );
 }
 
 /**
@@ -603,7 +428,6 @@ function dailyTick(
    * ⚠️ **남의 팀 폼은 `tickOtherClubs`가 움직인다** — 스카우팅 대상은 대개 남의
    * 팀이므로 위 감독 팀 루프 뒤로 옮기는 것만으로는 모자라다.
    */
-  resolveScouting(state, digest);
   // 하루치 전술 적응 — **AI 클럽만** 받는다 (other-clubs.ts의 계약)
   driftFamiliarity(state);
 
@@ -813,39 +637,6 @@ function dailyTick(
   }
 
   /**
-   * 등재 방치 불만 — 2군 방치와 **같은 결이다**: 추첨 없이 문턱을 넘으면 걸린다
-   * (→ docs/story/people.md §5). 등재는 감독이 값을 부르며 시장에 내놓은 **공개된
-   * 결정**이라 문턱만 강등보다 짧다.
-   */
-  if (dow === MONDAY) {
-    const shelved = players.flatMap((p): { player: GamePlayer; days: number }[] => {
-      if (!listedGrievanceDue(state, p)) return [];
-      // 판정이 통과했으니 등재는 있다 — 줄에 적을 며칠째만 여기서 센다
-      const listing = listingOf(state, p.id);
-      return listing ? [{ player: p, days: diffDays(listing.listedOn, state.date) }] : [];
-    });
-    if (shelved.length > 0) {
-      for (const { player } of shelved) {
-        // `count`는 없다 — 기간은 `TransferListing.listedOn`이 갖는다
-        state.issues.push({
-          gamePlayerId: player.id,
-          kind: "unhappy",
-          reason: "listed",
-          since: state.date,
-        });
-      }
-      /** 여럿이 한날 문턱을 넘으면 전부 걸리되, 줄은 하나다 — 이름이 화면을 채우지 않게 */
-      const longest = Math.max(...shelved.map((row) => row.days));
-      const line =
-        shelved.length === 1
-          ? `${shelved[0]!.player.name} 이적 리스트 불만 — 등재 ${longest}일째`
-          : `이적 리스트 불만 ${shelved.length}명 — 최장 ${longest}일째`;
-      digest.push(line);
-      pushNarrative(state, line, 3);
-    }
-  }
-
-  /**
    * 과부하 불만 — 2군·등재 방치와 **같은 결이다**: 추첨 없이 문턱을 넘으면 걸린다
    * (→ docs/story/people.md §5 · docs/common/player.md §5.5).
    *
@@ -890,68 +681,9 @@ function dailyTick(
     }
   }
 
-  /**
-   * 계약 만료 불만 — 만료가 문턱 안인데 **열린 재계약이 없을 때** (people.md §5).
-   *
-   * ⚠️ `warnExpiringContracts`와 다른 일이다 — 그것은 감독에게 알리는 주의 줄이고,
-   * 이것은 감독이 열지 않아서 서는 **선수의 불만**이다.
-   */
-  if (dow === MONDAY) {
-    const unrenewed = players.flatMap((p): { player: GamePlayer; days: number }[] => {
-      if (!contractGrievanceDue(state, p)) return [];
-      // 판정이 통과했으니 활성 계약은 있다 — 줄에 적을 남은 일수만 여기서 센다
-      const contract = activeContract(state, p.id);
-      return contract ? [{ player: p, days: diffDays(state.date, contract.until) }] : [];
-    });
-    if (unrenewed.length > 0) {
-      for (const { player } of unrenewed) {
-        // `count`는 없다 — 남은 일수는 `Contract.until`이 갖는다
-        state.issues.push({
-          gamePlayerId: player.id,
-          kind: "unhappy",
-          reason: "contract",
-          since: state.date,
-        });
-      }
-      /** 줄은 하나다 — 급한 쪽이 앞에 선다 */
-      const soonest = Math.min(...unrenewed.map((u) => u.days));
-      const line =
-        unrenewed.length === 1
-          ? `${unrenewed[0]!.player.name} 재계약 불만 — 계약 ${soonest}일 남음`
-          : `재계약 불만 ${unrenewed.length}명 — 최단 ${soonest}일 남음`;
-      digest.push(line);
-      pushNarrative(state, line, 3);
-    }
-  }
-
-  // 협상 — 기한 경과 처리 + 답할 날이 된 라운드 + 들어오는 오퍼.
-  // 무직이면 흥정할 구단이 없다 — 경질과 함께 진행 중이던 협상은 이미 사라졌다
   if (managed) expireNegotiations(state, kind.interest);
-  /**
-   * 답할 날이 된 라운드 — 감독이 그 자리에 나서지 않았으면 코어가 앵커로 굳힌다
-   * (transfer.md §12-1). **기한 처리 뒤, 위임이 구르기 전**이다: 맡긴 협상과 감독이 쥔
-   * 협상이 같은 자리에서 같은 함수를 지나야 같은 오퍼가 누가 쥐었는지에 따라 갈리지 않는다.
-   */
-  if (managed) settleArrivedResponses(state, digest);
-  /**
-   * 단장에게 맡긴 협상 — 감독 턴 없이 여기서 굴러 합의까지 간다 (transfer.md §12-4).
-   * **기한 처리 뒤**다: 오늘 무산된 자리의 결과를 먼저 알리고, 없는 협상에 첫 제시를 넣지
-   * 않는다.
-   */
-  if (managed) runMandates(state, digest);
-  /**
-   * 메디컬 — 합의한 딜은 검진일에 계약이 된다. **통과는 시계를 세우지 않는다**:
-   * 감독이 이미 결정한 일이라 확인만 남았다. 소견이 붙어도 오늘 답할 필요는
-   * 없으므로 여기서 멈추지 않고, 주의 줄에 서서 다음 턴에 감독을 기다린다.
-   */
-  if (managed) runMedicals(state, kind.interest);
   // 다른 구단의 재계약 — 노리던 선수를 놓칠 수 있다
   runAiRenewals(state, digest);
-  /**
-   * 그 거울상 — 다른 구단이 **우리** 만료 선수를 예약한다 (transfer.md §1-4).
-   * 지킬 스쿼드가 없는 무직에게는 뺏길 선수도 없다.
-   */
-  if (managed) runAiPrecontracts(state, digest);
   // 무소속 시장 — 우리가 안 데려가면 남이 데려간다
   if (windowOpenOn(state.windows, state.date)) signFreeAgents(state, digest);
   // 남의 팀끼리의 이적·임대 — 세계는 감독 없이도 돈다 (ai-market.ts)
@@ -960,12 +692,6 @@ function dailyTick(
   // 무직이면 그 자리 중 하나가 감독의 것이 될 수도 있다 (career.md §5.1)
   const offered = runManagerMarket(state, digest);
   if (managed) {
-    /**
-     * 관심 — **오퍼보다 먼저 부른다** (transfer.md §1-2). 오퍼는 `bidding`까지 오른
-     * 관심에서만 나오므로, 사다리가 먼저 서야 그날의 오퍼가 그 줄을 읽을 수 있다.
-     */
-    tickInterests(state, kind.interest);
-    generateIncomingOffers(state, kind.interest);
     warnExpiringContracts(state, digest);
   }
 
@@ -1021,7 +747,12 @@ function dailyTick(
    * **찾아온 사람도 같은 자리에 선다** (people.md §8) — 그 자리는 사흘이면 사라지고,
    * 시간이 그 위를 지나가면 남는 것은 평판이 깎였다는 다이제스트 한 줄뿐이다.
    */
-  return approached || offered || (managed !== null && standsToday(state, kind.interest));
+  const deadlineDue = pendingVerdicts(state).filter(
+    (item) => item.negotiation.expiresOn === state.date,
+  );
+  for (const item of deadlineDue)
+    pushEvent(digest, "interest", `${item.label} — 오늘이 기한입니다`);
+  return approached || offered || deadlineDue.length > 0;
 }
 
 /**
@@ -1093,26 +824,6 @@ export function warnExpiringContracts(state: GameState, digest: TickSink, final 
     );
     pushNarrative(state, `${player.name} 계약 ${left}일 남음`, stage <= 90 ? 4 : 3);
   }
-}
-
-/**
- * **오늘이 마지막 날인 결정** — 시계를 세우는 유일한 사유(경기일·시즌 종료 외).
- *
- * 협상은 기한을 넘기면 그대로 사라진다. 감독이 "다음 경기까지" 하고 3주를
- * 넘겼는데 그 사이 오퍼가 조용히 만료돼 있으면, 잃은 것을 되돌릴 방법이 없다.
- * 그래서 다른 알림은 다 지나가되 **오늘 답하지 않으면 없어지는 것** 앞에서만
- * 멈춘다 — 한 협상당 많아야 하루다.
- */
-function standsToday(state: GameState, digest: TickSink): boolean {
-  const due = pendingVerdicts(state).filter((v) => v.negotiation.expiresOn === state.date);
-  if (due.length === 0) return false;
-  for (const v of due) {
-    digest.push(`${v.label} — 오늘이 기한입니다. 넘기면 협상이 사라집니다`);
-    // 오퍼 답 도착과 같은 눈금 — 오늘 답해야 하는 일은 3이다 (people.md §9).
-    // `label`이 아니라 `subject`를 싣는다: 표에는 도구 이름이 아니라 사실만 선다
-    pushNarrative(state, `${v.subject} — 오늘이 협상 기한`, 3);
-  }
-  return true;
 }
 
 /**
@@ -1648,9 +1359,27 @@ export function advanceTime(
   const maxDays =
     typeof until === "object" ? Math.min(until.days, MAX_REQUESTED_DAYS) : MAX_OPEN_ENDED_DAYS;
 
+  captureScoutingEvidence(state);
+  if (
+    state.scoutingRequests.some((request) => request.status === "ready") ||
+    dueNegotiationFollowups(state).length > 0
+  ) {
+    pushEvent(digest, "news", "예정된 조사·연락을 확인할 시간입니다");
+    return { ok: true, events, stopped: "attention", trained, pendingDateEvents: true };
+  }
   for (let d = 0; d < maxDays; d++) {
     // 시즌 종료 체크 — 남은 경기가 없으면 시즌 리뷰 + 전환
-    if (allMatchesDone(state)) {
+    const rolloverDate = `${seasonYear(state.season + 1)}-07-01`;
+    const pendingBeforeRollover = [
+      ...pendingVerdicts(state).map((item) => item.negotiation.expiresOn ?? null),
+      ...state.scoutingRequests
+        .filter((request) => request.status === "scheduled")
+        .map((request) => request.dueOn),
+      ...state.negotiationFollowups
+        .filter((event) => event.status === "pending")
+        .map((event) => event.dueOn),
+    ].some((date) => date !== null && date > state.date && date < rolloverDate);
+    if (allMatchesDone(state) && !pendingBeforeRollover) {
       // 남은 만료 문턱은 여기서 낸다 — 이 뒤로 그 계약에 닿는 tick이 없다
       warnExpiringContracts(state, digest, true);
       /**
@@ -1661,7 +1390,9 @@ export function advanceTime(
        */
       if (managedTeamId(state)) declinePendingPress(state, digest);
       const seasonEnded = state.season;
+      captureScoutingEvidence(state);
       const seasonLines = endSeason(state);
+      captureScoutingEvidence(state);
       digest.push(...seasonLines);
       journal({ kind: "tick.season_end", season: seasonEnded, lines: [...seasonLines] });
       return { ok: true, events, stopped: "season_end", trained };
@@ -1695,6 +1426,7 @@ export function advanceTime(
      */
     const contractDay = reviewManagerContract(state, kind.board);
     simulateOtherMatches(state, kind.matchday);
+    captureScoutingEvidence(state);
     // 녹아웃 — 직전 단계가 끝났으면 다음 단계를 편성한다.
     // 대항전을 먼저 돌려야 예약된 대항전 날짜가 컵 날짜 선택에 반영된다.
     if (hasCups(state.world)) {
@@ -1735,9 +1467,20 @@ export function advanceTime(
     }
 
     // 통보가 선 날은 답할 자리가 생긴 날이다 — 경기일이 아니면 주의로 멈춘다
-    if (needsAttention || contractDay === "notice") {
+    if (
+      needsAttention ||
+      contractDay === "notice" ||
+      state.scoutingRequests.some((request) => request.status === "ready") ||
+      dueNegotiationFollowups(state).length > 0
+    ) {
       closeDay("attention");
-      return { ok: true, events, stopped: "attention", trained };
+      return {
+        ok: true,
+        events,
+        stopped: "attention",
+        trained,
+        pendingDateEvents: !needsAttention && contractDay !== "notice",
+      };
     }
     if (typeof until === "object" && d + 1 >= until.days) {
       closeDay("reached");

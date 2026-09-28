@@ -16,17 +16,7 @@ import {
   type GameState,
 } from "../../common/core/state";
 import { pickAnyPlayer } from "../../common/core/player-ref";
-import { renewalYearsExpectation } from "./counter-bounds";
-import {
-  askingPriceFor,
-  isPrecontractTarget,
-  loanedInBy,
-  marketValueOf,
-  observedMarketValue,
-  renewalExpectation,
-  wageExpectationOf,
-  LOAN_FEE_RATE,
-} from "./market";
+import { isPrecontractTarget, loanedInBy, observedMarketValue } from "./market";
 import {
   offerTerms,
   openNegotiationFor,
@@ -69,29 +59,31 @@ export function applyProposal(state: GameState, input: ProposalInput): CommandRe
         playerId: player.id,
         kind: input.kind,
         fee,
-        weeklyWage: input.weeklyWage ?? wageExpectationOf(state, player),
-        years: input.years ?? 4,
+        weeklyWage: input.weeklyWage ?? 0,
+        years: input.years ?? 0,
         ...(input.paymentYears === undefined ? {} : { paymentYears: input.paymentYears }),
         ...(input.squadStatus === undefined ? {} : { squadStatus: input.squadStatus }),
         ...(terms ? { terms } : {}),
       });
     }
     case "renew": {
-      if (input.weeklyWage === undefined) return { ok: false, message: "주급이 비어 있습니다" };
+      if (input.weeklyWage === undefined || input.years === undefined)
+        return { ok: false, message: "주급과 계약 기간을 명시해 주세요" };
       return openRenewal(state, {
         playerId: player.id,
         weeklyWage: input.weeklyWage,
-        years: input.years ?? renewalYearsExpectation(state, player),
+        years: input.years,
         ...(input.squadStatus === undefined ? {} : { squadStatus: input.squadStatus }),
         ...(terms ? { terms } : {}),
       });
     }
     case "personal": {
-      if (input.weeklyWage === undefined) return { ok: false, message: "주급이 비어 있습니다" };
+      if (input.weeklyWage === undefined || input.years === undefined)
+        return { ok: false, message: "주급과 계약 기간을 명시해 주세요" };
       return proposePersonal(state, {
         playerId: player.id,
         weeklyWage: input.weeklyWage,
-        years: input.years ?? 4,
+        years: input.years,
         ...(input.squadStatus === undefined ? {} : { squadStatus: input.squadStatus }),
         ...(terms ? { terms } : {}),
       });
@@ -137,13 +129,6 @@ export interface ProposalView {
   /** 열린 협상 — 있으면 그 갈래로 고정된다 */
   negotiationId: string | null;
   negotiationKind: "buy" | "loan" | "renew" | null;
-  /** 갈래별 자 — 영입은 요구가, 임대는 임대료 */
-  fee: { buy: number; loan: number };
-  /** 이적·임대의 기대 주급 */
-  weeklyWage: number;
-  /** 재계약의 기대 주급 — 우리 선수가 아니면 null */
-  renewalWage: number | null;
-  years: { buy: number; renew: number };
   /** 우리 스쿼드에서의 지금 자리 — 지위 칸의 기본값 */
   squadStatus: SquadStatus;
   /** 사전 계약을 부를 수 있는가 — 이적료 0이 허용되는 자리 */
@@ -178,7 +163,7 @@ export interface ProposalView {
   /** 우리 이적 예산과 주급 여력 — 폼 아래에 서는 사실 */
   transferBudget: number;
   wageRoom: number;
-  marketValue: number;
+  marketValue: number | null;
 }
 
 /**
@@ -255,15 +240,6 @@ export function proposalViewOf(state: GameState, playerId: string): ProposalView
     loanedFrom: loanedIn && player.loan ? teamName(player.loan.fromTeamId) : null,
     negotiationId: open?.id ?? null,
     negotiationKind,
-    fee: free
-      ? { buy: 0, loan: 0 }
-      : {
-          buy: askingPriceFor(state, player),
-          loan: Math.round(marketValueOf(state, player) * LOAN_FEE_RATE),
-        },
-    weeklyWage: wageExpectationOf(state, player),
-    renewalWage: ours ? renewalExpectation(state, player) : null,
-    years: { buy: 4, renew: renewalYearsExpectation(state, player) },
     squadStatus: derivedSquadStatus(state, player, state.userTeamId),
     precontract: !ours && isPrecontractTarget(state, player),
     personal: personal

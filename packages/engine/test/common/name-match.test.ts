@@ -6,7 +6,7 @@ import {
   playerCard,
   playersOf,
   rankByName,
-  scoutPlayer,
+  changeScoutingRequest,
   setCaptain,
   setTransferList,
   startMatch,
@@ -238,10 +238,14 @@ describe("카탈로그 — 실제 세계에서", () => {
   it("갈리는 이름은 상태를 바꾸지 않고 후보를 돌려준다", () => {
     const game = createTestGame(7);
     // 마르티네스는 세계에 둘이고, 스카우트가 고를 수 있는 사람은 둘 다 남의 팀이다
-    const res = scoutPlayer(game, "마르티네스");
+    const res = changeScoutingRequest(
+      game,
+      { action: "request", question: "조사", playerIds: ["마르티네스"] },
+      "조사해줘",
+    );
     expect(res.ok).toBe(false);
     expect(res.message).toContain("여러 선수와 맞습니다");
-    expect(game.scoutReports).toHaveLength(0);
+    expect(game.scoutingRequests).toHaveLength(0);
   });
 });
 
@@ -284,9 +288,9 @@ describe("이름이 겹칠 때 — 자격이 문을 고른다", () => {
   });
 
   it("우리 선수를 이름으로 불러도 그 사실이 답이다 — 없는 이름이 되지 않는다", () => {
-    const res = scoutPlayer(game, onlyOurs.name);
+    const res = pickRivalPlayer(game, onlyOurs.name);
     expect(res.ok).toBe(false);
-    expect(res.message).toContain("이미 다 알고 있습니다");
+    expect(res.ok ? "" : res.message).toContain("우리 선수");
   });
 
   it("자격 안에서 갈리면 고르지 않고 후보를 돌려준다", () => {

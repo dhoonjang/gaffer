@@ -133,6 +133,7 @@ function ourClubBlock(state: GameState, otherTeamId: string | null): string[] {
 
 /** 시계 — 이적창과 협상 기한 */
 function clockLine(state: GameState, negotiation: Negotiation): string {
+  if (!negotiation.expiresOn) return `<clock>${describeWindowState(state)}</clock>`;
   const left = diffDays(state.date, negotiation.expiresOn);
   return (
     `<clock>${describeWindowState(state)} · 협상 기한 ${negotiation.expiresOn}` +

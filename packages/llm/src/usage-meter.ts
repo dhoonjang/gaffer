@@ -33,6 +33,8 @@ import { LlmCallError } from "./llm-error";
  */
 const SKIPPABLE_AGENTS: ReadonlySet<AgentName> = new Set<AgentName>([
   "training-rater",
+  "scouting",
+  "negotiation",
   // 경기 마감도 같은 계약이다 — 건너뛰면 앵커가 평점이고 마무리는 매치 GM이 쓴다 (agents.md §3)
   "finalize-match",
   "history-compactor",

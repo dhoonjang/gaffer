@@ -1,19 +1,17 @@
 "use client";
 
-import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type { CardMark, ChatTurn, GoalMark, ToolCallRecord } from "@story-fm/engine";
 import { cutStamps } from "../../domains/story/lib/scene-stamp";
 import { hasRailHint } from "../../domains/common/lib/panel-hints";
 import { groupChips, groupPieces, splitStaging, weaveTurn } from "../lib/turn-pieces";
 import type { Utterance } from "../lib/turn-pieces";
-import { BROADCAST_SPEAKER, formatMoney, formatScore, normalizeSpeaker } from "@story-fm/domain";
-import { contractUntil } from "../../domains/common/lib/dateline";
-import type { ScoutReportCard, TickEvent } from "@story-fm/domain";
-import { MarketCardView, MissionReportCardView } from "@/domains/negotiation/ui/market-card";
+import { BROADCAST_SPEAKER, formatScore, normalizeSpeaker } from "@story-fm/domain";
+import type { TickEvent } from "@story-fm/domain";
+import { MarketCardView } from "@/domains/negotiation/ui/market-card";
 import { splitMarketCalls } from "@/domains/negotiation/lib/market-calls";
-import { ratingTone } from "@/domains/common/lib/scout-report-display";
+import { ScoutingReportView } from "@/domains/negotiation/ui/scouting-report";
 import { tickEventLook } from "@/domains/common/lib/tick-event-display";
 import { CALL_LABEL } from "@/domains/common/lib/call-label";
 import type { SpeakerRole } from "@story-fm/engine";
@@ -319,157 +317,6 @@ function TickEvents({ events }: { events: readonly TickEvent[] }) {
   );
 }
 
-/**
- * 능력치 막대의 바닥 — 프로 선수의 축은 여기 아래로 잘 내려가지 않는다.
- * 0에서 시작하면 열여섯 줄이 모두 반쯤 차 보여 강점과 약점이 뭉갠다.
- */
-const BAR_FLOOR = 25;
-
-const barPct = (value: number) =>
-  Math.max(0, Math.min(100, ((value - BAR_FLOOR) / (99 - BAR_FLOOR)) * 100));
-
-/**
- * 스카우팅 보고서 — **며칠을 기다려 얻은 것이므로 한 장으로 편다.**
- *
- * 한 번 읽고 넘어갈 정보가 아니다 —
- * 능력치·주발·성장 가능성·몸값이 한자리에 있어야 "지금 지를까, 더 볼까"가 판단된다.
- *
- * **안개는 모양으로 드러난다.** 종합은 관측값과 오차폭으로, 성장 가능성은 단계로 말한다.
- * 축은 막대 끝이 오차만큼 번진다. 또렷한 숫자
- * 하나로 그리면 감독이 그걸 사실로 읽는다.
- */
-function ScoutReport({ report: r }: { report: ScoutReportCard }) {
-  const groups = [...new Set(r.attributes.map((a) => a.group))];
-  const overall = r.overall.value;
-  const overallMargin = r.overall.margin;
-  const potentialLow = r.potential?.low.value ?? null;
-  const potentialHigh = r.potential?.high.value ?? null;
-  return (
-    <div className="scout-report" data-testid="scout-report">
-      <div className="sr-head">
-        <span className="sr-badge">스카우팅 보고서</span>
-        <b className="sr-name">{r.name}</b>
-        <span className="sr-meta">
-          {r.team} · {r.age}세 · {r.position}
-        </span>
-        <span
-          className="sr-ovr"
-          data-rating={overall === null ? undefined : ratingTone(overall)}
-          title={
-            overall === null
-              ? undefined
-              : overallMargin > 0
-                ? `가장 잘 맞는 자리 기준 종합 추정치 ${overall} ±${overallMargin}`
-                : `가장 잘 맞는 자리 기준 종합 ${overall}`
-          }
-        >
-          <em>종합</em>
-          <b>
-            {overall ?? "—"}
-            {overallMargin > 0 && <i>±{overallMargin}</i>}
-          </b>
-        </span>
-      </div>
-
-      <div className="sr-facts">
-        <span>
-          <em>성장 가능성</em>
-          <b>
-            <GrowthOutlook
-              overall={overall}
-              potential={
-                potentialLow !== null && potentialHigh !== null
-                  ? { low: potentialLow, high: potentialHigh }
-                  : null
-              }
-            />
-          </b>
-        </span>
-        <span>
-          <em>주발</em>
-          <b>
-            {r.foot.left >= r.foot.right ? "왼발" : "오른발"} {r.foot.left}/{r.foot.right}
-          </b>
-        </span>
-        {r.height !== null && (
-          <span>
-            <em>신체</em>
-            <b>
-              {r.height}cm{r.weight !== null && ` ${r.weight}kg`}
-            </b>
-          </span>
-        )}
-        <span>
-          <em>시장가</em>
-          <b>{formatMoney(r.marketValue)}</b>
-        </span>
-        {/* 상대가 **부를 값** — 코치의 대사가 말하는 액수도 이것이라, 카드가 몸값만
-            적으면 한 화면이 두 말을 한다 (player.md §9.4-1) */}
-        <span>
-          <em>요구액</em>
-          <b>{formatMoney(r.askingPrice)}</b>
-        </span>
-        <span>
-          <em>기대 주급</em>
-          <b>{formatMoney(r.wageExpectation)}</b>
-        </span>
-        {r.contractUntil && (
-          <span>
-            <em>계약</em>
-            <b>{contractUntil(r.contractUntil)}</b>
-          </span>
-        )}
-      </div>
-
-      <div className="sr-positions">
-        {r.positions.map((p) => (
-          <span className={`sr-pos${p.natural ? " natural" : ""}`} key={p.position}>
-            {p.position}
-          </span>
-        ))}
-      </div>
-
-      <div className="sr-groups">
-        {groups.map((group) => (
-          <div className="sr-group" key={group}>
-            <div className="sr-group-name">{group}</div>
-            {r.attributes
-              .filter((a) => a.group === group)
-              .map((a) => (
-                <span
-                  className={`sr-axis${a.margin > 0 ? " fuzzy" : ""}`}
-                  key={a.key}
-                  data-rating={ratingTone(a.value)}
-                >
-                  <em>{a.ko}</em>
-                  {/**
-                   * 막대는 **확실한 몫까지 채우고 오차만큼 번진다** — 스카우팅을
-                   * 마쳐도 관측형 ±1 · 분석형 ±3이 남는다. 단정/추정 둘로만 그리면
-                   * "리포트를 받은 선수"와 "소문으로만 아는 선수"가 같아 보인다.
-                   */}
-                  <span
-                    className="sr-bar"
-                    aria-hidden
-                    style={
-                      {
-                        "--fill": barPct(a.value - a.margin),
-                        "--fog": barPct(a.value + a.margin) - barPct(a.value - a.margin),
-                      } as CSSProperties
-                    }
-                  />
-                  <b>
-                    {a.value}
-                    {a.margin > 0 && <i className="est">±{a.margin}</i>}
-                  </b>
-                </span>
-              ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** 선수 id처럼 생긴 토큰 — 사전에 없으면 그대로 둔다 (`store.ts`와 같은 규칙) */
 const ID_LIKE = /[a-z][a-z0-9]*(?:-[a-z0-9]+)+/g;
 
@@ -720,12 +567,9 @@ export function ChatTurnView({
       })}
       {/* 보고서는 대화 뒤 — 서류는 "이런 게 왔습니다" 다음에 놓인다 */}
       {turn.reports?.map((report) => (
-        <ScoutReport report={report} key={report.playerId} />
+        <ScoutingReportView report={report} key={report.id} />
       ))}
       {/* 임무 보고도 서류다 — 지목 보고와 같은 자리에 선다 */}
-      {turn.missions?.map((card) => (
-        <MissionReportCardView card={card} key={card.missionId} />
-      ))}
     </div>
   );
 }

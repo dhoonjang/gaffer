@@ -105,8 +105,8 @@ export type SettlingEvent = z.infer<typeof SettlingEventSchema>;
  */
 export const TransferListingSchema = z.object({
   gamePlayerId: z.string().min(1),
-  /** 감독이 부르는 값 */
-  askingPrice: z.number().min(0),
+  /** 감독이 명시한 호가. 없으면 가격 없는 등재다. */
+  askingPrice: z.number().min(0).optional(),
   listedOn: DateString,
   note: z.string().max(160).optional(),
 });

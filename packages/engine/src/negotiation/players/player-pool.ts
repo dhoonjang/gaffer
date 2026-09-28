@@ -12,7 +12,7 @@ import type { GameState } from "../../common/core/state";
  * **선수 풀 — 대회·자리·나이로 세계를 좁히는 하나의 자.**
  *
  * 두 자리가 이 규칙을 읽는다: 감독이 부르는 조회(`search_players`)와 조건으로
- * 나가는 스카우트 임무(`scout_mission` — docs/common/player.md §9.4). 같은 말로
+ * 나가는 스카우팅 의뢰(`request_scouting` — docs/negotiation/scouting.md). 같은 말로
  * 부른 조건이 두 곳에서 다른 풀을 뒤지면, 감독은 검색에 서던 선수가 임무의
  * 후보에는 없는 이유를 어디서도 읽을 수 없다.
  *

@@ -38,3 +38,9 @@ export function growthTier(
   const ceilingTier = ratingTier(ceiling);
   return ceilingTier === "elite" || ceilingTier === "world" ? 5 : 4;
 }
+
+/** Stored observation intervals remain intervals; missing evidence stays unknown. */
+export function observationRange(range: { low: number; high: number } | null): string {
+  if (range === null) return "판단 보류";
+  return range.low === range.high ? String(range.low) : `${range.low}–${range.high}`;
+}

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { loadGame } from "@story-fm/engine";
 
 import { seedFinishedSeason, seedTransferTarget } from "./seed";
 import { COLD_MS } from "./timeouts";
@@ -54,39 +55,21 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
   await expect(page.locator('[data-testid^="cal-fixture-"]').first()).toBeVisible();
 });
 
-test("이적 오퍼 — 넣고, 코어가 답을 굳히고, 서명으로 합의한다", async ({ page }) => {
-  const { gameId, targetName } = seedTransferTarget();
+test("양쪽이 승인한 계약은 감독의 확정 지시로 한 번만 체결된다", async ({ page }) => {
+  const { gameId, targetName, playerId } = seedTransferTarget("arsenal", 4061, true);
   await page.goto(`/game/${gameId}`);
-
   const input = page.getByTestId("chat-input");
   await expect(input).toBeEnabled({ timeout: COLD_MS });
-
-  // ① 제안 — 협상은 어느 장부에도 실리지 않으므로 카드가 그 자리에 선다
-  await input.fill(`${targetName} 영입하자`);
-  await page.getByTestId("chat-send").click();
-  const offer = page.getByTestId("market-offer").first();
-  await expect(offer).toBeVisible();
-  await expect(offer).toContainText(targetName);
-  // 금액 두 벌과 답할 기한을 펼치지 않고 읽는다
-  await expect(offer).toContainText("이적료");
-  await expect(offer).toContainText("성사 가능성");
-  await expect(offer).toContainText("답");
-
-  /*
-   * ② 답이 굳는다 — **감독이 나서지 않은 라운드는 그날의 tick이 앵커로 굳히고**, 결과가
-   * 사건 한 줄로 선다 (transfer.md §12-1). 카드가 아니라 줄인 이유가 그것이다: 감독이
-   * 판정할 자리가 없다. 픽스처가 **내일 답이 오는 상대**를 골랐으므로 하루면 된다.
-   */
-  await page.getByTestId("time-skip-toggle").click();
-  await page.getByTestId("skip-day").click();
-  await expect(input).toBeEnabled();
-  const settled = page.getByTestId("tick-event").filter({ hasText: targetName }).first();
-  await expect(settled).toBeVisible();
-  // 줄이 말하는 것은 답이 왔다는 사실이 아니라 **상대가 무엇으로 답했는가**다 — 매체는 없다
-  await expect(settled).toContainText("상대가 받아들였습니다");
-
-  // ③ 서명 — 받아들인 자리를 닫는 것은 감독이다. 영입이라 그다음은 메디컬이다
   await input.fill("이적 건 마무리하자");
   await page.getByTestId("chat-send").click();
-  await expect(page.getByTestId("tool-accept_deal")).toBeVisible();
+  await expect(input).toBeEnabled();
+  await expect.poll(() => loadGame(gameId)!.negotiations[0]!.status).toBe("completed");
+  const saved = loadGame(gameId)!;
+  expect(saved.players.find((p) => p.id === playerId)?.teamId).toBe(saved.userTeamId);
+  const transfers = saved.transfers.filter((t) => t.gamePlayerId === playerId);
+  expect(transfers).toHaveLength(1);
+  await page.reload();
+  await expect(input).toBeEnabled();
+  expect(loadGame(gameId)!.transfers.filter((t) => t.gamePlayerId === playerId)).toHaveLength(1);
+  expect(saved.players.find((p) => p.id === playerId)?.name).toBe(targetName);
 });

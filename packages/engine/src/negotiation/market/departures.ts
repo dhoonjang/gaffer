@@ -1,49 +1,48 @@
 import {
-  type GameState,
-  pendingContractOf,
-  releaseFromTactics,
-  withdrawTransferRequest,
-  clearInterests,
-  activeContract,
-  teamName,
-  squadShortfall,
-  pushNarrative,
-  onLoanFromUs,
-  playerById,
-  seasonStatOf,
-  openInjury,
-  benchRunOf,
-  groupOf,
-  playersOf,
-  weeklyWagesOf,
-} from "../../common/core/state";
-import {
-  type GamePlayer,
   ageOf,
-  type TransferReason,
+  type Contract,
+  type GamePlayer,
+  type Injury,
   josa,
   josaOf,
-  type TickSink,
-  type Injury,
   seasonRating,
-  type Contract,
+  type TickSink,
+  type TransferReason,
 } from "@story-fm/domain";
-import { leaderWeightOf } from "../../common/players/hierarchy";
-import { forgetRoles } from "../../common/players/role-memory";
-import { closeMentoringsFor } from "../../common/players/mentoring";
+import { item } from "../../common/commands/brief";
 import { type CommandResult } from "../../common/commands/result";
+import { windowOpenOn } from "../../common/core/calendar";
+import { contractUntil, seasonYear } from "../../common/core/dates";
 import { pickOurPlayer, pickPlayerAmong } from "../../common/core/player-ref";
+import { makeRng } from "../../common/core/rng";
+import {
+  activeContract,
+  benchRunOf,
+  clearInterests,
+  type GameState,
+  groupOf,
+  onLoanFromUs,
+  openInjury,
+  pendingContractOf,
+  playerById,
+  playersOf,
+  pushNarrative,
+  releaseFromTactics,
+  seasonStatOf,
+  squadShortfall,
+  teamName,
+  weeklyWagesOf,
+  withdrawTransferRequest,
+} from "../../common/core/state";
+import { isMarketOnlyLeague } from "../../common/data/league-catalog";
 import { isClubTeam, leagueOfTeam } from "../../common/data/team-catalog";
-import { windowOpenForTeam, transferWindowLabel, squadShortfallText } from "./market";
-import { seasonYear, contractUntil } from "../../common/core/dates";
+import { leaderWeightOf } from "../../common/players/hierarchy";
+import { closeMentoringsFor } from "../../common/players/mentoring";
 import { assignSquadNumber } from "../../common/players/numbers";
 import { admitOnLoan, arrivingSquadLevel } from "../../common/players/registration";
-import { item } from "../../common/commands/brief";
-import { windowOpenOn } from "../../common/core/calendar";
-import { makeRng } from "../../common/core/rng";
-import { estimateWeeklyWage, wageSubjectOf, clubWageBudget, WAGE_HEADROOM } from "../economy/wages";
-import { isMarketOnlyLeague } from "../../common/data/league-catalog";
-import { attachAiBuyout } from "./buyout";
+import { forgetRoles } from "../../common/players/role-memory";
+import { clubWageBudget, estimateWeeklyWage, WAGE_HEADROOM, wageSubjectOf } from "../economy/wages";
+import { squadShortfallText, transferWindowLabel, windowOpenForTeam } from "./market";
 
 /**
  * 팀을 떠나는 **다른 길들** — 방출과 임대.
@@ -805,7 +804,7 @@ function signWithClub(
   };
   state.contracts.push(signed);
   // 무소속 영입에도 조항이 붙을 수 있다 — 서는 계약마다 같은 규칙이다 (transfer.md §12-3)
-  attachAiBuyout(state, signed, player);
+
   player.teamId = teamId;
   player.squadNumber = undefined;
   assignSquadNumber(state.players, player);

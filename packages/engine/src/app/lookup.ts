@@ -1,3 +1,4 @@
+import { scoutingReportLine } from "../negotiation/views/scouting";
 import { boardAgendaLines } from "@story-fm/domain";
 import type {
   CallUp,
@@ -159,11 +160,7 @@ import {
   seasonLabelOf,
 } from "../match/competition/records";
 import { openManagerOffers } from "../negotiation/market/manager-market";
-import {
-  askingPriceFor,
-  observedMarketValue,
-  wageExpectationOf,
-} from "../negotiation/market/market";
+import { observedMarketValue } from "../negotiation/market/market";
 import { interestLine } from "../negotiation/market/interest";
 import {
   arrivedScoutReport,
@@ -475,7 +472,7 @@ function contractLabel(contract: Contract | null): string {
 
 /**
  * 타 팀 선수 한 줄 — 능력치는 안개, **값과 계약은 시장의 공개 정보**다.
- * 시장가는 `deal_odds`가 부르는 것과 같은 흐린 값이고, 계약 만료일은 흐리지 않는다.
+ * 시장가는 공개 정보의 추정이며, 계약 만료일은 계약 원장을 읽는다.
  *
  * 등번호는 싣지 않는다 — 셔츠에 적힌 공개 사실이지만 이 줄이 답하는 물음은 값·계약·
  * 기량이고, 남의 구단 번호로 감독이 할 일은 없다. 우리 번호를 GM이 지어내던 것이
@@ -490,7 +487,7 @@ function theirRow(state: GameState, p: GamePlayer): string {
   return (
     `${p.id} ${p.name} ${ageOf(p.birthdate, state.date)}세 ${naturalPositionOf(p).position} ` +
     `${teamShortNameIn(state, p.teamId)} · ${overallView(state, p)} (${source}) · ` +
-    `값 ${formatMoney(observedMarketValue(state, p))} · ` +
+    `최근 기록 이적료 ${observedMarketValue(state, p) === null ? "미확인" : formatMoney(observedMarketValue(state, p)!)} · ` +
     `계약 ${contract ? contract.until : "없음(자유계약)"} · ` +
     `${statLine(stat)}${injury ? ` · 부상 중(~${injury.expectedReturn})` : ""}`
   );
@@ -615,7 +612,7 @@ function foggedKeyOf(
     case "fatigue":
       return sortCondition(state, p);
     case "value":
-      return observedMarketValue(state, p);
+      return observedMarketValue(state, p) ?? -1;
     // 구간이 없으면 성장 여력을 짐작할 근거가 없다 — 0으로 두어 맨 뒤에 선다
     default:
       return potentialBand(state, p)?.low ?? 0;
@@ -768,7 +765,8 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
       const band = potentialBand(state, p);
       if (band === null || band.low < input.minPotential) return false;
     }
-    if (input.maxValue !== undefined && observedMarketValue(state, p) > input.maxValue)
+    const recordedFee = observedMarketValue(state, p);
+    if (input.maxValue !== undefined && recordedFee !== null && recordedFee > input.maxValue)
       return false;
     return true;
   });
@@ -1156,15 +1154,8 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
    * 두 말을 한다. 우리 선수에게는 세우지 않는다: 데려온 뒤의 요구액·기대 주급은
    * 그 선수에 대한 사실이 아니다.
    */
-  const lastReport = knowledge === "own" ? null : arrivedScoutReport(state, p.id);
-  if (lastReport?.completedOn) {
-    lines.push(
-      `스카우트 보고서: ${lastReport.completedOn} 도착 · ` +
-        `시장가 ${formatMoney(observedMarketValue(state, p))} · ` +
-        `요구액 ${formatMoney(askingPriceFor(state, p))} · ` +
-        `기대 주급 ${formatMoney(wageExpectationOf(state, p))}`,
-    );
-  }
+  const lastReport = arrivedScoutReport(state, p.id);
+  if (lastReport) lines.push(scoutingReportLine(lastReport));
 
   if (knowledge === "own") {
     // 등급이 아니라 이력이다 — 위태로운지는 읽는 쪽이 판단한다 (player.md §5.3)

@@ -123,7 +123,6 @@ export * from "./common/players/contract-status";
 export * from "./negotiation/players/promises";
 export * from "./common/players/observation";
 export * from "./negotiation/players/scouting";
-export * from "./negotiation/players/scout-mission";
 export * from "./story/players/training-plan";
 export * from "./story/players/training-report";
 export * from "./app/workflows/story/players/training-report";
@@ -195,3 +194,6 @@ export * from "./match/squad/selection";
 export * from "./story/world/social";
 
 export * from "./app/workflows/match/health/injury";
+
+export * from "./negotiation/market/evaluation";
+export * from "./negotiation/commands/incoming-contact";

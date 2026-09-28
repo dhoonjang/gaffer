@@ -1,4 +1,5 @@
 "use client";
+import type { NegotiationMethod } from "@story-fm/domain";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -629,7 +630,13 @@ export function GameScreen({ gameId }: { gameId: string }) {
               at: game.date,
               ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
               ...(activeNegotiationId
-                ? { inNegotiation: true as const, negotiationId: activeNegotiationId }
+                ? {
+                    inNegotiation: true as const,
+                    negotiationId: activeNegotiationId,
+                    ...(liveNegotiation?.contactId
+                      ? { negotiationContactId: liveNegotiation.contactId }
+                      : {}),
+                  }
                 : {}),
             };
       if (optimistic) setGame((g) => (g ? { ...g, chat: [...g.chat, optimistic] } : g));
@@ -794,6 +801,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
       liveMatch?.matchId,
       liveMatch?.live,
       liveNegotiation?.negotiationId,
+      liveNegotiation?.contactId,
       gameId,
       saver,
       draft,
@@ -829,17 +837,20 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 감독이므로 방은 누름과 함께 서고, 코어가 `seated`를 세우는 것은 그다음이다. 게이트가
    * 물러나는 시간도 한 벌이다 — 두 문이 한 화면에 함께 서는 일은 없다.
    */
-  const enterNegotiation = useCallback(() => {
-    const id = pendingNegotiation?.negotiationId;
-    if (id === undefined) return;
-    setEnteringNegotiation(id);
-    if (!reducedMotion()) {
-      setGateLeaving(true);
-      if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
-      gateLeaveTimer.current = setTimeout(() => setGateLeaving(false), GATE_LEAVE_MS);
-    }
-    void send(undefined, { kind: "enter_negotiation" });
-  }, [pendingNegotiation?.negotiationId, send]);
+  const enterNegotiation = useCallback(
+    (method: NegotiationMethod) => {
+      const id = pendingNegotiation?.negotiationId;
+      if (id === undefined) return;
+      setEnteringNegotiation(id);
+      if (!reducedMotion()) {
+        setGateLeaving(true);
+        if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
+        gateLeaveTimer.current = setTimeout(() => setGateLeaving(false), GATE_LEAVE_MS);
+      }
+      void send(undefined, { kind: "enter_negotiation", method });
+    },
+    [pendingNegotiation?.negotiationId, send],
+  );
   /** 협상에서 물러난다 — 협상은 열린 채 방만 닫힌다. 손잡이는 방의 칸에 선다 */
   const leaveNegotiation = useCallback(() => {
     void send(undefined, { kind: "leave_negotiation" });
@@ -854,14 +865,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const lastStamp = useMemo(() => {
     const visible = chatForActiveNegotiation(
       chatForActiveMatch(game?.chat ?? [], liveMatch?.matchId ?? null),
-      liveNegotiation?.negotiationId ?? null,
+      liveNegotiation ? (liveNegotiation.contactId ?? "") : null,
     );
     for (let i = visible.length - 1; i >= 0; i--) {
       const stamp = turnStamp(visible[i]!);
       if (stamp) return stamp;
     }
     return null;
-  }, [game, liveMatch?.matchId, liveNegotiation?.negotiationId]);
+  }, [game, liveMatch?.matchId, liveNegotiation]);
   /**
    * 턴 → 원문 기록의 자리. ⚠️ **걸러지지 않은 `game.chat`**으로 만든다 —
    * 화면이 그리는 목록은 경기 중 턴을 걸러내므로 그 자리를 쓰면 남의 턴이 열린다.
@@ -914,7 +925,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const visibleChat = chatForActiveNegotiation(
     chatForActiveMatch(game.chat, liveMatch?.matchId ?? null),
-    liveNegotiation?.negotiationId ?? null,
+    liveNegotiation ? (liveNegotiation.contactId ?? "") : null,
   );
   /**
    * 오른쪽 칸에 무엇이 서는가 — **경기 판이 우선이고 장부가 그것을 덮는다.**

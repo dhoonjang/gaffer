@@ -1,4 +1,4 @@
-import type { MissionReportCard, ScoutReportCard, TickEvent } from "@story-fm/domain";
+import type { ScoutingReport, TickEvent } from "@story-fm/domain";
 import type { CardMark, GoalMark, CommandBrief } from "@story-fm/engine";
 
 /** GM 턴 결과 — mock/실모드 공통 계약 */
@@ -74,9 +74,7 @@ export interface GmTurnResult {
   /** 이번 턴의 경고·퇴장 — 골과 같은 자리에 선다 */
   cards?: CardMark[];
   /** 이번 턴에 도착한 스카우팅 보고서 — 채팅이 카드로 편다 */
-  reports?: ScoutReportCard[];
-  /** 이번 턴에 도착한 스카우트 임무 보고 — 채팅이 후보 목록 카드로 편다 */
-  missions?: MissionReportCard[];
+  reports?: ScoutingReport[];
   /**
    * **이번 턴에 시간이 지나간 자리에 남은 사건** — 화면이 하나를 카드 하나로 세운다
    * (overview.md §2 · `ChatTurn.events`).

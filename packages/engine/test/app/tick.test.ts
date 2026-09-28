@@ -33,13 +33,9 @@ import {
   advanceTime,
   CALL_UP_FATIGUE_PER_APP,
   CALL_UP_TRAVEL_FATIGUE,
-  contractGrievanceDue,
   diffDays,
   endSeason,
   dueExpiryStage,
-  listedGrievanceDue,
-  listedPatienceDaysOf,
-  wageByRating,
   seasonYear,
   assignmentsOf,
   financeOf,
@@ -51,8 +47,6 @@ import {
   LOAN_ROTATION_OVR_DROP,
   ROTATION_FATIGUE,
   openInjury,
-  pendingApproach,
-  pendingVerdicts,
   playersOf,
   PLAYER_REST_MAX_DAYS,
   restingOn,
@@ -406,7 +400,6 @@ describe("시간은 웬만하면 지나간다", () => {
           weeklyWage: 100_000,
           contractYears: 4,
           respondsOn: null,
-          probability: 60,
           verdict: null,
         },
       ],
@@ -416,41 +409,12 @@ describe("시간은 웬만하면 지나간다", () => {
     expect(state.date).toBe("2026-07-17");
   });
 
-  it("멈춘 날에는 반드시 오늘이 기한인 협상이거나 오늘 찾아온 사람이 있다", () => {
-    /**
-     * **축소 세계로 민다** — 시계가 서는 규칙은 세계의 크기와 무관하다(`tick.ts`의
-     * 같은 갈래를 탄다). 전체 세계로 한 시즌을 밀면 이 한 케이스가 30초를 넘게 쓴다.
-     */
-    const state = createMiniGame(5);
-    /**
-     * 한 시즌을 통째로 밀면서 **멈춘 이유를 전부 확인**한다. 부상이 나고 불만이
-     * 생기고 오퍼가 들어와도 시계는 지나가야 하고, 섰다면 그 자리엔 반드시
-     * 오늘이 마지막 날인 결정 — 기한인 협상이거나 오늘 열린 다가옴 — 이 있어야 한다
-     * (people.md §8 · season.md §5의 표).
-     */
-    let injuries = 0;
-    let stops = 0;
-    for (let i = 0; i < 120; i++) {
-      const r = advanceTime(state, { days: 3 });
-      if (r.stopped === "attention") {
-        stops++;
-        const due = pendingVerdicts(state).filter((v) => v.negotiation.expiresOn === state.date);
-        const came = pendingApproach(state)?.date === state.date;
-        expect(due.length + (came ? 1 : 0), `${state.date}에 이유 없는 멈춤`).toBeGreaterThan(0);
-      }
-      if (r.stopped === "matchday") state.phase = "idle";
-      if (r.stopped === "season_end") break;
-      injuries = state.injuries.length;
-    }
-    // 부상은 실제로 났는데도 그것만으로는 서지 않았다는 것이 이 테스트의 요점이다
-    expect(injuries).toBeGreaterThan(0);
-    // 한 번도 서지 않았다면 위 검사는 한 줄도 돌지 않은 것이다
-    expect(stops, "시계가 한 번도 서지 않아 멈춤의 이유를 확인하지 못했다").toBeGreaterThan(0);
-  });
-
-  it("오늘이 기한인 협상 앞에서는 선다 — 넘기면 사라지기 때문이다", () => {
-    const state = createTestGame(5);
-    state.date = "2026-07-10";
+  it.each([false, true])("명시된 협상 기한 앞에서는 선다 — 시즌 종료 직후=%s", (offseason) => {
+    const state = offseason ? createMiniGame() : createTestGame(5);
+    const start = offseason ? "2027-06-20" : "2026-07-10";
+    const deadline = addDays(start, 3);
+    state.date = start;
+    if (offseason) state.matches = [];
     const player = userPlayers(state)[0]!;
     const buyer = state.teams.find((t) => t.id !== state.userTeamId)!;
     state.negotiations.push({
@@ -460,7 +424,7 @@ describe("시간은 웬만하면 지나간다", () => {
       counterpartTeamId: buyer.id,
       windowId: null,
       openedOn: state.date,
-      expiresOn: "2026-07-13",
+      expiresOn: deadline,
       status: "open",
       pitched: [],
       precontract: false,
@@ -474,142 +438,14 @@ describe("시간은 웬만하면 지나간다", () => {
           weeklyWage: 100_000,
           contractYears: 4,
           respondsOn: null,
-          probability: 60,
           verdict: null,
         },
       ],
     });
     const result = advanceTime(state, { days: 7 });
     expect(result.stopped).toBe("attention");
-    expect(state.date).toBe("2026-07-13");
+    expect(state.date).toBe(deadline);
     expect(eventTexts(result.events).join(" ")).toContain("오늘이 기한");
-  });
-});
-
-/**
- * 등재·계약의 불만 문턱 — **결정적이다** (→ docs/story/people.md §5).
- *
- * 추첨이 없어 감독이 날짜를 셀 수 있는 자리라, 경계가 하루·한 명 어긋나면 화면이
- * "180일 남았다"고 적어 놓고 불만은 서지 않는다.
- */
-describe("불만의 문턱 — 등재와 계약 만료", () => {
-  /** 스쿼드에 서로 다른 종합을 매긴다 — 동점이 있으면 상위 14명 경계를 잴 수 없다 */
-  function rankedSquad(state: GameState) {
-    const squad = [...userPlayers(state)].sort(
-      (a, b) => b.attributes.overall - a.attributes.overall,
-    );
-    squad.forEach((p, i) => {
-      p.attributes.overall = 90 - i;
-    });
-    return squad;
-  }
-
-  /** 그 선수의 활성 계약을 오늘로부터 `days` 뒤에 끝나게 하고, 주급을 서열 대비로 놓는다 */
-  function contractOf(state: GameState, player: GamePlayer, days: number, paid: boolean) {
-    const contract = state.contracts.find(
-      (c) => c.gamePlayerId === player.id && c.status === "active",
-    )!;
-    contract.until = addDays(state.date, days);
-    const rate = wageByRating(player.attributes.overall);
-    contract.weeklyWage = Math.round(paid ? rate * 1.1 : rate * 0.5);
-    return contract;
-  }
-
-  it("계약 만료 — 서열 대비 밀려 있으면 181일엔 서지 않고 180일에 선다", () => {
-    const state = createMiniGame();
-    const target = rankedSquad(state)[0]!;
-
-    contractOf(state, target, 181, false);
-    expect(contractGrievanceDue(state, target)).toBe(false);
-    contractOf(state, target, 180, false);
-    expect(contractGrievanceDue(state, target)).toBe(true);
-  });
-
-  it("계약 만료 — 서열대로 받고 있으면 문턱이 절반이다 (91/90일)", () => {
-    const state = createMiniGame();
-    const target = rankedSquad(state)[0]!;
-
-    contractOf(state, target, 180, true);
-    expect(contractGrievanceDue(state, target)).toBe(false);
-    contractOf(state, target, 91, true);
-    expect(contractGrievanceDue(state, target)).toBe(false);
-    contractOf(state, target, 90, true);
-    expect(contractGrievanceDue(state, target)).toBe(true);
-  });
-
-  it("계약 만료 — 이미 만료된 계약에는 서지 않고, 열린 재계약이 있으면 멈춘다", () => {
-    const state = createMiniGame();
-    const target = rankedSquad(state)[0]!;
-
-    contractOf(state, target, -1, false);
-    expect(contractGrievanceDue(state, target)).toBe(false);
-
-    contractOf(state, target, 100, false);
-    expect(contractGrievanceDue(state, target)).toBe(true);
-    state.negotiations.push({
-      id: `neg-renew-${target.id}`,
-      gamePlayerId: target.id,
-      kind: "renew",
-      counterpartTeamId: null,
-      windowId: null,
-      openedOn: state.date,
-      expiresOn: addDays(state.date, 14),
-      status: "open",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [],
-    });
-    expect(contractGrievanceDue(state, target)).toBe(false);
-  });
-
-  it("자격은 상위 14명이다 — 열넷째는 서고 열다섯째는 서지 않는다", () => {
-    const state = createMiniGame();
-    const squad = rankedSquad(state);
-    const core = squad[13]!; // 그보다 나은 선수 13명 — 안
-    const fringe = squad[14]!; // 14명 — 밖
-
-    contractOf(state, core, 180, false);
-    contractOf(state, fringe, 180, false);
-    expect(contractGrievanceDue(state, core)).toBe(true);
-    expect(contractGrievanceDue(state, fringe)).toBe(false);
-  });
-
-  it("등재 — 문턱은 그 사람의 것이고, 하루 전에는 서지 않는다", () => {
-    const state = createMiniGame();
-    const target = rankedSquad(state)[0]!;
-    const threshold = listedPatienceDaysOf(state, target);
-    expect(threshold).toBeGreaterThan(0);
-
-    state.transferList.push({
-      gamePlayerId: target.id,
-      askingPrice: 1_000_000,
-      listedOn: addDays(state.date, -(threshold - 1)),
-    });
-    expect(listedGrievanceDue(state, target)).toBe(false);
-
-    state.transferList[state.transferList.length - 1]!.listedOn = addDays(state.date, -threshold);
-    expect(listedGrievanceDue(state, target)).toBe(true);
-  });
-
-  it("등재 — 이미 불만이 있는 선수에게 사유를 하나 더 얹지 않는다", () => {
-    const state = createMiniGame();
-    const target = rankedSquad(state)[0]!;
-    state.transferList.push({
-      gamePlayerId: target.id,
-      askingPrice: 1_000_000,
-      listedOn: addDays(state.date, -60),
-    });
-    expect(listedGrievanceDue(state, target)).toBe(true);
-
-    state.issues.push({
-      gamePlayerId: target.id,
-      kind: "unhappy",
-      reason: "minutes",
-      since: state.date,
-    });
-    expect(listedGrievanceDue(state, target)).toBe(false);
   });
 });
 

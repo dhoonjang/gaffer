@@ -14,6 +14,9 @@ import { DateString } from "./date-string";
  *
  * 화면과 코어가 함께 쓰므로 도메인에 산다 (AGENTS.md §5).
  */
+export const NegotiationMethodSchema = z.enum(["meeting", "phone", "proposal"]);
+export type NegotiationMethod = z.infer<typeof NegotiationMethodSchema>;
+
 export type TurnOperation =
   /** 시간 이동 — 하루·일주일. 눈금은 화면이 정하고 코어는 일수만 본다 */
   | { kind: "skip_days"; days: number }
@@ -33,7 +36,7 @@ export type TurnOperation =
    * 협상 방에 앉는다 — `start_negotiation`이 세운 방의 게이트를 지난다. 그 턴은 자리에
    * 앉는 첫 턴이고 도구가 없다 (docs/negotiation/transfer.md §12-2).
    */
-  | { kind: "enter_negotiation" }
+  | { kind: "enter_negotiation"; method?: NegotiationMethod }
   /** 협상에서 물러난다 — 협상은 열린 채 그 자리만 닫힌다 */
   | { kind: "leave_negotiation" }
   /**
@@ -62,7 +65,7 @@ export const TurnOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("skip_to_next_match"), date: DateString }),
   z.object({ kind: z.literal("enter_match") }),
   z.object({ kind: z.literal("match_stop") }),
-  z.object({ kind: z.literal("enter_negotiation") }),
+  z.object({ kind: z.literal("enter_negotiation"), method: NegotiationMethodSchema.optional() }),
   z.object({ kind: z.literal("leave_negotiation") }),
 ]);
 
@@ -84,9 +87,9 @@ export function operationLabel(operation: TurnOperation): string {
     case "match_stop":
       return "경기 중단";
     case "enter_negotiation":
-      return "협상에 직접 나선다";
+      return "협상 이어가기";
     case "leave_negotiation":
-      return "협상에서 물러난다";
+      return "일상으로 돌아가기";
     case "propose":
       return operation.label;
   }

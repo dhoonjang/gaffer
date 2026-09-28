@@ -1,3 +1,5 @@
+import type { ChatTurn } from "@story-fm/engine";
+import { chatForActiveNegotiation } from "../../domains/negotiation/lib/negotiation-chat";
 import { describe, expect, it, vi } from "vitest";
 import { splitMarketCalls } from "../../domains/negotiation/lib/market-calls";
 
@@ -15,7 +17,6 @@ const offered = {
   playerName: "마누엘 우가르테",
   counterpart: "아스날",
   terms: { fee: 38_000_000, weeklyWage: 120_000, years: 4 },
-  odds: "82%",
 } as const;
 
 describe("시장 결과 카드와 칩", () => {
@@ -67,11 +68,48 @@ describe("시장 결과 카드와 칩", () => {
   it("모양이 깨진 카드도 칩으로 흘리지 않는다", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     // counterpart가 없다 — 코어 계약(MarketCommandResult)이 깨진 경우
-    const call = { name: "scout_player", payload: { kind: "scout", playerName: "누구" } };
+    const call = { name: "send_offer", payload: { kind: "offer", playerName: "누구" } };
 
     expect(splitMarketCalls([call])).toEqual({ cards: [], chips: [] });
     expect(error).toHaveBeenCalled();
 
     error.mockRestore();
+  });
+});
+
+describe("상대별 협상 이력", () => {
+  it("같은 상대의 여러 거래는 잇고, 같은 거래의 다른 상대는 제외한다", () => {
+    const turns: ChatTurn[] = [
+      {
+        role: "user",
+        text: "첫 거래",
+        at: "2026-07-01",
+        toolCalls: [],
+        inNegotiation: true,
+        negotiationId: "deal-a",
+        negotiationContactId: "club",
+      },
+      {
+        role: "model",
+        text: "개인 조건",
+        at: "2026-07-01",
+        toolCalls: [],
+        inNegotiation: true,
+        negotiationId: "deal-a",
+        negotiationContactId: "agent",
+      },
+      {
+        role: "user",
+        text: "다른 선수",
+        at: "2026-07-02",
+        toolCalls: [],
+        inNegotiation: true,
+        negotiationId: "deal-b",
+        negotiationContactId: "club",
+      },
+      { role: "model", text: "일상", at: "2026-07-02", toolCalls: [] },
+    ];
+    expect(chatForActiveNegotiation(turns, "club")).toEqual([turns[0], turns[2]]);
+    expect(chatForActiveNegotiation(turns, null)).toBe(turns);
   });
 });

@@ -1,244 +1,347 @@
-/**
- * **스카우팅 — 정보 비대칭을 푸는 명령** (player.md §8).
- *
- * 이름을 지목한 파견과 조건으로 내보내는 임무. 둘 다 며칠 뒤 tick이 보고서를
- * 세우고, 그때부터 그 선수의 안개가 걷힌다.
- */
-import type { MarketCard, ScoutMission } from "@story-fm/domain";
 import {
+  ScoutingInputSchema,
+  ScoutingPlanSchema,
+  ScoutingReportSchema,
+  ScoutingAssessmentSchema,
   POSITION_CODES,
-  MISSION_CANDIDATES,
-  MISSION_DAYS,
-  SCOUT_CONCURRENT_LIMIT,
-  SCOUT_DAYS,
-  josa,
-  josaOf,
+  ageOf,
+  naturalPositionOf,
+  ATTRIBUTE_AXES,
+  type ScoutingInput,
+  type ScoutingRequest,
+  type ScoutingPlan,
+  type ScoutingEvidence,
+  type ScoutingAssessment,
+  type ScoutingReport,
 } from "@story-fm/domain";
-
-import { addDays } from "../../common/core/dates";
-
 import {
-  SCOUT_REPEAT_LIMIT,
-  activeMissions,
-  deferScout,
-  dropDeferredScout,
-  earliestScoutReturn,
-  freeScoutSlots,
-  inFlightScoutLabels,
-  missionBrief,
-  missionLabel,
-  missionScope,
-  sameMissionConditions,
-  waitingMissions,
-} from "../players/scouting";
-import { completedScoutReports } from "../../common/players/observation";
-import { resolveCompetition } from "../players/player-pool";
-// 면담에서 한 약속은 장부에 선다 (people.md §5-2 · career.md §2)
-// 감독이 지목한 번호는 코어가 배정하고, 사실만 돌려준다 (player.md §1.1)
-// 잔향 — 그 대화를 쥔 호출이 심경 한 문장을 남긴다 (people.md §5)
+  type GameState,
+  playerById,
+  teamNameIn,
+  activeContract,
+  isOurPlayer,
+} from "../../common/core/state";
+import { pickAnyPlayer } from "../../common/core/player-ref";
+import { addDays } from "../../common/core/dates";
+import { observedMarketValue } from "../market/market";
+import { inPlayerPool, playerPoolOf, resolveCompetition } from "../players/player-pool";
 
-import { teamName, type GameState } from "../../common/core/state";
-import { pickRivalPlayer } from "../../common/core/player-ref";
-import type { MarketCommandResult } from "../../common/commands/result";
-
-// ---- 스카우팅 (정보 비대칭 해제) ----
-
-/**
- * 스카우트 파견 — 타 팀 선수 한 명을 지목해 보고서를 요청한다.
- * SCOUT_DAYS 뒤 tick이 완료 처리하고, 그때부터 능력치 안개가 걷힌다.
- *
- * **거듭 보낼 수 있다.** 첫 리포트가 능력치를 열어 준다면, 두 번째·세 번째는
- * 잠재력 추정을 좁힌다 — 한 번 보고 성장 여력을 단정하는 스카우트는 없다
- * (SCOUT_REPEAT_LIMIT까지 · scouting.ts 규약).
- */
-export function scoutPlayer(state: GameState, ref: string): MarketCommandResult {
-  const pick = pickRivalPlayer(state, ref, "이미 다 알고 있습니다");
-  if (!pick.ok) return pick;
-  const player = pick.player;
-  const playerId = player.id;
-  const pending = state.scoutReports.find(
-    (r) => r.gamePlayerId === playerId && r.completedOn === null,
-  );
-  if (pending) {
+export function changeScoutingRequest(
+  state: GameState,
+  raw: ScoutingInput,
+  source: string,
+): { ok: true; request: ScoutingRequest; message: string } | { ok: false; message: string } {
+  const parsed = ScoutingInputSchema.safeParse(raw);
+  if (!parsed.success || !source.trim())
+    return { ok: false, message: "조사 의뢰와 원문을 확인해 주세요" };
+  const input = parsed.data;
+  const existing = input.requestId
+    ? state.scoutingRequests.find((r) => r.id === input.requestId)
+    : undefined;
+  if (input.action !== "request" && !existing)
+    return { ok: false, message: "조사 의뢰를 찾을 수 없습니다" };
+  if (input.action === "cancel" && existing) {
+    if (existing.status !== "completed" && existing.status !== "cancelled") {
+      existing.revision += 1;
+      existing.status = "cancelled";
+      existing.error = null;
+    }
     return {
-      ok: false,
-      message: `${player.name}에게는 이미 스카우트를 보냈습니다 — 보고 예정 ${pending.dueOn}`,
+      ok: true,
+      request: existing,
+      message: "조사 의뢰를 종료했습니다. 기존 보고서는 보관됩니다",
     };
   }
-  const done = completedScoutReports(state, playerId);
-  if (done >= SCOUT_REPEAT_LIMIT) {
-    return {
-      ok: false,
-      message: `${josa(player.name, "은/는")} ${done}번 살펴봤습니다 — 더 보내도 새로 알 게 없습니다`,
-    };
+  if (input.action === "retry" && existing) {
+    return { ok: true, request: existing, message: "같은 조사 기록에서 다시 시도합니다" };
   }
-  /**
-   * 자리는 **임무와 함께 센다** — 조건으로 나간 스카우트도 같은 스카우트진이다
-   * (player.md §9.4).
-   */
-  if (freeScoutSlots(state) <= 0) {
-    /**
-     * **무엇이 나갔고 무엇이 안 나갔는지 이름으로 말한다.** 한도만 알려 주면
-     * 감독은 지목한 넷 중 누가 빠졌는지 알 수 없다.
-     *
-     * 그리고 못 나갔다는 사실을 대기로 남긴다 — 이 문구는 이 턴에만 살아 있어,
-     * 남기지 않으면 다음 턴의 모델에는 넷째를 읽을 자리가 없다
-     * (→ [docs/common/player.md](../../../../docs/common/player.md) §9.4).
-     */
-    deferScout(state, playerId);
-    return {
-      ok: false,
-      message:
-        `${josa(`${player.name}(${teamName(player.teamId)})`, "은/는")} 보내지 못했습니다 — 동시 파견 한도 ` +
-        `${josa(String(SCOUT_CONCURRENT_LIMIT), "이/가")} 차 있습니다 (파견 중: ${inFlightScoutLabels(state).join(", ")}). ` +
-        `${earliestScoutReturn(state)} 보고가 들어오면 자리가 납니다. ` +
-        `${player.name} 요청은 대기로 남습니다 — 자리가 난 뒤 다시 불러야 나갑니다`,
-    };
-  }
-  const dueOn = addDays(state.date, SCOUT_DAYS);
-  state.scoutReports.push({
-    // 재파견이 있으므로 날짜만으로는 id가 겹칠 수 있다
-    id: `scout-${playerId}-${state.date}-${state.scoutReports.length}`,
-    gamePlayerId: playerId,
-    requestedOn: state.date,
-    dueOn,
-    completedOn: null,
-  });
-  // 대기하던 요청이 드디어 나갔다 — 남겨 두면 나간 파견이 "안 나갔다"로 읽힌다
-  dropDeferredScout(state, playerId);
-  /**
-   * 파견은 아직 아무 장부도 바꾸지 않았다 — 갈 화면이 없으므로 **카드**로 선다.
-   * 며칠 뒤 도착하는 보고서 카드와 같은 흐름에 놓여 "보냈다 → 왔다"가 이어진다.
-   */
-  const card: MarketCard = {
-    kind: "scout",
-    playerId,
-    playerName: player.name,
-    counterpart: teamName(player.teamId),
-    // 우리 선수는 위에서 걸러졌다 — 파견이 나갔다면 데려올 선수를 본 것이다
-    direction: "in",
-    dueOn,
-    ...(done > 0 ? { note: `${done + 1}번째 파견` } : {}),
+  if (input.action === "revise" && existing && ["completed", "cancelled"].includes(existing.status))
+    return { ok: false, message: "종료된 조사는 보관됩니다. 후속 조사를 새로 의뢰해 주세요" };
+  const resolved = resolveCompetition(input.competition);
+  if (!resolved.ok) return resolved;
+  const prior = input.action === "revise" ? existing : undefined;
+  const scope = {
+    playerIds: input.playerIds ?? prior?.scope.playerIds ?? [],
+    competitionId:
+      input.competition === undefined
+        ? (prior?.scope.competitionId ?? null)
+        : resolved.competitionId,
+    position: input.position?.toUpperCase() ?? prior?.scope.position ?? null,
+    minAge: input.minAge ?? prior?.scope.minAge ?? null,
+    maxAge: input.maxAge ?? prior?.scope.maxAge ?? null,
+    maxValue: input.maxValue ?? prior?.scope.maxValue ?? null,
   };
-  return {
-    ok: true,
-    payload: card,
-    message:
-      `${player.name}(${teamName(player.teamId)}) 스카우트 파견 — 보고 예정 ${dueOn}` +
-      (done > 0 ? ` (${done + 1}번째 파견)` : ""),
-  };
-}
-
-/**
- * 감독이 조건으로 부르는 파견 — 이름이 없다 (→ docs/common/player.md §9.4).
- * 대회는 감독이 부르는 이름 그대로 받는다("프리미어", "챔스", "라리가").
- */
-export interface ScoutMissionInput {
-  competition?: string;
-  position?: string;
-  minAge?: number;
-  maxAge?: number;
-  /** 관측 시장가 상한 (£) — 참값이 아니라 흐린 값으로 거른다 (player.md §10) */
-  maxValue?: number;
-}
-
-/**
- * **스카우트 임무 파견** — 조건 한 벌을 주고 후보 `MISSION_CANDIDATES`명을 받는다.
- *
- * 지목(`scoutPlayer`)과 **같은 자리를 나눠 쓴다** — 자리를 세는 자는 `freeScoutSlots`
- * 하나뿐이라, 임무 셋이 나가 있는 날에는 지목도 나가지 못한다.
- *
- * 후보를 여기서 고르지 않는다 — 조건만 적고 `MISSION_DAYS` 뒤 tick이 그날의 상태로
- * 줄을 세운다. 지금 고르면 두 주 동안 값도 나이도 움직인 뒤에 도착한 목록이 두 주
- * 전의 세계를 말한다.
- */
-export function scoutMission(state: GameState, input: ScoutMissionInput): MarketCommandResult {
-  const competition = resolveCompetition(input.competition);
-  if (!competition.ok) return competition;
-
-  const position = input.position?.trim().toUpperCase();
-  if (position !== undefined && !POSITION_CODES.includes(position)) {
-    return {
-      ok: false,
-      message: `"${input.position}"${josaOf(position, "이라는/라는")} 자리는 없습니다 — ${POSITION_CODES.join("·")}`,
-    };
+  const ids: string[] = [];
+  for (const ref of scope.playerIds) {
+    const selected = pickAnyPlayer(state, ref);
+    if (!selected.ok) return selected;
+    ids.push(selected.player.id);
   }
-  /**
-   * 뒤집힌 나이 조건은 **아무도 지나지 못한다.** 그대로 받으면 두 주 뒤에야 "후보
-   * 없음"이 답으로 오고, 감독은 그 리그에 스물셋 이하가 없다고 읽는다.
-   */
-  if (input.minAge !== undefined && input.maxAge !== undefined && input.minAge > input.maxAge) {
-    return {
-      ok: false,
-      message: `나이 조건이 뒤집혔습니다 — ${input.minAge}세 이상 ${input.maxAge}세 이하를 함께 지나는 선수는 없습니다`,
-    };
-  }
-
-  const draft: ScoutMission = {
-    id: `mission-${state.date}-${state.scoutMissions.length}`,
-    ...(competition.competitionId === null ? {} : { competitionId: competition.competitionId }),
-    ...(position === undefined ? {} : { position }),
-    ...(input.minAge === undefined ? {} : { minAge: input.minAge }),
-    ...(input.maxAge === undefined ? {} : { maxAge: input.maxAge }),
-    ...(input.maxValue === undefined ? {} : { maxValue: input.maxValue }),
+  scope.playerIds = ids;
+  const question = input.question ?? prior?.question;
+  const deadline = input.deadline ?? prior?.deadline ?? null;
+  const previousReportId = input.previousReportId ?? prior?.previousReportId ?? null;
+  if (!question?.trim()) return { ok: false, message: "조사할 내용을 알려 주세요" };
+  if (scope.position && !POSITION_CODES.includes(scope.position))
+    return { ok: false, message: "존재하지 않는 포지션입니다" };
+  if (
+    new Set(scope.playerIds).size !== scope.playerIds.length ||
+    scope.playerIds.some((id) => !playerById(state, id))
+  )
+    return { ok: false, message: "조사 대상 선수를 확인해 주세요" };
+  if (scope.minAge !== null && scope.maxAge !== null && scope.minAge > scope.maxAge)
+    return { ok: false, message: "나이 하한이 상한보다 큽니다" };
+  if (deadline && deadline < state.date)
+    return { ok: false, message: "지난 날짜를 조사 기한으로 정할 수 없습니다" };
+  if (previousReportId && !state.scoutReports.some((r) => r.id === previousReportId))
+    return { ok: false, message: "이전 보고서를 찾을 수 없습니다" };
+  const twin =
+    !prior &&
+    state.scoutingRequests.find(
+      (r) =>
+        r.requestedOn === state.date &&
+        r.source === source &&
+        r.question === question &&
+        JSON.stringify(r.scope) === JSON.stringify(scope) &&
+        r.deadline === deadline &&
+        r.previousReportId === previousReportId &&
+        r.status !== "cancelled",
+    );
+  if (twin) return { ok: true, request: twin, message: "이미 접수한 조사 의뢰입니다" };
+  const request: ScoutingRequest = {
+    id: prior?.id ?? `scouting-${state.id}-${state.scoutingRequests.length}`,
+    revision: (prior?.revision ?? 0) + 1,
     requestedOn: state.date,
+    source,
+    question,
+    scope,
+    deadline,
+    previousReportId,
+    plan: null,
     dueOn: null,
-    completedOn: null,
+    status: "planning",
+    evidenceOn: null,
+    evidence: [],
+    reportId: null,
+    error: null,
   };
+  if (prior) Object.assign(prior, request);
+  else state.scoutingRequests.push(request);
+  return { ok: true, request: prior ?? request, message: "조사 의뢰를 접수했습니다" };
+}
 
-  const twin = [...activeMissions(state), ...waitingMissions(state)].find((m) =>
-    sameMissionConditions(m, draft),
+/** The only inputs to Jev are public records, actual observations and past reports. */
+export function scoutingEvidence(state: GameState, request: ScoutingRequest): ScoutingEvidence[] {
+  const scope = request.scope;
+  const pool = playerPoolOf(state, {
+    competitionId: scope.competitionId,
+    ...(scope.position ? { position: scope.position } : {}),
+    ...(scope.minAge === null ? {} : { minAge: scope.minAge }),
+    ...(scope.maxAge === null ? {} : { maxAge: scope.maxAge }),
+  });
+  const players = state.players.filter(
+    (p) =>
+      (scope.playerIds.length ? scope.playerIds.includes(p.id) : !isOurPlayer(state, p)) &&
+      inPlayerPool(state, p, pool),
   );
-  if (twin && (twin.dueOn !== null || freeScoutSlots(state) <= 0)) {
-    return {
-      ok: false,
-      message:
-        twin.dueOn === null
-          ? `같은 조건의 임무가 이미 대기 중입니다 (${missionLabel(twin)}) — 자리가 나면 나갑니다`
-          : `같은 조건으로 이미 나가 있습니다 (${missionLabel(twin)}) — 보고 예정 ${twin.dueOn}`,
-    };
-  }
+  return players
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((p): ScoutingEvidence => {
+      const contract = activeContract(state, p.id);
+      const sources: ScoutingEvidence["sources"] = [
+        {
+          id: `profile:${p.id}:${state.date}`,
+          date: state.date,
+          text: `${p.name} · ${teamNameIn(state, p.teamId)} · ${ageOf(p.birthdate, state.date)}세 · ${naturalPositionOf(p).position}`,
+        },
+      ];
+      for (const m of state.matches) {
+        if (m.date > state.date || !m.result) continue;
+        const r = m.result;
+        if (!r.homeLineup.includes(p.id) && !r.awayLineup.includes(p.id)) continue;
+        const rating = r.ratings?.[p.id];
+        const goals = r.scorers.filter((id) => id.endsWith(`:${p.id}`)).length;
+        const assists = r.assists.filter((id) => id.endsWith(`:${p.id}`)).length;
+        sources.push({
+          id: `match:${m.id}:${p.id}`,
+          date: m.date,
+          text: `${m.date} ${teamNameIn(state, m.homeTeamId)} ${r.homeGoals}-${r.awayGoals} ${teamNameIn(state, m.awayTeamId)} 출전 · ${goals}골 ${assists}도움${rating === undefined ? "" : ` · 평점 ${rating}`}`,
+        });
+      }
+      for (const stat of state.seasonStats.filter((v) => v.gamePlayerId === p.id && v.apps > 0)) {
+        sources.push({
+          id: `season:${stat.season}:${stat.teamId}:${stat.competitionId}:${p.id}`,
+          date: state.date,
+          text: `시즌 ${stat.season} · ${stat.apps}경기 ${stat.goals}골 ${stat.assists}도움 · 평점 합 ${stat.ratingSum}`,
+        });
+      }
+      for (const i of state.injuries.filter((i) => i.gamePlayerId === p.id)) {
+        if (i.occurredOn > state.date) continue;
+        sources.push({
+          id: `injury:${i.id}`,
+          date: i.occurredOn,
+          text: `${i.bodyPart} 부상 · 복귀 예정 ${i.expectedReturn}`,
+        });
+      }
+      for (const transfer of state.transfers) {
+        if (
+          transfer.gamePlayerId !== p.id ||
+          transfer.date > state.date ||
+          transfer.type !== "transfer"
+        )
+          continue;
+        sources.push({
+          id: `transfer:${transfer.id}`,
+          date: transfer.date,
+          text: `${transfer.fromTeamId ? teamNameIn(state, transfer.fromTeamId) : "무소속"} → ${transfer.toTeamId ? teamNameIn(state, transfer.toTeamId) : "무소속"} · 기록 이적료 £${transfer.fee}. 현재 요구 가격이 아님`,
+        });
+      }
+      for (const report of state.scoutReports) {
+        const old = report.candidates.find((c) => c.evidence.playerId === p.id);
+        if (!old || report.completedOn > state.date) continue;
+        sources.push({
+          id: `report:${report.id}:${p.id}`,
+          date: report.completedOn,
+          text: JSON.stringify({ question: report.question, assessment: old.assessment }),
+        });
+      }
+      return {
+        playerId: p.id,
+        name: p.name,
+        teamId: p.teamId,
+        team: teamNameIn(state, p.teamId),
+        age: ageOf(p.birthdate, state.date),
+        position: naturalPositionOf(p).position,
+        positions: p.positions.map((v) => v.position),
+        contractUntil: contract?.until ?? null,
+        weeklyWage: contract?.weeklyWage ?? null,
+        listed: state.transferList.some((l) => l.gamePlayerId === p.id),
+        marketEstimate: observedMarketValue(state, p),
+        sources,
+      };
+    });
+}
 
-  const missions = state.scoutMissions;
-  if (freeScoutSlots(state) <= 0) {
-    /**
-     * 못 나갔다는 사실을 **표에 남긴다** — 반려 문구는 이 턴에만 살아 있어, 남기지
-     * 않으면 다음 턴의 모델에는 이 임무를 읽을 자리가 없다 (player.md §9.4).
-     * 자리가 나도 코어가 대신 보내지 않는다: 상태 전이는 명령 한 경로뿐이다.
-     */
-    missions.push(draft);
-    return {
-      ok: false,
-      message:
-        `${missionLabel(draft)} 임무는 보내지 못했습니다 — 동시 파견 한도 ` +
-        `${josa(String(SCOUT_CONCURRENT_LIMIT), "이/가")} 차 있습니다 (파견 중: ${inFlightScoutLabels(state).join(", ")}). ` +
-        `${earliestScoutReturn(state)} 보고가 들어오면 자리가 납니다. ` +
-        `이 임무는 대기로 남습니다 — 자리가 난 뒤 다시 불러야 나갑니다`,
-    };
-  }
+export function applyScoutingPlan(
+  state: GameState,
+  id: string,
+  revision: number,
+  raw: ScoutingPlan,
+): boolean {
+  const request = state.scoutingRequests.find((r) => r.id === id);
+  if (
+    !request ||
+    request.revision !== revision ||
+    !["planning", "failed"].includes(request.status) ||
+    request.evidenceOn
+  )
+    return false;
+  const plan = ScoutingPlanSchema.parse(raw);
+  const dueOn = addDays(state.date, plan.days);
+  if (dueOn < state.date) throw new Error("Invalid scouting date");
+  if (
+    plan.expectations.some((entry) => !plan.focus.includes(entry.topic)) ||
+    new Set(plan.expectations.map((entry) => entry.topic)).size !== plan.expectations.length
+  )
+    throw new Error("Scouting precision must refer to distinct planned topics");
+  if (request.deadline && plan.status === "ready" && dueOn > request.deadline)
+    plan.status = "needs_revision";
+  request.plan = plan;
+  request.dueOn = plan.status === "ready" ? dueOn : null;
+  request.status = plan.status === "ready" ? "scheduled" : "held";
+  request.error = null;
+  return true;
+}
 
-  const dueOn = addDays(state.date, MISSION_DAYS);
-  const mission: ScoutMission = twin ?? draft;
-  mission.dueOn = dueOn;
-  if (!twin) missions.push(mission);
-  /**
-   * 파견은 아직 아무 장부도 바꾸지 않았다 — 지목과 같은 갈래(`kind: "scout"`)의
-   * 카드로 선다. 이름 자리에는 조건이, 상대 자리에는 뒤지는 곳이 온다.
-   */
-  const card: MarketCard = {
-    kind: "scout",
-    playerId: mission.id,
-    playerName: missionBrief(mission),
-    counterpart: missionScope(mission),
-    direction: "in",
-    dueOn,
-    note: `후보 ${MISSION_CANDIDATES}명`,
-  };
-  return {
-    ok: true,
-    payload: card,
-    message:
-      `스카우트 임무 파견 — ${missionLabel(mission)} · ` +
-      `보고 예정 ${dueOn} (후보 ${MISSION_CANDIDATES}명)`,
-  };
+/** Pure date boundary: freeze evidence now; the application runs the evaluator later. */
+export function captureScoutingEvidence(state: GameState): void {
+  for (const request of state.scoutingRequests) {
+    if (request.status !== "scheduled" || !request.dueOn || request.dueOn > state.date) continue;
+    request.evidence = scoutingEvidence(state, request);
+    request.evidenceOn = state.date;
+    request.status = "ready";
+  }
+}
+
+export function completeScoutingReport(
+  state: GameState,
+  id: string,
+  revision: number,
+  raw: ScoutingAssessment[],
+): ScoutingReport | null {
+  const request = state.scoutingRequests.find((r) => r.id === id);
+  if (
+    !request ||
+    request.revision !== revision ||
+    !["ready", "failed"].includes(request.status) ||
+    !request.evidenceOn ||
+    !request.plan
+  )
+    return null;
+  const assessments = raw.map((a) => ScoutingAssessmentSchema.parse(a));
+  if (
+    assessments.length !== request.evidence.length ||
+    new Set(assessments.map((a) => a.playerId)).size !== assessments.length
+  )
+    throw new Error("Scouting must account for each investigated player exactly once");
+  const candidates = request.evidence.map((evidence) => {
+    const assessment = assessments.find((a) => a.playerId === evidence.playerId);
+    if (
+      !assessment ||
+      assessment.evidenceRefs.some((id) => !evidence.sources.some((s) => s.id === id))
+    )
+      throw new Error("Unverified scouting evidence");
+    if (
+      Object.keys(assessment.attributes).some(
+        (axis) => !(ATTRIBUTE_AXES as readonly string[]).includes(axis),
+      )
+    )
+      throw new Error("Unknown observed attribute");
+    if (
+      (assessment.overall ||
+        assessment.potential ||
+        Object.keys(assessment.attributes).length > 0) &&
+      !assessment.evidenceRefs.some(
+        (id) => id.startsWith("match:") || id.startsWith("report:") || id.startsWith("season:"),
+      )
+    )
+      throw new Error("Ability assessment without observation");
+    if (
+      (assessment.fit === "recommended" || assessment.strengths.length > 0) &&
+      assessment.evidenceRefs.length === 0
+    )
+      throw new Error("Recommendation without evidence");
+    return { evidence, assessment };
+  });
+  const report = ScoutingReportSchema.parse({
+    id: `report-${id}-${revision}`,
+    requestId: id,
+    revision,
+    requestedOn: request.requestedOn,
+    completedOn: state.date,
+    evidenceOn: request.evidenceOn,
+    question: request.question,
+    plan: request.plan,
+    candidates,
+  });
+  if (state.scoutReports.some((r) => r.id === report.id)) return null;
+  state.scoutReports.push(structuredClone(report));
+  request.reportId = report.id;
+  request.status = "completed";
+  request.error = null;
+  request.evidence = [];
+  if (!state.pendingReportCards.includes(report.id)) state.pendingReportCards.push(report.id);
+  return report;
+}
+
+export function failScouting(state: GameState, id: string, revision: number, error: string): void {
+  const request = state.scoutingRequests.find((r) => r.id === id);
+  if (
+    !request ||
+    request.revision !== revision ||
+    ["completed", "cancelled"].includes(request.status)
+  )
+    return;
+  request.status = "failed";
+  request.error = error;
 }

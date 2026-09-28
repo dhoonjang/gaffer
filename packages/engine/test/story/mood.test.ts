@@ -27,10 +27,8 @@ import {
   addDays,
   applyMoodNotes,
   applyResultMood,
-  dealOdds,
   injuryRiskFor,
   lastMatchIndexOf,
-  marketValueOf,
   moodAnchor,
   moodFactsOf,
   moodOf,
@@ -289,51 +287,6 @@ describe("심경 사실 카드 — 코어는 사실만 낸다", () => {
       "창을 넘긴 사이가 아직 서 있다",
     ).toBe(false);
     expect(stale.some((fact) => fact.cause === "departure")).toBe(true);
-  });
-});
-
-/**
- * **체력은 몸의 예산이지 사기가 아니다.**
- *
- * 경기 한 판이 30~50을 가져가므로 "체력이 낮다 = 마음이 떴다"로 읽으면 90분을
- * 뛴 다음 날 선발 전원이 팀을 떠나고 싶어 하는 선수가 된다. 실제로 이적 확률·
- * 재계약 확률·들어오는 오퍼가 그 기준으로 굴러가고 있었다.
- */
-describe("지친 것과 마음이 뜬 것은 다르다", () => {
-  const tired = (state: ReturnType<typeof createTestGame>) => {
-    const player = userPlayers(state).find((p) => p.teamId === state.userTeamId)!;
-    player.state.condition = 25; // 방금 90분을 뛰었다
-    return player;
-  };
-
-  it("불만은 사실로 전달하며 금전 앵커에 고정 가산하지 않는다", () => {
-    const state = createTestGame();
-    state.date = "2026-08-20";
-    const player = tired(state);
-    const before = dealOdds(state, {
-      playerId: player.id,
-      fee: marketValueOf(state, player),
-      weeklyWage: 120_000,
-      years: 4,
-      kind: "sell",
-      counterpartTeamId: "chelsea",
-    }).probability;
-    state.issues.push({
-      gamePlayerId: player.id,
-      kind: "unhappy",
-      reason: "minutes",
-      since: state.date,
-    });
-    const after = dealOdds(state, {
-      playerId: player.id,
-      fee: marketValueOf(state, player),
-      weeklyWage: 120_000,
-      years: 4,
-      kind: "sell",
-      counterpartTeamId: "chelsea",
-    }).probability;
-    expect(after).toBe(before);
-    expect(moodFactsOf(state, player).some((fact) => fact.cause === "grievance")).toBe(true);
   });
 });
 

@@ -1,25 +1,18 @@
 "use client";
 
+import { useState } from "react";
+import type { NegotiationMethod } from "@story-fm/domain";
 import type { NegotiationRoomView } from "@story-fm/engine";
 import { humanDate } from "@/domains/common/lib/dateline";
 import {
-  Odds,
-  PatienceMeter,
+  METHOD_LABELS,
+  Followups,
   TermSheet,
   Voices,
   hasTermSheet,
 } from "@/domains/negotiation/ui/negotiation-room";
 
-/**
- * ── 협상 게이트 — 감독이 직접 나서는 문 (transfer.md §12-2 · design-system.md §7-1) ────
- *
- * 킥오프 게이트와 한 쌍이다. `start_negotiation`은 방을 세울 뿐이고 나서는 것은
- * 감독이다 — 그 턴부터 채팅의 주인이 협상 GM으로 바뀐다. 닫는 손잡이는 없다: 열린
- * 방은 나서거나 물러나는 길뿐이고, 물러나는 손잡이는 방 안에 선다.
- *
- * 나서기 전 마지막으로 읽는 한 장이라 방의 지금이 통째로 선다 — 데이트라인 · 건너편의
- * 사람들 · 지금의 조건서 · 성사 가능성 · 남은 인내. 값은 전부 뷰가 접어 온 것이다.
- */
+/** The entry method belongs to this exchange; the counterparty history remains shared. */
 export function NegotiationGate({
   room,
   date,
@@ -33,8 +26,9 @@ export function NegotiationGate({
   busy: boolean;
   /** 감독이 지금 이 문을 지나는 중인가 — 무대는 이미 방이다(`GATE_LEAVE_MS`) */
   leaving?: boolean;
-  onEnter: () => void;
+  onEnter: (method: NegotiationMethod) => void;
 }) {
+  const [method, setMethod] = useState(room.method);
   return (
     <div
       className={leaving ? "negotiation-gate leaving" : "negotiation-gate"}
@@ -70,16 +64,21 @@ export function NegotiationGate({
             </div>
           )}
 
-          <div className="ng-row">
-            <div className="ng-block">
-              <span className="ng-label">성사</span>
-              <Odds room={room} />
-            </div>
-            <div className="ng-block">
-              <span className="ng-label">인내</span>
-              <PatienceMeter patience={room.patience} />
-            </div>
-          </div>
+          <label className="ng-block">
+            연락 방식
+            <select
+              value={method}
+              onChange={(event) => setMethod(event.target.value as NegotiationMethod)}
+              disabled={busy}
+            >
+              {Object.entries(METHOD_LABELS).map(([key, label]) => (
+                <option value={key} key={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Followups room={room} />
         </div>
         <button
           className="primary-btn"
@@ -87,10 +86,10 @@ export function NegotiationGate({
           disabled={busy}
           /* 협상의 문도 손잡이다 — 무대는 누름과 함께 바뀌고, 그 턴이 여는 턴인지는
              코어가 안다(`seated`) */
-          onClick={onEnter}
+          onClick={() => onEnter(method)}
           data-testid="negotiation-enter"
         >
-          직접 나선다
+          협상 이어가기
         </button>
       </div>
     </div>

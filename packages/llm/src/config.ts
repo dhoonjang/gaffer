@@ -26,6 +26,8 @@ export const EVALUATOR_NAMES = [
   ...INSTRUCTION_AGENT_NAMES,
   "match-reader",
   "training-rater",
+  "scouting",
+  "negotiation",
   "finalize-match",
 ] as const;
 export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
@@ -225,6 +227,8 @@ const LlmConfigFileSchema = z
         "table-orders": RawEvaluatorConfigSchema.optional(),
         "match-reader": RawEvaluatorConfigSchema.optional(),
         "training-rater": RawEvaluatorConfigSchema.optional(),
+        scouting: RawEvaluatorConfigSchema.optional(),
+        negotiation: RawEvaluatorConfigSchema.optional(),
         "finalize-match": RawEvaluatorConfigSchema.optional(),
       })
       .strict()

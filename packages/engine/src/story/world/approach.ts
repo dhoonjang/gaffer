@@ -50,7 +50,7 @@ export function renewalOpenFor(state: GameState, playerId: string): boolean {
 
 /** 그 협상이 끝난 날 — 만료는 기한이, 거절은 마지막 라운드가 그날이다 */
 function closedOn(negotiation: Negotiation): string {
-  if (negotiation.status === "expired") return negotiation.expiresOn;
+  if (negotiation.status === "expired" && negotiation.expiresOn) return negotiation.expiresOn;
   return negotiation.rounds[negotiation.rounds.length - 1]?.date ?? negotiation.openedOn;
 }
 

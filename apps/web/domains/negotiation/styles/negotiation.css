@@ -213,47 +213,6 @@
   --stance: var(--loss);
 }
 
-/**
- * 인내 — 방의 시계. 칸 `max`개가 트랙이고 남은 만큼 키 컬러로 찬다. 결은 뷰가 낸
- * `data-tone`이 고른다 — `low`면 주의, `out`이면 꺼짐. 숫자는 `.fig`로 옆에 (`2/4`).
- */
-.patience {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  align-self: stretch;
-}
-.patience-cells {
-  display: flex;
-  flex: 1;
-  gap: var(--sp-1);
-  max-width: 200px;
-}
-.patience-cells i {
-  flex: 1;
-  height: 8px;
-  border-radius: var(--r-xs);
-  background: var(--border);
-  transition: background var(--ease);
-}
-.patience-cells i.on {
-  background: var(--accent);
-}
-.patience[data-tone="low"] .patience-cells i.on {
-  background: var(--warn);
-}
-.patience b {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.patience[data-tone="low"] b {
-  color: var(--warn);
-}
-.patience[data-tone="out"] b {
-  color: var(--dim);
-}
-
 /* ── 조건서 — 시장 카드의 격자(`.mc-table`)를 그대로 쓴다 ──────────────────── */
 .nr-sheet {
   display: flex;
@@ -314,37 +273,6 @@
   font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
-}
-
-/* ── 성사 — 가능성과 기한 ────────────────────────────────────────────────── */
-.nr-odds {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-1) var(--sp-4);
-  font-size: var(--fs-xs);
-}
-.nr-odds span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-}
-.nr-odds em {
-  color: var(--dim);
-  white-space: nowrap;
-}
-.nr-odds b {
-  color: var(--text);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.nr-odds-val b {
-  color: var(--accent-2);
-}
-/* 상대가 건 기한은 주의다 — 지나면 문이 닫힌다 */
-.nr-deadline[data-ultimatum] b {
-  color: var(--warn);
 }
 
 /* ── 손잡이 — 방에서만 산다 ───────────────────────────────────────────────── */
@@ -942,4 +870,37 @@
   color: var(--text);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.sr-candidate + .sr-candidate {
+  margin-top: var(--sp-4);
+}
+.sr-candidate details,
+.pc-reports,
+.nr-section details {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+}
+.sr-candidate summary,
+.pc-reports summary,
+.nr-section summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+.nr-section select,
+.ng-block select {
+  max-width: 100%;
+  padding: var(--sp-2);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.nr-section ol,
+.nr-section ul,
+.sr-candidate ul {
+  padding-left: var(--sp-4);
+}
+.nr-section li + li {
+  margin-top: var(--sp-2);
 }

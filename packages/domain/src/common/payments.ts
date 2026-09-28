@@ -10,12 +10,6 @@ import { type TransferReason } from "../negotiation/transfers";
  */
 export const MAX_PAYMENT_YEARS = 4;
 
-/**
- * 늦게 오는 회분을 판정이 깎아 보는 비율 — 1년 늦을 때마다 곱한다.
- * 분할이 공짜 신용이 되지 않게 하는 손잡이다 (`effectiveFeeOf`).
- */
-export const INSTALLMENT_DISCOUNT = 0.9;
-
 /** 지급 일정의 한 회분 — `paidOn=null`이 미지급 (기록 테이블 공통 패턴) */
 export const PaymentInstallmentSchema = z.object({
   dueOn: DateString,
@@ -70,23 +64,6 @@ export function buildPaymentInstallments(
     amount: k === n - 1 ? total - per * (n - 1) : per,
     paidOn: null,
   }));
-}
-
-/**
- * 분할 오퍼의 **유효 이적료** — 회분마다 해마다 `INSTALLMENT_DISCOUNT`를 곱한
- * 현재가치다. 파는 쪽은 늦게 오는 돈을 깎아 보므로 딜 판정(`dealOdds`)은 이
- * 값으로 잰다 — 같은 확률을 원하면 분할은 총액을 올려 불러야 한다 (transfer.md §5-2).
- */
-export function effectiveFeeOf(fee: number, paymentYears?: number): number {
-  const n = Math.max(1, Math.min(MAX_PAYMENT_YEARS, Math.floor(paymentYears ?? 1)));
-  if (n <= 1) return fee;
-  let sum = 0;
-  let weight = 1;
-  for (let k = 0; k < n; k += 1) {
-    sum += (fee / n) * weight;
-    weight *= INSTALLMENT_DISCOUNT;
-  }
-  return Math.round(sum);
 }
 
 /**

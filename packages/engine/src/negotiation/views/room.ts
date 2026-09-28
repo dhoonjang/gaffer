@@ -4,26 +4,20 @@ import {
   type NegotiationKind,
   type MarketTerms,
   type Negotiation,
+  type NegotiationMethod,
+  type NegotiationFollowup,
   dealTermLabel,
 } from "@story-fm/domain";
 import { type GameState, playerById, teamNameIn, teamShortNameIn } from "../../common/core/state";
-import {
-  roomNegotiationOf,
-  roomPartyOf,
-  tableOf,
-  tablePatienceOf,
-  TABLE_PATIENCE_LOW,
-} from "../market/table";
+import { roomNegotiationOf, roomPartyOf, tableOf } from "../market/table";
 import { tableVoicesOf } from "../market/counterparty";
 import { clubColoursOf } from "../../common/views/colours";
 import {
   pendingOffer,
-  standingDeadlineOf,
   negotiationKindKo,
   counterpartOf,
   personalAwaiting,
 } from "../market/negotiation";
-import { dealOdds, oddsText } from "../market/market";
 import { termSheetOf } from "../market/terms";
 
 /** 건너편의 목소리 하나 — 화자 토큰 · 이름 · 직책 · 답하는 칸 (transfer.md §12-1) */
@@ -66,13 +60,20 @@ export interface NegotiationRoomView {
   voices: NegotiationRoomVoiceView[];
   /** 구단이 이미 이적료에 합의했으면 그 값 — 남은 것은 개인 조건이다 */
   feeAgreed: { fee: number; on: string } | null;
-  /** 아직 자리에 앉기 전인가 — 게이트가 선다 */
+  /** 이번 교환을 시작하기 전이면 진입 방식 선택을 보여준다. */
   beforeSeating: boolean;
-  /**
-   * 인내 — 남은 칸·앉을 때의 칸·결. 테이블이 아직 없으면(첫 말 전) 앉을 때의 값이다.
-   * `tone`의 문턱은 코어의 것이다(`TABLE_PATIENCE_LOW`) — 화면이 숫자를 다시 자르지 않는다.
-   */
-  patience: { left: number; max: number; tone: "steady" | "low" | "out" };
+  contactId: string | null;
+  method: NegotiationMethod;
+  history: Array<{
+    exchangeId: string;
+    negotiationId: string;
+    playerName: string;
+    method: NegotiationMethod;
+    date: string;
+    by: "us" | "ledger";
+    text: string;
+  }>;
+  followups: NegotiationFollowup[];
   /** 우리 마지막 오퍼 · 상대의 마지막 조정안 — 없으면 null */
   ours: MarketTerms | null;
   theirs: MarketTerms | null;
@@ -81,10 +82,6 @@ export interface NegotiationRoomView {
   /** 개인 조건 선합의 — 제안·되부름·합의 (transfer.md §12-3) */
   personal: { weeklyWage: number; years: number; agreed: boolean; countered: boolean } | null;
   terms: NegotiationRoomTermView[];
-  /** 성사 가능성 — 코어가 낸 표기 그대로(`oddsText`). 재는 오퍼가 없으면 null */
-  odds: string | null;
-  /** 협상의 기한 — 상대가 건 기한이면 `ultimatum`이 참 */
-  deadline: { on: string; ultimatum: boolean };
   /** 사실로 확인된 설득 논거의 이름 */
   pitched: string[];
   loan: boolean;
@@ -105,7 +102,9 @@ export function roundTermsOf(
       : noFee
         ? {}
         : { fee: round.fee }),
-    ...(negotiation.kind === "release" ? {} : { weeklyWage: round.weeklyWage }),
+    ...(negotiation.kind === "release" || round.contractYears <= 0
+      ? {}
+      : { weeklyWage: round.weeklyWage }),
     ...(round.contractYears > 0 ? { years: round.contractYears } : {}),
     ...(round.paymentYears !== undefined && round.paymentYears >= 2
       ? { paymentYears: round.paymentYears }
@@ -115,7 +114,7 @@ export function roundTermsOf(
 
 /**
  * 협상 방 — `phase`가 `negotiation`일 때만 선다 (transfer.md §12-2). 값은 전부 협상의
- * 장부에서 파생한다: 오퍼 이력·조건서·테이블의 인내·앵커가 재는 확률.
+ * 장부에서 파생한다: 조건서·상대별 교환 기록·후속 일정.
  */
 export function buildNegotiationView(state: GameState): NegotiationRoomView | null {
   const negotiation = roomNegotiationOf(state);
@@ -145,28 +144,13 @@ export function buildNegotiationView(state: GameState): NegotiationRoomView | nu
         answers: [...v.answers],
       };
     });
-  const table = tableOf(negotiation, party);
-  const max = table?.patienceMax ?? tablePatienceOf(state, negotiation, party);
-  const left = table?.patience ?? max;
+  const table = tableOf(state, negotiation, party);
   const rounds = negotiation.rounds;
   const lastOurs = [...rounds].reverse().find((r) => r.by === "us");
   const last = rounds[rounds.length - 1];
   const lastTheirs = last && last.by === "them" && last.verdict === "counter" ? last : undefined;
   const offer = pendingOffer(negotiation);
-  const odds = last
-    ? dealOdds(state, {
-        playerId: player.id,
-        fee: last.fee,
-        weeklyWage: last.weeklyWage,
-        years: last.contractYears,
-        kind: negotiation.kind,
-        ...(negotiation.counterpartTeamId
-          ? { counterpartTeamId: negotiation.counterpartTeamId }
-          : {}),
-      })
-    : null;
   const personal = negotiation.personal;
-  const ultimatum = standingDeadlineOf(negotiation);
   return {
     negotiationId: negotiation.id,
     playerId: player.id,
@@ -180,11 +164,28 @@ export function buildNegotiationView(state: GameState): NegotiationRoomView | nu
       ? { fee: negotiation.feeAgreed.fee, on: negotiation.feeAgreed.on }
       : null,
     beforeSeating: room.seated !== true,
-    patience: {
-      left,
-      max,
-      tone: left <= 0 ? "out" : left <= TABLE_PATIENCE_LOW ? "low" : "steady",
-    },
+    contactId: table?.id ?? null,
+    method: room.method,
+    history: (table?.lines ?? []).flatMap((line) => {
+      const exchange = state.negotiationExchanges.find((entry) => entry.id === line.exchangeId);
+      if (!exchange || exchange.contactId !== table?.id) return [];
+      const deal = state.negotiations.find((entry) => entry.id === line.negotiationId);
+      return [
+        {
+          ...line,
+          method: exchange.method,
+          playerName: deal
+            ? (playerById(state, deal.gamePlayerId)?.name ?? deal.gamePlayerId)
+            : line.negotiationId,
+        },
+      ];
+    }),
+    followups: state.negotiationFollowups.filter(
+      (entry) =>
+        entry.negotiationId === negotiation.id &&
+        entry.party === party &&
+        entry.status !== "cancelled",
+    ),
     ours: roundTermsOf(negotiation, lastOurs),
     theirs: roundTermsOf(negotiation, lastTheirs),
     awaiting: offer !== null || personalAwaiting(negotiation) !== null,
@@ -201,8 +202,6 @@ export function buildNegotiationView(state: GameState): NegotiationRoomView | nu
       by: row.by,
       answer: row.answer ?? null,
     })),
-    odds: odds && odds.blockers.length === 0 ? oddsText(odds) : null,
-    deadline: { on: negotiation.expiresOn, ultimatum: ultimatum !== null },
     pitched: [...negotiation.pitched],
     loan: negotiation.kind === "loan" || negotiation.kind === "loan_out",
     precontract: negotiation.precontract === true,

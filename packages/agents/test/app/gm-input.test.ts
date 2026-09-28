@@ -1,6 +1,11 @@
+import * as scoutingWorkflow from "../../src/app/workflows/negotiation/scouting";
 import { describe, expect, it, vi } from "vitest";
 import {
   activeContract,
+  openIncomingTalks,
+  changeScoutingRequest,
+  applyScoutingPlan,
+  completeScoutingReport,
   addDays,
   advanceTime,
   applyScenePoint,
@@ -15,7 +20,6 @@ import {
   leagueOfTeamIn,
   HISTORY_CHAR_LIMIT,
   HISTORY_STEP,
-  missionReportCard,
   openPress,
   openRenewal,
   ownerOf,
@@ -26,8 +30,6 @@ import {
   sendOffer,
   sitAtTable,
   speakerRoles,
-  scoutPlayer,
-  scoutReportCard,
   squadReturnOf,
   subLimitsOf,
   teamName,
@@ -73,7 +75,7 @@ import {
   runOnboarding,
   type GmToolCall,
 } from "@story-fm/agents";
-import { awardTitle, normalizeSpeaker, SCOUT_DAYS } from "@story-fm/domain";
+import { awardTitle, normalizeSpeaker, type ScoutingReport } from "@story-fm/domain";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@story-fm/llm";
 
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
@@ -112,6 +114,55 @@ const BASE = build();
  */
 BASE.pressConferences = [];
 const game = (): GameState => structuredClone(BASE);
+
+function archivedReport(state: GameState, id = "report"): ScoutingReport {
+  return {
+    id,
+    requestId: "request",
+    revision: 1,
+    requestedOn: state.date,
+    completedOn: state.date,
+    evidenceOn: state.date,
+    question: "이 선수가 역할에 맞는가?",
+    plan: {
+      status: "ready",
+      days: 2,
+      depth: "match_review",
+      focus: ["role"],
+      expectations: [],
+      evidenceRefs: ["appearance"],
+      limitations: [],
+    },
+    candidates: [
+      {
+        evidence: {
+          playerId: "archived-player",
+          name: "보존된 선수 이름",
+          teamId: "former-team",
+          team: "당시 소속팀",
+          age: 23,
+          position: "CB",
+          positions: ["CB"],
+          contractUntil: null,
+          weeklyWage: null,
+          listed: false,
+          marketEstimate: null,
+          sources: [{ id: "appearance", date: state.date, text: "기록된 출전" }],
+        },
+        assessment: {
+          playerId: "archived-player",
+          fit: "unknown",
+          overall: null,
+          potential: null,
+          attributes: {},
+          evidenceRefs: ["appearance"],
+          strengths: [],
+          concerns: ["insufficient_evidence"],
+        },
+      },
+    ],
+  };
+}
 
 describe("레퍼런스 층 — <club>·<manager> (캐시되는 시스템 블록)", () => {
   /**
@@ -562,59 +613,12 @@ describe("상태 스냅샷 (매 턴 갱신되는 휘발성 블록)", () => {
     expect(block).not.toContain(sub!.name);
   });
 
-  it("스카우트 파견을 주의 신호로 알린다", () => {
+  it("도착 보고의 보존된 사실을 그대로 GM 입력에 싣는다", () => {
     const state = game();
-    const target = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, target.id);
-    expect(buildGmStateNote(state)).toContain("스카우트 파견 중");
-  });
-
-  /**
-   * 카드는 프롬프트에 가지 않는다. 카드가 서는 턴의 스냅샷이 같은 금액을 싣지 않으면
-   * 모델은 카드 옆에서 몸값을 지어내고 한 화면이 두 말을 한다 (agents.md §6).
-   */
-  it("카드가 서는 턴의 스냅샷이 카드와 같은 금액을 싣는다", () => {
-    const state = game();
-    const target = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, target.id);
-    advanceTime(state, { days: SCOUT_DAYS });
-
-    const card = scoutReportCard(state, target.id)!;
-    const note = buildGmStateNote(state, null, [card]);
-    expect(note).toContain("<scout_reports name=");
-    expect(note).toContain(formatMoney(card.marketValue));
-    expect(note).toContain(formatMoney(card.wageExpectation));
-    // 실리지 않은 턴에는 한 줄도 쓰지 않는다 — 매 턴 정가로 읽히는 블록이다
+    const report = archivedReport(state);
+    const note = buildGmStateNote(state, null, [report]);
+    expect(note).toContain(JSON.stringify(report));
     expect(buildGmStateNote(state)).not.toContain("<scout_reports");
-  });
-
-  /**
-   * **임무도 같은 블록을 지난다.** 지목만 싣던 자리라 임무 쪽은 조용히 빈손이 된다 —
-   * 그러면 모델은 카드 옆에서 후보와 금액을 지어내고, 카드의 다섯과 대사의 다섯이
-   * 다른 선수가 된다 (agents.md §6).
-   */
-  it("같은 블록이 임무 보고의 후보 값도 싣는다", () => {
-    const state = game();
-    const candidates = playersOf(state, "chelsea").slice(0, 5);
-    state.scoutMissions = [
-      {
-        id: "mission-lb",
-        position: "LB",
-        maxAge: 23,
-        requestedOn: state.date,
-        dueOn: state.date,
-        completedOn: state.date,
-        candidates: candidates.map((p) => p.id),
-      },
-    ];
-
-    const card = missionReportCard(state, "mission-lb")!;
-    // 지목은 하나도 없는 턴이다 — 임무만으로도 블록이 서야 한다
-    const note = buildGmStateNote(state, null, [], [card]);
-    expect(note).toContain("<scout_reports name=");
-    expect(note).toContain(card.brief);
-    for (const c of card.candidates) expect(note).toContain(c.name);
-    expect(note).toContain(formatMoney(card.candidates[0]!.marketValue));
   });
 
   /**
@@ -1191,7 +1195,7 @@ describe("도구 구성", () => {
     const fromCatalog = SKILL_CATALOG.filter((s) => s.readOnly).map((s) => s.name);
     expect(fromSpec.sort()).toEqual(fromCatalog.sort());
     // 상태를 바꾸는 도구는 기록 대상 — 표시가 아예 서지 않는다
-    expect(tools.find((t) => t.name === "scout_player")?.readOnly).toBeUndefined();
+    expect(tools.find((t) => t.name === "request_scouting")?.readOnly).toBeUndefined();
   });
 
   it("시간을 흘리는 도구는 없다 — 시계는 장면 헤더가 움직인다", () => {
@@ -1904,167 +1908,219 @@ describe("꺾쇠 블록 — 평시와 중계가 같은 규칙을 읽는다", () 
   });
 });
 
-/**
- * 도착 줄(`pendingReportCards`)에는 지목의 선수 id와 임무 id가 **섞여** 온다.
- * 갈래마다 줄을 따로 꺼내면 앞의 호출이 줄을 비워 뒤는 언제나 빈손이고, 그 턴의
- * 카드 한 갈래가 통째로 사라진다 — 화면에도 로그에도 아무 말이 남지 않는다.
- */
-describe("도착한 카드 — 한 줄에서 지목과 임무를 가른다", () => {
-  it("같은 턴에 도착한 보고서와 임무가 둘 다 선다", async () => {
-    const state = game();
-    const target = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, target.id);
-    advanceTime(state, { days: SCOUT_DAYS });
-    // 임무 하나가 같은 날 돌아왔다 — 줄에는 선수 id 뒤에 임무 id가 선다
-    const candidates = playersOf(state, "chelsea")
-      .slice(1, 6)
-      .map((p) => p.id);
-    state.scoutMissions = [
-      {
-        id: "mission-lb",
-        position: "LB",
-        maxAge: 23,
-        requestedOn: state.date,
-        dueOn: state.date,
-        completedOn: state.date,
-        candidates,
-      },
-    ];
-    state.pendingReportCards = [...(state.pendingReportCards ?? []), "mission-lb"];
-    state.chat.push({ role: "user", text: "보고 왔나?", toolCalls: [], at: state.date });
+it("세계 연락은 같은 사건을 재생하지 않고 다른 상대의 문의를 분리한다", () => {
+  const state = game();
+  const player = userPlayers(state)[0]!;
+  const input = {
+    playerId: player.id,
+    counterpartTeamId: "chelsea",
+    kind: "sell" as const,
+    trigger: "listing" as const,
+  };
+  expect(openIncomingTalks(state, input).ok).toBe(false);
+  state.transferList.push({ gamePlayerId: player.id, listedOn: state.date, askingPrice: 12000000 });
+  const first = openIncomingTalks(state, input);
+  if (!first.ok) throw new Error(first.message);
+  expect(first.negotiation.rounds).toEqual([]);
+  expect(first.negotiation.expiresOn).toBeUndefined();
+  const rival = openIncomingTalks(state, { ...input, counterpartTeamId: "mancity" });
+  expect(rival.ok).toBe(true);
+  expect(state.negotiations).toHaveLength(2);
+  first.negotiation.status = "rejected";
+  const retry = openIncomingTalks(state, input);
+  expect(retry.ok && retry.opened).toBe(false);
+  expect(state.negotiations).toHaveLength(2);
+  expect(activeContract(state, player.id)?.teamId).toBe(state.userTeamId);
+});
 
-    stubRunTurn.mockImplementation(async (): Promise<TurnResult> => ({
-      text: `[${state.date} AM 10:00]\n@스티브 홀랜드: 보고서 올려두었습니다.`,
+it("협상 이력은 같은 상대의 다른 거래를 잇고 다른 상대의 같은 거래를 제외한다", () => {
+  const state = game();
+  state.chat = [
+    {
+      role: "user",
+      text: "같은 상대의 이전 거래",
+      at: state.date,
+      toolCalls: [],
+      inNegotiation: true,
+      negotiationId: "old-deal",
+      negotiationContactId: "club-contact",
+    },
+    {
+      role: "model",
+      text: "이전 답변",
+      at: state.date,
+      toolCalls: [],
+      inNegotiation: true,
+      negotiationId: "old-deal",
+      negotiationContactId: "club-contact",
+    },
+    {
+      role: "user",
+      text: "선수에게만 공개한 조건",
+      at: state.date,
+      toolCalls: [],
+      inNegotiation: true,
+      negotiationId: "current-deal",
+      negotiationContactId: "agent-contact",
+    },
+    {
+      role: "model",
+      text: "선수 측 답변",
+      at: state.date,
+      toolCalls: [],
+      inNegotiation: true,
+      negotiationId: "current-deal",
+      negotiationContactId: "agent-contact",
+    },
+    {
+      role: "user",
+      text: "이번 구단 문의",
+      at: state.date,
+      toolCalls: [],
+      inNegotiation: true,
+      negotiationId: "current-deal",
+      negotiationContactId: "club-contact",
+    },
+  ];
+  const scope = { negotiationId: "current-deal", negotiationContactId: "club-contact" };
+  const history = JSON.stringify(buildGmHistory(state, scope));
+  expect(history).toContain("같은 상대의 이전 거래");
+  expect(history).not.toContain("선수에게만 공개한 조건");
+  expect(buildGmTurnMessage(state, [], scope)).toContain("이번 구단 문의");
+});
+
+describe("보존 보고 전달", () => {
+  function response(state: GameState): TurnResult {
+    return {
+      text: `[${state.date} AM 10:00]\n@스티브 홀랜드: 확인했습니다.`,
       history: { version: 1, provider: "google", model: "test", messages: [] },
       historyBase: 0,
       usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
       toolCallCount: 0,
       stopReason: "completed",
-    }));
-    const previousMode = process.env.LLM_MODE;
+    };
+  }
+  async function realTurn(state: GameState) {
+    const previous = process.env.LLM_MODE;
     process.env.LLM_MODE = "real";
     try {
-      const turn = await runGmTurn(state, "보고 왔나?");
-      expect(turn.reports?.map((r) => r.playerId)).toEqual([target.id]);
-      expect(turn.missions?.map((m) => m.missionId)).toEqual(["mission-lb"]);
-      expect(turn.missions?.[0]?.candidates).toHaveLength(candidates.length);
+      return await runGmTurn(state, "보고 왔나?");
     } finally {
-      if (previousMode === undefined) delete process.env.LLM_MODE;
-      else process.env.LLM_MODE = previousMode;
+      if (previous === undefined) delete process.env.LLM_MODE;
+      else process.env.LLM_MODE = previous;
     }
-    // 줄은 비었다 — 다음 턴이 같은 카드를 다시 세우지 않는다
-    expect(state.pendingReportCards ?? []).toEqual([]);
+  }
+  it("존재하지 않는 선수의 과거 보고도 전달하며 표시 상한은 나머지를 지우지 않는다", async () => {
+    const state = game();
+    state.scoutReports = Array.from({ length: 5 }, (_, i) => archivedReport(state, `report-${i}`));
+    state.pendingReportCards = ["missing", ...state.scoutReports.map((report) => report.id)];
+    stubRunTurn.mockImplementation(async () => response(state));
+    const result = await realTurn(state);
+    expect(result.reports).toHaveLength(3);
+    expect(result.reports?.[0]?.candidates[0]?.evidence.name).toBe("보존된 선수 이름");
+    expect(state.pendingReportCards).toEqual(["missing", "report-3", "report-4"]);
+    expect(state.scoutReports).toHaveLength(5);
+  });
+  it("경기 중 대기 보고는 보존하고 첫 평시 턴에 전달한다", async () => {
+    const state = game();
+    state.scoutReports = [archivedReport(state)];
+    state.pendingReportCards = ["report"];
+    stubRunTurn.mockImplementation(async () => response(state));
+    state.phase = "match";
+    await realTurn(state);
+    expect(state.pendingReportCards).toEqual(["report"]);
+    state.phase = "idle";
+    expect((await realTurn(state)).reports?.map((report) => report.id)).toEqual(["report"]);
+    expect(state.pendingReportCards).toEqual([]);
+  });
+  it("첫 GM 호출 이후 완료된 보고는 같은 턴의 도구 없는 서술 호출에 전달한다", async () => {
+    const state = game();
+    const inputs: TurnRequest[] = [];
+    stubRunTurn.mockImplementation(async (request: TurnRequest) => {
+      inputs.push(request);
+      if (inputs.length === 1) {
+        state.scoutReports.push(archivedReport(state));
+        state.pendingReportCards.push("report");
+      }
+      return response(state);
+    });
+    const result = await realTurn(state);
+    expect(inputs).toHaveLength(2);
+    expect(inputs[1]?.stateNote).toContain(JSON.stringify(result.reports![0]));
+    expect(inputs[1]?.tools).toEqual([]);
+    expect(state.pendingReportCards).toEqual([]);
+  });
+  it("예정일에 근거를 동결하고 평가한 뒤 요청한 나머지 날짜를 진행한다", async () => {
+    const state = game();
+    const target = playersOf(state, "chelsea")[0]!;
+    const start = state.date;
+    const changed = changeScoutingRequest(
+      state,
+      { action: "request", question: "출전 이력을 확인", playerIds: [target.id] },
+      "이 선수 출전 이력을 확인해줘",
+    );
+    if (!changed.ok) throw new Error(changed.message);
+    applyScoutingPlan(state, changed.request.id, changed.request.revision, {
+      ...archivedReport(state).plan,
+      days: 1,
+    });
+    const evaluatedOn: string[] = [];
+    const processing = vi
+      .spyOn(scoutingWorkflow, "processScoutingReports")
+      .mockImplementation(async (current) => {
+        const reports: ScoutingReport[] = [];
+        for (const request of current.scoutingRequests.filter((row) => row.status === "ready")) {
+          evaluatedOn.push(current.date);
+          const report = completeScoutingReport(
+            current,
+            request.id,
+            request.revision,
+            request.evidence.map((evidence) => ({
+              playerId: evidence.playerId,
+              fit: "unknown",
+              overall: null,
+              potential: null,
+              attributes: {},
+              evidenceRefs: [],
+              strengths: [],
+              concerns: ["insufficient_evidence"],
+            })),
+          );
+          if (report) reports.push(report);
+        }
+        return reports;
+      });
+    stubRunTurn.mockImplementation(async () => response(state));
+    const previous = process.env.LLM_MODE;
+    process.env.LLM_MODE = "real";
+    try {
+      const result = await runGmTurn(state, "시간 진행", undefined, { kind: "skip_days", days: 3 });
+      expect(evaluatedOn).toEqual([addDays(start, 1)]);
+      expect(state.date).toBe(addDays(start, 3));
+      expect(result.reports?.[0]?.evidenceOn).toBe(addDays(start, 1));
+    } finally {
+      processing.mockRestore();
+      if (previous === undefined) delete process.env.LLM_MODE;
+      else process.env.LLM_MODE = previous;
+    }
   });
 
-  /**
-   * 이슈 #647 — **꺼낸 것과 선 것이 갈리면 보고서가 없어진다.** 조립이 `null`이면
-   * (그 사이 은퇴해 `state.players`에서 빠진 선수) 그 id는 줄에 남아야 하고, 그 뒤에
-   * 서 있던 보고서는 같은 턴에 카드로 서야 한다 (player.md §9.4-1).
-   */
-  it("조립에 실패한 id는 줄에 남고, 뒤에 선 보고서는 그 턴에 선다", async () => {
+  it("서술 전달 실패는 완료 보고를 재평가하거나 대기열에서 지우지 않는다", async () => {
     const state = game();
-    const target = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, target.id);
-    advanceTime(state, { days: SCOUT_DAYS });
-    // 줄 맨 앞에 카드를 세울 수 없는 id를 끼운다 — 세계에 없는 선수다
-    state.pendingReportCards = ["ghost", ...(state.pendingReportCards ?? [])];
-    state.chat.push({ role: "user", text: "보고 왔나?", toolCalls: [], at: state.date });
-
-    stubRunTurn.mockImplementation(async (): Promise<TurnResult> => ({
-      text: `[${state.date} AM 10:00]\n@스티브 홀랜드: 보고서 올려두었습니다.`,
-      history: { version: 1, provider: "google", model: "test", messages: [] },
-      historyBase: 0,
-      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
-      toolCallCount: 0,
-      stopReason: "completed",
-    }));
-    const previousMode = process.env.LLM_MODE;
-    process.env.LLM_MODE = "real";
-    try {
-      const turn = await runGmTurn(state, "보고 왔나?");
-      expect(turn.reports?.map((r) => r.playerId)).toEqual([target.id]);
-    } finally {
-      if (previousMode === undefined) delete process.env.LLM_MODE;
-      else process.env.LLM_MODE = previousMode;
-    }
-    // 선 것만 빠졌다 — 못 선 id는 그대로 남아 tick의 닫는 자를 기다린다
-    expect(state.pendingReportCards ?? []).toEqual(["ghost"]);
-  });
-
-  /**
-   * 이슈 #647 — 경기 중 턴은 줄을 꺼내지 않는다(중계의 스냅샷은 장부라 이 블록이
-   * 없다). 여러 턴이 걸리는 경기 뒤 **첫 평시 턴**에 밀린 카드가 서야 한다.
-   */
-  it("경기 중에는 안 서고 경기 뒤 첫 평시 턴에 선다", async () => {
-    const state = game();
-    const target = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, target.id);
-    advanceTime(state, { days: SCOUT_DAYS });
-    expect(state.pendingReportCards).toEqual([target.id]);
-
-    stubRunTurn.mockImplementation(async (): Promise<TurnResult> => ({
-      text: `[${state.date} AM 10:00]\n@스티브 홀랜드: 알겠습니다.`,
-      history: { version: 1, provider: "google", model: "test", messages: [] },
-      historyBase: 0,
-      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
-      toolCallCount: 0,
-      stopReason: "completed",
-    }));
-    const previousMode = process.env.LLM_MODE;
-    process.env.LLM_MODE = "real";
-    try {
-      // 경기 중 — 중계가 도는 자리다. 줄은 그대로 있어야 한다
-      state.phase = "match";
-      await runGmTurn(state, "진행");
-      expect(state.pendingReportCards).toEqual([target.id]);
-
-      // 경기가 끝난 첫 평시 턴 — 밀린 카드가 여기서 선다
-      state.phase = "idle";
-      const peace = await runGmTurn(state, "수고했다");
-      expect(peace.reports?.map((r) => r.playerId)).toEqual([target.id]);
-    } finally {
-      if (previousMode === undefined) delete process.env.LLM_MODE;
-      else process.env.LLM_MODE = previousMode;
-    }
-    expect(state.pendingReportCards ?? []).toEqual([]);
-  });
-
-  /**
-   * 이슈 #845 — **시계를 미는 자리는 손잡이만이 아니다.** 모델의 장면 헤더가 일주일을
-   * 밀면 그 진행의 tick이 보고서를 줄에 넣는데, 줄을 보는 자리가 손잡이 앞뒤 둘뿐이면
-   * 카드는 그 턴에 서지 못한다 — 일주일을 기다려 산 정보 대신 지문 한 문단이 남는다
-   * (player.md §9.4-1).
-   */
-  it("장면 헤더가 민 시계에 도착한 보고서도 그 턴에 선다", async () => {
-    const state = game();
-    const target = playersOf(state, "chelsea")[0]!;
-    scoutPlayer(state, target.id);
-    // 손잡이를 쓰지 않는다 — 이 턴에 시계를 미는 것은 모델의 헤더 하나다
-    const due = addDays(state.date, SCOUT_DAYS);
-    expect(state.pendingReportCards ?? []).toEqual([]);
-    state.chat.push({ role: "user", text: "한 주 지켜보지", toolCalls: [], at: state.date });
-
-    stubRunTurn.mockImplementation(async (): Promise<TurnResult> => ({
-      text: `[${due} AM 10:00]\n@스티브 홀랜드: 한 주가 지났습니다.`,
-      history: { version: 1, provider: "google", model: "test", messages: [] },
-      historyBase: 0,
-      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
-      toolCallCount: 0,
-      stopReason: "completed",
-    }));
-    const previousMode = process.env.LLM_MODE;
-    process.env.LLM_MODE = "real";
-    try {
-      const turn = await runGmTurn(state, "한 주 지켜보지");
-      // 헤더가 시계를 밀었고, 그 진행이 낳은 도착이 같은 턴의 카드가 된다
-      expect(state.date).toBe(due);
-      expect(turn.reports?.map((r) => r.playerId)).toEqual([target.id]);
-    } finally {
-      if (previousMode === undefined) delete process.env.LLM_MODE;
-      else process.env.LLM_MODE = previousMode;
-    }
-    // 선 것은 줄에서 빠진다 — 다음 턴이 같은 카드를 다시 세우지 않는다
-    expect(state.pendingReportCards ?? []).toEqual([]);
+    let calls = 0;
+    stubRunTurn.mockImplementation(async () => {
+      calls++;
+      if (calls === 1) {
+        state.scoutReports.push(archivedReport(state));
+        state.pendingReportCards.push("report");
+        return response(state);
+      }
+      throw new Error("delivery unavailable");
+    });
+    const result = await realTurn(state);
+    expect(result.reports).toBeUndefined();
+    expect(state.scoutReports).toHaveLength(1);
+    expect(state.pendingReportCards).toEqual(["report"]);
   });
 });
 
@@ -2095,13 +2151,11 @@ describe("교섭 서류의 목소리 — 화자와 그가 답하는 칸", () => 
     const seat = sitAtTable(state, negotiation.id, "남아 주십시오");
     if (!seat.ok) throw new Error(seat.message);
     expect(seat.seat.voices.map((v) => v.speaker)).toEqual(["agent"]);
-    const [agent] = seat.seat.voices;
-    expect(buildCounterpartyBlock(state, negotiation)!).toContain(
-      `agent “${agent!.name}” (${agent!.title}) —`,
-    );
+    expect(buildCounterpartyBlock(state, negotiation)).toContain('"speaker":"agent"');
+    expect(buildCounterpartyBlock(state, negotiation)).not.toContain('"speaker":"club"');
   });
 
-  it("영입의 서류는 화자를 둘 적고, 방은 앉은 한 사람만 적는다", () => {
+  it("영입의 서류는 지정한 당사자만 싣는다", () => {
     const state = game();
     const target = state.players.find((p) => p.teamId !== state.userTeamId)!;
     const sent = sendOffer(state, {
@@ -2114,18 +2168,17 @@ describe("교섭 서류의 목소리 — 화자와 그가 답하는 칸", () => 
     const buy = state.negotiations.find((n) => n.kind === "buy")!;
     // 이적료와 개인 조건을 받는 사람이 다르다 — 서류는 둘을 이름으로 부른다
     const both = buildCounterpartyBlock(state, buy)!;
-    expect(both).toContain(`club “`);
-    expect(both).toContain(`agent “`);
+    expect(both).toContain('"speaker":"club"');
+    expect(both).not.toContain('"speaker":"agent"');
+    expect(buildCounterpartyBlock(state, buy, { party: "agent" })).toContain('"speaker":"agent"');
 
     // 방 — 단장 한 사람이다 (transfer.md §12-1 「두 테이블, 두 사람」)
     const room = sitAtTable(state, buy.id, "값부터 맞춥시다");
     if (!room.ok) throw new Error(room.message);
     expect(room.seat.voices.map((v) => v.speaker)).toEqual(["club"]);
     const roomBrief = buildCounterpartyBlock(state, buy, { party: "club" })!;
-    expect(roomBrief).toContain(
-      `club “${room.seat.voices[0]!.name}” (${teamName(buy.counterpartTeamId!)} 단장) —`,
-    );
-    expect(roomBrief).not.toContain("agent “");
+    expect(roomBrief).toContain('"speaker":"club"');
+    expect(roomBrief).not.toContain('"speaker":"agent"');
   });
 });
 
@@ -2180,5 +2233,27 @@ describe("해석기가 읽는 지난 턴 — 이번 턴의 꼬리는 @감독: �
     expect(block).toContain("@: 지난 장면");
     expect(block).not.toContain("이번 턴의 말");
     expect(block).not.toContain("전술판에서 라인을 내렸다");
+  });
+});
+
+describe("감독 원문 없는 평시 도구 호출", () => {
+  it("시간 손잡이의 GM이 접촉이나 조사 의뢰를 대신 만들지 않는다", async () => {
+    const state = game();
+    const target = state.players.find((p) => p.teamId !== state.userTeamId)!;
+    const before = {
+      negotiations: state.negotiations.length,
+      requests: state.scoutingRequests.length,
+    };
+    const tools = buildGmTools(state, []);
+    const negotiation = await tools
+      .find((tool) => tool.name === "start_negotiation")!
+      .handle({ playerId: target.id, kind: "buy", mode: "request" });
+    const scouting = await tools
+      .find((tool) => tool.name === "request_scouting")!
+      .handle({ action: "request", playerIds: [target.id], question: "현재 상태" });
+    expect(negotiation).toMatchObject({ ok: false });
+    expect(scouting).toMatchObject({ ok: false });
+    expect(state.negotiations).toHaveLength(before.negotiations);
+    expect(state.scoutingRequests).toHaveLength(before.requests);
   });
 });

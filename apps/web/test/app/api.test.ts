@@ -330,13 +330,18 @@ describe("API — 온보딩부터 경기까지", () => {
     const offer = last.toolCalls.find((c) => c.name === "send_offer");
     expect(offer?.payload).toMatchObject({ kind: "offer", playerId: wanted.id });
 
-    // 반려 — 답을 기다리는 오퍼 위에 또 넣을 수 없다. 턴은 돌지 않고 이유가 돌아온다
-    const failure = (await events(await postTurn(json({ proposal }), params(game.id)))).find(
-      (e) => e.type === "error",
-    );
+    // 남의 구단과 계약한 선수의 재계약을 폼으로 우회할 수 없다.
+    const beforeRejected = loadGame(game.id)!;
+    const unauthorized = { playerId: wanted.id, kind: "renew", weeklyWage: 40_000, years: 4 };
+    const failure = (
+      await events(await postTurn(json({ proposal: unauthorized }), params(game.id)))
+    ).find((e) => e.type === "error");
     expect(failure?.error).toBe("제안을 넣지 못했습니다");
-    expect(failure?.detail).toContain("기다리는");
-    expect(loadGame(game.id)!.chat.length).toBe(payload!.chat.length);
+    expect(failure?.detail).toBeTruthy();
+    const afterRejected = loadGame(game.id)!;
+    expect(afterRejected.chat).toEqual(beforeRejected.chat);
+    expect(afterRejected.negotiations).toEqual(beforeRejected.negotiations);
+    expect(afterRejected.contracts).toEqual(beforeRejected.contracts);
   });
 
   it("달력 뷰가 유저 팀 일정(친선 + 리그 38 + 대항전)을 담는다", async () => {

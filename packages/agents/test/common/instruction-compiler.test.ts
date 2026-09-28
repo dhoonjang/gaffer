@@ -506,3 +506,34 @@ describe("exact source numbers", () => {
     expect(sourceNumbers("99999999999999999999원")).toEqual([]);
   });
 });
+
+describe("contextual numeric evaluation", () => {
+  it("refines arbitrary amounts without rounding them to balance anchors", async () => {
+    const { evaluateNumber } = await import("../../src/common/contextual-evaluation");
+    const target = 137_493_827;
+    const model = evaluator(
+      (_, criteria) =>
+        Object.entries(criteria).find(([, text]) => {
+          const [a, b] = String(text).split(" to ").map(Number);
+          return target >= a! && target <= (b ?? a!);
+        })![0],
+    );
+    expect(
+      await evaluateNumber(
+        "contract context",
+        "Appropriate fee",
+        { min: 0, max: 1_000_000_000 },
+        model,
+      ),
+    ).toBe(target);
+    expect(model.requests.length).toBeGreaterThan(1);
+  });
+  it("covers zero and the upper boundary and rejects invalid numeric domains", async () => {
+    const { evaluateNumber } = await import("../../src/common/contextual-evaluation");
+    const first = evaluator((_, criteria) => Object.keys(criteria)[0]!);
+    const last = evaluator((_, criteria) => Object.keys(criteria).at(-1)!);
+    expect(await evaluateNumber("", "days", { min: 0, max: 36525 }, first)).toBe(0);
+    expect(await evaluateNumber("", "days", { min: 0, max: 36525 }, last)).toBe(36525);
+    await expect(evaluateNumber("", "days", { min: 2, max: 1 }, first)).rejects.toThrow();
+  });
+});

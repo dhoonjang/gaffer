@@ -1,3 +1,4 @@
+import type { ScoutingReport } from "@story-fm/domain";
 import {
   type AttributeAxis,
   type FatigueBand,
@@ -59,7 +60,7 @@ import {
 } from "../common/core/state";
 import { observedMarketValue } from "../negotiation/market/market";
 import { listingOf } from "../negotiation/market/negotiation";
-import { scoutReportFacts } from "../negotiation/views/scouting";
+import { scoutingReportsFor } from "../negotiation/views/scouting";
 import { INJURY_SEVERITY_KO, injuryHistoryOf } from "../common/players/injury";
 import { competitionShortName } from "../common/data/cup-catalog";
 import { careerSeasonRowsOf, foldCareer } from "../story/players/career";
@@ -206,10 +207,10 @@ export interface PlayerCardView {
   potential: { low: number; high: number; margin: number; confidence: string } | null;
 
   /**
-   * **관측** 시장가 — `deal_odds`가 부르는 것과 같은 흐린 값(`observedMarketValue`).
+   * **관측** 시장가 — 공개 정보 기준의 추정(`observedMarketValue`).
    * 우리 선수는 흐림 폭이 0이라 참값이다.
    */
-  marketValue: number;
+  marketValue: number | null;
   /** 주급·계약 만료일은 흐리지 않는다 — 공개 기록 계열이다 (player.md §10) */
   weeklyWage: number | null;
   contractUntil: string | null;
@@ -226,12 +227,7 @@ export interface PlayerCardView {
    * 채팅 카드와 **같은 자**에서 낸다. 우리 계약에는 서지 않는다 — 데려온 뒤의
    * 요구액은 그 선수에 대한 사실이 아니다.
    */
-  scoutReport: {
-    /** 보고서가 도착한 날 */
-    on: string;
-    askingPrice: number;
-    wageExpectation: number;
-  } | null;
+  scoutingReports: ScoutingReport[];
 
   /** 지금 부상 (없으면 null) — 공개 기록이라 남의 선수도 그대로 선다 */
   injury: { bodyPart: string; severity: string; expectedReturn: string } | null;
@@ -312,7 +308,7 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
     contractUntil: contract?.until ?? null,
     transferListed: listingOf(state, p.id)?.askingPrice ?? null,
     proposal: proposalViewOf(state, p.id),
-    scoutReport: scoutReportFacts(state, p, knowledge),
+    scoutingReports: scoutingReportsFor(state, p.id),
     injury: injury
       ? {
           bodyPart: injury.bodyPart,

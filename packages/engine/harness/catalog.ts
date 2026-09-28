@@ -396,8 +396,8 @@ export const AI_BENCH = defineHarness({
 
 export const AI_MARKET = defineHarness({
   id: "ai-market",
-  what: "한 시즌의 AI↔AI 시장 규모, 그리고 우리 선수에게 선 관심이 오퍼가 되는 비율",
-  doc: "docs/negotiation/transfer.md §6 · §1-2",
+  what: "한 시즌의 AI↔AI 시장 규모",
+  doc: "docs/negotiation/transfer.md §10",
   cost: "전체 세계 한 시즌 · 수 분",
   // prettier-ignore
   bands: [
@@ -405,28 +405,6 @@ export const AI_MARKET = defineHarness({
     { metric: "1부 팀당 이적", role: "guard", min: 1, max: 6, why: "실제 시장과 같은 자릿수" },
     { metric: "1부 팀당 임대", role: "guard", min: 0.5, max: 4, why: "실제 시장과 같은 자릿수" },
     { metric: "여름 비중", role: "guard", min: 0.5, unit: "ratio", why: "실제 시장의 여름:겨울은 7:3" },
-    { metric: "우리 선수 관심", role: "guard", min: 5, max: 45, unit: "count", why: "한 시즌 우리 스쿼드에 선 관심 줄 수 — 라커룸이 매주 흔들리지 않으면서 창마다 이야기가 있는 폭 (transfer.md §1-2)" },
-    { metric: "문의까지 오른 비중", role: "guard", min: 0.15, unit: "ratio", why: "밖에 나지 않는 관심만 쌓이면 사다리가 장식이다" },
-    { metric: "오퍼가 된 비중", role: "guard", min: 0.05, max: 0.6, unit: "ratio", why: "관심이 전부 오퍼가 되면 사다리가 지연일 뿐이고, 하나도 안 되면 오퍼가 마른다" },
-    { metric: "우리에게 온 오퍼", role: "measure", unit: "count", why: "우리에게 도착한 매각 오퍼 전부 — 관심 갈래와 이적 요청 갈래(§1-1)가 함께 든다" },
-    { metric: "AI 사전 계약", role: "measure", unit: "count", why: "한 시즌에 다른 구단이 우리 만료 선수에게 건 예약 수 (§1-4). 감독이 재계약을 한 번도 열지 않는 하네스라 0이면 노림이 죽은 것이고, 스쿼드의 만료 주전 수보다 크면 무언가 두 번 세고 있다" },
-    { metric: "사전 계약 창 선수", role: "measure", unit: "count", why: "발효일 기준 창(§1-4) 안에 든 타 구단 선수 수 — 감독 쪽 손잡이에 과녁이 있기는 한가. `runAiRenewals`가 만료 240일 안의 주전을 서둘러 잡으므로 여기 남는 것은 대체로 노장과 잉여다" },
-  ],
-});
-
-export const INCOMING_OFFERS = defineHarness({
-  id: "incoming-offers",
-  what: "한 시즌 우리 선수에게 온 매각 오퍼 — 수 · 마감 주 비중 · 큰 무대 비중 · 시장가 대비 값",
-  doc: "docs/negotiation/transfer.md §1-3",
-  cost: "전체 세계 한 시즌 · 수 분",
-  // prettier-ignore
-  bands: [
-    { metric: "우리에게 온 오퍼", role: "guard", min: 10, max: 45, unit: "count", why: "실제 1부 중위권은 여름 창 하나에 진지한 오퍼가 서너 건~열몇 건, 겨울까지 합쳐 그 두 배다. 하한은 「시장이 죽었다」, 상한은 「감독실이 오퍼로 덮인다」" },
-    { metric: "마감 주 비중", role: "guard", min: 0.15, unit: "ratio", why: "창은 한 시즌 95일 안팎이고 마감 주는 그중 14일이라 균등이면 15% — `DEADLINE_RUSH`가 걸린 자리는 그보다 위여야 한다 (§1-3)" },
-    { metric: "큰 무대 비중", role: "guard", min: 0.08, unit: "ratio", why: "우리보다 큰 무대(`gapTo > 0`)에서 오는 몫. 0에 가까우면 무대 무게(`suitorWeightOf`)가 죽어 2부 상위와 맨시티가 같은 확률로 부르는 자리로 돌아간 것이다" },
-    { metric: "값/시장가 · 중앙값", role: "measure", why: "첫 호가는 흥정 여지를 남겨 시장가의 75~100%로 들어오고(§1-2), 요청 갈래는 그 아래다 — 아래 마감 주 값과 견줘 읽는다" },
-    { metric: "마감 주 값/시장가 · 중앙값", role: "guard", min: 0.95, why: "마감 주에는 부르는 값과 사는 쪽 상한이 함께 `DEADLINE_PREMIUM`을 탄다 (§1-3). 배수가 값에 닿지 않으면 이 값은 위 「값/시장가」(0.75 언저리)로 내려앉으므로 그 사이에 문턱을 둔다 — 1.0에 붙이면 표본이 예닐곱뿐인 중앙값이 한 건에 흔들려 주간 워크플로가 매주 시끄럽다" },
-    { metric: "주전 오퍼의 큰 무대 비중", role: "measure", unit: "ratio", why: "주전에게 붙는 끌림(`STAGE_PULL_STARTER`)이 실제로 위를 향하는가 — 위 「큰 무대 비중」보다 높아야 잉여와 갈린 것이다" },
   ],
 });
 
@@ -582,28 +560,6 @@ export const YOUTH_INTAKE_TAIL = defineHarness({
  * 문턱에 원형의 `patience`가 곱해진 뒤로(people.md §6) 날짜 자체는 사람마다 다르다 —
  * 그래서 밴드는 날짜가 아니라 **제 문턱을 넘고 밀린 날**을 쥔다.
  */
-export const NEGOTIATION = defineHarness({
-  id: "negotiation",
-  what: "재계약·해지·영입의 성사 확률 분포 — 기대치를 맞춘 제안이 자동 통과인가",
-  doc: "docs/negotiation/transfer.md §3",
-  cost: "세계 하나 · 수 초",
-  // prettier-ignore
-  bands: [
-    { metric: "표본 · 재계약", role: "guard", min: 25, unit: "count", why: "우리 스쿼드 전원을 잰다 — 표본이 줄면 분포가 아니다" },
-    { metric: "재계약 기대치 · 중앙값", role: "measure", unit: "score", why: "기대 주급 100% · 3년 제안의 성사 확률" },
-    { metric: "재계약 기대치 · p90−p10", role: "guard", min: 20, unit: "score", why: "조건에 따라 실제로 갈리는가 — 폭이 없으면 축이 죽어 있다. 표본이 한 구단의 첫날(같은 대항전·불만 없음)이라 폭의 바닥은 낮게 둔다" },
-    { metric: "재계약 기대치 · 90% 이상 비율", role: "guard", max: 0.3, unit: "ratio", why: "기대치를 맞춘 제안이 자동 통과가 아니다" },
-    { metric: "재계약 기대치 · 앵커가 조정인 비율", role: "measure", unit: "ratio", why: "`COUNTERPARTY_COUNTER_AT`~`COUNTERPARTY_ACCEPT_AT` 구간 — 사다리의 가운데 칸에 서는 몫" },
-    { metric: "재계약 70% 주급 · 중앙값", role: "reference", max: 50, unit: "score", why: "기대치의 70%는 반 이상 실패해야 한다" },
-    { metric: "해지 기대치 · 중앙값", role: "measure", unit: "score", why: "기대 정산금 일시금 제안의 성사 확률" },
-    { metric: "해지 기대치 · p90−p10", role: "measure", unit: "score", why: "잔여 계약·나이·갈 곳이 해지를 실제로 가르는가" },
-    { metric: "표본 · 영입", role: "guard", min: 40, unit: "count", why: "타 구단 66~84 표본 — 표본이 줄면 분포가 아니다" },
-    { metric: "영입 기대치 · 중앙값", role: "measure", unit: "score", why: "호가·희망 주급을 그대로 맞춘 4년 오퍼의 성사 확률" },
-    { metric: "영입 기대치 · p90−p10", role: "guard", min: 20, unit: "score", why: "선수 관문이 구단 관문 뒤에 숨은 도장이 아니다" },
-    { metric: "영입 기대치 · 90% 이상 비율", role: "guard", max: 0.2, unit: "ratio", why: "호가를 맞췄다고 선수까지 자동으로 오지 않는다" },
-  ],
-});
-
 export const DEMOTION_GRIEVANCE = defineHarness({
   id: "demotion-grievance",
   what: "한 시즌 2군 강등이 낳는 불만 — 로테이션은 공짜고 방치는 값을 치르는가",
@@ -850,9 +806,7 @@ export const HARNESSES: readonly Harness[] = [
   AI_FITNESS,
   AI_BENCH,
   AI_MARKET,
-  INCOMING_OFFERS,
   MANAGER_MARKET,
-  NEGOTIATION,
   SQUAD_LONGEVITY,
   YOUTH_DEVELOPMENT,
   YOUTH_INTAKE_TAIL,

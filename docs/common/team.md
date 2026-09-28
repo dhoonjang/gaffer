@@ -1,5 +1,10 @@
 # 구단
 
+선수 거래에서 구단 재정·선수단 필요·실제 경쟁 제안은 Jev가 읽는 맥락이다.
+이 문서의 경제 수준·체급·초기 금액 추정은 [협상](../negotiation/transfer.md)의
+수락률·상대 선택 확률·요구 가격 배수가 아니다. 감독의 비공개 한도는 실행 권한
+검증에만 쓰고 상대에게 제공하지 않는다.
+
 **구단의 정체성은 카탈로그가 정하고, 게임이 시작하면 세이브가 그 사본을 갖는다.**
 이름·소속 리그·체급·구장·브랜드는 코드의 불변 표에서 오지만, 새 게임은 그 값을
 `GAME_TEAM`으로 **복사**하고 그 뒤로는 세이브가 단일 소스다(§1의 복사 목록).
@@ -194,11 +199,10 @@ TeamCatalogEntry {
   순위(잉글랜드 1 · 스페인 2 …)여서 **2부가 그 나라 1부와 같은 값**을 갖고, 승강은
   언제나 한 나라 안에서 일어나므로 계수는 승강에 반응하지 않는다. 돈이 승강을 따라야
   하는 자리 — 살림·예산, 그리고 **선수 몸값**
-  ([../simulation/transfer.md](../negotiation/transfer.md) §3) — 은 전부 경제 수준을
+  ([선수 거래](../negotiation/transfer.md) §10) — 은 전부 경제 수준을
   쓴다. 계수를 쓰는 자리는 대항전 시드와 타 리그 전력 보정뿐이다 (§4).
 - ⚠️ **주급 예산은 이 축을 쓰지 않는다** — 연 매출에서 **고정비를 뺀 뒤** 나오는 값이다
-  ([../simulation/transfer.md](../negotiation/transfer.md) §8 ·
-  [../simulation/finance.md](../negotiation/finance.md) §6.3). 리그·브랜드·구장 크기가
+  ([재정](../negotiation/finance.md) §6.3). 리그·브랜드·구장 크기가
   이미 매출에 들어 있어 배율을 한 번 더 곱하면 이중 계상이고, 무엇보다 **카탈로그 값만
   보는 천장은 다섯 시즌 내내 상수**라 번 돈이 나갈 축이 없다. 체급이 주급에 닿는
   길은 체급 → 구장·브랜드 → 매출 → 천장이다.
@@ -268,8 +272,8 @@ TeamCatalogEntry {
 ### 2.2 팀 전력 한 숫자 (`squadRating` — `match/squad/depth.ts`)
 
 **스쿼드 상위 열한 명의 평균 OVR.** 팀 하나를 한 숫자로 줄이는 자는 이것 하나뿐이다 —
-체급 재산정의 전력 축(§2.1) · 승격 클럽 줄 세우기와 보강 기준선(§5) · 이적 시장의 무대
-자([../simulation/transfer.md](../negotiation/transfer.md) §1-3) · 개막 전 예상
+체급 재산정의 전력 축(§2.1) · 승격 클럽 줄 세우기와 보강 기준선(§5) · 협상에서 읽는 팀 전력
+참고 정보([선수 거래](../negotiation/transfer.md) §5) · 개막 전 예상
 순위([../simulation/season.md](season.md) §2), 그리고 **일정과 달력의 상대
 전력 칸**이 같은 자를 읽는다. 전 팀을 한 번에 세우는 진입점(`squadRatingsOf`)은
 `state.players`를 한 번만 훑는다 — 팀마다 부르면 그 자리 하나가 「팀 수 × 선수 수」가
@@ -406,7 +410,7 @@ Derby { name, teams: [teamId, teamId], heat: 1 | 2 | 3 }
 자리가 전부 **한 문**(`derbyForMatch`)을 지나므로 이 규칙이 한 곳에만 적힌다.
 
 더비 전야·경기 뒤 회견과 시즌 리뷰의 더비 전적은
-[people §4](../story/people.md#4-기자회견--세계가-먼저-말을-거는-유일한-자리) ·
+[people §4](../story/people.md#4-기자회견) ·
 [career §5.1](../story/career.md).
 
 ## 4. 팀의 종류
@@ -425,7 +429,7 @@ Derby { name, teams: [teamId, teamId], heat: 1 | 2 | 3 }
 - **2부는 컵을 채우는 인원**이다. 전력 기준선에 `SECOND_DIVISION_PENALTY`(9)가
   붙어 1부 최하위(72)와 2부 최상위(67) 사이에 5점이 남는다 — 이변이 가끔 나오되
   기본은 1부가 이기는 간격이다. 리그 수입이 없으므로 이적료를 쓰지 않는다
-  ([../simulation/transfer.md](../negotiation/transfer.md) §6). **감독이 강등돼
+  ([선수 거래](../negotiation/transfer.md) §10). **감독이 강등돼
   내려간 시즌만은 그 리그가 리그전을 돌고 순위표를 갖는다** —
   [competition.md](../match/competition.md) §5.
 - **시장 전용 리그는 약한 리그가 아니라 경기를 안 하는 리그**다. 전력 감점이 없고

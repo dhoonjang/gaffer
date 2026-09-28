@@ -1,25 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import type { NegotiationRoomView } from "@story-fm/engine";
-import { formatMoney, type ProposalPrefill } from "@story-fm/domain";
+import { formatMoney, type NegotiationMethod, type ProposalPrefill } from "@story-fm/domain";
 import { Crest } from "@/domains/common/ui/crest";
 import { IconPerson } from "@/domains/common/ui/icons";
 import { Terms } from "@/domains/negotiation/ui/market-card";
 import { useProposal } from "@/domains/negotiation/ui/proposal-form";
 import { humanDate } from "@/domains/common/lib/dateline";
 
-/**
- * ── 협상 방 — 채팅 옆의 한 칸 (transfer.md §12-2 · design-system.md §7-1) ─────
- *
- * 경기가 판세를 갖듯 협상은 **조건서 · 인내 · 건너편**을 갖는다. 값은 전부 뷰
- * (`views.negotiation`)가 접어 온 것이고 여기서 새로 만드는 사실은 없다 — 인내의
- * 결(`tone`)도 뷰가 낸다. 화면이 숫자를 다시 자르지 않는다.
- *
- * 손잡이는 둘이고 둘 다 방에서만 산다: 「제안서 작성」은 폼을 방의 협상으로 미리 채워 열고,
- * 「협상 끝내기」는 협상을 열어 둔 채 방만 닫는다 — 오늘의 자리를 끝내는 것이고, 협상은
- * 코어가 굳히는 라운드로 이어지며 다시 나설 수 있다. 빈 입력에 눌리는 버튼이 물러나는
- * 문이면 실수가 협상을 끊는다 — 그래서 입력창이 아니라 여기 선다.
- */
+/** Current terms, the same counterparty’s history, and scheduled followups. */
 export function NegotiationRoom({
   room,
   busy,
@@ -33,7 +23,9 @@ export function NegotiationRoom({
   return (
     <div className="negotiation-room" data-testid="negotiation-room">
       <header className="nr-head">
-        <span className="nr-kind">{room.kindLabel}</span>
+        <span className="nr-kind">
+          {room.kindLabel} · {METHOD_LABELS[room.method]}
+        </span>
         <b className="nr-who">{room.playerName}</b>
         {/* 상대가 선수 본인인 갈래(재계약·해지)는 같은 이름을 두 번 적지 않는다 */}
         {room.counterpart !== room.playerName && (
@@ -46,11 +38,6 @@ export function NegotiationRoom({
         <Voices voices={room.voices} />
       </section>
 
-      <section className="nr-section">
-        <span className="nr-label">인내</span>
-        <PatienceMeter patience={room.patience} />
-      </section>
-
       {hasTermSheet(room) && (
         <section className="nr-section">
           <span className="nr-label">조건서</span>
@@ -58,10 +45,8 @@ export function NegotiationRoom({
         </section>
       )}
 
-      <section className="nr-section">
-        <span className="nr-label">성사</span>
-        <Odds room={room} />
-      </section>
+      <ContactHistory room={room} />
+      <Followups room={room} />
 
       <div className="nr-handles">
         {proposal !== null && (
@@ -82,7 +67,7 @@ export function NegotiationRoom({
           onClick={onLeave}
           data-testid="negotiation-leave"
         >
-          협상 끝내기
+          일상으로 돌아가기
         </button>
       </div>
     </div>
@@ -126,32 +111,6 @@ export function Voices({ voices }: { voices: NegotiationRoomView["voices"] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-/**
- * 인내 — 방의 시계 (transfer.md §12-2). 칸 `max`개, 남은 만큼 채워지고 숫자가 옆에 선다.
- * 색이 갈리는 문턱은 여기 없다 — `data-tone`은 뷰가 낸 값이고 CSS가 그것만 읽는다.
- */
-export function PatienceMeter({ patience }: { patience: NegotiationRoomView["patience"] }) {
-  const { left, max, tone } = patience;
-  return (
-    <div
-      className="patience"
-      data-tone={tone}
-      role="img"
-      aria-label={`인내 ${left}/${max}`}
-      data-testid="negotiation-patience"
-    >
-      <span className="patience-cells">
-        {Array.from({ length: max }, (_, i) => (
-          <i key={i} className={i < left ? "on" : ""} />
-        ))}
-      </span>
-      <b className="fig">
-        {left}/{max}
-      </b>
-    </div>
   );
 }
 
@@ -254,21 +213,80 @@ export function TermSheet({ room }: { room: NegotiationRoomView }) {
   );
 }
 
-/** 성사 가능성(코어가 낸 표기 그대로)과 기한 — 상대가 건 기한이면 그렇게 적힌다 */
-export function Odds({ room }: { room: NegotiationRoomView }) {
+export const METHOD_LABELS: Record<NegotiationMethod, string> = {
+  meeting: "대면",
+  phone: "통화",
+  proposal: "제안서",
+};
+
+export function Followups({ room }: { room: NegotiationRoomView }) {
+  const labels = { response: "답신", renegotiate: "추가 협상", medical: "메디컬" };
+  if (room.followups.length === 0) return null;
   return (
-    <div className="nr-odds">
-      {room.odds !== null && (
-        <span className="nr-odds-val">
-          <em>성사 가능성</em>
-          <b>{room.odds}</b>
-        </span>
-      )}
-      <span className="nr-deadline" data-ultimatum={room.deadline.ultimatum || undefined}>
-        <em>{room.deadline.ultimatum ? "상대가 건 기한" : "기한"}</em>
-        <b>{humanDate(room.deadline.on)}</b>
-      </span>
-    </div>
+    <section className="nr-section">
+      <span className="nr-label">다음 할 일</span>
+      <ul>
+        {room.followups.map((event) => (
+          <li key={event.id}>
+            {humanDate(event.dueOn)} · {labels[event.purpose]} ·{" "}
+            {event.status === "completed"
+              ? "처리됨"
+              : event.requiresDecision
+                ? "감독 결정 필요"
+                : "예정"}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ContactHistory({ room }: { room: NegotiationRoomView }) {
+  const [method, setMethod] = useState<NegotiationMethod | "all">("all");
+  const [deal, setDeal] = useState("all");
+  const deals = [
+    ...new Map(room.history.map((line) => [line.negotiationId, line.playerName])).entries(),
+  ];
+  const lines = room.history.filter(
+    (line) =>
+      (method === "all" || line.method === method) &&
+      (deal === "all" || line.negotiationId === deal),
+  );
+  return (
+    <details className="nr-section">
+      <summary>상대와의 연락 기록 ({room.history.length})</summary>
+      <select
+        aria-label="연락 방식"
+        value={method}
+        onChange={(event) => setMethod(event.target.value as NegotiationMethod | "all")}
+      >
+        <option value="all">모든 방식</option>
+        {Object.entries(METHOD_LABELS).map(([key, label]) => (
+          <option value={key} key={key}>
+            {label}
+          </option>
+        ))}
+      </select>
+      <select aria-label="거래" value={deal} onChange={(event) => setDeal(event.target.value)}>
+        <option value="all">모든 거래</option>
+        {deals.map(([id, name]) => (
+          <option value={id} key={id}>
+            {name} · {id}
+          </option>
+        ))}
+      </select>
+      <ol>
+        {lines.map((line, index) => (
+          <li key={`${line.exchangeId}-${index}`}>
+            <small>
+              {humanDate(line.date, { weekday: false })} · {METHOD_LABELS[line.method]} ·{" "}
+              {line.playerName}
+            </small>
+            <p>{line.text}</p>
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

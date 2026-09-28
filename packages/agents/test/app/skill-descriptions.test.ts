@@ -55,8 +55,6 @@ import {
   SET_PIECE_ROUTINE_NEUTRAL,
   SQUAD_STATUS_KO,
   SQUAD_STATUSES,
-  TABLE_STANCE_KO,
-  TABLE_STANCES,
   TACTIC_TOGGLES,
 } from "@story-fm/domain";
 import { AXIS_AGING, agingDelta, createGame } from "@story-fm/engine";
@@ -162,7 +160,6 @@ describe("규칙이 사는 자리", () => {
    * 늘어도 모델은 옛 표를 믿고, 표에 없는 갈래는 부를 길이 없다.
    */
   it("코어가 갈래표를 든 열거는 그 표가 모델에게 닿는다", () => {
-    const room = NEGOTIATION_TOOL_DEFINITIONS.find((t) => t.name === "counterparty_reply")!;
     const rows = [
       {
         where: "record_incident.kind",
@@ -177,14 +174,6 @@ describe("규칙이 사는 자리", () => {
         kinds: OPENING_KINDS as readonly string[],
         tables: [OPENING_KIND_KO as Record<string, string>],
         reads: ONBOARDING_JUDGE_SYSTEM,
-      },
-      {
-        /** 방의 태도는 인자 설명이 표를 든다 — 협상 GM 프롬프트는 도구의 사용법을 적지 않는다 */
-        where: "counterparty_reply.stance",
-        node: enumArg([room], room.name, "stance"),
-        kinds: TABLE_STANCES as readonly string[],
-        tables: [TABLE_STANCE_KO as Record<string, string>],
-        reads: "",
       },
       {
         /** 대화와 다가옴의 응대가 **같은 인자 하나**를 쓴다 — 한 자리를 재면 둘 다 잰다 */
@@ -206,13 +195,6 @@ describe("규칙이 사는 자리", () => {
          */
         where: "send_offer.squadStatus",
         node: enumArg(SKILL_TOOLS, "send_offer", "squadStatus"),
-        kinds: SQUAD_STATUSES as readonly string[],
-        tables: [SQUAD_STATUS_KO as Record<string, string>],
-        reads: "",
-      },
-      {
-        where: "counterparty_reply.ruling.squadStatus",
-        node: enumArg([room], room.name, "squadStatus"),
         kinds: SQUAD_STATUSES as readonly string[],
         tables: [SQUAD_STATUS_KO as Record<string, string>],
         reads: "",
@@ -358,7 +340,7 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
     const commands = instructionCommands(specs, names);
     expect(commands.map((command) => command.name)).toEqual(names);
     // 해제 목록의 명시성처럼 별도 구조가 필요한 명령을 제외한 스키마는 코어의 것을 그대로 쓴다.
-    for (const name of ["substitute", "set_tactics", "set_training", "send_offer"]) {
+    for (const name of ["substitute", "set_tactics", "set_training", "set_transfer_list"]) {
       const spec = specs.get(name)!;
       expect(commands.find((command) => command.name === name)?.inputSchema, name).toBe(
         spec.instructionSchema ?? spec.inputSchema,
@@ -392,15 +374,15 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
    * 명령이 두 해석기에서 다른 문맥으로 채워진다.
    */
   it("코어 명령은 어느 해석기 목록에 정확히 한 번 선다", () => {
-    const lists = [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS];
+    const lists = [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS, ...TABLE_OPS];
     for (const name of CORE_COMMANDS) {
       expect(
         lists.filter((n) => n === name),
         name,
       ).toHaveLength(1);
     }
-    // 테이블 해석기는 시장 해석의 부분집합을 이 협상의 문맥으로 다시 채운다 — 새 이름은 없다 (§12-2)
-    for (const name of TABLE_OPS) expect(MARKET_OPS.includes(name), name).toBe(true);
+    // 상대 접촉은 협상 해석기 하나만 실행한다.
+    for (const name of TABLE_OPS) expect(MARKET_OPS.includes(name), name).toBe(false);
     /**
      * 판독기도 판 해석의 부분집합이다 — 적용은 `TACTIC_OPS`의 순서를 지나므로
      * (`applyTacticOrders`), 그 목록에 없는 이름은 판독기가 채워도 조용히 버려진다.
@@ -508,7 +490,7 @@ describe("같은 종류의 인자는 같은 검증을 지난다", () => {
 
   /** 빈 목록은 아무에게도 닿지 않으면서 하루 한도만 쓴다 */
   it("대상 목록은 빈 배열을 받지 않는다", () => {
-    const lists = only(["playerIds", "targetIds"]);
+    const lists = only(["playerIds", "targetIds"]).filter((arg) => arg.tool !== "request_scouting");
     expect(lists.length).toBeGreaterThan(0);
     for (const a of lists) expect(a.node.minItems, where(a)).toBeGreaterThanOrEqual(1);
   });
@@ -546,7 +528,7 @@ describe("액수는 감독이 부른 것만 실린다", () => {
   const theirs = STATE.players.find((p) => p.teamId !== STATE.userTeamId)!;
   const buyer = STATE.teams.find((t) => t.id !== STATE.userTeamId)!.id;
 
-  it("이적료가 빠지면 협상이 열리지 않고, 코어의 자가 한 줄로 돌아온다", () => {
+  it("이적료가 빠지면 협상이나 임의 가격이 생기지 않는다", () => {
     const before = STATE.negotiations.length;
     for (const input of [
       { playerId: theirs.name },
@@ -555,9 +537,7 @@ describe("액수는 감독이 부른 것만 실린다", () => {
     ]) {
       const result = call("send_offer", input);
       expect(result.ok, JSON.stringify(input)).toBe(false);
-      // 스키마 반려가 아니라 코어의 답이다 — 무엇이 비었는지와 그 갈래의 자를 든다
-      expect(result.message).toContain("부르지 않았습니다");
-      expect(result.message).toMatch(/£/);
+      expect(result.message).not.toMatch(/£/);
     }
     expect(STATE.negotiations, "액수 없는 오퍼는 협상을 남기지 않는다").toHaveLength(before);
   });
@@ -576,9 +556,7 @@ describe("액수는 감독이 부른 것만 실린다", () => {
     ] as const) {
       const result = call(name, input);
       expect(result.ok, JSON.stringify(input)).toBe(false);
-      expect(result.message).toContain("부르지 않았습니다");
-      // 그 갈래의 자가 함께 온다 — 감독이 값을 부르려 확률 조회를 한 번 더 거치지 않게
-      expect(result.message).toMatch(/£/);
+      if (name === "open_renewal") expect(result.message).not.toMatch(/£/);
     }
     expect(STATE.negotiations, "액수 없는 제안은 협상을 남기지 않는다").toHaveLength(before);
   });
@@ -590,7 +568,7 @@ describe("액수는 감독이 부른 것만 실린다", () => {
   it("액수 자리를 스키마가 필수로 걸지 않는다", () => {
     for (const [name, amounts] of [
       ["send_offer", ["fee", "weeklyWage"]],
-      // 연수도 비울 수 있다 — 코어가 아는 기대 연수가 실린다
+      // 연수도 비울 수 있지만 실제 제안은 명시된 조건이 있어야 한다
       ["open_renewal", ["weeklyWage", "years"]],
       ["open_release", ["severance"]],
     ] as const) {

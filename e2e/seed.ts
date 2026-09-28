@@ -1,15 +1,16 @@
 import {
-  addDays,
   advanceTime,
   allMatchesDone,
   createGame,
-  dealOdds,
   isReserveMatch,
   settleQuickMatch,
   simulateOtherMatches,
   saveGame,
   sendOffer,
-  suggestTerms,
+  respondOffer,
+  proposePersonal,
+  answerPersonal,
+  activeContract,
   type GameState,
   type WorldScope,
   eventTexts,
@@ -113,47 +114,44 @@ export function seedFinishedSeason(teamId = "arsenal", seed = 406): string {
   return state.id;
 }
 
-/**
- * **오퍼 한 건이 성사되는 세이브** — 상대와 조건은 여기서 고르고, 넣는 것은 브라우저다.
- *
- * 상대의 답은 **코어 앵커가** 낸다 — mock은 교섭 상대를 부르지 않으므로 도착한 편지가
- * 서류대로 마감된다 (docs/common/llm/agents.md §4-1의 mock). 아무나 지목하면 그 답이 수락일지
- * 조정일지가 카탈로그에 달리므로, 스펙은 `if (수락이면)`을 쓰게 된다 — 그 조건문이 이
- * 픽스처가 지우는 것이다. 그래서 **확률이 문턱을 확실히 넘는 상대를 코어에게 물어서**
- * 고르고, 스펙은 그 이름 하나만 받아 조건 없이 단언한다.
- *
- * 문턱은 70이다. 코어의 답신 지연도 이 구간에서 짧아진다(`responseDelayDays`의
- * `probability >= 70` → 0~3일) — 브라우저가 하루씩 미는 횟수를 적게 유지한다.
- */
-const TARGET_ODDS_FLOOR = 70;
-
+/** Browser fixtures supply a legal target; optional agreements are explicit evaluator stand-ins. */
 export function seedTransferTarget(
   teamId = "arsenal",
   seed = 4061,
+  agreed = false,
 ): {
   gameId: string;
   targetName: string;
+  playerId: string;
 } {
   const state = appoint({ teamId, managerName: "영입", seed });
-  const tomorrow = addDays(state.date, 1);
-  for (const player of state.players) {
-    if (player.teamId === teamId) continue;
-    const terms = suggestTerms(state, player.id);
-    if (!terms) continue;
-    if (dealOdds(state, terms).probability < TARGET_ODDS_FLOOR) continue;
-    // 동명이인은 이름으로 지목할 수 없다(`pickAnyPlayer`가 되묻는다) — 그런 이름은 넘긴다
-    if (state.players.filter((p) => p.name === player.name).length > 1) continue;
-    /**
-     * **답이 내일 오는 상대만 고른다.** 지연은 확률과 해시가 함께 정하므로
-     * (`responseDelayDays`) 문턱만으로는 며칠인지 모른다 — 스펙이 손잡이를 몇 번
-     * 누를지 세지 않아도 되게, 복제본에 미리 넣어 보고 하루짜리만 통과시킨다.
-     */
-    const rehearsal = structuredClone(state);
-    if (!sendOffer(rehearsal, terms).ok) continue;
-    const round = rehearsal.negotiations.at(-1)?.rounds.at(-1);
-    if (round?.respondsOn !== tomorrow) continue;
-    saveGame(state);
-    return { gameId: state.id, targetName: player.name };
+  const player = state.players.find(
+    (p) =>
+      p.teamId !== teamId &&
+      !p.loan &&
+      activeContract(state, p.id) &&
+      state.players.filter((other) => other.name === p.name).length === 1,
+  );
+  if (!player) throw new Error("Fixture has no contracted transfer target");
+  if (agreed) {
+    const offered = sendOffer(state, {
+      playerId: player.id,
+      kind: "buy",
+      fee: 1_000_000,
+      weeklyWage: 10_000,
+      years: 2,
+    });
+    if (!offered.ok) throw new Error(offered.message);
+    const n = state.negotiations.at(-1)!;
+    const club = respondOffer(state, { negotiationId: n.id, verdict: "accept", feeOnly: true });
+    if (!club.ok) throw new Error(club.message);
+    const personal = proposePersonal(state, { negotiationId: n.id, weeklyWage: 10_000, years: 2 });
+    if (!personal.ok) throw new Error(personal.message);
+    const agent = answerPersonal(state, { negotiationId: n.id, verdict: "accept" });
+    if (!agent.ok) throw new Error(agent.message);
+    if (n.status !== "agreed")
+      throw new Error("Fixture requires separate club and player agreement");
   }
-  throw new Error(`내일 답이 오는 영입 상대(성사 ${TARGET_ODDS_FLOOR}+)를 찾지 못했다`);
+  saveGame(state);
+  return { gameId: state.id, targetName: player.name, playerId: player.id };
 }

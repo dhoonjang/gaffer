@@ -36,6 +36,9 @@ export const PANEL_OF: Record<string, PanelKey> = {
   // 방을 세우는 스킬 — 경기의 `start_match`와 같은 자리다. 방 자체는 게이트가 세우고,
   // 협상이 실리는 장부는 이적 예산이 선 재정이다
   start_negotiation: "재정",
+  evaluate_negotiation: "재정",
+  receive_market_contact: "재정",
+  request_scouting: "스쿼드",
   set_player_tactic: "스쿼드",
   // 세트피스는 판의 사실이다 — 키커도 인원도 확인하러 갈 화면은 전술판이 선 스쿼드다
   set_set_piece_takers: "스쿼드",
@@ -89,7 +92,7 @@ export const PANEL_OF: Record<string, PanelKey> = {
  * **카드로 서는 호출** — 갈 장부가 없어서 채팅에 카드를 남긴다 (`MarketCard`).
  *
  * 진행 중인 흥정은 어느 장부에도 실리지 않고, 파견한 스카우트는 아직 아무것도
- * 바꾸지 않았다. 대신 금액·확률·기한이 다음 판단의 입력이라 카드로 정리해 세운다.
+ * 바꾸지 않았다. 대신 조건·평가·후속 일정이 다음 판단의 입력이라 카드로 정리해 세운다.
  *
  * 이 목록에도 `PANEL_OF`에도 없는 조작형 호출은 **화면에 서는 길이 없다** —
  * 그런 호출이 생기면 `skill-surface.test.ts`가 실패해 결정을 요구한다.
@@ -97,13 +100,9 @@ export const PANEL_OF: Record<string, PanelKey> = {
 export const CARD_CALLS: ReadonlySet<string> = new Set([
   "send_offer",
   "respond_offer",
-  // 방 안의 상대의 답이 오퍼를 판정하면 그 카드가 선다 — 말만 오간 턴은 카드 없이 지나간다
-  "counterparty_reply",
   "open_renewal",
   "open_release",
   "withdraw_offer",
-  "scout_player",
-  "scout_mission",
 ]);
 
 /**

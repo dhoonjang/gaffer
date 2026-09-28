@@ -51,7 +51,7 @@ core's spatial simulator in the live web match and xG simulator elsewhere**; the
 LLM only commentates, stages and adjudicates.
 A season starts on July 1 and runs preseason → league/cup/European competition →
 season rollover → next season. Data has two layers: catalog (immutable seed) and
-save (mutable state), model v14.
+save (mutable state), model v15.
 
 ## 3. Stack
 
@@ -287,8 +287,10 @@ red change merged green. How the gate is sharded and what it runs on is
    reference / history) to keep the cache prefix intact. Never interpolate dates
    or IDs into the fixed layer.
 4. **Determinism boundary** — the ledger is deterministic, the telling is
-   emergent. Emergent output never becomes game state unvalidated, and an LLM
-   ruling always stays within **core anchor ± bound**.
+   emergent. Emergent output never becomes game state unvalidated. Match and
+   training settlement stay within **core anchor ± bound**; negotiation conditions
+   and scouting judgments use contextual Jev evaluation with authority, evidence,
+   legal representation and ledger validation, without price or timing balance bands.
 5. **Prompts are code** — separate files or constants so versions and diffs stay
    traceable. ⚠️ **Edit by deleting first.** When the behavior is wrong, delete
    the line that causes it before adding an instruction. Keep the rules; drop
@@ -318,7 +320,7 @@ non-deterministic LLM.
 
 ## Status
 
-🚧 **Playable prototype (data model v14, SAVE_VERSION 14).** Onboarding → chat
+🚧 **Playable prototype (data model v15, SAVE_VERSION 15).** Onboarding → chat
 instructions → match → season rollover → multi-season runs end to end. What is
 built and what is not is listed in [overview.md](docs/overview.md) §7.
 

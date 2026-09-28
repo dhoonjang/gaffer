@@ -82,4 +82,6 @@ evaluators:
   table-orders: *jev
   match-reader: *jev
   training-rater: *jev
+  scouting: *jev
+  negotiation: *jev
   finalize-match: *jev

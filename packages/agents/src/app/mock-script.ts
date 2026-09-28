@@ -13,10 +13,8 @@ import {
   minutesOfClock,
   nextMatchFor,
   playerName,
-  renewalExpectation,
   roomNegotiationOf,
   roomPartyOf,
-  suggestTerms,
   tableVoicesOf,
   teamName,
   unseenEvents,
@@ -89,7 +87,6 @@ const WEEKDAYS = [1, 2, 3, 4, 5] as const;
 
 /** 재계약을 여는 자 — 대본이 「계약 만료 다가오는 선수」로 고르는 폭 */
 const RENEWAL_HORIZON_DAYS = 365;
-const RENEWAL_YEARS = 3;
 
 /**
  * **표** — 위에서 아래로 훑어 처음 걸린 줄이 그 턴의 대본이다.
@@ -162,14 +159,22 @@ const SCRIPT: readonly ScriptLine[] = [
   { say: "하루 넘기자", skip: 1 },
   {
     say: "계약 만료 다가오는 선수 재계약 하자",
-    ops: ({ state }): OpsInput => {
+    gm: ({ state }) => {
       const who = expiringContracts(state, RENEWAL_HORIZON_DAYS)[0]?.player;
-      if (!who) return {};
-      return {
-        open_renewal: [
-          { playerId: who.id, weeklyWage: renewalExpectation(state, who), years: RENEWAL_YEARS },
-        ],
-      };
+      return who
+        ? [
+            {
+              tool: "start_negotiation",
+              input: {
+                playerId: who.id,
+                kind: "renew",
+                party: "agent",
+                mode: "request",
+                method: "proposal",
+              },
+            },
+          ]
+        : [];
     },
   },
   {
@@ -184,21 +189,12 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: `${NAME_SLOT} 영입하자`,
-    /**
-     * 이적료는 **코어가 부르는 자**를 그대로 쓴다(`suggestTerms`) — 감독이 액수를
-     * 말하지 않은 오퍼는 실모드에서 나가지 않으므로(`missingFeeNote`), 대본이 그
-     * 자리를 대신 채운다.
-     */
-    ops: ({ state, named }): OpsInput => {
-      const wanted = state.players.find((p) => p.name === named && p.teamId !== state.userTeamId);
-      const terms = wanted ? suggestTerms(state, wanted.id) : null;
-      if (!wanted || !terms) return {};
-      return {
-        send_offer: [
-          { playerId: wanted.id, fee: terms.fee, weeklyWage: terms.weeklyWage, years: terms.years },
-        ],
-      };
-    },
+    gm: ({ named }) => [
+      {
+        tool: "start_negotiation",
+        input: { playerId: named, kind: "buy", party: "club", mode: "request", method: "proposal" },
+      },
+    ],
   },
   {
     // 방을 세운다 — 오퍼 없는 영입 자리, 상대는 구단 쪽(단장) (transfer.md §12-2)
@@ -214,24 +210,7 @@ const SCRIPT: readonly ScriptLine[] = [
       { tool: "start_negotiation", input: { playerId: named, kind: "buy", party: "agent" } },
     ],
   },
-  {
-    /**
-     * 방 안의 말 — 값이 실렸으니 손잡이가 열리고(`negotiation_orders`) 그 뒤에 상대가 답한다
-     * (`counterparty_reply`). 값은 코어가 부르는 자다(`suggestTerms`) — 선수와 갈래는 해석기가
-     * 이 협상의 것으로 고정하므로 여기 적지 않는다.
-     */
-    say: "제안한 조건으로 갑시다",
-    ops: ({ state }): OpsInput => {
-      const room = roomNegotiationOf(state);
-      const terms = room ? suggestTerms(state, room.gamePlayerId) : null;
-      if (!room || !terms) return {};
-      // 에이전트의 방에서 낸 영입 값은 개인 조건 선제안이다 — 이적료는 단장의 방의 것
-      if (roomPartyOf(state) === "agent" && (room.kind === "buy" || room.kind === "loan")) {
-        return { propose_personal: [{ weeklyWage: terms.weeklyWage, years: terms.years }] };
-      }
-      return { send_offer: [{ fee: terms.fee, weeklyWage: terms.weeklyWage, years: terms.years }] };
-    },
-  },
+  { say: "제안한 조건으로 갑시다", gm: () => [ROOM_REPLY] },
   {
     // 방 안의 말 — 자리를 뜬다. 협상은 열린 채 방만 닫힌다
     say: "오늘은 여기까지 하죠",
@@ -239,6 +218,17 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: "이적 건 마무리하자",
+    gm: ({ state }) => {
+      const agreed = state.negotiations.find((negotiation) => negotiation.status === "agreed");
+      return agreed
+        ? [
+            {
+              tool: "start_negotiation",
+              input: { negotiationId: agreed.id, mode: "request", method: "proposal" },
+            },
+          ]
+        : [];
+    },
     ops: ({ state }): OpsInput => {
       const agreed = state.negotiations.find((n) => n.status === "agreed");
       return agreed ? { accept_deal: [{ negotiationId: agreed.id }] } : {};
@@ -361,15 +351,8 @@ export function ordersScript(state: GameState, said: string): ScriptedTurn {
 
 // ── 협상 방 ─────────────────────────────────────────────
 //
-// **대본이 상대의 말을 쓰는 자리다.** 판정은 비워 내므로 코어가 앵커 그대로 자른다 —
-// 감독이 나서지 않은 라운드와 같은 사다리라 두 모드가 확률을 다르게 가르지 않는다
-// (agents.md §4-1의 mock). 방 안의 헤더는 그 날 안의 시각만 옮긴다.
-
-/** 상대의 답 — 판정과 요구는 비운다. 코어가 앵커로 자른다 */
-const ROOM_REPLY: ScriptedCall = {
-  tool: "counterparty_reply",
-  input: { stance: "steady", heard: { tone: "civil", claims: [] } },
-};
+/** 개발 대본도 같은 평가 요청을 보낸다. 상대의 결정을 생성하지 않는다. */
+const ROOM_REPLY: ScriptedCall = { tool: "evaluate_negotiation", input: {} };
 
 /** 방 안의 다음 말 — 표의 키다: 값이 실려 손잡이와 상대의 답이 함께 선다 */
 const ROOM_SUGGESTION = "제안한 조건으로 갑시다";

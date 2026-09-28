@@ -4,9 +4,8 @@ import type {
   GamePlayer,
   Negotiation,
   PressConference,
-  ScoutReport,
 } from "@story-fm/domain";
-import { createTestGame } from "../helpers";
+import { createTestGame, recordTestScouting } from "../helpers";
 import type { GameState } from "../../src/common/core/state";
 import {
   CHARACTER_INJECTION_LIMIT,
@@ -161,20 +160,12 @@ describe("인물 사전 — 이번 턴에 실을 인물지", () => {
     const standing = [{ characterId: outsider.name, depth: "rumour" as const, memories: 0 }];
     expect(selectCharacters(state, { message, injected: standing })).toEqual([]);
 
-    const report: ScoutReport = {
-      id: `scout-${outsider.id}`,
-      gamePlayerId: outsider.id,
-      requestedOn: state.date,
-      dueOn: state.date,
-      completedOn: state.date,
-    };
-    state.scoutReports.push(report);
+    recordTestScouting(state, outsider.id);
 
     const scouted = selectCharacters(state, { message, injected: standing }).find(
       (e) => e.characterId === outsider.name,
     );
-    expect(scouted?.depth).toBe("outline");
-    expect(scouted?.speechStyle?.note).toBeTruthy();
+    expect(scouted).toBeUndefined();
   });
 
   it("한 턴 상한을 넘으면 이름순으로 잘린다", () => {
@@ -264,7 +255,7 @@ describe("인물 사전 — 이번 턴에 실을 인물지", () => {
   it("지식 눈금 다섯이 깊이 셋으로 접힌다", () => {
     expect(characterDepthOf("own")).toBe("full");
     expect(characterDepthOf("adapting")).toBe("full");
-    expect(characterDepthOf("scouted")).toBe("outline");
+    expect(characterDepthOf("scouted")).toBe("rumour");
     expect(characterDepthOf("seen")).toBe("outline");
     expect(characterDepthOf("rumoured")).toBe("rumour");
   });

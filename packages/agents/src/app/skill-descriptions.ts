@@ -1,11 +1,6 @@
 import { CALL_LABELS } from "@story-fm/domain";
 import { MAX_INCIDENTS_PER_DAY } from "@story-fm/engine";
-import {
-  INCIDENT_KIND_KO,
-  INCIDENT_KINDS,
-  MISSION_CANDIDATES,
-  MISSION_DAYS,
-} from "@story-fm/domain";
+import { INCIDENT_KIND_KO, INCIDENT_KINDS } from "@story-fm/domain";
 
 export type SkillGroup = "진행" | "전술·훈련" | "대화·서사" | "조회" | "이적" | "재정";
 
@@ -55,12 +50,17 @@ export const SKILL_CATALOG = [
     group: "이적",
     readOnly: false,
     description:
-      "감독이 시장과 장부를 움직이는 지시를 했을 때 — 오퍼·들어온 오퍼에 답·계약 확정·철회·재계약·해지·이적 리스트·이적 요청 답·되사기·임대 복귀·이적 예산·보드 요청·표값·스태프 고용·계약 해지·감독직 수락·흥정·지원. " +
-      "한 턴에 한 번 부른다. 조건(추가 영입·주장·등번호·바이아웃 조항·사이닝 보너스·공격 포인트 보너스·주급 인상 조항·그 밖)도 오퍼·재계약에 실린다. 오퍼 전에는 deal_odds로 확률을 보고 감독과 값을 정한 턴에 부른다. 결과로 무엇이 걸렸고 무엇이 반려됐는지가 온다. " +
-      "협상을 단장에게 맡기는 말과 도로 가져오는 말도 여기다 — 맡긴 자리는 감독 턴 없이 굴러가고 그 진행은 다이제스트로 온다. " +
-      "감독이 직접 나서서 주고받는 자리는 여기가 아니다 — start_negotiation이 연다.",
+      "이적 리스트·이적 요청 답·임대 복귀·이적 예산·보드 요청·표값·스태프 고용·계약 해지·감독직 등 직접 관리 명령을 실행한다. 한 턴에 한 번 부른다. 상대에게 연락하거나 조건을 제안·협상하는 요청은 start_negotiation으로 넘기며 여기서 중복 실행하지 않는다.",
   },
 
+  {
+    name: "receive_market_contact",
+    label: CALL_LABELS.receive_market_contact,
+    group: "이적",
+    readOnly: false,
+    description:
+      "세계 쪽에서 먼저 연락할 맥락이 있을 때 실제 이적 명단 등재(listing)나 계약 기록(contract)을 근거로 상대 구단의 문의를 연다. 감독이 접촉을 지시한 경우는 start_negotiation이다. 선수가 우리 계약이고 상대가 다른 구단인지 검증하며 같은 근거의 연락을 중복 생성하지 않는다. 금액·주급·연수·감독 승인을 만들지 않는다. 상대 판단은 협상 평가가 반환한 결과만 전한다.",
+  },
   {
     name: "start_match",
     label: CALL_LABELS.start_match,
@@ -78,11 +78,7 @@ export const SKILL_CATALOG = [
     group: "진행",
     readOnly: false,
     description:
-      "감독이 협상 상대와 직접 이야기하려 할 때 — 상대 구단의 단장이나 선수의 에이전트와 직접 말하겠다고 하거나, 어느 선수와 협상을 열자고 할 때 부른다. " +
-      "한 자리의 건너편은 한 사람이다: party=club은 단장(이적료·분할·기한), party=agent는 에이전트(주급·연수·지위·조건). 영입·임대는 감독이 누구와 이야기하겠다고 했는지로 고르고, 말하지 않았으면 비운다(구단 쪽이 먼저다). 재계약은 에이전트뿐이다. " +
-      "협상 방이 열리고 감독에게 나설지 묻는 확인 창이 뜨므로 이 턴에는 그 자리로 향하는 장면까지만 쓰고 상대의 말은 쓰지 않는다. 감독이 나서면 협상 마스터가 진행한다. " +
-      "열린 협상이 있으면 list_negotiations의 negotiationId로, 없으면 playerId와 kind(buy·renew·loan)로 오퍼 없는 자리를 연다 — 이레 안에 오퍼가 없으면 닫힌다. " +
-      "감독의 값과 명령은 장면 전에 적용되며 적용 결과를 읽는다.",
+      "상대 구단·선수 측과의 접촉과 교섭을 연다. party=club은 구단 조건, agent는 개인 조건이다. method는 meeting·phone·proposal이며 같은 상대의 테이블을 이어 쓴다. mode=request는 감독이 맡긴 요청을 처리해 메인 대화로 결과를 돌려주고, continue는 감독이 직접 주고받는 협상 대화를 연다. 열린 거래의 negotiationId 또는 대상 playerId·kind를 쓴다. 감독이 말하지 않은 금액·계약 연수·발신 권한을 만들지 않는다. 결과가 대기·실패이면 합의한 것처럼 서술하지 않는다.",
   },
   {
     name: "team_talk",
@@ -259,32 +255,12 @@ export const SKILL_CATALOG = [
       '구단 재정을 조회한다 — 잔고·이적 예산·주급 총액·주급 여력·미지급 분할 회분·부채·1년 안에 끝나는 계약 전원, 월간 보고서(수입·지출, 현금 순증과 장부 손익, 급여 비중, PSR 여유), 이번 달 잠정 집계. month를 주면 그 달 보고서만 본다("2026-08"). 영입은 오퍼 전에 이것부터 읽어라 — 주급 여력이 음수면 못 산다.',
   },
   {
-    name: "scout_player",
-    label: CALL_LABELS.scout_player,
+    name: "request_scouting",
+    label: "스카우팅 의뢰",
     group: "조회",
     readOnly: false,
     description:
-      "타 팀 선수에게 스카우트를 파견한다. 며칠 뒤 보고서가 오면 실행 계열은 거의 정확해지고 판단 계열에는 오차가 남는다 — 같은 선수에게 거듭 보낼수록 잠재력 구간이 좁아진다. 도착한 보고서는 그 선수의 상세 카드에 남는다 — 지난 보고서를 물으면 다시 파견하지 않는다.",
-  },
-  {
-    name: "scout_mission",
-    label: CALL_LABELS.scout_mission,
-    group: "조회",
-    readOnly: false,
-    description:
-      "이름 대신 조건으로 스카우트를 내보낸다 — 대회(competition)·자리(position)·나이 상하한(minAge·maxAge)·관측 시장가 상한(maxValue) 중 감독이 말한 것만 싣는다. 대회를 비우면 5대 리그 1·2부 전체가 풀이다. " +
-      `${MISSION_DAYS}일 뒤 후보 ${MISSION_CANDIDATES}명이 카드로 온다. ` +
-      "조건으로 찾아오라는 지시는 search_players가 아니라 이것이다. " +
-      "돌아온 후보는 직접 상대해 본 선수만큼만 보이고, 관측값은 각자의 상세 카드에 남는다 — 더 알아야 하면 그 이름으로 scout_player를 보낸다. " +
-      "동시 파견 한도는 scout_player와 나눠 쓴다 — 어느 쪽이든 자리가 없으면 대기로 남고, 자리가 난 뒤 다시 불러야 나간다.",
-  },
-  {
-    name: "deal_odds",
-    label: CALL_LABELS.deal_odds,
-    group: "이적",
-    readOnly: true,
-    description:
-      "이 조건이면 이적이 성사될지 코어가 계산한 확률과 그 근거(요구액·주급 기대치·기여 항목)를 준다. 감독에게 답하기 전에 확인하고, 그 근거는 사람의 말로 풀어 전하라. 확률이 낮다고 포기하지 마라.",
+      "선수 조사·후보 탐색·비교·추가 질문을 의뢰하거나 변경·취소·재시도한다. 감독이 말한 대상·조건·질문·기한만 싣는다. 조사 범위와 기한은 평가된 계획이 정하며, 조건 변경이 필요한 요청은 보류한다. 완료 보고서는 보존되므로 지난 보고서를 묻는 말에 재의뢰하지 않는다. 의뢰 자체는 접촉·오퍼·영입을 승인하지 않는다.",
   },
   {
     name: "list_negotiations",
@@ -292,7 +268,7 @@ export const SKILL_CATALOG = [
     group: "이적",
     readOnly: true,
     description:
-      "진행 중인 협상을 요약한다. negotiationId를 주면 오퍼 이력·조건서(감독이 건 조건과 상대의 요구)·개인 조건·현재 확률 근거까지 자세히 본다.",
+      "진행 중인 협상을 요약한다. negotiationId를 주면 교류 이력·조건서·당사자별 승인과 후속 연락을 자세히 본다.",
   },
 ] as const satisfies readonly SkillCatalogEntry[];
 
