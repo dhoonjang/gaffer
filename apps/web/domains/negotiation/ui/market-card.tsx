@@ -1,5 +1,6 @@
 "use client";
 
+import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import {
   formatMoney,
   marketDirectionKo,
@@ -312,7 +313,7 @@ export function MissionReportCardView({ card }: { card: MissionReportCard }) {
               <em>나이</em>
               <em>자리</em>
               <em className="mn-ovr">종합</em>
-              <em className="mn-pot">잠재력</em>
+              <em className="mn-pot">성장 가능성</em>
               <em className="mn-val">시장가</em>
               <em className="mn-until">계약 만료</em>
             </div>
@@ -327,9 +328,8 @@ export function MissionReportCardView({ card }: { card: MissionReportCard }) {
                   {c.overall.value}
                   {c.overall.margin > 0 && <i>±{c.overall.margin}</i>}
                 </span>
-                {/* 잠재력은 끝까지 폭으로만 안다 — 짐작할 근거가 없으면 숫자를 짓지 않는다 */}
                 <span className="mn-pot">
-                  {c.potential ? `${c.potential.low}–${c.potential.high}` : "미지"}
+                  <GrowthOutlook overall={c.overall.value} potential={c.potential} />
                 </span>
                 <span className="mn-val">{formatMoney(c.marketValue)}</span>
                 {/* 머리가 「계약 만료」라 「까지」 없이 달만 — `2027년 6월` */}

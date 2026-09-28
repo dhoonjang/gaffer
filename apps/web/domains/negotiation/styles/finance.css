@@ -30,15 +30,11 @@
   gap: 14px;
 }
 .fin-col-title {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: 600;
   margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
-  color: var(--text-2);
-}
-.fin-col-title.income,
-.fin-col-title.expense {
-  color: var(--text-2);
+  color: var(--text);
 }
 .fin-line {
   display: flex;
@@ -98,8 +94,9 @@
   border-top: 1px solid var(--line);
 }
 .fin-board-title {
-  color: var(--text-2);
-  font-size: var(--fs-xs);
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: 600;
 }
 .fin-board-line {
   margin-top: 4px;
@@ -288,9 +285,75 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 지급 일정·계약 만료 — 월간 보고서 카드와 같은 껍데기(`.fin-month`)에 담고 줄은
-   `.fin-line`을 그대로 쓴다. 돈이 왼쪽 이름과 오른쪽 금액으로 서는 모양은 이미
-   보고서가 정해 둔 것이라, 새 모양을 만들면 같은 화면에 두 문법이 산다 */
+/* 지급 일정은 월간 보고서와 같은 금액 행을 쓴다. */
 .fin-line.muted {
   color: var(--text-2);
+}
+
+.fin-expiring {
+  container-type: inline-size;
+  background: var(--panel);
+  border-radius: var(--r-sm);
+  margin-bottom: 10px;
+}
+.fin-contracts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.fin-contracts th,
+.fin-contracts td {
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.fin-contracts th {
+  color: var(--text-2);
+  font-weight: 500;
+}
+.fin-contracts td:first-child {
+  width: 100%;
+  font-size: var(--fs-md);
+  overflow-wrap: anywhere;
+}
+.fin-contracts td:nth-child(2) {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.fin-contracts td:last-child,
+.fin-contracts th:last-child {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fin-contracts td:last-child {
+  font-weight: 600;
+}
+.fin-contracts tbody tr:last-child td {
+  border-bottom: 0;
+}
+.fin-contracts tr.clickable {
+  cursor: pointer;
+}
+.fin-contracts tr.clickable:hover,
+.fin-contracts tr.clickable:focus-within {
+  background: var(--panel-2);
+}
+.fin-contract-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin-top: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.fin-contract-meta .fin-tag {
+  margin-left: 0;
+}
+@container (max-width: 400px) {
+  .fin-contracts th,
+  .fin-contracts td {
+    padding-inline: 8px;
+  }
 }

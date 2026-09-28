@@ -1,50 +1,76 @@
 /* ── 달력 — 월 격자 · 일자 상세 · 일지 ─────────────────────────── */
 
+.calendar-view {
+  container-type: inline-size;
+}
+
 /* 달력 */
 .cal-legend {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
 }
 /* 머리줄 안에서는 섹션 제목의 바깥 여백을 쓰지 않는다 (줄 정렬이 어긋난다) */
-.cal-legend .section-title {
+.cal-legend .view-title {
   margin: 0;
 }
-/* 이적창 표식 — 읽는 값이라 글자로만 선다. 라벨은 흐리고 마감일은 굵다 */
+/* 이적시장 아이콘 · 이름 · 마감일. 조작 버튼이 아닌 읽는 정보다. */
 .cal-focus {
   display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--text-2);
   white-space: nowrap;
 }
-.cal-focus.open {
-  color: var(--text);
+.cal-focus .ev-icon {
+  width: 14px;
+  height: 14px;
 }
 .cal-focus b {
+  padding-left: 8px;
+  margin-left: 2px;
+  border-left: 1px solid var(--border);
   color: var(--text);
+  font-weight: 500;
 }
 .cal-months {
   display: grid;
-  /* 칸 하나에 "원정 LIV / 2-1"이 접히지 않고 들어가야 한다 — 폭이 좁으면
-     세 줄로 접혀 달이 통째로 읽히지 않는다 (280px일 때 칸이 37px였다) */
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+}
+/* 월 최소 폭 360px 두 개와 열 간격 14px를 확보할 때만 2열로 편다. */
+@container (min-width: 734px) {
+  .cal-months {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .cal-month {
   background: var(--panel);
   border-radius: var(--r-sm);
   padding: 12px 12px 10px;
 }
+@container (max-width: 400px) {
+  .cal-month {
+    padding-inline: 8px;
+  }
+  .cal-cell {
+    padding-inline: 2px;
+  }
+  .cal-fx {
+    padding-inline: 2px;
+    border-left-width: 2px;
+  }
+}
 .cal-month-title {
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--text-2);
+  color: var(--text);
 }
 .cal-grid {
   display: grid;
@@ -129,15 +155,21 @@
   word-break: keep-all;
 }
 .cal-fx-opp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 3px;
   font-weight: 500;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+.cal-fx-team,
+.cal-fx-score {
+  white-space: nowrap;
 }
 .cal-fx-venue {
   font-size: var(--fs-2xs);
   color: var(--text-2);
   font-weight: 500;
-  margin-right: 3px;
 }
 .cal-fx-venue.home {
   color: var(--text);
@@ -176,6 +208,9 @@
   color: var(--text-2);
 }
 .cal-fx.pending .cal-fx-opp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 3px;
   font-weight: 500;
 }
 

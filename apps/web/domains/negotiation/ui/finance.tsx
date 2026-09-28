@@ -4,8 +4,8 @@ import { useState } from "react";
 import type { OfficeViews } from "@story-fm/engine";
 import { formatMoney, formatPounds } from "@story-fm/domain";
 import { IconChevron } from "@/domains/common/ui/icons";
-import { PlayerName } from "@/domains/common/ui/player-card";
-import { contractUntil, humanDate, humanMonthYear } from "@/domains/common/lib/dateline";
+import { PlayerName, usePlayerCard } from "@/domains/common/ui/player-card";
+import { humanDate, humanMonthYear } from "@/domains/common/lib/dateline";
 
 // ── 재정 (요약 카드 + 실시간 활동 + 월간 보고서) ─────────────
 type FinanceMonth = OfficeViews["finance"]["current"];
@@ -222,7 +222,7 @@ function PaymentsBlock({ payments }: { payments: FinancePayments }) {
   if (outgoing.rows.length === 0 && incoming.rows.length === 0) return null;
   return (
     <>
-      <div className="section-title">지급 일정</div>
+      <h2 className="section-title">지급 일정</h2>
       <div className="fin-month" data-testid="fin-payments">
         <div className="fin-cols">
           <PaymentColumn side={outgoing} title="나갈 돈" tone="expense" />
@@ -275,25 +275,51 @@ function PaymentColumn({
  * 선수는 재계약을 열 수 있는 사람이 아니라서 같은 줄에 섞이면 안 된다.
  */
 function ExpiringBlock({ rows }: { rows: ExpiringContract[] }) {
+  const card = usePlayerCard();
   if (rows.length === 0) return null;
   return (
     <>
-      <div className="section-title">계약 만료 예정</div>
-      <div className="fin-month" data-testid="fin-expiring">
-        {rows.map((row) => (
-          <div className="fin-line" key={row.playerId}>
-            <span>
-              <PlayerName id={row.playerId} name={row.name} /> {row.age}세 ·{" "}
-              {contractUntil(row.until)}
-              {row.leavingTo ? (
-                <span className="fin-tag danger">{row.leavingTo}로 떠남</span>
-              ) : (
-                row.openToPrecontract && <span className="fin-tag">타 구단 예약 가능</span>
-              )}
-            </span>
-            <span>{formatMoney(row.weeklyWage)}/주</span>
-          </div>
-        ))}
+      <h2 className="section-title">계약 만료 예정</h2>
+      <div className="fin-expiring" data-testid="fin-expiring">
+        <table className="fin-contracts" aria-label="계약 만료 예정">
+          <thead>
+            <tr>
+              <th scope="col">선수</th>
+              <th scope="col">만료일</th>
+              <th scope="col">주급</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.playerId}
+                className={card ? "clickable" : undefined}
+                onClick={
+                  card
+                    ? (event) => {
+                        event.currentTarget.querySelector("button")?.focus({ preventScroll: true });
+                        card.open(row.playerId);
+                      }
+                    : undefined
+                }
+              >
+                <td>
+                  <PlayerName id={row.playerId} name={row.name} />
+                  <div className="fin-contract-meta">
+                    <span>{row.age}세</span>
+                    {row.leavingTo ? (
+                      <span className="fin-tag danger">{row.leavingTo}로 떠남</span>
+                    ) : (
+                      row.openToPrecontract && <span className="fin-tag">타 구단 예약 가능</span>
+                    )}
+                  </div>
+                </td>
+                <td>{humanMonthYear(row.until)}</td>
+                <td>{formatMoney(row.weeklyWage)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </>
   );
@@ -390,7 +416,7 @@ export function FinanceView({ finance }: { finance: OfficeViews["finance"] }) {
       <PaymentsBlock payments={finance.payments} />
       <ExpiringBlock rows={finance.expiringContracts} />
 
-      <div className="section-title">재정 활동</div>
+      <h2 className="section-title">재정 활동</h2>
       {finance.feed.length === 0 && <div className="empty">기록 0건</div>}
       {finance.feed.length > 0 && (
         <div className="fin-feed" data-testid="fin-feed">
@@ -400,7 +426,7 @@ export function FinanceView({ finance }: { finance: OfficeViews["finance"] }) {
         </div>
       )}
 
-      <div className="section-title">월간 재정 보고서</div>
+      <h2 className="section-title">월간 재정 보고서</h2>
       <FinanceMonthCard month={finance.current} />
       {finance.reports.map((month) => (
         <FinanceMonthCard month={month} key={month.month} />

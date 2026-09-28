@@ -298,15 +298,15 @@ export function CalendarView({
   );
 
   return (
-    <div data-testid="view-calendar">
+    <div className="calendar-view" data-testid="view-calendar">
       <div className="cal-legend">
-        <span className="section-title">시즌 일정</span>
-        {/* 이적창 상태만 — 훈련 지시 안내는 빈 날 상세에서만 말한다.
-            "열림"은 적지 않는다 — 마감일이 붙어 있고 칩이 초록이면 그게 열림이다 */}
-        <span className={openWindow ? "cal-focus open" : "cal-focus"}>
+        <h1 className="view-title">시즌 일정</h1>
+        <span className="cal-focus">
+          <EventIcon kind="transfer" />
           {openWindow ? (
             <>
-              {openWindow.kind} 이적시장 <b>{humanDate(openWindow.closesOn)}까지</b>
+              <span>{openWindow.kind} 이적시장</span>
+              <b>{humanDate(openWindow.closesOn, { weekday: false })} 마감</b>
             </>
           ) : (
             "이적시장 닫힘"
@@ -394,7 +394,7 @@ export function CalendarView({
                                   ? "원"
                                   : "중"}
                             </span>
-                            {mt.match.opponent}
+                            <span className="cal-fx-team">{mt.match.opponent}</span>
                           </span>
                           {/* 스코어는 코어가 `formatScore`로 적어 보낸 값이다 — 라틴·숫자뿐이라 `.fig` */}
                           {mt.match.score && (

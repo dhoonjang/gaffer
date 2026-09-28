@@ -546,8 +546,7 @@
   box-shadow: var(--ring);
 }
 
-/* 선수 카드·시장 카드에서 폼을 여는 손잡이 */
-.pc-propose,
+/* 시장 카드에서 폼을 여는 손잡이 */
 .mc-propose {
   height: 28px;
   padding: 0 12px;
@@ -560,26 +559,11 @@
   font-weight: 600;
   cursor: pointer;
 }
-.pc-propose {
-  height: 36px;
-  font-size: var(--fs-sm);
-}
-.pc-propose:focus-visible,
 .mc-propose:focus-visible {
   outline: none;
   box-shadow: var(--ring);
 }
-.pc-propose:disabled,
 .mc-propose:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-.pc-actions {
-  display: flex;
-  justify-content: center;
-  gap: var(--sp-2);
-  margin-top: var(--sp-4);
-}
-.pc-actions .pc-close {
-  margin-top: 0;
 }

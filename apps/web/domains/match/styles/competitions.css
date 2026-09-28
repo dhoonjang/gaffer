@@ -1,5 +1,15 @@
 /* ── 대회 — 순위표 · 라운드 일정 · 브래킷 ─────────────────────────── */
 
+.competitions-view {
+  container-type: inline-size;
+}
+.view-scroll:has(> .competitions-view) {
+  padding: 0;
+}
+.view-scroll > .competitions-view {
+  padding: var(--view-padding);
+}
+
 /**
  * 최근 결과 — 한 줄은 `대회 | 홈 | 스코어 | 원정 | 승부차기`다.
  * 격자는 **목록이 갖고 줄은 `display: contents`로 그 칸에 들어간다** — 줄마다
@@ -105,7 +115,7 @@
 /* 브래킷 한 줄 — 날짜 | 대진 | 결과. 순수 녹아웃 대회에선 이게 곧 일정표다 */
 .euro-tie {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: 5.5em 1fr auto;
   align-items: baseline;
   gap: 8px;
   font-size: var(--fs-sm);
@@ -113,7 +123,7 @@
   border-bottom: 1px solid var(--line);
 }
 .euro-tie.ours {
-  background: var(--club-wash);
+  background: var(--row-highlight);
 }
 .euro-tie .euro-when {
   color: var(--text-2);
@@ -127,10 +137,15 @@
 /* ── 대회 뷰 — 대회 탭 · 라운드 선택기 · 일정 목록 ────────── */
 /* 대회 탭 — 밑줄 탭. 켜진 것은 글자 무게와 키 컬러 밑줄이 말한다 */
 .comp-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 31;
   display: flex;
   gap: 4px;
   overflow-x: auto;
-  margin-bottom: 12px;
+  margin: calc(-1 * var(--view-padding)) calc(-1 * var(--view-padding)) 12px;
+  padding: 8px var(--view-padding) 0;
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 .comp-tabs button {
@@ -147,6 +162,9 @@
     color var(--ease),
     border-color var(--ease);
 }
+.comp-tabs button:first-child {
+  padding-left: 0;
+}
 .comp-tabs button:hover {
   color: var(--text);
 }
@@ -156,18 +174,17 @@
   font-weight: 600;
 }
 .comp-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  background: var(--panel);
-  border-radius: var(--r-sm);
-  padding: 10px 14px;
+  padding: 0 0 8px;
+}
+.comp-head .view-title {
+  margin: 0 0 var(--sp-1);
 }
 .comp-head span {
+  display: block;
   color: var(--text-2);
   font-size: var(--fs-sm);
-  text-align: right;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .round-nav {
   display: flex;
@@ -176,6 +193,12 @@
   margin-bottom: 8px;
 }
 .round-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   background: var(--panel-2);
   border: 0;
   border-radius: var(--r-sm);
@@ -190,6 +213,8 @@
   opacity: 0.4;
 }
 .round-nav select {
+  min-width: 0;
+  height: 32px;
   flex: 1;
   background: var(--panel-2);
   border: 0;
@@ -217,12 +242,15 @@
   border-bottom: none;
 }
 .fixture.ours {
-  background: var(--club-wash);
+  background: var(--row-highlight);
 }
 .fixture .when {
   color: var(--text-2);
   font-size: var(--fs-xs);
   white-space: nowrap;
+}
+.fixture .when .hide-sm {
+  display: block;
 }
 .fixture .side {
   display: inline-flex;
@@ -270,6 +298,8 @@
  * 여기서 다시 자르면 같은 76이 두 색이 된다.
  */
 .fixture .fx-str {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text);
@@ -308,99 +338,105 @@
   color: var(--draw);
 }
 
-/* ── 역대 — 우승 횟수 · 시즌 고르기 · 그 시즌의 표와 시상 ────── */
-
-/**
- * 역대 우승 한 줄 — **횟수가 먼저 읽히고 언제였나가 뒤따른다.**
- * 시드 우승은 연도만 알고(카탈로그 `honours`) 게임 안의 우승은 시즌 라벨을 갖는데,
- * 둘 다 없는 구단은 이 줄 자체가 서지 않는다 — 없는 것은 0회가 아니다.
- */
-.honours-line {
+/* 역대 우승팀 — 시즌·문장·성적을 한 줄기로 읽고 상세 표는 펼쳐 본다. */
+.champions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.champion-season {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 0;
+}
+.champion-season:first-child {
+  padding-top: 4px;
+}
+.champion-row {
+  display: grid;
+  grid-template-columns: 64px 32px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.champion-year {
+  padding-top: 5px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.champion-info {
+  min-width: 0;
+}
+.champion-name {
   display: flex;
-  align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: var(--fs-base);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.champion-ours {
+  color: var(--accent-2);
+  font-size: var(--fs-xs);
+}
+.champion-record,
+.champion-runner-up,
+.champion-our-result {
+  margin: 4px 0 0;
+  color: var(--text-2);
   font-size: var(--fs-sm);
 }
-.honours-line > b {
-  color: var(--gold);
+.champion-record b {
+  color: var(--text);
 }
-.honours-last {
-  color: var(--text-2);
-  font-size: var(--fs-xs);
+.champion-details {
+  margin-top: 8px;
 }
-.honours-won {
+.champion-details summary {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.honours-won i {
-  background: var(--panel-2);
-  border-radius: var(--r-xs);
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  list-style: none;
   color: var(--text-2);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  padding: 1px 6px;
-}
-
-/**
- * 시즌 고르기 — **누를 수 있는 것으로 보인다.** 아래 순위표는 읽는 값이라 테두리도
- * 커서도 없고, 이쪽만 밑줄 탭·호버·포커스 링을 갖는다(대회 탭과 같은 규약).
- */
-.season-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.season-tabs button {
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  margin-bottom: -1px;
-  color: var(--text-2);
+  font-size: var(--fs-sm);
   cursor: pointer;
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  padding: 6px 10px;
 }
-.season-tabs button:hover {
+.champion-details summary::-webkit-details-marker {
+  display: none;
+}
+.champion-details summary:hover,
+.champion-details summary:focus-visible {
   color: var(--text);
 }
-.season-tabs button.active {
-  border-bottom-color: var(--accent);
-  color: var(--text);
-  font-weight: 600;
+.champion-details[open] summary svg {
+  transform: rotate(180deg);
 }
-.season-tabs button:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
+.champion-detail-body {
+  overflow-x: auto;
 }
-
-/* 고른 시즌의 머리줄 — 우승 · 준우승 · 우리 순위 */
-.season-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
+.champion-our-result {
   margin-bottom: 8px;
 }
-.season-slot {
+.champions-empty {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--panel);
+  color: var(--text-2);
+}
+.champions-empty > svg {
+  flex-shrink: 0;
+}
+.champions-empty p {
+  margin: 0 0 4px;
+  font-size: var(--fs-md);
+}
+.champions-empty span {
   font-size: var(--fs-sm);
 }
-.season-slot i {
-  color: var(--text-3);
-  font-size: var(--fs-xs);
-}
-/* 우리 순위 — 구단 색은 상태 자리에 서지 않으므로 글자 무게로만 갈린다 */
-.season-slot.ours b {
-  color: var(--text);
-}
-/* 그 시즌 리그의 시상 — 상 이름 | 수상자 | 팀 | 근거 수치 */
+
 .season-awards {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
@@ -428,7 +464,7 @@
   white-space: nowrap;
 }
 
-/* ── 눈금 고르기 — 전체/홈/원정 · 개인 순위 항목 ─────────────── */
+/* ── 눈금 고르기 — 개인 순위 항목 ─────────────── */
 
 /**
  * 세그먼트 — 무대를 고르는 것(대회 탭)과 보고 있는 표의 눈금을 고르는 것은 같은
@@ -502,4 +538,19 @@
 /* 읽기만 하는 곁칸 — 개인 순위의 팀 약칭, 순위표의 예상 순위. 한 톤 낮춘다 */
 .dim-cell {
   color: var(--text-2);
+}
+
+@container (max-width: 480px) {
+  .competitions-view .fixture {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+  .fixture .when {
+    grid-column: 1 / -1;
+  }
+  .fixture > .fin-tag {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-left: 0;
+  }
 }

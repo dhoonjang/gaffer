@@ -1,11 +1,13 @@
 "use client";
 
+import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -18,6 +20,7 @@ import {
   physiqueLabel,
 } from "@story-fm/domain";
 import type { PlayerCardView } from "@story-fm/engine";
+import { useDialog } from "@/domains/common/lib/use-dialog";
 import { moodSentence } from "@/domains/common/lib/mood";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/domains/common/ui/player-facts";
@@ -223,14 +226,8 @@ function PlayerCardOverlay({
     return () => abort.abort();
   }, [gameId, playerId, stamp]);
 
-  // 카드는 읽는 자리다 — 되돌아가는 길이 손 가까이 있어야 한다 (Esc·바깥 클릭·닫기)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const trapTab = useDialog(cardRef, onClose, '[data-testid="player-card-close"]');
 
   return (
     <div
@@ -242,7 +239,12 @@ function PlayerCardOverlay({
       onClick={onClose}
     >
       {/* 카드 안의 눌림은 카드의 것이다 — 베일까지 새어 나가면 읽다가 닫힌다 */}
-      <div className="player-card" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="player-card"
+        ref={cardRef}
+        onKeyDown={trapTab}
+        onClick={(e) => e.stopPropagation()}
+      >
         {error !== null ? (
           <div className="pc-blank" data-testid="player-card-error">
             선수 카드를 불러오지 못했다
@@ -260,6 +262,14 @@ function PlayerCardOverlay({
          * 않는 선수(무소속·빌려 온 선수)에게는 잠긴 버튼조차 두지 않는다 (design-system.md §1).
          */}
         <div className="pc-actions">
+          <button
+            className="pc-close"
+            type="button"
+            onClick={onClose}
+            data-testid="player-card-close"
+          >
+            닫기
+          </button>
           {onPropose !== undefined && card?.proposal != null && (
             <button
               className="pc-propose"
@@ -273,14 +283,6 @@ function PlayerCardOverlay({
               제안
             </button>
           )}
-          <button
-            className="pc-close"
-            type="button"
-            onClick={onClose}
-            data-testid="player-card-close"
-          >
-            닫기
-          </button>
         </div>
       </div>
     </div>
@@ -344,15 +346,8 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
       {ours && !inMatch && <p className="pc-mood">{moodSentence(ours.mood)}</p>}
 
       <div className="pc-facts">
-        <Fact
-          label="잠재력"
-          title={
-            card.potential
-              ? `추정 폭 ±${card.potential.margin} — ${card.potential.confidence}`
-              : "성장 여력을 짐작할 근거가 없습니다"
-          }
-        >
-          {card.potential ? `${card.potential.low}–${card.potential.high}` : "미지"}
+        <Fact label="성장 가능성">
+          <GrowthOutlook overall={card.overall} potential={card.potential} />
         </Fact>
         <Fact
           label="시장가"

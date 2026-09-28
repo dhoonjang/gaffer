@@ -1,5 +1,6 @@
 "use client";
 
+import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { CardMark, ChatTurn, GoalMark, ToolCallRecord } from "@story-fm/engine";
@@ -331,10 +332,10 @@ const barPct = (value: number) =>
  * 스카우팅 보고서 — **며칠을 기다려 얻은 것이므로 한 장으로 편다.**
  *
  * 한 번 읽고 넘어갈 정보가 아니다 —
- * 능력치·주발·잠재력·몸값이 한자리에 있어야 "지금 지를까, 더 볼까"가 판단된다.
+ * 능력치·주발·성장 가능성·몸값이 한자리에 있어야 "지금 지를까, 더 볼까"가 판단된다.
  *
- * **안개는 모양으로 드러난다.** 종합과 잠재력은 아예 등급으로 말하고(스카우트가
- * 가져온 숫자에는 늘 ±가 붙는다), 축은 막대 끝이 오차만큼 번진다. 또렷한 숫자
+ * **안개는 모양으로 드러난다.** 종합은 관측값과 오차폭으로, 성장 가능성은 단계로 말한다.
+ * 축은 막대 끝이 오차만큼 번진다. 또렷한 숫자
  * 하나로 그리면 감독이 그걸 사실로 읽는다.
  */
 function ScoutReport({ report: r }: { report: ScoutReportCard }) {
@@ -372,11 +373,16 @@ function ScoutReport({ report: r }: { report: ScoutReportCard }) {
 
       <div className="sr-facts">
         <span>
-          <em>잠재력</em>
-          <b title={r.potential ? "잠재력 추정 구간" : "성장 여력을 짐작할 근거가 없다"}>
-            {potentialLow !== null && potentialHigh !== null
-              ? `${potentialLow}–${potentialHigh}`
-              : "미지"}
+          <em>성장 가능성</em>
+          <b>
+            <GrowthOutlook
+              overall={overall}
+              potential={
+                potentialLow !== null && potentialHigh !== null
+                  ? { low: potentialLow, high: potentialHigh }
+                  : null
+              }
+            />
           </b>
         </span>
         <span>

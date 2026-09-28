@@ -1,5 +1,6 @@
 "use client";
 
+import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import {
   defaultRoleOf,
   formatRating,
@@ -13,16 +14,6 @@ import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/domains/common/ui/player-facts";
 import { FitGauge, FormArrow, RatingTrend, StatusBadges } from "../../../common/ui/player-marks";
 import type { SquadRow } from "./types";
-
-/**
- * 추정 폭을 말로 — 같은 "잠재력 78–86"도 확신의 정도가 다르다.
- * 폭이 어느 정도부터 무슨 낱말인지는 **스카우팅이 정한다**(`potentialConfidence`).
- * 화면은 그 낱말을 받아 문장에 끼울 뿐, 임계값을 다시 재지 않는다.
- */
-function potentialHint(band: SquadRow["potential"]): string {
-  if (!band) return "성장 여력을 짐작할 근거가 없습니다";
-  return `추정 폭 ±${band.margin} — ${band.confidence}. 함께 뛴 경기가 쌓이면 좁아집니다`;
-}
 
 /** 선택한 선수 상세 — 그 자리 적응도와 능력치 16축 */
 export function PlayerDetail({
@@ -103,11 +94,15 @@ export function PlayerDetail({
   const showCareer = careerRows.length > 1 || (careerRows.length === 1 && p.seasonApps === 0);
   return (
     <div className="player-detail" data-testid="player-detail">
-      {/* 지금 심경 한 줄 — 아래 숫자들이 왜 그런지 */}
-      {!inMatch && (
-        <p className="pd-mood" data-testid="player-mood">
-          {moodSentence(p.mood)}
-        </p>
+      {(!inMatch || action) && (
+        <div className="pd-head">
+          {!inMatch && (
+            <p className="pd-mood" data-testid="player-mood">
+              {moodSentence(p.mood)}
+            </p>
+          )}
+          {action && <div className="pd-action">{action}</div>}
+        </div>
       )}
 
       {/* 상태 요약 — 이름·나이·OVR은 바로 위 행과 겹치므로 표에 없는 것만, 박스로
@@ -127,10 +122,11 @@ export function PlayerDetail({
             </b>
           </span>
         )}
-        {/* 잠재력은 숫자 하나가 아니라 **구간**이다 — 우리 선수도 단정할 수 없다.
-            폭이 좁을수록 확신이 크고, 근거가 없으면 "미지" (scouting.ts §잠재력) */}
-        <span title={potentialHint(p.potential)}>
-          잠재력 <b>{p.potential ? `${p.potential.low}–${p.potential.high}` : "미지"}</b>
+        <span>
+          성장 가능성{" "}
+          <b>
+            <GrowthOutlook overall={p.overall} potential={p.potential} />
+          </b>
         </span>
         {/* 체력은 여기 두지 않는다 — 바로 위 명단 행에 바가 있고, 왜 그런지는
             맨 위 심경 한 줄이 말한다. 같은 값을 두 번 쓰면 상세가 표의 복사본이 된다 */}
@@ -138,6 +134,7 @@ export function PlayerDetail({
           폼{" "}
           <b>
             <FormArrow p={p} />
+            {p.formLabel}
           </b>
         </span>
         {p.role !== "스쿼드" && (
@@ -145,6 +142,7 @@ export function PlayerDetail({
             적응{" "}
             <b>
               <FitGauge value={p.adaptation} />
+              {p.adaptation}
             </b>
           </span>
         )}
@@ -224,10 +222,6 @@ export function PlayerDetail({
           </span>
         )}
         <StatusBadges p={p} />
-        {/* 조작은 대상 옆에 — 명단 머리글에 두면 선수를 고를 때마다 버튼이
-            나타나 정원 숫자를 가운데로 밀어내 머리글이 들썩이고, 무엇보다
-            "누구를" 옮기는 버튼인지가 화면상 멀어진다 */}
-        {action && <span className="pd-action">{action}</span>}
       </div>
 
       <div className="pd-body">
@@ -288,6 +282,7 @@ export function PlayerDetail({
                     type="button"
                     title={r.desc}
                     disabled={!onRole}
+                    aria-pressed={r.id === activeRole}
                     onClick={(e) => {
                       // 상세는 행 안에 있다 — 막지 않으면 행 토글로 새어 나가 접힌다
                       e.stopPropagation();
@@ -306,9 +301,6 @@ export function PlayerDetail({
         <AxisGrid axes={p as unknown as Record<string, number>} />
       </div>
 
-      {/* 커리어 — 시즌 × 팀의 표와 그 옆의 마일스톤. **머리글 줄이 아니라 제
-          블록이다**: 요약 줄은 한 줄로 훑는 자리라 격자가 낄 자리가 없다.
-          기록이 없으면 아무것도 세우지 않는다 (위 `showCareer` 주석) */}
       {/* 커리어 — 시즌 × 팀의 표와 그 옆의 마일스톤. **머리글 줄이 아니라 제
           블록이다**: 요약 줄은 한 줄로 훑는 자리라 격자가 낄 자리가 없다.
           기록이 없으면 아무것도 세우지 않는다 (위 `showCareer` 주석) */}

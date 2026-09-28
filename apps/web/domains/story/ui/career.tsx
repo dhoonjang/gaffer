@@ -244,7 +244,7 @@ export function CareerView({
        */}
       <div className="mgr-head">
         <div className="mgr-info">
-          <h3>{squad.manager.name} 감독</h3>
+          <h1 className="view-title">{squad.manager.name} 감독</h1>
           <div className="bg">{squad.manager.background}</div>
           {/**
            * 감독에게 딸린 값은 **두 갈래**고 생김새가 그것을 가른다 — 견주는 눈금
@@ -326,7 +326,7 @@ export function CareerView({
       <InPost career={career} />
       <OutOfWork career={career} />
 
-      <div className="section-title">트로피 보관함</div>
+      <h2 className="section-title">트로피 보관함</h2>
       <div className="trophy-list">
         {/* 빈 자리도 사실로 — 「없습니다」가 아니라 수 0과, 그 수가 왜 0인지(첫 시즌) */}
         {career.trophies.length === 0 && (
@@ -342,7 +342,7 @@ export function CareerView({
         ))}
       </div>
 
-      <div className="section-title">업적</div>
+      <h2 className="section-title">업적</h2>
       <div className="trophy-list">
         {career.achievements.length === 0 && <div className="empty">업적 0</div>}
         {career.achievements.map((a, i) => {
@@ -363,7 +363,7 @@ export function CareerView({
        * 시상 — **감독의 상이 아니라 선수의 상이다** (career.md §6). 코어가 내려
        * 주는 것은 코드와 근거 수치뿐이라 상의 이름도 근거 문장도 여기서 쓴다.
        */}
-      <div className="section-title">시상</div>
+      <h2 className="section-title">시상</h2>
       <div className="trophy-list">
         {career.awards.length === 0 && <div className="empty">시상 0</div>}
         {career.awards.map((a, i) => (
@@ -377,7 +377,7 @@ export function CareerView({
         ))}
       </div>
 
-      <div className="section-title">시즌 기록</div>
+      <h2 className="section-title">시즌 기록</h2>
       {seasonRows.length === 0 ? (
         <div className="empty">첫 시즌 진행 중</div>
       ) : (

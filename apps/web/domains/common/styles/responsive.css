@@ -8,10 +8,6 @@
  * 실제로 그랬다. 여기서는 한 열로 쌓고 스크롤을 페이지에 돌려준다.
  */
 @media (max-width: 1023px) {
-  .view-scroll.fill {
-    overflow-y: auto;
-    height: auto;
-  }
   .squad-view,
   .squad-layout {
     display: block;
@@ -245,13 +241,10 @@
     max-width: 100%;
   }
   .view-scroll {
-    padding: 12px;
+    --view-padding: 12px;
   }
   .finance-cards {
     grid-template-columns: 1fr 1fr;
-  }
-  .cal-months {
-    grid-template-columns: 1fr;
   }
   .fin-cols {
     grid-template-columns: 1fr;

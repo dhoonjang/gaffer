@@ -1,5 +1,6 @@
 "use client";
 
+import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MATCHDAY_BENCH,
@@ -115,6 +116,27 @@ export function SquadView({
   const players = squad.players;
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const boardRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const view = viewRef.current;
+    const scroll = view?.closest(".view-scroll");
+    const summary = view?.querySelector<HTMLElement>(".squad-summary");
+    const head = view?.querySelector<HTMLElement>(".squad-head");
+    if (!view || !scroll || !summary || !head) return;
+    // 요약이 줄바꿈할 때만 CSS sticky의 시작 높이를 갱신한다.
+    const measure = () => {
+      const height = head.getBoundingClientRect().height || summary.getBoundingClientRect().height;
+      view.style.setProperty("--squad-sticky-top", `${height}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(summary);
+    observer.observe(head);
+    measure();
+    return () => {
+      observer.disconnect();
+      view.style.removeProperty("--squad-sticky-top");
+    };
+  }, []);
   /** 직접 저장할 수 있는가 — 경기 중과 무직에는 아니다 (뷰의 `editable`이 판정한다) */
   const live = squad.editable;
   /** 무직 — 판은 옛 구단의 것이라 잠겨 있다 (career.md §5.1). 여기서는 문구만 가른다 */
@@ -883,6 +905,7 @@ export function SquadView({
      */
     <div
       className={`squad-view${boardOpen ? "" : " folded"}`}
+      ref={viewRef}
       data-testid="view-squad"
       data-save={
         advisory
@@ -930,14 +953,6 @@ export function SquadView({
             등록 <b>{squad.registration.listed}</b>/{squad.registration.limit} · HG{" "}
             <b>{squad.registration.homegrown}</b>/{squad.registration.homegrownMin}
           </span>
-          {/**
-           * 전술판 손잡이 — **글자가 아니라 상태로 알린다.**
-           *
-           * 눌린 채로 남는 버튼이라 지금 펼쳐져 있는지가 모양에 드러난다. 안내
-           * 문구를 붙이지 않는 것도 같은 이유다 — 누르면 판이 열리는 것을 보면 안다.
-           * 요약 줄 안에 두는 이유는 머리글이 **두 칸짜리 격자**이기 때문이다:
-           * 세 번째 칸으로 세우면 책갈피가 명단에서 한 줄 떨어진다.
-           */}
           {onToggleBoard && (
             <button
               className={`board-toggle${boardOpen ? " on" : ""}`}
@@ -949,52 +964,6 @@ export function SquadView({
               전술판
             </button>
           )}
-        </div>
-        {/*
-         * 저장 상태는 적지 않는다 — 자동 저장이라 "저장됨"은 늘 켜져 있는 등이고,
-         * 늘 켜진 등은 아무것도 알리지 않으면서 머리글 오른쪽을 차지한다.
-         * **실패했을 때만** 아래 경고 줄이 말한다.
-         */}
-        {/*
-         * 명단 머리(책갈피 + 정원)는 **위 요약 줄의 오른쪽 칸**에 선다.
-         *
-         * 명단 열 안에 두면 그 줄 높이(31px)만큼 표가 전술판보다 내려가 두 열의
-         * 윗변이 어긋난다. 이 줄이 `squad-layout`과 **같은 그리드**를 쓰므로
-         * 책갈피는 여전히 명단 바로 위에 서고, 표와도 이어진다.
-         */}
-        <div className="roster-head">
-          {/* 책갈피 — 고른 쪽이 아래 명단과 한 장으로 이어진다 */}
-          <div className="roster-tabs" role="tablist">
-            {(
-              [
-                ["first", "1군", players.length - onLoan.size - localReserve.size],
-                ["reserve", "2군", localReserve.size],
-                // 임대는 **있을 때만 선다** — 대부분의 세이브에 임대가 없고,
-                // 빈 책갈피는 눌러 봐야 빈 표다
-                ...(onLoan.size > 0 ? ([["loan", "임대", onLoan.size]] as const) : []),
-              ] as const
-            ).map(([key, label, count]) => (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={roster === key}
-                className={`roster-tab${roster === key ? " on" : ""}`}
-                onClick={() => setSquadFilter(key)}
-              >
-                {label}
-                <span className="roster-tab-n">{count}</span>
-              </button>
-            ))}
-          </div>
-          {/* 조작법 대신 숫자만 — 벤치 정원이 몇 자리 남았는지가 유일하게 필요한 정보다.
-              찬 자리는 글자 한 층 올라선다 — 그 순간 명단의 「매치데이 벤치로」가
-              잠기므로, 이 숫자가 잠긴 이유다 (design-system.md §1 조작) */}
-          <span className="roster-counts" data-testid="bench-count">
-            <span className={`roster-count-bench${benchFull ? " full" : ""}`}>
-              벤치 {benchDesignated.length}/{MATCHDAY_BENCH}
-            </span>{" "}
-            · 예비 {benchPlayers.length - benchDesignated.length}
-          </span>
         </div>
         {/* 무직 잠금은 버튼이 아니다 — 돌아갈 경기가 없고, 판의 잠긴 모양이 이미 말한다 */}
         {!live && !advisory && !dismissed && (
@@ -1020,7 +989,7 @@ export function SquadView({
        * 선다 (season.md §6). 소집일이 지나면 뷰가 null이라 이 판 자체가 사라진다.
        *
        * 읽는 값만 있다 — 고르는 일은 감독의 말로 일어나고, 여기 선 것은 그 결정의
-       * 근거다. 종합·잠재력이 구간과 물결표를 달고 있는 것은 **안개**다: 아직 우리
+       * 근거다. 종합은 관측값, 성장 가능성은 추정 단계다: 아직 우리
        * 선수가 아니라 참값을 볼 수 없다 (player.md §9).
        */}
       {squad.youthIntake && (
@@ -1039,8 +1008,8 @@ export function SquadView({
                 <span className="yc-ovr" title="추정 종합">
                   {c.overall}
                 </span>
-                <span className="yc-pot" title={c.potential.confidence}>
-                  {c.potential.low}–{c.potential.high}
+                <span className="yc-pot">
+                  성장 가능성 <GrowthOutlook overall={c.overall} potential={c.potential} />
                 </span>
                 <span className="muted">
                   {formatMoney(c.weeklyWage)}/주 · {c.years}년
@@ -1173,10 +1142,41 @@ export function SquadView({
         </div>
 
         <div className="squad-side-col">
+          <div className="roster-head">
+            {/* 책갈피 — 고른 쪽이 아래 명단과 한 장으로 이어진다 */}
+            <div className="roster-tabs" role="tablist">
+              {(
+                [
+                  ["first", "1군", players.length - onLoan.size - localReserve.size],
+                  ["reserve", "2군", localReserve.size],
+                  // 임대는 **있을 때만 선다** — 대부분의 세이브에 임대가 없고,
+                  // 빈 책갈피는 눌러 봐야 빈 표다
+                  ...(onLoan.size > 0 ? ([["loan", "임대", onLoan.size]] as const) : []),
+                ] as const
+              ).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  role="tab"
+                  aria-selected={roster === key}
+                  className={`roster-tab${roster === key ? " on" : ""}`}
+                  onClick={() => setSquadFilter(key)}
+                >
+                  {label}
+                  <span className="roster-tab-n">{count}</span>
+                </button>
+              ))}
+            </div>
+            {/* 조작법 대신 숫자만 — 벤치 정원이 몇 자리 남았는지가 유일하게 필요한 정보다.
+              찬 자리는 글자 한 층 올라선다 — 그 순간 명단의 「매치데이 벤치로」가
+              잠기므로, 이 숫자가 잠긴 이유다 (design-system.md §1 조작) */}
+            <span className="roster-counts" data-testid="bench-count">
+              <span className={`roster-count-bench${benchFull ? " full" : ""}`}>
+                벤치 {benchDesignated.length}/{MATCHDAY_BENCH}
+              </span>{" "}
+              · 예비 {benchPlayers.length - benchDesignated.length}
+            </span>
+          </div>
           <div className="roster-scroll">{rosterTable}</div>
-          {/* 명단 **아래**에 선다 — 전술판 옆에 두면 판이 매일 그만큼 눌리는데,
-              스쿼드 화면에서 늘 눌러야 하는 것은 판이다. 명단은 어차피 굴러가는
-              목록이라 이 높이를 내줘도 잃는 것이 없다 */}
           <StaffPanel staff={squad.staff} today={game.views.calendar.today} />
         </div>
       </div>
@@ -1200,7 +1200,7 @@ function StaffPanel({ staff, today }: { staff: OfficeStaff[]; today: string }) {
   return (
     <div className="club-staff" data-testid="club-staff">
       <div className="club-staff-head">
-        <b>스태프</b>
+        <h2 className="section-title">스태프</h2>
         <span className="muted">{staff.length}명</span>
       </div>
       <ul className="club-staff-list">
@@ -1211,17 +1211,23 @@ function StaffPanel({ staff, today }: { staff: OfficeStaff[]; today: string }) {
               <span className="cs-icon" aria-hidden>
                 <Icon size={13} />
               </span>
-              <span className="cs-name">{person.name}</span>
-              <span className="cs-title">{person.title}</span>
-              <span className="muted">{person.archetype}</span>
-              {/* 「부임 2년째」는 화면의 문장이다 — 코어가 내는 것은 날짜뿐이고,
-                  지난 햇수를 세는 규칙은 나이와 같은 함수를 쓴다 (`ageOf`) */}
-              {person.since && (
-                <span className="muted" title={`부임 ${humanDate(person.since, { year: true })}`}>
-                  부임 {ageOf(person.since, today) + 1}년째
-                </span>
+              <div className="cs-person">
+                <div className="cs-heading">
+                  <span className="cs-name">{person.name}</span>
+                  <span className="cs-title">{person.title}</span>
+                </div>
+                <div className="cs-meta">
+                  <span>{person.archetype}</span>
+                  {person.since && (
+                    <span title={`부임 ${humanDate(person.since, { year: true })}`}>
+                      부임 {ageOf(person.since, today) + 1}년째
+                    </span>
+                  )}
+                </div>
+              </div>
+              {person.until && (
+                <span className="cs-contract">계약 {contractUntil(person.until)}</span>
               )}
-              {person.until && <span className="muted">계약 {contractUntil(person.until)}</span>}
             </li>
           );
         })}

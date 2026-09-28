@@ -1529,7 +1529,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     `key`로 장부마다 새로 세운다 — 탭을 옮길 때 흐려졌다 든다 */}
                     <div
                       key={shownPanel ?? "none"}
-                      className={`view-scroll ledger-body${wide ? " wide" : ""}${shownPanel === "스쿼드" ? " fill" : ""}`}
+                      className={`view-scroll ledger-body${wide ? " wide" : ""}`}
                     >
                       {shownPanel === "스쿼드" && squadView(() => setPanel(null))}
                       {shownPanel === "달력" && (

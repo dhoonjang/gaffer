@@ -8,7 +8,7 @@ import {
   type GameState,
 } from "@story-fm/engine";
 import { slotOverallOf } from "../../domains/match/lib/slot-overall";
-import { ratingTone } from "../../domains/common/lib/scout-report-display";
+import { growthTier, ratingTone } from "../../domains/common/lib/scout-report-display";
 
 /**
  * 화면이 만드는 **순수 파생값** — `apps/web/lib`의 표시 규칙들이다. 문자열이 아니라
@@ -177,5 +177,48 @@ describe("관측 능력 표시", () => {
       "top",
       "top",
     ]);
+  });
+});
+
+describe("성장 가능성 단계", () => {
+  it.each([
+    [-5, 0],
+    [0, 0],
+    [2.5, 0],
+    [3, 1],
+    [5.5, 1],
+    [6, 2],
+    [9.5, 2],
+    [10, 3],
+    [14.5, 3],
+    [15, 4],
+    [19.5, 4],
+    [20, 4],
+    [24.5, 4],
+    [25, 5],
+    [30, 5],
+  ])("관측 성장 여지 %s의 경계를 판정한다", (gap, tier) => {
+    expect(growthTier(60, { low: 60 + gap - 2, high: 60 + gap + 2 })).toBe(tier);
+  });
+  it.each([
+    [40, 60, 4],
+    [60, 84.5, 4],
+    [65, 85, 5],
+    [65.5, 85, 4],
+    [70, 90, 5],
+    [71, 90, 4],
+    [90, 95, 1],
+  ])("종합 %s와 예상 도달 수준 %s를 함께 판단한다", (overall, ceiling, tier) => {
+    expect(growthTier(overall, { low: ceiling - 2, high: ceiling + 2 })).toBe(tier);
+  });
+  it("관측 정보가 없는 선수에게 등급을 만들어내지 않는다", () => {
+    expect(growthTier(70, null)).toBeNull();
+    expect(growthTier(null, { low: 80, high: 90 })).toBeNull();
+  });
+  it("최상위 이외의 단계는 현재 실력 대비 여지를 비교한다", () => {
+    expect(growthTier(60, { low: 75, high: 85 })).toBeGreaterThan(
+      growthTier(80, { low: 75, high: 85 })!,
+    );
+    expect(growthTier(60, { low: 70, high: 80 })).toBe(growthTier(70, { low: 80, high: 90 }));
   });
 });

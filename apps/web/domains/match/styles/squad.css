@@ -93,14 +93,6 @@
   padding-bottom: 8px;
 }
 /**
- * 스쿼드 화면의 뼈대 — 머리글은 고정, 그 아래가 남는 높이를 다 쓴다.
- *
- * 페이지 한 장이 통째로 스크롤되면 왼쪽 열(전술판 611 + 전술 패널 232)이
- * 화면보다 커서, 명단을 훑으려고 굴릴 때 전술판이 위로 사라지고 명단의 자체
- * 스크롤과 겹쳐 스크롤이 두 겹으로 움직인다. 화면 밖으로
- * 넘치는 건 명단 하나뿐이어야 한다.
- */
-/**
  * 머리 줄과 두 열 사이에는 **간격을 두지 않는다** — 오른쪽 책갈피가 명단 표에
  * 그대로 닿아야 한 장으로 읽힌다. 왼쪽 요약이 전술판과 떨어지는 몫은
  * `.squad-summary`의 아래 여백이 따로 갖는다.
@@ -110,6 +102,89 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+/* 오피스 본문이 세로 스크롤을 소유한다. 명단과 스태프는 내용 높이로 이어진다. */
+/* 여백은 스크롤 컨테이너 안에 둬 고정 머리가 컨테이너 끝까지 덮게 한다. */
+.view-scroll:has(> .squad-view) {
+  container-type: inline-size;
+  padding: 0;
+}
+.view-scroll .squad-view {
+  min-width: calc(560px + 2 * var(--view-padding));
+  height: auto;
+  padding: var(--view-padding);
+}
+.view-scroll .squad-layout,
+.view-scroll .board-stack,
+.view-scroll .pitch-wrap,
+.view-scroll .roster-scroll {
+  flex: none;
+}
+.view-scroll .pitch-wrap {
+  container-type: normal;
+}
+.view-scroll .pitch-board {
+  width: 100%;
+  height: auto;
+}
+.view-scroll .roster-scroll {
+  overflow: visible;
+  container-type: normal;
+}
+.view-scroll .roster-head,
+.view-scroll .club-staff {
+  position: sticky;
+  left: var(--view-padding);
+  width: 100%;
+  max-width: calc(100cqw - 2 * var(--view-padding));
+}
+/* 모바일의 head는 display: contents라 요약이 같은 고정 면을 직접 맡는다. */
+.view-scroll .squad-view .squad-head {
+  display: block;
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100cqw;
+  z-index: 31;
+  margin: calc(-1 * var(--view-padding)) calc(-1 * var(--view-padding)) 0;
+  padding: 8px var(--view-padding) 0;
+  background: var(--bg);
+}
+@media (max-width: 1023px) {
+  .view-scroll .squad-view .squad-head {
+    display: contents;
+  }
+  .view-scroll .squad-board-col {
+    max-width: calc(100cqw - 2 * var(--view-padding));
+  }
+  .view-scroll .squad-view .squad-summary {
+    position: sticky;
+    left: 0;
+    width: 100cqw;
+    top: 0;
+    z-index: 31;
+    margin: calc(-1 * var(--view-padding)) calc(-1 * var(--view-padding)) 0;
+    padding: 8px var(--view-padding) 8px;
+    background: var(--bg);
+  }
+}
+.squad-side-col > .roster-head {
+  order: 0;
+}
+.view-scroll .squad-table thead {
+  position: sticky;
+  top: var(--squad-sticky-top, 0px);
+  z-index: 2;
+  background: var(--bg);
+}
+.view-scroll .roster-scroll .squad-table thead th {
+  position: static;
+  background: var(--bg);
+  padding-block: 8px;
+  box-shadow: inset 0 -1px var(--border);
+}
+.view-scroll .roster-head {
+  border-bottom: 0;
 }
 /* 경고 줄은 위아래로 숨 쉴 자리가 필요하다 */
 .squad-view > .lineup-status {
@@ -540,40 +615,52 @@
   cursor: not-allowed;
 }
 
-/* 지금 심경 한 줄 — 숫자 위에 얹는 설명이라 눈에 먼저 들어와야 한다 */
+/* 행 상세의 설명과 조작은 상태 수치와 분리한다. */
+.pd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
 .pd-mood {
-  margin: 0 0 6px;
-  color: var(--text);
+  margin: 0;
+  color: var(--text-2);
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
-/* 상태 요약 — 박스 대신 한 줄 띠. 항목 사이는 얇은 선으로만 가른다 */
-/* 상세 요약 줄 끝의 조작 — 읽는 값들과 섞이지 않게 오른쪽 끝으로 민다 */
 .pd-action {
   margin-left: auto;
-  /* 요약 줄은 baseline 정렬이라 버튼만 글자 밑선에 매달린다 — 가운데로 세운다 */
-  align-self: center;
+  flex-shrink: 0;
 }
 .pd-action .ghost-btn {
-  font-size: var(--fs-xs);
-  padding: 3px var(--sp-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 4px 12px;
+  font-size: var(--fs-sm);
 }
 .pd-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 3px 14px;
-  padding-bottom: 7px;
+  align-items: center;
+  gap: 8px 18px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--pd-rule);
   color: var(--text-2);
   font-size: var(--fs-xs);
 }
 .pd-summary > span {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 5px;
 }
 .pd-summary b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--text);
   font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
@@ -842,6 +929,56 @@
   font-size: var(--fs-xs);
   line-height: 1.5;
 }
+.view-scroll .squad-table tr.detail-row .player-detail {
+  position: sticky;
+  left: var(--view-padding);
+  max-width: calc(100cqw - 2 * var(--view-padding) - 4px);
+}
+/* 상세의 구획 라벨은 하나의 열에 맞추고 내용 폭에 따라 능력치 열을 나눈다. */
+.player-detail .pd-body {
+  margin-top: 12px;
+  gap: 12px;
+}
+.player-detail .pd-side {
+  gap: 10px;
+  padding-bottom: 12px;
+}
+.player-detail .pd-positions,
+.player-detail .pd-roles,
+.player-detail .pd-axis-group {
+  gap: 12px;
+  align-items: baseline;
+}
+.player-detail .pd-positions {
+  padding: 0;
+  border: 0;
+}
+.player-detail .pd-axis-group-name {
+  flex: 0 0 40px;
+  text-align: left;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  letter-spacing: 0;
+}
+.player-detail .pd-role {
+  min-height: 28px;
+  padding: 4px 10px;
+}
+.player-detail .pd-axis-group {
+  padding: 6px 0;
+}
+.player-detail .pd-axes {
+  min-width: 0;
+  padding-left: 0;
+  border-left: 0;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 6px 18px;
+}
+.player-detail .pd-axis b {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* 커리어 — 시즌 × 팀의 표와 그 옆의 마일스톤. 능력치 격자 아래에 제 블록으로 선다 */
 .pd-career {
   display: flex;
@@ -1619,7 +1756,7 @@
   font-weight: 600;
 }
 /**
- * 이 화면에서 유일하게 스크롤하는 곳 — 남는 높이를 다 쓰고 그 안에서만 넘친다.
+ * 명단의 가로 스크롤 영역. 오피스에서는 내용 높이를 사용해 세로 스크롤을 만들지 않는다.
  *
  * **선수 상세의 기준 폭이기도 하다** (`container-type: inline-size`). 상세가 얼마나
  * 넓게 펼쳐질 수 있는지는 화면이 아니라 이 칸이 정한다 — 같은 1024px 화면이라도
@@ -1914,6 +2051,7 @@
  * 같은 두 톤(`--text`·`--text-2`)만 쓴다 — 늘 거기 있는 것은 눈에 띌 일이 없다.
  */
 .club-staff {
+  container-type: inline-size;
   /* 명단과 붙지 않는다 — 옆 열은 `gap: 0`이라(책갈피가 표에 닿아야 한다) 이 한 칸은
      제 여백을 스스로 갖는다 */
   margin-top: 10px;
@@ -1927,33 +2065,66 @@
   font-size: var(--fs-md);
   margin-bottom: 6px;
 }
+.club-staff-head .section-title {
+  margin: 0;
+}
 .club-staff-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
 }
 .club-staff-list li {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
   font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.club-staff-list li:last-child {
+  border-bottom: 0;
+}
+.cs-heading,
+.cs-meta {
+  display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
 }
-/* 값이지 손잡이가 아니다 — 읽는 칸은 폭만 고정하고 테두리를 두지 않는다 */
 .cs-name {
-  min-width: 6em;
+  font-size: var(--fs-md);
+  font-weight: 600;
 }
-/* 이름 다음으로 읽히는 사실은 훈련장의 어느 자리냐다 — 나머지 칸(원형·날짜)만
-   `.muted`로 물러선다. 색을 하나 더 쓰지 않고 두 톤으로 가른다 */
-.cs-title {
-  min-width: 5.4em;
-}
-/* 도형은 밑변이 없어 baseline에 얹으면 글자보다 처진다 — 이 칸만 가운데로 선다 */
-.cs-icon {
-  align-self: center;
-  display: inline-flex;
+.cs-title,
+.cs-meta,
+.cs-contract {
   color: var(--text-2);
+}
+.cs-person {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cs-meta > span + span::before {
+  content: "·";
+  margin-right: 8px;
+}
+.cs-contract {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cs-icon {
+  align-self: start;
+  display: inline-flex;
+  margin-top: 3px;
+  color: var(--text-2);
+}
+@container (max-width: 380px) {
+  .club-staff-list li {
+    grid-template-columns: 14px minmax(0, 1fr);
+  }
+  .cs-contract {
+    grid-column: 2;
+  }
 }

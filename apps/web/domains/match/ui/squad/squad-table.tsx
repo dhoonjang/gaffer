@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo } from "react";
 import { PROMISE_KIND_KO, formatRating, josaOf } from "@story-fm/domain";
+import { PlayerName } from "@/domains/common/ui/player-card";
 import { ConditionBar } from "@/domains/common/ui/condition-bar";
 import { IconChevron, IconChevronUp } from "@/domains/common/ui/icons";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
@@ -258,7 +259,7 @@ export function SquadTable({
                   {/* 세트피스 표식 — 완장 바로 옆이다. 둘 다 "이 선수가 맡은 자리"라
                       한 계열로 읽혀야 하고, 이름 뒤로 밀면 국적·자격 배지에 묻힌다 */}
                   <SetPieceMarks id={p.id} takers={setPieces} />
-                  {p.name}
+                  <PlayerName id={p.id} name={p.name} />
                 </span>
                 {/* 국적 — **표식이 아니라 사실**이라 알약이 아니다. 등록 표식(HG·U21)과
                     같은 모양으로 두면 "이 선수가 무엇에 해당한다"로 읽힌다.

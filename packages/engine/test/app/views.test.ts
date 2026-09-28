@@ -32,6 +32,7 @@ import {
   seasonLabelOf,
   type GameState,
 } from "@story-fm/engine";
+import { competitionSeasonsOf } from "../../src/match/views/competition";
 import { FINANCE_CATEGORY_KO } from "@story-fm/domain";
 import { matchFatigueOf } from "@story-fm/sim";
 import { observationOf } from "../../src/common/players/observation";
@@ -825,7 +826,6 @@ describe("대회 뷰 — 역대", () => {
   const league = buildOfficeViews(state).competitions.list[0]!;
   const leagueId = league.id;
   const others = league.standings.map((r) => r.teamId).filter((id) => id !== state.userTeamId);
-  const seeded = league.honours?.count ?? 0;
   // 우승한 시즌과 중위권 시즌의 순서는 서로 다르다
   const champOrder = [state.userTeamId, ...others];
   const midOrder = [...others.slice(0, 3), state.userTeamId, ...others.slice(3)];
@@ -931,13 +931,39 @@ describe("대회 뷰 — 역대", () => {
     expect(mid.champion!.teamId).toBe(midOrder[0]);
   });
 
-  it("역대 우승은 카탈로그 시드에 게임 안의 우승을 더한 것이다", () => {
-    const honours = view().honours!;
-    expect(honours.seeded).toBe(seeded);
-    expect(honours.count).toBe(seeded + 1);
-    expect(honours.won).toEqual([
-      { season: state.season - 1, label: seasonLabelOf(state.season - 1) },
+  it("트로피만 있는 시즌도 포함하고 같은 시즌의 표와 중복하지 않는다", () => {
+    const cup = {
+      ...state,
+      history: [],
+      trophies: [
+        ...state.trophies,
+        {
+          season: state.season,
+          competitionId: "fa-cup",
+          teamId: others[1]!,
+          runnerUpTeamId: others[0]!,
+        },
+      ],
+    };
+    const seasons = competitionSeasonsOf(cup, "fa-cup");
+    expect(seasons.map((s) => s.season)).toEqual([state.season, state.season - 1]);
+    expect(seasons[0]!.champion).toMatchObject({ teamId: others[1]!, ours: false });
+    expect(seasons[0]!.runnerUp?.teamId).toBe(others[0]);
+    expect(seasons[1]!.champion?.teamId).toBe(others[0]);
+    expect(competitionSeasonsOf(state, leagueId).map((s) => s.season)).toEqual([
+      state.season - 1,
+      state.season - 2,
     ]);
+  });
+
+  it("리그 최종 순위표가 우승 원장보다 우선하며 시드 횟수로 시즌을 만들지 않는다", () => {
+    const conflict = {
+      ...state,
+      trophies: [{ season: state.season - 1, competitionId: leagueId, teamId: others[0]! }],
+    };
+    expect(competitionSeasonsOf(conflict, leagueId)[0]!.champion?.teamId).toBe(state.userTeamId);
+    expect(competitionSeasonsOf({ ...state, history: [], trophies: [] }, leagueId)).toEqual([]);
+    expect(competitionSeasonsOf(state, "unknown-competition")).toEqual([]);
   });
 
   it("감독의 보관함엔 AI 구단의 우승이 서지 않는다", () => {

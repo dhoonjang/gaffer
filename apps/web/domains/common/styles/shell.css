@@ -85,6 +85,7 @@
   --club-hi: #c9c4ba;
   /* 리그 슬롯 — 카탈로그가 색을 주지 못할 때의 기본값. 주입은 리그 행이 한다 (§2-1) */
   --league-hi: #c9c4ba;
+  --row-highlight: color-mix(in srgb, white 8%, var(--bg));
   --club-wash: var(--panel);
   --club-wash-pop: var(--pop);
   --role-coach: var(--accent-2);
@@ -122,12 +123,12 @@
 
   /* 글자 눈금 — 아홉 칸. 12px과 12.5px의 차이는 위계로 읽히지 않는다 */
   --fs-2xs: 10px; /* 칩 꼬리표 · 표 머리 · 국적 태그 */
-  --fs-xs: 11px; /* 배지 · 데이트라인 · 섹션 라벨 · 직책 칩 */
+  --fs-xs: 11px; /* 배지 · 데이트라인 · 직책 칩 */
   --fs-sm: 12px; /* 표 셀 · 순위표 · 시계 */
   --fs-md: 13px; /* 장부 본문 보조 · 선수 이름 셀 · 버튼 */
   --fs-base: 14px; /* UI 본문 · 칩 글자 */
-  --fs-lg: 16px; /* 소제목 · 구단명 · 채팅 산문 */
-  --fs-xl: 20px; /* 섹션 제목 · 홀로 서는 수치 */
+  --fs-lg: 16px; /* 섹션 제목 · 구단명 · 채팅 산문 */
+  --fs-xl: 20px; /* 패널 화면 제목 · 홀로 서는 수치 */
   --fs-2xl: 28px; /* 화면 제목 · 온보딩 질문 · 보조 KPI */
   --fs-3xl: 40px; /* 스코어 · 잔고 KPI — `--font-score` 700 전용 */
 
@@ -2561,8 +2562,9 @@ textarea {
   }
 }
 .view-scroll {
+  --view-padding: var(--sp-4);
   overflow-y: auto;
-  padding: var(--sp-4);
+  padding: var(--view-padding);
   max-width: 900px;
   width: 100%;
   margin: 0 auto;
@@ -2570,13 +2572,6 @@ textarea {
 /* 스쿼드·달력 — 전술판+명단, 열두 달 격자처럼 폭이 곧 가독성인 화면 */
 .view-scroll.wide {
   max-width: 1400px;
-}
-/* 화면을 넘기지 않는 뷰 — 스크롤은 안쪽의 한 곳(명단)이 갖는다.
-   페이지가 통째로 스크롤되면 명단을 훑는 동안 전술판이 위로 사라진다 */
-.view-scroll.fill {
-  overflow: hidden;
-  height: 100%;
-  min-height: 0;
 }
 
 /* 채팅 */
@@ -3383,9 +3378,9 @@ textarea {
   padding: 7px 6px;
   border-bottom: 1px solid var(--line);
 }
-/* 우리 행 — 구단 워시 */
+/* 우리 팀 행 — 구단색과 무관한 중립 강조 */
 .ledger-body tr.me td {
-  background: var(--club-wash);
+  background: var(--row-highlight);
 }
 
 /**
