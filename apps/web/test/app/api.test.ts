@@ -1205,12 +1205,12 @@ describe("계측 라우트 — 히트율의 문턱", () => {
     const body = (await (await usageGet()).json()) as UsageResponse;
     expect(body.gameId).toBe("usage-test");
     const gm = body.agents.find((a) => a.agent === "gm")!;
-    const rater = body.agents.find((a) => a.agent === "history-compactor")!;
+    const compactor = body.agents.find((a) => a.agent === "history-compactor")!;
     expect(gm.avgInput).toBe(1000);
     expect(gm.cacheHitRate).toBeNull();
-    expect(rater.cacheHitRate).toBeCloseTo(0.4, 6);
+    expect(compactor.cacheHitRate).toBeCloseTo(0.4, 6);
     // 부르지 않은 자리는 「캐시가 안 걸렸다」가 아니라 잰 것이 없다
-    expect(body.agents.find((a) => a.agent === "history-compactor")!.cacheHitRate).toBeNull();
+    expect(body.agents.find((a) => a.agent === "negotiation-gm")!.cacheHitRate).toBeNull();
     expect(body.totals.billed).toBe(21_300);
     resetLlmUsage();
   });
