@@ -67,7 +67,6 @@ import { formatMoney } from "../negotiation/finance/finance";
 import { observedPlayerFacts, youthCandidateFog } from "../common/players/observation";
 import { derbyRecordOf } from "../common/world/derby";
 import { derbyOf } from "../common/data/derbies";
-import { spendLine, transferFundRoom } from "../negotiation/finance/manager-wallet";
 import {
   buildMatchReport,
   type MatchReportEventView,
@@ -192,7 +191,6 @@ import {
   groupOf,
   isAvailableFor,
   isOurPlayer,
-  managedTeamId,
   onLoanFromUs,
   openInjury,
   ourPlayers,
@@ -1164,9 +1162,7 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
       `스카우트 보고서: ${lastReport.completedOn} 도착 · ` +
         `시장가 ${formatMoney(observedMarketValue(state, p))} · ` +
         `요구액 ${formatMoney(askingPriceFor(state, p))} · ` +
-        `기대 주급 ${formatMoney(wageExpectationOf(state, p))}` +
-        // 스카우트가 남긴 한 줄 — 감독의 모달이 읽는 그 문장이다 (agents.md §4-4)
-        (lastReport.verdict ? ` · “${lastReport.verdict}”` : ""),
+        `기대 주급 ${formatMoney(wageExpectationOf(state, p))}`,
     );
   }
 
@@ -2762,14 +2758,6 @@ export function careerView(state: GameState): LookupResult {
                 // 비갱신 통보는 만료일이 곧 끝이라는 사실이다 (career.md §5.4)
                 (m.contract.renewalOffered === false ? ` · 보드는 재계약하지 않기로 했다` : ""),
             ]
-          : []),
-        `지갑: ${formatMoney(m.wallet)}` +
-          // 지갑은 눈금이 아니라 쓸 수 있는 돈이다 — 남은 문이 그 자리에 함께 선다 (career.md §5.4)
-          (managedTeamId(state) === null
-            ? ""
-            : ` · 이번 시즌 사재 출연 여력 ${formatMoney(transferFundRoom(state))}`),
-        ...(m.spending.length > 0
-          ? [`최근 사재 지출: ${[...m.spending].reverse().slice(0, 5).map(spendLine).join(" / ")}`]
           : []),
         // 재직 중에 서는 제안은 재계약 하나다 — 답할 자리라 여기 선다 (career.md §5.4)
         ...openManagerOffers(state)

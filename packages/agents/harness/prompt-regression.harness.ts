@@ -1,24 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  MARKET_OPS,
-  MARKET_ORDERS_SYSTEM,
-  MATCH_READER_SPEC,
-  TACTIC_CAPS,
-  TACTIC_OPS,
-  TACTIC_ORDERS_SYSTEM,
-  TRAINING_OPS,
-  TRAINING_ORDERS_SYSTEM,
-  buildOpsSchema,
-  buildToolSpecs,
-  type OpsCaps,
   GM_SYSTEM,
   MATCH_GM_SYSTEM,
-  MATCH_TOOL_DEFINITIONS,
-  SETTLE_MATCH_INPUT,
+  buildMatchTools,
+  FINALIZE_MATCH_RULES,
   SKILL_CATALOG,
   buildGmReference,
   buildGmStateNote,
-  buildTrainingPrompt,
+  buildTrainingRequest,
   parseSceneHeader,
   runGmTurn,
   sanitizeCasterText,
@@ -92,43 +81,18 @@ function gmSystemParts(): { map: number; guide: number; example: number } {
   };
 }
 
-/**
- * 경기 마감의 고정층 — 마감 에이전트가 요청에 싣는 출력 스키마(결산 규칙은 시스템
- * 프롬프트로 옮겨 갔다 — models.md §3-2). 경기당 한 번 실리므로 고정층 예산과는 다른
- * 눈금이다 (agents.md §3).
- */
+/** 경기 결산 Jev 요청의 공통 규칙. 선수별 질문과 사실은 변동층이다. */
 function settlementLayer(): number {
-  return JSON.stringify(SETTLE_MATCH_INPUT).length;
+  return FINALIZE_MATCH_RULES.length;
 }
 
-/**
- * 해석기 하나가 매 호출에 싣는 고정층 — 시스템 프롬프트 + `ops`의 인자 스키마.
- *
- * 인자 스키마가 **명령의 도구 정의에서 그대로 오므로**(agents.md §1), 명령 하나의 설명이
- * 길어지면 그 명령을 든 해석기의 요청이 그만큼 길어진다 — 평시 고정층과 달리 아무도
- * 보지 않던 자리라 여기서 잰다.
- */
-function interpreterLayer(ops: readonly string[], system: string, caps: OpsCaps = {}): number {
-  const state = build(7, "최감독", BACKGROUND);
-  const specs = new Map(buildToolSpecs(state, []).map((t) => [t.name, t] as const));
-  return system.length + JSON.stringify(buildOpsSchema(specs, ops, "인자", caps)).length;
-}
-
-/**
- * 판독기의 고정층 — 시스템 프롬프트 + 산출 스키마(명령 인자 · 포인트 · 시트).
- *
- * 해석기와 눈금이 같지만 자리가 다르다: 경기의 세 자리(킥오프·지시 턴·구간 뒤)에서
- * 매번 실리므로 구간마다 한 번씩 나간다 (agents.md §3).
- */
-function readerLayer(): number {
-  const state = build(7, "최감독", BACKGROUND);
-  const specs = new Map(buildToolSpecs(state, []).map((t) => [t.name, t] as const));
-  return MATCH_READER_SPEC.system.length + JSON.stringify(MATCH_READER_SPEC.schema(specs)).length;
-}
-
-/** 경기의 고정층 — 매치 GM 프롬프트 + 경기 도구 셋. 매 경기 턴의 캐시 프리픽스다 */
+/** 경기의 고정층 — 매치 GM 프롬프트 + 경기 도구 둘. 매 경기 턴의 캐시 프리픽스다 */
 function matchLayer(): number {
-  return MATCH_GM_SYSTEM.length + JSON.stringify(MATCH_TOOL_DEFINITIONS).length;
+  const state = build(7, "최감독", BACKGROUND);
+  const tools = buildMatchTools(state, { calls: [], goals: [], cards: [] }).map(
+    ({ name, description, inputSchema }) => ({ name, description, inputSchema }),
+  );
+  return MATCH_GM_SYSTEM.length + JSON.stringify(tools).length;
 }
 
 /** 새 게임 첫날부터 첫 경기일까지 — 소집 뒤 며칠의 훈련이 이 안에 든다 */
@@ -146,7 +110,7 @@ function trainingBriefChars(seed: number): number {
     if (moved.stopped === "blocked" || moved.stopped === "matchday") break;
   }
   const brief = buildTrainingBrief(state, sessions, { from, to: state.date });
-  return brief ? buildTrainingPrompt(brief).length : 0;
+  return brief ? JSON.stringify(buildTrainingRequest(brief)).length : 0;
 }
 
 /** 프리픽스 안정성 — 바이트까지 같으면 1, 아니면 0. 중간값이 없는 질문이다 */
@@ -292,10 +256,6 @@ describe("프롬프트 회귀", () => {
       "가장 긴 도구 설명 글자": Math.max(...SKILL_CATALOG.map((s) => s.description.length)),
       "경기 고정층 글자": matchLayer(),
       "경기 마감 고정층 글자": settlementLayer(),
-      "전술 해석 고정층 글자": interpreterLayer(TACTIC_OPS, TACTIC_ORDERS_SYSTEM, TACTIC_CAPS),
-      "판독기 고정층 글자": readerLayer(),
-      "훈련 해석 고정층 글자": interpreterLayer(TRAINING_OPS, TRAINING_ORDERS_SYSTEM),
-      "시장 해석 고정층 글자": interpreterLayer(MARKET_OPS, MARKET_ORDERS_SYSTEM),
       "훈련 브리프 글자": trainingBriefChars(13),
       "레퍼런스층 글자": reference.length,
       "매 턴 층 글자": stateNote.length,

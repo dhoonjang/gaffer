@@ -14,7 +14,6 @@ import {
   type RatingTier,
   SCOUT_CONCURRENT_LIMIT,
   SCOUT_DEFER_DAYS,
-  SCOUT_VERDICT_MAX,
   type ScoutMission,
   type ScoutReport,
 } from "@story-fm/domain";
@@ -67,8 +66,7 @@ export function openScoutReport(state: GameState, playerId: string): ScoutReport
  * **도착한 마지막 보고서** — 카드도 모달도 조회 도구도 여기서 같은 한 장을 본다.
  *
  * 같은 선수에게 세 번까지 보낼 수 있으므로(`SCOUT_REPEAT_LIMIT`) 완료된 것이 여럿일 수
- * 있다. 마지막 것이 답인 이유는 그 사이 안개가 좁아졌기 때문이다 — 첫 보고서의 평은
- * 지금 카드가 그리는 숫자를 더는 말하지 않는다 (player.md §9.4-1).
+ * 있다. 마지막 완료 시점이 현재 관측 수준에 해당한다 (player.md §9.4-1).
  */
 export function arrivedScoutReport(state: GameState, playerId: string): ScoutReport | null {
   let last: ScoutReport | null = null;
@@ -76,22 +74,6 @@ export function arrivedScoutReport(state: GameState, playerId: string): ScoutRep
     if (r.gamePlayerId === playerId && r.completedOn !== null) last = r;
   }
   return last;
-}
-
-/**
- * 한 줄 평을 보고서에 남긴다 — **덮어쓰지 않는다.**
- *
- * 평이 이미 있으면 그대로 둔다: 카드는 한 번 서지만 모달은 언제든 다시 열리고, 같은
- * 보고서에 두 문장이 서면 어느 쪽이 그 선수인지 알 수 없다
- * (docs/common/llm/agents.md §4-4). 길이는 코어가 자른다 — 판정자가 문단을 보내도 서류는
- * 한 줄이다.
- */
-export function recordScoutVerdict(state: GameState, playerId: string, verdict: string): boolean {
-  const report = arrivedScoutReport(state, playerId);
-  const text = verdict.trim().slice(0, SCOUT_VERDICT_MAX);
-  if (!report || report.verdict !== undefined || text.length === 0) return false;
-  report.verdict = text;
-  return true;
 }
 
 /**

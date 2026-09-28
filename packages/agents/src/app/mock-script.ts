@@ -1,4 +1,7 @@
-import type { MatchEvent, Point, SheetLine, ShootoutOutcome } from "@story-fm/domain";
+import { TACTIC_OPS } from "../match/tactic-orders";
+import { TRAINING_OPS } from "../story/training-orders";
+import { MARKET_OPS } from "../negotiation/market-orders";
+import type { MatchEvent, ShootoutOutcome } from "@story-fm/domain";
 import { eventCauseText, formatScore, shootoutTally } from "@story-fm/domain";
 import {
   addDays,
@@ -9,7 +12,6 @@ import {
   formatClock,
   minutesOfClock,
   nextMatchFor,
-  playerById,
   playerName,
   renewalExpectation,
   roomNegotiationOf,
@@ -18,9 +20,7 @@ import {
   tableVoicesOf,
   teamName,
   unseenEvents,
-  userSide,
   type GameState,
-  type ReadingOccasion,
 } from "@story-fm/engine";
 import type { ScriptedCall, ScriptedTurn } from "@story-fm/llm";
 import { eventMinuteText, scoreBeforeEvents } from "../match/match-script";
@@ -65,9 +65,6 @@ interface ScriptLine {
   ops?: (ctx: ScriptContext) => OpsInput;
 }
 
-/** 손잡이 하나 — 인자가 없다. 감독의 말은 코어가 해석기에 넘긴다 (실모드와 같다) */
-const orders = (tool: string): ScriptedCall[] => [{ tool }];
-
 /**
  * **감독의 다음 말 하나** — 실모드의 GM이 장면 마지막 줄에 태그로 내는 것을 대본도 매 턴
  * 낸다 (agents.md §8 · prompts.md §1). 글은 전부 표의 키다: Tab으로 받아 그대로 보내면 그
@@ -103,37 +100,30 @@ const RENEWAL_YEARS = 3;
 const SCRIPT: readonly ScriptLine[] = [
   {
     say: "훈련 잡아줘",
-    gm: () => orders("training_orders"),
     ops: () => weekly(WEEKDAYS, "빌드업", ["passing", "vision"]),
   },
   {
     say: "평일 오전은 세트피스 반복 훈련 잡아줘",
-    gm: () => orders("training_orders"),
     ops: () => weekly(WEEKDAYS, "세트피스", ["kicking", "finishing"]),
   },
   {
     say: "월요일 오전은 세트피스 반복 훈련 잡아줘",
-    gm: () => orders("training_orders"),
     ops: () => weekly([1], "세트피스", ["kicking", "finishing"]),
   },
   {
     say: "훈련 쉬자",
-    gm: () => orders("training_orders"),
     ops: ({ state }) => ({ set_training: [{ clear: { from: state.date, rest: true } }] }),
   },
   {
     say: "4-4-2로 바꾸고 공격적으로 가자",
-    gm: () => orders("tactic_orders"),
     ops: () => ({ set_tactics: [{ mentality: 4 }] }),
   },
   {
     say: "4-4-2로 수비적으로 가자",
-    gm: () => orders("tactic_orders"),
     ops: () => ({ set_tactics: [{ mentality: 2 }] }),
   },
   {
     say: `${NAME_SLOT} 주장 시키자`,
-    gm: () => orders("tactic_orders"),
     ops: ({ named }) => ({ set_captain: [{ playerId: named }] }),
   },
   {
@@ -172,7 +162,6 @@ const SCRIPT: readonly ScriptLine[] = [
   { say: "하루 넘기자", skip: 1 },
   {
     say: "계약 만료 다가오는 선수 재계약 하자",
-    gm: () => orders("market_orders"),
     ops: ({ state }): OpsInput => {
       const who = expiringContracts(state, RENEWAL_HORIZON_DAYS)[0]?.player;
       if (!who) return {};
@@ -186,15 +175,15 @@ const SCRIPT: readonly ScriptLine[] = [
   {
     // 단장에게 맡긴다 — 협상이 없으면 이 명령이 코어의 자로 연다 (transfer.md §12-4)
     say: `${NAME_SLOT} 재계약은 맡겨`,
-    gm: () => orders("market_orders"),
     ops: ({ state, named }): OpsInput => {
       const who = state.players.find((p) => p.name === named && p.teamId === state.userTeamId);
-      return who ? { delegate_negotiation: [{ playerId: who.id, kind: "renew" }] } : {};
+      return who
+        ? { delegate_negotiation: [{ playerId: who.id, kind: "renew", scope: "player" }] }
+        : {};
     },
   },
   {
     say: `${NAME_SLOT} 영입하자`,
-    gm: () => orders("market_orders"),
     /**
      * 이적료는 **코어가 부르는 자**를 그대로 쓴다(`suggestTerms`) — 감독이 액수를
      * 말하지 않은 오퍼는 실모드에서 나가지 않으므로(`missingFeeNote`), 대본이 그
@@ -250,7 +239,6 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: "이적 건 마무리하자",
-    gm: () => orders("market_orders"),
     ops: ({ state }): OpsInput => {
       const agreed = state.negotiations.find((n) => n.status === "agreed");
       return agreed ? { accept_deal: [{ negotiationId: agreed.id }] } : {};
@@ -347,6 +335,14 @@ export function peaceScript(
   const line = hit?.line ?? null;
   const header = pointOf(state, line);
   const calls = hit?.line.gm?.({ state, named: hit.named }) ?? [];
+  const ops = hit?.line.ops?.({ state, named: hit.named }) ?? {};
+  for (const [tool, names] of [
+    ["tactic_orders", TACTIC_OPS],
+    ["training_orders", TRAINING_OPS],
+    ["market_orders", MARKET_OPS],
+  ] as const) {
+    if (names.some((name) => (ops[name]?.length ?? 0) > 0)) calls.unshift({ tool, input: {} });
+  }
   const stands = options.recorded || calls.length > 0 || line?.skip !== undefined;
   // 제안 줄은 장면이 아니다 — 코어가 꺼내 가고 위생이 걷으므로 장면이 서는지는 앞 줄들이 정한다
   const suggested = suggestLine(peaceSuggestion(state, line));
@@ -361,73 +357,6 @@ export function ordersScript(state: GameState, said: string): ScriptedTurn {
   const ops = hit?.line.ops?.({ state, named: hit.named }) ?? {};
   // 실모드의 해석기와 같은 산출 — 도구가 아니라 `{ ops }` JSON 하나다 (models.md §3-2)
   return { output: { ops } };
-}
-
-/** 대본의 판독이 쓰는 포인트 id — 판독하는 자리(킥오프·지시·사건 뒤)가 같은 줄을 이어 쓴다 */
-const MOCK_POINT_EDGE = "mock-edge";
-const MOCK_POINT_COHESION = "mock-cohesion";
-
-/**
- * **대본이 쓰는 전술 포인트와 시트** — 실모드의 판독기가 서는 자리다 (agents.md §3 mock).
- *
- * 겨냥하는 사람은 지어내지 않는다: 지금 그라운드에 선 우리 최고 전력과 상대 최저
- * 전력을 진행 중인 경기의 명단에서 꺼내 쓰므로, 코어의 실재 확인을 그대로 지나 판세에 시트가
- * 선다. 실모드와 다른 것은 저자뿐이다.
- */
-function mockReading(state: GameState): { points: Point[]; sheet: SheetLine[] } {
-  const pending = state.pendingMatch;
-  if (!pending) return { points: [], sheet: [] };
-  const ours = userSide(state);
-  const theirs = ours === "home" ? "away" : "home";
-  const overallOf = (id: string) => playerById(state, id)?.attributes.overall ?? 0;
-  const field = (side: "home" | "away") =>
-    pending.live.slots[side].filter((slot) => slot.position !== "GK");
-  const strongest = [...field(ours)].sort(
-    (a, b) => overallOf(b.playerId) - overallOf(a.playerId),
-  )[0];
-  const weakest = [...field(theirs)].sort(
-    (a, b) => overallOf(a.playerId) - overallOf(b.playerId),
-  )[0];
-  if (!strongest || !weakest) return { points: [], sheet: [] };
-  return {
-    points: [
-      {
-        id: MOCK_POINT_EDGE,
-        text: `${playerName(state, strongest.playerId)}가 ${playerName(state, weakest.playerId)}의 뒤를 노린다`,
-        about: [strongest.playerId, weakest.playerId],
-        importance: 2,
-      },
-      {
-        id: MOCK_POINT_COHESION,
-        text: `벤치의 주문이 그라운드에 또렷이 닿는다`,
-        about: [ours],
-        importance: 1,
-      },
-    ],
-    sheet: [
-      {
-        pointId: MOCK_POINT_EDGE,
-        target: { player: weakest.playerId },
-        shape: "edge",
-        sign: -1,
-        step: 2,
-      },
-      { pointId: MOCK_POINT_COHESION, target: { side: ours }, shape: "cohesion", sign: 1, step: 1 },
-    ],
-  };
-}
-
-/**
- * **판독기의 대본.** 감독이 말한 턴이면 표의 같은 줄이 `ops`를 주고, 포인트와 시트는
- * 세 자리 모두 같은 한 벌이다 — 실모드와 같이 산출 JSON 하나로 답한다.
- */
-export function readerScript(
-  state: GameState,
-  options: { occasion: ReadingOccasion; said?: string },
-): ScriptedTurn {
-  const hit = options.said === undefined ? null : findLine(options.said);
-  const ops = hit?.line.ops?.({ state, named: hit.named }) ?? {};
-  return { output: { ops, ...mockReading(state) } };
 }
 
 // ── 협상 방 ─────────────────────────────────────────────
@@ -501,9 +430,9 @@ export function negotiationScript(
     };
   }
   const hit = findLine(options.message);
-  const planned =
-    hit?.line.gm?.({ state, named: hit.named }) ??
-    (hit?.line.ops ? [{ tool: "negotiation_orders" }, ROOM_REPLY] : [ROOM_REPLY]);
+  const planned = hit?.line.gm?.({ state, named: hit.named }) ?? [ROOM_REPLY];
+  if (hit?.line.ops && Object.keys(hit.line.ops({ state, named: hit.named })).length > 0)
+    planned.unshift({ tool: "negotiation_orders", input: {} });
   return {
     calls: planned.filter((call) => has(call.tool)),
     text: [header, `@${who}: 검토해 보겠습니다.`, suggestLine(ROOM_SUGGESTION)].join("\n"),
@@ -659,7 +588,7 @@ function shootoutLines(state: GameState): string[] {
  */
 export function matchScript(
   state: GameState,
-  options: { kickoff: boolean; operator: boolean },
+  options: { kickoff: boolean; operator: boolean; message?: string },
 ): ScriptedTurn {
   const suggested = suggestLine(MATCH_SUGGESTION);
   const pending = state.pendingMatch;
@@ -691,5 +620,12 @@ export function matchScript(
   // 사건 없이 멈춘 턴에도 한 줄은 선다 — 빈 장면은 턴이 취소되는 자리다
   if (lines.length === 0) lines.push(`@중계: ${minute}′ — ${scoreLine(state, now)}.`);
   lines.push(suggested);
-  return { text: lines.join("\n") };
+  const hit = options.message ? findLine(options.message) : null;
+  const commands = hit?.line.ops?.({ state, named: hit.named }) ?? {};
+  return {
+    text: lines.join("\n"),
+    ...(!options.operator && Object.keys(commands).length > 0
+      ? { calls: [{ tool: "tactic_orders", input: {} }] }
+      : {}),
+  };
 }

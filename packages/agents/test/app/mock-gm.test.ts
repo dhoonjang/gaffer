@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { STOP_EVENT_TYPES, isMandated } from "@story-fm/domain";
+import { STOP_EVENT_TYPES, isMandated, MANAGER_TERMS_BY_TIER } from "@story-fm/domain";
 import {
   activeContract,
+  tierOfTeamIn,
   addDays,
   advanceTime,
   arrivedResponses,
@@ -27,6 +28,7 @@ import {
 } from "@story-fm/engine";
 import {
   SUGGESTION_MAX_CHARS,
+  applyInstructionBatch,
   TABLE_LEFT,
   TIME_PASSED,
   buildOnboardingTurn,
@@ -413,12 +415,13 @@ describe("mock 대본 — 협상 방", () => {
     const state = newGame();
     const target = acceptableTarget(state);
     const from = state.date;
-    const negotiation = await seatWith(state, target.name);
+    let negotiation = await seatWith(state, target.name);
     expect(negotiation.gamePlayerId).toBe(target.id);
     expect(negotiation.rounds).toHaveLength(0);
     expect(state.pendingNegotiation?.party).toBe("club");
 
     const spoke = await runGmTurn(state, "제안한 조건으로 갑시다");
+    negotiation = state.negotiations.find((entry) => entry.id === negotiation.id)!;
     expectGmGrammar(spoke.text);
     // 감독의 말은 코어가 단장의 테이블에 us 줄로 적었다
     expect(tableOf(negotiation, "club")?.lines.some((l) => l.by === "us")).toBe(true);
@@ -438,6 +441,7 @@ describe("mock 대본 — 협상 방", () => {
     expect(same.id).toBe(negotiation.id);
     expect(state.pendingNegotiation?.party).toBe("agent");
     const personal = await runGmTurn(state, "제안한 조건으로 갑시다");
+    negotiation = state.negotiations.find((entry) => entry.id === negotiation.id)!;
     expectGmGrammar(personal.text);
     expect(namesOf(personal)).toContain("propose_personal");
     expect(namesOf(personal)).not.toContain("send_offer");
@@ -482,5 +486,91 @@ describe("mock 대본 — 협상 방", () => {
     expect(namesOf(left)).toContain("leave_negotiation");
     expect(state.phase).toBe("idle");
     expect(negotiation.status).toBe("open");
+  });
+});
+
+describe("지시 묶음의 상태 경계", () => {
+  it("연속 목록 추가는 앞선 명령의 결과를 유지한다", () => {
+    const state = newGame();
+    const selected = state.players
+      .filter((player) => player.teamId === state.userTeamId)
+      .slice(0, 2);
+    selected.forEach((player) => {
+      player.squadLevel = "reserve";
+    });
+    state.developmentFocus = [];
+    const result = applyInstructionBatch(
+      state,
+      [],
+      {
+        ops: {
+          set_development_focus: selected.map((player) => ({
+            listMode: "add",
+            playerIds: [player.id],
+          })),
+        },
+      },
+      ["set_development_focus"],
+    );
+    expect(result).toMatchObject({ rejected: false, applied: 2 });
+    expect(state.developmentFocus).toEqual(selected.map((player) => player.id));
+    const before = structuredClone(state);
+    expect(
+      applyInstructionBatch(state, [], { ops: { set_development_focus: [{}] } }, [
+        "set_development_focus",
+      ]).rejected,
+    ).toBe(true);
+    expect(state).toEqual(before);
+  });
+
+  it("위임 범위 생략은 전체 위임이나 전체 철회가 되지 않는다", () => {
+    const state = newGame();
+    for (const name of ["delegate_negotiation", "revoke_mandate"]) {
+      const before = structuredClone(state);
+      const result = applyInstructionBatch(state, [], { ops: { [name]: [{}] } }, [name]);
+      expect(result.rejected).toBe(true);
+      expect(state).toEqual(before);
+    }
+  });
+
+  it("부임이 지운 경질 상태는 원자적 반영 뒤에도 사라진다", () => {
+    const state = newGame();
+    state.dismissal = {
+      teamId: state.userTeamId,
+      on: state.date,
+      season: state.season,
+      kind: "sacked",
+      tier: 1,
+      target: 10,
+      expectationCode: "mid",
+    };
+    delete state.manager.contract;
+    state.managerOffers = [
+      {
+        id: "mgr-offer-test",
+        teamId: "everton",
+        madeOn: state.date,
+        expiresOn: addDays(state.date, 10),
+        tier: tierOfTeamIn(state, "everton"),
+        target: 10,
+        expectationCode: "mid",
+        salary: MANAGER_TERMS_BY_TIER[3].salary,
+        years: 2,
+        budgetPledge: MANAGER_TERMS_BY_TIER[3].budgetPledge,
+        via: "vacancy",
+        status: "open",
+      },
+    ];
+    const result = applyInstructionBatch(
+      state,
+      [],
+      { ops: { accept_manager_offer: [{ offer: "mgr-offer-test" }] } },
+      ["accept_manager_offer"],
+    );
+    expect(result).toMatchObject({ rejected: false, applied: 1 });
+    expect(state.dismissal).toBeUndefined();
+    expect(state.userTeamId).toBe("everton");
+    expect(state.manager.contract).toBeDefined();
+    expect(state.managerOffers[0]!.status).toBe("accepted");
   });
 });

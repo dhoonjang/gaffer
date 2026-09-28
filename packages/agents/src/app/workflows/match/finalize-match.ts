@@ -1,20 +1,22 @@
 import { type GameState, buildRatingBrief, finalizeMatch, pushNews } from "@story-fm/engine";
 import { type GmToolCall } from "../../../common/gm-types";
-import { type GameLLM } from "@story-fm/llm";
+import { type GameEvaluator } from "@story-fm/llm";
 import { type FinalizeOutcome, runFinalizeMatch } from "../../../match/finalize-match";
+import { type MatchClosing } from "../../../match/match-closing";
 
 /**
  * **경기 마감 한 걸음** — `finalize_match` 도구의 핸들러이자, GM이 마감을 부르지 않은
  * 턴에 코어가 대신 도는 안전망이다 (agents.md §3 「경기 마감」).
  *
  * 순서가 계약이다: 평점 브리프(장부가 살아 있을 때) → `finalizeMatch`(앵커) → 마감
- * 에이전트. 마감 기록은 말풍선(**대회 · "경기 종료"**)으로 서고, 결산은 감독이 부른
+ * 타입 평가. 마감 기록은 말풍선(**대회 · "경기 종료"**)으로 서고, 결산은 감독이 부른
  * 적 없는 내부 판정이라 칩으로 세우지 않는다. `null`이면 마감할 장부가 없었다.
  */
 export async function finalizeMatchTurn(
   state: GameState,
   calls: GmToolCall[],
-  llm?: GameLLM,
+  evaluator?: GameEvaluator,
+  closing: MatchClosing = {},
 ): Promise<FinalizeOutcome | null> {
   const brief = buildRatingBrief(state);
   if (!brief) return null;
@@ -32,7 +34,7 @@ export async function finalizeMatchTurn(
     brief: { head: "경기 종료", items: digest.ours.map((text) => ({ text })) },
   });
   pushNews(state, [...digest.finance, ...digest.others]);
-  const outcome = await runFinalizeMatch(state, brief, llm);
+  const outcome = await runFinalizeMatch(state, brief, evaluator, closing);
   if (outcome.settled > 0) {
     calls.push({
       // 기록의 이름 — 코어 걸음(`settleMatchRating`)의 이름이지 모델이 보는 도구가 아니다

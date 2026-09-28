@@ -388,13 +388,7 @@ export function clampGain(value: unknown): number {
   return Math.max(TACTIC_GAIN_MIN, Math.min(TACTIC_GAIN_MAX, Math.round(value)));
 }
 
-/**
- * 근거 한 줄을 한 줄로 편다 — **자르지는 않는다.**
- *
- * 길이는 판정자 쪽에서 이미 두 겹으로 잡혀 있다(프롬프트가 30자 안팎을 요구하고
- * 스키마가 200자에서 튕긴다). 코어가 그 위에 또 `…`를 붙이면 감독이 읽는 건
- * 문장이 아니라 잘린 토막이고, 왜 잘렸는지는 화면 어디에도 없다.
- */
+/** Collapse whitespace in optional report notes; typed training supplies no prose. */
 export function oneLine(note: string): string {
   return note.replace(/\s+/g, " ").trim();
 }

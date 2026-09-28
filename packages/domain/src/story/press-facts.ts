@@ -158,12 +158,6 @@ export const PressFactKindSchema = z.enum([
    */
   "manager-contract",
   /**
-   * **감독이 사재를 구단에 넣었다** — 시즌 누적이 문턱을 넘은 자리 (career.md §5.4).
-   * `tags[0]`이 등급 코드, `values`가 시즌 누계(`amount`)·구단 예산 약속 대비
-   * 백분율(`percent`)·사재 보너스를 받은 인원(`players`)이다.
-   */
-  "manager-fund",
-  /**
    * **감독의 거취가 밖으로 향했다** — 재직 중인 감독이 공석을 두드렸거나
    * (`tags[0]`이 `knock`), 다른 구단이 그를 부른 제안이 열려 있다(`approach`)
    * (career.md §5.1 「재직 중 접근·노크」). `name`이 그 구단이다.
@@ -874,17 +868,6 @@ export function pressFactText(fact: PressFact): string {
       return sub === "knock"
         ? `${name} 감독직에 지원했다`
         : `${josa(name, "이/가")} 감독직을 제안했다 — 재직 중이다`;
-    case "manager-fund":
-      /**
-       * 등급은 `tags[0]`이 들지만 줄에는 서지 않는다 — 백분율이 이미 그 사실이고,
-       * 등급은 평판과 회견 창이 읽는 코드다 (career.md §5.4). 보너스 인원은 **있을
-       * 때만**: 예산에만 부은 감독의 줄에 "보너스 0명"을 적으면 라커룸이 그 돈을
-       * 아는 것처럼 읽힌다.
-       */
-      return (
-        `사재 출연 ${formatMoney(v.amount ?? 0)} — 구단 이적 예산 약속의 ${v.percent ?? 0}%` +
-        (v.players ? ` · 사재 보너스 ${v.players}명` : "")
-      );
     case "sacking":
       /**
        * 전임의 줄에는 **그 구단에 걸려 있던 기대**가 함께 선다 — 몇 위에서 잘렸는가는

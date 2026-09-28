@@ -23,7 +23,6 @@ import {
 } from "@story-fm/domain";
 import { buildSeasonCalendar, FIRST_SEASON } from "../../common/core/calendar";
 import { addDays, dayOfWeek, DEFAULT_KICKOFF, SATURDAY } from "../../common/core/dates";
-import { creditManagerWallet } from "./manager-wallet";
 import { clubProfile } from "../../common/data/club-profile";
 import { derbyForMatch } from "../../common/world/derby";
 import {
@@ -531,10 +530,10 @@ export function recordFinance(state: GameState, teamId: string, input: RecordFin
 }
 
 /**
- * **경질 위약금** — 구단이 물고 감독의 지갑에 들어간다 (career.md §5.4).
+ * **경질 위약금** — 구단의 일회성 지출로 기록한다 (career.md §5.4).
  *
  * 금액을 정하는 것은 계약의 일이라 `market/manager-market.ts`의 `severanceOf`가
- * 갖고, 여기는 그 값이 장부와 지갑에 앉는 자리다. 일회성 지출이라 카테고리가
+ * 갖고, 여기는 그 값을 구단 원장에 기록한다. 일회성 지출이라 카테고리가
  * 따로다 — `staff_wages`에 얹으면 경질한 달의 구단이 임금 과다로 읽힌다
  * (finance.md §9.3).
  */
@@ -545,7 +544,6 @@ export function payManagerSeverance(state: GameState, teamId: string, amount: nu
     label: "감독 위약금",
     amount,
   });
-  creditManagerWallet(state, amount);
 }
 
 /** 1회성 항목(상금 등)을 중복 지급하지 않고 지급한다 — 원장은 절단되므로 키로 관리 */
@@ -1929,7 +1927,6 @@ function postMonthlyItems(state: GameState): void {
         label: "감독 연봉",
         amount: monthly,
       });
-      creditManagerWallet(state, monthly);
     }
     recordFinance(state, team.id, {
       kind: "expense",

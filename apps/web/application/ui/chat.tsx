@@ -466,9 +466,6 @@ function ScoutReport({ report: r }: { report: ScoutReportCard }) {
           </div>
         ))}
       </div>
-
-      {/* 보고서를 닫는 한 줄 — 스카우트가 쓴 평. 판정이 실패했거나 mock이면 없다 */}
-      {r.verdict && <div className="sr-note">{r.verdict}</div>}
     </div>
   );
 }

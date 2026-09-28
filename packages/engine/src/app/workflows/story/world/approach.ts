@@ -44,7 +44,6 @@ import { formLabel } from "../../../../common/players/form";
 import { leaderGroupOf, leaderRoleOf } from "../../../../common/players/hierarchy";
 import { type MoodLine, applyMoodNotes } from "../../../../common/players/mood-notes";
 import { SQUAD_CORE_SIZE } from "../../../../common/players/squad-depth";
-import { fundingFactOf } from "../../../../negotiation/finance/manager-wallet";
 import { settleInterview } from "../../../../negotiation/market/manager-market";
 import {
   isSeriousOffer,
@@ -450,17 +449,6 @@ function openSeasonReview(state: GameState, digest: TickSink): boolean {
     about: null,
     sharp: false,
   });
-  /**
-   * **지난 시즌 감독이 건 사재** (career.md §5.4). 체급은 그 시즌의 기대 갈래에서
-   * 되짚는다 — 승강이 지나간 해에 지금 등급의 약속으로 재면 같은 £1M이 다른 비율로
-   * 읽힌다.
-   */
-  const fund = fundingFactOf(state, {
-    season: record.season,
-    tier: record.tier,
-  });
-  if (fund) facts.push(fund);
-
   const contextCard: ApproachContext = {
     code: "season-review",
     value: record.position,

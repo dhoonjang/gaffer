@@ -98,7 +98,6 @@ export function scoutReportCard(state: GameState, playerId: string): ScoutReport
     askingPrice: askingPriceFor(state, p),
     wageExpectation: wageExpectationOf(state, p),
     contractUntil: activeContract(state, p.id)?.until ?? null,
-    verdict: arrivedScoutReport(state, p.id)?.verdict ?? null,
   };
 }
 
@@ -231,6 +230,5 @@ export function scoutReportFacts(
     on: report.completedOn,
     askingPrice: askingPriceFor(state, p),
     wageExpectation: wageExpectationOf(state, p),
-    verdict: report.verdict ?? null,
   };
 }

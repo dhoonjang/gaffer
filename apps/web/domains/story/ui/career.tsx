@@ -160,9 +160,6 @@ function InPost({ career }: { career: CareerView }) {
  * 화면이 "왜 맡은 팀이 없는가"와 "무엇이 걸려 있는가"를 한자리에서 말해야 한다.
  * 제안은 **읽는 값이다** — 수락은 감독이 말로 한다.
  */
-/** 지갑 아래에 세우는 지출 줄 수 — 그 위는 커리어 표가 아니라 가계부가 된다 */
-const SPENDING_SHOWN = 3;
-
 /** 자리를 잃은 갈래의 이름 — 코드가 사실이고 문장은 화면이 만든다 (career.md §5.4) */
 const LEAVE_KO = {
   expired: "계약 만료",
@@ -248,7 +245,7 @@ export function CareerView({
           <div className="bg">{squad.manager.background}</div>
           {/**
            * 감독에게 딸린 값은 **두 갈래**고 생김새가 그것을 가른다 — 견주는 눈금
-           * (평판)은 상자에 담고, 읽는 사실(계약·지갑)은 상자 없이 라벨과 값으로
+           * (평판)은 상자에 담고, 읽는 사실(계약)은 상자 없이 라벨과 값으로
            * 선다. 둘 다 이름·배경보다 아래 단이다.
            */}
           <div className="mgr-meters">
@@ -274,17 +271,8 @@ export function CareerView({
                 </div>
               </div>
             </div>
-            {/**
-             * 계약·지갑 — 눈금이 아니라 **읽는 사실 한 줄씩**이라 상자를 쓰지 않는다.
-             * 둘이 나란히 서야 연봉과 위약금이 어디로 갔는지가 그 자리에서 읽히고
-             * (career.md §5.1 · §5.4), 무직이면 계약이 없어 줄이 하나다.
-             *
-             * 지갑은 **잔고만** 말한다 — 사재 출연 여력은 실제로 넣을 수 있는 최대가
-             * 아니라(`min(지갑, 여력)`) 잔고 옆에 세우면 못 쓰는 돈을 부른다. 여력이
-             * 서는 자리는 감독이 금액을 고르는 순간이다 (career.md §5.4).
-             */}
-            <dl className="mgr-facts">
-              {career.contract && (
+            {career.contract && (
+              <dl className="mgr-facts">
                 <div className="mgr-fact">
                   <dt>계약</dt>
                   <dd>
@@ -295,29 +283,7 @@ export function CareerView({
                     )}
                   </dd>
                 </div>
-              )}
-              <div className="mgr-fact">
-                <dt>지갑</dt>
-                <dd>{formatMoney(career.wallet)}</dd>
-              </div>
-            </dl>
-            {/**
-             * 지출 이력 — 지갑 **아래 자기 줄**이다. 지갑 칸 안에 품고 있었더니 그 칸만
-             * 높이가 튀고 나란히 선 칸들이 그 높이에 맞춰 빈 채로 늘어났다.
-             */}
-            {career.spending.length > 0 && (
-              <div className="mgr-spending">
-                {career.spending.slice(0, SPENDING_SHOWN).map((s, i) => (
-                  <div className="mgr-spend" key={i}>
-                    <span className="when">{humanDate(s.on, { year: true, weekday: false })}</span>
-                    <span>
-                      {s.kind}
-                      {s.playerName ? ` — ${s.playerName}` : ""}
-                    </span>
-                    <b>−{formatMoney(s.amount)}</b>
-                  </div>
-                ))}
-              </div>
+              </dl>
             )}
           </div>
         </div>

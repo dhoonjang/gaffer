@@ -12,22 +12,14 @@ import {
   KNOCK_SALARY_RATE,
   computeStandings,
   financeOf,
-  fundTransferBudget,
-  fundingFactOf,
-  fundingPressFactOf,
   generateHeadCoach,
   generateOwner,
   generateReporters,
   headCoachOf,
   isTopFlight,
   leagueOfTeamIn,
-  MANAGER_WALLET,
   managerSeveranceOf,
-  payPlayerBonus,
   resignPost,
-  seasonSpentOn,
-  spendFromWallet,
-  transferFundRoom,
   offerDrySpell,
   offerVacancy,
   openManagerOffers,
@@ -565,14 +557,12 @@ describe("경질 뒤 — 무직으로 흐르고, 제안을 받고, 부임한다"
     }
 
     /**
-     * 위약금이 **구단의 지출이고 지갑이 감독의 것**이라는 경계다 (career.md §5.4 · §7).
-     * 한쪽으로 몰면 감독의 돈이 구단 잔고를 흔들거나 옛 구단의 지출이 사라진다.
+     * 경질 위약금은 계약에서 계산해 옛 구단의 지출로 한 번만 기록한다.
      */
     {
       const expected = managerSeveranceOf(contractAtSack, "2027-03-04");
       expect(expected, "잔여가 남은 계약인데 위약금이 0이다").toBeGreaterThan(0);
       expect(state.dismissal!.severance, "경질 카드에 위약금이 없다").toBe(expected);
-      expect(state.manager.wallet, "구단이 낸 돈이 감독에게 닿지 않았다").toBe(expected);
       expect(state.manager.contract, "경질이 계약을 남겼다").toBeUndefined();
 
       const paid = financeOf(state, sackedFrom).ledger.filter((e) => e.category === "severance");
@@ -641,12 +631,8 @@ describe("경질 뒤 — 무직으로 흐르고, 제안을 받고, 부임한다"
         reason: "minutes",
         since: state.date,
       });
-      // 지갑은 감독의 것이다 — 구단에 묶인 것만 지워진다 (career.md §5.4 · §7)
-      const wallet = state.manager.wallet;
-      expect(wallet, "위약금이 지갑에 없다").toBeGreaterThan(0);
       const accepted = acceptManagerOffer(state, offer.id);
       expect(accepted.ok, accepted.message).toBe(true);
-      expect(state.manager.wallet, "이직이 감독의 지갑을 비웠다").toBe(wallet);
       expect(state.userTeamId).toBe(offer.teamId);
       expect(state.userTeamId, "옛 구단으로 돌아갔다").not.toBe(sackedFrom);
       expect(state.dismissal, "부임했는데 경질장이 남았다").toBeUndefined();
@@ -1231,274 +1217,27 @@ describe("감독 계약 — 만료는 하루를 건너뛰지 않고 두 번 걸�
   });
 });
 
-/**
- * **지갑에서 나가는 길** — 갈래가 몇이든 출구는 하나이고 모자라면 한 푼도 나가지
- * 않는다 (career.md §5.4 · §7). 조용히 새는 자리라 문마다 경계를 잰다.
- */
-describe("지갑을 쓴다 — 출구는 하나다", () => {
-  const fixture = () => {
+describe("사임 — 계약 정산과 무직 전환", () => {
+  it("옛 구단에 위약금을 한 번 기록하고 계약을 닫는다", () => {
     const state = createTestGame(7);
-    state.manager.wallet = 5_000_000;
-    return state;
-  };
-
-  it("잔고가 모자라면 한 푼도 나가지 않는다", () => {
-    const state = fixture();
-    const spent = spendFromWallet(state, { kind: "transfer-fund", amount: 5_000_001 });
-    expect(spent.ok, "지갑보다 큰 지출이 나갔다").toBe(false);
-    expect(state.manager.wallet, "실패한 지출이 지갑을 깎았다").toBe(5_000_000);
-    expect(state.manager.spending ?? [], "실패한 지출이 이력에 남았다").toHaveLength(0);
-
-    // 딱 맞는 금액은 통과하고 지갑이 0이 된다 — 경계는 초과에만 선다
-    const exact = spendFromWallet(state, { kind: "transfer-fund", amount: 5_000_000 });
-    expect(exact.ok, "지갑과 같은 금액이 막혔다").toBe(true);
-    expect(state.manager.wallet).toBe(0);
-    expect(state.manager.spending).toHaveLength(1);
-  });
-
-  it("사재 출연은 이적 예산만 올린다 — 원장에도 잔고에도 서지 않는다", () => {
-    const state = fixture();
     const team = state.userTeamId;
-    const finance = financeOf(state, team);
-    const budget = finance.transferBudget;
-    const balance = finance.balance;
-    const ledger = finance.ledger.length;
-
-    const result = fundTransferBudget(state, { amount: 1_000_000 });
-    expect(result.ok, result.message).toBe(true);
-    expect(finance.transferBudget, "사재가 이적 예산에 닿지 않았다").toBe(budget + 1_000_000);
-    // 자본이지 매출이 아니다 — 원장에 서면 PSR이 "돈을 부으면 규정이 풀린다"가 된다
-    expect(finance.balance, "감독의 돈이 구단 잔고를 흔들었다").toBe(balance);
-    expect(finance.ledger, "사재가 구단 원장에 섰다").toHaveLength(ledger);
-    expect(state.manager.wallet).toBe(4_000_000);
-  });
-
-  it("사재 출연에는 시즌 상한이 있다 — 넘겨 부르면 남은 몫까지만 나간다", () => {
-    const state = fixture();
-    state.manager.wallet = 100_000_000;
-    const room = transferFundRoom(state);
-    expect(room, "출연 여력이 0이다").toBeGreaterThan(0);
-
-    const first = fundTransferBudget(state, { amount: room + 50_000_000 });
-    expect(first.ok, first.message).toBe(true);
-    expect(transferFundRoom(state), "상한을 넘겨 부른 값이 그대로 나갔다").toBe(0);
-    expect(state.manager.wallet).toBe(100_000_000 - room);
-
-    // 문이 닫힌 뒤로는 지갑이 남아 있어도 나가지 않는다
-    const second = fundTransferBudget(state, { amount: 1_000_000 });
-    expect(second.ok, "시즌 상한을 다 쓰고도 더 나갔다").toBe(false);
-    expect(state.manager.wallet).toBe(100_000_000 - room);
-  });
-
-  it("사재 보너스는 주급으로 재고 선수당 시즌 한 번이다", () => {
-    const state = fixture();
-    const player = userPlayers(state)[0]!;
-    const weekly = state.contracts.find(
-      (c) => c.status === "active" && c.gamePlayerId === player.id,
-    )!.weeklyWage;
-    const form = player.state.form;
-
-    // 4주치 미만은 눈금이 서지 않는다
-    const thin = payPlayerBonus(state, {
-      playerId: player.id,
-      amount: Math.floor(weekly * (MANAGER_WALLET.BONUS_MIN_WEEKS - 1)),
-    });
-    expect(thin.ok, "4주치 미만이 눈금으로 섰다").toBe(false);
-    expect(player.state.form, "반려된 보너스가 사기를 올렸다").toBe(form);
-
-    const paid = payPlayerBonus(state, {
-      playerId: player.id,
-      amount: Math.ceil(weekly * MANAGER_WALLET.BONUS_FULL_WEEKS),
-    });
-    expect(paid.ok, paid.message).toBe(true);
-    expect(player.state.form, "보너스가 사기를 올리지 않았다").toBeGreaterThan(form);
-
-    // 같은 선수에게 두 번은 없다 — 돈이 유한한 것만으로는 남용이 막히지 않는다
-    const wallet = state.manager.wallet;
-    const again = payPlayerBonus(state, {
-      playerId: player.id,
-      amount: Math.ceil(weekly * MANAGER_WALLET.BONUS_FULL_WEEKS),
-    });
-    expect(again.unchanged, "같은 선수에게 두 번 나갔다").toBe(true);
-    expect(state.manager.wallet).toBe(wallet);
-  });
-
-  /**
-   * "최근 20건"은 화면의 수이지 상한의 장부가 아니다 (career.md §5.4) — 절단이
-   * 이번 시즌 항목을 떨구면 시즌 상한과 3명 문이 건수를 넘는 순간 조용히 열린다.
-   */
-  it("이번 시즌 항목은 20건을 넘어도 장부에서 떨어지지 않는다 — 상한과 3명 문이 선다", () => {
-    const state = fixture();
-    state.manager.wallet = 1_000_000_000;
-
-    // 절단이 떨굴 수 있는 것은 지난 시즌 항목뿐이다
-    state.manager.spending = Array.from({ length: 5 }, (_, i) => ({
-      id: `old-${i}`,
-      on: "2024-01-01",
-      kind: "transfer-fund" as const,
-      amount: 10_000,
-      season: state.season - 1,
-    }));
-
-    // 보너스 세 명 — 문을 먼저 채우고, 그 뒤 사재 출연이 이력을 KEPT 너머로 민다
-    const contracted = userPlayers(state).filter((p) =>
-      state.contracts.some((c) => c.status === "active" && c.gamePlayerId === p.id),
-    );
-    const weeklyOf = (id: string) =>
-      state.contracts.find((c) => c.status === "active" && c.gamePlayerId === id)!.weeklyWage;
-    const bonusFor = (id: string) => Math.ceil(weeklyOf(id) * MANAGER_WALLET.BONUS_FULL_WEEKS);
-    for (const p of contracted.slice(0, MANAGER_WALLET.BONUS_PLAYERS_PER_SEASON)) {
-      const paid = payPlayerBonus(state, { playerId: p.id, amount: bonusFor(p.id) });
-      expect(paid.ok, "message" in paid ? paid.message : undefined).toBe(true);
-    }
-
-    const cap = transferFundRoom(state);
-    const chunk = MANAGER_WALLET.MIN_SPEND;
-    const rounds = MANAGER_WALLET.KEPT + 1;
-    expect(cap, "출연 상한이 스물한 번의 최소 지출보다 작다").toBeGreaterThan(chunk * rounds);
-    for (let i = 0; i < rounds; i += 1) {
-      const spent = spendFromWallet(state, { kind: "transfer-fund", amount: chunk });
-      expect(spent.ok).toBe(true);
-    }
-
-    // 이번 시즌 장부는 온전하고, 지난 시즌 항목만 떨어졌다
-    const spending = state.manager.spending ?? [];
-    expect(
-      spending.every((s) => s.season === state.season),
-      "지난 시즌 항목이 KEPT 안에 남아 이번 시즌 항목을 밀어냈다",
-    ).toBe(true);
-    expect(spending.length, "이번 시즌 항목이 절단에 떨어졌다").toBe(
-      rounds + MANAGER_WALLET.BONUS_PLAYERS_PER_SEASON,
-    );
-    expect(seasonSpentOn(state, "transfer-fund"), "상한 누계가 잘린 이력에서 셌다").toBe(
-      chunk * rounds,
-    );
-    expect(transferFundRoom(state)).toBe(cap - chunk * rounds);
-
-    // 건수가 넘은 뒤에도 보너스 문 둘은 그대로 선다
-    const fourth = contracted[MANAGER_WALLET.BONUS_PLAYERS_PER_SEASON]!;
-    const overflow = payPlayerBonus(state, { playerId: fourth.id, amount: bonusFor(fourth.id) });
-    expect(overflow.ok, "넷째 선수에게 보너스가 나갔다").toBe(false);
-    const first = contracted[0]!;
-    const repeat = payPlayerBonus(state, { playerId: first.id, amount: bonusFor(first.id) });
-    expect(repeat.unchanged, "같은 선수에게 두 번째 보너스가 나갔다").toBe(true);
-  });
-
-  /**
-   * 경질의 거울상이다 (career.md §5.4) — 같은 식으로 잰 위약금이 반대 방향으로
-   * 흐르고, 그다음은 경질·만료와 한 길이다.
-   */
-  it("사임은 감독이 위약금을 물고 나간다 — 물지 못하면 계약이 깨지지 않는다", () => {
-    const state = fixture();
-    const team = state.userTeamId;
-    const contract = state.manager.contract!;
-    const buyout = managerSeveranceOf(contract, state.date);
-    expect(buyout, "잔여가 남은 계약인데 위약금이 0이다").toBeGreaterThan(0);
-
-    // 지갑이 모자라면 못 나간다
-    state.manager.wallet = buyout - 1;
-    const broke = resignPost(state);
-    expect(broke.ok, "물지 못하는 계약이 깨졌다").toBe(false);
-    expect(state.dismissal, "실패한 사임이 감독을 무직으로 만들었다").toBeUndefined();
-    expect(state.manager.contract, "실패한 사임이 계약을 지웠다").toBeDefined();
-
-    state.manager.wallet = buyout;
+    const buyout = managerSeveranceOf(state.manager.contract!, state.date);
+    expect(buyout).toBeGreaterThan(0);
+    const before = financeOf(state, team).balance;
     const left = resignPost(state);
     expect(left.ok, left.message).toBe(true);
-    expect(state.manager.wallet, "감독이 위약금을 물지 않았다").toBe(0);
     expect(state.dismissal?.kind).toBe("resigned");
     expect(state.dismissal?.severance).toBe(buyout);
-    expect(state.manager.contract, "사임이 계약을 남겼다").toBeUndefined();
-
-    // 그 돈은 옛 구단의 수입이다 — 구단이 무는 `severance`의 반대편
-    const got = financeOf(state, team).ledger.filter((e) => e.category === "manager_buyout");
-    expect(got, "위약금이 옛 구단 원장에 서지 않았다").toHaveLength(1);
+    expect(state.manager.contract).toBeUndefined();
+    const finance = financeOf(state, team);
+    const got = finance.ledger.filter((entry) => entry.category === "manager_buyout");
+    expect(got).toHaveLength(1);
     expect(got[0]!.amount).toBe(buyout);
-    // 무직의 길은 갈래를 가리지 않는다 — 옛 구단은 그날로 후임을 세웠다
+    expect(finance.balance).toBe(before + buyout);
     expect(state.teams.find((t) => t.id === team)!.managerName).not.toBe(state.manager.name);
-  });
-});
-
-/**
- * 사재가 세계에 닿는 자리 (career.md §5.4) — **문턱 하나에 자리 셋**이다. 카드도
- * 평판도 전부 지출 이력에서 파생하므로, 여기서 재는 것은 그 파생의 경계다.
- */
-describe("사재는 문턱을 넘어야 세계에 보인다", () => {
-  const ownedBy = (state: GameState, archetype: string): GameState => {
-    state.personas!.find((p) => p.role === "owner")!.archetype = archetype;
-    state.manager.reputation.board = 50;
-    state.manager.reputation.squad = 50;
-    return state;
-  };
-  const pledgeOf = (state: GameState) =>
-    MANAGER_TERMS_BY_TIER[tierOfTeamIn(state, state.userTeamId)].budgetPledge;
-
-  it("사재 문턱은 사실 카드를 만들며 보드 평판을 바꾸지 않는다", () => {
-    const state = ownedBy(createTestGame(7), "투자자형");
-    const pledge = pledgeOf(state);
-    const gate = pledge * MANAGER_WALLET.FUND_GRADE_STEPS.notable;
-    state.manager.wallet = pledge;
-
-    const below = fundTransferBudget(state, { amount: gate - MANAGER_WALLET.MIN_SPEND });
-    expect(below.ok, "message" in below ? below.message : undefined).toBe(true);
-    expect(fundingFactOf(state), "문턱 아래의 사재가 카드로 섰다").toBeNull();
-    expect(state.manager.reputation.board, "문턱 아래의 사재가 보드를 움직였다").toBe(50);
-
-    // 경계는 「넘어섰는가」가 아니라 「닿았는가」다 — 딱 문턱이면 선다
-    const cross = fundTransferBudget(state, { amount: MANAGER_WALLET.MIN_SPEND });
-    expect(cross.ok, "message" in cross ? cross.message : undefined).toBe(true);
-    expect(fundingFactOf(state)?.data?.tags?.[0]).toBe("notable");
-    expect(fundingFactOf(state)?.data?.values?.percent).toBe(
-      Math.round(MANAGER_WALLET.FUND_GRADE_STEPS.notable * 100),
-    );
-    expect(state.manager.reputation.board, "문턱을 넘었는데 보드가 그대로다").toBe(50);
-
-    // 등급이 더 올라도 보드는 다시 사지 않는다 — 시즌 1회
-    const again = fundTransferBudget(state, {
-      amount: pledge * MANAGER_WALLET.FUND_GRADE_STEPS.major,
-    });
-    expect(again.ok, "message" in again ? again.message : undefined).toBe(true);
-    expect(fundingFactOf(state)?.data?.tags?.[0], "누계가 늘었는데 등급이 그대로다").toBe("major");
-    expect(state.manager.reputation.board, "같은 시즌에 보드가 두 번 움직였다").toBe(50);
-
-    // 회견의 창은 등급이 오른 날부터 이레다 — 구단주의 자리에는 창이 없다
-    expect(fundingPressFactOf(state), "등급이 오른 날의 회견이 사재를 빠뜨렸다").not.toBeNull();
-    state.date = addDays(state.date, MANAGER_WALLET.FUND_PRESS_DAYS + 1);
-    expect(fundingPressFactOf(state), "창이 지난 사실이 회견에 남았다").toBeNull();
-    expect(fundingFactOf(state), "창이 지났다고 구단주까지 잊었다").not.toBeNull();
-  });
-
-  /**
-   * 라커룸이 아는 것은 이적 예산에 들어간 돈이 아니라 자기 주머니에 꽂힌 돈이다 —
-   * 문턱이 아니라 보너스 건수가 눈금이고, 시즌 폭에서 멈춘다.
-   */
-  it("사재 보너스의 지출은 선수단 평판을 자동 변경하지 않는다", () => {
-    // 부호가 0인 원형 — 라커룸 축만 남는다
-    const state = ownedBy(createTestGame(7), "축구광형");
-    state.manager.wallet = 1_000_000_000;
-    const contracted = userPlayers(state).filter((p) =>
-      state.contracts.some((c) => c.status === "active" && c.gamePlayerId === p.id),
-    );
-    const bonusFor = (id: string) =>
-      Math.ceil(
-        state.contracts.find((c) => c.status === "active" && c.gamePlayerId === id)!.weeklyWage *
-          MANAGER_WALLET.BONUS_FULL_WEEKS,
-      );
-
-    let seen = 50;
-    for (const player of contracted.slice(0, MANAGER_WALLET.BONUS_PLAYERS_PER_SEASON)) {
-      const paid = payPlayerBonus(state, { playerId: player.id, amount: bonusFor(player.id) });
-      expect(paid.ok, "message" in paid ? paid.message : undefined).toBe(true);
-      expect(state.manager.reputation.squad, "보너스가 라커룸에 닿지 않았다").toBeGreaterThan(seen);
-      seen = state.manager.reputation.squad;
-    }
-    expect(state.manager.reputation.squad - 50, "시즌 폭 밖으로 올랐다").toBe(
-      MANAGER_WALLET.FUND_SQUAD_LIFT,
-    );
-    expect(state.manager.reputation.board, "부호 0인 원형에서 보드가 움직였다").toBe(50);
-    // 카드는 보너스만으로도 선다 — 인원이 함께 실린다
-    const fact = fundingFactOf(state);
-    expect(fact?.data?.values?.players).toBe(MANAGER_WALLET.BONUS_PLAYERS_PER_SEASON);
+    const after = structuredClone(state);
+    expect(resignPost(state).ok).toBe(false);
+    expect(state).toEqual(after);
   });
 });
 
@@ -1506,7 +1245,7 @@ describe("사재는 문턱을 넘어야 세계에 보인다", () => {
  * **재직 중 접근·노크** (career.md §5.1) — 계약을 남기고 떠나는 길이다.
  *
  * 여기서 재는 것은 셋이다: 보상금이 **구단과 구단 사이에서만** 움직이는 경계
- * (§7 — 지갑은 감독의 것이다), 부름을 흘려보낸 값, 그리고 재직 중 노크의 대가.
+ * (두 구단의 원장), 부름을 흘려보낸 값, 그리고 재직 중 노크의 대가.
  * 문턱과 확률은 `pnpm balance manager-market`이 잰다.
  */
 describe("재직 중에도 다른 구단이 손을 뻗는다", () => {
@@ -1536,11 +1275,10 @@ describe("재직 중에도 다른 구단이 손을 뻗는다", () => {
     expect(poachUntilOffered(inPost(40), "napoli", 60), "문턱 아래인데 불렀다").toBeNull();
   });
 
-  it("보상금은 두 구단 원장 사이에서만 움직인다 — 감독의 지갑은 그대로다", () => {
+  it("보상금은 두 구단 원장 사이에서만 움직인다", () => {
     const state = inPost(70);
     const from = state.userTeamId;
     const contract = { ...state.manager.contract! };
-    const wallet = state.manager.wallet ?? 0;
 
     const offer = poachUntilOffered(state, "napoli");
     expect(offer, "문턱을 다 넘었는데 한 번도 부르지 않았다").not.toBeNull();
@@ -1553,7 +1291,6 @@ describe("재직 중에도 다른 구단이 손을 뻗는다", () => {
     const took = acceptManagerOffer(state, offer!.id);
     expect(took.ok, "message" in took ? took.message : undefined).toBe(true);
     expect(state.userTeamId).toBe("napoli");
-    expect(state.manager.wallet ?? 0, "보상금이 감독의 지갑을 지났다").toBe(wallet);
 
     const got = financeOf(state, from).ledger.filter((e) => e.category === "manager_compensation");
     expect(got, "보상금이 옛 구단 원장에 서지 않았다").toHaveLength(1);

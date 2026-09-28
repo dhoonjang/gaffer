@@ -14,8 +14,8 @@ import { type GmToolCall } from "../common/gm-types";
 /**
  * 협상 GM — 협상 방의 GM. 이 협상의 서류·상황·방의 대화만 읽고 건너편 사람들이 되어 장면과
  * 대사를 쓰며, 장부를 움직여야 할 때만 도구를 부른다 (agents.md §4-1 · transfer.md §12-2).
- * 값과 판정은 코어가 앵커 ± 한도로 자른다 — **장부를 바꾸는 도구는 없다**. 도구 셋은
- * 코어를 부르는 손잡이이고 그 뒤에 테이블 해석기가 선다(`buildNegotiationTools`).
+ * 값과 판정은 코어가 앵커 ± 한도로 자른다 — **장부를 바꾸는 도구는 없다**. 도구 둘은
+ * 상대의 반응 판정과 자리 종료를 코어에 건다(`buildNegotiationTools`).
  * 프롬프트는 코드처럼 버전 관리한다 (AGENTS.md 6-5).
  *
  * 평시 GM이 상대가 되지 않는 이유가 이 파일이 따로 선 이유다 — 평시 GM은 감독이 이사회에
@@ -37,7 +37,7 @@ export const NEGOTIATION_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니�
 서류·상황·<table>에 없는 사실은 없는 것이다. 다른 구단의 관심이나 오퍼, 선수의 뜻을 지어내지 않는다 — [경쟁 입찰] 줄이 없으면 다른 구단은 없다.
 
 # 진행
-- 감독의 말에 값·연수·지위·조건·상대 요구의 답·수락·철회가 실렸으면 먼저 장부에 건다. 걸린 것과 반려된 것이 결과로 온다 — 반려된 대로 쓴다.
+- 값·조건·수락·철회 지시가 있으면 negotiation_orders를 먼저 부른다. 확인이 필요한 지시는 적용된 것처럼 말하지 않고 되묻는다.
 - 상대가 답할 자리면 장면을 쓰기 전에 답을 판정한다. 말만 오간 턴도 상대가 답하면 그렇다. 오퍼나 개인 조건 제안이 올라 있으면 그 판정이 이 답에 실린다.
 - 감독이 그만하겠다고 하면 물러난다. 협상은 열린 채 이 자리만 닫힌다.
 - 첫 턴은 이 대화가 어디서 오가는지와 건너편 사람들, 상대의 첫 말까지만 쓴다 — 마주 앉은 자리인지 전화인지 오간 서면인지는 서류·상황·감독의 말에서 골라 첫 턴에 정하고, 그다음부터는 이력이 세운 그 자리를 잇는다.
@@ -74,8 +74,6 @@ export const OPENING_BLOCK =
   "<opening>감독이 이 협상에 직접 나섰다 — 이 대화가 어디서 오가는지와 건너편 사람들, 상대의 첫 말까지만 쓴다</opening>";
 
 // ── 협상 도구 셋 — 코어를 부르는 손잡이 ──────────────────────
-
-export const NEGOTIATION_ORDERS_TOOL = "negotiation_orders";
 
 export const COUNTERPARTY_REPLY_TOOL = "counterparty_reply";
 
@@ -123,15 +121,15 @@ export const NEGOTIATION_TOOL_DEFINITIONS: ReadonlyArray<{
   inputSchema: JsonObjectSchema;
 }> = [
   {
-    name: NEGOTIATION_ORDERS_TOOL,
+    name: "negotiation_orders",
     description:
-      "감독의 말에 값·연수·지위·조건·상대 요구의 답·수락·철회가 실렸을 때 한 번 부른다 — 이 협상의 명령으로 옮겨 장부에 건다. 결과로 무엇이 걸렸고 무엇이 반려됐는지와 새 <table>이 온다. 값도 조건도 답도 없는 말에는 부르지 않는다 — 그 말은 그대로 상대에게 간다. 상대의 답은 이 뒤에 counterparty_reply로 판정한다.",
+      "감독이 현재 협상에서 값·연수·조건·수락·철회를 지시할 때만 부른다. 설득이나 질문만 한 턴에는 부르지 않는다. 원문은 코어가 전달하며 한 턴에 한 번, 결과를 받은 뒤 상대의 답을 판정한다.",
     inputSchema: toToolSchema(EmptySchema),
   },
   {
     name: COUNTERPARTY_REPLY_TOOL,
     description:
-      "상대의 답을 판정한다 — 감독이 말을 건 턴마다 한 번, negotiation_orders 뒤·장면을 쓰기 전에. heard에 감독의 말투와 실제로 든 설득 논거만, stance에 이 답의 태도 하나. <table>의 <anchor>에 오퍼나 개인 조건 제안이 올라 있으면 ruling이 이 답에 실려야 한다 — 비우면 코어가 기준 판정으로 굳힌다. 부르는 조건은 asks에. 논거는 상대가 사실과 인물을 읽어 판단한다. 코어는 판정을 앵커 ± 한도로 잘라 반영한다. 결과로 [장부] 줄(감독이 한 말 · 상대의 요구 · 굳은 판정과 값), 인내 N/M과 태도, 협상이 끝났으면 그 상태가 온다 — 장면은 그 위에 선다. 상대의 말이 [장부]의 값·판정과 어긋나지 않게 쓴다.",
+      "상대의 답을 판정한다 — 감독이 말을 건 턴마다 한 번, 지시 적용 결과를 읽은 뒤·장면을 쓰기 전에. heard에 감독의 말투와 실제로 든 설득 논거만, stance에 이 답의 태도 하나. <table>의 <anchor>에 오퍼나 개인 조건 제안이 올라 있으면 ruling이 이 답에 실려야 한다 — 비우면 코어가 기준 판정으로 굳힌다. 부르는 조건은 asks에. 논거는 상대가 사실과 인물을 읽어 판단한다. 코어는 판정을 앵커 ± 한도로 잘라 반영한다. 결과로 [장부] 줄(감독이 한 말 · 상대의 요구 · 굳은 판정과 값), 인내 N/M과 태도, 협상이 끝났으면 그 상태가 온다 — 장면은 그 위에 선다. 상대의 말이 [장부]의 값·판정과 어긋나지 않게 쓴다.",
     inputSchema: toToolSchema(CounterpartyReplySchema),
   },
   {
@@ -145,10 +143,6 @@ export const NEGOTIATION_TOOL_DEFINITIONS: ReadonlyArray<{
 /** 한 턴의 도구가 공유하는 자리 — 기록은 턴의 것이고, 감독의 말은 코어가 쥔다 */
 export interface NegotiationToolContext {
   calls: GmToolCall[];
-  /**
-   * 이번 턴 감독의 말 — `negotiation_orders`가 해석기에 넘기는 원문이다 (agents.md §1). 턴 러너가
-   * 채팅에 넣은 그 문자열이고, 손잡이 턴에는 없다.
-   */
   said?: string;
 }
 

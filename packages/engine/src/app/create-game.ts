@@ -101,11 +101,6 @@ export interface CreateGameInput {
   userTeamId: string;
   managerName: string;
   background: string;
-  /**
-   * 시작 지갑 (£) — 배경 판정이 자산 한도 안에서 정한 값 (career.md §1).
-   * 생략하면 0이다.
-   */
-  wallet?: number;
   /** 세계의 범위 — 없으면 카탈로그 전체 (`world/scope.ts`) */
   world?: WorldScope;
 }
@@ -884,8 +879,6 @@ export function createGame(input: CreateGameInput): GameState {
       background: input.background,
       reputation: { board: 50, media: 50, squad: 50 },
       reactionSeason: { season, board: 0, media: 0, squad: 0 },
-      wallet: input.wallet !== undefined && input.wallet > 0 ? input.wallet : 0,
-      spending: [],
     },
     // 부임하면 사람이 먼저 기다린다 — 수석코치는 시드로 결정되므로
     // 같은 세이브는 언제 열어도 같은 사람이다 (persona.ts)

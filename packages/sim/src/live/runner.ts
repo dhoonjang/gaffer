@@ -49,6 +49,7 @@ import {
 import { createLiveState, liveMinuteOf, startingCondition, createLiveStepper } from "./step";
 import type { LiveInput, LiveSideInput } from "./types";
 import { ADDED_TIME_BASE, BENCH_INTERVAL_SECONDS, HEADLESS_CHUNK_TICKS } from "./tuning";
+import { emptyRecentFlow, recordFlowEvents, recordFlowTick, type RecentFlow } from "./recent-flow";
 
 /**
  * 실행기 — 말의 규칙 밖에서 경기를 잇는 것 (live-match.md §8).
@@ -89,6 +90,7 @@ export interface LiveSetup {
 
 /** 실시간 경기 한 묶음 — 세이브가 들고 실행기가 굴리는 것 */
 export interface LiveMatch {
+  flow: RecentFlow;
   setup: LiveSetup;
   state: LiveMatchState;
   ledger: MatchLedgerState;
@@ -196,6 +198,7 @@ export function createLiveMatch(
   reading: { points: Point[]; sheet: SheetLine[] },
 ): LiveMatch {
   const match: LiveMatch = {
+    flow: emptyRecentFlow(),
     setup,
     state: undefined as unknown as LiveMatchState,
     ledger,
@@ -253,8 +256,10 @@ function halfEndSeconds(match: LiveMatch): number {
 function record(match: LiveMatch, events: MatchEvent[], rejected: string[]): void {
   if (events.length === 0) return;
   const result: ApplyResult = applyEvents(match.ledger, events);
-  if (result.ok) match.ledger = result.state;
-  else rejected.push(...result.errors);
+  if (result.ok) {
+    match.ledger = result.state;
+    recordFlowEvents(match.flow, match.state.tick, events);
+  } else rejected.push(...result.errors);
 }
 
 function recordStats(match: LiveMatch, stats: Record<string, MatchStatLine>): void {
@@ -337,6 +342,7 @@ export function applySubstitution(
     return false;
   }
   match.ledger = result.state;
+  recordFlowEvents(match.flow, match.state.tick, [event]);
   const slotIndex = match.slots[side].findIndex((s) => s.playerId === out);
   const leaving = match.slots[side][slotIndex];
   const player = match.setup.players[into];
@@ -621,6 +627,7 @@ export function advanceLive(
       step = createLiveStepper(input);
     }
     const result = step!(match.state);
+    recordFlowTick(match.flow, match.state, result.state, result.stats);
     match.state = result.state;
     onTick?.(match.state, input);
     if (result.events.length > 0) {

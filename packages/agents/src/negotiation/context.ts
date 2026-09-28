@@ -21,7 +21,7 @@ export function offerTerms(offer: ManagerOffer): string {
     offer.salary
       ? `연봉 ${formatMoney(offer.salary)}·${offer.years}년·이적 예산 약속 ${formatMoney(offer.budgetPledge)}`
       : null,
-    // 보상금은 감독의 지갑을 지나지 않는다 — 새 구단이 지금 구단에 무는 돈이다
+    // 보상금은 새 구단이 지금 구단에 지급하는 계약 정산이다
     offer.compensation ? `지금 구단에 보상금 ${formatMoney(offer.compensation)}` : null,
     offer.counteredOn ? `흥정은 끝났다 — 수락 여부만 남았다` : null,
     `${offer.expiresOn}까지`,
