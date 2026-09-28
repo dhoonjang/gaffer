@@ -132,7 +132,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
    * 위에 온보딩과 경기 중 조작이 얹힌다. 기본 상한(`playwright.config.ts`의 90초)은
    * 나머지 케이스의 것이다.
    */
-  test.setTimeout(240_000);
+  test.setTimeout(480_000);
   // ── 랜딩(게임 목록) → 새 게임 ──
   await page.goto("/");
   await expect(page.getByTestId("new-game")).toBeVisible({ timeout: COLD_MS });

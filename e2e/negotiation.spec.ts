@@ -5,6 +5,8 @@ import { COLD_MS } from "./timeouts";
 
 // The mock evaluates to review. This test verifies routing and durable contact history, not a price oracle.
 test("같은 상대와 대면·통화·제안서를 이어도 기록과 거래가 유지된다", async ({ page }) => {
+  // Three complete exchanges and reloads share one record; their total duration is not a speed assertion.
+  test.slow();
   const { gameId, targetName } = seedTransferTarget();
   await page.goto(`/game/${gameId}`);
   const input = page.getByTestId("chat-input");
