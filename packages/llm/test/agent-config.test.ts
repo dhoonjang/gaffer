@@ -66,16 +66,6 @@ describe("에이전트별 LLM 설정", () => {
     model: claude-custom
     max_tokens: 100
     timeout_ms: 1000
-  tactic-orders:
-    provider: google
-    model: gemini-custom
-    max_tokens: 150
-    timeout_ms: 1500
-  match-reader:
-    provider: google
-    model: gemini-reader
-    max_tokens: 150
-    timeout_ms: 1500
   match-gm:
     provider: openai
     model: gpt-custom
@@ -86,42 +76,12 @@ describe("에이전트별 LLM 설정", () => {
     model: gpt-room
     max_tokens: 200
     timeout_ms: 2000
-  finalize-match:
-    provider: google
-    model: gemini-final
-    max_tokens: 250
-    timeout_ms: 2500
-  market-orders:
-    provider: google
-    model: gemini-market
-    max_tokens: 250
-    timeout_ms: 2500
-  table-orders:
-    provider: google
-    model: gemini-table-orders
-    max_tokens: 250
-    timeout_ms: 2500
-  training-orders:
-    provider: google
-    model: gemini-training-orders
-    max_tokens: 250
-    timeout_ms: 2500
-  training-rater:
+  history-compactor:
     provider: anthropic
-    model: claude-training
+    model: claude-compactor
     max_tokens: 400
     timeout_ms: 4000
     thinking_level: low
-  scout-rater:
-    provider: google
-    model: gemini-scout
-    max_tokens: 300
-    timeout_ms: 3000
-  history-compactor:
-    provider: google
-    model: gemini-compactor
-    max_tokens: 600
-    timeout_ms: 6000
   onboarding-judge:
     provider: google
     model: gemini-judge
@@ -135,14 +95,14 @@ describe("에이전트별 LLM 설정", () => {
       provider: "openai",
       model: "gpt-custom",
     });
-    expect(config.agents["training-rater"]).toMatchObject({
+    expect(config.agents["history-compactor"]).toMatchObject({
       provider: "anthropic",
-      model: "claude-training",
+      model: "claude-compactor",
       thinkingLevel: "low",
     });
-    expect(config.agents["training-rater"].agent).toBe("training-rater");
-    expect(config.agents["training-rater"].maxTokens).toBe(400);
-    expect(config.agents["training-rater"].timeoutMs).toBe(4000);
+    expect(config.agents["history-compactor"].agent).toBe("history-compactor");
+    expect(config.agents["history-compactor"].maxTokens).toBe(400);
+    expect(config.agents["history-compactor"].timeoutMs).toBe(4000);
     expect(config.agents.gm.timeoutMs).toBe(1000);
   });
 
@@ -329,5 +289,48 @@ describe("게임 버전", () => {
 
   it("저장소의 버전 파일이 그 모양을 지킨다", () => {
     expect(gameVersion()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
+describe("typed evaluators are separate from generative agents", () => {
+  const configWith = (fields: string) =>
+    yamlWith(AGENT_YAML) +
+    `
+evaluators:
+  match-reader:
+    provider: typesafe
+    model: evaluation-fixture
+    timeout_ms: 2000
+    input_usd_per_million: 0.1
+${fields}`;
+
+  it("rejects retired comparison roles in production configuration", () => {
+    const agents = fullAgents();
+    for (const name of ["reader-baseline", "scout-rater", "training-rater", "finalize-match"]) {
+      expect(() => parseLlmConfig(yamlOf({ ...agents, [name]: { ...AGENT_BLOCK } }))).toThrow();
+    }
+    expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();
+  });
+
+  it("does not allow evaluation-only models to take a GM role", () => {
+    const agents = fullAgents();
+    agents.gm!.provider = "typesafe";
+    expect(() => parseLlmConfig(yamlOf(agents))).toThrow();
+    expect(() => parseLlmConfig(configWith("    max_tokens: 10\n"))).toThrow();
+  });
+
+  it("carries the shared retry policy and rejects unbounded timeout/negative prices", () => {
+    expect(parseLlmConfig(configWith("")).evaluators["match-reader"]).toMatchObject({
+      maxRetries: 2,
+      timeoutMs: 2000,
+    });
+    expect(() =>
+      parseLlmConfig(configWith("").replace("timeout_ms: 2000", "timeout_ms: 0")),
+    ).toThrow();
+    expect(() =>
+      parseLlmConfig(
+        configWith("").replace("input_usd_per_million: 0.1", "input_usd_per_million: -1"),
+      ),
+    ).toThrow();
   });
 });

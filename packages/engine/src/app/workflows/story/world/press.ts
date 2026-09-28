@@ -61,7 +61,6 @@ import {
   awardFact,
   retirementJudgeDate,
 } from "../../../../common/players/career";
-import { fundingPressFactOf } from "../../../../negotiation/finance/manager-wallet";
 import { predictionOf, predictedPlaceOf } from "../../../../common/views/prediction";
 import { leagueOfTeamIn } from "../../../../common/core/league-membership";
 import { addDays, diffDays } from "../../../../common/core/dates";
@@ -310,18 +309,6 @@ export function openAppointmentPress(
  * 않고, 보드의 판정이 갈리면 다음 회견이 새 코드로 다시 묻는다.
  */
 /**
- * **감독이 사재를 구단에 넣었다** — 등급이 오른 날부터 이레 안의 회견이 싣는다
- * (career.md §5.4 · people.md §4). 대기열이 없는 것은 그 날이 지출 이력에서 그대로
- * 나오기 때문이고, 감독이 또 부어 등급이 오르면 창이 새 사실로 다시 열린다.
- */
-export function loadManagerFund(state: GameState, conference: PressConference): void {
-  const fact = fundingPressFactOf(state);
-  if (!fact) return;
-  conference.facts.push(fact);
-  conference.weight = Math.max(conference.weight, 2);
-}
-
-/**
  * 시즌 개막 전야 — 한 시즌에 한 번뿐인 자리라 id도 시즌으로 잡는다.
  * 무게 1인 것은 아직 아무 일도 일어나지 않았기 때문이다 — 물을 수 있는 것은 기대뿐이다.
  */
@@ -505,7 +492,6 @@ export function openPress(state: GameState, conference: PressConference, digest?
   loadCallUps(state, conference);
   loadSackings(state, conference);
   loadManagerContract(state, conference);
-  loadManagerFund(state, conference);
   loadJobLink(state, conference);
   state.pressConferences.push(conference);
   // 지나간 회견은 서사에 남지 상태로 쌓일 이유가 없다

@@ -1,26 +1,59 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   HISTORY_DIGEST_CHARS,
   HISTORY_OPEN_CHARS,
-  MOOD_BATCH,
-  MOOD_NOTE_MAX,
-  RATING_MAX,
+  RATING_BAND,
+  MATCH_FAMILIARITY_MIN,
+  MATCH_FAMILIARITY_MAX,
+  buildRatingBrief,
+  finalizeMatch,
+  startMatch,
+  matchRated,
+  settleMatchRating,
+  type MatchRatingBrief,
   TACTIC_GAIN_MAX,
   TACTIC_GAIN_MIN,
-  advanceTime,
-  createGame,
-  markEntered,
-  startMatch,
+  POSITION_TRAIN_MAX,
+  applyTrainingOutcomes,
+  trainingSettled,
+  userPlayers,
+  type TrainingBrief,
+  type GameState,
 } from "@story-fm/engine";
 import { CharacterMemorySchema } from "@story-fm/domain";
-import type { GameLLM, GameToolSpec, JsonObjectSchema, TurnResult } from "@story-fm/llm";
+import type {
+  EvaluationResult,
+  EvaluationRequest,
+  GameEvaluator,
+  GameLLM,
+  JsonObjectSchema,
+  TurnResult,
+} from "@story-fm/llm";
 import { LlmCallError, LlmTimeoutError, TokenBudgetExceededError } from "@story-fm/llm";
 import { z } from "zod";
 import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src/common/retry";
-import { runMatchReader } from "../../src/app/workflows/match/match-reader";
-import { SettleMatchSchema, SETTLE_MATCH_INPUT } from "../../src/match/finalize-match";
-import { REPORT_TRAINING_INPUT, TrainingReportSchema } from "../../src/story/training-rater";
+import { agreement, costUsd, durationStats } from "../../harness/match-reader-eval-metrics";
+import { runReaderPipeline } from "../../harness/reader-pipeline";
+import { matchReaderOutputSchema } from "../../harness/reader-baseline";
+import {
+  buildSettlementRequest,
+  evaluateSettlement,
+  runFinalizeMatch,
+} from "../../src/match/finalize-match";
+import { buildTrainingRequest, evaluateTraining } from "../../src/story/training-rater";
+import { reportTraining } from "../../src/app/workflows/story/training-rater";
+import { createTestGame, createMiniGame, advanceToMatchday } from "../../../engine/test/helpers";
 import { REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
+
+const answered = (output: TurnResult["output"]): TurnResult => ({
+  text: "",
+  history: { version: 1, provider: "google", model: "test", messages: [] },
+  historyBase: 0,
+  usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  toolCallCount: 0,
+  stopReason: "completed",
+  output,
+});
 
 /**
  * 실패 계약 — **쓸 수 없는 산출만 한 번 더 부르고, 그다음은 갈린다** (agents.md §8).
@@ -84,15 +117,6 @@ describe("retryOnce — 폴백 대신 한 번의 재시도", () => {
  */
 describe("readOutput — 산출이 왔는가", () => {
   const schema = z.object({ n: z.number().int().min(0) });
-  const answered = (output: TurnResult["output"]): TurnResult => ({
-    text: "",
-    history: { version: 1, provider: "google", model: "test", messages: [] },
-    historyBase: 0,
-    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-    toolCallCount: 0,
-    stopReason: "completed",
-    output,
-  });
 
   it("스키마를 지난 산출은 그대로 돌려준다", () => {
     expect(readOutput("t", schema, answered({ n: 3 }))).toEqual({ n: 3 });
@@ -107,181 +131,6 @@ describe("readOutput — 산출이 왔는가", () => {
 
   it("스키마를 못 지난 산출도 ModelOutputError이고, 어디가 틀렸는지 적는다", () => {
     expect(() => readOutput("t", schema, answered({ n: -1 }))).toThrow(/n: /);
-  });
-});
-
-/**
- * 판독기의 실패 계약 — 산출은 JSON 하나로 오므로 "산출 뒤의 실패"라는 자리는 없다.
- * 남는 갈래는 셋이다: 산출이 왔다 · 산출이 없다(한 번 더) · 호출 자체가 실패했다(그대로).
- *
- * 경기 중 명단이 없는 상태라 `buildLedgerNote`도 `<facts>`도 빈 줄을 낸다 — 이
- * 테스트가 보는 것은 프롬프트가 아니라 실패와 산출이 만나는 자리다.
- */
-describe("runMatchReader — 산출과 실패", () => {
-  /** 이 경기의 지난 중계 턴 하나 — 판독기가 `<match_log>`로 읽는다 (agents.md §3) */
-  // 장부 없는 경기 상태 — 입력 조립이 경기 갈래로 가되 실을 것이 없다
-  /**
-   * 킥오프에 선 실제 경기 한 판 — 판독기는 실시간 경기의 장부와 통계를 읽으므로 손으로 세운
-   * 조각으로는 입력이 서지 않는다. 한 번 세워 케이스가 나눠 쓴다(판독은 상태를 바꾸지 않는다).
-   */
-  const emptyState = (() => {
-    const background = "K리그에서 뛰다 은퇴한 수비수 출신 분석가";
-    const state = createGame({
-      seed: 5,
-      userTeamId: "arsenal",
-      managerName: "김감독",
-      background,
-    });
-    for (let guard = 0; guard < 40 && state.phase !== "matchday"; guard++) {
-      advanceTime(state, "next_match");
-    }
-    expect(startMatch(state).ok).toBe(true);
-    markEntered(state);
-    state.chat.push({
-      role: "model",
-      text: "@중계: 브루노가 절뚝이며 터치라인으로 나옵니다.",
-      toolCalls: [],
-      at: state.date,
-      inMatch: true,
-    });
-    return state;
-  })();
-
-  /** 판독기가 인자를 옮길 명령의 스펙 — 이 갈래의 시험에는 스키마만 있으면 된다 */
-  const SPECS = new Map<string, GameToolSpec>([
-    [
-      "set_tactics",
-      {
-        name: "set_tactics",
-        description: "팀 전술 6축과 갈래",
-        inputSchema: { type: "object", properties: {} },
-        handle: () => ({ ok: true, message: "" }),
-      },
-    ],
-  ]);
-
-  /** 산출 JSON 하나로 답하는 모델 — 실모드에서 어댑터가 `output`에 세우는 그 모양이다 */
-  const answering =
-    (output: TurnResult["output"], text = ""): GameLLM["runTurn"] =>
-    () =>
-      Promise.resolve({
-        text,
-        history: { version: 1, provider: "google", model: "test", messages: [] },
-        historyBase: 0,
-        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-        toolCallCount: 0,
-        stopReason: "completed",
-        output,
-      });
-
-  it("산출이 오면 그것으로 진행한다 — 요청은 도구 없이 출력 스키마 하나다", async () => {
-    const llm: GameLLM = { runTurn: answering({ ops: { set_tactics: [{ pressing: 4 }] } }) };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    const result = await runMatchReader(emptyState, SPECS, {
-      occasion: "orders",
-      said: "압박 올려",
-      llm,
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.reading.ops.set_tactics).toEqual([{ pressing: 4 }]);
-    expect(spy).toHaveBeenCalledTimes(1);
-    const request = spy.mock.calls[0]![0];
-    expect(request.outputSchema).toBeDefined();
-    expect(request.tools).toBeUndefined();
-  });
-
-  it.each(["", "   "])("미해석 내용이 %j여도 함께 온 명령을 버리지 않는다", async (unresolved) => {
-    const runTurn = vi.fn(answering({ ops: { set_tactics: [{ pressing: 4 }] }, unresolved }));
-    const result = await runMatchReader(emptyState, SPECS, {
-      occasion: "orders",
-      said: "압박 올려",
-      llm: { runTurn },
-    });
-    expect(result.ok && result.reading.ops.set_tactics).toEqual([{ pressing: 4 }]);
-    expect(result.ok && result.reading.unresolved).toBeUndefined();
-    expect(runTurn).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([false, 3, "a".repeat(201)])(
-    "미해석 내용의 잘못된 타입과 길이는 계속 반려한다",
-    async (unresolved) => {
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-      try {
-        const runTurn = vi.fn(answering({ ops: { set_tactics: [{ pressing: 4 }] }, unresolved }));
-        const result = await runMatchReader(emptyState, SPECS, {
-          occasion: "orders",
-          said: "압박 올려",
-          llm: { runTurn },
-        });
-        expect(result.ok).toBe(false);
-        expect(runTurn).toHaveBeenCalledTimes(2);
-      } finally {
-        warn.mockRestore();
-      }
-    },
-  );
-
-  /**
-   * 출력 스키마를 실었는데도 산문으로 답하는 경우 — 예외가 없어 `retryOnce`가 그냥
-   * 지나가면, 해석은 **한 번** 실패에 턴이 취소되고 결산은 로그 한 줄 없이 앵커로
-   * 떨어진다 (agents.md §8).
-   */
-  it("산출 없이 본문만 답하면 다시 부르고, 그래도 없으면 ok:false다", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const llm: GameLLM = { runTurn: answering(null, "왼쪽을 두껍게 하겠습니다.") };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    const result = await runMatchReader(emptyState, SPECS, {
-      occasion: "orders",
-      said: "왼쪽을 두껍게",
-      llm,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(spy).toHaveBeenCalledTimes(2);
-    // 요청이 산출의 꼴을 강제했는지 — 프롬프트 문장만으로는 이 자리가 비어 있었다
-    expect(spy.mock.calls[0]![0].outputSchema).toBeDefined();
-    // 이 경기의 지난 턴이 장부 뒤·감독 발화 앞에 선다 — "걔 빼"가 가리킬 대상이 여기 있다
-    const user = spy.mock.calls[0]![0].user;
-    expect(user).toContain("<match_log>\n@중계: 브루노가 절뚝이며");
-    expect(user.indexOf("</match_log>")).toBeLessThan(user.indexOf("@감독: 왼쪽을 두껍게"));
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  /** 모양이 틀린 산출도 쓸 수 없는 산출이다 — `ops`가 배열이면 명령 이름이 없다 */
-  it("스키마를 못 지난 산출도 다시 부르고, 그래도 어긋나면 ok:false다", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const llm: GameLLM = { runTurn: answering({ ops: [] }) };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    const result = await runMatchReader(emptyState, SPECS, {
-      occasion: "orders",
-      said: "왼쪽을 두껍게",
-      llm,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(spy).toHaveBeenCalledTimes(2);
-    warn.mockRestore();
-  });
-
-  /**
-   * 혼잡은 다시 불러도 같은 답이다 — 한 번에 끝낸다. 그리고 **삼키지 않는다**:
-   * 시한·혼잡을 "다시 말씀해 주세요"로 바꾸면 감독은 자기 말이 잘못된 줄 알고 같은
-   * 말을 다시 쳐서 같은 시한을 한 번 더 기다린다 (agents.md §8, models.md §1-1).
-   */
-  it("의도 없이 혼잡으로 실패하면 한 번만 부르고 그대로 올린다", async () => {
-    const thrown = new LlmCallError("overloaded", "529");
-    const llm: GameLLM = { runTurn: () => Promise.reject(thrown) };
-    const spy = vi.spyOn(llm, "runTurn");
-
-    await expect(
-      runMatchReader(emptyState, SPECS, { occasion: "orders", said: "왼쪽을 두껍게", llm }),
-    ).rejects.toBe(thrown);
-    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -300,22 +149,7 @@ describe("anchorStands — 결산 실패는 삼키고 앵커를 남긴다", () =
   });
 });
 
-/**
- * 결산 산출이 받아들이는 폭 — **넘친 값 하나가 결산 전체를 버리지 않는다** (agents.md §4).
- *
- * 스키마는 코어 밴드보다 넓게 열어 두고, 밴드 밖의 값은 파싱을 깨뜨리는 대신 코어가
- * 자른다. 그러나 그 **폭 밖**은 코어에 닿기 전에 반려된다 — 여기가 조여지면 한 선수의
- * 과한 숫자 하나로 경기 판정 전체가 앵커로 떨어지고, 반대로 풀리면 검증되지 않은 값이
- * 코어의 문 앞까지 온다. 재는 것은 그 산출의 Zod 한 벌이다 — 모델이 보는 JSON 스키마가
- * 거기서 파생되므로(prompts.md §2) 한 벌을 재면 둘을 잰다.
- */
-describe("결산 스키마의 수용 폭", () => {
-  /** 반려된 자리들 — 지났으면 빈 문자열이다 */
-  function rejects(schema: z.ZodTypeAny, input: unknown): string {
-    const parsed = schema.safeParse(input);
-    return parsed.success ? "" : parsed.error.issues.map((i) => i.path.join(".")).join(" / ");
-  }
-
+describe("이력 압축 스키마의 수용 폭", () => {
   /** 도구 스키마의 한 자리 — `properties`가 unknown이라 여기서 한 번만 좁힌다 */
   function schemaAt(schema: JsonObjectSchema, path: string): Record<string, unknown> {
     let node: Record<string, unknown> = schema;
@@ -329,53 +163,6 @@ describe("결산 스키마의 수용 폭", () => {
     }
     return node;
   }
-
-  const settle = (input: unknown) => rejects(SettleMatchSchema, input);
-
-  it("평점은 코어 밴드보다 넓게 받고, 그 폭 밖은 코어에 닿기 전에 반려한다", async () => {
-    const rating = schemaAt(SETTLE_MATCH_INPUT, "ratings.[].rating");
-    // 모델이 보는 폭이 코어 밴드보다 양쪽으로 넓다 (코어는 앵커 ±RATING_BAND로 다시 자른다)
-    expect(rating.maximum).toBeGreaterThan(RATING_MAX);
-    expect(rating.minimum).toBe(0);
-
-    expect(settle({ ratings: [{ playerId: "p1", rating: Number(rating.maximum) + 1 }] })).toContain(
-      "rating",
-    );
-    // 빈 제출도, 한 경기 명단을 넘는 제출도 여기서 걸린다
-    expect(settle({ ratings: [] })).not.toBe("");
-    const flood = Array.from({ length: 31 }, (_, i) => ({ playerId: `p${i}`, rating: 7 }));
-    expect(settle({ ratings: flood })).not.toBe("");
-    // 마무리 중계는 비워도 된다 — GM이 대신 닫는다 (agents.md §3)
-    expect(settle({ ratings: [{ playerId: "p1", rating: 7 }] })).toBe("");
-  });
-
-  it("심경 한 줄은 세이브의 상한에서 끊기고, 한 번에 세는 인원도 물려 있다", async () => {
-    // 길이는 세이브의 계약이 정한다 — 여기 다시 적으면 그 자리가 갈린다
-    expect(schemaAt(SETTLE_MATCH_INPUT, "moods.[].text").maxLength).toBe(MOOD_NOTE_MAX);
-
-    const ratings = [{ playerId: "p1", rating: 7 }];
-    const note = (chars: number) => ({
-      playerId: "p1",
-      text: "말".repeat(chars),
-      acknowledgesIssue: false,
-    });
-    expect(settle({ ratings, moods: [note(MOOD_NOTE_MAX + 1)] })).toContain("text");
-    const flood = Array.from({ length: MOOD_BATCH + 1 }, () => note(10));
-    expect(settle({ ratings, moods: flood })).not.toBe("");
-  });
-
-  it("훈련 결산의 폭도 코어 밴드보다 넓다 — 날짜는 형식이 여기서 걸린다", () => {
-    const gain = schemaAt(REPORT_TRAINING_INPUT, "results.[].tacticGain");
-    expect(gain.maximum).toBeGreaterThan(TACTIC_GAIN_MAX);
-    expect(gain.minimum).toBeLessThan(TACTIC_GAIN_MIN);
-
-    const report = (input: unknown) => rejects(TrainingReportSchema, input);
-    expect(
-      report({ results: [{ playerId: "p1", tacticGain: Number(gain.maximum) + 1 }] }),
-    ).toContain("tacticGain");
-    // 어느 훈련에서 나온 변화인지는 날짜로 가리킨다 — 형식이 어긋난 값은 코어까지 가지 않는다
-    expect(report({ results: [{ playerId: "p1", date: "2026/01/02" }] })).toContain("date");
-  });
 
   /**
    * ⚠️ 이력 압축의 상한은 **코어·세이브의 상수 그대로**여야 한다. 손으로 다시 적으면
@@ -398,5 +185,760 @@ describe("결산 스키마의 수용 폭", () => {
     for (const path of free) {
       expect(schemaAt(REPORT_DIGEST_INPUT, path).maxLength, path).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("reader pipeline — atomic probabilistic pilot", () => {
+  const schema = matchReaderOutputSchema();
+  const point = { id: "p", text: "왼쪽 공격이 이어진다", about: ["home"], importance: 2 };
+  const candidate = {
+    pointId: "p",
+    target: { side: "home", lane: "left" },
+    shape: "focus",
+    sign: 1,
+  };
+  const evaluation = {
+    model: "fixture",
+    answers: {
+      line_0: {
+        type: "score" as const,
+        score: 1.25,
+        probabilities: { "0": 0, "1": 0.75, "2": 0.25, "3": 0 },
+        confidence: 0.3,
+      },
+    },
+    usage: { inputTokens: 12, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  };
+
+  it("keeps fractional strength without multiplying confidence and removes scalar generation", async () => {
+    const llm = {
+      runTurn: vi.fn<GameLLM["runTurn"]>(async () =>
+        answered({ points: [point], sheet: [candidate] }),
+      ),
+    };
+    const evaluator = { evaluate: vi.fn(async () => evaluation) };
+    const result = await runReaderPipeline({
+      llm,
+      evaluator,
+      user: "recorded input",
+      schema,
+    });
+    expect(result.reading.sheet[0]?.step).toBe(1.25);
+    expect(result.evaluations).toEqual([evaluation]);
+    expect(llm.runTurn).toHaveBeenCalledTimes(1);
+    expect(evaluator.evaluate).toHaveBeenCalledTimes(1);
+    const request = llm.runTurn.mock.calls[0]![0];
+    expect(JSON.stringify(request.outputSchema)).not.toContain('"step"');
+    expect(request.outputSchema?.properties).not.toHaveProperty("ops");
+  });
+
+  it("empty experimental sheet skips evaluator; obsolete command fields are discarded", async () => {
+    const llm: GameLLM = {
+      runTurn: async () =>
+        answered({
+          points: [],
+          sheet: [],
+          ops: { substitute: [{ out: "a", in: "b" }] },
+          unresolved: "invented",
+        }),
+    };
+    const evaluator = { evaluate: vi.fn(async () => evaluation) };
+    const result = await runReaderPipeline({
+      llm,
+      evaluator,
+      user: "facts",
+      schema,
+    });
+    expect(result.reading).toEqual({ points: [], sheet: [] });
+    expect(evaluator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it("retry invalid point references before evaluating; never return a partial reading", async () => {
+    const llm = {
+      runTurn: vi.fn(async () =>
+        answered({ points: [], sheet: [candidate], ops: { substitute: [{ out: "a", in: "b" }] } }),
+      ),
+    };
+    const evaluator = { evaluate: vi.fn(async () => evaluation) };
+    await expect(runReaderPipeline({ llm, evaluator, user: "facts", schema })).rejects.toThrow(
+      ModelOutputError,
+    );
+    expect(llm.runTurn).toHaveBeenCalledTimes(2);
+    expect(evaluator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it.each(["missing", "out-of-range", "transport"])(
+    "%s evaluation fails without repeating prose",
+    async (failure) => {
+      const llm = {
+        runTurn: vi.fn<GameLLM["runTurn"]>(async () =>
+          answered({ points: [point], sheet: [candidate] }),
+        ),
+      };
+      const evaluator: GameEvaluator = {
+        evaluate: async (): Promise<EvaluationResult> => {
+          if (failure === "transport") throw new LlmCallError("auth", "missing key");
+          return failure === "missing"
+            ? { ...evaluation, answers: {} }
+            : {
+                ...evaluation,
+                answers: { line_0: { ...evaluation.answers.line_0, score: 3.1 } },
+              };
+        },
+      };
+      await expect(runReaderPipeline({ llm, evaluator, user: "facts", schema })).rejects.toThrow();
+      expect(llm.runTurn).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
+describe("reader comparison metrics", () => {
+  it("empty measurements are unknown and percentiles use nearest rank", () => {
+    expect(durationStats([])).toEqual({ n: 0, p50Ms: null, p95Ms: null });
+    expect(durationStats([40, 10, 30, 20])).toEqual({ n: 4, p50Ms: 20, p95Ms: 40 });
+  });
+
+  it("missing prices and unsupported cache-write charges never look free", () => {
+    const usage = {
+      inputTokens: 1000,
+      outputTokens: 100,
+      cacheReadTokens: 200,
+      cacheWriteTokens: 0,
+    };
+    expect(costUsd(usage, { input: 1, output: 2 })).toBeNull();
+    expect(costUsd(usage, { input: 1, output: 2, cachedInput: 0.1 })).toBeCloseTo(0.00102);
+    expect(
+      costUsd({ ...usage, cacheWriteTokens: 1 }, { input: 1, output: 2, cachedInput: 0.1 }),
+    ).toBeNull();
+  });
+
+  it("pairs duplicate rows once and separates lexical agreement from step error", () => {
+    const row = {
+      pointId: "p",
+      target: { side: "home" as const, lane: "left" as const },
+      shape: "focus" as const,
+      sign: 1 as const,
+      step: 1,
+    };
+    const baseline = {
+      points: [{ id: "p", text: "same fact", about: [], importance: 1 as const }],
+      sheet: [row, row],
+    };
+    const candidate = {
+      ...baseline,
+      sheet: [{ ...row, step: 1.5 }],
+    };
+    expect(agreement(baseline, candidate)).toMatchObject({
+      matchedRows: 1,
+      unmatchedBaselineRows: 1,
+      structuralJaccard: 0.5,
+      stepMeanAbsoluteError: 0.5,
+    });
+    expect(
+      agreement(baseline, {
+        ...candidate,
+        points: [{ ...baseline.points[0]!, text: "different wording" }],
+      }),
+    ).toMatchObject({ matchedRows: 0, stepMeanAbsoluteError: null });
+  });
+});
+
+function trainingBrief(): TrainingBrief {
+  const subject = {
+    age: 22,
+    position: "CM",
+    familiarity: 5,
+    condition: 90,
+    form: 0,
+    room: 10,
+    overall: 70,
+    apps: 0,
+    rating: null,
+    mentor: { name: "선배", boost: 1.2 },
+  };
+  return {
+    teamName: "훈련팀",
+    from: "2026-07-01",
+    to: "2026-07-03",
+    sessions: [
+      {
+        entryId: "training-1",
+        date: "2026-07-02",
+        slot: "am",
+        label: "패스",
+        focus: ["passing"],
+        ordered: true,
+      },
+      {
+        entryId: "training-2",
+        date: "2026-07-03",
+        slot: "am",
+        label: "전술",
+        focus: ["tactical"],
+        ordered: false,
+      },
+    ],
+    subjects: [
+      { ...subject, playerId: "p1", name: "민수", program: { axis: "pace", position: "DM" } },
+      { ...subject, playerId: "p2", name: "준호", program: null },
+    ],
+    trainedAxes: ["passing", "pace"],
+    chat: [],
+  };
+}
+
+function trainingAnswers(request: EvaluationRequest): EvaluationResult {
+  return {
+    model: "mock",
+    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    answers: Object.fromEntries(
+      Object.entries(request.questions).map(([key, question]) => {
+        if (question.type === "score") {
+          const zero = question.criteria.indexOf("0");
+          return [
+            key,
+            {
+              type: "score",
+              score: zero,
+              confidence: 0.1,
+              probabilities: Object.fromEntries(
+                question.criteria.map((_, i) => [String(i), i === zero ? 1 : 0]),
+              ),
+            },
+          ];
+        }
+        if (question.type !== "choice") throw new Error("unexpected noul");
+        const choice = Object.hasOwn(question.criteria, "none") ? "none" : "d0";
+        return [
+          key,
+          {
+            type: "choice",
+            choice,
+            confidence: 1,
+            probabilities: Object.fromEntries(
+              Object.keys(question.criteria).map((candidate) => [
+                candidate,
+                candidate === choice ? 1 : 0,
+              ]),
+            ),
+          },
+        ];
+      }),
+    ),
+  };
+}
+
+function selectTraining(
+  request: EvaluationRequest,
+  result: EvaluationResult,
+  key: string,
+  choice: string,
+) {
+  const question = request.questions[key];
+  if (question?.type !== "choice") throw new Error("expected choice");
+  result.answers[key] = {
+    type: "choice",
+    choice,
+    confidence: 1,
+    probabilities: Object.fromEntries(
+      Object.keys(question.criteria).map((candidate) => [candidate, candidate === choice ? 1 : 0]),
+    ),
+  };
+}
+
+describe("typed training evaluation", () => {
+  it("batches every subject, restricts personal axes, preserves facts and maps continuous levels", async () => {
+    const brief = trainingBrief();
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => {
+      expect(JSON.parse(request.state).brief.subjects[0].mentor).toEqual(brief.subjects[0]!.mentor);
+      expect(request.questions.p0_attribute?.criteria).toHaveProperty("pace_up");
+      expect(request.questions.p1_attribute?.criteria).not.toHaveProperty("pace_up");
+      expect(request.questions.p1_attribute?.criteria).toHaveProperty("passing_down");
+      expect(request.questions).not.toHaveProperty("p1_position");
+      for (const [key, question] of Object.entries(request.questions))
+        expect(question.instructions).toContain(key.startsWith("p0_") ? "p1" : "p2");
+      const result = trainingAnswers(request);
+      const tactic = request.questions.p0_tactic!;
+      if (tactic.type !== "score") throw new Error("expected score");
+      expect(tactic.criteria).toEqual(
+        Array.from({ length: TACTIC_GAIN_MAX - TACTIC_GAIN_MIN + 1 }, (_, i) =>
+          String(i + TACTIC_GAIN_MIN),
+        ),
+      );
+      result.answers.p0_tactic = {
+        type: "score",
+        score: 1.5,
+        confidence: 0.01,
+        probabilities: { "0": 0, "1": 0.5, "2": 0.5, "3": 0, "4": 0 },
+      };
+      const position = request.questions.p0_position!;
+      if (position.type !== "score") throw new Error("expected score");
+      result.answers.p0_position = {
+        type: "score",
+        score: POSITION_TRAIN_MAX,
+        confidence: 1,
+        probabilities: Object.fromEntries(
+          position.criteria.map((_, i) => [String(i), i === POSITION_TRAIN_MAX ? 1 : 0]),
+        ),
+      };
+      selectTraining(request, result, "p0_attribute", "pace_down");
+      selectTraining(request, result, "p0_mark", "tired");
+      selectTraining(request, result, "p0_date", "d1");
+      return result;
+    });
+    const result = await evaluateTraining(brief, { evaluate });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      playerId: "p1",
+      tacticGain: 1.5 + TACTIC_GAIN_MIN,
+      positionGain: POSITION_TRAIN_MAX,
+      attribute: "pace",
+      attributeStep: -1,
+      mark: "tired",
+      date: "2026-07-03",
+      note: "",
+    });
+    expect(result[1]).toMatchObject({
+      playerId: "p2",
+      positionGain: null,
+      attribute: null,
+      mark: null,
+      note: "",
+    });
+  });
+
+  it("abstains on tied discrete fields and delegates date fallback to the core", async () => {
+    const evaluator: GameEvaluator = {
+      evaluate: async (request) => {
+        const result = trainingAnswers(request);
+        for (const [key, alternative] of [
+          ["p0_attribute", "pace_up"],
+          ["p0_mark", "standout"],
+          ["p0_date", "d1"],
+        ]) {
+          const original = result.answers[key!];
+          if (original?.type !== "choice") throw new Error("expected choice");
+          result.answers[key!] = {
+            ...original,
+            choice: alternative!,
+            probabilities: {
+              ...original.probabilities,
+              [original.choice]: 0.5,
+              [alternative!]: 0.5,
+            },
+          };
+        }
+        return result;
+      },
+    };
+    const [outcome] = await evaluateTraining(trainingBrief(), evaluator);
+    expect(outcome).toMatchObject({ attribute: null, attributeStep: null, mark: null });
+    expect(outcome).not.toHaveProperty("date");
+  });
+
+  it.each(["missing", "extra", "wrong key", "invalid mass", "inconsistent score", "forged choice"])(
+    "rejects the entire report on %s",
+    async (failure) => {
+      const evaluator: GameEvaluator = {
+        evaluate: async (request) => {
+          const result = trainingAnswers(request);
+          if (failure === "missing") delete result.answers.p1_tactic;
+          if (failure === "extra") result.answers.unknown = result.answers.p0_tactic!;
+          if (failure === "wrong key") {
+            result.answers.unknown = result.answers.p1_tactic!;
+            delete result.answers.p1_tactic;
+          }
+          const answer = result.answers.p0_tactic;
+          if (answer?.type === "score") {
+            if (failure === "invalid mass") answer.probabilities["0"] = 0.1;
+            if (failure === "inconsistent score") answer.score += 0.1;
+          }
+          if (failure === "forged choice")
+            selectTraining(request, result, "p1_attribute", "pace_up");
+          return result;
+        },
+      };
+      await expect(evaluateTraining(trainingBrief(), evaluator)).rejects.toThrow(ModelOutputError);
+    },
+  );
+
+  it("rejects duplicate subjects or overflowing date candidates without truncating", () => {
+    const brief = trainingBrief();
+    expect(() =>
+      buildTrainingRequest({ ...brief, subjects: [brief.subjects[0]!, brief.subjects[0]!] }),
+    ).toThrow("중복");
+    expect(() =>
+      buildTrainingRequest({
+        ...brief,
+        sessions: Array.from({ length: 256 }, (_, i) => ({
+          ...brief.sessions[0]!,
+          date: `date-${i}`,
+        })),
+      }),
+    ).toThrow("한도");
+  });
+});
+
+describe("training evaluation workflow", () => {
+  let base: GameState;
+  beforeAll(() => {
+    base = createTestGame();
+  });
+  function fixture() {
+    const state = structuredClone(base);
+    const brief = trainingBrief();
+    brief.subjects = brief.subjects.map((subject, i) => ({
+      ...subject,
+      playerId: userPlayers(state)[i]!.id,
+    }));
+    for (const session of brief.sessions)
+      state.schedule.push({
+        id: session.entryId,
+        date: session.date,
+        time: "10:00",
+        type: "training",
+        refId: session.entryId,
+        teamId: state.userTeamId,
+        status: "done",
+      });
+    return { state, brief };
+  }
+
+  it("preserves an empty report in mock mode without settling the ledger", async () => {
+    vi.stubEnv("LLM_MODE", "mock");
+    try {
+      const { state, brief } = fixture();
+      const { report } = await reportTraining(state, brief);
+      expect(report).toMatchObject({ moved: [], marks: [] });
+      expect(trainingSettled(state, brief)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("retries malformed evaluation once and leaves an empty report without settlement", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { state, brief } = fixture();
+      const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => ({
+        ...trainingAnswers(request),
+        answers: {},
+      }));
+      const { report } = await reportTraining(state, brief, { evaluate });
+      expect(evaluate).toHaveBeenCalledTimes(2);
+      expect(report).toMatchObject({ moved: [], marks: [] });
+      expect(trainingSettled(state, brief)).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not retry transport errors", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { state, brief } = fixture();
+      const evaluate = vi.fn<GameEvaluator["evaluate"]>(async () => {
+        throw new LlmCallError("auth", "unavailable");
+      });
+      await reportTraining(state, brief, { evaluate });
+      expect(evaluate).toHaveBeenCalledTimes(1);
+      expect(trainingSettled(state, brief)).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("applies only once and skips evaluation for an already settled interval", async () => {
+    const { state, brief } = fixture();
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => trainingAnswers(request));
+    const first = await reportTraining(state, brief, { evaluate });
+    expect(first.report).not.toBeNull();
+    expect(trainingSettled(state, brief)).toBe(true);
+    const after = structuredClone(state);
+    expect(await reportTraining(state, brief, { evaluate })).toEqual({ report: null });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(state).toEqual(after);
+  });
+
+  it("discards a result if another call settles the interval while it waits", async () => {
+    const { state, brief } = fixture();
+    let settled: GameState | undefined;
+    const evaluator: GameEvaluator = {
+      evaluate: async (request) => {
+        applyTrainingOutcomes(state, brief, []);
+        settled = structuredClone(state);
+        const result = trainingAnswers(request);
+        selectTraining(request, result, "p0_mark", "standout");
+        return result;
+      },
+    };
+    expect(await reportTraining(state, brief, evaluator)).toEqual({ report: null });
+    expect(state).toEqual(settled);
+  });
+});
+
+function settlementBrief(): MatchRatingBrief {
+  return {
+    matchId: "match-test",
+    scoreline: "우리 1 : 0 상대",
+    outcome: "win",
+    timeline: ["후반 압박으로 상대 전개를 막았다"],
+    players: ["p1", "p2"].map((playerId) => ({
+      playerId,
+      name: playerId,
+      position: "CM",
+      started: true,
+      minutes: 90,
+      goals: 0,
+      assists: 0,
+      shots: 0,
+      saves: 0,
+      yellows: 0,
+      reds: 0,
+      anchor: 6.5,
+      age: 25,
+      room: 5,
+      familiarity: 30,
+    })),
+  };
+}
+
+describe("typed match settlement", () => {
+  it.each([0, 1] as const)(
+    "maps the %s endpoint of both score ranges from a single full batch",
+    async (upper) => {
+      const brief = settlementBrief();
+      const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => {
+        expect(JSON.parse(request.state)).toMatchObject({ brief, commentary: "확정 중계" });
+        expect(Object.keys(request.questions)).toHaveLength(brief.players.length * 3);
+        const result = trainingAnswers(request);
+        for (const [key, question] of Object.entries(request.questions)) {
+          expect(question.instructions).toContain(key.startsWith("p0_") ? "p1" : "p2");
+          if (question.type !== "score") continue;
+          const last = question.criteria.length - 1;
+          expect(question.criteria).toHaveLength(key.endsWith("rating") ? 7 : 6);
+          result.answers[key] = {
+            type: "score",
+            score: upper * last,
+            confidence: 0.1,
+            probabilities: Object.fromEntries(
+              question.criteria.map((_, i) => [String(i), i === upper * last ? 1 : 0]),
+            ),
+          };
+        }
+        selectTraining(request, result, "p0_attribute", "pace_down");
+        return result;
+      });
+      const entries = await evaluateSettlement(brief, "확정 중계", { evaluate });
+      expect(evaluate).toHaveBeenCalledTimes(1);
+      expect(entries).toHaveLength(2);
+      expect(entries[0]?.rating).toBeCloseTo(6.5 + (upper ? RATING_BAND : -RATING_BAND));
+      expect(entries[0]?.drill).toBe(upper ? MATCH_FAMILIARITY_MAX : MATCH_FAMILIARITY_MIN);
+      expect(entries[0]).toMatchObject({ playerId: "p1", attribute: "pace", attributeStep: -1 });
+      expect(entries.every((entry) => entry.note === undefined)).toBe(true);
+    },
+  );
+
+  it("retains fractional score expectations and abstains on a tied attribute", async () => {
+    const evaluator: GameEvaluator = {
+      evaluate: async (request) => {
+        const result = trainingAnswers(request);
+        for (const key of ["p0_rating", "p0_drill"]) {
+          const question = request.questions[key];
+          if (question?.type !== "score") throw new Error("expected score");
+          result.answers[key] = {
+            type: "score",
+            score: 2.25,
+            confidence: 0.01,
+            probabilities: Object.fromEntries(
+              question.criteria.map((_, i) => [String(i), i === 2 ? 0.75 : i === 3 ? 0.25 : 0]),
+            ),
+          };
+        }
+        const attribute = result.answers.p0_attribute;
+        if (attribute?.type !== "choice") throw new Error("expected choice");
+        result.answers.p0_attribute = {
+          ...attribute,
+          choice: "pace_up",
+          probabilities: { ...attribute.probabilities, none: 0.5, pace_up: 0.5 },
+        };
+        return result;
+      },
+    };
+    const [entry] = await evaluateSettlement(settlementBrief(), "", evaluator);
+    expect(entry?.rating).toBeCloseTo(6.5 - RATING_BAND + (2.25 * 2 * RATING_BAND) / 6);
+    expect(entry?.drill).toBeCloseTo(
+      MATCH_FAMILIARITY_MIN + (2.25 * (MATCH_FAMILIARITY_MAX - MATCH_FAMILIARITY_MIN)) / 5,
+    );
+    expect(entry).toMatchObject({ attribute: null, attributeStep: null });
+  });
+
+  it.each(["missing", "extra", "wrong key", "invalid mass", "inconsistent score", "wrong type"])(
+    "rejects %s across the whole batch",
+    async (failure) => {
+      const evaluator: GameEvaluator = {
+        evaluate: async (request) => {
+          const result = trainingAnswers(request);
+          if (failure === "missing") delete result.answers.p1_rating;
+          if (failure === "extra") result.answers.unknown = result.answers.p0_rating!;
+          if (failure === "wrong key") {
+            result.answers.unknown = result.answers.p1_rating!;
+            delete result.answers.p1_rating;
+          }
+          const answer = result.answers.p1_rating;
+          if (answer?.type === "score") {
+            if (failure === "invalid mass") answer.probabilities["0"] = 0.1;
+            if (failure === "inconsistent score") answer.score += 0.1;
+          }
+          if (failure === "wrong type") result.answers.p1_rating = { type: "noul", noul: 0.5 };
+          return result;
+        },
+      };
+      await expect(evaluateSettlement(settlementBrief(), "", evaluator)).rejects.toThrow(
+        ModelOutputError,
+      );
+    },
+  );
+
+  it("rejects duplicate subjects rather than repeating a participant's settlement", () => {
+    const brief = settlementBrief();
+    expect(() =>
+      buildSettlementRequest({ ...brief, players: [brief.players[0]!, brief.players[0]!] }, ""),
+    ).toThrow("중복");
+  });
+});
+
+describe("match settlement workflow", () => {
+  let base: GameState;
+  let brief: MatchRatingBrief;
+  beforeAll(() => {
+    base = createMiniGame();
+    advanceToMatchday(base);
+    expect(startMatch(base).ok).toBe(true);
+    brief = buildRatingBrief(base)!;
+    finalizeMatch(base);
+  });
+
+  it("keeps anchors and prose untouched in mock mode", async () => {
+    const state = structuredClone(base);
+    vi.stubEnv("LLM_MODE", "mock");
+    try {
+      expect(
+        await runFinalizeMatch(state, brief, undefined, {
+          notes: [{ playerId: brief.players[0]!.playerId, note: "마감 근거" }],
+        }),
+      ).toEqual({ settled: 0 });
+      expect(state).toEqual(base);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("retries malformed batches once without applying numbers or closing prose", async () => {
+    const state = structuredClone(base);
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => ({
+      ...trainingAnswers(request),
+      answers: {},
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(
+        await runFinalizeMatch(
+          state,
+          brief,
+          { evaluate },
+          { moods: [{ playerId: brief.players[0]!.playerId, text: "좋았다" }] },
+        ),
+      ).toEqual({ settled: 0 });
+      expect(evaluate).toHaveBeenCalledTimes(2);
+      expect(state).toEqual(base);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("rejects malformed closing prose before evaluation or mutation", async () => {
+    const state = structuredClone(base);
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => trainingAnswers(request));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(
+        await runFinalizeMatch(
+          state,
+          brief,
+          { evaluate },
+          { notes: [{ playerId: brief.players[0]!.playerId, note: "" }] },
+        ),
+      ).toEqual({ settled: 0 });
+      expect(evaluate).not.toHaveBeenCalled();
+      expect(state).toEqual(base);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("filters prose to participants, keeps first duplicate note, and never re-applies settlement", async () => {
+    const state = structuredClone(base);
+    const playerId = brief.players[0]!.playerId;
+    const outsider = userPlayers(state).find(
+      (player) => !brief.players.some((subject) => subject.playerId === player.id),
+    )!;
+    const outsiderBefore = structuredClone(outsider.state);
+    const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => {
+      expect(request.state).not.toContain("마감 설명은 별도");
+      return trainingAnswers(request);
+    });
+    const result = await runFinalizeMatch(
+      state,
+      brief,
+      { evaluate },
+      {
+        notes: [
+          { playerId, note: "마감 설명은 별도" },
+          { playerId, note: "덮어쓰면 안 됨" },
+          { playerId: outsider.id, note: "뛰지 않음" },
+        ],
+        moods: [
+          { playerId, text: "끝까지 버텼다", acknowledgesIssue: true },
+          { playerId: outsider.id, text: "뛰지 않았다", acknowledgesIssue: true },
+        ],
+      },
+    );
+    expect(result.settled).toBe(brief.players.length);
+    const notes = state.matches.find((match) => match.id === brief.matchId)?.result?.ratingNotes;
+    expect(notes?.[playerId]).toBe("마감 설명은 별도");
+    expect(notes).not.toHaveProperty(outsider.id);
+    expect(state.players.find((player) => player.id === playerId)?.state.moodNote?.text).toBe(
+      "끝까지 버텼다.",
+    );
+    expect(outsider.state).toEqual(outsiderBefore);
+    expect(matchRated(state, brief.matchId)).toBe(true);
+    const after = structuredClone(state);
+    expect(await runFinalizeMatch(state, brief, { evaluate })).toEqual({ settled: 0 });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(state).toEqual(after);
+  });
+
+  it("ignores an in-flight evaluation if another settlement has already applied", async () => {
+    const state = structuredClone(base);
+    let settled: GameState | undefined;
+    const evaluator: GameEvaluator = {
+      evaluate: async (request) => {
+        settleMatchRating(
+          state,
+          brief.matchId,
+          brief.players.map((player) => ({ playerId: player.playerId, rating: player.anchor })),
+        );
+        settled = structuredClone(state);
+        return trainingAnswers(request);
+      },
+    };
+    expect(
+      await runFinalizeMatch(state, brief, evaluator, {
+        notes: [{ playerId: brief.players[0]!.playerId, note: "반영하면 안 됨" }],
+      }),
+    ).toEqual({ settled: 0 });
+    expect(state).toEqual(settled);
   });
 });

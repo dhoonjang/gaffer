@@ -1165,7 +1165,7 @@ describe("게임 잠금 — 겹친 요청", () => {
  */
 describe("계측 라우트 — 히트율의 문턱", () => {
   /** 사용량만 돌려주는 가짜 호출 — 장부는 `meterLlm`을 지나야만 움직인다 */
-  function call(agent: "gm" | "training-rater", usage: TurnResult["usage"]) {
+  function call(agent: "gm" | "history-compactor", usage: TurnResult["usage"]) {
     const llm = meterLlm(
       {
         async runTurn(): Promise<TurnResult> {
@@ -1194,8 +1194,8 @@ describe("계측 라우트 — 히트율의 문턱", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     });
-    // training-rater도 Google이지만 이쪽은 문턱을 넘겨 부른다
-    await call("training-rater", {
+    // history-compactor도 Google이지만 이쪽은 문턱을 넘겨 부른다
+    await call("history-compactor", {
       inputTokens: 20_000,
       outputTokens: 200,
       cacheReadTokens: 8_000,
@@ -1205,12 +1205,12 @@ describe("계측 라우트 — 히트율의 문턱", () => {
     const body = (await (await usageGet()).json()) as UsageResponse;
     expect(body.gameId).toBe("usage-test");
     const gm = body.agents.find((a) => a.agent === "gm")!;
-    const rater = body.agents.find((a) => a.agent === "training-rater")!;
+    const compactor = body.agents.find((a) => a.agent === "history-compactor")!;
     expect(gm.avgInput).toBe(1000);
     expect(gm.cacheHitRate).toBeNull();
-    expect(rater.cacheHitRate).toBeCloseTo(0.4, 6);
+    expect(compactor.cacheHitRate).toBeCloseTo(0.4, 6);
     // 부르지 않은 자리는 「캐시가 안 걸렸다」가 아니라 잰 것이 없다
-    expect(body.agents.find((a) => a.agent === "history-compactor")!.cacheHitRate).toBeNull();
+    expect(body.agents.find((a) => a.agent === "negotiation-gm")!.cacheHitRate).toBeNull();
     expect(body.totals.billed).toBe(21_300);
     resetLlmUsage();
   });

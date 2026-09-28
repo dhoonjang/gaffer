@@ -1,3 +1,4 @@
+import { moodLineArg, moodNotesArg } from "../common/mood-input";
 import { z } from "zod";
 import {
   POSITION_CODES,
@@ -38,7 +39,6 @@ import {
 import {
   EVENT_CREDIT,
   EVENT_BAND,
-  MOOD_NOTE_MAX,
   type GameState,
   formatMoney,
   quotedFee,
@@ -49,7 +49,6 @@ import {
   PROMISE_DAYS_MIN,
   PROMISE_DAYS_MAX,
   journal,
-  applyMatchReading,
   startMatch,
   startNegotiation,
   setLineup,
@@ -83,8 +82,6 @@ import {
   applyFinanceEvent,
   adjustTransferBudget,
   requestBoard,
-  fundTransferBudget,
-  payPlayerBonus,
   resignPost,
   setTicketPrice,
   hireStaff,
@@ -143,22 +140,12 @@ import { type GmToolCall, type CommandReturn, recordCall } from "../common/gm-ty
 import { type GameToolSpec, type ToolCallContext } from "@story-fm/llm";
 import { skillDescriptions } from "./skill-descriptions";
 import { toToolSchema, inputError } from "../common/tool-schema";
-import { runMatchReader } from "./workflows/match/match-reader";
+import { createInstructionTool } from "./workflows/instructions";
 import { sideTeamName } from "../match/context";
-import { ordersGate, applyOps } from "../common/orders-ops";
-import { runTacticOrders } from "./workflows/match/tactic-orders";
-import { applyTacticOrders } from "../match/tactic-apply";
-import { runTrainingOrders } from "./workflows/story/training-orders";
-import { buildTrainingSchedule } from "./gm-input";
-import { TRAINING_OPS } from "../story/training-orders";
-import { runMarketOrders } from "./workflows/negotiation/market-orders";
-import { MARKET_OPS } from "../negotiation/market-orders";
 
 /**
- * **GM에게 보이지 않는 코어 명령** — 판을 세우는 열과 훈련 여섯, 시장 스물여섯. 감독의 전술 지시는
- * `tactic_orders`(평시·경기)·`training_orders`·`market_orders` 뒤의 해석이 JSON으로 옮기고 코어가 이 명령들을
- * 부른다 (agents.md §1). 설명은 모델에게 가지 않으므로 이름만 든다 — 판정 근거는
- * `TACTIC_ORDERS_SYSTEM`의 것이다.
+ * GM의 역할별 지시 스킬 안에서 Jev가 타입 인자를 선택한다.
+ * 이 코어 명령들은 GM 도구 카탈로그에 직접 노출하지 않는다.
  */
 export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "set_lineup",
@@ -198,8 +185,6 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "recall_loan",
   "adjust_transfer_budget",
   "request_board",
-  "fund_transfer_budget",
-  "pay_player_bonus",
   "set_ticket_price",
   "hire_staff",
   "release_staff",
@@ -242,8 +227,6 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   recall_loan: "임대 복귀",
   adjust_transfer_budget: "이적 예산 조정",
   request_board: "보드에 요청",
-  fund_transfer_budget: "사재 출연",
-  pay_player_bonus: "사재 보너스",
   set_ticket_price: "티켓 가격",
   hire_staff: "스태프 고용",
   release_staff: "스태프 계약 해지",
@@ -305,36 +288,6 @@ const settlingArg = z
     "새로 영입해 아직 적응 중인 선수에게 이 말이 남긴 무게. 생략하면 코어가 outcome·강도로 정한다. " +
       "적응을 겨냥한 이야기(자리·역할 약속, 라커룸 소개, 사는 문제)면 크게, 지나가는 말이면 작게.",
   );
-
-/**
- * 심경 잔향 — 그 선수와 있었던 일을 쓴 호출이 한 문장을 함께 남긴다 (agents.md §4-3).
- * 검사는 코어의 것이다(`applyMoodNotes`): 대상 밖의 선수는 버리고, 불만이 걸린 선수의
- * 문장은 `acknowledgesIssue`로 그 사실을 안아야 남는다 — 낱말을 세지 않는다.
- */
-const MOOD_LINE_HINT =
-  "이 일 뒤 그 선수의 심경 한 문장 (60자 안팎). 불만이 걸린 선수면 그 사실을 안았는지 acknowledgesIssue로";
-
-const moodLineArg = z
-  .object({
-    text: z.string().min(1).max(MOOD_NOTE_MAX),
-    acknowledgesIssue: z.boolean().optional(),
-  })
-  .optional()
-  .describe(MOOD_LINE_HINT);
-
-/** 대상이 여럿인 자리(팀토크·사건)의 심경 — 선수마다 한 줄, 상한은 그 자리가 정한다 */
-const moodNotesArg = (max: number) =>
-  z
-    .array(
-      z.object({
-        playerId: playerRef,
-        text: z.string().min(1).max(MOOD_NOTE_MAX),
-        acknowledgesIssue: z.boolean().optional(),
-      }),
-    )
-    .max(max)
-    .optional()
-    .describe(`${MOOD_LINE_HINT} — 이 일을 겪은 선수마다 한 줄, ${max}명까지`);
 
 /**
  * **감독이 이적료를 부르지 않은 오퍼가 되돌아오는 한 줄** (transfer.md §1).
@@ -535,7 +488,10 @@ function writtenLines(text: string): number {
  * **무직인 감독의 문** — 한 문장이 한 자리에만 산다. `wrap`도 손으로 지은 명령도 손잡이도
  * 같은 함수를 지나므로, 새 자리가 생겨도 이 문구를 다시 적을 일이 없다 (career.md §5.1).
  */
-function dismissed(state: GameState, applies: boolean): { ok: false; message: string } | null {
+export function dismissed(
+  state: GameState,
+  applies: boolean,
+): { ok: false; message: string } | null {
   if (!applies || !state.dismissal) return null;
   return {
     ok: false,
@@ -589,6 +545,7 @@ export function buildToolSpecs(
     name,
     description,
     inputSchema: toToolSchema(schema),
+    instructionSchema: toToolSchema(schema, true),
     handle(input: unknown, context?: ToolCallContext) {
       /**
        * 명령 하나가 기록에 한 줄 — **반려도 남는다** (models.md §5-3). 화면의 칩
@@ -657,34 +614,12 @@ export function buildToolSpecs(
     },
   });
 
-  /**
-   * 문이 열린 자리에서 **판독기가 이 경기의 첫 포인트와 시트를 쓴다** (match.md §2 ①).
-   *
-   * 실패는 빈 판독이다 — 아무것도 저장하지 않고 코어 로직만으로 굴러가는 경기가 된다.
-   * 문이 열린 것은 이미 일어난 일이라 되돌리지 않는다.
-   */
-  const readAtKickoff = async (): Promise<void> => {
-    const specs = new Map(tools.map((t) => [t.name, t] as const));
-    try {
-      const read = await runMatchReader(state, specs, { occasion: "kickoff" });
-      if (read.ok) applyMatchReading(state, read.reading);
-    } catch (error) {
-      console.warn("[match-reader] 킥오프 판독을 건너뜁니다 — 빈 포인트로 시작합니다:", error);
-    }
-  };
   const startMatchTool = wrap("start_match", descriptions.start_match, z.object({}), () =>
     startMatch(state),
   );
 
   const tools: GameToolSpec[] = [
-    {
-      ...startMatchTool,
-      async handle(input: unknown, context?: ToolCallContext) {
-        const opened = await startMatchTool.handle(input, context);
-        if (opened.ok) await readAtKickoff();
-        return opened;
-      },
-    },
+    startMatchTool,
     /**
      * **협상 방을 세운다** — 경기의 `start_match`와 같은 자리다 (transfer.md §12-2). 문을 열
      * 뿐이고, 자리에 앉은 뒤의 턴은 협상 GM의 것이다(`negotiation-gm.ts`).
@@ -913,6 +848,7 @@ export function buildToolSpecs(
       name: "set_training",
       description: CORE_COMMAND_LABELS.set_training!,
       inputSchema: toToolSchema(TRAINING_INPUT),
+      instructionSchema: toToolSchema(TRAINING_INPUT, true),
       handle(input: unknown, context?: ToolCallContext) {
         const blocked = dismissed(state, true);
         if (blocked) return blocked;
@@ -1109,24 +1045,6 @@ export function buildToolSpecs(
           .describe("영입 승인(signing)일 때 그 선수 — 이름 그대로 실어도 된다"),
       }),
       (input) => requestBoard(state, input),
-    ),
-    wrap(
-      "fund_transfer_budget",
-      CORE_COMMAND_LABELS.fund_transfer_budget!,
-      z.object({
-        /** 상한은 오타를 막는 자리다 — 실제 문은 지갑 잔고와 시즌 한도가 건다 */
-        amount: money(MONEY_MAX).describe("지갑에서 이적 예산으로 넣을 금액 (£)"),
-      }),
-      (input) => fundTransferBudget(state, input),
-    ),
-    wrap(
-      "pay_player_bonus",
-      CORE_COMMAND_LABELS.pay_player_bonus!,
-      z.object({
-        playerId: playerRef,
-        amount: money(MONEY_MAX).describe("지갑에서 그 선수에게 줄 금액 (£)"),
-      }),
-      (input) => payPlayerBonus(state, input),
     ),
     wrap("resign", descriptions.resign, z.object({}), () => resignPost(state)),
     wrap(
@@ -1880,123 +1798,39 @@ export function collectMatchMarks(
   }
 }
 
-/** 손잡이 셋의 인자 — 없다. 부르는 것이 곧 라우팅이다 (agents.md §1) */
-const NoArgsSchema = z.object({});
-
-/**
- * **평시 GM이 받는 도구** — 코어 명령 전부에서 판을 세우는 것들(`CORE_COMMANDS`)을
- * 빼고 `tactic_orders` 하나를 얹는다 (agents.md §1·§2). 그 하나의 핸들러 뒤에서 지시
- * 해석이 감독의 말을 JSON으로 옮기고 코어가 코어 명령을 부른다 — 기록은 코어 명령의
- * 이름으로 남아 칩과 말풍선이 그대로 선다.
- */
+/** Existing skills request only their interpreter; normal dialogue invokes none. */
 export function buildGmTools(
   state: GameState,
   calls: GmToolCall[],
   options?: {
-    /**
-     * 이번 턴 감독의 말 — 손잡이 셋이 해석기에 넘기는 원문이다 (agents.md §1). 턴 러너가
-     * 채팅에 넣은 그 문자열이고, 손잡이 턴에는 없다.
-     */
     said?: string;
     deferNegotiationIds?: ReadonlySet<string>;
-    /** 이번 턴 전술판이 이미 움직인 것 — 해석기가 되풀이를 가릴 근거다 (agents.md §3) */
     boardMoves?: readonly BoardMove[];
   },
 ): GameToolSpec[] {
   const descriptions = skillDescriptions();
-  /**
-   * 명령 배선은 **한 번만 짓는다** — 손잡이 셋이 각자 다시 지으면 같은 상태를 두고 스펙
-   * 쉰여섯 벌이 턴마다 네 번 만들어지고, 그중 하나가 `options`를 빠뜨리면 조용히 갈린다.
-   */
-  const specList = buildToolSpecs(state, calls, options);
-  const specs = new Map(specList.map((t) => [t.name, t] as const));
-  const visible = specList.filter((t) => !CORE_COMMANDS.has(t.name));
-  /**
-   * **손잡이 셋은 인자가 없다** — 부르는 것이 곧 라우팅이고, 이번 턴 감독의 말은 코어가
-   * 쥔 `options.said`가 해석기에 간다 (agents.md §1). 문은 셋이 함께 지난다: 감독의 말이
-   * 없는 턴에는 열리지 않고, 같은 손잡이의 두 번째 호출은 같은 말을 다시 옮기므로 닫힌다.
-   */
-  const gate = ordersGate(options?.said);
-  const tactics: GameToolSpec = {
-    name: "tactic_orders",
-    description: descriptions.tactic_orders,
-    inputSchema: toToolSchema(NoArgsSchema),
-    async handle() {
-      const blocked = dismissed(state, true);
-      if (blocked) return blocked;
-      const opened = gate("tactic_orders");
-      if (!opened.ok) return opened;
-      const intent = await runTacticOrders(state, specs, opened.said, {
-        ...(options?.boardMoves ? { boardMoves: options.boardMoves } : {}),
-      });
-      if (!intent.ok) return { ok: false, message: intent.message };
-      const applied = applyTacticOrders(state, intent.intent, specs);
-      /**
-       * **아무 명령도 걸리지 않은 턴은 성공이 아니다** (agents.md §3). `ops`가 빈 채
-       * 돌아온 응답에 ok를 주면 GM은 "조정했습니다"로 장면을 닫고, 감독은 걸리지 않은
-       * 지시 위에 다음 경기를 맞는다 — 그때 결과에 실려 오는 것은 옮기지 못한 말뿐이다.
-       */
-      return {
-        ok: applied.applied > 0,
-        message: applied.notes.length > 0 ? applied.notes.join("\n") : "지시를 판에 걸었습니다",
-      };
-    },
-  };
-  /**
-   * **훈련·육성 지시** — 전술과 같은 무늬다 (agents.md §1). 코어가 쥔 감독의 말이 넘어가고
-   * 도구 뒤의 해석기가 선수단 운영 명령의 인자를 채운다.
-   */
-  const training: GameToolSpec = {
-    name: "training_orders",
-    description: descriptions.training_orders,
-    inputSchema: toToolSchema(NoArgsSchema),
-    async handle() {
-      const blocked = dismissed(state, true);
-      if (blocked) return blocked;
-      const opened = gate("training_orders");
-      if (!opened.ok) return opened;
-      const parsedOrders = await runTrainingOrders(
-        state,
-        specs,
-        buildTrainingSchedule(state),
-        opened.said,
-      );
-      if (!parsedOrders.ok) return { ok: false, message: parsedOrders.message };
-      const notes: string[] = [];
-      const outcomes = applyOps(specs, parsedOrders.orders, TRAINING_OPS, notes);
-      return {
-        ok: outcomes.applied > 0,
-        message: notes.length > 0 ? notes.join("\n") : "훈련을 걸었습니다",
-      };
-    },
-  };
-  /**
-   * **이적·재정 지시** — 판 지시와 같은 무늬다 (agents.md §1). 코어가 쥔 감독의 말이 넘어가고
-   * 도구 뒤의 해석기가 시장·장부 명령의 인자를 채운다. 명령 자체는 GM에게 보이지 않는다.
-   */
-  const market: GameToolSpec = {
-    name: "market_orders",
-    description: descriptions.market_orders,
-    inputSchema: toToolSchema(NoArgsSchema),
-    async handle() {
-      const opened = gate("market_orders");
-      if (!opened.ok) return opened;
-      /**
-       * 무직의 문은 여기서 열지 않는다 — 감독의 말을 되읽어 가르지 않고, 해석기가 낸
-       * 명령마다 그 명령의 `wrap`이 판정한다(`OUT_OF_WORK_TOOLS`). 감독직을 두드리는
-       * 명령은 지나고 나머지는 그 자리에서 무직의 문구로 반려된다.
-       */
-      const parsedOrders = await runMarketOrders(state, specs, opened.said);
-      if (!parsedOrders.ok) return { ok: false, message: parsedOrders.message };
-      const notes: string[] = [];
-      const outcomes = applyOps(specs, parsedOrders.orders, MARKET_OPS, notes);
-      return {
-        ok: outcomes.applied > 0,
-        message: notes.length > 0 ? notes.join("\n") : "장부에 걸었습니다",
-      };
-    },
-  };
-  return [...visible, tactics, training, market];
+  const visible = buildToolSpecs(state, calls, options).filter(
+    (tool) => !CORE_COMMANDS.has(tool.name),
+  );
+  return [
+    ...visible,
+    ...(
+      [
+        ["tactic_orders", "tactic-orders"],
+        ["training_orders", "training-orders"],
+        ["market_orders", "market-orders"],
+      ] as const
+    ).map(([name, agent]) =>
+      createInstructionTool(state, calls, {
+        ...options,
+        name,
+        agent,
+        description: descriptions[name],
+        allowed: () =>
+          agent === "market-orders" ? undefined : (dismissed(state, true) ?? undefined),
+      }),
+    ),
+  ];
 }
 
 /**

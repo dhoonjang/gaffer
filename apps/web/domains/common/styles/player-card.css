@@ -126,18 +126,13 @@
   color: var(--text-3);
 }
 
-/* 안개 한 줄과 심경 한 줄 — 아래 숫자들이 왜 그런지 */
-.pc-note,
+/* 심경 한 줄 — 아래 숫자들이 왜 그런지 */
 .pc-mood {
   margin: 0;
   color: var(--text-2);
   font-size: var(--fs-xs);
   line-height: 1.6;
 }
-.pc-note {
-  color: var(--accent-2);
-}
-
 /* 사실 줄 — 명단 상세의 요약 줄과 같은 결(`.pd-summary`) */
 .pc-facts {
   display: flex;

@@ -41,6 +41,7 @@ import {
 import path from "node:path";
 
 import { agentMinCacheableInput, type AgentName, type LlmEnv } from "./config";
+import { TypesafeEvaluationError } from "./typesafe-adapter";
 import { gameVersion } from "./game-version";
 import {
   isStoredLlmHistory,
@@ -128,6 +129,7 @@ export interface TurnTraceTool {
 
 /** 이 호출이 모델에 보낸 것 — `TurnRequest`를 직렬화 가능한 모양으로만 옮긴다 */
 export interface TurnTraceRequest {
+  evaluation?: { questions: import("./game-evaluator").EvaluationRequest["questions"] };
   /** 시스템 프롬프트 블록 — 문자열 하나로 온 것도 블록 하나로 적는다 */
   system: string[];
   /** 넘긴 이력 원문 (제공자 원형 메시지 또는 텍스트 이력) */
@@ -204,7 +206,7 @@ export interface TurnTraceCall {
   minCacheableInput?: number;
   durationMs: number;
   request: TurnTraceRequest;
-  /** 실패한 호출은 `null` — 그때는 `error`가 이유를 갖는다 */
+  /** 응답이 없으면 `null`. 실패한 평가도 보고된 사용량은 남으며 `error`가 실패를 표시한다. */
   response: TurnTraceResponse | null;
   error: string | null;
 }
@@ -1119,3 +1121,78 @@ function pruneTraces(gameId: string, limits: TraceLimits): void {
  * 디스크를 쥐는 것은 상한뿐이고(`pruneTraces`), 창고를 통째로 비우는 것은 사람이
  * 디렉터리를 지우는 일이다 (`pnpm log --games`가 어디에 얼마나 쌓였는지 적는다).
  */
+
+/** Typed evaluations occupy the same timeline without pretending to generate prose. */
+export function tapEvaluator(
+  evaluator: import("./game-evaluator").GameEvaluator,
+  agent: import("./config").EvaluatorName,
+  env: LlmEnv = process.env,
+): import("./game-evaluator").GameEvaluator {
+  if (!traceEnabled(env)) return evaluator;
+  return {
+    async evaluate(request) {
+      const scope = collecting.getStore();
+      if (!scope) return evaluator.evaluate(request);
+      const startedAt = Date.now();
+      const parent = running.getStore();
+      const at = place(scope);
+      const call: TurnTraceCall = {
+        id: nameOf(agent, startedAt),
+        at: at.at,
+        seq: at.seq,
+        gameVersion: gameVersion(),
+        parentId: parent?.id ?? null,
+        viaTool: parent?.tool ?? null,
+        agent,
+        model: null,
+        minCacheableInput: 0,
+        durationMs: 0,
+        request: {
+          system: [],
+          history: [],
+          user: request.state,
+          tools: [],
+          streaming: false,
+          evaluation: { questions: request.questions },
+        },
+        response: null,
+        error: null,
+      };
+      scope.callIds.push(call.id);
+      const via = viaOf();
+      try {
+        const result = await evaluator.evaluate(request);
+        call.model = result.model;
+        call.response = {
+          text: "",
+          messages: [],
+          usage: result.usage,
+          toolCallCount: 0,
+          stopReason: "completed",
+          output: {
+            answers: result.answers,
+            attempts: result.attempts,
+            usageComplete: result.usageComplete,
+          },
+        };
+        return result;
+      } catch (error) {
+        call.error = error instanceof Error ? error.message : String(error);
+        if (error instanceof TypesafeEvaluationError) {
+          call.response = {
+            text: "",
+            messages: [],
+            usage: error.usage,
+            toolCallCount: 0,
+            stopReason: "other",
+            output: { attempts: error.attempts, usageComplete: error.usageComplete },
+          };
+        }
+        throw error;
+      } finally {
+        call.durationMs = Date.now() - startedAt;
+        writeCall(scope, call, via);
+      }
+    },
+  };
+}

@@ -56,7 +56,7 @@ export const FINANCE_CATEGORY_KO: Record<FinanceCategory, string> = {
   manager_buyout: "감독 사임 위약금",
   /**
    * 재직 중인 감독을 데려간 구단이 문 돈 — **구단이 구단에 무는 돈**이라 감독의
-   * 지갑을 지나지 않는다 (career.md §5.1). 무는 쪽은 `severance`로 선다.
+   * 개인 잔액을 만들지 않는다 (career.md §5.1). 무는 쪽은 `severance`로 선다.
    */
   manager_compensation: "감독 이적 보상금",
   player_wages: "선수 주급",

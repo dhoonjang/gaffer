@@ -21,4 +21,5 @@ export * from "./live/geometry";
 export * from "./live/types";
 export * from "./live/step";
 export * from "./live/runner";
+export * from "./live/recent-flow";
 export * from "./live/checkpoint";

@@ -49,6 +49,7 @@ export * from "./common/tick-event";
 export * from "./common/league-tone";
 export * from "./common/josa";
 export * from "./match/live-match";
+export * from "./match/recent-flow";
 export * from "./match/live-input";
 
 export * from "./common/social-ledger";

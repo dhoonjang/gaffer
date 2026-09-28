@@ -8,11 +8,10 @@ import {
   ageOf,
   naturalPositionOf,
   type AchievementCode,
-  MANAGER_SPEND_KIND_KO,
   boardAgendaLines,
 } from "@story-fm/domain";
 import { type CareerTotals } from "../../story/players/career";
-import { type GameState, teamNameIn, playerById } from "../../common/core/state";
+import { type GameState, teamNameIn } from "../../common/core/state";
 import { headCoachOf, staffOf } from "../../common/people/persona";
 import { ourYouthCandidates, youthIntakeDeadline } from "../season";
 import { youthCandidateFog } from "../../common/players/observation";
@@ -20,7 +19,6 @@ import { managerTenureOf, managerTrophiesOf } from "../../match/competition/reco
 import { openManagerOffers } from "../../negotiation/market/manager-market";
 import { tierOfTeamIn } from "../../common/core/club-tier";
 import { diffDays } from "../../common/core/dates";
-import { walletOf, MANAGER_WALLET } from "../../negotiation/finance/manager-wallet";
 import { competitionName } from "../../common/data/cup-catalog";
 import { leagueName } from "../../common/data/league-catalog";
 
@@ -259,14 +257,6 @@ export type CareerView = {
     daysLeft: number;
     renewal: "offered" | "declined" | null;
   } | null;
-  /** 감독의 **개인 지갑** — 연봉과 위약금이 쌓인 돈, 구단 잔고와 다르다 (career.md §5.4) */
-  wallet: number;
-  /**
-   * 감독이 쓴 돈 — 최근 것이 먼저다 (career.md §5.4). 구단 원장이 아니라 **감독의
-   * 이력**이라 커리어 뷰가 지갑 옆에서 읽는다. 갈래의 이름은 코어가 준다
-   * (`MANAGER_SPEND_KIND_KO`) — 화면이 코드를 문장으로 옮기지 않는다.
-   */
-  spending: Array<{ on: string; kind: string; amount: number; playerName: string | null }>;
   trophies: Array<{ competition: string; season: number; teamName: string }>;
   /**
    * 업적 — **코드와 근거 수치**다. 세이브가 문장을 갖지 않으므로(career.md §6)
@@ -385,18 +375,6 @@ export function buildCareerView(state: GameState): CareerView {
                 : ("declined" as const),
         }
       : null,
-    /** 감독의 지갑 — 구단 잔고와 다른 돈이고 이직을 따라간다 (career.md §5.4) */
-    wallet: walletOf(state),
-    spending: [...state.manager.spending]
-      .reverse()
-      .slice(0, MANAGER_WALLET.KEPT)
-      .map((s) => ({
-        on: s.on,
-        kind: MANAGER_SPEND_KIND_KO[s.kind],
-        amount: s.amount,
-        playerName:
-          s.kind === "player-bonus" && s.ref ? (playerById(state, s.ref)?.name ?? null) : null,
-      })),
     /**
      * 보관함은 **감독의 것만** — 원장은 전 구단의 우승을 든다 (career.md §6).
      * 그대로 실으면 AI 구단의 우승이 감독의 보관함에 선다.

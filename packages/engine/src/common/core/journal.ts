@@ -360,3 +360,17 @@ export function turnDigestOf(state: GameState): TurnDigest {
     },
   };
 }
+
+/** Buffer a synchronous command transaction so rolled-back facts never look committed. */
+export function captureJournal<T>(run: () => T): { value: T; entries: JournalEntry[] } {
+  const previous = sink;
+  const entries: JournalEntry[] = [];
+  sink = (entry) => entries.push(entry);
+  try {
+    const value = run();
+    if (value instanceof Promise) throw new Error("Journal transactions must be synchronous");
+    return { value, entries };
+  } finally {
+    sink = previous;
+  }
+}

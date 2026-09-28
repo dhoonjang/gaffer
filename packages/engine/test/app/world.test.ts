@@ -44,8 +44,6 @@ import {
   MAX_OPENINGS,
   OPENING_DAYS,
   addDays,
-  clampStartingWallet,
-  START_MAX_WALLET,
   playerCatalog,
   checkArmbandSeeds,
   buildTeamSquad,
@@ -765,16 +763,6 @@ describe("시즌 일정 (일정 축)", () => {
     // MLS는 아예 다른 계절에 연다 (북미 시즌이 봄에 시작한다)
     expect(mls.length).toBe(2);
     expect(mls.some((w) => w.opensOn.includes("-02-"))).toBe(true);
-  });
-});
-
-describe("온보딩 — 모델 판정의 수치 경계", () => {
-  it("개인 자산을 유한한 금액으로 제한하고 금액 눈금을 지킨다", () => {
-    expect(clampStartingWallet(Number.NaN)).toBe(0);
-    expect(clampStartingWallet(-1)).toBe(0);
-    expect(clampStartingWallet(Number.POSITIVE_INFINITY)).toBe(0);
-    expect(clampStartingWallet(START_MAX_WALLET * 2)).toBe(START_MAX_WALLET);
-    expect(clampStartingWallet(3_214_777)).toBe(3_210_000);
   });
 });
 

@@ -8,25 +8,19 @@ import {
 } from "./live-match";
 
 /**
- * 전술 포인트와 시트 — 판독기가 말에게 주는 것 (live-match.md §6.2).
- *
- * 말의 규칙은 역할·능력치·전술에서 경기를 결정적으로 굴리고, 그 위에서 이 경기가 지금
- * 어떻게 읽히는가를 자연어로 든 것이 **전술 포인트**, 그 판독의 수치 독해가 **시트**다.
- * 둘을 쓰는 저자는 판독기 하나이고(agents `match-reader.ts`), 값을 매기는 것은 코어다
- * (sim `sheet.ts`). 여기 있는 것은 그 둘이 오가는 **그릇의 모양**뿐이다.
+ * 경기 지시의 출처와 시트. Point는 감독 원문을 길이 제한해 보관하는 메타데이터다.
+ * Jev는 시트의 타입 값을 판독하고 코어가 실재·예산·대가와 적용 가능성을 검증한다.
  */
 
 export const PointImportanceSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 export type PointImportance = z.infer<typeof PointImportanceSchema>;
 
-/** 포인트 문장의 길이 상한 — 한 줄로 읽히는 판독이다 */
+/** 화면과 기록에 보관하는 감독 원문의 길이 상한 */
 export const POINT_TEXT_MAX = 120;
 
 /**
- * 전술 포인트 하나 — **세계가 이 경기를 읽은 문장.**
- *
- * `id`는 판독기가 매기고 이어지는 판독은 같은 id로 남는다 — 화면과 기록이 무엇이
- * 바뀌었는지 안다. `about`은 그 판독이 겨눈 사람과 편이다.
+ * 코어가 정한 id와 감독 원문, 효과가 겨냥한 사람·편을 함께 보관한다.
+ * 생성형 판독기의 비교 하네스도 같은 저장 그릇을 사용한다.
  */
 export const PointSchema = z.object({
   id: z.string().min(1).max(40),

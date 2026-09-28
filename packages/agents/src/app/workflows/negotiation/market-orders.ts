@@ -9,11 +9,8 @@ import {
   describeStaffPool,
 } from "@story-fm/engine";
 import { managerSeatLines } from "./context";
-import { tagged, runOpsOrders } from "../../../common/orders-ops";
+import { tagged } from "../../../common/orders-ops";
 import { buildRecentTurnsBlock } from "../../../common/context";
-import { type GameToolSpec, type GameLLM } from "@story-fm/llm";
-import { type MarketOrders, MARKET_ORDERS_SPEC } from "../../../negotiation/market-orders";
-import { mockOrdersLlm } from "../../mock-gm";
 
 /** 해석기의 입력 — 협상·관심·되사기·보드·감독직·재정·스태프 풀·지난 다섯 턴 */
 export function buildMarketContext(state: GameState): string[] {
@@ -39,23 +36,4 @@ export function buildMarketContext(state: GameState): string[] {
     ...tagged("staff_pool", describeStaffPool(state).join("\n")),
     ...tagged("recent_turns", buildRecentTurnsBlock(state)),
   ];
-}
-
-/**
- * 감독의 말 → 시장·장부 명령의 인자. 훈련 해석과 같은 뼈대를 지난다(`runOpsOrders`).
- */
-export async function runMarketOrders(
-  state: GameState,
-  specs: ReadonlyMap<string, GameToolSpec>,
-  message: string,
-  llm?: GameLLM,
-): Promise<{ ok: true; orders: MarketOrders } | { ok: false; message: string }> {
-  const user = [...buildMarketContext(state), ``, `@감독: ${message}`].join("\n");
-  return runOpsOrders(
-    MARKET_ORDERS_SPEC,
-    specs,
-    user,
-    llm ?? mockOrdersLlm(state, MARKET_ORDERS_SPEC, message),
-    message,
-  );
 }

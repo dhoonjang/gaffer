@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildToolSpecs, outputAgents, type OutputAgent } from "@story-fm/agents";
-import { createGame, type GameState } from "@story-fm/engine";
+import { outputAgents, type OutputAgent } from "@story-fm/agents";
 import {
   agentConfig,
   countOptionalProperties,
@@ -10,7 +9,6 @@ import {
   llmErrorKind,
   providerTraits,
   type AgentConfig,
-  type GameToolSpec,
   type LlmErrorKind,
   type LlmProvider,
 } from "@story-fm/llm";
@@ -62,8 +60,6 @@ const TRANSIENT: readonly LlmErrorKind[] = ["overloaded", "rate_limit", "timeout
 
 /** 선언 하나에 붙는 한 줄 — 무엇을 말하든 요청은 같은 모양으로 나간다 */
 const PROBE_USER = "점검 호출입니다. 스키마대로 JSON 하나를 내세요.";
-
-const BACKGROUND = "프리미어리그에서 뛰었던 주장 출신 수비수";
 
 const PROVIDERS: readonly LlmProvider[] = ["anthropic", "google", "openai"];
 
@@ -130,20 +126,6 @@ const TARGET = parseTarget(process.env.LIVE_SCHEMA_TARGET);
 function configOf(entry: OutputAgent): AgentConfig {
   const base = agentConfig(entry.agent);
   return TARGET === null ? base : retarget(base, TARGET);
-}
-
-/**
- * 해석기 넷의 `ops`가 코어 명령의 도구 스키마를 그대로 물어 오므로(agents.md §1)
- * 명령 스펙 맵이 필요하다 — 세계 하나를 세우는 것은 그 맵을 얻기 위해서다.
- */
-function toolSpecs(): ReadonlyMap<string, GameToolSpec> {
-  const state: GameState = createGame({
-    seed: 7,
-    userTeamId: "arsenal",
-    managerName: "김감독",
-    background: BACKGROUND,
-  });
-  return new Map(buildToolSpecs(state, []).map((tool) => [tool.name, tool] as const));
 }
 
 /** 이 선언이 요청에 싣는 JSON 그것 — 스키마를 문법으로 펼치는 제공자의 한도에 닿는 값이다 */
@@ -223,7 +205,7 @@ async function probe(entry: OutputAgent): Promise<Probe> {
 
 describe("출력 스키마", () => {
   it("선언마다 한 번씩 걸어 제공자가 받는지·산출이 오는지 본다", async () => {
-    const entries = outputAgents(toolSpecs());
+    const entries = outputAgents();
     // 키는 나가는 제공자의 것이다 — 목표가 있으면 그 제공자, 없으면 자리마다 설정의 제공자 (models.md §2)
     const live = entries.filter((entry) => hasKey(configOf(entry).provider));
 

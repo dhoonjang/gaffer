@@ -11,3 +11,6 @@ export * from "./scripted-adapter";
 export * from "./structured-output";
 export * from "./turn-trace";
 export * from "./usage-meter";
+export * from "./game-evaluator";
+export * from "./typesafe-adapter";
+export * from "./evaluator-factory";

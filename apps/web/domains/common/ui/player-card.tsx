@@ -334,11 +334,6 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
         </span>
       </header>
 
-      {/**
-       * 스카우트가 쓴 **한 줄 평** — 채팅 카드는 한 번 지나가고 사무실에 스카우팅
-       * 화면이 없으므로, 감독이 그 문장을 되찾는 자리가 여기다 (player.md §9.5).
-       */}
-      {card.scoutReport?.verdict && <p className="pc-note">{card.scoutReport.verdict}</p>}
       {/* 지금 심경 한 줄 — 아래 숫자들이 왜 그런지 (우리 선수만 아는 사실이다).
           경기 중에는 서지 않는다 — 지난 경기까지의 마음이라 지금 경기와 어긋난다 */}
       {ours && !inMatch && <p className="pc-mood">{moodSentence(ours.mood)}</p>}

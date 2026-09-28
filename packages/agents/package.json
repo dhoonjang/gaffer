@@ -10,6 +10,7 @@
     "@story-fm/domain": "workspace:*",
     "@story-fm/engine": "workspace:*",
     "@story-fm/llm": "workspace:*",
+    "@story-fm/sim": "workspace:^",
     "zod": "^3.24.1"
   }
 }

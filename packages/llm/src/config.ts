@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import type { EvaluatorConfig } from "./game-evaluator";
 import type { LlmProvider } from "./game-llm";
 
 /** 실제로 LLM을 호출하는 단위 — 설정과 사용량 계측이 이 이름을 공유한다. */
@@ -9,24 +10,43 @@ export const AGENT_NAMES = [
   "gm",
   "match-gm",
   "negotiation-gm",
-  "tactic-orders",
-  "training-orders",
-  "market-orders",
-  "table-orders",
-  "match-reader",
-  "finalize-match",
-  "training-rater",
-  "scout-rater",
   "history-compactor",
   "onboarding-judge",
 ] as const;
 
-export type AgentName = (typeof AGENT_NAMES)[number];
+export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
+export const INSTRUCTION_AGENT_NAMES = [
+  "tactic-orders",
+  "training-orders",
+  "market-orders",
+  "table-orders",
+] as const;
+export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
+export const EVALUATOR_NAMES = [
+  ...INSTRUCTION_AGENT_NAMES,
+  "match-reader",
+  "training-rater",
+  "finalize-match",
+] as const;
+export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
+/** Retain historical trace names without making them callable production roles. */
+const RETIRED_AGENT_NAMES = [
+  "instructions",
+  "reader-baseline",
+  "match-sheet",
+  "scout-rater",
+] as const;
+export const RECORDED_AGENT_NAMES = [
+  ...AGENT_NAMES,
+  ...EVALUATOR_NAMES,
+  ...RETIRED_AGENT_NAMES,
+] as const;
+export type AgentName = (typeof RECORDED_AGENT_NAMES)[number];
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 export type LlmEnv = Record<string, string | undefined>;
 
 interface BaseAgentConfig {
-  agent: AgentName;
+  agent: GenerativeAgentName;
   model: string;
   maxTokens: number;
   /**
@@ -179,6 +199,15 @@ const RawAgentConfigSchema = z
     }),
   );
 
+const RawEvaluatorConfigSchema = z
+  .object({
+    provider: z.literal("typesafe"),
+    model: z.string().trim().min(1),
+    timeout_ms: z.number().int().positive(),
+    input_usd_per_million: z.number().nonnegative(),
+  })
+  .strict();
+
 const LlmConfigFileSchema = z
   .object({
     version: z.literal(1),
@@ -188,19 +217,23 @@ const LlmConfigFileSchema = z
      * 셋이 같은 값을 든다 (models.md §1-1).
      */
     max_retries: z.number().int().min(0).optional(),
+    evaluators: z
+      .object({
+        "tactic-orders": RawEvaluatorConfigSchema.optional(),
+        "training-orders": RawEvaluatorConfigSchema.optional(),
+        "market-orders": RawEvaluatorConfigSchema.optional(),
+        "table-orders": RawEvaluatorConfigSchema.optional(),
+        "match-reader": RawEvaluatorConfigSchema.optional(),
+        "training-rater": RawEvaluatorConfigSchema.optional(),
+        "finalize-match": RawEvaluatorConfigSchema.optional(),
+      })
+      .strict()
+      .optional(),
     agents: z
       .object({
         gm: RawAgentConfigSchema,
         "match-gm": RawAgentConfigSchema,
         "negotiation-gm": RawAgentConfigSchema,
-        "tactic-orders": RawAgentConfigSchema,
-        "training-orders": RawAgentConfigSchema,
-        "market-orders": RawAgentConfigSchema,
-        "table-orders": RawAgentConfigSchema,
-        "match-reader": RawAgentConfigSchema,
-        "finalize-match": RawAgentConfigSchema,
-        "training-rater": RawAgentConfigSchema,
-        "scout-rater": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,
       })
@@ -213,7 +246,8 @@ type RawAgentConfig = z.infer<typeof RawAgentConfigSchema>;
 export interface LlmConfig {
   version: 1;
   maxRetries: number;
-  agents: Record<AgentName, AgentConfig>;
+  agents: Record<GenerativeAgentName, AgentConfig>;
+  evaluators: Partial<Record<EvaluatorName, EvaluatorConfig>>;
 }
 
 /**
@@ -225,7 +259,11 @@ export interface LlmConfig {
  */
 const DEFAULT_MAX_RETRIES = 2;
 
-function toAgentConfig(agent: AgentName, raw: RawAgentConfig, maxRetries: number): AgentConfig {
+function toAgentConfig(
+  agent: GenerativeAgentName,
+  raw: RawAgentConfig,
+  maxRetries: number,
+): AgentConfig {
   const base = {
     agent,
     model: raw.model,
@@ -277,12 +315,24 @@ export function parseLlmConfig(source: string, label = "config/llm.yml"): LlmCon
   return {
     version: parsed.data.version,
     maxRetries,
+    evaluators: Object.fromEntries(
+      Object.entries(parsed.data.evaluators ?? {}).map(([name, raw]) => [
+        name,
+        {
+          provider: raw.provider,
+          model: raw.model,
+          timeoutMs: raw.timeout_ms,
+          inputUsdPerMillion: raw.input_usd_per_million,
+          maxRetries,
+        },
+      ]),
+    ),
     agents: Object.fromEntries(
       AGENT_NAMES.map((agent) => [
         agent,
         toAgentConfig(agent, parsed.data.agents[agent], maxRetries),
       ]),
-    ) as Record<AgentName, AgentConfig>,
+    ) as Record<GenerativeAgentName, AgentConfig>,
   };
 }
 
@@ -316,7 +366,7 @@ export function loadLlmConfig(configPath = findLlmConfigPath()): LlmConfig {
 /** 프로세스 시작 시 한 번 검증한 설정 — 모델 ID의 런타임 단일 원본이다. */
 export const LLM_CONFIG = loadLlmConfig();
 
-export function agentConfig(name: AgentName): AgentConfig {
+export function agentConfig(name: GenerativeAgentName): AgentConfig {
   return LLM_CONFIG.agents[name];
 }
 
@@ -327,7 +377,8 @@ export function agentConfig(name: AgentName): AgentConfig {
  * 제공자에게 물어야 한다 (models.md §4).
  */
 export function agentMinCacheableInput(name: AgentName): number {
-  return PROVIDER_TRAITS[agentConfig(name).provider].minCacheableInput;
+  if (!AGENT_NAMES.includes(name as GenerativeAgentName)) return 0;
+  return PROVIDER_TRAITS[agentConfig(name as GenerativeAgentName).provider].minCacheableInput;
 }
 
 /**

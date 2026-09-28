@@ -46,7 +46,7 @@ import type { BoardMove, CharacterEntry, MatchEvent, TickEvent } from "@story-fm
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
 import { MAX_REPORT_CARDS, NO_CARDS, takeArrivedReports, type ArrivedCards } from "./report-cards";
 import { reportTraining } from "./workflows/story/training-rater";
-import { buildMatchTools, readMatchAfterStop } from "./workflows/match/match-gm";
+import { buildMatchTools } from "./workflows/match/match-gm";
 import { eventsBlockOf } from "../match/context";
 import { KICKOFF_BLOCK, MATCH_GM_SYSTEM, type MatchToolContext } from "../match/match-gm";
 import { finalizeMatchTurn } from "./workflows/match/finalize-match";
@@ -333,7 +333,7 @@ async function openTurn(
    * ⚠️ 손잡이가 시계를 옮기기 **전에** 꺼낸다: 그 뒤에 도착하는 것은 「그 사이 벌어진
    * 일」이 따로 실으므로, 여기 섞이면 한 프롬프트에 같은 값이 두 번 실린다 (agents.md §6).
    */
-  const carried = peace ? await takeArrivedReports(state, MAX_REPORT_CARDS, stuckCards) : NO_CARDS;
+  const carried = peace ? takeArrivedReports(state, MAX_REPORT_CARDS, stuckCards) : NO_CARDS;
   // 손잡이로 넘긴 시간은 모델보다 먼저 흐른다 — 코어가 먼저 굴리고 "그 사이
   // 벌어진 일"을 상태에 실어, 모델은 도착한 자리에서 보고한다
   const pendingBeforeSkip = new Set(pendingVerdicts(state).map((v) => v.negotiation.id));
@@ -347,7 +347,7 @@ async function openTurn(
     noteTraining(state, ledger, skipped, from);
   }
   const skippedCards = skipped
-    ? await takeArrivedReports(
+    ? takeArrivedReports(
         state,
         MAX_REPORT_CARDS - carried.reports.length - carried.missions.length,
         stuckCards,
@@ -360,14 +360,6 @@ async function openTurn(
           .filter((id) => !pendingBeforeSkip.has(id))
       : [],
   );
-  /**
-   * 정지점 턴(`match_stop`) — 판이 사건으로 바뀌었다. 판독기가 그 사건으로 포인트와 시트를
-   * 먼저 다시 쓰고, 매치 GM은 다시 쓴 판 위에서 그 사건을 중계한다 (agents.md §3).
-   */
-  if (inMatch && !kickoff && operation?.kind === "match_stop") {
-    const stopped = unseenEvents(state);
-    if (stopped.length > 0) await readMatchAfterStop(state, stopped);
-  }
   /**
    * **이 턴이 서술할 사건** — 지난 턴 뒤 장부에 앉은 것 (`<events>`). 킥오프 턴은 아무
    * 사건도 없다.
@@ -641,9 +633,9 @@ async function closeTurn(
   const { text: rawText, suggestion } = takeSuggestion(result.text);
   /**
    * **GM이 마감을 부르지 않았으면 코어가 대신 부른다** (agents.md §3 「경기 마감」) —
-   * 경기가 끝났는데 열려 있는 세이브는 없다. 마무리 중계는 장면 끝에 붙는다.
+   * 경기가 끝났는데 열려 있는 세이브는 없다.
    */
-  let closingTail = "";
+  let closedByCore = false;
   if (
     inMatch &&
     state.pendingMatch &&
@@ -651,8 +643,8 @@ async function closeTurn(
     !awaitingShootout(state)
   ) {
     ledger.finalMinute = state.pendingMatch.live.ledger.minute;
-    const outcome = await finalizeMatchTurn(state, ledger.calls);
-    if (outcome && outcome.closing.length > 0) closingTail = outcome.closing;
+    await finalizeMatchTurn(state, ledger.calls);
+    closedByCore = true;
   }
 
   // 도구 앞에 흘린 작업 서술과 값이 같은 반복 헤더를 걷어낸다 — 중계에는 헤더 규칙을
@@ -743,7 +735,7 @@ async function closeTurn(
    */
   const headerCards =
     peace && scenePoint
-      ? await takeArrivedReports(
+      ? takeArrivedReports(
           state,
           MAX_REPORT_CARDS -
             opening.carried.reports.length -
@@ -754,7 +746,8 @@ async function closeTurn(
         )
       : NO_CARDS;
   /**
-   * 훈련 결산 — 코어 앵커 위에 LLM이 맥락을 더한다 (실패해도 앵커가 남는다).
+   * 훈련 결산 — Jev가 구간의 성장·적응을 판정하고 코어가 대상·한도를 검증한다.
+   * 실패하면 그 구간은 성장 없는 빈 결산을 남긴다.
    *
    * 내부 판정이라 칩으로 세우지 않는다. 결과는 **장부의 결산 카드**가 갖는다
    * (`state.trainingReports`) — 달력 일지가 그 카드를 문장으로 펼치고, 다음 턴의
@@ -788,8 +781,6 @@ async function closeTurn(
   // 경기 장면의 헤더는 모델의 것이 아니라 장부의 분이다 (스트리밍에 나간 것과 같다)
   let body = humanizePlayerIds(state, scene.body);
   let header = scene.header;
-  // 코어가 대신 마감한 턴 — 마감 에이전트의 마무리 중계가 장면 끝에 선다
-  if (closingTail.length > 0) body = `${body.trimEnd()}\n${humanizePlayerIds(state, closingTail)}`;
   /**
    * **장면이 비어 돌아온 턴** — 왕복 상한을 도구로 채우면(`stopReason === "tool_use"`)
    * 모델은 "확인하겠습니다" 한 줄만 남기거나 아무것도 쓰지 못한다. 도구는 이미 돌아
@@ -864,7 +855,7 @@ async function closeTurn(
     moved: movedFact,
     stalled: clockStalled,
     emptyScene,
-    closedByCore: closingTail.length > 0,
+    closedByCore,
     suggested: suggestion !== undefined,
     textChars: text.length,
   });
@@ -936,14 +927,12 @@ export async function runGmTurn(
     calls: ledger.calls,
     goals: ledger.goals,
     cards: ledger.cards,
-    // 지시 도구가 해석기에 넘길 원문 — 감독이 친 말일 때만이다 (agents.md §3)
     ...(shape.operator ? {} : { said: message }),
-    ...(boardMoves && boardMoves.length > 0 ? { boardMoves } : {}),
+    ...(boardMoves ? { boardMoves } : {}),
     onFinalized: (minute) => (ledger.finalMinute = minute),
   };
   const negotiationCtx: NegotiationToolContext = {
     calls: ledger.calls,
-    // 방의 손잡이가 해석기에 넘길 원문 — 감독이 친 말일 때만이다 (agents.md §1)
     ...(shape.operator ? {} : { said: message }),
   };
   const opening = await openTurn(state, message, shape, operation, ledger);

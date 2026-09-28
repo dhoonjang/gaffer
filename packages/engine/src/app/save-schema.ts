@@ -1,4 +1,4 @@
-import { BoardAgendaSchema } from "@story-fm/domain";
+import { BoardAgendaSchema, RecentFlowSchema } from "@story-fm/domain";
 import { z } from "zod";
 import {
   AchievementSchema,
@@ -87,7 +87,30 @@ import {
  * (2026-08 측정, 놀고 있는 기계에서). 깎을 자리를 찾는다면 검사를 줄이는 쪽이
  * 아니라 조각(내용 해시)이 그대로인 표를 건너뛰는 쪽이다.
  */
+const PendingMatchFlowSchema = z
+  .object({
+    live: z
+      .object({
+        state: z.object({ tick: z.number().int().nonnegative() }).passthrough(),
+        flow: RecentFlowSchema,
+      })
+      .passthrough()
+      .superRefine((live, ctx) => {
+        if (live.flow.endTick !== live.state.tick)
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Recent flow does not end at the committed match tick",
+          });
+      }),
+  })
+  .passthrough()
+  .nullish();
+
 export const GameTablesSchema = z.object({
+  pendingMatch: z.unknown().superRefine((pending, ctx) => {
+    const checked = PendingMatchFlowSchema.safeParse(pending);
+    if (!checked.success) for (const issue of checked.error.issues) ctx.addIssue(issue);
+  }),
   // 필수 테이블 — 없으면 앞 걸음(형태 검사)이 이미 손상으로 답한다
   players: z.array(GamePlayerSchema),
   teams: z.array(GameTeamSchema),

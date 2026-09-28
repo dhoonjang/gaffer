@@ -12,7 +12,13 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { AGENT_NAMES, agentMinCacheableInput, type AgentName, type LlmEnv } from "./config";
+import {
+  AGENT_NAMES,
+  RECORDED_AGENT_NAMES,
+  agentMinCacheableInput,
+  type AgentName,
+  type LlmEnv,
+} from "./config";
 import type { GameLLM, TurnRequest, TurnResult, TurnUsage } from "./game-llm";
 import { LlmCallError } from "./llm-error";
 
@@ -101,10 +107,9 @@ export function emptyLedger(): UsageLedger {
     calls: 0,
     skipped: 0,
     usage: emptyUsage(),
-    byAgent: Object.fromEntries(AGENT_NAMES.map((agent) => [agent, emptyAgent()])) as Record<
-      AgentName,
-      AgentLedger
-    >,
+    byAgent: Object.fromEntries(
+      RECORDED_AGENT_NAMES.map((agent) => [agent, emptyAgent()]),
+    ) as Record<AgentName, AgentLedger>,
   };
 }
 
@@ -271,6 +276,28 @@ function warnOnce(session: UsageSession, key: string, message: string): void {
   console.warn(message);
 }
 
+/** Enforce the same call budget for generative and typed evaluation roles. */
+export function assertAgentBudget(agent: AgentName, env: LlmEnv = process.env): void {
+  const session = currentSession();
+  const verdict = budgetVerdict(session.ledger, parseTokenBudget(env));
+  if (!agentAllowed(agent, verdict)) {
+    session.ledger = recordSkip(session.ledger, agent);
+    warnOnce(
+      session,
+      `budget:${agent}`,
+      `[llm] 토큰 예산 상한(${verdict.limit}) 초과 — ${agent} 호출을 건너뜁니다. 코어 앵커가 남습니다.`,
+    );
+    throw new TokenBudgetExceededError(agent, verdict);
+  }
+  if (verdict.over) {
+    warnOnce(
+      session,
+      `budget-pass:${agent}`,
+      `[llm] 토큰 예산 상한(${verdict.limit}) 초과 — 계속 실행합니다: ${agent} (누적 ${verdict.used}).`,
+    );
+  }
+}
+
 /**
  * 계측·상한을 씌운 `GameLLM` — 계약이 같으므로 부르는 쪽은 감싼 줄 모른다.
  *
@@ -281,23 +308,7 @@ export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.e
   return {
     async runTurn(req: TurnRequest): Promise<TurnResult> {
       const session = currentSession();
-      const verdict = budgetVerdict(session.ledger, parseTokenBudget(env));
-      if (!agentAllowed(agent, verdict)) {
-        session.ledger = recordSkip(session.ledger, agent);
-        warnOnce(
-          session,
-          `budget:${agent}`,
-          `[llm] 토큰 예산 상한(${verdict.limit}) 초과 — ${agent} 호출을 건너뜁니다. 코어 앵커가 남습니다.`,
-        );
-        throw new TokenBudgetExceededError(agent, verdict);
-      }
-      if (verdict.over) {
-        warnOnce(
-          session,
-          `budget-pass:${agent}`,
-          `[llm] 토큰 예산 상한(${verdict.limit}) 초과 — 계속 실행합니다: ${agent} (누적 ${verdict.used}).`,
-        );
-      }
+      assertAgentBudget(agent, env);
 
       // 왕복마다 보고된 몫을 모아 둔다 — 호출이 실패로 끝나면 이것이 장부에
       // 남는 전부다. 결과를 받은 뒤에만 적으면 여덟 번을 왕복하다 시한에 걸린
@@ -332,4 +343,10 @@ export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.e
       return result;
     },
   };
+}
+
+/** Evaluations share the turn budget ledger, including reported failed-attempt usage. */
+export function recordEvaluationUsage(agent: AgentName, usage: TurnUsage): void {
+  const session = currentSession();
+  session.ledger = recordUsage(session.ledger, agent, usage);
 }
