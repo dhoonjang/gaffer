@@ -631,7 +631,12 @@ test("재계약 제안서 문의는 조건을 임의로 채우지 않고 재접�
   expect(saved.negotiationExchanges).toHaveLength(1);
   expect(saved.negotiationExchanges[0]).toMatchObject({ method: "proposal", party: "agent" });
   expect(saved.negotiationExchanges[0]!.closedOn).not.toBeNull();
-  expect(saved.negotiationContacts[0]!.lines.some((line) => line.by === "us")).toBe(true);
+  expect(
+    saved.chat.some(
+      (line) =>
+        line.negotiationContactId === saved.negotiationContacts[0]!.id && line.role !== "model",
+    ),
+  ).toBe(true);
 });
 
 test("달력 상세와 전술판 라인업 편집", async ({ page }) => {

@@ -59,6 +59,16 @@ export function isStoredLlmHistory(value: unknown): value is StoredLlmHistory {
 export const UNRUN_CALL =
   "턴이 중단되어 이 도구 호출은 처리되지 않았습니다 — 필요하면 다시 호출하세요.";
 
+/** 넘김 도구 뒤에 선 호출을 닫는 말 — 턴이 이미 다른 장면으로 넘어갔다 (models.md §3-1) */
+export const HANDED_OFF = "턴이 다른 장면으로 넘어가 이 도구 호출은 처리되지 않았습니다.";
+
+/**
+ * 이 도구의 답이 턴을 끝내는가 — 성공한 넘김 도구만이다. 어댑터 넷이 같은 판정을 쓴다.
+ */
+export function endsTurn(outcome: ToolOutcome): boolean {
+  return outcome.ok && outcome.endsTurn === true;
+}
+
 /**
  * 도구가 불린 **자리** — 그때까지 모델이 쓴 본문.
  *
@@ -85,6 +95,11 @@ export interface ToolCallContext {
 export interface ToolOutcome {
   ok: boolean;
   message: string;
+  /**
+   * **넘김** — 결과를 모델에게 돌려주지 않고 이 호출에서 턴을 끝낸다. 다음 장면은 다른
+   * GM의 것이다 (models.md §3-1 `handoff`).
+   */
+  endsTurn?: boolean;
 }
 
 export interface GameToolSpec {
@@ -198,7 +213,14 @@ export interface TurnRequest {
  * 소문자로 바꾼 값이 우연히 같아 돌고 OpenAI(`max_output_tokens`)에서는 아무 말 없이 꺼진다.
  * 이름이 우연히 겹치는 것은 계약이 아니다.
  */
-export const STOP_REASONS = ["completed", "truncated", "tool_use", "filtered", "other"] as const;
+export const STOP_REASONS = [
+  "completed",
+  "truncated",
+  "tool_use",
+  "filtered",
+  "other",
+  "handoff",
+] as const;
 
 export type StopReason = (typeof STOP_REASONS)[number];
 

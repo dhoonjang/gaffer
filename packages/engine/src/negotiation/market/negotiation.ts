@@ -78,7 +78,6 @@ import {
   isIncomingDeal,
   medicalConcernText,
   medicalNoteText,
-  needsMedical,
   receivingTeamOf,
 } from "./medical";
 import { pitchNotes } from "./persuasion";
@@ -601,7 +600,7 @@ export function respondOffer(
         payload: verdictCard({}),
         message:
           `${josa(player.name, "이/가")} 정산금 ${formatMoney(offer.fee)}${splitLabel(offer.paymentYears)}에 계약 해지를 받아들였습니다. ` +
-          "accept_deal로 확정하세요",
+          "계약서 서명이 남았습니다",
       };
     }
     if (renewing) {
@@ -611,7 +610,7 @@ export function respondOffer(
         payload: verdictCard({}),
         message:
           `${josa(player.name, "이/가")} 주급 ${formatMoney(offer.weeklyWage)} · ${offer.contractYears}년 재계약을 받아들였습니다. ` +
-          "accept_deal로 서명해야 계약이 섭니다",
+          "계약서 서명이 남았습니다",
       };
     }
     pushNarrative(state, `${player.name} 이적 합의 (${formatMoney(offer.fee)})`, 4);
@@ -620,7 +619,7 @@ export function respondOffer(
       payload: verdictCard({}),
       message:
         `${josa(counterpart, "이/가")} 오퍼를 받아들였습니다 — ${player.name}, ${formatMoney(offer.fee)}${splitLabel(offer.paymentYears)}. ` +
-        "accept_deal로 검진을 잡아야 계약이 섭니다",
+        "계약서 서명이 남았습니다",
     };
   }
 
@@ -1106,8 +1105,8 @@ export function answerIncomingOffer(
       ok: true,
       payload: card,
       message: renegotiated
-        ? `${player.name} 메디컬 재협상안을 수락했습니다 — ${formatMoney(offer.fee)}. accept_deal로 확정하세요`
-        : `${player.name} 매각에 합의했습니다 — ${formatMoney(offer.fee)}. accept_deal로 확정하세요`,
+        ? `${player.name} 메디컬 재협상안을 수락했습니다 — ${formatMoney(offer.fee)}. 계약서 서명이 남았습니다`
+        : `${player.name} 매각에 합의했습니다 — ${formatMoney(offer.fee)}. 계약서 서명이 남았습니다`,
     };
   }
 
@@ -1837,13 +1836,13 @@ export function expireNegotiations(state: GameState, digest: TickSink): void {
 
 export function pendingVerdicts(state: GameState): Array<{
   negotiation: Negotiation;
-  action: "respond_offer" | "accept_deal";
+  action: "respond_offer" | "start_negotiation";
   label: string;
   subject: string;
 }> {
   const out: Array<{
     negotiation: Negotiation;
-    action: "respond_offer" | "accept_deal";
+    action: "respond_offer" | "start_negotiation";
     label: string;
     subject: string;
   }> = [];
@@ -1861,21 +1860,18 @@ export function pendingVerdicts(state: GameState): Array<{
       if (medical?.status === "scheduled") continue;
       out.push({
         negotiation,
-        action: "accept_deal",
+        action: "start_negotiation",
         subject: who,
         label:
           medical?.status === "flagged"
             ? isIncomingDeal(negotiation)
-              ? `${who} 메디컬 소견 — ${medicalNoteText(medical)} · 강행하려면 accept_deal, 물러서려면 withdraw_offer`
+              ? `${who} 메디컬 소견 — ${medicalNoteText(medical)} · 강행하려면 start_negotiation으로 테이블을 열어 서명, 물러서려면 withdraw_offer`
               : // 상대 구단의 소견이라 우리가 강행할 것이 없다 — 깎인 값에 합의한 상태다
-                `${who} 상대 메디컬 소견을 반영한 값에 합의했습니다 — accept_deal로 확정하세요`
+                `${who} 상대 메디컬 소견을 반영한 값에 합의했습니다 — start_negotiation으로 테이블을 열어 서명해야 합니다`
             : // 검진은 통과했는데 아직 합의 상태다 = 계약이 걸렸다 (예산·명단 등)
               medical?.status === "passed"
-              ? `${who} 메디컬은 통과했으나 계약이 확정되지 않았습니다 — accept_deal로 다시 시도`
-              : // 검진을 지나지 않는 갈래는 그 자리에서 끝난다 — 자는 하나다(`needsMedical`)
-                needsMedical(negotiation)
-                ? `${who} 합의됨 — accept_deal로 메디컬을 잡아야 합니다`
-                : `${who} 합의됨 — accept_deal로 확정해야 합니다`,
+              ? `${who} 메디컬은 통과했으나 계약이 확정되지 않았습니다 — start_negotiation으로 테이블을 열어 다시 서명`
+              : `${who} 합의됨 — start_negotiation으로 테이블을 열어 서명해야 합니다`,
       });
       continue;
     }
@@ -1892,9 +1888,9 @@ export function pendingVerdicts(state: GameState): Array<{
     if (standingCounter(negotiation)) {
       out.push({
         negotiation,
-        action: "accept_deal",
+        action: "start_negotiation",
         subject: who,
-        label: `${who} 상대가 조정을 되불렀습니다 — 그대로 받으려면 accept_deal, 아니면 다시 제안`,
+        label: `${who} 상대가 조정을 되불렀습니다 — 그대로 받으려면 start_negotiation으로 테이블을 열어 받는다, 아니면 다시 제안`,
       });
       continue;
     }
@@ -1906,9 +1902,9 @@ export function pendingVerdicts(state: GameState): Array<{
     ) {
       out.push({
         negotiation,
-        action: "accept_deal",
+        action: "start_negotiation",
         subject: who,
-        label: `${who} 선수 쪽이 개인 조건을 되불렀습니다 — 그대로 받으려면 accept_deal, 아니면 다시 제안`,
+        label: `${who} 선수 쪽이 개인 조건을 되불렀습니다 — 그대로 받으려면 start_negotiation으로 테이블을 열어 받는다, 아니면 다시 제안`,
       });
     }
   }
@@ -2024,7 +2020,7 @@ function describePersonal(negotiation: Negotiation, today: string): string[] {
   return [
     `개인 조건: ${personal.proposedOn} 제안 — ${line(personal)}` +
       (personal.counter
-        ? ` → 선수 쪽 조정 ${line(personal.counter)} (받아들이려면 accept_deal)`
+        ? ` → 선수 쪽 조정 ${line(personal.counter)}`
         : personal.respondsOn > today
           ? ` (답 ${personal.respondsOn})`
           : " (답 도착 — 판정 필요)"),
@@ -2365,7 +2361,7 @@ export function answerPersonal(
         payload: card("accept"),
         message:
           `${player.name} 쪽이 개인 조건을 받아들였습니다 — ${line(personal)}. 이적료는 이미 합의돼 있습니다. ` +
-          "accept_deal로 검진을 잡아야 계약이 섭니다",
+          "계약서 서명이 남았습니다",
       };
     }
     return {
@@ -2409,7 +2405,7 @@ export function answerPersonal(
       "counter",
       dealTerms({ weeklyWage: personal.counter.weeklyWage, years: personal.counter.contractYears }),
     ),
-    message: `${player.name} 쪽의 조정 — ${line(personal.counter)}. 그 조건으로 다시 제안하면 받아들일 것입니다 (accept_deal)`,
+    message: `${player.name} 쪽의 조정 — ${line(personal.counter)}. 그 조건으로 다시 제안하면 받아들일 것입니다`,
   };
 }
 

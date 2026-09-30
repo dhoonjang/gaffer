@@ -18,7 +18,6 @@ import { youthCandidateFog } from "../../common/players/observation";
 import { managerTenureOf, managerTrophiesOf } from "../../match/competition/records";
 import { openManagerOffers } from "../../negotiation/market/manager-market";
 import { tierOfTeamIn } from "../../common/core/club-tier";
-import { diffDays } from "../../common/core/dates";
 import { competitionName } from "../../common/data/cup-catalog";
 import { leagueName } from "../../common/data/league-catalog";
 
@@ -254,7 +253,6 @@ export type CareerView = {
   contract: {
     salary: number;
     until: string;
-    daysLeft: number;
     renewal: "offered" | "declined" | null;
   } | null;
   trophies: Array<{ competition: string; season: number; teamName: string }>;
@@ -366,7 +364,6 @@ export function buildCareerView(state: GameState): CareerView {
       ? {
           salary: state.manager.contract.salary,
           until: state.manager.contract.until,
-          daysLeft: Math.max(0, diffDays(state.date, state.manager.contract.until)),
           renewal:
             state.manager.contract.renewalDecidedOn === undefined
               ? null

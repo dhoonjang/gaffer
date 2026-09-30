@@ -7,9 +7,7 @@ export function chatForActiveNegotiation(
   activeContactId: string | null,
 ): readonly ChatTurn[] {
   if (activeContactId === null) return chat;
-  return chat.filter(
-    (turn) => turn.inNegotiation === true && turn.negotiationContactId === activeContactId,
-  );
+  return chat.filter((turn) => turn.negotiationContactId === activeContactId);
 }
 
 /**

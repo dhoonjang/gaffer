@@ -363,7 +363,8 @@ describe("LLM 응답 실패", () => {
     "협상 평가는 다른 원장 변경 없이만 분리 보존한다 (%s)",
     async (changesLedger) => {
       const game = await newGame();
-      const { loadGame, startNegotiation, closeNegotiation } = await import("@story-fm/engine");
+      const { loadGame, startNegotiation, closeNegotiation, linkNegotiationChat } =
+        await import("@story-fm/engine");
       const { evaluateNegotiation } = await import("@story-fm/agents");
       const before = loadGame(game.id)!;
       reject.mockImplementationOnce(async (...args: Parameters<typeof runGmTurn>) => {
@@ -379,12 +380,12 @@ describe("LLM 응답 실패", () => {
         });
         expect(opened.ok).toBe(true);
         const room = state.pendingNegotiation!;
+        linkNegotiationChat(state, room.exchangeId);
         const response = await evaluateNegotiation(state, {
           negotiationId: room.negotiationId,
           party: room.party,
           exchangeId: room.exchangeId,
           ending: true,
-          said: "선수 영입 가능성을 문의합니다",
         });
         expect(response.ok).toBe(true);
         closeNegotiation(state, "left");
@@ -404,6 +405,12 @@ describe("LLM 응답 실패", () => {
       );
       expect(after.phase).toBe(before.phase);
       expect(after.pendingNegotiation).toBeNull();
+      if (!changesLedger) {
+        expect(after.chat.at(-1)?.negotiationContactId).toBe(after.negotiationContacts.at(-1)?.id);
+        expect(
+          after.chat.filter((turn) => turn.text === "선수 영입 가능성을 문의합니다"),
+        ).toHaveLength(1);
+      }
     },
   );
 

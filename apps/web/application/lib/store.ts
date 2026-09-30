@@ -14,7 +14,7 @@ import {
   type ChatTurn,
 } from "@story-fm/engine";
 import { STALLED_CLOCK_TURNS } from "@story-fm/agents";
-import { type ClubColours, type Negotiation } from "@story-fm/domain";
+import { proposalInputOf, type ClubColours, type Negotiation } from "@story-fm/domain";
 import { buildPlayerNameIndex, playerIdsIn } from "../../domains/common/lib/player-names";
 
 /** 응답에 실을 장부 — 라우트가 **자기가 바꾼 것만** 고른다 */
@@ -174,6 +174,10 @@ function namesForChat(state: GameState): Record<string, string> {
         chatNames.mentions.delete(chatNames.mentions.keys().next().value!);
     }
     for (const id of ids) mentioned.add(id);
+    for (const call of turn.toolCalls) {
+      const proposal = proposalInputOf(call);
+      if (proposal) mentioned.add(proposal.playerId);
+    }
   }
   return Object.fromEntries(
     state.players
@@ -188,13 +192,13 @@ function namesForChat(state: GameState): Record<string, string> {
  * 스킬 카탈로그의 이름만 남기면 코어가 남기는 기록이 함께 사라진다 — 경기 마감
  * (`finalize_match`)의 "경기 종료"가 그것이라, 90분이 무엇으로 끝났는지가 어느
  * 화면에도 서지 않았다. 무엇이 칩으로 설 만한 일인지는 그것을 남긴 코어가 알므로
- * 화면은 표식만 본다 (agents.md §2). 저장된 데이터는 건드리지 않고 **보여줄 때만**
- * 거른다.
+ * 제안 폼의 입력은 칩 대신 첨부 카드로 표시하므로 남긴다. 저장된 데이터는 건드리지
+ * 않고 **보여줄 때만** 거른다.
  */
 export function visibleChat(chat: readonly ChatTurn[]): ChatTurn[] {
   return chat.map((turn) => {
     if (turn.toolCalls.length === 0) return turn;
-    const kept = turn.toolCalls.filter((c) => c.silent !== true);
+    const kept = turn.toolCalls.filter((c) => c.silent !== true || proposalInputOf(c) !== null);
     return kept.length === turn.toolCalls.length ? turn : { ...turn, toolCalls: kept };
   });
 }

@@ -32,6 +32,8 @@ export type CommandReturn = {
   brief?: CommandBrief;
   payload?: unknown;
   tone?: "good" | "bad";
+  /** 넘김 — 이 호출로 평시 GM의 턴이 끝난다 (`ToolOutcome.endsTurn`, agents.md §2) */
+  endsTurn?: boolean;
 };
 
 /**

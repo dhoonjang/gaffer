@@ -52,7 +52,7 @@ import {
   startNegotiation,
   openIncomingTalks,
   closeNegotiation,
-  recordExchangeLine,
+  linkNegotiationChat,
   setLineup,
   setSquadLevels,
   setCaptain,
@@ -109,7 +109,6 @@ import {
   offerPlayerOut,
   sendOffer,
   answerIncomingOffer,
-  acceptDeal,
   pickSignedPlayer,
   openRenewal,
   openRelease,
@@ -160,7 +159,6 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "sign_youth",
   // 이적·재정·감독직 — market-orders의 ops
   "respond_offer",
-  "accept_deal",
   "respond_transfer_request",
   "withdraw_offer",
   // 위임 — 협상·갈래를 단장에게 맡기고 도로 가져온다 (transfer.md §12-4)
@@ -204,7 +202,6 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   set_squad_number: "등번호",
   sign_youth: "유스 첫 계약",
   respond_offer: "들어온 오퍼에 감독이 답한다",
-  accept_deal: "합의 확정 · 상대 조정 수락",
   respond_transfer_request: "이적 요청 응답",
   withdraw_offer: "오퍼 철회",
   delegate_negotiation: "협상을 단장에게 맡긴다",
@@ -587,15 +584,17 @@ export function buildToolSpecs(
     },
   });
 
-  const startMatchTool = wrap("start_match", descriptions.start_match, z.object({}), () =>
-    startMatch(state),
-  );
+  // 넘김 — 경기의 첫 장면은 입장한 턴의 매치 GM이 쓴다 (agents.md §2)
+  const startMatchTool = wrap("start_match", descriptions.start_match, z.object({}), () => {
+    const started = startMatch(state);
+    return started.ok ? { ...started, endsTurn: true } : started;
+  });
 
   const tools: GameToolSpec[] = [
     startMatchTool,
     /**
-     * **협상 방을 세운다** — 경기의 `start_match`와 같은 자리다 (transfer.md §12-2). 문을 열
-     * 뿐이고, 자리에 앉은 뒤의 턴은 협상 GM의 것이다(`negotiation-gm.ts`).
+     * **협상 방을 세운다** — 대화 이어가기면 방의 첫 장면부터 협상 GM의 것이다
+     * (`negotiation-gm.ts` · agents.md §2). 요청 처리는 이 안에서 끝나 결과가 평시로 돌아온다.
      */
     wrap(
       "start_negotiation",
@@ -612,8 +611,9 @@ export function buildToolSpecs(
         if (!opened.ok) return opened;
         const room = state.pendingNegotiation;
         if (!room) return opened;
-        if (options?.said?.trim()) recordExchangeLine(state, room.exchangeId, "us", options.said);
-        if (input.mode !== "request") return opened;
+        linkNegotiationChat(state, room.exchangeId);
+        // 넘김 — 대화의 첫 장면은 같은 요청 안에서 협상 GM이 쓴다 (agents.md §2)
+        if (input.mode !== "request") return { ...opened, endsTurn: true };
         const orders = await runInstructions(state, calls, options?.said ?? "", {
           agent: "table-orders",
         });
@@ -635,7 +635,6 @@ export function buildToolSpecs(
           party: room.party,
           exchangeId: room.exchangeId,
           ending: true,
-          said: options?.said ?? "",
         });
         closeNegotiation(state, "left");
         await options?.onCheckpoint?.(state, "negotiation");
@@ -1472,12 +1471,6 @@ export function buildToolSpecs(
       },
     ),
     wrap(
-      "accept_deal",
-      CORE_COMMAND_LABELS.accept_deal!,
-      z.object({ negotiationId: z.string().min(1) }),
-      (input) => acceptDeal(state, input.negotiationId),
-    ),
-    wrap(
       "open_renewal",
       CORE_COMMAND_LABELS.open_renewal!,
       z.object({
@@ -1816,7 +1809,12 @@ export function buildGmTools(
  * (transfer.md §12-2). 감독의 말은 싣지 않는다 — 방 안의 말은 코어가 협상 GM에게 넘긴다.
  */
 const StartNegotiationArgsSchema = z.object({
-  method: z.enum(["meeting", "phone", "proposal"]).optional(),
+  method: z
+    .enum(["meeting", "phone", "proposal"])
+    .optional()
+    .describe(
+      "감독의 요청과 현재 장면에서 정한 연락 방식. 만나면 meeting, 통화는 phone, 서면 발송은 proposal. 선택을 위한 질문이나 UI는 없다.",
+    ),
   mode: z.enum(["continue", "request"]).optional(),
   negotiationId: z
     .string()

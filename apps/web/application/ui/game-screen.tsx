@@ -1,5 +1,4 @@
 "use client";
-import type { NegotiationMethod } from "@story-fm/domain";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -11,6 +10,8 @@ import { reducedMotion } from "@/domains/common/lib/motion";
 import type { AttentionItemView, ChatTurn } from "@story-fm/engine";
 import type { TurnOperation } from "@story-fm/agents";
 import type { ProposalInput } from "@story-fm/domain";
+import { proposalCommandName } from "@story-fm/domain";
+import { proposalAttachments } from "@/domains/negotiation/lib/market-calls";
 import { ChatTurnView, turnStamp } from "./chat";
 import { chatForActiveMatch } from "@/domains/match/lib/match-chat";
 import {
@@ -39,8 +40,8 @@ import {
 import { StageSplitHandle } from "../../domains/common/ui/stage-split-handle";
 import { Crest, clubStyle } from "../../domains/common/ui/crest";
 import { KickoffGate } from "../../domains/match/ui/kickoff-gate";
-import { NegotiationGate } from "../../domains/negotiation/ui/negotiation-gate";
 import { NegotiationRoom } from "../../domains/negotiation/ui/negotiation-room";
+import { type ContractSigning } from "../../domains/negotiation/ui/market-card";
 import { PlayerCardHost } from "./player-card-host";
 import { ProposalProvider, type ProposalDraft } from "../../domains/negotiation/ui/proposal-form";
 import {
@@ -231,19 +232,10 @@ export function GameScreen({ gameId }: { gameId: string }) {
       ? null
       : pendingMatch;
   /**
-   * 협상 방 — 경기와 같은 두 걸음이다 (transfer.md §12-2). `start_negotiation`은 방을
-   * 세울 뿐이고 감독이 나서는 게이트를 지나야 무대가 방으로 바뀐다. 나서는 손잡이를
-   * 누른 순간을 `enteringNegotiation`이 적어 두고, 코어가 `seated`를 돌려주기 전에도
-   * 무대는 이미 방이다 — 그 턴이 실패하면 `fail`이 이 값을 지워 게이트로 돌아간다.
+   * 협상 방 — 게이트가 없다. 방은 협상 GM이 첫 장면을 쓴 그 턴에 서서 돌아온다
+   * (agents.md §2 · design-system.md §7-1).
    */
-  const pendingNegotiation = game?.views.negotiation ?? null;
-  const [enteringNegotiation, setEnteringNegotiation] = useState<string | null>(null);
-  const liveNegotiation =
-    pendingNegotiation === null ||
-    (pendingNegotiation.beforeSeating &&
-      !(busy && enteringNegotiation === pendingNegotiation.negotiationId))
-      ? null
-      : pendingNegotiation;
+  const liveNegotiation = game?.views.negotiation ?? null;
   /** 열린 장부 뷰 — null이면 무대(채팅 / 경기+채팅)가 보인다 */
   const [panel, setPanel] = useState<Panel | null>(null);
   /**
@@ -306,6 +298,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 한 자리에 있다 (`rail-hints.tsx`). 무대는 무엇을 눌렀는지만 넘긴다.
    */
   const rail = useRailHints({ chat: game?.chat, panel });
+  const attachments = useMemo(() => proposalAttachments(game?.chat ?? []), [game?.chat]);
   /**
    * 전술판에서 쌓인 조작 — 다음 턴에 함께 나간다 (대기 목록을 화면에 그리지는
    * 않는다: 판 자체가 바뀐 모습이 곧 표시다).
@@ -621,12 +614,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
       // 협상 방도 같은 규칙이다 — 방 안에서 친 말은 그 협상의 이력이다 (lib/turn-runner.ts)
       const activeNegotiationId = liveNegotiation?.negotiationId;
       const optimistic =
-        operation || !message
+        operation || (!message && !attached)
           ? null
           : {
-              role: "user" as const,
-              text: message,
-              toolCalls: [],
+              role: message ? ("user" as const) : ("operator" as const),
+              text: message ?? "",
+              toolCalls: attached
+                ? [{ name: proposalCommandName(attached.kind), summary: "", input: attached }]
+                : [],
               at: game.date,
               ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
               ...(activeNegotiationId
@@ -639,7 +634,19 @@ export function GameScreen({ gameId }: { gameId: string }) {
                   }
                 : {}),
             };
-      if (optimistic) setGame((g) => (g ? { ...g, chat: [...g.chat, optimistic] } : g));
+      if (optimistic)
+        setGame((g) =>
+          g
+            ? {
+                ...g,
+                chat: [...g.chat, optimistic],
+                playerNames:
+                  sentDraft && draft
+                    ? { ...g.playerNames, [draft.playerId]: draft.playerName }
+                    : g.playerNames,
+              }
+            : g,
+        );
 
       /**
        * 턴 실패 — 낙관적 유저 턴을 지우고 배너를 세운다 (채팅엔 아무것도 남기지 않는다).
@@ -666,8 +673,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
          * 지시·입력과 달리 이 낙관은 서버에 두 번 실릴 것이 없다.
          */
         setEntering(null);
-        // 협상의 문도 같다 — 앉는 턴이 실패하면 무대는 게이트로 돌아간다
-        setEnteringNegotiation(null);
         setError(failure.reason);
         setErrorDetail(failure.detail ?? null);
         setErrorRetry(failure.retry);
@@ -832,29 +837,29 @@ export function GameScreen({ gameId }: { gameId: string }) {
     }
     void send(undefined, { kind: "enter_match" });
   }, [pendingMatch?.matchId, send]);
-  /**
-   * 협상의 문을 지난다 — 경기의 문과 같은 순서다 (transfer.md §12-2). 나서는 것은
-   * 감독이므로 방은 누름과 함께 서고, 코어가 `seated`를 세우는 것은 그다음이다. 게이트가
-   * 물러나는 시간도 한 벌이다 — 두 문이 한 화면에 함께 서는 일은 없다.
-   */
-  const enterNegotiation = useCallback(
-    (method: NegotiationMethod) => {
-      const id = pendingNegotiation?.negotiationId;
-      if (id === undefined) return;
-      setEnteringNegotiation(id);
-      if (!reducedMotion()) {
-        setGateLeaving(true);
-        if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
-        gateLeaveTimer.current = setTimeout(() => setGateLeaving(false), GATE_LEAVE_MS);
-      }
-      void send(undefined, { kind: "enter_negotiation", method });
-    },
-    [pendingNegotiation?.negotiationId, send],
-  );
   /** 협상에서 물러난다 — 협상은 열린 채 방만 닫힌다. 손잡이는 방의 칸에 선다 */
   const leaveNegotiation = useCallback(() => {
     void send(undefined, { kind: "leave_negotiation" });
   }, [send]);
+  /**
+   * 계약서의 서명 손잡이 — 확정된 거래는 「계약 확정」, 그 거래의 방이 열려 있고 합의
+   * 상태일 때만 눌린다 (transfer.md §9). 상태는 장부의 것을 읽는다(`negotiationLogs`).
+   */
+  const signingOf = useCallback(
+    (negotiationId: string): ContractSigning => {
+      if (game?.negotiationLogs[negotiationId]?.status === "completed") return "signed";
+      if (liveNegotiation?.negotiationId !== negotiationId) return "locked";
+      if (liveNegotiation.status !== "agreed") return "locked";
+      return busy ? "busy" : "ready";
+    },
+    [game?.negotiationLogs, liveNegotiation, busy],
+  );
+  const signContract = useCallback(
+    (negotiationId: string) => {
+      void send(undefined, { kind: "sign_contract", negotiationId });
+    },
+    [send],
+  );
 
   /**
    * 마지막으로 화면에 선 시각 — 흘러오는 턴이 같은 시각을 다시 적지 않게 한다.
@@ -1013,15 +1018,23 @@ export function GameScreen({ gameId }: { gameId: string }) {
            */
           let prevStamp: string | null = null;
           const render = (turn: ChatTurn, i: number) => {
-            if (turn.role === "operator") return null;
             // 감독의 발화를 눌러도 열리는 것은 **그 발화가 실려 나간 호출**이다 —
             // 인덱스를 아는 이 자리가 그것을 해석한다 (`buildTraceIndex`)
             if (turn.role !== "model")
-              return <ChatTurnView key={i} turn={turn} onLongPress={traceOpener(turn)} />;
+              return (
+                <ChatTurnView
+                  key={i}
+                  turn={turn}
+                  proposal={attachments.byTurn.get(turn)}
+                  playerNames={game.playerNames}
+                  onLongPress={traceOpener(turn)}
+                />
+              );
             const node = (
               <ChatTurnView
                 key={i}
                 turn={turn}
+                attachedCalls={attachments.calls}
                 playerNames={game.playerNames}
                 speakerRoles={game.speakerRoles}
                 prevStamp={prevStamp}
@@ -1033,6 +1046,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 onRevealHint={inMatch ? undefined : rail.reveal}
                 revealedCall={rail.revealedCall}
                 onLongPress={traceOpener(turn)}
+                signingOf={signingOf}
+                onSign={signContract}
               />
             );
             prevStamp = turnStamp(turn) ?? prevStamp;
@@ -1360,17 +1375,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
               busy={busy}
               leaving={liveMatch !== null}
               onEnter={enterMatch}
-            />
-          )}
-          {/* 감독이 나서는 문 — 협상의 게이트. 킥오프 게이트와 한 쌍이라 같은 때 서고 같은
-          때 물러난다 (transfer.md §12-2 · design-system.md §7-1) */}
-          {pendingNegotiation !== null && (liveNegotiation === null || gateLeaving) && (
-            <NegotiationGate
-              room={pendingNegotiation}
-              date={game.date}
-              busy={busy}
-              leaving={liveNegotiation !== null}
-              onEnter={enterNegotiation}
             />
           )}
           {/**

@@ -196,6 +196,18 @@ const SCRIPT: readonly ScriptLine[] = [
       },
     ],
   },
+  // 방식을 붙인 말이 먼저다 — 뒤의 일반 줄은 꼬리만 보므로 이름 자리에 방식까지 삼킨다
+  ...(
+    [
+      ["전화로", "phone"],
+      ["제안서로", "proposal"],
+    ] as const
+  ).map(([label, method]): ScriptLine => ({
+    say: `${NAME_SLOT} ${label} 협상하자`,
+    gm: ({ named }) => [
+      { tool: "start_negotiation", input: { playerId: named, kind: "buy", party: "club", method } },
+    ],
+  })),
   {
     // 방을 세운다 — 오퍼 없는 영입 자리, 상대는 구단 쪽(단장) (transfer.md §12-2)
     say: `${NAME_SLOT} 협상하자`,
@@ -217,21 +229,13 @@ const SCRIPT: readonly ScriptLine[] = [
     gm: () => [{ tool: "leave_negotiation" }],
   },
   {
+    // 합의된 거래의 방으로 간다 — 서명은 방의 계약서에서 한다 (transfer.md §7)
     say: "이적 건 마무리하자",
     gm: ({ state }) => {
       const agreed = state.negotiations.find((negotiation) => negotiation.status === "agreed");
       return agreed
-        ? [
-            {
-              tool: "start_negotiation",
-              input: { negotiationId: agreed.id, mode: "request", method: "proposal" },
-            },
-          ]
+        ? [{ tool: "start_negotiation", input: { negotiationId: agreed.id, method: "meeting" } }]
         : [];
-    },
-    ops: ({ state }): OpsInput => {
-      const agreed = state.negotiations.find((n) => n.status === "agreed");
-      return agreed ? { accept_deal: [{ negotiationId: agreed.id }] } : {};
     },
   },
 ];
@@ -389,7 +393,10 @@ export function negotiationScript(
       "상대")
     : "상대";
   if (options.seating) {
+    // 합의된 거래로 돌아온 자리는 계약서부터 세운다 — 실모드 프롬프트와 같은 규칙이다
+    const agreed = negotiation?.status === "agreed" && options.tools.includes("accept_negotiation");
     return {
+      ...(agreed ? { calls: [{ tool: "accept_negotiation", input: { side: "manager" } }] } : {}),
       text: [
         header,
         `@: *${ROOM_PLACE}*`,

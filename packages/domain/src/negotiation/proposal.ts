@@ -44,6 +44,12 @@ export const ProposalInputSchema = z.object({
 });
 export type ProposalInput = z.infer<typeof ProposalInputSchema>;
 
+/** A submitted form has both its proposal kind and the matching core command. */
+export function proposalInputOf(call: { name: string; input?: unknown }): ProposalInput | null {
+  const parsed = ProposalInputSchema.safeParse(call.input);
+  return parsed.success && call.name === proposalCommandName(parsed.data.kind) ? parsed.data : null;
+}
+
 /**
  * 모델과 이력이 읽을 표시 문구 — **구조체에서 만든다.** 이 문장은 오퍼레이터 봉투에
  * 실려 GM이 「감독이 화면에서 제안했다」로 읽는다. 아무도 되읽지 않는다.
@@ -78,4 +84,19 @@ export interface ProposalPrefill {
   years?: number;
   squadStatus?: SquadStatus;
   terms?: DealTerm[];
+}
+
+/** 이 명령이 화면의 칩·카드에 서는 이름 — 채팅으로 낸 것과 같은 이름이다 */
+export function proposalCommandName(kind: ProposalKind): string {
+  switch (kind) {
+    case "buy":
+    case "loan":
+      return "send_offer";
+    case "renew":
+      return "open_renewal";
+    case "personal":
+      return "propose_personal";
+    case "terms":
+      return "offer_terms";
+  }
 }

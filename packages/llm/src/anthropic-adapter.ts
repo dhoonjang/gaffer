@@ -11,6 +11,8 @@ import {
   type TurnResult,
   type TurnUsage,
   UNRUN_CALL,
+  HANDED_OFF,
+  endsTurn,
 } from "./game-llm";
 import {
   blockedTurnError,
@@ -437,14 +439,18 @@ export class AnthropicGameLLM implements GameLLM {
       if (stopReason !== "tool_use") break;
 
       const results: Anthropic.ToolResultBlockParam[] = [];
+      let handedOff = false;
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
-        toolCallCount++;
+        if (!handedOff) toolCallCount++;
         const spec = tools.find((t) => t.name === block.name);
         // 이 반복의 텍스트까지 누적된 뒤다 — 도구가 불린 자리가 그대로 실린다
-        const outcome: ToolOutcome = spec
-          ? await spec.handle(block.input, { text })
-          : { ok: false, message: `알 수 없는 도구: ${block.name}` };
+        const outcome: ToolOutcome = handedOff
+          ? { ok: false, message: HANDED_OFF }
+          : spec
+            ? await spec.handle(block.input, { text })
+            : { ok: false, message: `알 수 없는 도구: ${block.name}` };
+        if (endsTurn(outcome)) handedOff = true;
         results.push({
           type: "tool_result",
           tool_use_id: block.id,
@@ -453,6 +459,11 @@ export class AnthropicGameLLM implements GameLLM {
         });
       }
       messages.push({ role: "user", content: results });
+      // 넘김 도구의 결과는 모델에게 돌아가지 않는다 — 그 뒤의 장면은 다른 GM이 쓴다
+      if (handedOff) {
+        stopReason = "handoff";
+        break;
+      }
     }
 
     // 이력 위생 — 마지막 assistant 턴에 미해결 tool_use가 남아 있으면

@@ -296,22 +296,17 @@ describe("mock 대본 — 협상 방", () => {
     return target;
   }
 
-  /** 방을 세우고 자리에 앉는 두 걸음 — 케이스마다 같다. 여는 말이 건너편을 정한다 */
+  /**
+   * 방을 세우는 한 턴 — 케이스마다 같다. 여는 말이 건너편을 정한다. 평시 호출은
+   * `start_negotiation`에서 끝나고, 같은 턴의 장면은 협상 GM의 첫 장면이다.
+   */
   async function seatWith(state: GameState, name: string, say = "협상하자") {
     const opened = await runGmTurn(state, `${name} ${say}`);
     expectGmGrammar(opened.text);
-    expect(namesOf(opened)).toContain("start_negotiation");
+    expect(namesOf(opened)).toEqual(["start_negotiation"]);
     expect(state.phase).toBe("negotiation");
-    expect(state.pendingNegotiation?.seated).toBe(false);
-
-    // 자리에 앉는 턴 — 방의 도구가 없고, 방과 상대의 첫 말까지다. 다음 말은 그래도 선다
-    const seated = await runGmTurn(state, "협상 자리에 앉는다", undefined, {
-      kind: "enter_negotiation",
-    });
-    expectGmGrammar(seated.text);
-    expect(seated.toolCalls).toHaveLength(0);
-    expect(seated.suggestion).toBe("제안한 조건으로 갑시다");
     expect(state.pendingNegotiation?.seated).toBe(true);
+    expect(opened.suggestion).toBe("제안한 조건으로 갑시다");
     return openNegotiationFor(state, acceptableTarget(state).id) ?? state.negotiations.at(-1)!;
   }
 
@@ -333,6 +328,13 @@ describe("mock 대본 — 협상 방", () => {
     expect(same.personal).toBeUndefined();
     expect(same.status).toBe("open");
     expect(state.date).toBe(from);
+    const exchangeId = state.pendingNegotiation!.exchangeId;
+    await runGmTurn(state, "일상으로 돌아가기", undefined, { kind: "leave_negotiation" });
+    expect(state.negotiationEvaluations.at(-1)).toMatchObject({
+      party: "agent",
+      exchangeId,
+      ending: true,
+    });
   });
 
   it("값 없는 말에는 상대의 답만 서고, 일어서는 손잡이가 방을 닫되 협상은 열어 둔다", async () => {
@@ -354,7 +356,7 @@ describe("mock 대본 — 협상 방", () => {
     expect(left.toolCalls.find((c) => c.name === TABLE_LEFT)?.silent).toBe(true);
     expect(state.phase).toBe("idle");
     expect(negotiation.status).toBe("open");
-    expect(tableOf(state, negotiation, "club")?.lines.at(-1)?.by).toBe("ledger");
+    expect(state.negotiationExchanges.at(-1)?.closedOn).toBe(state.date);
   });
 
   it("자리를 뜨는 말은 leave_negotiation로 방을 닫는다", async () => {
@@ -523,7 +525,6 @@ describe("협상 평가의 재시도와 후속 처리", () => {
     const input = {
       negotiationId: id,
       party: "club" as const,
-      said: "구단 의견을 확인해 주세요",
       ending: true,
     };
     expect((await evaluateNegotiation(state, input, failed)).ok).toBe(false);
@@ -537,6 +538,45 @@ describe("협상 평가의 재시도와 후속 처리", () => {
     expect((await evaluateNegotiation(state, input, client)).ok).toBe(true);
     expect(client.requests).toHaveLength(count);
     expect(state.negotiationEvaluations).toHaveLength(1);
+  });
+  it("대화 중에는 후속 일을 묻지 않고 종료 때 응답을 재판정하지 않는다", async () => {
+    const { state, id } = inquiry();
+    const client = reviewer(true);
+    expect(
+      (await evaluateNegotiation(state, { negotiationId: id, party: "club" }, client)).ok,
+    ).toBe(true);
+    expect(client.requests.every((request) => !("followup" in request.questions))).toBe(true);
+    expect(state.negotiationFollowups).toHaveLength(0);
+    const before = client.requests.length;
+    expect(
+      (await evaluateNegotiation(state, { negotiationId: id, party: "club", ending: true }, client))
+        .ok,
+    ).toBe(true);
+    expect(
+      client.requests.slice(before).every((request) => !("position" in request.questions)),
+    ).toBe(true);
+    expect(state.negotiationFollowups).toHaveLength(1);
+    const count = client.requests.length;
+    await evaluateNegotiation(state, { negotiationId: id, party: "club", ending: true }, client);
+    expect(client.requests).toHaveLength(count);
+    expect(state.negotiationFollowups).toHaveLength(1);
+  });
+  it("턴 시작의 평가 재시도는 조건에 반영하되 내부 요약을 사건 카드에 넣지 않는다", async () => {
+    const { state, id } = inquiry();
+    await evaluateNegotiation(
+      state,
+      { negotiationId: id, party: "club", ending: true },
+      {
+        async evaluate() {
+          throw new Error("unavailable");
+        },
+      },
+    );
+    expect(state.negotiationEvaluations[0]!.status).toBe("pending");
+    const turn = await runGmTurn(state, "현재 상황을 알려줘");
+    expect(state.negotiationEvaluations[0]!.status).toBe("completed");
+    expect(state.negotiationEvaluations[0]!.result).not.toBeNull();
+    expect((turn.events ?? []).filter((event) => event.kind === "interest")).toHaveLength(0);
   });
   it("같은 날 생성된 후속은 다음 처리 단위로 남기며 완료 이벤트를 다시 처리하지 않는다", async () => {
     const { state, id } = inquiry();

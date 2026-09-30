@@ -6,6 +6,7 @@ import {
   negotiationTermsOf,
   applyNegotiationAssessment,
   assessmentText,
+  settledNegotiationAssessment,
   defaultPartyOf,
   dueNegotiationFollowups,
   negotiationVersion,
@@ -27,7 +28,6 @@ export async function evaluateNegotiation(
     party?: TableSpeaker;
     exchangeId?: string;
     ending?: boolean;
-    said?: string;
   },
   evaluator?: GameEvaluator,
 ): Promise<{ ok: boolean; message: string }> {
@@ -39,14 +39,17 @@ export async function evaluateNegotiation(
   if (record.status === "completed") return { ok: true, message: assessmentText(record) };
   const context = negotiationEvaluationContext(state, n, party);
   if (!context) return { ok: false, message: "상대 평가의 사실이 부족합니다" };
+  const settled = settledNegotiationAssessment(state, record);
   try {
     const result =
       process.env.LLM_MODE === "mock" && !evaluator
         ? {
-            position: "review" as const,
-            conditions: negotiationTermsOf(n),
-            alternatives: [],
-            factRefs: ["proposal"],
+            ...(settled ?? {
+              position: "review" as const,
+              conditions: negotiationTermsOf(n),
+              alternatives: [],
+              factRefs: ["proposal"],
+            }),
             followup: null,
           }
         : await assessNegotiation(
@@ -57,7 +60,8 @@ export async function evaluateNegotiation(
               current: negotiationTermsOf(n),
               factRefs: context.factRefs,
               hasProposal: context.hasProposal,
-              ending: input.ending === true,
+              ending: record.ending,
+              settled,
               medicalAllowed: context.medicalAllowed,
             },
             evaluator ?? createGameEvaluator("negotiation"),
@@ -130,7 +134,16 @@ export async function processNegotiationFollowups(
       const exchange = state.negotiationExchanges.find((e) => e.id === event.exchangeId);
       if (exchange) exchange.summary = `${event.dueOn} ${event.purpose} 도래`;
       const prior = state.negotiationEvaluations.find((e) => e.id === event.evaluationId);
-      if (prior) prior.status = "stale";
+      if (prior) {
+        for (const evaluation of state.negotiationEvaluations) {
+          if (
+            evaluation.negotiationId === n.id &&
+            evaluation.party === event.party &&
+            evaluation.version === prior.version
+          )
+            evaluation.status = "stale";
+        }
+      }
       const result = await evaluateNegotiation(
         state,
         { negotiationId: n.id, party: event.party, ending: true },

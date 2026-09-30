@@ -7,6 +7,67 @@
  * 선택지가 손에 꼽히는 자리(연수·지위·지급)는 접힌 목록 대신 칩으로 전부 펼친다. 테두리는
  * 없고, 고른 것은 색만이 아니라 `aria-checked`로도 전해진다 (overview.md §5).
  */
+.turn-user.with-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.proposal-attachment {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.proposal-attachment header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.proposal-attachment header > span {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.proposal-attachment header > svg {
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+.turn-user .proposal-attachment em {
+  font-weight: 400;
+  opacity: 1;
+  color: var(--text-2);
+  font-style: normal;
+  font-size: var(--fs-xs);
+}
+.proposal-attachment .mc-vals > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.proposal-attachment .mc-vals b {
+  font-variant-numeric: tabular-nums;
+}
+.proposal-attachment ul {
+  margin: 10px 0 0;
+  padding: 10px 0 0 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-2);
+}
+.proposal-attachment header + ul {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.proposal-attachment li + li {
+  margin-top: 4px;
+}
 .proposal-veil {
   position: fixed;
   inset: 0;
@@ -544,26 +605,4 @@
 .draft-remove:focus-visible {
   outline: none;
   box-shadow: var(--ring);
-}
-
-/* 시장 카드에서 폼을 여는 손잡이 */
-.mc-propose {
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-family: inherit;
-  font-size: var(--fs-2xs);
-  font-weight: 600;
-  cursor: pointer;
-}
-.mc-propose:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-}
-.mc-propose:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }

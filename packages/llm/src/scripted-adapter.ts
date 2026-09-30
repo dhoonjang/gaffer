@@ -1,5 +1,6 @@
 import type { AgentConfig } from "./config";
 import {
+  endsTurn,
   isStoredLlmHistory,
   type GameLLM,
   type StoredLlmHistory,
@@ -79,6 +80,7 @@ export class ScriptedGameLLM implements GameLLM {
     }
     const byName = new Map((req.tools ?? []).map((tool) => [tool.name, tool] as const));
     let called = 0;
+    let handedOff = false;
     for (const call of plan.calls ?? []) {
       const tool = byName.get(call.tool);
       if (!tool) {
@@ -88,8 +90,13 @@ export class ScriptedGameLLM implements GameLLM {
         );
         continue;
       }
-      await tool.handle(call.input ?? {}, { text });
+      const outcome = await tool.handle(call.input ?? {}, { text });
       called += 1;
+      // 실모드와 같은 계약이다 — 넘김 도구 뒤의 호출은 돌지 않는다 (models.md §3-1)
+      if (endsTurn(outcome)) {
+        handedOff = true;
+        break;
+      }
     }
     const model = `${this.config.model}${SCRIPTED_MODEL_SUFFIX}`;
     const prior =
@@ -110,7 +117,7 @@ export class ScriptedGameLLM implements GameLLM {
       historyBase: prior.length,
       usage: NO_USAGE,
       toolCallCount: called,
-      stopReason: "completed",
+      stopReason: handedOff ? "handoff" : "completed",
       ...(req.outputSchema === undefined ? {} : { output: plan.output ?? null }),
     };
   }

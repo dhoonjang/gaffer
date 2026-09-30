@@ -3,24 +3,63 @@
 import {
   formatMoney,
   marketDirectionKo,
+  PROPOSAL_KIND_KO,
+  SQUAD_STATUS_KO,
+  dealTermLabel,
+  type ProposalInput,
   type MarketCard,
   type MarketTerms,
 } from "@story-fm/domain";
-import { IconFinance, IconInsight, IconPerson, IconTrash } from "@/domains/common/ui/icons";
-import { useProposal } from "@/domains/negotiation/ui/proposal-form";
-import type { ProposalPrefill } from "@story-fm/domain";
+import {
+  IconContract,
+  IconFinance,
+  IconInsight,
+  IconPerson,
+  IconTrash,
+} from "@/domains/common/ui/icons";
 import { humanDate } from "@/domains/common/lib/dateline";
 
-/**
- * **협상·스카우트 카드** — 갈 화면이 없는 호출의 결과가 서는 자리.
- *
- * 진행 중인 협상은 어느 장부에도 실리지 않아서 레일이 알릴 수 없고, 칩 속에 줄글로
- * 접어 두면 조건을 견주려 매번 펼쳐야 했다. 금액·확률·기한은 **다음 판단의 입력**이라
- * 문단 밖으로 꺼내 한 줄씩 세운다 — 골 카드가 그런 것처럼.
- *
- * 내용은 전부 코어가 실어 보낸 사실이다(`MarketCard`) — 중계 문장을 되읽지 않는다.
- * 상대의 한마디만 LLM의 것이고, 그건 인용으로 따로 앉힌다.
- */
+export function ProposalAttachment({
+  proposal,
+  playerName,
+}: {
+  proposal: ProposalInput;
+  playerName: string;
+}) {
+  return (
+    <section
+      className="proposal-attachment"
+      aria-label={`${playerName} 제안서`}
+      data-testid="proposal-attachment"
+    >
+      <header>
+        <IconContract size={16} />
+        <strong>{playerName}</strong>
+        <span>{PROPOSAL_KIND_KO[proposal.kind]} 제안서</span>
+      </header>
+      {proposal.kind !== "terms" && (
+        <div className="mc-vals">
+          <Terms terms={proposal} loan={proposal.kind === "loan"} />
+          {proposal.squadStatus && (
+            <span>
+              <em>지위</em>
+              <b>{SQUAD_STATUS_KO[proposal.squadStatus]}</b>
+            </span>
+          )}
+        </div>
+      )}
+      {!!proposal.terms?.length && (
+        <ul>
+          {proposal.terms.map((term, i) => (
+            <li key={i}>{dealTermLabel(term)}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** 발송 조건과 상대 응답을 보여주는 읽기 전용 거래 기록. */
 
 const KIND_ICON = {
   offer: IconFinance,
@@ -29,6 +68,7 @@ const KIND_ICON = {
   release: IconPerson,
   withdraw: IconTrash,
   scout: IconInsight,
+  contract: IconContract,
 } as const;
 
 /**
@@ -97,6 +137,8 @@ function badgeOf(card: MarketCard): string {
       return way ? `${way} 철회` : "협상 철회";
     case "scout":
       return "스카우트 파견";
+    case "contract":
+      return way ? `${way} 계약서` : "계약서";
   }
 }
 
@@ -143,31 +185,21 @@ export function Terms({ terms, loan = false }: { terms: MarketTerms; loan?: bool
 }
 
 /**
- * 카드가 폼에 미리 채우는 값 — 상대의 조정안이 있으면 그것, 없으면 우리 조건이다. 같은
- * 숫자를 감독이 다시 치지 않는다 (transfer.md §12-3).
+ * 계약서의 서명 손잡이가 선 자리 — `ready`만 눌린다. `locked`는 그 거래의 협상 방이
+ * 열려 있지 않거나 합의 상태가 아닌 것, `signed`는 확정된 것이다.
  */
-function prefillOf(card: MarketCard): ProposalPrefill {
-  const terms = card.counterTerms ?? card.terms;
-  return {
-    kind: card.kind === "renewal" ? "renew" : card.loan === true ? "loan" : "buy",
-    ...(terms?.fee === undefined ? {} : { fee: terms.fee }),
-    ...(terms?.paymentYears === undefined ? {} : { paymentYears: terms.paymentYears }),
-    ...(terms?.weeklyWage === undefined ? {} : { weeklyWage: terms.weeklyWage }),
-    ...(terms?.years === undefined ? {} : { years: terms.years }),
-  };
-}
+export type ContractSigning = "ready" | "busy" | "signed" | "locked";
 
-/** 폼으로 이어지는 카드 — 오퍼·답·재계약. 해지·철회·스카우트에는 다시 부를 값이 없다 */
-const PROPOSABLE: ReadonlySet<MarketCard["kind"]> = new Set(["offer", "verdict", "renewal"]);
-
-/**
- * `propose` — 카드에서 폼을 여는 손잡이를 세우는가. 협상 방의 턴에 선 카드는 세우지 않는다:
- * 그 방의 폼은 방의 손잡이(「제안서 작성」) 하나로 열리고, 끝난 협상의 카드에서 다시 부를
- * 값은 없다 (design-system.md §7-1).
- */
-export function MarketCardView({ card, propose = true }: { card: MarketCard; propose?: boolean }) {
+export function MarketCardView({
+  card,
+  signing = "locked",
+  onSign,
+}: {
+  card: MarketCard;
+  signing?: ContractSigning;
+  onSign?: (negotiationId: string) => void;
+}) {
   const Icon = KIND_ICON[card.kind];
-  const proposal = useProposal();
   /**
    * 답의 결이 카드의 색을 정한다 — 수락은 강조색, 거절은 경고색, 조정은 그 사이.
    * 금액을 읽기 전에 잘 됐는지가 보여야 스크롤을 훑을 때 눈이 걸린다.
@@ -177,7 +209,9 @@ export function MarketCardView({ card, propose = true }: { card: MarketCard; pro
       ? ` ${card.verdict}`
       : card.kind === "withdraw"
         ? " reject"
-        : "";
+        : card.kind === "contract"
+          ? " accept"
+          : "";
   return (
     <div className={`market-card${tone}`} data-testid={`market-${card.kind}`}>
       <div className="mc-head">
@@ -214,6 +248,36 @@ export function MarketCardView({ card, propose = true }: { card: MarketCard; pro
         </div>
       )}
 
+      {card.kind === "contract" && (card.squadStatus || card.clauses?.length) && (
+        <div className="mc-pitch">
+          {card.squadStatus && <span className="on">{SQUAD_STATUS_KO[card.squadStatus]}</span>}
+          {card.clauses?.map((clause) => (
+            <span className="on" key={clause}>
+              {clause}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {card.kind === "contract" && card.negotiationId && (
+        <div className="mc-sign">
+          {signing === "signed" ? (
+            <b className="mc-signed">계약 확정</b>
+          ) : (
+            <button
+              type="button"
+              className="mc-sign-btn"
+              data-testid="contract-sign"
+              disabled={signing !== "ready"}
+              title={signing === "locked" ? "이 거래의 협상 테이블에서 서명합니다" : undefined}
+              onClick={() => card.negotiationId && onSign?.(card.negotiationId)}
+            >
+              서명
+            </button>
+          )}
+        </div>
+      )}
+
       {card.pitch && card.pitch.length > 0 && (
         <div className="mc-pitch">
           {card.pitch.map((p, i) => (
@@ -241,17 +305,6 @@ export function MarketCardView({ card, propose = true }: { card: MarketCard; pro
           ) : (
             <span className="mc-note">{card.note}</span>
           ))}
-        {/* 이 카드의 조건을 폼에 그대로 앉혀 다시 부른다 — 조정안이면 그 값이 출발점이다 */}
-        {proposal !== null && propose && PROPOSABLE.has(card.kind) && (
-          <button
-            type="button"
-            className="mc-propose"
-            onClick={() => proposal.open(card.playerId, prefillOf(card))}
-            data-testid="market-card-propose"
-          >
-            제안
-          </button>
-        )}
       </div>
     </div>
   );

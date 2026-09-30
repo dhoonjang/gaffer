@@ -8,8 +8,12 @@ import { hasRailHint } from "../../domains/common/lib/panel-hints";
 import { groupChips, groupPieces, splitStaging, weaveTurn } from "../lib/turn-pieces";
 import type { Utterance } from "../lib/turn-pieces";
 import { BROADCAST_SPEAKER, formatScore, normalizeSpeaker } from "@story-fm/domain";
-import type { TickEvent } from "@story-fm/domain";
-import { MarketCardView } from "@/domains/negotiation/ui/market-card";
+import type { TickEvent, ProposalInput } from "@story-fm/domain";
+import {
+  MarketCardView,
+  ProposalAttachment,
+  type ContractSigning,
+} from "@/domains/negotiation/ui/market-card";
 import { splitMarketCalls } from "@/domains/negotiation/lib/market-calls";
 import { ScoutingReportView } from "@/domains/negotiation/ui/scouting-report";
 import { tickEventLook } from "@/domains/common/lib/tick-event-display";
@@ -295,8 +299,11 @@ const TICK_EVENTS_SHOWN = 5;
  */
 function TickEvents({ events }: { events: readonly TickEvent[] }) {
   const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? events : events.slice(0, TICK_EVENTS_SHOWN);
-  const rest = events.length - shown.length;
+  // Stored interest events contain evaluator diagnostics, not confirmed correspondence.
+  const visible = events.filter((event) => event.kind !== "interest");
+  const shown = expanded ? visible : visible.slice(0, TICK_EVENTS_SHOWN);
+  const rest = visible.length - shown.length;
+  if (visible.length === 0) return null;
   return (
     <div className="tick-events">
       {shown.map((event, i) => (
@@ -411,8 +418,17 @@ export function ChatTurnView({
   onRevealHint,
   revealedCall = null,
   onLongPress,
+  proposal,
+  attachedCalls,
+  signingOf,
+  onSign,
 }: {
   turn: ChatTurn;
+  /** 계약서 카드의 서명 손잡이가 지금 어느 자리인가 — 거래 id로 묻는다 */
+  signingOf?: (negotiationId: string) => ContractSigning;
+  onSign?: (negotiationId: string) => void;
+  proposal?: ProposalInput;
+  attachedCalls?: ReadonlySet<ToolCallRecord>;
   /** 스트리밍 중인 미완성 턴 — 마지막 미완성 줄을 보류해 파싱 깨짐 방지 */
   streaming?: boolean;
   playerNames?: Record<string, string>;
@@ -437,10 +453,17 @@ export function ChatTurnView({
   // 감독의 말은 오른쪽 말풍선이라 그 자체로 갈린다 — 구간 표시는 모델 턴이 맡는다.
   // 다만 문법은 같다: 감독이 쓴 `*…*`도 연출로 서고, 새어 든 id도 이름으로 편다.
   // 이름이 손잡이가 되는 것도 같다 — 감독이 부른 선수도 그 자리에서 열린다
-  if (turn.role === "user") {
+  if (turn.role !== "model") {
+    if (turn.role === "operator" && !proposal) return null;
     return (
-      <div className="turn-user" {...press}>
-        {renderStaging(text, prose, "u")}
+      <div className={`turn-user${proposal ? " with-proposal" : ""}`} {...press}>
+        {turn.role === "user" && <div>{renderStaging(text, prose, "u")}</div>}
+        {proposal && (
+          <ProposalAttachment
+            proposal={proposal}
+            playerName={playerNames?.[proposal.playerId] ?? proposal.playerId}
+          />
+        )}
       </div>
     );
   }
@@ -480,7 +503,7 @@ export function ChatTurnView({
    *
    * `silent`은 도구 호출이 아니라 코어가 한 일이다(시계 이동).
    */
-  const shownCalls = turn.toolCalls.filter((call) => !call.silent);
+  const shownCalls = turn.toolCalls.filter((call) => !call.silent && !attachedCalls?.has(call));
 
   /**
    * 표시는 **벌어진 자리**에 선다 — 칩은 호출 시점의 줄 수, 골·경고는 분으로.
@@ -560,7 +583,14 @@ export function ChatTurnView({
               </div>
             )}
             {cards.map((card, j) => (
-              <MarketCardView card={card} key={j} propose={turn.inNegotiation !== true} />
+              <MarketCardView
+                card={card}
+                key={j}
+                {...(card.negotiationId && signingOf
+                  ? { signing: signingOf(card.negotiationId) }
+                  : {})}
+                {...(onSign ? { onSign } : {})}
+              />
             ))}
           </Fragment>
         );

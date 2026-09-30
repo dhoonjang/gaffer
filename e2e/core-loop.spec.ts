@@ -55,7 +55,7 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
   await expect(page.locator('[data-testid^="cal-fixture-"]').first()).toBeVisible();
 });
 
-test("양쪽이 승인한 계약은 감독의 확정 지시로 한 번만 체결된다", async ({ page }) => {
+test("양쪽이 승인한 계약은 감독의 서명으로 한 번만 체결된다", async ({ page }) => {
   const { gameId, targetName, playerId } = seedTransferTarget("arsenal", 4061, true);
   await page.goto(`/game/${gameId}`);
   const input = page.getByTestId("chat-input");
@@ -63,7 +63,11 @@ test("양쪽이 승인한 계약은 감독의 확정 지시로 한 번만 체결
   await input.fill("이적 건 마무리하자");
   await page.getByTestId("chat-send").click();
   await expect(input).toBeEnabled();
+  const sign = page.getByTestId("contract-sign");
+  await expect(sign).toBeEnabled();
+  await sign.click();
   await expect.poll(() => loadGame(gameId)!.negotiations[0]!.status).toBe("completed");
+  await expect(page.getByTestId("market-contract")).toContainText("계약 확정");
   const saved = loadGame(gameId)!;
   expect(saved.players.find((p) => p.id === playerId)?.teamId).toBe(saved.userTeamId);
   const transfers = saved.transfers.filter((t) => t.gamePlayerId === playerId);

@@ -5,22 +5,16 @@ import {
   type MarketTerms,
   type Negotiation,
   type NegotiationMethod,
-  type NegotiationFollowup,
   dealTermLabel,
 } from "@story-fm/domain";
 import { type GameState, playerById, teamNameIn, teamShortNameIn } from "../../common/core/state";
 import { roomNegotiationOf, roomPartyOf, tableOf } from "../market/table";
 import { tableVoicesOf } from "../market/counterparty";
 import { clubColoursOf } from "../../common/views/colours";
-import {
-  pendingOffer,
-  negotiationKindKo,
-  counterpartOf,
-  personalAwaiting,
-} from "../market/negotiation";
+import { negotiationKindKo, counterpartOf } from "../market/negotiation";
 import { termSheetOf } from "../market/terms";
 
-/** 건너편의 목소리 하나 — 화자 토큰 · 이름 · 직책 · 답하는 칸 (transfer.md §12-1) */
+/** 협상 상대의 화자 토큰·이름·소속·직책. */
 export interface NegotiationRoomVoiceView {
   speaker: TableSpeaker;
   name: string;
@@ -28,7 +22,6 @@ export interface NegotiationRoomVoiceView {
   title: string;
   /** 구단 쪽에만 — 화면이 문장과 구단 색을 세우는 열쇠 */
   team?: { id: string; name: string; short: string; colours?: ClubColours };
-  answers: string[];
 }
 
 /** 조건서 한 줄 — 누가 · 무엇을 · 답 (transfer.md §12-3) */
@@ -60,25 +53,11 @@ export interface NegotiationRoomView {
   voices: NegotiationRoomVoiceView[];
   /** 구단이 이미 이적료에 합의했으면 그 값 — 남은 것은 개인 조건이다 */
   feeAgreed: { fee: number; on: string } | null;
-  /** 이번 교환을 시작하기 전이면 진입 방식 선택을 보여준다. */
-  beforeSeating: boolean;
   contactId: string | null;
   method: NegotiationMethod;
-  history: Array<{
-    exchangeId: string;
-    negotiationId: string;
-    playerName: string;
-    method: NegotiationMethod;
-    date: string;
-    by: "us" | "ledger";
-    text: string;
-  }>;
-  followups: NegotiationFollowup[];
   /** 우리 마지막 오퍼 · 상대의 마지막 조정안 — 없으면 null */
   ours: MarketTerms | null;
   theirs: MarketTerms | null;
-  /** 답을 기다리는 오퍼(또는 개인 조건 제안)가 올라 있는가 */
-  awaiting: boolean;
   /** 개인 조건 선합의 — 제안·되부름·합의 (transfer.md §12-3) */
   personal: { weeklyWage: number; years: number; agreed: boolean; countered: boolean } | null;
   terms: NegotiationRoomTermView[];
@@ -114,7 +93,7 @@ export function roundTermsOf(
 
 /**
  * 협상 방 — `phase`가 `negotiation`일 때만 선다 (transfer.md §12-2). 값은 전부 협상의
- * 장부에서 파생한다: 조건서·상대별 교환 기록·후속 일정.
+ * 장부에서 파생한다: 상대와 현재 조건. 과거 대화는 채팅에서 읽는다.
  */
 export function buildNegotiationView(state: GameState): NegotiationRoomView | null {
   const negotiation = roomNegotiationOf(state);
@@ -141,7 +120,6 @@ export function buildNegotiationView(state: GameState): NegotiationRoomView | nu
               },
             }
           : {}),
-        answers: [...v.answers],
       };
     });
   const table = tableOf(state, negotiation, party);
@@ -149,7 +127,6 @@ export function buildNegotiationView(state: GameState): NegotiationRoomView | nu
   const lastOurs = [...rounds].reverse().find((r) => r.by === "us");
   const last = rounds[rounds.length - 1];
   const lastTheirs = last && last.by === "them" && last.verdict === "counter" ? last : undefined;
-  const offer = pendingOffer(negotiation);
   const personal = negotiation.personal;
   return {
     negotiationId: negotiation.id,
@@ -163,32 +140,10 @@ export function buildNegotiationView(state: GameState): NegotiationRoomView | nu
     feeAgreed: negotiation.feeAgreed
       ? { fee: negotiation.feeAgreed.fee, on: negotiation.feeAgreed.on }
       : null,
-    beforeSeating: room.seated !== true,
     contactId: table?.id ?? null,
     method: room.method,
-    history: (table?.lines ?? []).flatMap((line) => {
-      const exchange = state.negotiationExchanges.find((entry) => entry.id === line.exchangeId);
-      if (!exchange || exchange.contactId !== table?.id) return [];
-      const deal = state.negotiations.find((entry) => entry.id === line.negotiationId);
-      return [
-        {
-          ...line,
-          method: exchange.method,
-          playerName: deal
-            ? (playerById(state, deal.gamePlayerId)?.name ?? deal.gamePlayerId)
-            : line.negotiationId,
-        },
-      ];
-    }),
-    followups: state.negotiationFollowups.filter(
-      (entry) =>
-        entry.negotiationId === negotiation.id &&
-        entry.party === party &&
-        entry.status !== "cancelled",
-    ),
     ours: roundTermsOf(negotiation, lastOurs),
     theirs: roundTermsOf(negotiation, lastTheirs),
-    awaiting: offer !== null || personalAwaiting(negotiation) !== null,
     personal: personal
       ? {
           weeklyWage: personal.counter?.weeklyWage ?? personal.weeklyWage,

@@ -816,3 +816,39 @@ button:disabled,
 .cond-bar.spent span {
   background: var(--loss);
 }
+
+/* 성장 가능성 — 올라가는 막대 다섯 개 (design-system.md). 읽는 값이라 키 컬러를 쓰지 않는다 */
+.growth-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+  vertical-align: middle;
+}
+.growth-bars i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.growth-bars i:nth-child(1) {
+  height: 4px;
+}
+.growth-bars i:nth-child(2) {
+  height: 6px;
+}
+.growth-bars i:nth-child(3) {
+  height: 8px;
+}
+.growth-bars i:nth-child(4) {
+  height: 10px;
+}
+.growth-bars i:nth-child(5) {
+  height: 12px;
+}
+.growth-bars i.on {
+  background: var(--text);
+}
+.growth-bars.top i.on {
+  background: var(--gold);
+}

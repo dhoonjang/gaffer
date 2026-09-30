@@ -1,6 +1,5 @@
 import { isFreeAgent } from "./departures";
 import {
-  TABLE_LINE_MAX,
   isPlayerDeal,
   type Negotiation,
   type NegotiationMethod,
@@ -9,16 +8,9 @@ import {
 } from "@story-fm/domain";
 import { agentForPlayer, directorOf } from "../../common/people/persona";
 import { type GameState, playerById } from "../../common/core/state";
-import { type CounterpartyVoice, tableVoicesOf } from "./counterparty";
 import { openTalks, type TalksKind } from "./negotiation";
 
 export type TableParty = TableSpeaker;
-export interface TableSeat {
-  negotiation: Negotiation;
-  party: TableParty;
-  table: NegotiationTable;
-  voices: CounterpartyVoice[];
-}
 export interface RoomResult {
   ok: boolean;
   message: string;
@@ -86,7 +78,6 @@ export function ensureNegotiationContact(
       ...identity,
       party,
       openedOn: state.date,
-      lines: [],
     };
     state.negotiationContacts.push(table);
   }
@@ -136,72 +127,21 @@ export function ensureNegotiationExchange(
   state.negotiationExchanges.push(exchange);
   return exchange;
 }
-export function recordExchangeLine(
-  state: GameState,
-  exchangeId: string,
-  by: "us" | "ledger",
-  text: string,
-): void {
+/** Conversation text lives only in chat, shared across deals with this counterparty. */
+export function negotiationChat(state: GameState, negotiation: Negotiation, party: TableParty) {
+  const contact = tableOf(state, negotiation, party);
+  return contact ? state.chat.filter((turn) => turn.negotiationContactId === contact.id) : [];
+}
+
+/** Link the current chat input; never create a second transcript of the same words. */
+export function linkNegotiationChat(state: GameState, exchangeId: string): void {
   const exchange = state.negotiationExchanges.find((e) => e.id === exchangeId);
-  const table = state.negotiationContacts.find((t) => t.id === exchange?.contactId);
-  if (!exchange || !table || !text.trim()) return;
-  table.lines.push({
-    date: state.date,
-    by,
-    text: text.trim().slice(0, TABLE_LINE_MAX),
-    negotiationId: exchange.negotiationId,
-    exchangeId,
-  });
-}
-export function seatViewOf(
-  state: GameState,
-  negotiation: Negotiation,
-  party: TableParty,
-): TableSeat {
-  const identity = contactIdentity(state, negotiation, party);
-  return {
-    negotiation,
-    party,
-    table: tableOf(state, negotiation, party) ?? {
-      id: "",
-      counterpartyId: identity?.counterpartyId ?? "",
-      representativeId: identity?.representativeId ?? "",
-      party,
-      openedOn: state.date,
-      lines: [],
-    },
-    voices: tableVoicesOf(state, negotiation).filter((v) => v.speaker === party),
-  };
-}
-export function seatAt(
-  state: GameState,
-  negotiationId: string,
-  party?: TableParty,
-): { ok: false; message: string } | { ok: true; seat: TableSeat } {
-  const n = state.negotiations.find((n) => n.id === negotiationId);
-  if (!n || n.status !== "open") return { ok: false, message: "진행 중인 거래가 필요합니다" };
-  const who = party ?? defaultPartyOf(state, n);
-  if (!ensureNegotiationContact(state, n, who))
-    return { ok: false, message: "이 거래를 대표할 권한이 없는 상대입니다" };
-  return { ok: true, seat: seatViewOf(state, n, who) };
-}
-export function sitAtTable(
-  state: GameState,
-  negotiationId: string,
-  line: string,
-  party?: TableParty,
-) {
-  if (!line.trim()) return { ok: false as const, message: "감독의 원문이 필요합니다" };
-  const seated = seatAt(state, negotiationId, party);
-  if (!seated.ok) return seated;
-  const exchange = ensureNegotiationExchange(
-    state,
-    seated.seat.negotiation,
-    seated.seat.party,
-    state.pendingNegotiation?.method ?? "proposal",
-  );
-  if (exchange) recordExchangeLine(state, exchange.id, "us", line);
-  return seated;
+  const turn = state.chat.at(-1);
+  if (!exchange || !turn || turn.role === "model") return;
+  if (turn.negotiationContactId && turn.negotiationContactId !== exchange.contactId) return;
+  turn.negotiationContactId = exchange.contactId;
+  turn.negotiationExchangeId = exchange.id;
+  turn.negotiationId = exchange.negotiationId;
 }
 export function startNegotiation(
   state: GameState,
@@ -280,14 +220,4 @@ export function closeNegotiation(
     ok: true,
     message: `${reason === "left" ? "일상으로 돌아갑니다" : "이번 교환을 마쳤습니다"} — ${exchange?.summary ?? "기록 보존"}`,
   };
-}
-
-export function selectNegotiationMethod(state: GameState, method: NegotiationMethod): RoomResult {
-  const room = state.pendingNegotiation;
-  const exchange = state.negotiationExchanges.find((e) => e.id === room?.exchangeId);
-  if (!room || !exchange || room.seated || exchange.closedOn !== null)
-    return { ok: false, message: "시작 전 교환만 방식을 바꿀 수 있습니다" };
-  room.method = method;
-  exchange.method = method;
-  return { ok: true, message: `협상 방식: ${method}` };
 }

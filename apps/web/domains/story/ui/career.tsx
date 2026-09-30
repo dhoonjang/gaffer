@@ -277,7 +277,7 @@ export function CareerView({
                   <dt>계약</dt>
                   <dd>
                     연봉 {formatMoney(career.contract.salary)} ·{" "}
-                    {contractUntil(career.contract.until)} ({career.contract.daysLeft}일)
+                    {contractUntil(career.contract.until)}
                     {career.contract.renewal === "declined" && (
                       <b className="mgr-nonrenewal"> 재계약 없음</b>
                     )}

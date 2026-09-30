@@ -215,10 +215,10 @@ export interface ChatTurn {
   /**
    * **협상 방의 턴인가** — 방 안에서 감독이 하고 협상 GM이 답한 턴은 평시 이력에서
    * 갈린다 (docs/common/llm/agents.md §5). 방을 여는 `start_negotiation` 턴은 평시다 —
-   * 방의 이력은 자리에 앉는 턴부터다. 없으면 방 밖의 턴이다.
+   * 이 표식이 없으면 방 밖의 턴이다. 방 밖의 접촉도 상대·교환 참조로 같은 채팅에 연결된다.
    */
   inNegotiation?: boolean;
-  /** 어느 협상인가 (`Negotiation.id`) — `inNegotiation`인 턴에만 있다 */
+  /** 어느 협상인가 (`Negotiation.id`) — 일상에서 보낸 제안도 같은 거래에 연결한다 */
   negotiationId?: string;
   negotiationContactId?: string;
   negotiationExchangeId?: string;
@@ -372,9 +372,8 @@ export interface PendingNegotiation {
   exchangeId: string;
   method: "meeting" | "phone" | "proposal";
   /**
-   * 감독이 자리에 앉았는가 — **들어서는 것은 두 걸음이다.** `start_negotiation`은 방을
-   * 세울 뿐이고(게이트가 선다), 감독이 앉으면 협상 GM이 도구 없이 자리에 앉는 턴 하나를
-   * 갖는다. 값이 오가는 것은 그다음부터다.
+   * 방의 첫 장면을 썼는가 — `start_negotiation`이 방을 세운 그 요청 안에서 협상 GM이 첫
+   * 장면을 쓰면 선다 (agents.md §2). 서지 않은 방에 온 턴이 그 첫 장면이다.
    */
   seated?: boolean;
   /**

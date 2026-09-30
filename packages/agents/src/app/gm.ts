@@ -37,9 +37,7 @@ import {
   minutesOfClock,
   pendingVerdicts,
   roomNegotiationOf,
-  roomPartyOf,
   selectCharacters,
-  sitAtTable,
   takeMedia,
   takeNews,
   toolCallFactLine,
@@ -56,6 +54,7 @@ import type {
   BoardMove,
   CharacterEntry,
   MatchEvent,
+  MediaFact,
   TickEvent,
   ScoutingReport,
 } from "@story-fm/domain";
@@ -198,8 +197,8 @@ interface TurnShape {
   /** 협상 방의 장면인가 — 라우팅이 `negotiation-gm`으로 갈린다 (transfer.md §12-2) */
   inNegotiation: boolean;
   /**
-   * 자리에 앉는 턴 — **방의 첫 호흡.** 감독이 게이트를 지나 앉은 그 한 턴이다. 킥오프와
-   * 같은 자리라 도구가 없다 — 방과 건너편 사람들, 상대의 첫 말까지다.
+   * 자리에 앉는 턴 — **방의 첫 호흡.** `start_negotiation`이 평시 호출을 넘긴 그 요청 안에서
+   * 협상 GM이 감독의 원문을 받아 쓰는 장면이다. 감독이 조건을 함께 말했을 수 있어 도구를 쥔다.
    */
   seating: boolean;
   /** 일어서는 손잡이 턴 — 코어가 턴 앞에서 방을 닫고, GM은 자리를 뜨는 장면만 쓴다 */
@@ -321,15 +320,13 @@ function minuteNow(state: GameState, ledger: TurnLedger, opening: TurnOpening): 
  * 손잡이의 시간 이동, 지난 턴이 받아 둔 보고서, 손잡이 턴의 전술판 적용. 여기서 바뀐
  * 상태가 그대로 이번 턴의 입력이 되므로 **모델은 도착한 자리에서 보고한다**.
  */
-async function processDueReports(state: GameState, ledger: TurnLedger): Promise<string[]> {
+async function processDueReports(state: GameState, ledger: TurnLedger): Promise<void> {
   captureScoutingEvidence(state);
   await processScoutingReports(state);
-  if (ledger.processedNegotiationDates.has(state.date)) return [];
+  if (ledger.processedNegotiationDates.has(state.date)) return;
   ledger.processedNegotiationDates.add(state.date);
   const followed = await processNegotiationFollowups(state);
   ledger.dateEventDecision = followed.pending || dueNegotiationFollowups(state).length > 0;
-  ledger.events.push(...followed.events.map((text) => ({ kind: "interest" as const, text })));
-  return followed.events;
 }
 
 async function advanceOperationWithEvents(
@@ -372,29 +369,21 @@ async function openTurn(
   operation: TurnOperation | null | undefined,
   ledger: TurnLedger,
 ): Promise<TurnOpening> {
-  const { inMatch, kickoff, inNegotiation, seating, leaving, operator } = shape;
+  const { inMatch, kickoff, inNegotiation, leaving } = shape;
   /** 평시 턴만 하는 일 — 시간 이동·보고서 카드는 방 안에도 경기 중에도 없다 */
   const peace = !inMatch && !inNegotiation;
   const from = state.date;
   const clockFrom = clockOf(state);
-  /**
-   * **방 안의 턴 앞** (transfer.md §12-2) — 감독의 말은 코어가 테이블의 `us` 줄로 적고 답을
-   * 기다리던 오퍼를 오늘로 당긴다(`sitAtTable`). 일어서는 손잡이는 모델보다 먼저 방을
-   * 닫는다 — GM은 닫힌 방에서 자리를 뜨는 마지막 장면을 쓴다.
-   */
-  if (inNegotiation && shape.negotiationId !== null) {
-    if (leaving) {
-      await evaluateNegotiation(state, {
-        negotiationId: shape.negotiationId,
-        ending: true,
-        said: message,
-      });
-      const left = closeNegotiation(state, "left");
-      if (left.ok) ledger.calls.push({ name: TABLE_LEFT, summary: left.message, silent: true });
-    } else if (!seating && !operator) {
-      const sat = sitAtTable(state, shape.negotiationId, message, roomPartyOf(state) ?? undefined);
-      if (!sat.ok) console.warn(`[gm] 감독의 말을 테이블에 적지 못했습니다 — ${sat.message}`);
-    }
+  // Close before narration; the final scene reads the retained conversation and outcome.
+  if (inNegotiation && shape.negotiationId !== null && leaving) {
+    await evaluateNegotiation(state, {
+      negotiationId: shape.negotiationId,
+      party: state.pendingNegotiation?.party,
+      exchangeId: state.pendingNegotiation?.exchangeId,
+      ending: true,
+    });
+    const left = closeNegotiation(state, "left");
+    if (left.ok) ledger.calls.push({ name: TABLE_LEFT, summary: left.message, silent: true });
   }
   /**
    * 이번 턴에 조립이 안 된 보고서 — 줄을 보는 자리 셋이 이 집합을 이어 쓴다
@@ -463,6 +452,12 @@ interface GmCall {
   result: TurnResult;
   /** 이번 턴에 세운 인물 카드 — 턴 뒤가 기록으로 남긴다 */
   characters: CharacterEntry[];
+  /**
+   * 이 호출의 스냅샷이 비운 소식·기사 — 넘김으로 장면 없이 끝난 턴은 아무도 전하지
+   * 않았으므로 다음 평시 턴에 되돌린다 (agents.md §2).
+   */
+  news: string[];
+  media: MediaFact[];
   reportArrivals: (
     reports: readonly ScoutingReport[],
     events: readonly string[],
@@ -513,15 +508,15 @@ async function callGm(
    * 고정층이지만 셋뿐이라 평시의 56개와는 눈금이 다르다 (agents.md §5).
    *
    * 방 안의 도구도 **협상 도구 셋**뿐이다 — 장부를 바꾸는 것은 코어고 셋은 손잡이다
-   * (agents.md §4-1). 자리에 앉는 턴과 일어서는 손잡이 턴은 없다. 제안 폼으로만 온 손잡이
-   * 턴은 셋을 쥔다 — 상대가 그 오퍼에 답할 자리다 (손잡이는 감독의 말이 없어 열리지 않는다).
+   * (agents.md §4-1). 일어서는 손잡이 턴은 없다. 제안 폼으로만 온 손잡이 턴은 셋을 쥔다 —
+   * 상대가 그 오퍼에 답할 자리다 (손잡이는 감독의 말이 없어 열리지 않는다).
    */
   const tools = inMatch
     ? kickoff
       ? []
       : buildMatchTools(state, matchCtx, { operator })
     : inNegotiation
-      ? seating || leaving
+      ? leaving
         ? []
         : buildNegotiationTools(state, negotiationCtx, (current) =>
             ledger.onCheckpoint?.(current, "negotiation"),
@@ -610,11 +605,9 @@ async function callGm(
    * 소식은 **스냅샷에 실린 그 턴에 비워진다** — `pendingEdits`와 같은 규약이다.
    * 경기 중 스냅샷은 장부(`buildLedgerNote`)라 소식을 읽지 않으므로 그때는 남겨 둔다.
    */
-  if (peace) {
-    takeNews(state);
-    // 기사도 같은 규약이다 — 스냅샷과 인물 사전이 둘 다 읽은 뒤에 비운다 (people.md §4-1)
-    takeMedia(state);
-  }
+  const news = peace ? takeNews(state) : [];
+  // 기사도 같은 규약이다 — 스냅샷과 인물 사전이 둘 다 읽은 뒤에 비운다 (people.md §4-1)
+  const media = peace ? takeMedia(state) : [];
   // 킥오프 턴의 이력은 경기 전 대화다 — `relevantTurns`가 그 한 턴만 평시로 읽는다.
   // 방의 이력은 이 협상의 채팅 턴이다 — 평시와 같은 함수가 같은 꼴로 그린다 (agents.md §5)
   const history =
@@ -690,6 +683,8 @@ async function callGm(
   return {
     result,
     characters,
+    news,
+    media,
     reportArrivals: (reports, events, previous) =>
       llm.runTurn({
         system,
@@ -902,14 +897,14 @@ async function closeTurn(
     if (kickoff) markEntered(state);
   }
   /**
-   * **방의 턴 뒤** (transfer.md §12-2) — 자리에 앉았으면 게이트가 닫히고, 협상이 `open`을
-   * 벗어났는데 방이 열려 있으면 코어가 닫는다: 합의·결렬이 도구 뒤에서 일어난 턴이다
-   * (`accept_deal`·`withdraw_offer`는 해석기가 옮긴 명령이라 방을 스스로 닫지 않는다).
+   * **방의 턴 뒤** (transfer.md §12-2) — 첫 장면을 썼으면 방이 앉은 것으로 서고, 협상이 끝났는데
+   * (확정·결렬·무효) 방이 열려 있으면 코어가 닫는다 (`withdraw_offer`는 해석기가 옮긴 명령이라
+   * 방을 스스로 닫지 않는다). 합의(`agreed`)는 끝이 아니다 — 계약서의 서명이 이 방에서 선다.
    */
   if (inNegotiation) {
     if (seating) markSeated(state);
     const room = roomNegotiationOf(state);
-    if (room && room.status !== "open") closeNegotiation(state);
+    if (room && room.status !== "open" && room.status !== "agreed") closeNegotiation(state);
   }
   // 선수 id를 이름으로 바꾸고 헤더를 되붙여 저장한다 — ⚠️ 헤더를 떼면 화면
   // (scene-stamp)의 시각이 스트리밍이 끝나는 순간 사라진다.
@@ -1087,5 +1082,36 @@ export async function runGmTurn(
     operatorOrders,
     boardMoves,
   );
-  return closeTurn(state, shape, opening, ledger, call);
+  if (call.result.stopReason !== "handoff") return closeTurn(state, shape, opening, ledger, call);
+  /**
+   * **넘김으로 끝난 평시 호출** (agents.md §2) — 이 호출이 비운 소식은 전해지지 않았으니
+   * 되돌린다. 방이 섰으면 같은 요청 안에서 협상 GM이 감독의 원문으로 첫 장면을 쓰고,
+   * 평시 GM이 호출 앞에 흘린 말은 버린다. 경기는 게이트가 서므로 평시 턴으로 닫는다.
+   */
+  state.pendingNews = [...call.news, ...(state.pendingNews ?? [])];
+  state.media = [...call.media, ...state.media];
+  const opened = state.phase === "negotiation" ? state.pendingNegotiation : null;
+  if (!opened || opened.seated === true) return closeTurn(state, shape, opening, ledger, call);
+  const seating: TurnShape = {
+    ...shape,
+    inNegotiation: true,
+    seating: true,
+    negotiationId: opened.negotiationId,
+    negotiationContactId: state.negotiationExchanges.find(
+      (exchange) => exchange.id === opened.exchangeId,
+    )?.contactId,
+  };
+  const seated = await callGm(
+    state,
+    message,
+    seating,
+    opening,
+    ledger,
+    matchCtx,
+    negotiationCtx,
+    onText,
+    operatorOrders,
+    boardMoves,
+  );
+  return closeTurn(state, seating, opening, ledger, seated);
 }

@@ -23,47 +23,39 @@ export interface NegotiationEvaluationInput {
   ending: boolean;
   medicalAllowed: boolean;
   alternativeOnly?: boolean;
+  settled?: NegotiationAssessment;
 }
 /** Jev selects typed positions and exact numeric conditions. Prose never becomes a contract. */
 export async function assessNegotiation(
   input: NegotiationEvaluationInput,
   evaluator: GameEvaluator,
 ): Promise<NegotiationAssessment> {
-  const chosen = await evaluateChoices(
-    input.context,
-    {
-      position: {
-        instructions:
-          "상대의 현재 입장. 실제 계약·선수·구단 필요·이전 교환·감독이 제시한 이유를 함께 읽는다. 확률/인내/가격배수는 쓰지 않는다. agree는 발송된 조건 그대로 동의, counter는 구체적 수정 묶음, review는 추가 검토, end는 이번 협의 중단이다. 문의만 있었으면 agree할 제안이 없다.",
-        criteria: input.alternativeOnly
-          ? { counter: "서로 배타적인 대안 묶음" }
-          : {
-              ...(input.hasProposal ? { agree: "발송된 조건 버전에 동의" } : {}),
-              counter: "수정 조건 또는 문의에 구체적 조건 제시",
-              review: "확인/검토가 필요",
-              end: "현재 협의 중단",
-            },
-      },
-      followup: {
-        instructions: `${input.ending ? "이번 교환을 마친다." : "이번 응답을 평가한다."} 실제로 필요한 다음 일만 선택한다. 반복 연락이나 고정 지연을 만들지 않는다. none이면 예약하지 않는다.`,
-        criteria: input.alternativeOnly
-          ? { none: "대안 자체는 일정을 예약하지 않는다" }
-          : {
-              none: "후속 일정 필요 없음",
-              response: "상대 검토 뒤 응답",
-              renegotiate: "새 사실/선행 결정 뒤 다시 논의",
-              ...(!input.medicalAllowed ? {} : { medical: "실제 건강 상태 검진이 필요" }),
-            },
-      },
-      fact: {
-        instructions: "이번 판단을 가장 직접적으로 뒷받침하는 실제 입력 사실 묶음",
-        criteria: Object.fromEntries(input.factRefs.map((ref) => [ref, ref])),
-      },
-    },
-    evaluator,
-  );
-  const conditions = structuredClone(input.current);
-  if (chosen.position === "counter") {
+  const chosen = input.settled
+    ? { position: input.settled.position, fact: input.settled.factRefs[0] }
+    : await evaluateChoices(
+        input.context,
+        {
+          position: {
+            instructions:
+              "상대의 현재 입장. 실제 계약·선수·구단 필요·이전 교환·감독이 제시한 이유를 함께 읽는다. 확률/인내/가격배수는 쓰지 않는다. agree는 발송된 조건 그대로 동의, counter는 구체적 수정 묶음, review는 추가 검토, end는 이번 협의 중단이다. 문의만 있었으면 agree할 제안이 없다.",
+            criteria: input.alternativeOnly
+              ? { counter: "서로 배타적인 대안 묶음" }
+              : {
+                  ...(input.hasProposal ? { agree: "발송된 조건 버전에 동의" } : {}),
+                  counter: "수정 조건 또는 문의에 구체적 조건 제시",
+                  review: "확인/검토가 필요",
+                  end: "현재 협의 중단",
+                },
+          },
+          fact: {
+            instructions: "이번 판단을 가장 직접적으로 뒷받침하는 실제 입력 사실 묶음",
+            criteria: Object.fromEntries(input.factRefs.map((ref) => [ref, ref])),
+          },
+        },
+        evaluator,
+      );
+  const conditions = structuredClone(input.settled?.conditions ?? input.current);
+  if (chosen.position === "counter" && !input.settled) {
     const coupled = JSON.stringify({
       facts: JSON.parse(input.context),
       instruction:
@@ -126,52 +118,63 @@ export async function assessNegotiation(
         conditions.terms,
         evaluator,
       );
-    const consistency = await evaluateChoices(
-      JSON.stringify({ context: JSON.parse(input.context), conditions }),
+  }
+  let followup: NegotiationAssessment["followup"] = null;
+  if (input.ending && !input.alternativeOnly && chosen.position !== "end") {
+    const followupContext = JSON.stringify({
+      context: JSON.parse(input.context),
+      position: chosen.position,
+      conditions,
+    });
+    const followupChoice = await evaluateChoices(
+      followupContext,
       {
-        bundle: {
+        followup: {
           instructions:
-            "이 조건 묶음 전체가 앞서 평가한 상대 입장과 서로 일관적인가? 각 숫자의 선택이 다른 축과 충돌하거나 필요한 조건을 표현하지 못하면 다시 확인해야 한다.",
+            "이번 교환을 마친다. 실제로 필요한 다음 일만 선택한다. 반복 연락이나 고정 지연을 만들지 않는다. none이면 예약하지 않는다.",
           criteria: {
-            valid: "전체 묶음이 일관되고 충분히 구체적",
-            retry: "묶음이 충돌하거나 표현하지 못한 조건이 있음",
+            none: "후속 일정 필요 없음",
+            response: "상대 검토 뒤 응답",
+            renegotiate: "새 사실/선행 결정 뒤 다시 논의",
+            ...(!input.medicalAllowed ? {} : { medical: "실제 건강 상태 검진이 필요" }),
           },
         },
       },
       evaluator,
     );
-    if (consistency.bundle !== "valid")
-      throw new Error("상대 조건 묶음의 일관성을 다시 평가해야 합니다");
-  }
-  let followup: NegotiationAssessment["followup"] = null;
-  if (chosen.followup !== "none") {
-    const [days, decision] = await Promise.all([
-      evaluateNumber(
-        input.context,
-        "다음 일이 실제로 필요한 게임 일수. 0은 같은 날 다음 처리 단위. 실제 등록 기한과 약속한 일정을 확인하며 임의 기본 일수는 쓰지 않는다.",
-        { min: 0, max: 3650 },
-        evaluator,
-      ),
-      evaluateChoices(
-        input.context,
-        {
-          decision: {
-            instructions:
-              "이 후속 일을 처리할 때 감독의 결정이 필요한가? 단순 발송 확인은 결정이 아니다.",
-            criteria: { yes: "감독 결정 필요", no: "단순 진행/통지" },
+    if (followupChoice.followup !== "none") {
+      const schedulingContext = JSON.stringify({
+        assessment: JSON.parse(followupContext),
+        purpose: followupChoice.followup,
+      });
+      const [days, decision] = await Promise.all([
+        evaluateNumber(
+          schedulingContext,
+          "다음 일이 실제로 필요한 게임 일수. 0은 같은 날 다음 처리 단위. 실제 등록 기한과 약속한 일정을 확인하며 임의 기본 일수는 쓰지 않는다.",
+          { min: 0, max: 3650 },
+          evaluator,
+        ),
+        evaluateChoices(
+          schedulingContext,
+          {
+            decision: {
+              instructions:
+                "이 후속 일을 처리할 때 감독의 결정이 필요한가? 단순 발송 확인은 결정이 아니다.",
+              criteria: { yes: "감독 결정 필요", no: "단순 진행/통지" },
+            },
           },
-        },
-        evaluator,
-      ),
-    ]);
-    followup = {
-      purpose: chosen.followup as "response" | "renegotiate" | "medical",
-      days,
-      requiresDecision: decision.decision === "yes",
-    };
+          evaluator,
+        ),
+      ]);
+      followup = {
+        purpose: followupChoice.followup as "response" | "renegotiate" | "medical",
+        days,
+        requiresDecision: decision.decision === "yes",
+      };
+    }
   }
-  const alternatives: NegotiationTermsBundle[] = [];
-  if (chosen.position === "counter" && !input.alternativeOnly) {
+  const alternatives: NegotiationTermsBundle[] = structuredClone(input.settled?.alternatives ?? []);
+  if (chosen.position === "counter" && !input.alternativeOnly && !input.settled) {
     const alternative = await evaluateChoices(
       JSON.stringify({ context: JSON.parse(input.context), conditions }),
       {
@@ -207,7 +210,7 @@ export async function assessNegotiation(
     position: chosen.position as NegotiationAssessment["position"],
     conditions,
     alternatives,
-    factRefs: [chosen.fact!],
+    factRefs: input.settled?.factRefs ?? [chosen.fact!],
     followup,
   };
 }
