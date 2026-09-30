@@ -1,7 +1,7 @@
 /**
  * 세계 인물 명부 — **구단 밖의 이름들** (people.md §2-1).
  *
- * 상대 벤치에 선 사람, 협상 테이블 건너편의 에이전트, 중계석의 목소리. 감독이
+ * 상대 벤치에 선 사람, 중계석의 목소리. 감독이
  * 마주치지만 어느 구단의 자리도 아닌 사람들이다. `club-profile.ts`처럼 구단마다
  * 몇 명씩 채우는 표가 아니라 **이름 하나하나가 항목인 명부** 하나라, 어느 팀을 맡든
  * 같은 세계를 산다.
@@ -10,7 +10,7 @@
  *
  * 1. **살아 있다.** 예외 없다.
  * 2. **지금 축구계에 있다.**
- * 3. **감독이 마주칠 자리에 있다** — 상대 벤치, 협상 테이블, 회견장, 중계석.
+ * 3. **감독이 마주칠 자리에 있다** — 상대 벤치, 회견장, 중계석.
  *
  * ⚠️ **라이선스 부채** (sources.md §7): 코치·구단주 시드보다 **무거운** 자리다.
  * 저쪽은 이름만 실명이고 사람됨은 원형 추첨이 냈지만, 여기 오르는 사람들은 원형으로
@@ -18,7 +18,7 @@
  * 실존 인물에게 통째로 붙는다. 전원 `real` 표식이되 카드에 가드 문장은 없다
  * (docs/common/llm/prompts.md §5-3) — 여기 적는 원형이 직무 안의 사람을 그리고, 부정적 전개는
  * 장부의 사실에서만 나온다. 청산은 **이 표를 비우는 것으로 끝난다**: 감독은 다시
- * `inventPersonName`의 가상 이름으로 돌아가고 에이전트·해설은 세계에서 사라진다.
+ * `inventPersonName`의 가상 이름으로 돌아가고 해설은 세계에서 사라진다.
  *
  * ⚠️ **표는 낡는다.** 사람은 은퇴하고 팀을 옮기고 세상을 떠난다. 갱신은 sources.md
  * §4.1의 시드 갱신과 같은 결로 **표를 고치는 것으로 끝나야 한다** — 코드가 이름을
@@ -28,7 +28,7 @@
  * 그 시즌 문서들과 같은 출처다 — 두 표의 구단이 어긋나면 한쪽이 낡은 것이다.
  */
 
-import { AGENT_ARCHETYPE_LABEL, type PersonaRole } from "@story-fm/domain";
+import { type PersonaRole } from "@story-fm/domain";
 
 /** 명부 한 줄 — 페르소나가 되기 전의 사실 */
 export interface WorldFigureSeed {
@@ -310,57 +310,6 @@ const MANAGERS: readonly WorldFigureSeed[] = [
 ];
 
 /**
- * ── 에이전트 ──
- *
- * 협상 테이블 건너편에 앉는 사람들. 선수의 마음이 아니라 **선수의 다음 계약**을
- * 말하는 자리라, 감독의 설득이 통하는 상대가 아니다.
- */
-const AGENTS: readonly WorldFigureSeed[] = [
-  {
-    name: "조르제 멘데스",
-    role: "agent",
-    archetype: AGENT_ARCHETYPE_LABEL.empire,
-    traits: ["인맥이 넓다", "속도가 빠르다", "말을 아낀다", "판을 통째로 짠다"],
-    motivation: "한 선수의 이적이 아니라 여러 구단이 얽힌 그림을 완성한다",
-    speech: {
-      note: "숫자와 일정만 말하고 감정은 넣지 않는다. 늘 다른 선택지를 흘린다",
-      samples: [
-        "제 선수를 원하는 구단이 여기만 있는 건 아닙니다.",
-        "조건은 단순합니다. 금요일까지 답을 주시면 됩니다.",
-      ],
-    },
-  },
-  {
-    name: "라파엘라 피멘타",
-    role: "agent",
-    archetype: AGENT_ARCHETYPE_LABEL.lawyer,
-    traits: ["논리적", "빈틈이 없다", "감정에 흔들리지 않는다", "선수를 앞세운다"],
-    motivation: "선수의 커리어를 계약서의 문장으로 지킨다",
-    speech: {
-      note: "조항을 하나씩 짚으며 말한다. 목소리를 높이는 법이 없다",
-      samples: [
-        "그 조항은 우리 쪽에 아무 보호도 주지 않습니다. 다시 써 주세요.",
-        "선수가 원하는 건 출전 시간입니다. 금액은 그다음 이야기입니다.",
-      ],
-    },
-  },
-  {
-    name: "피니 자하비",
-    role: "agent",
-    archetype: AGENT_ARCHETYPE_LABEL.hardballer,
-    traits: ["강경함", "배짱", "언론을 쓴다", "끝까지 밀어붙인다"],
-    motivation: "협상에서 마지막 한 푼까지 받아낸다",
-    speech: {
-      note: "먼저 최대치를 부르고 물러서지 않는다. 침묵을 무기로 쓴다",
-      samples: [
-        "그 금액이면 이 대화를 계속할 이유가 없습니다.",
-        "구단이 급한 거지 우리가 급한 게 아닙니다.",
-      ],
-    },
-  },
-];
-
-/**
  * ── 해설 ──
  *
  * 중계석과 스튜디오. 감독이 마주 앉지는 않지만 **감독의 경기를 매주 평가하는**
@@ -427,20 +376,9 @@ const PUNDITS: readonly WorldFigureSeed[] = [
 ];
 
 /** 명부 전체 — 순서가 곧 결정적 순서다 */
-export const WORLD_FIGURE_SEEDS: readonly WorldFigureSeed[] = [...MANAGERS, ...AGENTS, ...PUNDITS];
+export const WORLD_FIGURE_SEEDS: readonly WorldFigureSeed[] = [...MANAGERS, ...PUNDITS];
 
 /** 이 팀의 벤치에 명부가 세운 사람 — 없으면 null (가상 이름이 대신 선다) */
 export function worldFigureManagerOf(teamId: string): WorldFigureSeed | null {
   return MANAGERS.find((m) => m.teamId === teamId) ?? null;
-}
-
-/**
- * 이 이름이 명부의 실명 인물인가 — **팀을 묻지 않는다** (people.md §2-1).
- *
- * 감독은 벤치를 옮겨 다니므로(transfer.md §7 「감독 풀」) 팀으로 되짚으면 이사한
- * 사람을 놓친다. 실명 표식(`real`)을 붙이는 자리와 사람됨을 명부에서 읽을지
- * 가르는 자리가 같은 답을 봐야 한다.
- */
-export function isWorldFigureName(name: string): boolean {
-  return WORLD_FIGURE_SEEDS.some((f) => f.name === name);
 }

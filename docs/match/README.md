@@ -4,7 +4,7 @@
 
 소유하는 책임: 선발·포지션·역할·전술, 공간 시뮬레이션·교체·개입, 경기 결산·징계·대회 일정·순위.
 
-선수 능력·체력·폼은 common 정보를 사용한다. 계약이나 서사가 결과를 덮어쓰지 않는다. 훈련·협상의 결과가 명단과 전술을 통해 경기에 닿는다.
+선수 능력·체력·폼은 common 정보를 사용한다. 계약이나 서사가 결과를 덮어쓰지 않는다. 훈련의 결과가 명단과 전술을 통해 경기에 닿는다.
 
 코드는 `packages/domain/src/match`, `packages/engine/src/match`,
 `packages/agents/src/match`, `apps/web/domains/match`에서 찾는다.

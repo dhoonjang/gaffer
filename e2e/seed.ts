@@ -6,11 +6,6 @@ import {
   settleQuickMatch,
   simulateOtherMatches,
   saveGame,
-  sendOffer,
-  respondOffer,
-  proposePersonal,
-  answerPersonal,
-  activeContract,
   type GameState,
   type WorldScope,
   eventTexts,
@@ -22,7 +17,7 @@ import { DATA_DIR } from "./slot";
 /**
  * **브라우저 앞에 미리 놓아 두는 세이브.**
  *
- * 핵심 루프의 뒷부분(시즌 전환·이적 성사)은 앞부분을 다 지나야 닿는다. 그 앞부분을
+ * 핵심 루프의 뒷부분(시즌 전환)은 앞부분을 다 지나야 닿는다. 그 앞부분을
  * 브라우저로 다시 밟으면 시즌 하나에 유저 경기 쉰 번, 턴 왕복 팔백 번이다 — CI가
  * 그것을 낼 수 없다. 그래서 **닿기까지는 코어로 걷고, 재려는 그 한 걸음만 브라우저가
  * 밟는다**: 세이브를 여기서 짓고, 스펙은 그것을 열어 손잡이를 누른다.
@@ -112,46 +107,4 @@ export function seedFinishedSeason(teamId = "arsenal", seed = 406): string {
   if (!allMatchesDone(state)) throw new Error("400번 안에 시즌을 끝내지 못했다");
   saveGame(state);
   return state.id;
-}
-
-/** Browser fixtures supply a legal target; optional agreements are explicit evaluator stand-ins. */
-export function seedTransferTarget(
-  teamId = "arsenal",
-  seed = 4061,
-  agreed = false,
-): {
-  gameId: string;
-  targetName: string;
-  playerId: string;
-} {
-  const state = appoint({ teamId, managerName: "영입", seed });
-  const player = state.players.find(
-    (p) =>
-      p.teamId !== teamId &&
-      !p.loan &&
-      activeContract(state, p.id) &&
-      state.players.filter((other) => other.name === p.name).length === 1,
-  );
-  if (!player) throw new Error("Fixture has no contracted transfer target");
-  if (agreed) {
-    const offered = sendOffer(state, {
-      playerId: player.id,
-      kind: "buy",
-      fee: 1_000_000,
-      weeklyWage: 10_000,
-      years: 2,
-    });
-    if (!offered.ok) throw new Error(offered.message);
-    const n = state.negotiations.at(-1)!;
-    const club = respondOffer(state, { negotiationId: n.id, verdict: "accept", feeOnly: true });
-    if (!club.ok) throw new Error(club.message);
-    const personal = proposePersonal(state, { negotiationId: n.id, weeklyWage: 10_000, years: 2 });
-    if (!personal.ok) throw new Error(personal.message);
-    const agent = answerPersonal(state, { negotiationId: n.id, verdict: "accept" });
-    if (!agent.ok) throw new Error(agent.message);
-    if (n.status !== "agreed")
-      throw new Error("Fixture requires separate club and player agreement");
-  }
-  saveGame(state);
-  return { gameId: state.id, targetName: player.name, playerId: player.id };
 }

@@ -71,12 +71,11 @@ import { item, briefNames } from "../../../../common/commands/brief";
 import { isFriendly } from "../../../../common/core/match-kinds";
 import { matchRating } from "../../../../match/flow/ratings";
 import { careerTotalsOf, settleMilestones } from "../../../../story/players/career";
-import { settlePointsBonus } from "../../../../negotiation/market/terms";
 import { clampForm, formDeltaFromMatch } from "../../../../common/players/form";
 import { recordCard } from "../../../../match/flow/discipline";
 import { openInjuryFor } from "../health/injury";
 import { easeProneness } from "../../../../common/players/injury";
-import { applyMatchFinance } from "../../../../negotiation/finance/finance";
+import { applyMatchFinance } from "../../../../common/finance/finance";
 import { competitionLabel } from "../../../../common/data/cup-catalog";
 import { applyResultMood } from "../../../../story/players/slump";
 import { advanceEuroKnockouts } from "../competition/euro-knockout";
@@ -390,8 +389,6 @@ export function finalizeMatch(state: GameState): MatchDigest {
             ? 1
             : 0,
         });
-        if (player.teamId === state.userTeamId)
-          settlePointsBonus(state, player, scoredBy + assists);
         if (before) {
           const rows = settleMilestones(state, {
             playerId: id,

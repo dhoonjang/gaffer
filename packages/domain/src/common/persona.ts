@@ -28,7 +28,7 @@ export const PersonaRoleSchema = z.enum([
   /**
    * 구단이 고용한 사람들 — **수석코치와 같은 자리가 아니다** (people.md §2-2).
    * 수석코치는 감독 옆에 서는 한 사람이고, 이쪽은 훈련장·의무실·보고서를 맡은
-   * 사람들이다. 셋만이 `employment`을 들고 감독이 고용·해고할 수 있다.
+   * 사람들이다. 수석코치와 이 셋이 `employment`을 든다.
    */
   "coach",
   "medic",
@@ -45,13 +45,6 @@ export const PersonaRoleSchema = z.enum([
    * 우리 구단의 수석코치, 감독(유저)이 매일 옆에 두는 사람이다 (people.md §2-1).
    */
   "manager",
-  /** 에이전트 — 협상 테이블 건너편, 선수 쪽 */
-  "agent",
-  /**
-   * 단장 — 협상 테이블 건너편, 구단 쪽 (people.md §2). 이적료·분할·기한을 답하는 사람이다.
-   * 구단마다 한 사람이고 세이브에 넣지 않는다 — (시드, 구단)에서 파생한다.
-   */
-  "director",
   /** 해설 — 중계석과 스튜디오. 축구계에 남은 은퇴 인물이 대개 여기 선다 */
   "pundit",
 ]);
@@ -74,37 +67,30 @@ export type SpeechStyle = z.infer<typeof SpeechStyleSchema>;
  *
  * 수석코치·코치·의료진·스카우트가 갖고 **구단주는 갖지 않는다** — 그는 고용된 사람이
  * 아니라 고용하는 쪽이다. 선수의 계약(`Contract`)과 다른 표인 이유는 자리가 다르기
- * 때문이다: 스태프는 등록 명단에도 이적 시장에도 서지 않고, 장부에서 `staff_wages`로
- * 선다 (→ ../../../docs/negotiation/finance.md §6.4-1).
+ * 때문이다: 스태프는 등록 명단에 서지 않고, 장부에서 `staff_wages`로 선다
+ * (→ docs/common/finance.md).
  */
 export const EmploymentSchema = z.object({
-  /** 어느 구단의 사람인가 — 감독이 이직해도 이 사람은 옛 구단에 남는다 */
+  /** 어느 구단의 사람인가 */
   teamId: z.string().min(1),
   /** 그 사람의 직책 — 「피지컬 코치」. 역할 라벨(「코치」)보다 좁고, 화면 칩이 이것을 쓴다 */
   title: z.string().min(1),
   /** 부임일 — 카드의 「부임 2년째」가 여기서 나온다. 감독보다 앞설 수 있다 */
   since: DateString,
-  /**
-   * 연봉(£/년)과 만료일. **위약금의 근거이기도 하다** — 자르면 잔여 계약에 비례해
-   * 문다(감독 경질과 같은 식 — career.md §5.4).
-   */
+  /** 연봉(£/년)과 만료일 — 만료되면 시즌 전환이 같은 조건으로 갱신한다 */
   contract: z.object({ salary: z.number().int().min(0), until: DateString }),
-  /** 데려온 곳 — 무직 풀에서 왔으면 그 사람의 옛 구단. 처음부터 있던 사람에겐 없다 */
-  from: z.string().min(1).optional(),
 });
 export type Employment = z.infer<typeof EmploymentSchema>;
 
 /**
- * 감독이 고용·해고할 수 있는 자리 — **수석코치는 여기 없다** (people.md §2-2).
+ * 스태프 자리 — **수석코치는 여기 없다** (people.md §2-2).
  *
- * 그 자리가 비면 감독 옆에 아무도 없고, 경기 레퍼런스가 상주시키는 카드도 사라진다
- * (agents.md §5). 수석코치도 `employment`을 들되 고용 명령이 다루는 대상은 아니다.
+ * 수석코치도 `employment`을 들되 감독 옆에 서는 한 사람이라 이 목록과 따로 산다.
  */
 export const STAFF_ROLES = ["coach", "medic", "scout"] as const;
-export const StaffRoleSchema = z.enum(STAFF_ROLES);
-export type StaffRole = z.infer<typeof StaffRoleSchema>;
+export type StaffRole = (typeof STAFF_ROLES)[number];
 
-/** 이 역할이 고용·해고의 대상인가 — 표를 직접 인덱싱하는 자리를 한 곳으로 묶는다 */
+/** 이 역할이 스태프 자리인가 — 표를 직접 인덱싱하는 자리를 한 곳으로 묶는다 */
 export function isStaffRole(role: PersonaRole): role is StaffRole {
   return (STAFF_ROLES as readonly string[]).includes(role);
 }
@@ -150,7 +136,7 @@ export const PersonaSchema = z.object({
   real: z.boolean().optional(),
   /**
    * 구단이 이 사람에게 급여를 주는가 — 자리·부임일·계약 (people.md §2-2).
-   * 수석코치·코치·의료진·스카우트에게만 있다 — 구단주·기자·감독 풀의 사람은 없다.
+   * 수석코치·코치·의료진·스카우트에게만 있다 — 구단주·기자·다른 구단 감독은 없다.
    */
   employment: EmploymentSchema.optional(),
   /** 생성 재현용 — 같은 세이브는 같은 사람을 만난다 */
@@ -177,8 +163,6 @@ export const PERSONA_ROLE_LABEL: Partial<Record<PersonaRole, string>> = {
   medic: "의료진",
   scout: "스카우트",
   manager: "감독",
-  agent: "에이전트",
-  director: "단장",
   pundit: "해설위원",
 };
 
@@ -186,34 +170,6 @@ export const PERSONA_ROLE_LABEL: Partial<Record<PersonaRole, string>> = {
 export function personaRoleLabel(role: PersonaRole): string | undefined {
   return PERSONA_ROLE_LABEL[role];
 }
-
-/**
- * **무직 스태프 풀의 한 줄** — 자리를 찾는 코치·의료진·스카우트 (people.md §2-2).
- *
- * 감독 풀(`ManagerPoolEntry`)과 같은 패턴이되 셋이 다르다: 채우는 것이 경질이 아니라
- * **여름의 결정적 추첨**이고, 부르는 쪽이 AI 구단이 아니라 **감독뿐**이며, 요구 연봉을
- * 넘기면 흥정 없이 그 자리에서 계약된다.
- *
- * ⚠️ **사람됨은 줄이 들지 않는다.** 이름·역할·자리·원형만 있으면 원형 표에서 성격·동기·
- * 말투가 결정적으로 파생하므로(`staffPersonaOf`), 카드를 줄에 넣으면 같은 사실이 두 곳에
- * 산다.
- */
-export const StaffPoolEntrySchema = z.object({
-  /** 이름이 곧 `characterId`다 (people.md §1) */
-  name: z.string().min(1),
-  role: StaffRoleSchema,
-  /** 그 사람이 맡을 자리 — 「피지컬 코치」 */
-  title: z.string().min(1),
-  /** 원형 라벨 — 표를 되짚어 성격·말투를 세운다 */
-  archetype: z.string().min(1),
-  /** 요구 연봉 (£/년) — 이 이상을 부르면 그 자리에서 계약된다 */
-  ask: z.number().int().min(0),
-  /** 이 줄이 선 시즌 — 여름 갱신이 「그해 자른 사람만 남긴다」를 판단하는 기준 */
-  listedOn: z.number().int(),
-  /** 직전 구단 — 감독이 자른 사람에게만 있다 */
-  from: z.string().min(1).optional(),
-});
-export type StaffPoolEntry = z.infer<typeof StaffPoolEntrySchema>;
 
 /**
  * 인물지의 **깊이** — 감독이 그 사람을 얼마나 아는가 (people.md §6).
@@ -459,7 +415,7 @@ export const LEADER_ROLE_LABEL: Record<LeaderRole, string> = {
  * 자기 문제로 오는 것과 라커룸을 대신해 오는 것은 다른 자리다. 채널은 그 자리를
  * 가리키고, 효과가 어느 축에 닿는지도 여기서 갈린다.
  */
-export const APPROACH_CHANNELS = ["player", "captain", "owner", "agent"] as const;
+export const APPROACH_CHANNELS = ["player", "captain", "owner"] as const;
 export const ApproachChannelSchema = z.enum(APPROACH_CHANNELS);
 export type ApproachChannel = z.infer<typeof ApproachChannelSchema>;
 
@@ -471,7 +427,6 @@ export const APPROACH_CHANNEL_LABEL: Record<ApproachChannel, string> = {
   player: PERSONA_ROLE_LABEL.player!,
   captain: CAPTAIN_ROLE_LABEL,
   owner: PERSONA_ROLE_LABEL.owner!,
-  agent: PERSONA_ROLE_LABEL.agent!,
 };
 
 /** 중계 — 무대 밖의 목소리. 이름이 곧 자리다 */
@@ -504,89 +459,6 @@ export const OWNER_ARCHETYPE_LABELS = [
   "흥행가형",
 ] as const;
 export type OwnerArchetypeLabel = (typeof OWNER_ARCHETYPE_LABELS)[number];
-
-/** 구단주 원형 라벨인가 */
-export function isOwnerArchetypeLabel(label: string): label is OwnerArchetypeLabel {
-  return (OWNER_ARCHETYPE_LABELS as readonly string[]).includes(label);
-}
-
-/**
- * 구단주 원형 → **재투자 몫** — 지난 시즌 현금 잉여의 얼마가 다음 시즌 이적 예산으로
- * 돌아오는가 (people.md §2 · simulation/finance.md §9.1).
- *
- * 원형이 재정 눈금에 직접 닿는 유일한 자리다. 되걸기(`CONDITION_OF_ARCHETYPE`)와
- * 구단주 요청(`DEMAND_OF_ARCHETYPE`)이 **감독이 물었을 때의 답**을 가른다면, 이 표는
- * **묻지 않아도 내주는 몫**을 가른다.
- *
- * 폭을 0.30~0.80으로 잡은 것은 그 사이에서 사람이 갈리게 하려는 것이다 — 0에 가까운
- * 원형을 두면 그 구단은 몇 시즌 만에 이적 시장에서 사라지고, 1에 가까우면 잉여가
- * 통째로 예산이 되어 이월 상한(§9.1)이 하는 일이 없어진다.
- *
- * 키가 아니라 **라벨**로 적는다 — 세이브에 남는 것이 라벨이고(`Persona.archetype`),
- * `DEMAND_OF_ARCHETYPE`·`CONDITION_OF_ARCHETYPE`이 이미 같은 규약이다.
- */
-export const REINVEST_SHARE_OF_ARCHETYPE: Record<OwnerArchetypeLabel, number> = {
-  /** "예산은 문제가 아닙니다" — 쌓아 둘 이유가 없는 사람 */
-  국부펀드형: 0.8,
-  /** 화제를 사는 사람 — 남은 돈은 다음 스타의 값이다 */
-  흥행가형: 0.6,
-  /** 장부를 읽지 않는다 — 남으면 쓰지만 계산해서 쓰지는 않는다 */
-  축구광형: 0.55,
-  /** 빚만 없으면 만족 — 흑자면 내주되 여유는 남긴다 */
-  "지역 유지형": 0.45,
-  /** 효율의 사람 — 잉여는 구조를 고치는 데 먼저 쓴다 */
-  산업가형: 0.35,
-  /** 회수 우선 — 잉여는 구단의 가치이지 다음 영입의 재원이 아니다 */
-  투자자형: 0.3,
-};
-
-/**
- * 구단주 카드가 없는 구단의 몫 — **여섯의 중앙값**이다.
- *
- * 페르소나는 감독의 구단에만 서므로(people.md §1) 나머지 95개 구단이 여기로 온다.
- * 평균이 아니라 중앙값인 것은 국부펀드형 하나가 표를 끌어올리기 때문이다.
- */
-export const REINVEST_SHARE_DEFAULT = 0.5;
-
-/** 이 구단주가 되돌리는 몫 — 카드가 없으면 기본값 */
-export function reinvestShareOf(archetype?: OwnerArchetypeLabel): number {
-  return archetype === undefined ? REINVEST_SHARE_DEFAULT : REINVEST_SHARE_OF_ARCHETYPE[archetype];
-}
-
-// ── 에이전트 원형 — 협상 테이블 건너편의 세 사람 ────────────────
-
-/**
- * 에이전트 원형의 코드 — **협상에서 무엇을 무기로 쓰는가**로 갈린다
- * (people.md §2-1).
- *
- * 명부(`engine/data/world-figures.ts`)는 사람의 이름과 라벨을 적고, 그 라벨이 무엇을
- * 뜻하는지는 이 키가 정한다. 키를 도메인에 두는 이유는 선수 원형과 같다 — 라벨을 두
- * 곳에 적으면 갈리고, 갈리는 순간 시장 프로필(`engine/market/agent-profile.ts`)이
- * 사람을 못 찾아 조용히 중립으로 떨어진다.
- *
- * ⚠️ **계수는 여기 없다.** 시장 프로필은 세계의 눈금이라 엔진의 것이다.
- */
-export const AGENT_ARCHETYPE_KEYS = ["empire", "lawyer", "hardballer"] as const;
-export const AgentArchetypeSchema = z.enum(AGENT_ARCHETYPE_KEYS);
-export type AgentArchetype = z.infer<typeof AgentArchetypeSchema>;
-
-/** 코드 → 명부와 인물 카드에 서는 이름. 페르소나의 `archetype`이 드는 값이다 */
-export const AGENT_ARCHETYPE_LABEL: Record<AgentArchetype, string> = {
-  empire: "제국형",
-  lawyer: "법률가형",
-  hardballer: "승부사형",
-};
-
-/**
- * 라벨 → 코드. 페르소나가 드는 것은 라벨이라(`Persona.archetype`은 열린 문자열이다)
- * 시장 프로필이 그 사람을 찾을 때 지나는 문이 여기다.
- *
- * **표에 없는 라벨은 `null`이다** — 명부를 비웠거나 다른 원형이 선 자리이고, 그런
- * 대리인은 숫자에 아무것도 얹지 않는다.
- */
-export function agentArchetypeOf(archetype: string): AgentArchetype | null {
-  return AGENT_ARCHETYPE_KEYS.find((key) => AGENT_ARCHETYPE_LABEL[key] === archetype) ?? null;
-}
 
 // ── 선수 원형 — 라벨과 계수는 여기 한 표에 있다 ────────────────
 
@@ -630,10 +502,10 @@ export const PLAYER_ARCHETYPE_LABEL: Record<PlayerArchetypeKey, string> = {
 };
 
 /**
- * 원형이 **상태 전이에 거는 계수 다섯** (people.md §6 · 요구사항 3).
+ * 원형이 **상태 전이에 거는 계수 셋** (people.md §6).
  *
- * 페르소나는 시뮬 숫자에 직접 손대지 않는다 — 여기 있는 다섯이 닿는 곳은 불만이 서는
- * 날 · 정착 목표 · 성장 확률 · 선수 관문의 점수까지이고, **경기 시뮬과 xG는 원형을
+ * 페르소나는 시뮬 숫자에 직접 손대지 않는다 — 여기 있는 셋이 닿는 곳은 불만이 서는
+ * 날 · 성장 확률 · 등번호 불만까지이고, **경기 시뮬과 xG는 원형을
  * 읽지 않는다.** 경기 결과가 사람됨을 읽기 시작하면 같은 스쿼드가 같은 전술로 다른
  * 점수를 내고, 그 차이를 감독이 되짚을 자리가 없다.
  *
@@ -647,21 +519,14 @@ export interface PlayerArchetypeTraits {
    */
   patience: number;
   /**
-   * 구단 애착 — 선수 관문의 「다른 구단의 관심」·「선수의 마음」에 걸린다.
-   * **남을 이유는 곱하고 떠날 이유는 나눈다** (transfer.md §3).
-   */
-  loyalty: number;
-  /**
    * 직업의식 — 월간 성장 확률과 결산 판정의 **상승** 흡수에 곱한다.
    * ⚠️ 노화 하락에는 붙지 않는다 (player.md §6).
    */
   professionalism: number;
-  /** 정착 목표 배수 — 크면 새 라커룸에 녹아드는 데 더 걸린다 (player.md §9.3) */
-  settling: number;
   /**
    * 등번호 애착 — **계수가 아니라 문턱을 만드는 값이다** (people.md §5).
    *
-   * 나머지 넷은 눈금에 곱해지지만 이것은 번호의 무게·재적 시즌과 함께 점수를 만들어
+   * 나머지 둘은 눈금에 곱해지지만 이것은 번호의 무게·재적 시즌과 함께 점수를 만들어
    * 「번호를 뺏겼을 때 불만이 서는가 서지 않는가」를 그 자리에서 가른다 — 굴림이
    * 없어 감독이 그 결정의 대가를 미리 셀 수 있다. 자를 쥔 것은
    * `numberGrievanceStands` (squad-rules.ts) 하나다.
@@ -672,20 +537,20 @@ export interface PlayerArchetypeTraits {
 /**
  * 원형 → 계수. **밴드 숫자가 적히는 자리는 여기 하나다.**
  *
- * 다섯 열 모두 평균이 1 근처(1.05 · 1.04 · 1.06 · 0.98 · 1.02)다 — 계수는 세계의
+ * 세 열 모두 평균이 1 근처(1.05 · 1.06 · 1.02)다 — 계수는 세계의
  * 눈금을 옮기는 것이 아니라 같은 눈금 위에서 사람을 가른다. 평균이 밀리면 원형을 붙인
  * 값이 아니라 문턱을 통째로 조정한 값이 된다.
  */
 // prettier-ignore
 export const PLAYER_ARCHETYPE_TRAITS: Record<PlayerArchetypeKey, PlayerArchetypeTraits> = {
-  ambitious:            { patience: 0.70, loyalty: 0.75, professionalism: 1.05, settling: 1.00, number: 1.10 },
-  team_first:           { patience: 1.45, loyalty: 1.25, professionalism: 1.10, settling: 0.85, number: 1.30 },
-  quiet_craftsman:      { patience: 1.15, loyalty: 1.10, professionalism: 1.25, settling: 1.15, number: 0.65 },
-  fierce_competitor:    { patience: 0.75, loyalty: 0.95, professionalism: 0.90, settling: 1.05, number: 0.90 },
-  anxious_prospect:     { patience: 1.20, loyalty: 1.10, professionalism: 0.95, settling: 1.25, number: 1.00 },
-  dressing_room_leader: { patience: 1.25, loyalty: 1.20, professionalism: 1.05, settling: 0.80, number: 1.15 },
-  professional:         { patience: 1.10, loyalty: 1.00, professionalism: 1.25, settling: 0.85, number: 0.60 },
-  weighing_star:        { patience: 0.60, loyalty: 0.60, professionalism: 0.85, settling: 1.10, number: 1.20 },
-  homegrown_heart:      { patience: 1.30, loyalty: 1.45, professionalism: 1.00, settling: 0.80, number: 1.45 },
-  film_reader:          { patience: 1.00, loyalty: 1.00, professionalism: 1.15, settling: 0.95, number: 0.80 },
+  ambitious:            { patience: 0.70, professionalism: 1.05, number: 1.10 },
+  team_first:           { patience: 1.45, professionalism: 1.10, number: 1.30 },
+  quiet_craftsman:      { patience: 1.15, professionalism: 1.25, number: 0.65 },
+  fierce_competitor:    { patience: 0.75, professionalism: 0.90, number: 0.90 },
+  anxious_prospect:     { patience: 1.20, professionalism: 0.95, number: 1.00 },
+  dressing_room_leader: { patience: 1.25, professionalism: 1.05, number: 1.15 },
+  professional:         { patience: 1.10, professionalism: 1.25, number: 0.60 },
+  weighing_star:        { patience: 0.60, professionalism: 0.85, number: 1.20 },
+  homegrown_heart:      { patience: 1.30, professionalism: 1.00, number: 1.45 },
+  film_reader:          { patience: 1.00, professionalism: 1.15, number: 0.80 },
 };

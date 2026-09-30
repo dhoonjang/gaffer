@@ -13,7 +13,7 @@ import { isFriendly } from "../core/match-kinds";
  * 약속 앞에서만 빈다.
  *
  * ⚠️ **여기 어디에도 문장이 없다.** 무슨 말로 약속했는지는 장면의 것이고, 이행
- * 판정은 전부 다른 장부에서 나온다 — 출전 명단 · 이적 리스트 · 열린 협상 · 완장.
+ * 판정은 전부 다른 장부에서 나온다 — 출전 명단 · 등번호 · 완장.
  */
 
 /** 지위·약속을 재는 창 — 여덟 경기는 한 시즌의 다섯 번째쯤이고 두 달 남짓이다 */
@@ -36,9 +36,7 @@ export function derivedSquadStatus(
   state: GameState,
   player: GamePlayer,
   /**
-   * 어느 스쿼드의 서열로 재는가 — 기본은 그의 소속이다. **영입은 우리 스쿼드로
-   * 잰다**: 파는 구단에서의 자리는 우리가 제시하는 지위와 견줄 값이 아니다
-   * (transfer.md §3).
+   * 어느 스쿼드의 서열로 재는가 — 기본은 그의 소속이다.
    */
   teamId: string = player.teamId,
 ): SquadStatus {
@@ -119,9 +117,8 @@ export function appearedIn(
  * 하는 색인이다.
  *
  * `minutesShortfalls`는 월요일마다 1군 전원에게 창을 묻는다. 호출마다 원장을
- * 훑으면 멀티시즌 세이브의 한 주가 「선수 수 × 전체 경기 수」가 된다 — 스쿼드 깊이
- * 색인(`squadDepthOf`)이 있는 이유와 같은 자리다. **읽기 전용 파생**이라 원장이
- * 그대로인 동안만 유효하다: 한 번의 순회 안에서 세우고 버린다.
+ * 훑으면 멀티시즌 세이브의 한 주가 「선수 수 × 전체 경기 수」가 된다. **읽기 전용 파생**이라
+ * 원장이 그대로인 동안만 유효하다: 한 번의 순회 안에서 세우고 버린다.
  */
 export function matchWindowOf(state: GameState): (typeof state.matches)[number][] {
   return state.matches

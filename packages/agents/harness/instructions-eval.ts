@@ -45,10 +45,10 @@ import { buildToolSpecs } from "../src/app/gm-tools";
 import { buildTrainingSchedule } from "../src/app/gm-input";
 import { buildPeaceContext } from "../src/app/workflows/match/tactic-orders";
 import { buildTrainingContext } from "../src/app/workflows/story/training-orders";
-import { buildMarketContext } from "../src/app/workflows/negotiation/market-orders";
+import { buildFinanceContext } from "../src/app/workflows/common/finance-orders";
 import { TACTIC_OPS } from "../src/match/tactic-orders";
 import { TRAINING_OPS } from "../src/story/training-orders";
-import { MARKET_OPS } from "../src/negotiation/market-orders";
+import { FINANCE_OPS } from "../src/common/finance-orders";
 import { runGmTurn } from "../src/app/gm";
 import { costUsd, durationStats, stableJson, type Prices } from "./match-reader-eval-metrics";
 
@@ -117,7 +117,7 @@ interface Stage {
   model?: string;
   failure?: ReturnType<typeof failure>;
 }
-type InstructionRole = "tactic-orders" | "training-orders" | "market-orders";
+type InstructionRole = "tactic-orders" | "training-orders" | "finance-orders";
 interface SyntheticResult {
   name: string;
   role: InstructionRole;
@@ -264,9 +264,9 @@ async function main() {
       commands: instructionCommands(specs, TRAINING_OPS),
       context: buildTrainingContext(state, buildTrainingSchedule(state)).join("\n"),
     },
-    "market-orders": {
-      commands: instructionCommands(specs, MARKET_OPS),
-      context: buildMarketContext(state).join("\n"),
+    "finance-orders": {
+      commands: instructionCommands(specs, FINANCE_OPS),
+      context: buildFinanceContext(state).join("\n"),
     },
   };
   const source = sourceFingerprint();
@@ -292,11 +292,11 @@ async function main() {
       criterion: "Discussion only; no commands.",
     },
     {
-      name: "club-budget-request",
-      role: "market-orders" as const,
-      said: "여름에 수비수를 보강해야 해. 구단주에게 이적 예산 천만 파운드를 더 요청해 줘.",
+      name: "club-stadium-request",
+      role: "finance-orders" as const,
+      said: "관중석이 모자라. 구단주에게 구장을 5천 석 늘려 달라고 요청해 줘.",
       criterion:
-        "Request the board for £10m transfer budget; no direct ledger adjustment or unrelated commands.",
+        "Request the board for a 5,000-seat stadium expansion; no direct ledger adjustment or unrelated commands.",
     },
     {
       name: "squad-number",
@@ -309,7 +309,7 @@ async function main() {
     const keys = Object.keys(ops).filter((key) => ops[key]!.length > 0);
     if (name === "discuss-pressing") return keys.length === 0;
     const command =
-      name === "club-budget-request"
+      name === "club-stadium-request"
         ? "request_board"
         : name === "squad-number"
           ? "set_squad_number"
@@ -317,11 +317,11 @@ async function main() {
     if (keys.length !== 1 || keys[0] !== command || ops[command]?.length !== 1) return false;
     const row = object(ops[command][0]);
     if (!row) return false;
-    if (name === "club-budget-request")
+    if (name === "club-stadium-request")
       return (
         Object.keys(row).every((key) => ["kind", "amount"].includes(key)) &&
-        row.kind === "transfer-budget" &&
-        row.amount === 10_000_000
+        row.kind === "stadium" &&
+        row.amount === 5_000
       );
     if (name === "squad-number")
       return (

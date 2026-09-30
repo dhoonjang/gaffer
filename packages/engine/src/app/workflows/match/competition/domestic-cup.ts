@@ -206,8 +206,8 @@ export function advanceDomesticCups(state: GameState, digest: TickSink): void {
 /**
  * 국내 컵 우승·준우승 **상금** — 구단이 받는 돈이라 감독의 커리어와 갈라져 있다.
  *
- * 트로피·평판을 적는 `reviewDomesticCups`와 따로 부르는 이유는 **무직으로 맞은 시즌
- * 끝**이다: 그 시즌은 감독에게 남지 않지만 옛 구단의 장부는 계속 돌아야 하고, 시즌 키가
+ * 트로피·평판을 적는 `reviewDomesticCups`와 따로 부르는 이유는 **커리어가 끝난 뒤 맞은
+ * 시즌 끝**이다: 그 시즌은 감독에게 남지 않지만 옛 구단의 장부는 계속 돌아야 하고, 시즌 키가
  * 바뀌므로 여기서 안 주면 영영 못 준다 (career.md §5.1).
  */
 export function payDomesticCupPrizes(state: GameState, digest: TickSink): void {

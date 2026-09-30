@@ -1,5 +1,3 @@
-import type { GameState } from "@story-fm/engine";
-import type { runGmTurn } from "@story-fm/agents";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -54,7 +52,6 @@ type TurnEvent = {
   payload?: GamePayload;
   error?: string;
   retry?: boolean;
-  saved?: boolean;
   detail?: string;
 };
 
@@ -259,161 +256,6 @@ describe("LLM 응답 실패", () => {
     }
   });
 
-  it.each([false, true])(
-    "보고서 체크포인트는 미저장 근거 변경을 분리 저장하지 않는다 (%s)",
-    async (unsafeEvidence) => {
-      const game = await newGame();
-      const { loadGame, scoutingEvidence, activeContract, addDays } =
-        await import("@story-fm/engine");
-      const before = loadGame(game.id)!;
-      reject.mockImplementationOnce(async (...args: Parameters<typeof runGmTurn>) => {
-        const state = args[0];
-        const checkpoint = args[7]!;
-        if (unsafeEvidence) state.date = addDays(state.date, 1);
-        await checkpoint(state, "opening");
-        const target = state.players.find(
-          (player) => player.teamId !== state.userTeamId && activeContract(state, player.id),
-        )!;
-        if (unsafeEvidence) activeContract(state, target.id)!.weeklyWage += 1000;
-        const plan = {
-          status: "ready" as const,
-          days: 0,
-          depth: "public_records" as const,
-          focus: ["contract" as const],
-          expectations: [{ topic: "contract" as const, precision: "broad" as const }],
-          evidenceRefs: [],
-          limitations: [],
-        };
-        state.scoutingRequests.push({
-          id: "request-durable",
-          revision: 1,
-          requestedOn: state.date,
-          source: "후보 조사",
-          question: "계약 확인",
-          scope: {
-            playerIds: [target.id],
-            competitionId: null,
-            position: null,
-            minAge: null,
-            maxAge: null,
-            maxValue: null,
-          },
-          deadline: null,
-          previousReportId: null,
-          plan,
-          dueOn: state.date,
-          status: "completed",
-          evidenceOn: state.date,
-          evidence: [],
-          reportId: "report-durable",
-          error: null,
-        });
-        const request = state.scoutingRequests.at(-1)!;
-        request.evidence = scoutingEvidence(state, request);
-        state.scoutReports.push({
-          id: "report-durable",
-          requestId: "request-durable",
-          revision: 1,
-          requestedOn: state.date,
-          completedOn: state.date,
-          evidenceOn: state.date,
-          question: "계약 확인",
-          plan,
-          candidates: request.evidence.map((evidence) => ({
-            evidence,
-            assessment: {
-              playerId: evidence.playerId,
-              fit: "unknown",
-              overall: null,
-              potential: null,
-              attributes: {},
-              evidenceRefs: evidence.sources.map((source) => source.id),
-              strengths: [],
-              concerns: [],
-            },
-          })),
-        });
-        state.pendingReportCards = ["report-durable"];
-        state.manager.name = "부분 변경은 저장하지 않는다";
-        await checkpoint(state, "scouting");
-        state.pendingReportCards = [];
-        throw new LlmCallError("overloaded", "narration failed");
-      });
-      const events = await turnEvents(game.id, "후보 조사");
-      expect(events.find((event) => event.type === "error")).toMatchObject({
-        saved: true,
-        retry: false,
-      });
-      const after: GameState = loadGame(game.id)!;
-      expect(after.manager.name).toBe(before.manager.name);
-      expect(after.scoutReports.some((report) => report.id === "report-durable")).toBe(
-        !unsafeEvidence,
-      );
-      expect(after.pendingReportCards?.includes("report-durable") ?? false).toBe(!unsafeEvidence);
-      expect(after.contracts).toEqual(before.contracts);
-      expect(after.date).toBe(unsafeEvidence ? addDays(before.date, 1) : before.date);
-      expect(after.chat.at(-1)?.text).toBe("후보 조사");
-      expect(after.chat.filter((turn) => turn.role === "model")).toEqual(
-        before.chat.filter((turn) => turn.role === "model"),
-      );
-    },
-  );
-
-  it.each([false, true])(
-    "협상 평가는 다른 원장 변경 없이만 분리 보존한다 (%s)",
-    async (changesLedger) => {
-      const game = await newGame();
-      const { loadGame, startNegotiation, closeNegotiation, linkNegotiationChat } =
-        await import("@story-fm/engine");
-      const { evaluateNegotiation } = await import("@story-fm/agents");
-      const before = loadGame(game.id)!;
-      reject.mockImplementationOnce(async (...args: Parameters<typeof runGmTurn>) => {
-        const state = args[0];
-        const checkpoint = args[7]!;
-        await checkpoint(state, "opening");
-        const target = state.players.find((player) => player.teamId !== state.userTeamId)!;
-        const opened = startNegotiation(state, {
-          playerId: target.id,
-          kind: "buy",
-          method: "proposal",
-          mode: "request",
-        });
-        expect(opened.ok).toBe(true);
-        const room = state.pendingNegotiation!;
-        linkNegotiationChat(state, room.exchangeId);
-        const response = await evaluateNegotiation(state, {
-          negotiationId: room.negotiationId,
-          party: room.party,
-          exchangeId: room.exchangeId,
-          ending: true,
-        });
-        expect(response.ok).toBe(true);
-        closeNegotiation(state, "left");
-        if (changesLedger) state.contracts[0]!.weeklyWage += 1000;
-        await checkpoint(state, "negotiation");
-        throw new LlmCallError("overloaded", "narration failed");
-      });
-      const events = await turnEvents(game.id, "선수 영입 가능성을 문의합니다");
-      expect(events.find((event) => event.type === "error")?.saved).toBe(!changesLedger);
-      const after = loadGame(game.id)!;
-      expect(after.contracts).toEqual(before.contracts);
-      expect(after.negotiationEvaluations.length).toBe(
-        before.negotiationEvaluations.length + (changesLedger ? 0 : 1),
-      );
-      expect(after.negotiationContacts.length).toBe(
-        before.negotiationContacts.length + (changesLedger ? 0 : 1),
-      );
-      expect(after.phase).toBe(before.phase);
-      expect(after.pendingNegotiation).toBeNull();
-      if (!changesLedger) {
-        expect(after.chat.at(-1)?.negotiationContactId).toBe(after.negotiationContacts.at(-1)?.id);
-        expect(
-          after.chat.filter((turn) => turn.text === "선수 영입 가능성을 문의합니다"),
-        ).toHaveLength(1);
-      }
-    },
-  );
-
   it("성공한 턴은 평소처럼 유저·모델 턴을 남긴다", async () => {
     const game = await newGame();
     reject.mockResolvedValueOnce({ text: "@수석코치: 알겠습니다.", toolCalls: [] });
@@ -447,10 +289,6 @@ describe("기다리기를 멈춘 턴", () => {
     // 서버가 스스로 실패를 알렸다 — `runTurnLocked`는 성공할 때만 저장한다
     const told = await call(ndjson('{"type":"error","error":"모델 서버가 혼잡합니다"}\n'));
     expect(told?.settled).toBe(true);
-    const saved = await call(
-      ndjson('{"type":"error","error":"서술 실패","saved":true,"retry":false}\n'),
-    );
-    expect(saved).toMatchObject({ settled: false, retry: false });
     // 라우트가 턴을 돌리기 전에 반려했다
     const rejected = await call(new Response('{"error":"메시지가 필요합니다"}', { status: 400 }));
     expect(rejected?.settled).toBe(true);

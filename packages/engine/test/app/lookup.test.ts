@@ -1,4 +1,3 @@
-import { recordTestScouting } from "../helpers";
 import { describe, expect, it } from "vitest";
 import {
   activeContract,
@@ -14,12 +13,13 @@ import {
   playerCard,
   playersOf,
   scheduleView,
-  loanPlayer,
   searchPlayers,
   seasonStatOf,
   setTraining,
   squadView,
+  teamName,
   teamProfile,
+  teamsOfLeagueIn,
   userPlayers,
   type GameState,
 } from "@story-fm/engine";
@@ -201,40 +201,6 @@ describe("search_players", () => {
     expect(order.indexOf(onDay.id)).toBeLessThan(order.indexOf(dayAfter.id));
   });
 
-  it("금액 검색은 공개 이적료만 읽고 미확인 후보를 남긴다", () => {
-    const state = createTestGame(21);
-    const pool = playersOf(state, "chelsea").slice(0, 3);
-    state.players = pool;
-    state.transfers = pool.slice(0, 2).map((player, i) => ({
-      id: `reference-${i}`,
-      gamePlayerId: player.id,
-      windowId: null,
-      fromTeamId: "arsenal",
-      toTeamId: "chelsea",
-      date: state.date,
-      type: "transfer" as const,
-      fee: (i + 1) * 1000000,
-    }));
-    const search = (maxValue?: number) =>
-      rowIds(
-        searchPlayers(state, {
-          team: "chelsea",
-          sortBy: "value",
-          limit: 15,
-          ...(maxValue === undefined ? {} : { maxValue }),
-        }).message,
-        pool,
-      );
-    expect(search()).toEqual([pool[1]!.id, pool[0]!.id, pool[2]!.id]);
-    expect(search(1000000)).toEqual([pool[0]!.id, pool[2]!.id]);
-    expect(search(999999)).toEqual([pool[2]!.id]);
-    for (const player of pool) {
-      player.attributes.overall = 99;
-      player.attributes.potential = 99;
-    }
-    expect(search(1000000)).toEqual([pool[0]!.id, pool[2]!.id]);
-  });
-
   /**
    * 홈그로운은 **등록하는 쪽의 협회**가 정한다 (team.md §5) — 선수의 현 소속이
    * 아니라. 나라가 같으면 1부든 2부든 같은 협회다.
@@ -292,17 +258,6 @@ describe("playerCard — 선수 상세", () => {
     expect(res.ok).toBe(true);
     expect(res.message).toContain("잠재력: 미지");
     expect(leaksTrueRatings(res.message, other.id, other.attributes)).toBe(false);
-  });
-
-  it("reads the archived observation after current attributes change", () => {
-    const state = createTestGame(21);
-    const other = playersOf(state, "chelsea")[0]!;
-    const report = recordTestScouting(state, other.id);
-    other.attributes.potential = 1;
-    const response = playerCard(state, other.id);
-    expect(response.message).toContain(report.id);
-    expect(response.message).toContain("65~90");
-    expect(response.message).not.toContain("기대 주급");
   });
 
   it("없는 id는 반려한다", () => {
@@ -539,61 +494,6 @@ describe("get_squad", () => {
     expect(header).toContain("선발 평균 적응");
     expect(header).not.toMatch(/선발 평균 적응 \d/);
     expect(rest.find((l) => l.startsWith("  "))).toMatch(/전술적응\d+/);
-  });
-});
-
-/**
- * **임대 보낸 선수는 세계에서 사라지지 않는다** (transfer.md §2) — 계약이 우리
- * 것이라 조회가 소속이 아니라 계약을 읽는다. 세계는 한 번만 세우고(임대 한 건을
- * 태워 둔다) 갈라지는 자리 넷을 함께 본다.
- */
-describe("조회 — 임대 보낸 우리 선수", () => {
-  const state = createTestGame(21);
-  // 2군의 여벌 하나를 보낸다 — 선발을 보내면 전술판이 함께 흔들려 다른 것을 재게 된다
-  const target = userPlayers(state)
-    .filter((p) => p.squadLevel === "reserve" && p.positions[0]?.position !== "GK")
-    .sort((a, b) => a.attributes.overall - b.attributes.overall)[0]!;
-  const loaned = loanPlayer(state, { playerId: target.id, teamId: "chelsea" });
-
-  it("보낸 뒤에도 우리 팀 조회에 선다 — 대상 줄이 그 사실을 말한다", () => {
-    expect(loaned.ok, loaned.message).toBe(true);
-    const res = searchPlayers(state, { team: "mine", name: target.name });
-    expect(res.message).toContain(target.id);
-    // 역할 칸이 소속을 말한다 — `[1군]`으로 서면 부릴 수 있는 인원으로 읽힌다
-    expect(res.message).toMatch(/\[임대:\S+ ~\d{4}-\d{2}-\d{2}\]/);
-    expect(res.message).toContain("임대 1명 포함");
-  });
-
-  it("빌린 구단을 물으면 그 구단 명단에도 선다 — 거기 실제로 있다", () => {
-    const res = searchPlayers(state, { team: "chelsea", name: target.name });
-    expect(res.message).toContain(target.id);
-  });
-
-  it("1군·2군으로 좁히면 빠진다 — 그 층은 빌린 구단의 값이다", () => {
-    for (const level of ["first", "reserve"] as const) {
-      expect(searchPlayers(state, { team: "mine", squadLevel: level }).message).not.toContain(
-        target.id,
-      );
-    }
-  });
-
-  it("get_squad level=loaned는 임대만, 배치 버킷에는 서지 않는다", () => {
-    const res = squadView(state, { level: "loaned" });
-    const rows = res.message.split("\n").filter((l) => l.startsWith("  "));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toContain(target.id);
-    expect(res.message).toContain("── 임대 1명 ──");
-    // 층 조회에는 섞이지 않는다 — 선발·벤치·예비는 전술판의 칸이다
-    for (const level of ["first", "reserve"] as const) {
-      expect(squadView(state, { level }).message).not.toContain(target.id);
-    }
-  });
-
-  it("선수 카드의 전술 칸이 임대를 말한다 — 예비 스쿼드가 아니다", () => {
-    const card = playerCard(state, target.id);
-    expect(card.message).toContain("전술: 임대 중");
-    expect(card.message).not.toContain("배치 없음");
-    expect(card.message).toContain("임대 리포트:");
   });
 });
 
@@ -943,7 +843,7 @@ describe("search_players — 대상 범위", () => {
 });
 
 describe("scheduleView — 감독의 달력", () => {
-  it("경기·훈련·이적창을 한 축에 날짜순으로 놓는다", () => {
+  it("경기·훈련을 한 축에 날짜순으로 놓는다", () => {
     const state = createTestGame(21);
     const applied = setTraining(state, {
       repeatWeekly: [{ dow: 2, slot: "am", label: "고강도 압박", focus: ["stamina", "tactical"] }],
@@ -1054,5 +954,76 @@ describe("이력·폼", () => {
     const res = leagueView(state, { view: "standings" });
     const ourRow = res.message.split("\n").find((l) => l.includes("←우리"))!;
     expect(ourRow).toContain("폼 승승승");
+  });
+});
+
+/**
+ * 승강 뒤의 조회 — 소속은 세이브(`state.leagueOf`)에만 남고, 조회 도구는 그 값을 읽는다.
+ * 시즌을 굴리지 않고 소속만 못 박는다.
+ */
+/** 그 팀의 소속만 바꾼다 — 재정 타격 없이 조회 도구만 보는 자리 */
+function moveTo(state: GameState, teamId: string, leagueId: string): void {
+  (state.leagueOf ??= {})[teamId] = leagueId;
+}
+
+/** 우리 팀이 아닌 1부 클럽 하나 */
+function otherTopClub(state: GameState): string {
+  return teamsOfLeagueIn(state, "epl").find((id) => id !== state.userTeamId)!;
+}
+
+describe("강등된 감독의 조회 도구", () => {
+  it("get_league가 지금 있는 리그의 순위표를 준다", () => {
+    const state = createTestGame(42, "arsenal");
+    expect(leagueView(state, { view: "standings" }).message).toContain("프리미어리그");
+
+    moveTo(state, "arsenal", "championship");
+    const after = leagueView(state, { view: "standings" }).message;
+    expect(after).toContain("챔피언십");
+  });
+
+  it("팀을 지목한 순위표도 그 팀의 지금 리그를 준다", () => {
+    const state = createTestGame(42, "arsenal");
+    const victim = otherTopClub(state);
+    moveTo(state, victim, "championship");
+    expect(leagueView(state, { view: "standings", team: teamName(victim) }).message).toContain(
+      "챔피언십",
+    );
+  });
+
+  it("팀 프로필의 리그 이름과 순위도 새 소속이다", () => {
+    const state = createTestGame(42, "arsenal");
+    const victim = otherTopClub(state);
+    moveTo(state, victim, "championship");
+    // 리그 이름은 머리글에 있다 — 아래 선수 줄에도 리그 이름이 섞이므로 거기서만 본다
+    const header = teamProfile(state, teamName(victim)).message.split("\n")[0]!;
+    expect(header).toContain("챔피언십");
+    expect(header).not.toContain("프리미어리그");
+  });
+
+  it("선수 검색의 리그 풀도 새 소속을 따른다", () => {
+    const state = createTestGame(42, "arsenal");
+    const ours = playersOf(state, "arsenal")[0]!;
+    const inTopFlight = () =>
+      searchPlayers(state, { competition: "프리미어리그", name: ours.name }).message;
+    expect(inTopFlight()).toContain(ours.name);
+
+    moveTo(state, "arsenal", "championship");
+    expect(inTopFlight()).not.toContain(ours.name);
+  });
+
+  it("커리어의 '이번 시즌 N위'를 새 리그 표에서 잰다", () => {
+    const state = createTestGame(42, "arsenal");
+    moveTo(state, "arsenal", "championship");
+    // 커리어는 경기를 치른 표에서만 순위를 말한다 — 새 리그에 장부를 하나 놓는다
+    const fixture = state.matches.find(
+      (m) => m.competitionId === "epl" && m.homeTeamId === "arsenal",
+    )!;
+    fixture.competitionId = "championship";
+    fixture.awayTeamId = teamsOfLeagueIn(state, "championship").find((id) => id !== "arsenal")!;
+    fixture.result = resultOf({ homeGoals: 3, awayGoals: 0 });
+
+    const career = careerView(state).message;
+    expect(career).toContain("챔피언십 1위");
+    expect(career).not.toContain("프리미어리그");
   });
 });

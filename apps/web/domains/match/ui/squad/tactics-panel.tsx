@@ -151,7 +151,7 @@ export function SetPiecePanel({
   starting: TakerCandidate[];
   /** 벤치·예비 — 다음 경기의 선발일 수 있어 지정은 받는다 (그 경기엔 기본값이 선다) */
   others: TakerCandidate[];
-  /** 무직이면 꺼진다 — 경기 중에는 켜진 채로 지시가 된다 */
+  /** 커리어가 끝나면 꺼진다 — 경기 중에는 켜진 채로 지시가 된다 */
   editing: boolean;
   onPick: (role: SetPieceRole, playerId: string | null) => void;
   /** 두 축의 지금 값 — 지시하지 않은 축은 뷰가 중립으로 펴서 준다 */
@@ -192,7 +192,7 @@ export function SetPiecePanel({
                 onChange={(e) => onPick(role, e.target.value === "" ? null : e.target.value)}
               >
                 <option value="">지정 없음</option>
-                {/* 지정한 선수가 2군·임대로 내려가 목록 밖이면 값이 그릴 자리를 잃는다 —
+                {/* 지정한 선수가 2군으로 내려가 목록 밖이면 값이 그릴 자리를 잃는다 —
                     그 한 명만 따로 세워 셀렉트가 빈칸으로 서지 않게 한다 */}
                 {designated !== null && !listed.has(designated) && (
                   <option value={designated}>{nameOf(designated)}</option>

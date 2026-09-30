@@ -15,13 +15,11 @@ import {
   isOurPlayer,
   openInjury,
   seasonStatOf,
-  teamNameIn,
 } from "../../../../common/core/state";
 import { playerArchetypeOf } from "../../../../common/people/player-persona";
 import { formLabel } from "../../../../common/players/form";
 import { leaderRoleOf } from "../../../../common/players/hierarchy";
 import { injuryHistoryOf } from "../../../../common/players/injury";
-import { settlingOf } from "../../../../common/players/settling";
 import { demotionPatienceDaysOf } from "../../../../match/squad/demotion";
 import {
   type LastMatchIndex,
@@ -39,11 +37,9 @@ import {
   MOOD_FACT_LIMIT,
   MOOD_NOTE_DAYS,
   numberEchoOf,
-  recentDeparture,
   recentReturn,
   YOUNG_AGE,
 } from "../../../../story/players/mood";
-import { playerReturnFixture } from "../../../../story/world/former-club";
 
 /**
  * **코어가 고른 심경의 사실** — 우선순위 순 최대 2장.
@@ -63,7 +59,6 @@ export function moodFactsOf(
   const assignment = assignmentFor(state, player.id);
   const stat = seasonStatOf(state, player.id);
   const contract = activeContract(state, player.id);
-  const settling = settlingOf(state, player.id);
   const demotionDays = demotionDaysOf(state, player);
   const { form, condition } = player.state;
   const retiring = player.state.retiringAfterSeason;
@@ -93,12 +88,6 @@ export function moodFactsOf(
       archetype: playerArchetypeOf(state.seed, player),
       patienceDays: demotionPatienceDaysOf(state, player),
     });
-  if (settling && !settling.done)
-    facts.push({
-      cause: "settling",
-      percent: Math.round(settling.progress * 100),
-      matches: settling.matches,
-    });
   const last = lastMatchOf(state, player.id, index);
   if (last && last.days <= AFTERGLOW_DAYS) facts.push(afterglow(state, player.id, last));
   if ((stat?.apps ?? 0) === 0 && state.date >= state.calendar.start) {
@@ -126,38 +115,11 @@ export function moodFactsOf(
   const mentoring = mentoringFactOf(state, player);
   /**
    * **끝난 멘토링이 곁들임의 맨 앞이다** (people.md §5) — 데리고 다니던 고참이
-   * 사라진 것은 옆자리 동료가 방출된 것보다 그 아이에게 큰 일이다. 서 있는 사이는
+   * 사라진 것은 옆자리 동료가 떠난 것보다 그 아이에게 큰 일이다. 서 있는 사이는
    * 며칠씩 그대로라 아래(번호의 여운 다음)에 선다.
    */
   if (mentoring !== null && mentoring.ended !== undefined) {
     facts.push(mentoring);
-  }
-  /**
-   * 방금 누가 팀을 떠났다 — **그와 `close` 이상이던 사람에게만 선다** (people.md §5·§6).
-   * 라커룸 전원이 같은 무게로 드는 사실이 아니다.
-   *
-   * ⚠️ **우리 라커룸의 사실이다.** 스카우트가 보는 남의 선수에게 우리 구단의
-   * 해지가 걸리면 그 카드는 거짓말이다.
-   */
-  if (player.teamId === state.userTeamId) {
-    const departure = recentDeparture(state, player);
-    if (departure) facts.push(departure);
-  }
-  /**
-   * **옛 소속 구단과 곧 만난다** (people.md §4·§5) — 계약 해지 뒤, 계약 만료 앞이다:
-   * 열나흘 안에 닫히는 창이라 반년짜리 계약 시계 위에 선다. 우리 선수에게만 서는
-   * 것도 해지 카드와 같은 이유다(`playerReturnFixture`).
-   */
-  {
-    const back = playerReturnFixture(state, player);
-    if (back) {
-      facts.push({
-        cause: "former-club",
-        // 약칭이 아니라 이름이다 — 화면이 이 값으로 문장을 쓰고 결산도 그 줄을 읽는다
-        club: teamNameIn(state, back.teamId),
-        days: back.days,
-      });
-    }
   }
   /**
    * ⚠️ **`contract` 불만이 걸린 선수에겐 서지 않는다** (people.md §5) — 같은 사실을

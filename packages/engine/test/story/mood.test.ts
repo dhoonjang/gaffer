@@ -4,11 +4,9 @@ import {
   ATTRIBUTE_AXES,
   INJURY_PRONENESS_MIN,
   PlayerStateSchema,
-  RELATION_TIER_RANK,
   freshPlayerState,
   pressFactText,
   type GamePlayer,
-  type Transfer,
 } from "@story-fm/domain";
 import {
   HEAVY_DEFEAT_MARGIN,
@@ -46,7 +44,6 @@ import {
   formSwing,
   dayOfWeek,
   setSquadLevel,
-  FREE_AGENT_TEAM,
   PROMISE,
   PROMISE_WINDOW_MATCHES,
   activeContract,
@@ -55,93 +52,16 @@ import {
   minutesShortfalls,
   openPromise,
   openPromises,
-  relationTierOf,
-  setRelationTier,
   squadStatusOf,
   startsInWindow,
   tickPromises,
 } from "@story-fm/engine";
 import { createTestGame, advanceDays, resultOf } from "../helpers";
 
-/**
- * 두 사람을 `close` 위로 올린다 — 계약 해지 카드가 서는 조건이다 (people.md §6).
- *
- * 압축이 지나는 문으로 올리는 것이 요점이다: 줄을 손으로 적으면 이 시험은
- * `setRelationTier`가 실제로 무엇을 하는지와 무관해진다. 한 번에 한 칸이라 되풀이한다.
- */
-function beFriends(state: GameState, a: GamePlayer, b: GamePlayer): void {
-  while (!["close", "trusted"].includes(relationTierOf(state, a.id, b.id))) {
-    if (!setRelationTier(state, a.name, b.name, "close")) throw new Error("사이가 움직이지 않는다");
-  }
-}
-
 describe("체력 — 몸과 마음이 한 축이다", () => {
   it("0~100 안에 머문다", () => {
     expect(clampCondition(120)).toBe(100);
     expect(clampCondition(-5)).toBe(0);
-  });
-});
-
-describe("라커룸이 계약 해지를 알아보는 표식", () => {
-  /**
-   * 계약 만료도 해지도 원장에서 `type: "free"`라, 둘을 가르는 것은 `reason` 코드
-   * 하나다. 문장으로 가르던 자리라 문구를 고치면 라커룸이 감독의 결정을 못 알아봤다
-   * (→ docs/negotiation/transfer.md §2 · game-state.md §6).
-   */
-  function departed(state: GameState, row: Partial<Transfer>): void {
-    const leaver = userPlayers(state)[1]!;
-    /**
-     * **카드는 가까웠던 사람에게만 선다**(people.md §6) — 이 시험이 보려는 것은 표식이지
-     * 사이가 아니므로, 읽는 사람과의 관계를 여기서 열어 둔다. 시드가 어느 나라 사람을
-     * 몇 명 담았는지에 이 시험이 기대면 표식이 멀쩡한 날에도 빨강이 뜬다.
-     */
-    beFriends(state, leaver, userPlayers(state)[0]!);
-    leaver.teamId = FREE_AGENT_TEAM;
-    state.transfers.push({
-      id: `tr-test-${state.transfers.length}`,
-      gamePlayerId: leaver.id,
-      windowId: null,
-      fromTeamId: state.userTeamId,
-      toTeamId: FREE_AGENT_TEAM,
-      date: state.date,
-      type: "free",
-      fee: 0,
-      ...row,
-    });
-  }
-
-  const sawDeparture = (state: GameState) =>
-    moodFactsOf(state, userPlayers(state)[0]!).some((f) => f.cause === "departure");
-
-  it("`reason` 코드로 갈린다 — 만료는 해지가 아니다", () => {
-    const released = createTestGame();
-    departed(released, { reason: "release-agreed" });
-    expect(sawDeparture(released), "해지가 라커룸에 닿지 않았다").toBe(true);
-
-    const expired = createTestGame();
-    departed(expired, { reason: "contract-expiry" });
-    expect(sawDeparture(expired), "계약 만료가 해지로 읽혔다").toBe(false);
-  });
-
-  it("가까웠던 사람에게만 선다 — 라커룸 전원이 같은 무게로 들지 않는다", () => {
-    const state = createTestGame();
-    const leaver = userPlayers(state)[1]!;
-    const near = userPlayers(state)[0]!;
-    /** 사이를 명시적으로 갈라 둔다 — 시드의 국적 분포가 이 시험의 답이면 안 된다 */
-    state.relations = [];
-    beFriends(state, leaver, near);
-    const far = userPlayers(state).find(
-      (p) =>
-        p.id !== leaver.id &&
-        p.id !== near.id &&
-        RELATION_TIER_RANK[relationTierOf(state, leaver.id, p.id)] < RELATION_TIER_RANK.close,
-    )!;
-    departed(state, { reason: "release-agreed" });
-
-    const sawIt = (p: (typeof state.players)[number]) =>
-      moodFactsOf(state, p).some((f) => f.cause === "departure");
-    expect(sawIt(near), "가까웠던 동료가 해지를 못 들었다").toBe(true);
-    expect(sawIt(far), "남이나 다름없던 동료에게도 카드가 걸렸다").toBe(false);
   });
 });
 
@@ -224,12 +144,10 @@ describe("심경 사실 카드 — 코어는 사실만 낸다", () => {
   });
 
   /**
-   * **끝난 멘토링이 곁들임의 맨 앞이다** (people.md §5 · §5-3) — 데리고 다니던 고참이
-   * 사라진 것은 옆자리 동료가 방출된 것보다 그 아이에게 큰 일이다. 그리고 장부가 닫힌
-   * 줄을 들고 있는 창(`MENTORING_ECHO_DAYS`)이 곧 카드가 서는 창이다 — 창이 두 벌로
-   * 갈리면 장부에 남은 줄이 화면에서 사라지거나 그 반대가 된다.
+   * 장부가 닫힌 멘토링 줄을 들고 있는 창(`MENTORING_ECHO_DAYS`)이 곧 카드가 서는
+   * 창이다 — 창이 두 벌로 갈리면 장부에 남은 줄이 화면에서 사라지거나 그 반대가 된다.
    */
-  it("멘토링과 계약 해지 사실은 함께 서고 각각의 기한을 따른다", () => {
+  it("끝난 멘토링 사실은 장부의 창 안에서만 선다", () => {
     const state = createTestGame();
     /**
      * **몸이 조용한 선수를 고른다** — 부상 위험 `high`는 곁들임보다 앞자리라(§5)
@@ -237,22 +155,7 @@ describe("심경 사실 카드 — 코어는 사실만 낸다", () => {
      */
     const quiet = userPlayers(state).filter((p) => injuryRiskFor(p).grade === "low");
     const [mentee, mentor] = [quiet[0]!, quiet[1]!];
-    const leaver = userPlayers(state).find((p) => p.id !== mentee.id && p.id !== mentor.id)!;
-    // 같은 날 계약이 해지된 **가까운** 동료 — 그 카드가 서는 조건이다 (people.md §6)
-    beFriends(state, leaver, mentee);
-    leaver.teamId = FREE_AGENT_TEAM;
-    state.transfers.push({
-      id: "tr-mentoring",
-      gamePlayerId: leaver.id,
-      windowId: null,
-      fromTeamId: state.userTeamId,
-      toTeamId: FREE_AGENT_TEAM,
-      date: state.date,
-      type: "free",
-      fee: 0,
-      reason: "release-agreed",
-    });
-    // 마음도 몸도 할 말이 없어야 곁들임 두 자리가 보인다 — 곁들임의 순서가 이 케이스다
+    // 마음도 몸도 할 말이 없어야 곁들임 자리가 보인다
     mentee.state.form = 0;
     mentee.state.condition = 84;
     mentee.state.injuryProneness = INJURY_PRONENESS_MIN;
@@ -278,7 +181,6 @@ describe("심경 사실 카드 — 코어는 사실만 낸다", () => {
       days: 0,
       ended: "departure",
     });
-    expect(fresh.some((fact) => fact.cause === "departure")).toBe(true);
 
     // 창을 넘긴 줄은 장부가 걷는 대상이고, 카드도 함께 사라진다
     const stale = closedOn(addDays(state.date, -(MENTORING_ECHO_DAYS + 1)));
@@ -286,7 +188,6 @@ describe("심경 사실 카드 — 코어는 사실만 낸다", () => {
       stale.some((f) => f.cause === "mentoring"),
       "창을 넘긴 사이가 아직 서 있다",
     ).toBe(false);
-    expect(stale.some((fact) => fact.cause === "departure")).toBe(true);
   });
 });
 
@@ -1054,10 +955,6 @@ describe("약속 — 감독의 말이 장부에 선다", () => {
     const captain = userPlayers(state).find((p) => p.isCaptain) ?? userPlayers(state)[0]!;
     captain.isCaptain = true;
     expect(openPromise(state, captain.id, "captain").ok).toBe(false);
-    // 이적 리스트에 이미 오른 선수에게 이적 허용을 약속할 것이 없다
-    const listed = userPlayers(state)[3]!;
-    state.transferList.push({ gamePlayerId: listed.id, askingPrice: 1, listedOn: state.date });
-    expect(openPromise(state, listed.id, "transfer").ok).toBe(false);
     expect(openPromises(state)).toHaveLength(0);
   });
 });

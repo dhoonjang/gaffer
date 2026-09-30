@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "@playwright/test";
-import { loadGame } from "@story-fm/engine";
 
 import { COLD_MS } from "./timeouts";
 
@@ -435,7 +434,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
 
   await page.getByTestId("tab-재정").click();
   await expect(page.getByTestId("view-finance")).toContainText("구단 잔고");
-  // 실시간 재정 활동 + 이번 달 진행 중 집계 (docs/negotiation/finance.md)
+  // 실시간 재정 활동 + 이번 달 진행 중 집계 (docs/common/finance.md)
   await expect(page.getByTestId("fin-feed")).toContainText("선수 주급");
   await expect(page.getByTestId("view-finance")).toContainText("월간 재정 보고서");
   await expect(page.getByTestId("view-finance")).toContainText("진행 중");
@@ -547,7 +546,7 @@ test("면담 시나리오 — 판정형 스킬과 사기 반영", async ({ page 
   await expect(page.getByTestId("team-grid")).toBeVisible();
   await page.getByTestId("team-chelsea").click();
   await page.getByTestId("manager-name").fill("박테스트");
-  await page.getByTestId("manager-background").fill("에이전트 출신 협상가");
+  await page.getByTestId("manager-background").fill("데이터 분석가 출신");
   await page.getByTestId("start-game").click();
   await expect(page.getByTestId("chat-scroll")).toContainText("박테스트", { timeout: COLD_MS });
 
@@ -605,40 +604,6 @@ test("면담 시나리오 — 판정형 스킬과 사기 반영", async ({ page 
   expect(fits.lastBtnRight).toBeLessThanOrEqual(fits.barRight);
 });
 
-test("재계약 제안서 문의는 조건을 임의로 채우지 않고 재접속 후에도 남는다", async ({ page }) => {
-  await page.goto("/new");
-  await expect(page.getByTestId("league-list")).toBeVisible({ timeout: COLD_MS });
-  await page.getByTestId("league-epl").click();
-  await expect(page.getByTestId("team-grid")).toBeVisible();
-  await page.getByTestId("team-arsenal").click();
-  await page.getByTestId("manager-name").fill("협테스트");
-  await page.getByTestId("manager-background").fill("스카우트 출신");
-  await page.getByTestId("start-game").click();
-  await expect(page.getByTestId("chat-scroll")).toContainText("협테스트", { timeout: COLD_MS });
-  const input = page.getByTestId("chat-input");
-  await input.fill("계약 만료 다가오는 선수 재계약 하자");
-  await page.getByTestId("chat-send").click();
-  const gameId = new URL(page.url()).pathname.split("/").at(-1)!;
-  await expect.poll(() => loadGame(gameId)?.negotiationExchanges.length).toBe(1);
-  await expect(input).toBeEnabled();
-  await expect(page.locator(".app")).toHaveAttribute("data-phase", "idle");
-  await page.reload();
-  await expect(input).toBeEnabled();
-  const saved = loadGame(gameId)!;
-  expect(saved.negotiations).toHaveLength(1);
-  expect(saved.negotiations[0]).toMatchObject({ kind: "renew", status: "open", rounds: [] });
-  expect(saved.negotiations[0]!.personal).toBeUndefined();
-  expect(saved.negotiationExchanges).toHaveLength(1);
-  expect(saved.negotiationExchanges[0]).toMatchObject({ method: "proposal", party: "agent" });
-  expect(saved.negotiationExchanges[0]!.closedOn).not.toBeNull();
-  expect(
-    saved.chat.some(
-      (line) =>
-        line.negotiationContactId === saved.negotiationContacts[0]!.id && line.role !== "model",
-    ),
-  ).toBe(true);
-});
-
 test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   await page.goto("/new");
   await expect(page.getByTestId("league-list")).toBeVisible({ timeout: COLD_MS });
@@ -659,15 +624,13 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   // 달력 — 경기 셀 클릭 → 상세 패널 (상대·라운드). 편집 UI 없음(읽기 전용)
   await page.getByTestId("tab-달력").click();
   await expect(page.getByTestId("view-calendar")).toContainText("시즌 일정");
-  // 머리줄은 이적창 상태만 알린다 (조작 안내 문구 없음)
-  await expect(page.getByTestId("view-calendar")).toContainText("이적시장");
   // 시즌 첫 경기는 프리시즌 친선이다 — 대회가 없으니 라운드도 없고 이름이 곧 정보다
   await page.locator('[data-testid^="cal-fixture-"]').first().click();
   await expect(page.getByTestId("cal-detail")).toBeVisible();
   await expect(page.getByTestId("cal-detail")).toContainText("친선");
   await expect(page.getByTestId("cal-detail")).toContainText("홈");
 
-  // 경기 아닌 일정은 점으로만 오른다 — 훈련은 노란 점, 추첨·이적창은 파란 점.
+  // 경기 아닌 일정은 점으로만 오른다 — 훈련은 노란 점, 추첨은 파란 점.
   // 무슨 일정인지는 칸을 눌러 여는 상세가 말한다
   await expect(page.locator(".cal-mark.train").first()).toBeVisible();
   const drawDot = page.locator('[data-testid^="cal-draw-"]').first();

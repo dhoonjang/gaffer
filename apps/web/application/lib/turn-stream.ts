@@ -1,5 +1,4 @@
 import type { TurnOperation } from "@story-fm/agents";
-import type { ProposalInput } from "@story-fm/domain";
 import type { GamePayload } from "@/application/lib/store";
 import type { MatchBoardOrder } from "@/domains/match/lib/match-orders";
 
@@ -18,7 +17,6 @@ type TurnStreamEvent = {
   payload?: GamePayload;
   error?: string;
   retry?: boolean;
-  saved?: boolean;
   detail?: string;
 };
 
@@ -32,8 +30,6 @@ export type TurnStreamBody = {
    */
   operation?: TurnOperation;
   orders?: readonly MatchBoardOrder[];
-  /** 제안 폼이 낸 정확한 조건 — 감독의 말과 함께 갈 수도, 혼자 갈 수도 있다 */
-  proposal?: ProposalInput;
 };
 
 /**
@@ -114,7 +110,6 @@ export async function streamTurn(
         ...(body.message !== undefined ? { message: body.message } : {}),
         ...(body.operation !== undefined ? { operation: body.operation } : {}),
         ...(body.orders && body.orders.length > 0 ? { orders: body.orders } : {}),
-        ...(body.proposal !== undefined ? { proposal: body.proposal } : {}),
       }),
       signal: abort.signal,
     });
@@ -169,7 +164,7 @@ export async function streamTurn(
           failure = {
             reason: evt.error ?? "턴을 처리하지 못했습니다",
             detail: evt.detail,
-            settled: evt.saved !== true,
+            settled: true,
             retry: evt.retry !== false,
           };
           closed = true;

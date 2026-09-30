@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultRoleOf, formatMoney } from "@story-fm/domain";
-import {
-  buildOfficeViews,
-  createGame,
-  playersOf,
-  settlingOf,
-  type GameState,
-} from "@story-fm/engine";
+import { buildOfficeViews, createGame, playersOf, type GameState } from "@story-fm/engine";
 import { slotOverallOf } from "../../domains/match/lib/slot-overall";
 import { growthTier, ratingTone } from "../../domains/common/lib/scout-report-display";
 
@@ -88,34 +82,6 @@ describe("화면과 서버가 같은 값을 낸다", () => {
 });
 
 describe("안개는 축에만 있고, 합성값은 거기서 파생된다", () => {
-  it("적응 중인 새 영입은 관측 오차가 남는데도 두 계산이 어긋나지 않는다", () => {
-    const state = game();
-    // 타 팀 선수를 우리 팀으로 옮겨 정착을 시작시킨다 (영입 직후와 같은 상태)
-    const target = playersOf(state, "chelsea")[0]!;
-    target.teamId = state.userTeamId;
-    target.squadLevel = "first";
-    state.transfers.push({
-      id: `tr-test-${target.id}`,
-      gamePlayerId: target.id,
-      windowId: null,
-      fromTeamId: "chelsea",
-      toTeamId: state.userTeamId,
-      date: state.date,
-      type: "transfer",
-      fee: 1_000_000,
-    });
-    expect(settlingOf(state, target.id)?.done).toBe(false);
-
-    const row = buildOfficeViews(state).squad.players.find((p) => p.id === target.id)!;
-    expect(row.observation.knowledge).toBe("adapting");
-    expect(row.observation.margin).toBeGreaterThan(0);
-    for (const listed of row.positions) {
-      expect(slotOverallOf(row, listed.position, defaultRoleOf(listed.position))).toBe(
-        listed.overall,
-      );
-    }
-  });
-
   it("우리 선수는 안개가 없다 — 오프셋도 0이다", () => {
     for (const p of shared().rows) {
       expect(p.observation.knowledge, p.name).toBe("own");
@@ -140,7 +106,7 @@ describe("자리와 역할이 값을 움직인다", () => {
 /**
  * 재정 활동 피드를 펼치면 선수 한 명 몫의 월 상각이 선다 — 백만 눈금으로는
  * 전부 `£0.0M`이 되어 서른 줄이 아무 말도 하지 않는다
- * (docs/negotiation/finance.md §8.1).
+ * (docs/common/finance.md §8.1).
  */
 /**
  * 금액 표기는 자가 하나고 **금액이 눈금을 고른다** (`formatMoney` — overview §5).

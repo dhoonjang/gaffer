@@ -40,7 +40,7 @@ export interface TeamCatalogEntry {
    * **구단 체급 1~4 — 최근 성적이 아니라 클럽의 크기다.**
    *
    * 티어는 절차 생성 능력치 기준선(`TIER_BASE`)만 정하는 값이 아니다.
-   * 초기 재정·이적 예산(`TIER_FINANCE`)·주급 기준선(`wages.ts`)·보드 기대치·
+   * 초기 재정·주급 기준선(`wages.ts`)·보드 기대치·
    * 첫 시즌 대항전 티켓 배정(`europe.ts`)·컵 시드가 전부 여기서 나온다.
    * 그래서 **한 시즌 순위가 아니라 지속되는 체급**으로 매겨야 한다 —
    * 강등권에서 한 해를 보낸 토트넘도 6만 석 구장과 최상위 상업 매출을 가진
@@ -1189,10 +1189,10 @@ const TEAM_SEED_BASE: readonly TeamCatalogEntry[] = [
     formation: "4-2-3-1",
   },
 
-  // ══ 이적 시장 전용 클럽 — 경기를 하지 않는다 (league-catalog `kind: "market-only"`) ══
+  // ══ 명단 전용 클럽 — 경기를 하지 않는다 (league-catalog `kind: "market-only"`) ══
   //
-  // 일정·순위표·컵 어디에도 안 나온다. 존재 이유는 하나 — **레전드를 보관하고
-  // 돈으로 선수를 흡수하는 것**. tier는 전력 표시용일 뿐 경기에 쓰이지 않는다.
+  // 일정·순위표·컵 어디에도 안 나오고 선수 검색에만 잡힌다. tier는 전력 표시용일
+  // 뿐 경기에 쓰이지 않는다.
 
   // ── 사우디 프로 리그 ──
   { id: "alnassr", name: "알 나스르", shortName: "NAS", leagueId: "saudi", tier: 2 },
@@ -1484,7 +1484,7 @@ export function countryOfTeam(teamId: string): string | null {
   return leagueId === null ? null : (leagueCatalogById(leagueId)?.country ?? null);
 }
 
-/** 이 팀이 1부인가 — 2부 클럽은 리그전·순위표·이적 시장 밖에 있다 */
+/** 이 팀이 1부인가 — 2부 클럽은 리그전·순위표 밖에 있다 */
 export function isTopFlight(teamId: string): boolean {
   return isTopLeague(leagueOfTeam(teamId));
 }
@@ -1494,8 +1494,8 @@ export function isTopFlight(teamId: string): boolean {
  * "2부는 약하다"가 한 곳에서만 정해진다.
  */
 export function strengthBase(team: TeamCatalogEntry): number {
-  // 2부만 감점한다 — 이적 시장 전용 리그(사우디·MLS)는 약한 리그가 아니라
-  // **경기를 안 하는 리그**다. 감점을 얹으면 레전드가 헐값이 된다
+  // 2부만 감점한다 — 명단 전용 리그(사우디·MLS)는 약한 리그가 아니라
+  // **경기를 안 하는 리그**다. 감점을 얹으면 레전드의 능력치가 깎인다
   return TIER_BASE[team.tier] - (isCupOnlyLeague(team.leagueId) ? SECOND_DIVISION_PENALTY : 0);
 }
 
@@ -1505,7 +1505,7 @@ export function strengthBase(team: TeamCatalogEntry): number {
  * 새 게임이 시작할 때 이 11명을 선발로 세운다. 어느 슬롯에 서는지는 엔진이
  * 포메이션 슬롯별 적응도로 정하므로 여기선 **순서가 아니라 구성**만 뜻한다.
  * 카탈로그에서 못 찾는 슬러그는 조용히 무시되고 그 자리는 적합도 상위 선수가
- * 채운다 — 어드민 편집·이적으로 명단이 바뀌어도 라인업이 깨지지 않는다.
+ * 채운다 — 어드민 편집·계약 만료로 명단이 바뀌어도 라인업이 깨지지 않는다.
  *
  * 출처는 2026-27 예상 베스트 11(starting11)이고, 직전 경기 라인업이 아니라
  * **주전으로 꼽히는 구성**이다 — 로테이션된 컵 라인업을 기본 선발로 앉히지

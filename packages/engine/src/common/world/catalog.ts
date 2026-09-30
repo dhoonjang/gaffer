@@ -487,7 +487,7 @@ const TOP_UP_QUANTILE = 0.25;
  *
  * tier 상수(`TIER_BASE`)를 쓰면 그 값이 리그 상위권의 눈금이라, 실선수 시드가
  * 얇은 클럽일수록 보충 선수가 스쿼드 최고 선수를 넘어섰다 — 세계 상위 명단에
- * 가명이 서고, 그 가명을 축으로 선발·경기·이적 시세가 돌았다.
+ * 가명이 서고, 그 가명을 축으로 선발·경기가 돌았다.
  *
  * 두 항의 작은 쪽을 쓴다.
  * - **하위 분위**(`TOP_UP_QUANTILE`) — 보충이 서는 자리.
@@ -672,7 +672,7 @@ function fallbackEntries(
 /** 시드에서 파생한 기본 카탈로그 (결정적) */
 
 /**
- * 이적 시장 전용 클럽의 스쿼드 — **경기를 안 하므로 작게 둔다.**
+ * 명단 전용 리그(`market-only`) 클럽의 스쿼드 — **경기를 안 하므로 작게 둔다.**
  * 레전드 시드 몇 명 + 나머지는 절차 생성. 로테이션도 유스도 필요 없다.
  */
 const MARKET_LEAGUE_TEMPLATE: string[] = [
@@ -703,10 +703,10 @@ const MARKET_LEAGUE_TEMPLATE: string[] = [
 function teamDrafts(team: TeamCatalogEntry, takenNames: Set<string>): CatalogDraft[] {
   /**
    * **무소속은 비어 있게 시작한다.** 클럽이 아니라 클럽이 없는 상태라
-   * 초기 스쿼드가 없다 — 방출·계약 만료로만 사람이 들어온다.
+   * 초기 스쿼드가 없다 — 계약 만료로만 사람이 들어온다.
    */
   if (team.leagueId === "free") return [];
-  // 이적 시장 전용 클럽 — 레전드 시드 + 절차 생성으로 작은 스쿼드를 만든다.
+  // 명단 전용 리그의 클럽 — 레전드 시드 + 절차 생성으로 작은 스쿼드를 만든다.
   // 2부와 달리 전력 감점이 없다 (약한 리그가 아니라 경기를 안 하는 리그다)
   if (isMarketOnlyLeague(team.leagueId)) {
     const seeds = SQUAD_SEEDS[team.id] ?? [];

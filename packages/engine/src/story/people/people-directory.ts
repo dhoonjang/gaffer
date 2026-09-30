@@ -6,7 +6,6 @@ import {
   type CharacterMemory,
   type Persona,
   isDeeperThan,
-  type Negotiation,
   type CharacterInjection,
 } from "@story-fm/domain";
 import { mentoringRelations, tierRelations, RELATION_CARD_LIMIT } from "./relations";
@@ -16,8 +15,6 @@ import {
   reportersOf,
   worldFigureByName,
   generateVirtualManager,
-  generateDirector,
-  generateOwner,
   isFamousPlayer,
   worldFigures,
 } from "../../common/people/persona";
@@ -38,7 +35,7 @@ import { pendingPress } from "../world/press";
  * (→ ../../../../docs/common/llm/agents.md §5). 기억은 카드가 실리는 그 턴 층에만 서고
  * (`selectCharacters`), 늘어난 기억은 재주입이 나른다.
  *
- * 이름이 세계에서 사라졌으면(방출된 선수) `null`이다 — 그 턴은 카드 없이 그려진다.
+ * 이름이 세계에서 사라졌으면(은퇴한 선수) `null`이다 — 그 턴은 카드 없이 그려진다.
  */
 export function characterEntryOf(
   state: GameState,
@@ -97,15 +94,9 @@ function memoriesOf(state: GameState, characterId: string): CharacterMemory[] {
 function personaOf(state: GameState, characterId: string): Persona | null {
   const saved = state.personas.find((p) => p.characterId === characterId);
   if (saved) return saved;
-  // 순서는 `candidatesOf`가 후보를 모으는 순서 그대로다 — 면접 중인 구단주는 우리
-  // 구단주 바로 뒤다 (career.md §5.1)
-  for (const persona of [
-    headCoachOf(state),
-    ownerOf(state),
-    interviewOwnerOf(state),
-    ...reportersOf(state),
-  ]) {
-    if (persona?.characterId === characterId) return persona;
+  // 순서는 `candidatesOf`가 후보를 모으는 순서 그대로다
+  for (const persona of [headCoachOf(state), ownerOf(state), ...reportersOf(state)]) {
+    if (persona.characterId === characterId) return persona;
   }
   const player = state.players.find((p) => p.name === characterId);
   if (player) return generatePlayerPersona(state.seed, player);
@@ -118,39 +109,7 @@ function personaOf(state: GameState, characterId: string): Persona | null {
   const bench = state.teams.find((t) => t.id !== state.userTeamId && t.managerName === characterId);
   if (bench?.managerName !== undefined)
     return generateVirtualManager(state.seed, bench.managerName);
-  // 타 구단의 단장 — 협상 테이블 건너편의 구단 쪽 (people.md §2)
-  for (const team of state.teams) {
-    if (team.id === state.userTeamId) continue;
-    const director = generateDirector(state.seed, team.id);
-    if (director.characterId === characterId) return director;
-  }
-  /**
-   * **무직 감독** — 어느 벤치에도 없지만 세계에는 있다 (transfer.md §7 「감독 풀」).
-   *
-   * `candidatesOf`에는 없는 겹이다: 무직인 사람은 감독이 이번 턴에 마주칠 사람이
-   * 아니라 후보로 담을 자리가 없다. 그런데 이 함수는 **이력이 이미 실은 카드를
-   * 되찾는** 자리라 규약이 다르다 — 지난 시즌 우리와 말을 섞은 상대 감독이 잘린
-   * 이튿날 그 이력의 화자가 빈 카드가 되면 안 된다.
-   */
-  const unemployed = state.managerPool.find((e) => e.name === characterId);
-  if (unemployed) {
-    return (
-      worldFigureByName(state, unemployed.name) ??
-      generateVirtualManager(state.seed, unemployed.name)
-    );
-  }
   return null;
-}
-
-/**
- * **마주 앉은 남의 구단주** — 감독직 면접이 열려 있는 동안만 있는 사람이다
- * (career.md §5.1). `ownerOf`는 우리 구단의 구단주를 돌려주므로, 이 겹이 없으면
- * 면접의 화자가 지목돼도 되찾을 카드가 없다.
- */
-function interviewOwnerOf(state: GameState): Persona | null {
-  const open = pendingApproach(state);
-  if (open?.topic !== "interview" || open.teamId === undefined) return null;
-  return generateOwner(state.seed, open.teamId);
 }
 
 /**
@@ -210,9 +169,9 @@ export function selectCharacters(
  *
  * | 겹              | 누구                                                                    |
  * | --------------- | ----------------------------------------------------------------------- |
- * | 우리 사람       | 세이브의 페르소나 · 우리 선수단 · 협상 테이블에 앉은 상대 선수          |
- * | 이름난 현역     | 종합 `FAMOUS_PLAYER_OVERALL` 이상 · 시장 전용 리그 시드 명단의 이름     |
- * | 세계 인물 명부  | 타 팀 감독(명부 + 가상) · 에이전트 · 해설 (`data/world-figures.ts` · people.md §2) |
+ * | 우리 사람       | 세이브의 페르소나 · 우리 선수단                                         |
+ * | 이름난 현역     | 종합 `FAMOUS_PLAYER_OVERALL` 이상 · 명단 전용 리그 시드 명단의 이름     |
+ * | 세계 인물 명부  | 타 팀 감독(명부 + 가상) · 해설 (`data/world-figures.ts` · people.md §2)            |
  *
  * 리그 4,000명을 **전부** 훑지 않는 이유는 `speakerRoles`가 사전에 전원을 담지 않는
  * 이유와 같다 (people.md §3 원칙 ③): 남의 팀 3군까지 넣으면 동명이인이 늘어 정작
@@ -232,23 +191,14 @@ function candidatesOf(state: GameState): Candidate[] {
   // 자리가 하나뿐인 인물 — 감독이 매일 보는 사람이라 언제나 `full`이다.
   add(headCoachOf(state), NEAR_OURS, always("full"));
   add(ownerOf(state), NEAR_OURS, always("full"));
-  /**
-   * 면접 자리의 구단주 — 남의 구단 사람이지만 **오늘 감독의 맞은편에 앉아 있다**
-   * (career.md §5.1). 그날의 가장 가까운 사람이라 우리 사람과 같은 겹에 선다.
-   */
-  const interviewer = interviewOwnerOf(state);
-  if (interviewer) add(interviewer, NEAR_OURS, always("full"));
   for (const reporter of reportersOf(state)) add(reporter, NEAR_OURS, always("full"));
   for (const persona of state.personas) {
     if (persona.role !== "player") add(persona, NEAR_OURS, always("full"));
   }
 
   // 선수 — 페르소나는 저장되지 않고 (시드, 선수 id)에서 파생하고, 깊이는 지식 눈금이 정한다
-  const negotiating = new Set(
-    state.negotiations.filter((n) => !CLOSED_NEGOTIATION.has(n.status)).map((n) => n.gamePlayerId),
-  );
   for (const player of state.players) {
-    if (player.teamId !== state.userTeamId && !negotiating.has(player.id)) continue;
+    if (player.teamId !== state.userTeamId) continue;
     add(generatePlayerPersona(state.seed, player), NEAR_OURS, asKnown(player.id));
   }
 
@@ -275,15 +225,10 @@ function candidatesOf(state: GameState): Candidate[] {
 
   // ── 가상 감독 ── 명부가 답하지 않는 벤치 — (시드, 팀, 이름)에서 파생한다
   // (people.md §2). 명부 감독의 벤치는 같은 이름이 위에서 이미 자리를 지켰다.
-  // 감독은 스카우팅으로 알게 되는 상대가 아니라 깊이는 명부와 같이 `full`이다
+  // 깊이는 명부와 같이 `full`이다
   for (const team of state.teams) {
     if (team.id === state.userTeamId || team.managerName === undefined) continue;
     add(generateVirtualManager(state.seed, team.managerName), NEAR_WORLD, always("full"));
-  }
-  // ── 단장 ── 타 구단마다 한 사람 — 협상 테이블 건너편의 구단 쪽 (people.md §2)
-  for (const team of state.teams) {
-    if (team.id === state.userTeamId) continue;
-    add(generateDirector(state.seed, team.id), NEAR_WORLD, always("full"));
   }
 
   return [...byId.values()];
@@ -354,7 +299,7 @@ function hasNewMemories(state: GameState, characterId: string, shown: number | u
  * 인물 사전 — **「이 인물이 지금 필요하다」를 판정해 그 턴에만 싣는다** (people.md §6).
  *
  * 인물 카드에는 두 상태밖에 없었다: 레퍼런스 층에 늘 서 있거나(코치·구단주·기자단)
- * 아예 없거나(선수). 상주하는 쪽은 회견도 협상도 없는 턴에 매번 읽히고, 없는 쪽은
+ * 아예 없거나(선수). 상주하는 쪽은 회견도 없는 턴에 매번 읽히고, 없는 쪽은
  * 같은 선수가 턴마다 다른 사람이 된다. 그 사이가 여기다.
  *
  * ⚠️ **레퍼런스에서 조건부로 넣었다 뺐다 하는 길은 막혀 있다** — 레퍼런스는 캐시
@@ -429,27 +374,13 @@ export const NEAR_OURS = 0;
 export const NEAR_WORLD = 1;
 
 /**
- * 끝난 협상 — 나머지(`open`·`agreed`)는 아직 테이블에 사람이 앉아 있다.
- * `speakerRoles`와 같은 목록을 같은 방향(빼는 쪽)으로 든다 — 상태가 하나 늘어도
- * 화자가 조용히 사라지지 않는다.
- */
-export const CLOSED_NEGOTIATION = new Set<string>([
-  "completed",
-  "rejected",
-  "expired",
-] satisfies Negotiation["status"][]);
-
-/**
  * 지식 눈금 → 인물지의 깊이 (people.md §6).
  *
- * 새 눈금을 만들지 않고 `Knowledge` 다섯을 셋으로 접는다 — `scouted`와 `seen`의
- * 인물지가 같기 때문이다. 주입 기록이 눈금이 아니라 깊이를 남기므로 **같은 판을 두 번
- * 싣지 않고**, 깊이가 실제로 달라졌을 때만 다시 싣는다.
+ * 주입 기록이 눈금이 아니라 깊이를 남기므로 **같은 판을 두 번 싣지 않고**, 깊이가
+ * 실제로 달라졌을 때만 다시 싣는다.
  */
 const DEPTH_OF_KNOWLEDGE: Record<Knowledge, CharacterDepth> = {
   own: "full",
-  adapting: "full",
-  scouted: "rumour",
   seen: "outline",
   rumoured: "rumour",
 };

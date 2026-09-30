@@ -13,8 +13,8 @@ export const NarrativeKindSchema = z.enum([
   "match",
   /** 시즌 결산·우승·순위 */
   "season",
-  /** 이적·계약 */
-  "transfer",
+  /** 계약·선수단의 들고 남 */
+  "contract",
   /** GM의 `record_incident` — 하루 한도가 걸리는 유일한 갈래 (people.md §6) */
   "incident",
   /** 그 밖의 호출 결과·tick 사건 */

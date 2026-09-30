@@ -6,7 +6,6 @@ import {
   generateYouthPlayer,
   isClubTeam,
   transitionSeason,
-  youthFreeAgents,
 } from "@story-fm/engine";
 import type { GameState } from "@story-fm/engine";
 import { createTestGame } from "../test/helpers";
@@ -43,10 +42,9 @@ function quantile(sorted: number[], p: number): number {
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : Number.NaN);
 
-/** 이 여름에 태어난 사람 전부 — AI가 그 자리에서 계약한 반 · 우리 후보 · 방출반 */
+/** 이 여름에 태어난 사람 전부 — AI가 그 자리에서 계약한 반 · 우리 후보 */
 function intakeOfSummer(state: GameState): { overall: number; potential: number; age: number }[] {
   const beforeIds = new Set(state.players.map((p) => p.id));
-  const beforeFree = new Set(youthFreeAgents(state).map((p) => p.id));
   /**
    * 예고를 함께 굴린다 — 전환은 집행일 뿐이고, 은퇴 수가 곧 그 구단이 채우는 수다
    * (season.md §6). 빼면 인테이크가 최소 인원까지 마른다.
@@ -56,7 +54,6 @@ function intakeOfSummer(state: GameState): { overall: number; potential: number;
   const born = [
     ...state.players.filter((p) => !beforeIds.has(p.id)),
     ...state.youthCandidates.map((c) => c.player),
-    ...youthFreeAgents(state).filter((p) => !beforeFree.has(p.id)),
   ];
   return born.map((p) => ({
     overall: p.attributes.overall,

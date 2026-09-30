@@ -26,7 +26,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
  * 몇 분이 세 배가 된다.
  */
 
-/** 리그전을 굴리지 않는 리그 — 매치데이 보정이 붙는 자리 (finance.md §9.5) */
+/** 리그전을 굴리지 않는 리그 — 매치데이 보정이 붙는 자리 (finance.md §5.1) */
 const SECOND_TIERS = ["championship", "serieb", "bundesliga2", "segunda"];
 
 /**
@@ -81,9 +81,6 @@ for (const seed of [42, 7]) {
         "연 현금 순증": sum((r) => r.cashNet),
         "연 수입": sum((r) => r.incomeTotal),
         "연 지출": sum((r) => r.expenseTotal),
-        "연 상각": sum((r) =>
-          r.expense.filter((l) => l.category === "amortisation").reduce((a, l) => a + l.amount, 0),
-        ),
         "경기 달 수": inSeason.length,
         "경기 달 급여 비중 (최저)": ratios.length ? Math.min(...ratios) : Number.NaN,
         "경기 달 급여 비중 (최고)": ratios.length ? Math.max(...ratios) : Number.NaN,

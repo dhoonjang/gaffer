@@ -1,7 +1,5 @@
 import {
   buildOfficeViews,
-  negotiationKindKo,
-  playerName,
   speakerRoles,
   type SpeakerRole,
   teamNameIn,
@@ -14,7 +12,7 @@ import {
   type ChatTurn,
 } from "@story-fm/engine";
 import { STALLED_CLOCK_TURNS } from "@story-fm/agents";
-import { proposalInputOf, type ClubColours, type Negotiation } from "@story-fm/domain";
+import type { ClubColours } from "@story-fm/domain";
 import { buildPlayerNameIndex, playerIdsIn } from "../../domains/common/lib/player-names";
 
 /** 응답에 실을 장부 — 라우트가 **자기가 바꾼 것만** 고른다 */
@@ -80,25 +78,6 @@ export interface GamePayload {
    * 것은 리포트가 갖는다 (match.md §8).
    */
   matchLogs: Record<string, MatchLogHead>;
-  /**
-   * 접힌 협상 기록의 머리글 — `negotiationId` → 선수 · 갈래 · 결과 · 날짜
-   * (transfer.md §12-2 · design-system.md §7-1). 경기 기록과 같은 자리다: 방 안의 턴이
-   * 끝난 뒤 메인 채팅에서 한 장으로 접히고, 그 머리가 무엇의 기록인지 말한다.
-   */
-  negotiationLogs: Record<string, NegotiationLogHead>;
-}
-
-/**
- * 접힌 협상 하나의 **머리 사실** — 문장이 아니라 값이다. 결과의 낱말(합의·결렬)은
- * 화면의 어휘고, 여기 실리는 것은 장부의 `status`다.
- */
-export interface NegotiationLogHead {
-  playerName: string;
-  /** 갈래의 이름 — 방 뷰의 `kindLabel`과 같은 함수에서 온다 (`negotiationKindKo`) */
-  kindLabel: string;
-  status: Negotiation["status"];
-  /** 협상이 열린 날 */
-  date: string;
 }
 
 /** 접힌 경기 머리가 아는 한 팀 — 문장과 구단 색의 열쇠까지 (design-system.md §2) */
@@ -140,7 +119,7 @@ const ID_LIKE = /[a-z][a-z0-9]*(?:-[a-z0-9]+)+/g;
  *
  * 이 사전은 이제 **손잡이가 설 수 있는 이름의 폭**이기도 하다 (player.md §9.5) —
  * 화면은 여기 있는 이름만 누를 수 있게 잇는다. 그래서 이야기가 **이름으로** 부른
- * 남의 선수도 담는다: 이적 대상도 상대 팀 선수도 id 없이 산문에만 서므로, 위의
+ * 남의 선수도 담는다: 상대 팀 선수도 이름난 현역도 id 없이 산문에만 서므로, 위의
  * 토큰 훑기로는 영영 잡히지 않는다.
  *
  * 폭을 넓히되 짐은 그대로다 — 전 리그로 색인을 **한 번** 지어 대화가 부른 id만
@@ -174,10 +153,6 @@ function namesForChat(state: GameState): Record<string, string> {
         chatNames.mentions.delete(chatNames.mentions.keys().next().value!);
     }
     for (const id of ids) mentioned.add(id);
-    for (const call of turn.toolCalls) {
-      const proposal = proposalInputOf(call);
-      if (proposal) mentioned.add(proposal.playerId);
-    }
   }
   return Object.fromEntries(
     state.players
@@ -191,14 +166,13 @@ function namesForChat(state: GameState): Record<string, string> {
  *
  * 스킬 카탈로그의 이름만 남기면 코어가 남기는 기록이 함께 사라진다 — 경기 마감
  * (`finalize_match`)의 "경기 종료"가 그것이라, 90분이 무엇으로 끝났는지가 어느
- * 화면에도 서지 않았다. 무엇이 칩으로 설 만한 일인지는 그것을 남긴 코어가 알므로
- * 제안 폼의 입력은 칩 대신 첨부 카드로 표시하므로 남긴다. 저장된 데이터는 건드리지
+ * 화면에도 서지 않았다. 무엇이 칩으로 설 만한 일인지는 그것을 남긴 코어가 안다. 저장된 데이터는 건드리지
  * 않고 **보여줄 때만** 거른다.
  */
 export function visibleChat(chat: readonly ChatTurn[]): ChatTurn[] {
   return chat.map((turn) => {
     if (turn.toolCalls.length === 0) return turn;
-    const kept = turn.toolCalls.filter((c) => c.silent !== true || proposalInputOf(c) !== null);
+    const kept = turn.toolCalls.filter((c) => c.silent !== true);
     return kept.length === turn.toolCalls.length ? turn : { ...turn, toolCalls: kept };
   });
 }
@@ -250,30 +224,6 @@ function matchLogsOf(state: GameState): GamePayload["matchLogs"] {
 }
 
 /**
- * 채팅에 접혀 있는 협상들의 머리글 — 이력에 등장한 `negotiationId`만 만든다.
- * 경기 머리(`matchLogsOf`)와 같은 규약이다: 값만 싣고 문장은 화면이 조립한다.
- */
-function negotiationLogsOf(state: GameState): GamePayload["negotiationLogs"] {
-  const ids = new Set(
-    state.chat.map((t) => t.negotiationId).filter((id): id is string => typeof id === "string"),
-  );
-  const logs: GamePayload["negotiationLogs"] = {};
-  if (ids.size === 0) return logs;
-  const byId = new Map(state.negotiations.map((n) => [n.id, n] as const));
-  for (const id of ids) {
-    const n = byId.get(id);
-    if (!n) continue;
-    logs[id] = {
-      playerName: playerName(state, n.gamePlayerId),
-      kindLabel: negotiationKindKo(n),
-      status: n.status,
-      date: n.openedOn,
-    };
-  }
-  return logs;
-}
-
-/**
  * 상태를 응답으로 — **뷰를 고르면 그 뷰만 실은 조각이 나간다.**
  *
  * 고르지 않으면 전부다. 시간이 흐르는 길(턴)은 무엇이든 바꿀 수 있어 통째로 보내야
@@ -310,6 +260,5 @@ export function toPayload(state: GameState, only?: readonly ViewKey[]): GamePayl
       ? { clockStalled: state.sceneHeaderMisses }
       : {}),
     matchLogs: matchLogsOf(state),
-    negotiationLogs: negotiationLogsOf(state),
   };
 }

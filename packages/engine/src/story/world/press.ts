@@ -14,14 +14,10 @@ import {
   type MatchRecord,
   type PressFact,
   naturalPositionOf,
-  isNaturalAt,
   type PressConference,
-  formatMoney,
-  type BoardExpectationCode,
   ageOf,
   RENEWAL_NOTICE_DAYS,
   type Incident,
-  interestStageRank,
   type CallUp,
   capsOf,
   isSymbolicNumber,
@@ -42,7 +38,6 @@ import { pick, makeRng } from "../../common/core/rng";
 import { leagueOfTeamIn } from "../../common/core/league-membership";
 import { managerCareerTotals } from "../../common/views/manager-career";
 import { numberLineageOf } from "../../common/players/numbers";
-import { SQUAD_CORE_SIZE } from "../../common/players/squad-depth";
 import { computeStandings } from "../../common/views/standings";
 import { diffDays, addDays } from "../../common/core/dates";
 import { derbyOf } from "../../common/data/derbies";
@@ -139,18 +134,6 @@ export function isSeasonFinale(state: GameState, match: MatchRecord): boolean {
 }
 
 /**
- * 이 영입에 자리를 위협받는 선수들 — 같은 자리를 자기 자리로 삼던 1군 자원.
- * 기자가 "누가 밀려납니까"를 물으려면 그 이름이 세계에 있어야 한다.
- */
-export function squeezedBy(state: GameState, arrival: GamePlayer): GamePlayer[] {
-  const pos = naturalPositionOf(arrival).position;
-  return playersOf(state, state.userTeamId)
-    .filter((p) => p.id !== arrival.id && p.squadLevel === "first" && isNaturalAt(p, pos))
-    .sort((a, b) => b.attributes.overall - a.attributes.overall)
-    .slice(0, RIVAL_NAMES_SHOWN);
-}
-
-/**
  * **번호를 물려받았다** — 계보가 있는 번호를 지금 달고 있을 때만 (player.md §1.1).
  *
  * 앞서 아무도 뛰지 않은 번호에는 물려받을 것이 없어 카드가 서지 않는다 — 없는 계보를
@@ -174,69 +157,6 @@ export function numberInheritedFact(state: GameState, player: GamePlayer): Press
 }
 
 /**
- * 이적 회견 — **큰 이동에만** 붙는다.
- * 백업 자원의 임대까지 회견이 열리면 회견이 흔해져 무게를 잃는다.
- */
-export function buildTransferPress(
-  state: GameState,
-  input: { playerId: string; kind: "in" | "out"; fee: number },
-): PressConference | null {
-  const player = state.players.find((p) => p.id === input.playerId);
-  if (!player) return null;
-  /**
-   * 핵심 자원인가 — **방향과 무관하게** 센다. 매각이 확정되면 그 선수는 이미
-   * 우리 명단에 없으므로 "명단 상위 14명"으로 물으면 팔린 순간 아무도 핵심이 아니다.
-   * 대신 우리 스쿼드에서 그보다 나은 선수가 몇인지를 센다.
-   */
-  if (betterThanInSquad(state, player) >= SQUAD_CORE_SIZE && input.fee < BIG_FEE) return null;
-
-  const pos = naturalPositionOf(player).position;
-  const facts: PressFact[] =
-    input.kind === "in"
-      ? [
-          {
-            kind: "arrival",
-            data: { name: player.name, values: { fee: input.fee }, tags: ["signed", pos] },
-            about: player.id,
-            sharp: false,
-          },
-          /**
-           * 밀려나는 선수 — 영입은 언제나 누군가의 자리를 뺏는다. 이름을 코어가
-           * 짚어 줘야 기자가 없는 선수를 지어내지 않는다.
-           */
-          ...squeezedBy(state, player).map((p): PressFact => ({
-            kind: "squeezed",
-            data: { name: p.name, tags: [pos] },
-            about: p.id,
-            sharp: true,
-          })),
-          // 새 셔츠가 누구의 것이었나 — 계보가 없는 번호에는 서지 않는다
-          ...[numberInheritedFact(state, player)].filter((f): f is PressFact => f !== null),
-        ]
-      : [
-          {
-            kind: "departure",
-            data: { name: player.name, values: { fee: input.fee }, tags: ["sold", pos] },
-            about: player.id,
-            sharp: true,
-          },
-        ];
-
-  return {
-    id: `press-transfer-${input.playerId}-${state.date}`,
-    date: state.date,
-    trigger: "transfer",
-    reporterId: reporterFor(state, "transfer"),
-    context:
-      `${player.name} ${input.kind === "in" ? "영입" : "매각"}` +
-      (input.fee > 0 ? ` · ${formatMoney(input.fee)}` : ""),
-    facts,
-    status: "pending",
-    weight: 2,
-  };
-}
-
-/**
  * 우리 스쿼드에서 그보다 나은 선수가 몇인가 — **명단 순위가 아니라 스쿼드 대비다.**
  * 나간 선수는 이미 우리 명단에 없으므로 "상위 14명 안"으로 물으면 떠난 순간
  * 아무도 핵심이 아니다 (people.md §4).
@@ -250,79 +170,13 @@ export function betterThanInSquad(state: GameState, player: GamePlayer): number 
   ).length;
 }
 
-/**
- * 계약 해지 회견 — **주장이었거나 핵심 자원이었을 때만.**
- * 백업 정리까지 회견이 붙으면 회견이 흔해져 무게를 잃는다 (transfer.md §2).
- */
-export function buildDeparturePress(
-  state: GameState,
-  input: { playerId: string; severance: number; wasCaptain: boolean },
-): PressConference | null {
-  const player = state.players.find((p) => p.id === input.playerId);
-  if (!player) return null;
-  if (!input.wasCaptain && betterThanInSquad(state, player) >= SQUAD_CORE_SIZE) return null;
-
-  const pos = naturalPositionOf(player).position;
-  return {
-    id: `press-release-${player.id}-${state.date}`,
-    date: state.date,
-    trigger: "transfer",
-    reporterId: reporterFor(state, "transfer"),
-    context: `${player.name} 계약 해지`,
-    facts: [
-      {
-        kind: "departure",
-        data: {
-          name: player.name,
-          values: { severance: input.severance },
-          tags: ["released", pos],
-        },
-        about: player.id,
-        sharp: true,
-      },
-    ],
-    status: "pending",
-    weight: 2,
-  };
-}
-
 // ── 부임 회견 (career.md §5.1) ─────────────────────────
 
 /**
- * 부임 회견 — **부임한 날의 자리.** 새 게임의 첫날(`createGame`)과 이직·부임
- * (`acceptManagerOffer`)이 같은 문을 지난다 (people.md §4).
- *
- * 앞 구단의 열린 회견은 부임이 이미 `expired`로 닫은 뒤라(career.md §5.1) 이 자리가
- * 그것을 거절로 읽지 않는다 — 순서가 뒤집히면 이직 하나로 언론 평판이 깎인다.
- *
- * ⚠️ **이적 예산의 숫자는 이 자리에 서지 않는다.** 회견에서 밝힌 금액은 약속이 되고,
- * 예산은 감독이 답할 사실이 아니라 감독이 쓰는 값이다 — 계약과 함께 온 약속만
- * 계약 카드에 붙는다.
- *
- * @param predecessor 전임이 물러난 자리 — 제안이 들고 온 사실이다. 없으면 카드도 없다.
+ * 부임 회견 — **부임한 날의 자리.** 새 게임의 첫날(`createGame`)이 연다 (people.md §4).
  */
-export function buildAppointmentPress(
-  state: GameState,
-  predecessor?: { position?: number; target: number; expectationCode: BoardExpectationCode },
-): PressConference {
-  const facts: PressFact[] = [];
-  if (predecessor) {
-    facts.push({
-      kind: "sacking",
-      data: {
-        refId: state.userTeamId,
-        name: teamNameIn(state, state.userTeamId),
-        values: {
-          target: predecessor.target,
-          ...(predecessor.position === undefined ? {} : { position: predecessor.position }),
-        },
-        tags: ["predecessor", predecessor.expectationCode],
-      },
-      about: null,
-      sharp: false,
-    });
-  }
-  facts.push(...boardFacts(state));
+export function buildAppointmentPress(state: GameState): PressConference {
+  const facts: PressFact[] = [...boardFacts(state)];
   /**
    * 지금 선 자리는 **시즌 중 부임일 때만**이다 — 한 경기도 안 치른 구단의 "1위"는
    * 사실이 아니라 알파벳 순이다.
@@ -417,93 +271,7 @@ export function loadManagerContract(state: GameState, conference: PressConferenc
   conference.weight = Math.max(conference.weight, 2);
 }
 
-/**
- * 감독의 거취가 밖으로 향한 사실 한 장 — 없으면 `null` (career.md §5.1).
- *
- * **열린 접근이 먼저다.** 지금 답을 기다리는 제안이 있는 것이 지난주에 두드린 것보다
- * 무거운 사실이고, 기자가 먼저 묻는 것도 그쪽이다. 카드가 드는 것은 갈래와 구단
- * 하나뿐 — 감독이 무슨 생각으로 두드렸는지는 카드가 아는 사실이 아니다.
- */
-export function jobLinkFactOf(state: GameState): PressFact | null {
-  const card = (code: "approach" | "knock", teamId: string): PressFact => ({
-    kind: "job-link",
-    data: { name: teamNameIn(state, teamId), refId: teamId, tags: [code] },
-    about: null,
-    // 감독의 자리를 두고 묻는 자리다 — 날 서지 않으면 기자가 물을 이유가 없다
-    sharp: true,
-  });
-
-  const approach = state.managerOffers.find(
-    (o) => o.via === "poach" && o.status === "open" && o.expiresOn >= state.date,
-  );
-  if (approach) return card("approach", approach.teamId);
-
-  /**
-   * 재직 중에 선 면접만 남는다 — 부임이 `state.approaches`를 비우므로(career.md §5.1)
-   * 여기 남아 있는 면접은 지금 임기에 감독이 두드려 연 자리뿐이다.
-   */
-  const knock = state.approaches
-    .filter(
-      (a) =>
-        a.topic === "interview" &&
-        a.teamId !== undefined &&
-        diffDays(a.date, state.date) >= 0 &&
-        diffDays(a.date, state.date) <= JOB_LINK_PRESS_DAYS,
-    )
-    .reduce<{ date: string; teamId?: string } | null>(
-      (latest, a) => (latest === null || a.date > latest.date ? a : latest),
-      null,
-    );
-  return knock?.teamId === undefined ? null : card("knock", knock.teamId);
-}
-
-/**
- * **재직 중인 감독의 거취도 사실이다** (career.md §5.1 · people.md §4).
- *
- * 무직이면 서지 않는다 — 무직 감독은 회견에 서지 않고, 그에게 거취는 사실이 아니라
- * 상태다.
- */
-export function loadJobLink(state: GameState, conference: PressConference): void {
-  if (state.dismissal) return;
-  const fact = jobLinkFactOf(state);
-  if (!fact) return;
-  conference.facts.push(fact);
-  conference.weight = Math.max(conference.weight, 2);
-}
-
 // ── 라이벌의 경질 (people.md §4) ───────────────────────
-
-/**
- * 라이벌 구단이 감독을 잘랐다 — **유출과 같은 문을 지난다.** 다음에 열리는 회견이
- * 싣고 대기열을 비운다. 자리를 따로 열지 않는 이유도 같다: 회견은 이미 경기마다 열린다.
- *
- * 날 선 자리가 아니다 — 남의 집 벤치는 감독을 몰아세우는 사실이 아니라 기자가
- * 곁들여 묻는 사실이다.
- */
-export function loadSackings(state: GameState, conference: PressConference): void {
-  const rows = state.pressSackings;
-  if (rows.length === 0) return;
-  for (const row of rows) {
-    // 이직하면 앞 구단의 라이벌은 라이벌이 아니다 — 남의 더비를 새 구단 기자가 묻지 않는다
-    if (!derbyOf(state.userTeamId, row.teamId)) continue;
-    conference.facts.push({
-      kind: "sacking",
-      data: {
-        refId: row.teamId,
-        name: teamNameIn(state, row.teamId),
-        values: {
-          days: diffDays(row.date, state.date),
-          ...(row.position === undefined ? {} : { position: row.position }),
-        },
-        tags: ["rival"],
-      },
-      about: null,
-      sharp: false,
-    });
-  }
-  // 실렸든 아니든 이 자리를 지나면 없다 — 다음 회견이 같은 사실을 다시 묻지 않는다
-  state.pressSackings = [];
-}
 
 /**
  * 방치된 불만이 신문에 실렸다 — **다음에 열리는 회견이 그것을 싣는다** (people.md §4).
@@ -582,88 +350,7 @@ export function loadIncidents(state: GameState, conference: PressConference): vo
   }
 }
 
-// ── 이적 요청 ──────────────────────────────────────────────────
-
-/**
- * 선수가 나가겠다고 말했다 — **유출과 같은 문을 지난다** (people.md §4 ·
- * transfer.md §1-1). 요청이 선 날과 감독이 답한 날, 다음에 열리는 회견이 그 사실을
- * sharp로 싣고 그 자리의 무게는 최소 2가 된다.
- *
- * ⚠️ **요청 장부는 유출과 달리 소비되지 않는다.** 실어 간 자리(`pressedOn`)만
- * 적어 같은 사실을 두 번 묻지 않게 하고, 줄 자체는 원인이 사라질 때까지 남는다 —
- * 감독이 답하면 그 칸이 비워져 답한 사실이 다음 회견에 다시 실린다.
- */
-export function loadTransferRequests(state: GameState, conference: PressConference): void {
-  let loaded = false;
-  for (const request of state.transferRequests) {
-    if (request.pressedOn !== undefined) continue;
-    const player = playerById(state, request.gamePlayerId);
-    // 떠난 선수의 요청은 조용히 건너뛴다 — 우리 라커룸에 없는 사람에게 물을 자리가 아니다
-    if (!player || player.teamId !== state.userTeamId) continue;
-    conference.facts.push({
-      kind: "transfer-request",
-      data: {
-        name: player.name,
-        values: { days: diffDays(request.since, state.date) },
-        // 둘째 태그가 감독의 답 — 결정(accept·refuse)이거나, 면담으로만 답한 `heard`
-        tags: [
-          request.reason,
-          ...(request.answer
-            ? [request.answer]
-            : request.answeredOn !== undefined
-              ? ["heard"]
-              : []),
-        ],
-      },
-      about: player.id,
-      sharp: true,
-    });
-    request.pressedOn = state.date;
-    loaded = true;
-  }
-  if (loaded) conference.weight = Math.max(conference.weight, 2);
-}
-
-/**
- * 타 구단의 관심이 문의 이상으로 올랐다 — **유출·이적 요청과 같은 문을 지난다**
- * (people.md §4 · transfer.md §1-2).
- *
- * ⚠️ **관심 장부는 요청과 같이 소비되지 않는다.** 실어 간 자리(`pressedOn`)만
- * 적어 같은 사실을 두 번 묻지 않게 하고, 줄 자체는 사다리가 걷힐 때까지 남는다 —
- * 칸이 오르면 `market/interest.ts`가 그 자리를 비워, 「보고 있다」와 「값을 부를
- * 참이다」가 각각 한 번씩 회견에 선다.
- */
-export function loadRumours(state: GameState, conference: PressConference): void {
-  const rows = state.interests
-    .filter((row) => row.stage !== "watching" && row.pressedOn === undefined)
-    // 우리 선수의 줄만 회견에 선다 — 떠난 선수도, 우리가 노리는 남의 선수도 물을 자리가 아니다
-    .filter((row) => playerById(state, row.gamePlayerId)?.teamId === state.userTeamId)
-    // 위 칸이 먼저다 — 값을 부를 참인 구단이 문의만 한 구단에 밀리지 않는다.
-    // 같은 칸끼리는 id로 세운다: 같은 날 같은 세이브면 같은 두 장이어야 한다
-    .sort((a, b) => {
-      const byStage = interestStageRank(b.stage) - interestStageRank(a.stage);
-      if (byStage !== 0) return byStage;
-      if (a.gamePlayerId !== b.gamePlayerId) return a.gamePlayerId < b.gamePlayerId ? -1 : 1;
-      return a.teamId < b.teamId ? -1 : 1;
-    })
-    .slice(0, RUMOURS_PER_CONFERENCE);
-  if (rows.length === 0) return;
-  for (const row of rows) {
-    conference.facts.push({
-      kind: "rumour",
-      data: {
-        name: teamNameIn(state, row.teamId),
-        refId: row.teamId,
-        values: { days: diffDays(row.since, state.date) },
-        tags: [row.stage],
-      },
-      about: row.gamePlayerId,
-      sharp: true,
-    });
-    row.pressedOn = state.date;
-  }
-  conference.weight = Math.max(conference.weight, 2);
-}
+// ── 대표팀 소집 — 우리 선수 ───────────────────────────────────
 
 /** 그 창에서 우리 선수의 소집 행 — 소집 중에는 세계 전체의 행이 열려 있다 */
 export function ourCallUps(
@@ -859,45 +546,6 @@ export function buildDerbyPress(
 }
 
 /**
- * 복귀전 전야 — **감독이 떠난 구단과 다시 만나는 날** (people.md §4).
- *
- * 무게 2인 것은 더비 전야와 같은 이유다: 결과와 무관하게 그 사람의 자리다.
- * 자리를 여는 것은 **감독의 복귀전뿐이고**, 선수의 친정 대결은 카드로만 얹힌다 —
- * 스쿼드 스물다섯 명의 옛 구단을 전부 자리로 열면 리그의 절반쯤 되는 전야에 회견이
- * 열려 회견 하나하나가 무게를 잃는다.
- */
-export function buildFormerClubPress(
-  state: GameState,
-  match: MatchRecord,
-  input: { opponentId: string; opponent: string; facts: PressFact[] },
-): PressConference {
-  const facts: PressFact[] = [...input.facts];
-  // 시즌 첫 경기면 아직 센 경기가 없다 — 없는 폼을 "최근 0경기"로 쓰지 않는다
-  const recent = recentOutcomes(state, state.userTeamId, FORM_WINDOW);
-  if (recent.length > 0) {
-    facts.push({
-      kind: "result",
-      data: { values: { matches: recent.length }, tags: ["recent", ...recent] },
-      about: null,
-      sharp: false,
-    });
-  }
-  const place = placeFact(state, input.opponentId, input.opponent);
-  if (place) facts.push(place);
-
-  return {
-    id: `press-former-${match.id}`,
-    date: state.date,
-    trigger: "former-club",
-    reporterId: reporterFor(state, "former-club"),
-    context: `복귀전 전야 · ${input.opponent}전`,
-    facts,
-    status: "pending",
-    weight: weightOf("former-club", false),
-  };
-}
-
-/**
  * 이번 여름 감독이 **새로 물려준 상징 번호** — 없으면 카드도 없다 (player.md §1.1).
  *
  * 프리시즌 이후 번호가 움직인 사람만 본다(`squadNumberOn`) — 시즌 내내 같은 셔츠를
@@ -913,18 +561,6 @@ export function summerNumberInheritance(state: GameState): PressFact | null {
     if (fact) return fact;
   }
   return null;
-}
-
-/** 이번 시즌 우리가 가장 크게 지른 영입 — 없으면 없는 대로 (이적료 0은 지른 것이 아니다) */
-export function biggestSigning(state: GameState): { player: GamePlayer; fee: number } | null {
-  let best: { player: GamePlayer; fee: number } | null = null;
-  for (const t of state.transfers) {
-    if (t.toTeamId !== state.userTeamId || t.date < state.calendar.preseasonStart) continue;
-    if (t.fee <= 0 || (best && t.fee <= best.fee)) continue;
-    const player = playerById(state, t.gamePlayerId);
-    if (player) best = { player, fee: t.fee };
-  }
-  return best;
 }
 
 /** 이 경기가 이번 시즌 우리 첫 리그 경기인가 */
@@ -1026,11 +662,10 @@ export function declinePendingPress(state: GameState, digest?: TickSink): void {
 }
 
 /**
- * 열린 회견을 **대가 없이** 닫는다 — 이직이 유일한 자리다 (career.md §5.1).
+ * 열린 회견을 **대가 없이** 닫는다 — 커리어가 끝난 날이 유일한 자리다 (career.md §5.1).
  *
- * `openPress`의 방치와 갈리는 지점: 감독이 답하지 않은 것이 아니라 **물을 구단이
- * 없어진 것**이다. 그대로 두면 새 구단의 첫 회견이 앞 구단의 자리를 거절로 닫아
- * 이유 없이 언론 평판이 깎인다.
+ * `openPress`의 방치와 갈리는 지점: 감독이 답하지 않은 것이 아니라 **물을 감독이
+ * 없어진 것**이다.
  */
 export function expirePendingPress(state: GameState): void {
   const open = pendingPress(state);
@@ -1325,11 +960,9 @@ export const KNOCKOUT_STAGES: readonly MatchStage[] = [
 export function weightOf(trigger: PressTrigger, sharp: boolean, stage?: MatchStage): 1 | 2 | 3 {
   if (trigger === "pressure" || trigger === "season-end") return 3;
   if (stage === "final") return 3;
-  if (trigger === "transfer" || trigger === "appointment") return 2;
+  if (trigger === "appointment") return 2;
   // 작별은 결과와 무관하게 구단의 자리다 — 더비 전야가 무게 2인 것과 같은 이유
   if (trigger === "farewell") return 2;
-  // 복귀전도 같다 — 결과와 무관하게 그 사람의 자리다
-  if (trigger === "former-club") return 2;
   if (stage !== undefined && KNOCKOUT_STAGES.includes(stage)) return 2;
   return sharp ? 2 : 1;
 }
@@ -1337,8 +970,7 @@ export function weightOf(trigger: PressTrigger, sharp: boolean, stage?: MatchSta
 /**
  * 이 자리를 여는 기자 — **누가 묻는가는 자리의 성격이 정한다.**
  *
- * 경기 뒤는 장면과 전술을 캐는 **전국지**, 이적은 사람 사이를 캐는 **타블로이드**,
- * 무승·압박처럼 구단의 내일을 묻는 자리는 팬을 대신하는 **지역지**다. 같은 회견은
+ * 경기 뒤는 장면과 전술을 캐는 **전국지**, 무승·압박처럼 구단의 내일을 묻는 자리는 팬을 대신하는 **지역지**다. 같은 회견은
  * 언제나 같은 기자가 물어야 "저 친구는 늘 라커룸부터 캔다"가 성립한다.
  *
  * ⚠️ 배열 인덱스다 — `reportersOf`가 주는 순서는 언제나 `REPORTER_ARCHETYPES`의
@@ -1347,12 +979,9 @@ export function weightOf(trigger: PressTrigger, sharp: boolean, stage?: MatchSta
 export const REPORTER_AT: Record<PressTrigger, number> = {
   pressure: 0,
   match: 1,
-  transfer: 2,
   // 전야 회견은 팬을 대신해 묻는 자리다 — 개막의 기대도 더비의 정서도 지역지의 것
   opening: 0,
   derby: 0,
-  // 복귀전도 전야의 자리다 — 감독의 지난 자리를 묻는 것은 팬을 대신하는 지역지의 몫
-  "former-club": 0,
   // 한 사람의 마지막 홈경기는 구단과 팬의 자리다 — 전술도 뒷이야기도 아니다
   farewell: 0,
   // 부임도 시즌 최종전도 구단의 내일을 묻는 자리다 — 팬을 대신하는 지역지의 몫
@@ -1417,9 +1046,6 @@ export const AWARD_FACTS_SHOWN = 2;
 /** 같은 자리를 두고 다투는 선수를 이름으로 몇까지 넘기는가 */
 export const RIVAL_NAMES_SHOWN = 2;
 
-/** 회견이 열릴 만한 이적료 — 이 아래는 1군 상위 자원일 때만 */
-export const BIG_FEE = 25_000_000;
-
 /** 계약 연수를 되짚는 자 — 체결일과 만료일 사이의 해 (`contractUntil`의 역) */
 export const DAYS_PER_YEAR = 365;
 
@@ -1430,14 +1056,6 @@ export function renewalCode(contract: ManagerContract): string {
 }
 
 // ── 감독의 거취가 밖으로 향했다 (career.md §5.1) ───────
-
-/**
- * **노크가 뉴스로 사는 날 수** — 두드린 그날부터 이레.
- *
- * 노크는 지나가는 사실이라 창이 필요하고, 접근은 **제안이 열려 있는 동안**
- * 서 있는 사실이라 창이 없다.
- */
-export const JOB_LINK_PRESS_DAYS = 7;
 
 // ── 언론 유출 ──────────────────────────────────────────────────
 
@@ -1460,14 +1078,6 @@ export const PRESS_INCIDENT_KINDS: ReadonlySet<IncidentKind> = new Set([
   "public-praise",
   "public-criticism",
 ]);
-
-// ── 이적 루머 ──────────────────────────────────────────────────
-
-/**
- * 한 회견에 오르는 루머 카드 수 — 셋을 실으면 그 자리가 이적 시장 브리핑이 된다
- * (people.md §4).
- */
-export const RUMOURS_PER_CONFERENCE = 2;
 
 // ── 대표팀 소집 (competition.md §5-1) ──────────────────────────
 

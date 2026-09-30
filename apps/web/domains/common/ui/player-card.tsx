@@ -81,8 +81,6 @@ export function PlayerCardProvider({
   playerNames,
   stamp,
   inMatch,
-  onPropose,
-  renderReports,
   children,
 }: {
   gameId: string;
@@ -91,8 +89,6 @@ export function PlayerCardProvider({
   stamp: string;
   /** 경기가 굴러가는 중인가 — 심경 한 줄은 지난 경기까지의 것이라 그동안 서지 않는다 */
   inMatch: boolean;
-  onPropose?: (playerId: string) => void;
-  renderReports?: (card: PlayerCardView) => ReactNode;
   children: ReactNode;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -108,8 +104,6 @@ export function PlayerCardProvider({
           playerId={openId}
           stamp={stamp}
           inMatch={inMatch}
-          renderReports={renderReports}
-          onPropose={onPropose}
           onClose={() => setOpenId(null)}
         />
       )}
@@ -193,23 +187,18 @@ function PlayerCardOverlay({
   playerId,
   stamp,
   inMatch,
-  onPropose,
-  renderReports,
   onClose,
 }: {
   gameId: string;
   playerId: string;
   stamp: string;
   inMatch: boolean;
-  onPropose?: (playerId: string) => void;
-  renderReports?: (card: PlayerCardView) => ReactNode;
   onClose: () => void;
 }) {
   const [card, setCard] = useState<PlayerCardView | null>(() =>
     cachedCard(gameId, playerId, stamp),
   );
   const [error, setError] = useState<string | null>(null);
-  /** 제안 폼을 여는 자리 — 감싸는 무대가 없으면(테스트·관리자 화면) 손잡이도 없다 */
 
   useEffect(() => {
     const hit = cachedCard(gameId, playerId, stamp);
@@ -260,12 +249,8 @@ function PlayerCardOverlay({
             <span className="skel pc-skel short" aria-hidden />
           </div>
         ) : (
-          <PlayerCardBody card={card} inMatch={inMatch} renderReports={renderReports} />
+          <PlayerCardBody card={card} inMatch={inMatch} />
         )}
-        {/**
-         * **제안** — 부를 명령이 있는 선수에게만 선다 (transfer.md §12-3). 조작이 뜻을 갖지
-         * 않는 선수(무소속·빌려 온 선수)에게는 잠긴 버튼조차 두지 않는다 (design-system.md §1).
-         */}
         <div className="pc-actions">
           <button
             className="pc-close"
@@ -275,19 +260,6 @@ function PlayerCardOverlay({
           >
             닫기
           </button>
-          {onPropose !== undefined && card?.proposal != null && (
-            <button
-              className="pc-propose"
-              type="button"
-              onClick={() => {
-                onClose();
-                onPropose(card.id);
-              }}
-              data-testid="player-card-propose"
-            >
-              제안
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -310,15 +282,7 @@ function Fact({ label, title, children }: { label: string; title?: string; child
  * 남의 선수에게 없는 칸은 아예 서지 않는다(`card.ours`가 null이다) — 「모름」으로
  * 채우면 없는 자리를 있는 것처럼 그린다 (player.md §9.5).
  */
-function PlayerCardBody({
-  card,
-  inMatch,
-  renderReports,
-}: {
-  card: PlayerCardView;
-  inMatch: boolean;
-  renderReports?: (card: PlayerCardView) => ReactNode;
-}) {
+function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: boolean }) {
   const ours = card.ours;
   const season = card.season;
   /**
@@ -349,8 +313,6 @@ function PlayerCardBody({
         </span>
       </header>
 
-      {renderReports?.(card)}
-
       {/* 지금 심경 한 줄 — 아래 숫자들이 왜 그런지 (우리 선수만 아는 사실이다).
           경기 중에는 서지 않는다 — 지난 경기까지의 마음이라 지금 경기와 어긋난다 */}
       {ours && !inMatch && <p className="pc-mood">{moodSentence(ours.mood)}</p>}
@@ -359,34 +321,15 @@ function PlayerCardBody({
         <Fact label="성장 가능성">
           <GrowthOutlook overall={card.overall} potential={card.potential} />
         </Fact>
-        <Fact
-          label="최근 기록 이적료"
-          title="공개 이적 원장의 참고 금액이며 현재 요구가가 아닙니다"
-        >
-          {card.marketValue === null ? "미확인" : formatMoney(card.marketValue)}
-        </Fact>
         {card.weeklyWage !== null && <Fact label="현 주급">{formatMoney(card.weeklyWage)}/주</Fact>}
         {card.contractUntil !== null && (
           <Fact label="계약">{contractUntil(card.contractUntil)}</Fact>
         )}
         {/**
-         * 계약의 나머지 칸 — 지위·바이아웃·조건은 **계약 정보**라 주급·만료 옆에 선다
-         * (people.md §5-2 · transfer.md §12-3). 코드는 장부의 것이고 표기는 도메인이,
-         * 조건 줄은 코어가 낸 문장 그대로다. 우리 계약에만 있는 칸이라 남의 선수에겐
-         * 서지 않는다.
+         * 지위는 우리 선수단 안의 자리라 주급·만료 옆에 선다 (people.md §5-2).
+         * 남의 선수에겐 서지 않는다.
          */}
         {ours && <Fact label="지위">{SQUAD_STATUS_KO[ours.squadStatus]}</Fact>}
-        {ours && ours.buyoutClause !== null && (
-          <Fact label="바이아웃" title="이 금액 이상의 오퍼는 구단이 막지 못한다">
-            {formatMoney(ours.buyoutClause)}
-          </Fact>
-        )}
-        {ours && ours.contractTerms.length > 0 && (
-          <Fact label="계약 조건">{ours.contractTerms.join(" · ")}</Fact>
-        )}
-        {card.transferListed !== null && (
-          <Fact label="이적 리스트">{formatMoney(card.transferListed)}</Fact>
-        )}
         {ours && (
           <>
             <Fact label="폼">{ours.formLabel}</Fact>
@@ -418,7 +361,7 @@ function PlayerCardBody({
         <FootMarks foot={card.foot} />
       </div>
 
-      {/* 지금 못 뛰는 사실들 — 부상·정지·임대·소집은 공개 기록이라 두 얼굴이 같다 */}
+      {/* 지금 못 뛰는 사실들 — 부상·정지·소집은 공개 기록이라 두 얼굴이 같다 */}
       <div className="pc-marks">
         {card.injury && (
           <span className="pc-mark out">
@@ -427,13 +370,6 @@ function PlayerCardBody({
           </span>
         )}
         {card.suspended > 0 && <span className="pc-mark out">출장 정지 {card.suspended}경기</span>}
-        {ours?.loan && (
-          <span className="pc-mark">
-            임대 {ours.loan.team} {contractUntil(ours.loan.until)} · 출전 {ours.loan.apps}/득점{" "}
-            {ours.loan.goals}
-            {ours.loan.benchRun > 0 && ` · 최근 ${ours.loan.benchRun}경기 출전 0`}
-          </span>
-        )}
         {ours?.away && (
           <span className="pc-mark">
             {ours.away.reason === "call-up"
@@ -442,7 +378,6 @@ function PlayerCardBody({
             · {humanDate(ours.away.returnsOn)} 복귀
           </span>
         )}
-        {ours && ours.settling !== null && <span className="pc-mark">정착 {ours.settling}%</span>}
         {ours?.assignment && (
           <span className="pc-mark">
             {ours.assignment.tier} {ours.assignment.position}

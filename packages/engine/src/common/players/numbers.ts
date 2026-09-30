@@ -181,8 +181,8 @@ export function numberLineageOf(state: GameState, teamId: string, number: number
 }
 
 /**
- * 지금 그 팀에서 **비어 있는 상징 번호**의 계보 — 근황(`number-open`)과 협상이
- * 같은 문을 지난다 (people.md §7 · §6의 `numberWishOf`).
+ * 지금 그 팀에서 **비어 있는 상징 번호**의 계보 — 근황(`number-open`)이
+ * 이 문을 지난다 (people.md §7 · §6의 `numberWishOf`).
  *
  * 계보가 없는 공석도 함께 낸다 — 원하는 선수를 고르는 것은 부르는 쪽의 일이고,
  * 여기서 걸러 내면 "아직 아무의 번호도 아닌 7번"이 어디에도 서지 못한다.
@@ -202,7 +202,7 @@ export type SquadNumberBlock =
   | { code: "out-of-range"; number: number }
   /** 같은 팀의 동료가 달고 있다 — `take` 없이는 넘겨받지 않는다 */
   | { code: "number-taken"; number: number; holder: NumberHolder }
-  /** 우리가 지금 쓰는 선수가 아니다 — 임대 나간 선수의 번호는 빌린 구단의 것이다 */
+  /** 우리가 지금 쓰는 선수가 아니다 — 남의 선수의 번호는 그 구단의 것이다 */
   | { code: "not-ours"; name: string };
 
 /** 막힌 이유를 사람 말로 — 문구는 여기 한 자리에만 있다 */

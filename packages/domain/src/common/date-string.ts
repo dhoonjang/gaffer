@@ -1,17 +1,6 @@
 import { z } from "zod";
 
 /**
- * YYYY-MM-DD에 해를 더한다 — 대상 연도에 없는 2월 29일만 28일로 접는다.
- * 지급 기일이 윤년마다 하루 흔들리면 일정이 결정적이지 않다.
- */
-export function addYearsTo(date: string, years: number): string {
-  const [y, md] = [Number(date.slice(0, 4)), date.slice(5)];
-  const target = y + years;
-  const leap = target % 4 === 0 && (target % 100 !== 0 || target % 400 === 0);
-  return `${target}-${md === "02-29" && !leap ? "02-28" : md}`;
-}
-
-/**
  * 게임 안의 모든 날짜는 `YYYY-MM-DD` 하나로만 적는다 — 시각도 시간대도 없다.
  * 세이브에 그대로 담기는 형식이라, 검증하는 자리가 늘어나도 표현은 하나여야 한다.
  */

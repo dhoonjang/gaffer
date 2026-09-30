@@ -85,7 +85,7 @@ Read it twice:
   makes a third hand on one file.
 
 If the tasks name no paths, say so and match by subsystem instead
-(`packages/engine/src/negotiation/finance/**` for a finance issue) — a coarse answer beats none.
+(`packages/engine/src/common/finance/**` for a finance issue) — a coarse answer beats none.
 
 **Overlap is not a reason to skip.** Files overlapping is normal; starting
 without knowing is the problem. Report what you found, then judge:
@@ -143,8 +143,8 @@ orca terminal send --terminal <handle> --enter --json --text 'Issue #<n> — <ti
 Read .claude/skills/resolve/SKILL.md and run it from §3 on. You are the lead in
 this worktree; it is already on its branch — work on that one, whatever it is named.
 열린 PR이 이미 쥐고 있는 파일 — 겹치는 것을 고치기 전에 그 PR의 diff를 읽어라:
-  packages/engine/src/negotiation/finance/finance.ts  #34 #49
-  docs/negotiation/finance.md  #34 #35 #45'
+  packages/engine/src/common/finance/finance.ts  #34 #49
+  docs/common/finance.md  #34 #35 #45'
 ```
 
 The briefing is short on purpose — the worktree holds the repo, so point at the

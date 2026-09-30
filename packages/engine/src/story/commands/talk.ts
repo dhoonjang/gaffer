@@ -6,7 +6,7 @@ import {
 } from "../../common/core/state";
 import { type MoodNoteSubmission, applyMoodNotes } from "../../common/players/mood-notes";
 import { pickOurPlayer } from "../../common/core/player-ref";
-import { type PromiseOpened } from "../../negotiation/players/promises";
+import { type PromiseOpened } from "../../common/players/promises";
 import {
   PROMISE_KIND_KO,
   type IncidentKind,
@@ -21,7 +21,6 @@ import {
 import { item, signed, briefNames, deltaItems } from "../../common/commands/brief";
 import { type CommandResult } from "../../common/commands/result";
 import { applySocialReaction } from "../world/social";
-import { creditSettling, EVENT_BAND } from "../../common/players/settling";
 import { applyCharacterMemories } from "../../common/people/persona";
 import { resolveOpening } from "../people/openings";
 import { addDays } from "../../common/core/dates";
@@ -47,7 +46,7 @@ export function resolveMoods(
  * 대화·응대가 연 약속을 **한 조각으로** 옮긴다 (people.md §5-2).
  *
  * ⚠️ **반려도 조각이 된다.** 감독은 자기가 한 말이 장부에 섰는지를 알아야 하고,
- * 반려는 그 대화를 무르지 않는다 — 사기·정착·압력은 이미 셈이 끝난 뒤다.
+ * 반려는 그 대화를 무르지 않는다 — 사기·압력은 이미 셈이 끝난 뒤다.
  * 두 자리가 같은 함수를 부르는 것은 같은 말이 자리마다 다른 줄로 서지 않게 하기
  * 위해서다.
  */
@@ -88,7 +87,6 @@ export function recordIncident(
     resolveOpeningIds?: string[];
     kind: IncidentKind;
     reaction: ReactionInput;
-    settling?: number;
     /** 당사자 — 감독이 부른 이름 그대로 올 수 있다 (`pickOurPlayer`) */
     playerIds: string[];
     intensity: 1 | 2 | 3;
@@ -108,12 +106,7 @@ export function recordIncident(
     return { ok: false, message: `오늘의 사건 한도(${MAX_INCIDENTS_PER_DAY}건)를 넘었습니다` };
   }
   const reaction = ReactionSchema.safeParse(input.reaction);
-  if (
-    !reaction.success ||
-    (input.settling !== undefined &&
-      (!Number.isFinite(input.settling) || Math.abs(input.settling) > 1))
-  )
-    return { ok: false, message: "사건 반응과 적응 변화는 -1~1 범위여야 합니다" };
+  if (!reaction.success) return { ok: false, message: "사건 반응은 -1~1 범위여야 합니다" };
   const summary = input.summary.trim();
   if (summary.length === 0 || summary.length > INCIDENT_SUMMARY_MAX) {
     return { ok: false, message: `요약은 1~${INCIDENT_SUMMARY_MAX}자여야 합니다` };
@@ -136,16 +129,6 @@ export function recordIncident(
     axes: ["target", "team"],
   });
   const morale = effect.target;
-  const settled =
-    input.settling === undefined
-      ? 0
-      : parties.filter(
-          (p) =>
-            creditSettling(state, p.id, "incident", {
-              anchor: 0,
-              proposed: input.settling! * EVENT_BAND.incident,
-            }) !== 0,
-        ).length;
 
   const salience = incidentSalience(input.intensity);
   // 인물 기억이 즉시 선다 — 선수의 characterId는 이름이다 (people.md §6 · §9-1)
@@ -180,8 +163,7 @@ export function recordIncident(
     message:
       `${head} — ${names.join(", ")}` +
       ` · 사기 ${signed(morale)}` +
-      (effect.team === 0 ? "" : ` · 팀 사기 ${signed(effect.team)}`) +
-      (settled > 0 ? ` · 적응 중인 ${settled}명이 한 걸음 가까워졌습니다` : ""),
+      (effect.team === 0 ? "" : ` · 팀 사기 ${signed(effect.team)}`),
     brief: {
       head,
       items: [
@@ -190,7 +172,6 @@ export function recordIncident(
           ["사기", morale],
           ["팀 사기", effect.team],
         ]),
-        ...(settled > 0 ? [item({ label: "적응", text: `${settled}명` })] : []),
       ],
     },
   };
@@ -306,8 +287,8 @@ export function creditTalkMorale(state: GameState, player: GamePlayer, delta: nu
 export interface PromiseInput {
   kind: PromiseKind;
   /**
-   * 기한(일) — 생략하면 갈래의 기본 기한이다. 날수가 아닌 갈래가 둘이다:
-   * `transfer`는 다음 창 마감, `number`는 다음 시즌 개막일 (people.md §5-2).
+   * 기한(일) — 생략하면 갈래의 기본 기한이다. `number`는 날수가 아니라 다음 시즌
+   * 개막일이다 (people.md §5-2).
    */
   days?: number;
   /**
@@ -315,7 +296,6 @@ export interface PromiseInput {
    * 번호가 곧 약속의 내용이라 그것 없이는 이행을 판정할 자가 없다.
    */
   number?: number;
-  position?: string;
 }
 
 /** 장부에 선 약속 한 조각 — 감독이 읽는 줄과 말풍선 항목 */
@@ -335,13 +315,6 @@ export interface TalkInput {
    */
   players?: readonly string[];
   reaction: ReactionInput;
-  /**
-   * 이 말이 새 영입들의 적응에 남긴 무게 — 코어 앵커에서 EVENT_BAND만큼만.
-   * 같은 "격려"라도 통역을 붙여 준 이야기와 지나가며 한 말은 다르다.
-   */
-  settling?: number;
-  /** 무게의 근거 한 줄 — 정착 원장에 남는다 */
-  settlingNote?: string;
   /**
    * 감독이 이 대화에서 한 약속 — **상대가 한 명일 때만 장부에 선다**
    * (career.md §2 · people.md §5-2). 반려돼도 대화 자체는 그대로 성립한다.

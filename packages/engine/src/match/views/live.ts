@@ -121,11 +121,11 @@ export interface MatchPlayerView {
    * 스쿼드 화면과 경기 화면에서 다른 숫자로 보인다.
    */
   effective: number;
-  /** 그 전력의 오차 폭 (±) — 0이면 정확히 아는 선수다 (우리 선수·스카우팅 완료) */
+  /** 그 전력의 오차 폭 (±) — 0이면 정확히 아는 선수다 (우리 선수) */
   margin: number;
   /**
    * 지금 남은 체력 0~100, 높을수록 좋다 (저장값 − 경기 중 소모).
-   * **상대 선수는 감독이 읽은 값**이다 — 참값은 `low~high` 안에 있다 (scouting.ts).
+   * **상대 선수는 감독이 읽은 값**이다 — 참값은 `low~high` 안에 있다 (observation.ts).
    */
   condition: ConditionRead;
   /** 다리가 멈췄나 — 이 자리에 구멍이 나 있다 (stamina.ts). 상대는 읽은 값 기준 */

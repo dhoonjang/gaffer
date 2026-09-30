@@ -7,7 +7,7 @@
  * 바꾼다 — 감독은 자기가 한 일이 아닌 이유로 자리가 흔들린다.
  *
  * 이 모듈은 `GameState` 타입과 팀 카탈로그만 본다. 체급을 읽는 자리가 재정·시즌·
- * 감독 시장에 흩어져 있어, 어느 쪽으로도 순환이 생기지 않는 자리에 둔다.
+ * 보드에 흩어져 있어, 어느 쪽으로도 순환이 생기지 않는 자리에 둔다.
  */
 import type { BoardExpectationCode } from "@story-fm/domain";
 import type { GameState } from "./state";

@@ -6,6 +6,6 @@
  */
 export { SquadView } from "../../domains/match/ui/squad/squad-view";
 export { CalendarView } from "./calendar";
-export { FinanceView } from "../../domains/negotiation/ui/finance";
+export { FinanceView } from "../../domains/common/ui/finance";
 export { CompetitionsView } from "../../domains/match/ui/competitions";
 export { CareerView } from "../../domains/story/ui/career";

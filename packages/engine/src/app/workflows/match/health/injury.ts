@@ -2,7 +2,7 @@ import { type GameState, openInjury } from "../../../../common/core/state";
 import { type GamePlayer } from "@story-fm/domain";
 import { diffDays, addDays } from "../../../../common/core/dates";
 import { rollInjury, raiseProneness } from "../../../../common/players/injury";
-import { recordMedicalCost } from "../../../../negotiation/finance/finance";
+import { recordMedicalCost } from "../../../../common/finance/finance";
 
 /** 부상 발생 — INJURY row 생성 (현재 부상 = returnedOn null) */
 export function openInjuryFor(

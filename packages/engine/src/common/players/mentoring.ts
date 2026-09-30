@@ -1,9 +1,6 @@
 import { type GameState } from "../core/state";
 import { type Mentoring, type MentoringEnd } from "@story-fm/domain";
 
-/** 새 영입 멘티의 필요 크레딧에 곱해지는 항 — 같은 협회 출신과 같은 무게 */
-export const MENTOR_SETTLING = 0.85;
-
 // ── 장부 읽기 ────────────────────────────────────────
 
 /** 지금 서 있는 사이 — 닫힌 줄은 빠진다 */

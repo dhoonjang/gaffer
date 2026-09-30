@@ -6,7 +6,7 @@
  * 바꾸는 자리다. 갈리면 후보를 돌려 GM이 되묻게 한다.
  */
 import { josa, josaOf, type GamePlayer } from "@story-fm/domain";
-import { onLoanFromUs, playerById, resolvePlayerRef, userPlayers, type GameState } from "./state";
+import { playerById, resolvePlayerRef, userPlayers, type GameState } from "./state";
 
 /** 되물을 때 늘어놓는 후보 수 — 그 이상은 감독이 고를 목록이 아니다 */
 const CANDIDATES_SHOWN = 6;
@@ -18,19 +18,6 @@ const candidateLine = (players: readonly GamePlayer[]): string =>
     .slice(0, CANDIDATES_SHOWN)
     .map((p) => `${p.name}(${p.id})`)
     .join(" / ");
-
-/** 세계 어디의 선수든 하나 — 타 팀 선수를 겨냥할 때 */
-export function pickAnyPlayer(state: GameState, ref: string): PlayerPickResult {
-  const { player, candidates } = resolvePlayerRef(state.players, ref);
-  if (player) return { ok: true, player };
-  return {
-    ok: false,
-    message:
-      candidates.length > 0
-        ? `"${ref}"${josaOf(ref, "은/는")} 여러 선수와 맞습니다 — ${candidateLine(candidates)}`
-        : `"${ref}"${josaOf(ref, "이라는/라는")} 선수를 찾지 못했습니다`,
-  };
-}
 
 /** 자격이 정해진 문의 공통 몸통 — 이름은 그 자격 **안에서만** 푼다 */
 function pickWithin(
@@ -68,29 +55,13 @@ export function pickOurPlayer(state: GameState, ref: string): PlayerPickResult {
 }
 
 /**
- * **계약이 우리 것인** 선수 하나 — 등재·매각 제안·해지처럼 계약을 건드리는 명령.
- *
- * 임대 보낸 선수는 `teamId`가 빌려 간 구단이라 `pickOurPlayer`로는 닿지 않는다.
- * 그래도 부를 수는 있어야 한다: 부르는 자리가 "임대 중이라 움직이지 않는다"고
- * 답해야 할 사람이고(`loanLockOf`), "우리 선수가 아니다"는 그에게 맞는 말이 아니다
- * (transfer.md §2).
- */
-export function pickSignedPlayer(state: GameState, ref: string): PlayerPickResult {
-  const signed = state.players.filter(
-    (p) => p.teamId === state.userTeamId || onLoanFromUs(state, p),
-  );
-  return pickWithin(state, signed, ref, `"${ref}"${josaOf(ref, "은/는")} 우리 팀 선수가 아닙니다`);
-}
-
-/**
- * 우리 팀이 **아닌** 선수 하나 — 스카우트·마킹 지목처럼 자격이 밖에 있는 자리.
+ * 우리 팀이 **아닌** 선수 하나 — 마킹 지목처럼 자격이 밖에 있는 자리.
  *
  * 자격이 정해진 명령은 그 자격 안에서만 이름을 푼다. 세계 전체를 훑은 뒤 소속으로
  * 되돌리면, 우리 유스와 남의 2군이 같은 이름을 쓰는 날 후보가 갈려 지시가 문 앞에서
  * 죽는다 — 고를 수 있는 사람이 애초에 하나뿐인데도.
  *
- * `ourNote`는 우리 선수를 지목했을 때 덧붙는 그 자리의 사정이다 (스카우트라면
- * "이미 다 알고 있습니다").
+ * `ourNote`는 우리 선수를 지목했을 때 덧붙는 그 자리의 사정이다.
  */
 export function pickRivalPlayer(state: GameState, ref: string, ourNote?: string): PlayerPickResult {
   const ours = (p: GamePlayer): PlayerPickResult => ({

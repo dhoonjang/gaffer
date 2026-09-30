@@ -194,25 +194,14 @@ export function registrationBlockText(block: RegistrationBlock): string {
 /**
  * 스쿼드 지위 — **계약에 적히는 약속**이다 (→ docs/story/people.md §5-2).
  *
- * 배열 순서가 곧 서열이라 `squadStatusRank`가 인덱스를 그대로 쓴다. 순서를 바꾸면
- * 흥정의 지위 항(transfer.md §3)과 되부르기의 상한이 함께 뒤집힌다.
+ * 배열 순서가 곧 서열이라 `squadStatusRank`가 인덱스를 그대로 쓴다.
  */
 export const SQUAD_STATUSES = ["prospect", "backup", "rotation", "starter", "key"] as const;
 export type SquadStatus = (typeof SQUAD_STATUSES)[number];
 
-/** 서열 — 큰 쪽이 위다. 한 칸 차이가 흥정의 한 칸이다 */
+/** 서열 — 큰 쪽이 위다 */
 export function squadStatusRank(status: SquadStatus): number {
   return SQUAD_STATUSES.indexOf(status);
-}
-
-/**
- * 서열을 다시 지위로 — `squadStatusRank`의 **역이라 같은 자리에 산다.**
- * 되부르기가 지위를 정수 사다리로 다루므로(transfer.md §1) 구간 밖의 정수는
- * 사다리의 양끝으로 접는다.
- */
-export function statusAtRank(rank: number): SquadStatus {
-  const index = Math.max(0, Math.min(SQUAD_STATUSES.length - 1, Math.round(rank)));
-  return SQUAD_STATUSES[index]!;
 }
 
 /** 지위의 이름 — 화면·카드·프롬프트가 같은 말을 쓴다 */
@@ -228,7 +217,7 @@ export const SQUAD_STATUS_KO: Record<SquadStatus, string> = {
  * 그 지위가 부르는 **선발 비율** — 이 표가 약속의 눈금이다.
  *
  * ⚠️ **백업·유망주가 0인 것은 눈금이 아니라 규약이다.** 그 자리로 온 선수에게는
- * 벤치가 곧 약속의 이행이라 출전 불만이 서지 않는다 — 이 줄이 없으면 백업 영입이
+ * 벤치가 곧 약속의 이행이라 출전 불만이 서지 않는다 — 이 줄이 없으면 백업 자리가
  * 곧 반란이 되어 스쿼드를 채우는 일 자체가 손해가 된다 (people.md §5-2).
  *
  * 8경기 창에서 정수 경계에 떨어지도록 고른 값이다: 핵심 6 · 주전 4 · 로테이션 2.
@@ -387,7 +376,7 @@ export function numberWishOf(
   lineage: readonly NumberLineageEntry[] = [],
 ): NumberWish | null {
   if (KEEPERS.includes(archetype)) {
-    // 지킬 번호가 없으면 지킬 뜻도 없다 — 자유계약·미배정 선수
+    // 지킬 번호가 없으면 지킬 뜻도 없다 — 무소속·미배정 선수
     return player.squadNumber === undefined
       ? null
       : { motive: "keep", numbers: [player.squadNumber] };

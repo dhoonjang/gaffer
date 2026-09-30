@@ -1,7 +1,7 @@
 import { type GameState } from "../../../../common/core/state";
 import { type PrizePayment, prizeLabel, prizeKey } from "../../../../match/competition/prize";
 import { type TickSink, pushEvent } from "@story-fm/domain";
-import { payOnce, formatMoney } from "../../../../negotiation/finance/finance";
+import { payOnce, formatMoney } from "../../../../common/finance/finance";
 
 /**
  * 상금 한 건을 지급하고, 감독의 팀이면 다이제스트에 올린다.

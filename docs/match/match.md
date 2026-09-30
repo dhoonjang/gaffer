@@ -327,7 +327,7 @@ EventCause { code, playerIds, values?, pointId? }
 서버에서 다시 한다([live-match.md](live-match.md) §8).
 
 - **친선은 명단에 든 사람 전부를 바꿀 수 있다** — 9인(`MATCHDAY_BENCH`)/3창. 프리시즌은
-  영입의 정착·유망주 시험을 위한 자리라 다섯 장으로는 그 시험이 열리지 않는다. 한도는
+  유망주 시험을 위한 자리라 다섯 장으로는 그 시험이 열리지 않는다. 한도는
   명수만 열고 창은 3회 그대로다 — 창이 세는 것은 경기를 몇 번 끊느냐다. AI 벤치도 같은
   한도를 본다.
 - **창을 면제받는 자리는 분이 아니라 정지점이 정한다.** 휴식 정지점(하프타임 · 연장 개시 ·
@@ -438,7 +438,7 @@ EventCause { code, playerIds, values?, pointId? }
   정확히 반대로 갈리므로 폭이 대칭이다.
 - **마일스톤은 스탯을 적은 그 자리가 센다**(`milestonesReached`): `debut` · `first-goal` ·
   `apps` 50·100·200·300·400·500 · `goals` 25·50·100·150·200 · `hat-trick`. 클럽 단위고
-  감독 팀 선수 것뿐이며 2군·친선은 문턱을 밀지 않는다. 무직 구간에는 서지 않는다.
+  감독 팀 선수 것뿐이며 2군·친선은 문턱을 밀지 않는다.
 - **포지션 적응도는 실제로 밟은 자리가 올린다** — `pendingMatch.live.positionsPlayed`의 자리가
   `MATCH_PROFICIENCY_GAIN`(1)만큼(상한 99, 양 팀 공통).
 - **평점**(`engine/match/ratings.ts`)은 기준선 6.0에서 장부 사실만으로 조정한다(난수 없음):

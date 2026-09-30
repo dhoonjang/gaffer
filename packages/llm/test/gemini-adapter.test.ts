@@ -222,7 +222,7 @@ describe("GeminiGameLLM", () => {
       response({
         role: "model",
         parts: [
-          { functionCall: { id: "call-1", name: "start_negotiation", args: {} } },
+          { functionCall: { id: "call-1", name: "request_board", args: {} } },
           { functionCall: { id: "call-2", name: "set_lineup", args: {} } },
         ],
       }),
@@ -242,10 +242,10 @@ describe("GeminiGameLLM", () => {
       system: "고정 프롬프트",
       history: [],
       user: "협상하자",
-      tools: [tool("start_negotiation", true), tool("set_lineup", false)],
+      tools: [tool("request_board", true), tool("set_lineup", false)],
     });
 
-    expect(handled).toEqual(["start_negotiation"]);
+    expect(handled).toEqual(["request_board"]);
     expect(stub.sent).toHaveLength(1);
     expect(result.stopReason).toBe("handoff");
     expect(result.toolCallCount).toBe(1);

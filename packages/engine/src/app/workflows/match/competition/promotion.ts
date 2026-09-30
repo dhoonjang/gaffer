@@ -22,14 +22,13 @@ import {
   REINFORCEMENT_YEARS,
 } from "../../../../match/competition/promotion";
 import { RELEGATION_SLOTS } from "../../../../common/core/league-shape";
-import { startParachute, stopParachute } from "../../../../negotiation/finance/finance";
+import { startParachute, stopParachute } from "../../../../common/finance/finance";
 import { leagueName } from "../../../../common/data/league-catalog";
 import { squadRating } from "../../../../common/players/squad-depth";
 import { generatePromotionSigning } from "../../../../common/world/generate";
 import { seasonYear, contractUntil } from "../../../../common/core/dates";
 import { assignSquadNumber } from "../../../../common/players/numbers";
-import { estimateWeeklyWage, wageSubjectOf } from "../../../../negotiation/economy/wages";
-import { attachAiBuyout } from "../../../../negotiation/market/buyout";
+import { estimateWeeklyWage, wageSubjectOf } from "../../../../common/finance/wages";
 
 /**
  * 승강 처리 — **시즌 전환에서 새 일정을 짜기 전에** 한 번.
@@ -98,17 +97,17 @@ export function applyPromotionRelegation(
  *
  * 난수는 `(세이브 시드, promotion-signing:팀:시즌:번호)`에서만 나온다 — 같은
  * 세이브를 다시 굴리면 같은 사람이 온다.
+ *
+ * **감독의 구단은 받지 않는다** — 감독의 선수단은 처음 맡은 선수와 유스 첫 계약으로만
+ * 채워진다 (season.md §6).
  */
-export function reinforcePromotedSquads(
-  state: GameState,
-  promoted: readonly string[],
-  digest: TickSink,
-): void {
+export function reinforcePromotedSquads(state: GameState, promoted: readonly string[]): void {
   // id도 이름도 세계 전체에서 유일해야 한다 — 한 번 쥐고 팀을 돌며 등록한다
   // (이름의 기준이 팀이 아니라 세계인 이유는 people.md §2)
   const takenIds = new Set(state.players.map((p) => p.id));
   const takenNames = new Set(state.players.map((p) => p.name));
   for (const teamId of promoted) {
+    if (teamId === state.userTeamId) continue;
     const squad = playersOf(state, teamId);
     /**
      * **하한이 재는 것은 1군이다.** 2군은 매치데이 명단에 설 수 없으므로(team.md §5)
@@ -137,20 +136,13 @@ export function reinforcePromotedSquads(
       );
       state.players.push(signing);
       assignSquadNumber(state.players, signing);
-      /**
-       * **창 밖 이동이다** — 이 자리는 새 시즌 이적창이 아직 세워지기 전이고
-       * (`buildTransferWindows`는 뒤에 온다), 자유계약이라 창에 걸리지 않는다.
-       * 유스 콜업이 `windowId: null`을 쓰는 것과 같은 자리다.
-       */
-      state.transfers.push({
-        id: `tr-promo-${signing.id}`,
+      state.moves.push({
+        id: `mv-promo-${signing.id}`,
         gamePlayerId: signing.id,
-        windowId: null,
         fromTeamId: null,
         toTeamId: teamId,
         date: state.date,
-        type: "free",
-        fee: 0,
+        kind: "reinforcement",
       });
       const signed: Contract = {
         id: `c-${signing.id}`,
@@ -167,11 +159,6 @@ export function reinforcePromotedSquads(
         status: "active",
       };
       state.contracts.push(signed);
-      // 보강 계약에도 조항이 붙을 수 있다 (transfer.md §12-3)
-      attachAiBuyout(state, signed, signing);
-    }
-    if (teamId === state.userTeamId) {
-      digest.push(`승격 보강: 자유계약으로 ${short}명을 더해 1군이 ${PROMOTED_SQUAD_FLOOR}명이다`);
     }
   }
 }

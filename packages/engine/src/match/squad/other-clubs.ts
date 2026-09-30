@@ -75,7 +75,7 @@ const AI_SESSIONS_PER_TRAINING_DAY = 1;
  */
 export function tickOtherClubs(state: GameState): void {
   const kinds = new Map<string, RecoveryKind>();
-  // 감독이 잘려 무직이면 옛 구단도 여기서 돈다 — `managedTeamId`가 null이다
+  // 커리어가 끝났으면 옛 구단도 여기서 돈다 — `managedTeamId`가 null이다
   const managed = managedTeamId(state);
   const injured = openInjuryIds(state);
   /**

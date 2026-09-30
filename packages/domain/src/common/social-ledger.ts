@@ -37,17 +37,9 @@ export const BoardReviewSchema = z.object({
   renewal: z
     .boolean()
     .optional()
-    .describe("계약 만료 90일 이내 재계약 제안 여부 — 이번 평가에서 결정할 때만"),
+    .describe("계약 만료 90일 이내 재계약 여부 — 이번 평가에서 결정할 때만"),
 });
 export type BoardReview = z.infer<typeof BoardReviewSchema>;
-
-export const InterviewOutcomeSchema = z.object({
-  offer: z.boolean(),
-  /** 0은 기본 조건, 1은 해당 구단이 허용하는 흥정 상한이다. */
-  leverage: z.number().min(0).max(1),
-  reason: z.string().trim().min(1).max(280),
-});
-export type InterviewOutcome = z.infer<typeof InterviewOutcomeSchema>;
 
 /** 현재 기대와 평가의 같은 문장을 화면과 GM에 전달한다. */
 export function boardAgendaLines(agenda: BoardAgenda): string[] {

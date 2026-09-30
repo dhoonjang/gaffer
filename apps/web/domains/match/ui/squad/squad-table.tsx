@@ -5,7 +5,7 @@ import { PROMISE_KIND_KO, formatRating, josaOf } from "@story-fm/domain";
 import { PlayerName } from "@/domains/common/ui/player-card";
 import { ConditionBar } from "@/domains/common/ui/condition-bar";
 import { IconChevron, IconChevronUp } from "@/domains/common/ui/icons";
-import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
+import { humanDate } from "@/domains/common/lib/dateline";
 import { moodSentence } from "@/domains/common/lib/mood";
 import {
   Armband,
@@ -34,7 +34,7 @@ const ROLE_ORDER: Record<string, number> = { 선발: 0, 벤치: 1, 스쿼드: 2 
  * `SquadRow.role`은 서버가 아는 값이라 자동 저장이 돌아오기 전까지 예전 칸이다.
  * 그걸로 정렬하면 선수를 벤치로 내려도 명단에서는 한 박자 뒤에야 자리를 옮긴다.
  */
-const TIER_ORDER: Record<Tier, number> = { 선발: 0, 벤치: 1, 예비: 2, "2군": 3, 임대: 4 };
+const TIER_ORDER: Record<Tier, number> = { 선발: 0, 벤치: 1, 예비: 2, "2군": 3 };
 const GROUP_ORDER: Record<string, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
 
 /** 명단 표 — 열 머리를 눌러 정렬한다. 기본은 역할 → 포지션 라인 → OVR */
@@ -219,16 +219,12 @@ export function SquadTable({
                       if (!swapPair || p.id === swapPair.id) return null;
                       const rowTier = tierOf(p.id);
                       if (rowTier === swapPair.tier) return null;
-                      // 임대는 맞바꿀 수 있는 칸이 아니다 — 남의 훈련장에 있는 선수라
-                      // 판에도 층에도 들어오지 못한다 (서버도 반려한다)
-                      if (rowTier === "임대" || swapPair.tier === "임대") return null;
                       // 전술판(선발) 쪽으로 올라오면 ←, 내려가면 →
                       const RANK: Record<Tier, number> = {
                         선발: 3,
                         벤치: 2,
                         예비: 1,
                         "2군": 0,
-                        임대: -1,
                       };
                       const rowGoesUp = RANK[swapPair.tier] > RANK[rowTier];
                       return (
@@ -292,13 +288,8 @@ export function SquadTable({
                   </span>
                 )}
                 {/*
-                 * 임대는 **표식이 아니라 소속**이라 어디에 언제까지 가 있는지가
-                 * 그 자리에 선다 — 상세를 펼쳐야 보이면 탭을 연 뜻이 없다.
-                 * 연속 미출전은 툴팁의 사실로만 적는다("불러들이라"는 GM의 몫이다).
-                 */}
-                {/*
-                 * 대표팀 소집·여름 대회 — 임대와 같은 결이다: **표식이 아니라 지금
-                 * 어디에 있는가**. 다만 열흘 뒤 돌아오므로 소속이 아니라 부재다.
+                 * 대표팀 소집·여름 대회 — **표식이 아니라 지금 어디에 있는가**.
+                 * 열흘 뒤 돌아오므로 소속이 아니라 부재다.
                  * 나라와 복귀일이 그 자리에 서고, 그 창의 출전·골은 툴팁의 사실로만
                  * 적는다("돌아오면 쉬게 하라"는 GM의 몫이다).
                  */}
@@ -314,25 +305,13 @@ export function SquadTable({
                     {p.away.country ?? "대표팀"}
                   </span>
                 )}
-                {p.loan !== null && (
-                  <span
-                    className="tag loan"
-                    title={
-                      `${p.loan.team} 임대 — ${humanDate(p.loan.until)} 복귀` +
-                      (p.loan.benchRun > 0 ? ` · 최근 ${p.loan.benchRun}경기 출전 0` : "") +
-                      (p.loan.growth > 0 ? ` · 임대 이후 성장 +${p.loan.growth}` : "")
-                    }
-                  >
-                    {p.loan.team} {contractUntil(p.loan.until)}
-                  </span>
-                )}
                 <StatusBadges p={p} />
                 {/*
                  * 열린 약속 — **감독이 한 말에 기한이 붙어 있다**
                  * (docs/story/people.md §5-2). 적는 것은 갈래와 기한뿐이다: 무슨
                  * 말로 약속했는지는 장면의 것이고 장부는 그것을 들지 않는다.
-                 * 임대 표식과 같은 모양인 이유도 같다 — 자격이 아니라 **언제까지
-                 * 무엇을 해야 하는가**라, 좁은 화면에서도 이름 옆에 남는다.
+                 * 자격이 아니라 **언제까지 무엇을 해야 하는가**라, 좁은 화면에서도
+                 * 이름 옆에 남는다.
                  */}
                 {p.promises.map((promise) => (
                   <span
@@ -366,12 +345,7 @@ export function SquadTable({
                 className="hide-sm"
                 title={`${p.assignedPosition ?? p.position} 자리에서의 적응도`}
               >
-                {/* 임대 중에는 우리 전술을 익힐 자리가 없다 — 0이 아니라 빈 칸이다 */}
-                {p.loan !== null || p.role === "스쿼드" ? (
-                  "—"
-                ) : (
-                  <FitGauge value={p.adaptation} label="적응도" />
-                )}
+                {p.role === "스쿼드" ? "—" : <FitGauge value={p.adaptation} label="적응도" />}
               </td>
               <td>
                 <FormArrow p={p} />
@@ -384,12 +358,7 @@ export function SquadTable({
               {/* 골 대신 평점 — 골 수는 행을 펼치면 시즌 기록에 그대로 있다 */}
               <td
                 className="hide-sm"
-                /* 임대 행의 시즌 기록은 **빌린 구단의 장부**다 — 어디서 낸 숫자인지를
-                   함께 적지 않으면 우리 경기에서 낸 값으로 읽힌다 */
-                title={
-                  (p.loan !== null ? `${p.loan.team} · ` : "") +
-                  `${p.seasonApps}경기 ${p.seasonGoals}골 ${p.seasonAssists}도움`
-                }
+                title={`${p.seasonApps}경기 ${p.seasonGoals}골 ${p.seasonAssists}도움`}
               >
                 {typeof p.seasonRating === "number" ? formatRating(p.seasonRating, "season") : "—"}
               </td>

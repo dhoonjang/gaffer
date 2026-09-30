@@ -1,11 +1,11 @@
 import { type GameState, managedTeamId, pushNarrative } from "../../../../common/core/state";
 import { type BoardReview, BoardReviewSchema } from "@story-fm/domain";
 import { diffDays } from "../../../../common/core/dates";
-import { RENEWAL_NOTICE_DAYS } from "../../../../negotiation/market/manager-market";
+import { RENEWAL_NOTICE_DAYS } from "@story-fm/domain";
 import { type CommandResult } from "../../../../common/commands/result";
 import { applySocialReaction } from "../../../../story/world/social";
 import { BOARD_REVIEW_BAND } from "../../../../story/world/social";
-import { decideManagerRenewal, dismissUserManager } from "../../negotiation/market/manager-market";
+import { decideManagerRenewal, dismissUserManager } from "../../../../story/world/manager-contract";
 
 /** 보드의 판단을 기록한다. 고용 해지는 기존 계약 정산 경로만 사용한다. */
 export function reviewBoard(state: GameState, input: BoardReview): CommandResult {
@@ -54,7 +54,8 @@ export function reviewBoard(state: GameState, input: BoardReview): CommandResult
     dismissUserManager(state, digest);
     return { ok: true, message: `${digest.join(" · ")} — ${review.assessment}` };
   }
-  if (review.renewal !== undefined) decideManagerRenewal(state, review.renewal, []);
+  const renewal: string[] = [];
+  if (review.renewal !== undefined) decideManagerRenewal(state, review.renewal, renewal);
   pushNarrative(
     state,
     `보드 ${review.decision === "warning" ? "경고" : "평가"} — ${review.assessment}`,
@@ -62,6 +63,8 @@ export function reviewBoard(state: GameState, input: BoardReview): CommandResult
   );
   return {
     ok: true,
-    message: `보드 평가 — ${review.assessment} (신뢰 ${effect.board > 0 ? "+" : ""}${effect.board})`,
+    message:
+      `보드 평가 — ${review.assessment} (신뢰 ${effect.board > 0 ? "+" : ""}${effect.board})` +
+      (renewal.length > 0 ? ` · ${renewal.join(" · ")}` : ""),
   };
 }

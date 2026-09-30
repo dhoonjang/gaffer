@@ -36,7 +36,6 @@ import { leagueOfTeamIn } from "../../common/core/league-membership";
 import { computeStandings } from "../../common/views/standings";
 import { tierOfTeamIn } from "../../common/core/club-tier";
 import { diffDays } from "../../common/core/dates";
-import { isSettling } from "../../common/players/settling";
 import { formLabel } from "../../common/players/form";
 import { derbyNameOf } from "../../common/data/derbies";
 import { potentialBand } from "../../common/players/observation";
@@ -317,21 +316,16 @@ export const reserveRecord: CoachEye = (state) => {
   };
 };
 
-/** 라커룸에 지금 걸려 있는 것 — 불만과 아직 녹지 않은 새 얼굴 */
+/** 라커룸에 지금 걸려 있는 불만 */
 export const dressingRoom: CoachEye = (state) => {
   const unhappy = state.issues
     .map((i) => playerById(state, i.gamePlayerId))
     .filter((p): p is GamePlayer => p !== null);
-  const settling = playersOf(state, state.userTeamId).filter((p) => isSettling(state, p.id));
-  if (unhappy.length === 0 && settling.length === 0) return null;
-  const parts = [
-    unhappy.length > 0 ? `불만 ${counted(unhappy.map((p) => p.name))}` : null,
-    settling.length > 0 ? `정착 미완 ${counted(settling.map((p) => p.name))}` : null,
-  ].filter((x): x is string => x !== null);
+  if (unhappy.length === 0) return null;
   return {
     code: "dressing-room",
-    fact: parts.join(" · "),
-    playerIds: [...unhappy, ...settling].map((p) => p.id).slice(0, NAMES_SHOWN),
+    fact: `불만 ${counted(unhappy.map((p) => p.name))}`,
+    playerIds: unhappy.map((p) => p.id).slice(0, NAMES_SHOWN),
   };
 };
 
@@ -484,7 +478,7 @@ export interface CoachCue {
   playerIds: string[];
   /**
    * **이 사실 옆에 서는 사람** — 비면 수석코치다 (people.md §3 화자 표).
-   * 훈련장·2군·임대는 그 자리를 맡은 코치의 것이라 화자가 갈린다.
+   * 훈련장·2군은 그 자리를 맡은 코치의 것이라 화자가 갈린다.
    */
   by?: "coach";
 }
@@ -524,14 +518,6 @@ export const AXES_SHOWN = 2;
  * 소식이 아니라 기록이다 — 달력이 갖는다.
  */
 export const TRAINING_REPORT_FRESH_DAYS = 3;
-
-/**
- * 임대 리포트가 "이달 소식"으로 서는 창 (일) — 결산 카드와 같은 결이다.
- *
- * 리포트는 매월 1일 다이제스트로 한 번 지나가므로, 감독이 그 자리에서 몇 마디 더
- * 나누는 동안만 남는다. 그 뒤로는 다음 달 1일이 새로 세운다.
- */
-export const LOAN_REPORT_FRESH_DAYS = 3;
 
 /** 코치가 카드를 고르기 전에 한 번만 뽑아 두는 것 — 갈래마다 다시 훑지 않는다 */
 export interface CoachSight {

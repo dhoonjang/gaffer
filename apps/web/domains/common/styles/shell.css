@@ -3470,9 +3470,6 @@ textarea {
 .tick-event[data-kind="draw"] {
   --tick: var(--violet);
 }
-.tick-event[data-kind="interest"] {
-  --tick: var(--accent-2);
-}
 .tick-event[data-kind="contract"] {
   --tick: var(--warn);
 }

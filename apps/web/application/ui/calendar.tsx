@@ -12,7 +12,7 @@ import { humanDate } from "@/domains/common/lib/dateline";
 import { MatchReportPanel } from "../../domains/match/ui/match-report";
 import { IconChevron } from "../../domains/common/ui/icons";
 
-// ── 달력 (일정 축: 경기·훈련·이적창 + 일자 상세) ─────────────
+// ── 달력 (일정 축: 경기·훈련·추첨 + 일자 상세) ─────────────
 function isoOf(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -65,16 +65,10 @@ function EventIcon({ kind }: { kind: IconKind }) {
     return: <path d="M3.8 8.4 6.6 11l5.6-6" {...line} />,
     yellow: <rect x="5.2" y="3.4" width="5.6" height="9.2" rx="1" fill="currentColor" />,
     red: <rect x="5.2" y="3.4" width="5.6" height="9.2" rx="1" fill="currentColor" />,
-    transfer: (
+    move: (
       <>
         <path d="M3 6.2h8.6M9.3 4 11.6 6.2 9.3 8.4" {...line} />
         <path d="M13 10.2H4.4M6.7 8 4.4 10.2 6.7 12.4" {...line} />
-      </>
-    ),
-    window: (
-      <>
-        <rect x="3.6" y="3.6" width="8.8" height="8.8" rx="1.4" {...line} />
-        <path d="M8 3.6v8.8" {...line} />
       </>
     ),
     // 돈 — 가로로 누운 지폐. 수입/지출은 글자의 +/−가 말하므로 도형은 방향을 갖지 않는다
@@ -84,8 +78,8 @@ function EventIcon({ kind }: { kind: IconKind }) {
         <circle cx="8" cy="8" r="1.9" {...line} />
       </>
     ),
-    // 소식 — 전해 들은 말이라 말풍선이다. 왼쪽 아래로 빠지는 꼬리와 지폐·창보다
-    // 큰 모서리 반경이 같은 "둥근 사각" 셋을 한눈에 가른다
+    // 소식 — 전해 들은 말이라 말풍선이다. 왼쪽 아래로 빠지는 꼬리와 지폐보다
+    // 큰 모서리 반경이 같은 "둥근 사각" 둘을 한눈에 가른다
     news: (
       <path
         d="M5 3.2H11A2.4 2.4 0 0 1 13.4 5.6V7.8A2.4 2.4 0 0 1 11 10.2H7L4.2 12.6 5 10.2A2.4 2.4 0 0 1 2.6 7.8V5.6A2.4 2.4 0 0 1 5 3.2Z"
@@ -245,11 +239,8 @@ export function CalendarView({
   // 아직 추첨 전인 컵 라운드 — 상대는 몰라도 **날짜는 공표돼 있다**.
   // 그 주의 로테이션을 계획하려면 점이 아니라 칸에 보여야 한다.
   const pendingRoundOf = (iso: string) => byDate.get(iso)?.find((e) => e.type === "cup-round");
-  // 훈련도 경기도 아닌 일정(추첨·이적창) — 칸에는 점 하나로만 오른다
-  const otherOf = (iso: string) =>
-    (byDate.get(iso) ?? []).filter(
-      (e) => e.type !== "training" && e.type !== "match" && e.type !== "cup-round",
-    );
+  // 컵 추첨 — 칸에는 점 하나로만 오른다
+  const drawsOf = (iso: string) => (byDate.get(iso) ?? []).filter((e) => e.type === "draw");
 
   const detail = selected
     ? {
@@ -259,8 +250,6 @@ export function CalendarView({
         isPast: selected < calendar.today,
       }
     : null;
-
-  const openWindow = calendar.windows.find((w) => w.open);
 
   // 상세는 고른 날이 있는 **그 달 카드 안**에 펼친다 — 화면 맨 위에 두면
   // 3월 칸을 눌러도 패널이 시야 밖에서 열려 아무 일도 안 난 것처럼 보인다
@@ -301,17 +290,6 @@ export function CalendarView({
     <div className="calendar-view" data-testid="view-calendar">
       <div className="cal-legend">
         <h1 className="view-title">시즌 일정</h1>
-        <span className="cal-focus">
-          <EventIcon kind="transfer" />
-          {openWindow ? (
-            <>
-              <span>{openWindow.kind} 이적시장</span>
-              <b>{humanDate(openWindow.closesOn, { weekday: false })} 마감</b>
-            </>
-          ) : (
-            "이적시장 닫힘"
-          )}
-        </span>
       </div>
 
       <div className="cal-months">
@@ -351,7 +329,7 @@ export function CalendarView({
                   const rests = sessions.filter((e) => e.rest);
                   // 그날 결산이 남긴 성과 — 있으면 점을 채워 구분한다
                   const gained = trainings.some((e) => e.result !== null);
-                  const others = otherOf(cell.iso);
+                  const draws = drawsOf(cell.iso);
                   // 그날 일지에 오른 소식 — 몇 줄이든 점은 하나다
                   const news = newsByDate.get(cell.iso) ?? [];
                   const pending = pendingRoundOf(cell.iso);
@@ -427,8 +405,7 @@ export function CalendarView({
                           카드)은 정보가 아니라 얼룩이라 상세 패널에만 둔다. 소식은
                           다르다: 며칠을 한 번에 넘긴 턴에 벌어진 일이라 달력 말고는
                           되짚을 자리가 없다.
-                          훈련은 노란 점, 추첨은 보라 점, 그 밖(이적창)은 파란 점,
-                          소식은 회색 점 — 무엇인지는 툴팁과 상세가 말한다 */}
+                          훈련은 노란 점, 추첨은 보라 점, 소식은 회색 점 — 무엇인지는 툴팁과 상세가 말한다 */}
                       <div className="cal-marks">
                         {trainings.length > 0 && (
                           <span
@@ -446,14 +423,12 @@ export function CalendarView({
                             data-testid={`cal-rest-${cell.iso}`}
                           />
                         )}
-                        {others.map((e) => (
+                        {draws.map((e) => (
                           <span
-                            className={`cal-mark ${e.type === "draw" ? "draw" : "event"}`}
+                            className="cal-mark draw"
                             key={e.id}
                             title={e.title}
-                            data-testid={
-                              e.type === "draw" ? `cal-draw-${cell.iso}` : `cal-event-${cell.iso}`
-                            }
+                            data-testid={`cal-draw-${cell.iso}`}
                           />
                         ))}
                         {news.length > 0 && (

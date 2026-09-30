@@ -37,15 +37,6 @@ agents:
     timeout_ms: 180000
     thinking_level: low
 
-  # 협상 방의 GM — 이 협상의 서류·상황·방의 대화만 읽고 상대가 되어 장면과 대사를 쓴다
-  # (docs/common/llm/agents.md §4-1). 도구 루프를 돌며 장면을 쓰는 머리라 매치 GM과 같은 자리다.
-  negotiation-gm:
-    provider: google
-    model: gemini-3.8-flash
-    max_tokens: 64000
-    timeout_ms: 180000
-    thinking_level: low
-
   # 새 게임의 배경을 읽고 시작 사건을 판정한 뒤, 그 위에서 부임 첫날의
   # 첫 장면까지 쓴다 (docs/common/llm/agents.md §4-2). **싼 자리로 보내지 않는다** — 판정만 낼
   # 때는 앵커가 답을 받쳐 줬지만 첫 장면에는 앵커가 없고, 그것이 이 게임의 첫인상이다.
@@ -78,10 +69,7 @@ evaluators:
     timeout_ms: 10000
     input_usd_per_million: 0.042
   training-orders: *jev
-  market-orders: *jev
-  table-orders: *jev
+  finance-orders: *jev
   match-reader: *jev
   training-rater: *jev
-  scouting: *jev
-  negotiation: *jev
   finalize-match: *jev

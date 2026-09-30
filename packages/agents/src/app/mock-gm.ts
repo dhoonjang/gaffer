@@ -13,7 +13,7 @@ import {
 import { josaOf } from "@story-fm/domain";
 import { ScriptedGameLLM, resolveLlmMode, type AgentConfig, type GameLLM } from "@story-fm/llm";
 import type { GmTurnResult } from "../common/gm-types";
-import { matchScript, negotiationScript, peaceScript } from "./mock-script";
+import { matchScript, peaceScript } from "./mock-script";
 
 /**
  * **mock 모드가 어느 어댑터를 세우는가** — 그것뿐인 층이다 (docs/common/llm/agents.md §8).
@@ -30,42 +30,27 @@ export interface MockTurnFacts {
   inMatch: boolean;
   /** 첫 휘슬만 여는 턴 */
   kickoff: boolean;
-  /** 협상 방의 턴 — 대본이 상대가 되어 답한다 (transfer.md §12-2) */
-  inNegotiation: boolean;
-  /** 자리에 앉는 첫 턴 — 도구가 없다 */
-  seating: boolean;
-  /** 이 턴이 속한 협상 — 방이 닫힌 뒤의 마지막 턴도 이 id의 것이다 */
-  negotiationId: string | null;
   /** 손잡이가 보낸 턴 — 구간은 코어가 이미 굴렸다 */
   operator: boolean;
   /** 이 턴에 코어가 이미 남긴 기록이 있는가 — 그러면 장면은 그 기록이 세운다 */
   recorded: () => boolean;
 }
 
-/** GM 셋(평시·경기·협상 방) 자리의 대본 어댑터 — 실모드면 `undefined` */
+/** GM 둘(평시·경기) 자리의 대본 어댑터 — 실모드면 `undefined` */
 export function mockGmLlm(
   config: AgentConfig,
   state: GameState,
   turn: MockTurnFacts,
 ): GameLLM | undefined {
   if (resolveLlmMode() !== "mock") return undefined;
-  return new ScriptedGameLLM(config, (req) =>
+  return new ScriptedGameLLM(config, () =>
     turn.inMatch
       ? matchScript(state, {
           kickoff: turn.kickoff,
           operator: turn.operator,
           message: turn.message,
         })
-      : turn.inNegotiation
-        ? negotiationScript(state, {
-            seating: turn.seating,
-            operator: turn.operator,
-            message: turn.message,
-            negotiationId: turn.negotiationId,
-            // 이번 요청에 실려 온 도구만 부른다 — 자리에 앉는 턴·일어서는 턴에는 도구가 없다
-            tools: (req.tools ?? []).map((tool) => tool.name),
-          })
-        : peaceScript(state, turn.message, { recorded: turn.recorded() }),
+      : peaceScript(state, turn.message, { recorded: turn.recorded() }),
   );
 }
 
@@ -97,7 +82,7 @@ const ONBOARDING_SCENES = [
   },
   {
     place: () => `감독실`,
-    line: () => `@: *여름 이적시장 첫날. 구단 전화가 쉴 새 없이 울리는 가운데 문이 열린다*`,
+    line: () => `@: *프리시즌 첫날. 훈련장 사무실 문이 열린다*`,
   },
 ] as const;
 
@@ -115,7 +100,7 @@ const ONBOARDING_WELCOMES = [
 const ONBOARDING_CLOSERS = [
   (tag: string) =>
     `${tag} 먼저 선수단을 들여다보시겠습니까, 아니면 이번 주 훈련 방향부터 정하시겠습니까?`,
-  (tag: string) => `${tag} 이적시장, 훈련, 전술 가운데 무엇부터 손대시겠습니까?`,
+  (tag: string) => `${tag} 훈련, 전술, 선수단 가운데 무엇부터 손대시겠습니까?`,
   (tag: string) =>
     `${tag} 감독님의 첫 결정은 무엇입니까 — 선수단 점검부터 할까요, 훈련장으로 바로 나갈까요?`,
   (tag: string) =>
