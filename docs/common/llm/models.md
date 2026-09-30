@@ -445,7 +445,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 ## 3-1. `stopReason` — 턴이 왜 멈췄는가
 
 **세 제공자의 종료 사유는 이름이 다르고 뜻도 딱 겹치지 않는다.** 어댑터가 자기 SDK의
-값을 아래 다섯 중 하나로 옮기고, 게임 코드는 이 다섯만 읽는다. 제공자가 사유를 보고하지
+값을 아래 다섯 중 하나로 옮기고, 게임 코드는 이 다섯과 코어가 세우는 `handoff`만 읽는다. 제공자가 사유를 보고하지
 않으면 `null`이다.
 
 | 중립 값     | 뜻                      | Anthropic                    | Google                                                                             | OpenAI (Responses)                                           |
@@ -455,6 +455,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 | `tool_use`  | 도구를 부르고 멈췄다    | `tool_use`                   | 함수 호출이 실린 턴                                                                | `function_call` 아이템이 실린 턴                             |
 | `filtered`  | 제공자가 내용을 막았다  | `refusal`                    | `SAFETY` · `RECITATION` · `BLOCKLIST` · `PROHIBITED_CONTENT` · `SPII` · `LANGUAGE` | `incomplete_details.reason: content_filter` · `refusal` 파트 |
 | `other`     | 위 어디에도 들지 않는다 | `pause_turn`                 | `OTHER` · `MALFORMED_FUNCTION_CALL` · `UNEXPECTED_TOOL_CALL` 등                    | `cancelled` 등 그 밖                                         |
+| `handoff`   | 넘김 도구가 턴을 닫았다 | 코어가 세운다                | 코어가 세운다                                                                      | 코어가 세운다                                                |
 
 - ⚠️ **중립 값에 제공자의 낱말을 쓰지 않는다.** 원문을 그대로 흘리면 잘림 검사가 제공자
   하나에만 맞는다 — Anthropic의 `max_tokens`를 신호로 삼으면 Gemini는 `MAX_TOKENS`를
@@ -464,6 +465,11 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
   부르고도 `STOP`/`status: completed`를 보고하므로, 도구 왕복을 계속할지 여기서 갈린다.
   **`truncated`만은 예외로 그대로 남는다** — 잘린 호출은 실행하지 않으므로(§3) 그 턴이
   멈춘 이유는 도구가 아니라 출력 상한이다.
+- **`handoff`는 제공자가 아니라 도구의 답이 세운다.** 도구가 `ToolOutcome.endsTurn`을
+  실어 성공하면 어댑터는 그 결과를 모델에게 보내지 않고 왕복을 끝낸다. 같은 응답에서 그
+  뒤에 선 호출은 실행하지 않고 `HANDED_OFF` 결과로 닫으며, 이력은 실행한 결과까지를 합성
+  content로 닫는다. 결과를 들고 가는 다음 요청이 없으므로 그 도구 뒤의 장면은 생성되지 않는다.
+  넘김 도구는 [agents.md §2](agents.md)의 둘이다.
 - **`truncated`가 잘린 턴의 유일한 신호다** — 첫 장면은 그 자리에서 실패하고
   (agents.md §1), 이미 스트리밍으로 나간 진행 턴은 원인만 로그에 남는다.
 

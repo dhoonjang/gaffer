@@ -32,13 +32,10 @@ export type TurnOperation =
    * 읽고 매치 GM이 그 사건을 중계한다. 시계는 실행기가 민다 (live-match.md §8.3)
    */
   | { kind: "match_stop" }
-  /**
-   * 협상 방에 앉는다 — `start_negotiation`이 세운 방의 게이트를 지난다. 그 턴은 자리에
-   * 앉는 첫 턴이고 도구가 없다 (docs/negotiation/transfer.md §12-2).
-   */
-  | { kind: "enter_negotiation"; method?: NegotiationMethod }
   /** 협상에서 물러난다 — 협상은 열린 채 그 자리만 닫힌다 */
   | { kind: "leave_negotiation" }
+  /** 합의한 계약서에 서명한다 — 서버가 계약 확정을 먼저 걸고 협상 GM이 그 장면을 쓴다 */
+  | { kind: "sign_contract"; negotiationId: string }
   /**
    * **제안 폼** — 화면이 정확한 값으로 낸 제안 (proposal.ts). 감독의 말이 없는 제안 턴은
    * 이 손잡이로 선다: 서버가 코어 명령을 먼저 걸고 그 문장을 `label`에 담는다. 화면은
@@ -65,8 +62,8 @@ export const TurnOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("skip_to_next_match"), date: DateString }),
   z.object({ kind: z.literal("enter_match") }),
   z.object({ kind: z.literal("match_stop") }),
-  z.object({ kind: z.literal("enter_negotiation"), method: NegotiationMethodSchema.optional() }),
   z.object({ kind: z.literal("leave_negotiation") }),
+  z.object({ kind: z.literal("sign_contract"), negotiationId: z.string().min(1) }),
 ]);
 
 /**
@@ -86,10 +83,10 @@ export function operationLabel(operation: TurnOperation): string {
       return "경기장에 들어선다";
     case "match_stop":
       return "경기 중단";
-    case "enter_negotiation":
-      return "협상 이어가기";
     case "leave_negotiation":
-      return "일상으로 돌아가기";
+      return "돌아가기";
+    case "sign_contract":
+      return "계약서에 서명";
     case "propose":
       return operation.label;
   }

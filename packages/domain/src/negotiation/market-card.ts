@@ -1,3 +1,5 @@
+import { type SquadStatus } from "../common/squad-rules";
+
 /**
  * **시장 카드** — 협상·스카우트가 채팅에 남기는 카드.
  *
@@ -36,7 +38,9 @@ export type MarketCardKind =
   /** 협상을 접었다 */
   | "withdraw"
   /** 스카우트 파견 — 보고서는 며칠 뒤에 온다 */
-  | "scout";
+  | "scout"
+  /** 합의한 계약서 — 감독의 서명을 기다린다 (transfer.md §7) */
+  | "contract";
 
 /** 조건 한 벌 — 없는 값은 싣지 않는다 (임대는 이적료가 임대료다) */
 export interface MarketTerms {
@@ -99,4 +103,10 @@ export interface MarketCard {
    * "지금 오는 게 아니라 여름에 온다"는 것이다 — 배지가 그 낱말을 든다.
    */
   precontract?: boolean;
+  /** 서명할 거래 — 계약서 카드에만 선다. 서명 조작이 이 id로 간다 */
+  negotiationId?: string;
+  /** 합의한 계약 지위 — 계약서 카드에만 */
+  squadStatus?: SquadStatus;
+  /** 합의한 추가 조항의 이름 — 계약서 카드에만 */
+  clauses?: string[];
 }

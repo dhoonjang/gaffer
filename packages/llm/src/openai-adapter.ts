@@ -10,6 +10,8 @@ import {
   type TurnResult,
   type TurnUsage,
   UNRUN_CALL,
+  HANDED_OFF,
+  endsTurn,
 } from "./game-llm";
 import {
   blockedTurnError,
@@ -484,7 +486,16 @@ export class OpenAiGameLLM implements GameLLM {
         break;
       }
 
+      let handedOff = false;
       for (const call of turn.calls) {
+        if (handedOff) {
+          input.push({
+            type: "function_call_output",
+            call_id: call.callId,
+            output: toolError(HANDED_OFF),
+          });
+          continue;
+        }
         toolCallCount++;
         const spec = tools.find((tool) => tool.name === call.name);
         let parsed: unknown;
@@ -504,11 +515,17 @@ export class OpenAiGameLLM implements GameLLM {
         const outcome: ToolOutcome = spec
           ? await spec.handle(parsed, { text })
           : { ok: false, message: `알 수 없는 도구: ${call.name}` };
+        if (endsTurn(outcome)) handedOff = true;
         input.push({
           type: "function_call_output",
           call_id: call.callId,
           output: outcome.ok ? outcome.message : toolError(outcome.message),
         });
+      }
+      // 넘김 도구의 결과는 모델에게 돌아가지 않는다 — 그 뒤의 장면은 다른 GM이 쓴다
+      if (handedOff) {
+        stopReason = "handoff";
+        break;
       }
     }
 

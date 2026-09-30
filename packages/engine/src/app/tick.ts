@@ -1661,8 +1661,10 @@ export function advanceForOperation(
 ): AdvanceOutcome | null {
   if (state.phase !== "idle") return null;
   if (operation.kind === "enter_match" || operation.kind === "match_stop") return null;
-  // 방에 앉고 일어서는 손잡이도 시계를 밀지 않는다 — 방의 시계는 인내다 (transfer.md §12-2)
-  if (operation.kind === "enter_negotiation" || operation.kind === "leave_negotiation") return null;
+  // 방에서 일어서는 손잡이도 시계를 밀지 않는다
+  if (operation.kind === "leave_negotiation") return null;
+  // 서명도 시계를 밀지 않는다 — 계약 확정은 턴 앞에서 걸렸다
+  if (operation.kind === "sign_contract") return null;
   // 제안은 시계를 밀지 않는다 — 코어 명령은 이미 턴 앞에서 걸렸다 (proposal.ts)
   if (operation.kind === "propose") return null;
   if (operation.kind === "skip_days") return advanceTime(state, { days: operation.days });

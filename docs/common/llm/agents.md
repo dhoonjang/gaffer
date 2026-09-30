@@ -36,22 +36,22 @@
 비교 실행은 `--baseline-agent`로 기존 생성형 역할의 모델 설정을 명시적으로 선택하고,
 강도 평가에는 `evaluators.match-reader` 설정을 사용한다. 비교 역할 이름은 과거 로그를 읽는 용도로만 남는다.
 
-| 호출 / 설정 키                      | 누가 시작하는가                                        | 책임과 경계                                                                               |
-| ----------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| 평시 GM / `gm`                      | 평시 턴                                                | 서사·관계·진행·조회 스킬. 지시는 `tactic_orders`·`training_orders`·`market_orders`로 전달 |
-| 매치 GM / `match-gm`                | 경기 턴                                                | 확정 사건 중계·벤치 대화. `tactic_orders`·`team_talk`·`finalize_match`                    |
-| 협상 GM / `negotiation-gm`          | 협상 교환·예약 이벤트                                  | 연락·대화·요약. `negotiation_orders`·`evaluate_negotiation`·`leave_negotiation`           |
-| 평시 전술 / `tactic-orders` (Jev)   | 평시 `tactic_orders`                                   | 현재 전술·선수 사실과 원문에서 명령 선택                                                  |
-| 훈련·육성 / `training-orders` (Jev) | `training_orders`                                      | 훈련·육성 명령 선택                                                                       |
-| 시장·재정 / `market-orders` (Jev)   | `market_orders`                                        | 명단·재정 관리; 거래 연락은 협상 GM 연결                                                  |
-| 협상 조건 / `table-orders` (Jev)    | `negotiation_orders`                                   | 현재 거래의 감독 지시·승인·위임 범위 해석                                                 |
-| 선수 거래 / `negotiation` (Jev)     | `evaluate_negotiation` 또는 교환 종료의 같은 평가 경로 | 조건 묶음·상대 입장·후속 일과 시점. 감독 지시 해석과 구분                                 |
-| 스카우팅 / `scouting` (Jev)         | `request_scouting` 또는 보고 예정일 이벤트             | 조사 범위·예상 정보 수준·시점 계획, 확보한 근거의 보고 평가                               |
-| 경기 전술 / `match-reader` (Jev)    | 경기 `tactic_orders`                                   | 직접 명령과 복합 전술 효과. 원문 출처와 시트는 함께 검증·적용                             |
-| 경기 결산 / `finalize-match` (Jev)  | 마감 스킬 또는 마감 보장 경로                          | 평점·성장, 코어 앵커 ± 한도. 근거·심경은 매치 GM                                          |
-| 훈련 결산 / `training-rater` (Jev)  | 날짜 진행                                              | 훈련 구간 평가, 코어 앵커 ± 한도                                                          |
-| 이력 압축 / `history-compactor`     | 평시 이력 창 상한                                      | 요약·인물 기억, 실패하면 접지 않음                                                        |
-| 온보딩 / `onboarding-judge`         | 새 게임 생성                                           | 초기 조건·사건·첫 장면, 실패하면 생성 중단                                                |
+| 호출 / 설정 키                      | 누가 시작하는가                                        | 책임과 경계                                                                                               |
+| ----------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| 평시 GM / `gm`                      | 평시 턴                                                | 서사·관계·진행·조회 스킬. 지시는 `tactic_orders`·`training_orders`·`market_orders`로 전달                 |
+| 매치 GM / `match-gm`                | 경기 턴                                                | 확정 사건 중계·벤치 대화. `tactic_orders`·`team_talk`·`finalize_match`                                    |
+| 협상 GM / `negotiation-gm`          | 협상 교환·예약 이벤트                                  | 연락·대화·합의·요약. `negotiation_orders`·`evaluate_negotiation`·`accept_negotiation`·`leave_negotiation` |
+| 평시 전술 / `tactic-orders` (Jev)   | 평시 `tactic_orders`                                   | 현재 전술·선수 사실과 원문에서 명령 선택                                                                  |
+| 훈련·육성 / `training-orders` (Jev) | `training_orders`                                      | 훈련·육성 명령 선택                                                                                       |
+| 시장·재정 / `market-orders` (Jev)   | `market_orders`                                        | 명단·재정 관리; 거래 연락은 협상 GM 연결                                                                  |
+| 협상 조건 / `table-orders` (Jev)    | `negotiation_orders`                                   | 현재 거래의 감독 지시·승인·위임 범위 해석                                                                 |
+| 선수 거래 / `negotiation` (Jev)     | `evaluate_negotiation` 또는 교환 종료의 같은 평가 경로 | 조건 묶음·상대 입장·후속 일과 시점. 감독 지시 해석과 구분                                                 |
+| 스카우팅 / `scouting` (Jev)         | `request_scouting` 또는 보고 예정일 이벤트             | 조사 범위·예상 정보 수준·시점 계획, 확보한 근거의 보고 평가                                               |
+| 경기 전술 / `match-reader` (Jev)    | 경기 `tactic_orders`                                   | 직접 명령과 복합 전술 효과. 원문 출처와 시트는 함께 검증·적용                                             |
+| 경기 결산 / `finalize-match` (Jev)  | 마감 스킬 또는 마감 보장 경로                          | 평점·성장, 코어 앵커 ± 한도. 근거·심경은 매치 GM                                                          |
+| 훈련 결산 / `training-rater` (Jev)  | 날짜 진행                                              | 훈련 구간 평가, 코어 앵커 ± 한도                                                                          |
+| 이력 압축 / `history-compactor`     | 평시 이력 창 상한                                      | 요약·인물 기억, 실패하면 접지 않음                                                                        |
+| 온보딩 / `onboarding-judge`         | 새 게임 생성                                           | 초기 조건·사건·첫 장면, 실패하면 생성 중단                                                                |
 
 ```mermaid
 flowchart TD
@@ -109,6 +109,13 @@ Choice 인자는 유일한 최대 선택지가 과반 확률을 얻어야 채택
 - **상대와의 모든 연락은 협상 GM으로 연결한다.** `start_negotiation`은 대면뿐 아니라
   제안 발송·답신도 맡긴다. 메인 GM은 명단 관리와 감독의 목표를 다루고, 상대 조건은
   Jev 평가를 거친 협상 결과와 요약으로 받는다. 화면을 옮기지 않는 처리도 같은 경로다.
+- **다른 GM에게 장면을 넘기는 스킬은 그 턴의 마지막 호출이다.** `start_match`와
+  `start_negotiation`(continue)이 성공하면 평시 GM의 호출은 거기서 끝나고, 그 뒤의 장면은
+  생성되지 않는다 ([models.md](models.md) §3-1 `handoff`). 같은 응답에서 뒤에 선 호출은
+  실행되지 않는다. 경기는 킥오프 게이트가 서고 입장한 턴에 매치 GM이 첫 휘슬을 연다.
+  협상은 게이트가 없다 — 같은 요청 안에서 협상 GM이 감독의 원문을 받아 첫 장면을 쓰고,
+  그 턴은 도구를 쥔다. 조건을 함께 말했으면 그 자리에서 평가까지 간다. `start_negotiation`의
+  request는 넘김이 아니다 — 결과가 평시 GM에게 돌아와 평시 장면이 그것을 전한다.
 
 - **턴은 감독의 다음 말 하나를 제안하며 닫힌다** — GM 셋(평시·경기·협상 방)이 장면의
   **마지막 줄**에 `<suggest_reply>…</suggest_reply>`로 낸다 ([prompts.md](prompts.md) §1).
@@ -124,8 +131,7 @@ Choice 인자는 유일한 최대 선택지가 과반 확률을 얻어야 채택
   늘어놓는 것은 그대로 금지다.
 - **손잡이는 문장이 아니라 구조체로 온다.** 화면은 `TurnOperation`을 API에 넘기고
   (`{ kind: "skip_days", days }` · `{ kind: "skip_to_next_match", date }` ·
-  `{ kind: "enter_match" }` · `{ kind: "match_stop" }` ·
-  `{ kind: "enter_negotiation" }` · `{ kind: "leave_negotiation" }`),
+  `{ kind: "enter_match" }` · `{ kind: "match_stop" }` · `{ kind: "leave_negotiation" }`),
   프롬프트에 실리는 `<operator>…</operator>` 문구는 서버가 그
   구조체에서 만든다(`operationLabel`). 문장을 되읽는 정규식은 없다 — UI 문구 한 글자에
   시계·배치가 갈리던 자리가 여기였다.
@@ -396,6 +402,8 @@ Jev는 의뢰 때 범위·예상 정보 수준·소요 일수·보고 내용을 
 
 ### 하나의 협상 경로
 
+연락 방식은 감독 요청과 장면에서 정한다. 대화 이력은 상대 참조가 붙은 `chat` 원문을 읽는다. 대화 중 평가는 조건과 입장만 결정하며, `leave_negotiation`으로 교환을 마칠 때 필요한 후속 이벤트를 예약한다. 동일한 조건의 응답은 종료 평가에서도 재사용한다.
+
 대면·통화·제안서는 negotiation-gm이 주관하며 같은 상대의 협상 테이블에 함께 기록한다. 감독이 협상 화면을 보고
 있지 않아도 상대 응답의 주인은 같다. 메인 GM의 `market_orders`는 명단 등재·해제와
 직접 관리에 한정하고, `start_negotiation`이 기존 기록으로 협상 GM을 부른다.
@@ -403,7 +411,9 @@ Jev는 의뢰 때 범위·예상 정보 수준·소요 일수·보고 내용을 
 
 협상 GM의 `negotiation_orders`는 감독 원문·제안서·위임의 범위 안에서 조건 작성과
 발송·답신·승인·철회를 처리한다. `evaluate_negotiation`은 Jev 조건 평가를 요청하고,
-`leave_negotiation`은 이번 교환의 기록·선택적 후속 일정·요약을 저장해 일상으로
+`accept_negotiation`은 대화에서 닿은 합의를 기록하고 서명 카드를 세운다 — 서명은
+감독이 카드에서 한다. 평시에서 합의된 거래를 확정할 때도 평시 GM은 `start_negotiation`으로
+그 테이블을 열 뿐이고, 계약을 확정하는 명령은 어느 GM에게도 없다. `leave_negotiation`은 이번 교환의 기록·선택적 후속 일정·요약을 저장해 일상으로
 돌아간다. 종료는 철회·동의·서명이 아니다. 상세 인자와 소유권은 transfer.md §4에만 둔다.
 
 ### 평가와 표현
@@ -537,7 +547,8 @@ Jev의 가격 판단 품질을 입증하지 않는다.
 - **경기를 여는 턴은 평시 이력에 남는다.** `start_match`를 부른 턴의 화자는 평시 GM이고,
   중계는 그다음 턴(킥오프)부터다. 끝날 때 국면이 바뀌었다는 이유로 경기 턴으로 표시하면
   중계 이력(`casterHistory`)에도 평시 이력에도 없어 **경기로 들어간 그 장면이 사라진다.**
-  협상에서는 실제 발송·응답·교환을 거래 ID에 기록하며, 연결을 요청한 평시 턴과 구분한다.
+  협상은 다르다 — `start_negotiation`(continue)을 부른 턴의 장면은 협상 GM이 쓰므로 감독의
+  발화와 그 턴이 함께 그 협상의 이력이다.
 - **협상 이력은 거래 기록과 상대별 협상 테이블을 함께 읽는다.** 현재 거래의 조건·승인은
   해당 ID로 한정하고, 같은 상대의 과거 교환은 관련성과 공개 범위에 따라 읽는다.
   일상으로 돌아가거나 협상 방식을 바꿔도 같은 테이블의 기록은 남는다. 평시로는 기록에 근거한 협상 요약과

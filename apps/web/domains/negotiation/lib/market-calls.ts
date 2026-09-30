@@ -1,5 +1,28 @@
-import type { MarketCard, MarketCardKind } from "@story-fm/domain";
+import {
+  proposalInputOf,
+  type ProposalInput,
+  type MarketCard,
+  type MarketCardKind,
+} from "@story-fm/domain";
+import type { ChatTurn, ToolCallRecord } from "@story-fm/engine";
 import { CARD_CALLS } from "../../common/lib/panel-hints";
+
+/** Form commands retain the submitted input; display it with the input turn without copying the ledger. */
+export function proposalAttachments(chat: readonly ChatTurn[]) {
+  const byTurn = new Map<ChatTurn, ProposalInput>();
+  const calls = new Set<ToolCallRecord>();
+  for (const [i, turn] of chat.entries()) {
+    const sender = turn.role === "model" ? chat[i - 1] : turn;
+    if (!sender || sender.role === "model") continue;
+    for (const call of turn.toolCalls) {
+      const proposal = proposalInputOf(call);
+      if (!proposal) continue;
+      byTurn.set(sender, proposal);
+      calls.add(call);
+    }
+  }
+  return { byTurn, calls };
+}
 
 const MARKET_CARD_KINDS: ReadonlySet<MarketCardKind> = new Set([
   "offer",
@@ -7,6 +30,7 @@ const MARKET_CARD_KINDS: ReadonlySet<MarketCardKind> = new Set([
   "renewal",
   "withdraw",
   "scout",
+  "contract",
 ]);
 
 /**

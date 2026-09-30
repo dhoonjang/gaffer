@@ -69,8 +69,7 @@ export const SKILL_CATALOG = [
     description:
       "경기일에 킥오프를 준비한다. 감독이 들어가자고 할 때, 또는 경기 전 점검(라인업·전술·팀토크)이 끝나 " +
       "그날 남은 일이 경기뿐일 때 되묻지 말고 부른다. " +
-      "부르면 감독에게 입장 확인 창이 뜨므로 이 턴에는 경기장으로 향하는 장면까지만 쓰고 킥오프·중계는 쓰지 않는다. " +
-      "감독이 입장하면 경기 마스터가 진행한다.",
+      "성공하면 이번 턴이 이 호출로 끝나고 장면을 쓰지 않는다. 같은 턴에 필요한 다른 호출은 먼저 부른다.",
   },
   {
     name: "start_negotiation",
@@ -78,7 +77,7 @@ export const SKILL_CATALOG = [
     group: "진행",
     readOnly: false,
     description:
-      "상대 구단·선수 측과의 접촉과 교섭을 연다. party=club은 구단 조건, agent는 개인 조건이다. method는 meeting·phone·proposal이며 같은 상대의 테이블을 이어 쓴다. mode=request는 감독이 맡긴 요청을 처리해 메인 대화로 결과를 돌려주고, continue는 감독이 직접 주고받는 협상 대화를 연다. 열린 거래의 negotiationId 또는 대상 playerId·kind를 쓴다. 감독이 말하지 않은 금액·계약 연수·발신 권한을 만들지 않는다. 결과가 대기·실패이면 합의한 것처럼 서술하지 않는다.",
+      "상대 구단·선수 측과의 접촉과 교섭을 연다. party=club은 구단 조건, agent는 개인 조건이다. method는 meeting·phone·proposal이며 같은 상대의 테이블을 이어 쓴다. mode=request는 감독이 맡긴 요청을 처리해 메인 대화로 결과를 돌려주고, continue는 감독이 직접 주고받는 협상 대화를 연다. continue가 성공하면 이번 턴이 이 호출로 끝나고 장면을 쓰지 않는다. 같은 턴에 필요한 다른 호출은 먼저 부른다. 열린 거래의 negotiationId 또는 대상 playerId·kind를 쓴다. 합의된 거래의 계약 확정도 그 거래를 continue로 연다 — 서명은 감독이 테이블의 계약서에서 한다. 감독이 말하지 않은 금액·계약 연수·발신 권한을 만들지 않는다. 결과가 대기·실패이면 합의한 것처럼 서술하지 않는다.",
   },
   {
     name: "team_talk",

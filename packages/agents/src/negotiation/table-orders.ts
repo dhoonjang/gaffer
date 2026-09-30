@@ -3,14 +3,13 @@ import {
   type GameState,
   roomPartyOf,
   defaultPartyOf,
-  tableOf,
+  negotiationChat,
   describeNegotiation,
 } from "@story-fm/engine";
 import { type Negotiation } from "@story-fm/domain";
 
 export const TABLE_OPS: readonly string[] = [
   "respond_offer",
-  "accept_deal",
   "withdraw_offer",
   "answer_term",
   "offer_terms",
@@ -24,11 +23,11 @@ const TABLE_LOG_TAIL = 6;
 
 export function buildTableOrdersContext(state: GameState, negotiation: Negotiation): string[] {
   const party = roomPartyOf(state) ?? defaultPartyOf(state, negotiation);
-  const log = (tableOf(state, negotiation, party)?.lines ?? [])
+  const log = negotiationChat(state, negotiation, party)
     .slice(-TABLE_LOG_TAIL)
     .map((line) => {
-      const who = line.by === "us" ? "@감독" : "[장부]";
-      return `${line.date} ${who}: ${line.text}`;
+      const who = line.role === "model" ? "@상대" : "@감독";
+      return `${line.at} ${who}: ${line.text}`;
     });
   return [
     ...tagged("negotiation", describeNegotiation(state, negotiation.id)),
@@ -38,7 +37,6 @@ export function buildTableOrdersContext(state: GameState, negotiation: Negotiati
 
 export const BY_NEGOTIATION = new Set([
   "respond_offer",
-  "accept_deal",
   "withdraw_offer",
   "answer_term",
   "offer_terms",

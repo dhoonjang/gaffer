@@ -13,21 +13,11 @@ import {
 import { TabledTermSchema, DealTermSchema } from "./deal-terms";
 import { formatMoney } from "../common/money";
 
-export const TABLE_LINE_MAX = 600;
-
 export const TABLE_SPEAKERS = ["club", "agent"] as const;
 
 export const TableSpeakerSchema = z.enum(TABLE_SPEAKERS);
 
 export type TableSpeaker = z.infer<typeof TableSpeakerSchema>;
-
-export const TableLineSchema = z.object({
-  date: DateString,
-  by: z.enum(["us", "ledger"]),
-  text: z.string().min(1).max(TABLE_LINE_MAX),
-});
-
-export type TableLine = z.infer<typeof TableLineSchema>;
 
 export const NegotiationContactTableSchema = z.object({
   id: z.string().min(1),
@@ -35,12 +25,6 @@ export const NegotiationContactTableSchema = z.object({
   representativeId: z.string().min(1),
   party: TableSpeakerSchema,
   openedOn: DateString,
-  lines: z.array(
-    TableLineSchema.extend({
-      negotiationId: z.string().min(1),
-      exchangeId: z.string().min(1),
-    }),
-  ),
 });
 export const NegotiationTableSchema = NegotiationContactTableSchema;
 export type NegotiationTable = z.infer<typeof NegotiationTableSchema>;

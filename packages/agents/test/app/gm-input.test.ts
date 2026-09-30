@@ -28,7 +28,6 @@ import {
   reportersOf,
   selectCharacters,
   sendOffer,
-  sitAtTable,
   speakerRoles,
   squadReturnOf,
   subLimitsOf,
@@ -2148,9 +2147,6 @@ describe("교섭 서류의 목소리 — 화자와 그가 답하는 칸", () => 
   it("재계약의 서류에는 목소리가 하나 선다 — 이적료를 받을 구단이 없다", () => {
     const state = game();
     const { negotiation } = renewal(state);
-    const seat = sitAtTable(state, negotiation.id, "남아 주십시오");
-    if (!seat.ok) throw new Error(seat.message);
-    expect(seat.seat.voices.map((v) => v.speaker)).toEqual(["agent"]);
     expect(buildCounterpartyBlock(state, negotiation)).toContain('"speaker":"agent"');
     expect(buildCounterpartyBlock(state, negotiation)).not.toContain('"speaker":"club"');
   });
@@ -2173,9 +2169,6 @@ describe("교섭 서류의 목소리 — 화자와 그가 답하는 칸", () => 
     expect(buildCounterpartyBlock(state, buy, { party: "agent" })).toContain('"speaker":"agent"');
 
     // 방 — 단장 한 사람이다 (transfer.md §12-1 「두 테이블, 두 사람」)
-    const room = sitAtTable(state, buy.id, "값부터 맞춥시다");
-    if (!room.ok) throw new Error(room.message);
-    expect(room.seat.voices.map((v) => v.speaker)).toEqual(["club"]);
     const roomBrief = buildCounterpartyBlock(state, buy, { party: "club" })!;
     expect(roomBrief).toContain('"speaker":"club"');
     expect(roomBrief).not.toContain('"speaker":"agent"');

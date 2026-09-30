@@ -33,8 +33,7 @@ export const PANEL_OF: Record<string, PanelKey> = {
   training_orders: "달력",
   market_orders: "재정",
   negotiation_orders: "재정",
-  // 방을 세우는 스킬 — 경기의 `start_match`와 같은 자리다. 방 자체는 게이트가 세우고,
-  // 협상이 실리는 장부는 이적 예산이 선 재정이다
+  // 방을 세우는 스킬 — 협상이 실리는 장부는 이적 예산이 선 재정이다
   start_negotiation: "재정",
   evaluate_negotiation: "재정",
   receive_market_contact: "재정",
@@ -103,6 +102,7 @@ export const CARD_CALLS: ReadonlySet<string> = new Set([
   "open_renewal",
   "open_release",
   "withdraw_offer",
+  "accept_negotiation",
 ]);
 
 /**

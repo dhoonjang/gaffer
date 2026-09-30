@@ -1,10 +1,4 @@
-import type {
-  DealTermKind,
-  ProposalInput,
-  ProposalKind,
-  SquadStatus,
-  TableSpeaker,
-} from "@story-fm/domain";
+import type { DealTermKind, ProposalInput, SquadStatus, TableSpeaker } from "@story-fm/domain";
 import { dealTermKindsFor, naturalPositionOf, pointsBonusEligible } from "@story-fm/domain";
 import type { CommandResult } from "../../common/commands/result";
 import { userWageRoom } from "../finance/board-request";
@@ -100,20 +94,7 @@ export function applyProposal(state: GameState, input: ProposalInput): CommandRe
   }
 }
 
-/** 이 명령이 화면의 칩·카드에 서는 이름 — 채팅으로 낸 것과 같은 이름이다 */
-export function proposalCommandName(kind: ProposalKind): string {
-  switch (kind) {
-    case "buy":
-    case "loan":
-      return "send_offer";
-    case "renew":
-      return "open_renewal";
-    case "personal":
-      return "propose_personal";
-    case "terms":
-      return "offer_terms";
-  }
-}
+export { proposalCommandName } from "@story-fm/domain";
 
 /**
  * **제안 폼이 미리 채우는 값** — 코어가 아는 자다 (transfer.md §12-3). 화면은 이 값을

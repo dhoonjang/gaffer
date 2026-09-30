@@ -1411,9 +1411,7 @@ function relevantTurns(
   contact = roomContactNow(state),
 ): typeof state.chat {
   if (contact !== undefined)
-    return state.chat.filter(
-      (turn) => turn.inNegotiation === true && turn.negotiationContactId === contact,
-    );
+    return state.chat.filter((turn) => turn.negotiationContactId === contact);
   if (room !== undefined) {
     // 방 안 — 이 협상의 턴만. 방을 나갔다 다시 앉아도 같은 협상이면 지난 자리의 대화가 이력이다
     return state.chat.filter((t) => t.inNegotiation === true && t.negotiationId === room);

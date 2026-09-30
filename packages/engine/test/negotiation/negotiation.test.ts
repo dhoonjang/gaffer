@@ -11,6 +11,7 @@ import {
 import type { GameState } from "@story-fm/engine";
 import {
   acceptDeal,
+  acceptTableTerms,
   activeContract,
   addDays,
   answerIncomingOffer,
@@ -850,6 +851,67 @@ describe("재계약 — 상대가 선수 본인이다", () => {
     expect(fresh.weeklyWage).toBe(Math.round(expectation * 1.2));
     expect(fresh.until > oldContract.until).toBe(true);
     expect(playerById(state, player.id)!.teamId).toBe(state.userTeamId);
+  });
+});
+
+describe("대화의 합의 — 계약서는 서고 서명은 감독이 한다", () => {
+  /** 80% 주급 · 3년 재계약을 열고, 선수 쪽이 115%로 되부른 자리까지 */
+  function counteredRenewal(state: GameState) {
+    const player = playersOf(state, state.userTeamId)[0]!;
+    activeContract(state, player.id)!.until = addDays(state.date, 120);
+    const expectation = renewalExpectation(state, player);
+    const offered = Math.round(expectation * 0.8);
+    openRenewal(state, { playerId: player.id, weeklyWage: offered, years: 3 });
+    const negotiation = state.negotiations.find((n) => n.kind === "renew")!;
+    const demanded = Math.round(expectation * 1.15);
+    respondOffer(state, {
+      negotiationId: negotiation.id,
+      verdict: "counter",
+      weeklyWage: demanded,
+    });
+    return { player, negotiation, offered, demanded };
+  }
+
+  it("감독이 상대의 조정안을 받으면 그 값으로 합의하고, 서명 전에는 계약이 그대로다", () => {
+    const state = createTestGame(42);
+    const { player, negotiation, demanded } = counteredRenewal(state);
+    const before = activeContract(state, player.id)!.weeklyWage;
+    const result = acceptTableTerms(state, {
+      negotiationId: negotiation.id,
+      party: "agent",
+      side: "manager",
+    });
+    expect(result.ok, result.message).toBe(true);
+    expect(negotiation.status).toBe("agreed");
+    const card = result.payload as MarketCard;
+    expect(card.kind).toBe("contract");
+    expect(card.negotiationId).toBe(negotiation.id);
+    expect(card.terms?.weeklyWage).toBe(demanded);
+    expect(activeContract(state, player.id)!.weeklyWage).toBe(before);
+
+    expect(acceptDeal(state, negotiation.id).ok).toBe(true);
+    expect(negotiation.status).toBe("completed");
+    expect(activeContract(state, player.id)!.weeklyWage).toBe(demanded);
+  });
+
+  it("상대가 우리 조건을 받으면 조정안이 서 있어도 우리 값으로 합의한다", () => {
+    const state = createTestGame(42);
+    const { negotiation, offered } = counteredRenewal(state);
+    const result = acceptTableTerms(state, {
+      negotiationId: negotiation.id,
+      party: "agent",
+      side: "counterparty",
+    });
+    expect(result.ok, result.message).toBe(true);
+    expect(negotiation.status).toBe("agreed");
+    expect((result.payload as MarketCard).terms?.weeklyWage).toBe(offered);
+    // 이미 합의된 거래는 같은 계약서를 다시 세울 뿐 조건을 옮기지 않는다
+    const again = acceptTableTerms(state, {
+      negotiationId: negotiation.id,
+      party: "agent",
+      side: "manager",
+    });
+    expect((again.payload as MarketCard).terms?.weeklyWage).toBe(offered);
   });
 });
 
@@ -2145,7 +2207,8 @@ import {
   overLimit,
   requestNegotiationEvaluation,
   resolveMedical,
-  selectNegotiationMethod,
+  negotiationChat,
+  linkNegotiationChat,
 } from "@story-fm/engine";
 
 describe("상대별 교환과 평가 원장", () => {
@@ -2172,11 +2235,16 @@ describe("상대별 교환과 평가 원장", () => {
     expect(
       startNegotiation(state, { negotiationId: n.id, party: "club", method: "meeting" }).ok,
     ).toBe(true);
-    expect(selectNegotiationMethod(state, "phone").ok).toBe(true);
     markSeated(state);
-    expect(selectNegotiationMethod(state, "proposal").ok).toBe(false);
-    sitAtTable(state, n.id, "이 선수 이적료를 문의합니다", "club");
-    const contact = state.pendingNegotiation!.exchangeId;
+    const exchange = state.pendingNegotiation!.exchangeId;
+    state.chat.push({
+      role: "user",
+      text: "이 선수 이적료를 문의합니다",
+      at: state.date,
+      toolCalls: [],
+    });
+    linkNegotiationChat(state, exchange);
+    linkNegotiationChat(state, exchange);
     closeNegotiation(state, "left");
     const other = state.players.find((p) => p.teamId === player.teamId && p.id !== player.id)!;
     const next = openTalks(state, { playerId: other.id, kind: "buy" });
@@ -2188,32 +2256,72 @@ describe("상대별 교환과 평가 원장", () => {
     });
     expect(state.negotiationContacts).toHaveLength(1);
     expect(state.negotiationExchanges).toHaveLength(2);
-    expect(state.negotiationContacts[0]!.lines[0]!.exchangeId).toBe(contact);
-    expect(state.negotiationContacts[0]!.lines[0]!.negotiationId).toBe(n.id);
+    expect(negotiationChat(state, next.negotiation, "club")).toHaveLength(1);
+    expect(negotiationChat(state, next.negotiation, "club")[0]).toBe(state.chat[0]);
+    expect(state.chat[0]!.negotiationExchangeId).toBe(exchange);
+    expect(state.chat[0]!.negotiationId).toBe(n.id);
+    expect(negotiationChat(state, next.negotiation, "agent")).toHaveLength(0);
   });
-  it("같은 사실과 조건은 종료 재시도에서도 재평가되지 않고 예약은 하나다", () => {
+  it("대화 중에는 예약하지 않고 종료 평가만 한 번 예약한다", () => {
     const { state, n } = setup();
     const e = requestNegotiationEvaluation(state, {
       negotiationId: n.id,
       party: "club",
-      said: "검토해 주세요",
     })!;
     const result = assessment(n);
     result.followup = { purpose: "response", days: 3, requiresDecision: false };
-    expect(applyNegotiationAssessment(state, e.id, result).ok).toBe(true);
+    expect(applyNegotiationAssessment(state, e.id, result).ok).toBe(false);
+    expect(state.negotiationFollowups).toHaveLength(0);
+    expect(applyNegotiationAssessment(state, e.id, assessment(n)).ok).toBe(true);
+    const ending = requestNegotiationEvaluation(state, {
+      negotiationId: n.id,
+      party: "club",
+      ending: true,
+    })!;
+    expect(ending.id).not.toBe(e.id);
+    expect(applyNegotiationAssessment(state, ending.id, result).ok).toBe(true);
     expect(
       requestNegotiationEvaluation(state, {
         negotiationId: n.id,
         party: "club",
-        said: "검토해 주세요",
         ending: true,
       })!.id,
-    ).toBe(e.id);
-    expect(applyNegotiationAssessment(state, e.id, result).ok).toBe(true);
+    ).toBe(ending.id);
+    expect(applyNegotiationAssessment(state, ending.id, result).ok).toBe(true);
     expect(state.negotiationFollowups).toHaveLength(1);
     expect(dueNegotiationFollowups(state)).toHaveLength(0);
     state.date = addDays(state.date, 3);
     expect(dueNegotiationFollowups(state)).toHaveLength(1);
+  });
+  it("종료 평가는 이미 받은 수정안을 바꾸거나 같은 응답 라운드를 다시 쌓지 않는다", () => {
+    const { state, n, player } = setup();
+    sendOffer(state, { playerId: player.id, fee: 1000, weeklyWage: 0, years: 0 });
+    const reply = requestNegotiationEvaluation(state, { negotiationId: n.id, party: "club" })!;
+    const counter = assessment(n, "counter");
+    counter.conditions.fee = 2000;
+    expect(applyNegotiationAssessment(state, reply.id, counter).ok).toBe(true);
+    const rounds = structuredClone(state.negotiations.find((entry) => entry.id === n.id)!.rounds);
+    const ending = requestNegotiationEvaluation(state, {
+      negotiationId: n.id,
+      party: "club",
+      ending: true,
+    })!;
+    expect(
+      applyNegotiationAssessment(state, ending.id, {
+        ...counter,
+        conditions: { ...counter.conditions, fee: 3000 },
+      }).ok,
+    ).toBe(false);
+    expect(
+      applyNegotiationAssessment(state, ending.id, {
+        ...counter,
+        followup: { purpose: "response", days: 2, requiresDecision: true },
+      }).ok,
+    ).toBe(true);
+    expect(state.negotiations.find((entry) => entry.id === n.id)!.rounds).toEqual(rounds);
+    expect(state.negotiationFollowups.filter((event) => event.status === "pending")).toHaveLength(
+      1,
+    );
   });
   it("바뀐 조건과 무관한 근거를 가진 결과는 계약과 후속 일정을 바꾸지 못한다", () => {
     const { state, n, player } = setup();
@@ -2265,7 +2373,11 @@ describe("상대별 교환과 평가 원장", () => {
   });
   it("합의 전 메디컬 예약은 원자적으로 거절하고 검진은 실제 부상만 기록한다", () => {
     const { state, n, player } = setup();
-    const e = requestNegotiationEvaluation(state, { negotiationId: n.id, party: "club" })!;
+    const e = requestNegotiationEvaluation(state, {
+      negotiationId: n.id,
+      party: "club",
+      ending: true,
+    })!;
     const result = assessment(n);
     result.followup = { purpose: "medical", days: 1, requiresDecision: false };
     expect(applyNegotiationAssessment(state, e.id, result).ok).toBe(false);
@@ -2291,7 +2403,7 @@ describe("상대별 교환과 평가 원장", () => {
   });
 });
 
-import { closeNegotiation, markSeated, sitAtTable, startNegotiation } from "@story-fm/engine";
+import { closeNegotiation, markSeated, startNegotiation } from "@story-fm/engine";
 
 import { pendingContractOf } from "@story-fm/engine";
 

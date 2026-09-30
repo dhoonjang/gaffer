@@ -322,7 +322,7 @@ describe("판정을 기다리는 협상은 눈에 띈다", () => {
    * **감독을 세우는 것은 답이 온 것이 아니라 굳은 뒤에 서 있는 조정이다**
    * (transfer.md §12-1). 답할 날이 된 라운드는 감독이 나섰으면 협상 GM이, 아니면
    * 그날의 tick이 앵커로 굳히므로, 답을 기다리는 동안에도 굳는 그 순간에도 감독이
-   * 할 일은 없다. 차례가 오는 것은 상대가 되불렀을 때뿐이고 받는 문은 `accept_deal`이다.
+   * 할 일은 없다. 차례가 오는 것은 상대가 되불렀을 때뿐이고 받는 문은 그 협상의 테이블(`start_negotiation`)이다.
    */
   it("상대가 되부르면 pendingVerdicts에 서고, 답을 기다리는 동안은 서지 않는다", () => {
     const state = createTestGame(11);
@@ -344,7 +344,7 @@ describe("판정을 기다리는 협상은 눈에 띈다", () => {
     expect(countered.ok, countered.message).toBe(true);
     const waiting = pendingVerdicts(state);
     expect(waiting).toHaveLength(1);
-    expect(waiting[0]!.action).toBe("accept_deal");
+    expect(waiting[0]!.action).toBe("start_negotiation");
   });
 
   it("합의된 협상은 확정을 기다린다", () => {
@@ -357,7 +357,7 @@ describe("판정을 기다리는 협상은 눈에 띈다", () => {
     const answered = respondOffer(state, { negotiationId: negotiation.id, verdict: "accept" });
     expect(answered.ok, answered.message).toBe(true);
     const waiting = pendingVerdicts(state);
-    expect(waiting[0]!.action).toBe("accept_deal");
+    expect(waiting[0]!.action).toBe("start_negotiation");
   });
 });
 

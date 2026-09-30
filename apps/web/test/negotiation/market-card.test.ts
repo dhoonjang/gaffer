@@ -1,7 +1,7 @@
 import type { ChatTurn } from "@story-fm/engine";
 import { chatForActiveNegotiation } from "../../domains/negotiation/lib/negotiation-chat";
 import { describe, expect, it, vi } from "vitest";
-import { splitMarketCalls } from "../../domains/negotiation/lib/market-calls";
+import { proposalAttachments, splitMarketCalls } from "../../domains/negotiation/lib/market-calls";
 
 const accepted = {
   kind: "verdict",
@@ -20,6 +20,54 @@ const offered = {
 } as const;
 
 describe("시장 결과 카드와 칩", () => {
+  it("첨부는 바로 앞 발신 메시지에만 연결하고 원본 조건과 다른 응답을 보존한다", () => {
+    const input = {
+      playerId: "player-2",
+      kind: "renew",
+      weeklyWage: 100_000,
+      years: 4,
+      terms: [{ kind: "other", note: "시즌 뒤 조건 재검토" }],
+    };
+    const proposal = { name: "open_renewal", summary: "", input };
+    const reply = { name: "respond_offer", summary: "", payload: accepted };
+    const sender: ChatTurn = {
+      role: "user",
+      text: "이 조건으로 제안합니다",
+      at: "2026-07-01",
+      toolCalls: [],
+    };
+    const response: ChatTurn = {
+      role: "model",
+      text: "",
+      at: sender.at,
+      toolCalls: [proposal, reply],
+    };
+    const next: ChatTurn = { ...sender, text: "다시 검토해줘" };
+    const chat = [sender, response, next];
+    const before = structuredClone(chat);
+    const result = proposalAttachments(chat);
+    expect(result.byTurn.get(sender)).toEqual(input);
+    expect(result.byTurn.has(next)).toBe(false);
+    expect([...result.calls]).toEqual([proposal]);
+    expect(chat).toEqual(before);
+    expect(proposalAttachments([response]).calls.size).toBe(0);
+  });
+
+  it("제안서만 보낸 경우와 전송 중인 경우도 원본을 표시하고 일반 GM 호출은 제외한다", () => {
+    const input = { playerId: "player-2", kind: "personal", weeklyWage: 100_000, years: 4 };
+    const call = { name: "propose_personal", summary: "", input };
+    const sender: ChatTurn = { role: "operator", text: "", at: "2026-07-01", toolCalls: [] };
+    const response: ChatTurn = { ...sender, role: "model", toolCalls: [call] };
+    expect(proposalAttachments([sender, response]).byTurn.get(sender)).toEqual(input);
+    const pending = { ...sender, toolCalls: [call] };
+    expect(proposalAttachments([pending]).byTurn.get(pending)).toEqual(input);
+    response.toolCalls = [
+      { ...call, input: { playerId: input.playerId, weeklyWage: 110_000, years: 4 } },
+    ];
+    expect(proposalAttachments([sender, response]).calls.size).toBe(0);
+    response.toolCalls = [{ ...call, name: "another_command" }];
+    expect(proposalAttachments([sender, response]).calls.size).toBe(0);
+  });
   it("제안 수락 카드가 있어도 계약 확정 결과는 숨기지 않는다", () => {
     const result = splitMarketCalls([
       { name: "respond_offer", payload: accepted },

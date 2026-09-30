@@ -12,6 +12,8 @@ export const CALL_LABELS = {
   receive_market_contact: "거래 연락 접수",
   negotiation_orders: "협상 지시",
   evaluate_negotiation: "협상 조건 평가",
+  accept_negotiation: "합의",
+  sign_contract: "계약 서명",
   leave_negotiation: "이번 연락 마치기",
   set_lineup: "라인업",
   set_squad_level: "1·2군 이동",

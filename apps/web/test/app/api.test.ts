@@ -329,6 +329,23 @@ describe("API — 온보딩부터 경기까지", () => {
     // 코어가 턴 앞에서 건 오퍼가 이 턴의 호출 장부에 카드로 선다
     const offer = last.toolCalls.find((c) => c.name === "send_offer");
     expect(offer?.payload).toMatchObject({ kind: "offer", playerId: wanted.id });
+    const saved = loadGame(game.id)!;
+    const contact = saved.negotiationContacts[0]!;
+    const history = saved.chat.filter((turn) => turn.negotiationContactId === contact.id);
+    expect(history).toHaveLength(2);
+    expect(history.map((turn) => turn.role)).toEqual(["operator", "model"]);
+    expect(history[0]!.negotiationExchangeId).toBe(saved.negotiationExchanges[0]!.id);
+    expect(history[1]!.negotiationExchangeId).toBe(history[0]!.negotiationExchangeId);
+
+    const reopened = await events(
+      await postTurn(json({ message: `${wanted.name} 협상하자` }), params(game.id)),
+    );
+    expect(reopened.find((event) => event.type === "done")).toBeDefined();
+    const returned = loadGame(game.id)!;
+    expect(returned.negotiationContacts).toHaveLength(1);
+    const continued = returned.chat.filter((turn) => turn.negotiationContactId === contact.id);
+    expect(continued.slice(0, 2)).toEqual(history);
+    expect(continued.map((turn) => turn.role)).toEqual(["operator", "model", "user", "model"]);
 
     // 남의 구단과 계약한 선수의 재계약을 폼으로 우회할 수 없다.
     const beforeRejected = loadGame(game.id)!;
@@ -1102,6 +1119,19 @@ describe("채팅 기록 필터", () => {
   it("거를 것이 없으면 턴을 그대로 둔다 — 화면이 쥔 것과 같은 객체다", () => {
     const kept = turn([{ name: "set_lineup", summary: "라인업 확정" }]);
     expect(visibleChat([kept])[0]).toBe(kept);
+  });
+
+  it("칩을 숨긴 개인 조건 제안도 첨부 원본은 페이로드에 남긴다", () => {
+    const proposal = {
+      name: "propose_personal",
+      summary: "",
+      silent: true,
+      input: { kind: "personal", playerId: "player-1", weeklyWage: 100_000, years: 4 },
+    };
+    const [filtered] = visibleChat([
+      turn([proposal, { name: "시간 경과", summary: "", silent: true }]),
+    ]);
+    expect(filtered!.toolCalls).toEqual([proposal]);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   openNegotiationFor,
   startNegotiation,
   closeNegotiation,
+  acceptDeal,
   bindJournal,
   journal,
   loadGame,
@@ -11,7 +12,6 @@ import {
   proposalCommandName,
   saveGame,
   scoutingEvidence,
-  selectNegotiationMethod,
   setPlayerTactic,
   setSetPieceTakers,
   setTactics,
@@ -393,14 +393,33 @@ export function runTurnLocked(
               "pendingNegotiation",
               "phase",
             ] as const;
-            const allowed = new Set<string>([...fields, "narrative"]);
-            // Narrative summaries stay at the opening checkpoint; contact lines own the durable exchange.
+            const allowed = new Set<string>([...fields, "narrative", "chat"]);
+            // Only negotiation references may change on existing chat messages at this checkpoint.
             // Every other saved field is a source or ledger boundary. Future fields default to protected.
             const sourceFacts = (value: GameState) =>
               JSON.stringify(
                 Object.fromEntries(Object.entries(value).filter(([key]) => !allowed.has(key))),
               );
-            if (sourceFacts(current) !== sourceFacts(next)) return;
+            const withoutReferences = (chat: GameState["chat"]) =>
+              chat.map((turn) => {
+                const {
+                  negotiationId: _deal,
+                  negotiationContactId: _contact,
+                  negotiationExchangeId: _exchange,
+                  ...message
+                } = turn;
+                void _deal;
+                void _contact;
+                void _exchange;
+                return message;
+              });
+            if (
+              sourceFacts(current) !== sourceFacts(next) ||
+              JSON.stringify(withoutReferences(current.chat)) !==
+                JSON.stringify(withoutReferences(next.chat))
+            )
+              return;
+            next.chat = structuredClone(current.chat);
             for (const key of fields) Object.assign(next, { [key]: structuredClone(current[key]) });
             durableCheckpoint = next;
             return;
@@ -437,8 +456,9 @@ export function runTurnLocked(
         const inMatch = state.phase === "match";
         const matchId = state.pendingMatch?.matchId;
         /**
-         * 협상 방의 턴도 같은 규칙이다 (transfer.md §12-2) — 감독이 나서는 손잡이 턴부터
-         * 물러나는 턴까지가 그 협상의 이력이고, 방을 세운 `start_negotiation` 턴은 평시다.
+         * 협상 방의 턴도 같은 규칙이다 — 방 안의 턴부터 물러나는 턴까지가 그 협상의 이력이다.
+         * 방을 세운 `start_negotiation` 턴은 그 장면을 협상 GM이 쓰므로 코어가 입력 줄에
+         * 협상 표식을 달고(`linkNegotiationChat`), 모델 턴이 그 표식을 이어받는다 (agents.md §2).
          * 방 안에서 낸 제안 폼의 줄도 이 표식을 달아 한 협상의 두 줄이 갈리지 않는다.
          */
         const inNegotiation = state.phase === "negotiation";
@@ -538,6 +558,7 @@ export function runTurnLocked(
          */
         const seedCalls: GmToolCall[] = [];
         let proposed: TurnOperation | undefined;
+        let proposalChatIndex: number | undefined;
         if (proposal !== undefined) {
           const name = proposalCommandName(proposal.kind);
           const result = applyProposal(state, proposal);
@@ -581,12 +602,28 @@ export function runTurnLocked(
               });
             const room = state.pendingNegotiation;
             if (room?.negotiationId === deal.id) {
+              const contact = state.negotiationExchanges.find(
+                (entry) => entry.id === room.exchangeId,
+              );
+              if (contact)
+                Object.assign(mark, {
+                  negotiationId: deal.id,
+                  negotiationContactId: contact.contactId,
+                  negotiationExchangeId: contact.id,
+                });
+              proposalChatIndex = state.chat.length;
+              state.chat.push({
+                role: "operator",
+                text: proposalLabel(proposal, playerName(state, proposal.playerId)),
+                toolCalls: [],
+                at: state.date,
+                ...mark,
+              });
               const response = await evaluateNegotiation(state, {
                 negotiationId: deal.id,
                 party: room.party,
                 exchangeId: room.exchangeId,
                 ending: !wasInRoom,
-                said: proposalLabel(proposal, playerName(state, proposal.playerId)),
               });
               result.message += ` · ${response.message}`;
               if (!wasInRoom) closeNegotiation(state, "left");
@@ -602,35 +639,65 @@ export function runTurnLocked(
             "(이미 넣었다 — 다시 넣지 말 것)";
           appliedOrders.push(label);
           proposed = { kind: "propose", label };
-          // 감독의 말이 함께 오면 그 말이 턴이다 — 제안은 앞에 선 손잡이 줄로 남는다
-          if (message !== undefined) {
-            state.chat.push({
-              role: "operator",
-              text: label,
-              toolCalls: [],
-              at: state.date,
-              ...mark,
+        }
+        /**
+         * **서명** — 계약서 카드의 손잡이다 (transfer.md §7). 계약 확정을 턴 앞에서 건다.
+         * 반려(예산·창·메디컬)는 제안 폼과 같이 턴이 없었던 일이 되고 이유가 화면으로 간다.
+         */
+        if (operation?.kind === "sign_contract") {
+          const result = acceptDeal(state, operation.negotiationId);
+          journal({
+            kind: "command",
+            name: "accept_deal",
+            input: { negotiationId: operation.negotiationId },
+            ok: result.ok,
+            message: result.message,
+            source: "board",
+            ...(result.brief === undefined ? {} : { brief: result.brief }),
+          });
+          if (!result.ok) {
+            noteTurn({
+              outcome: {
+                ok: false,
+                saved: false,
+                error: "계약을 확정하지 못했습니다",
+                detail: result.message,
+              },
+              after: turnDigestOf(state),
             });
+            return {
+              ok: false as const,
+              status: 400,
+              error: "계약을 확정하지 못했습니다",
+              retry: false,
+              detail: result.message,
+            };
           }
+          recordCall(seedCalls, "accept_deal", result, {
+            input: { negotiationId: operation.negotiationId },
+          });
+          appliedOrders.push(
+            `계약서에 서명했다 — ${result.message} (이미 확정했다 — 다시 확정하지 말 것)`,
+          );
         }
         /**
          * 모델이 읽을 한 줄 — 조작이면 **구조체에서 만든다.** 감독이 친 말이 아니라
          * 손잡이라, 이 문장은 표시일 뿐이고 되읽는 코드가 없다 (agents.md §2).
          */
-        if (operation?.kind === "enter_negotiation" && operation.method !== undefined) {
-          const result = selectNegotiationMethod(state, operation.method);
-          if (!result.ok)
-            return { ok: false as const, status: 400, error: result.message, retry: false };
-        }
         const handle = operation ?? (message === undefined ? proposed : undefined);
         const said = handle ? operationLabel(handle) : (message ?? "");
-        state.chat.push({
-          role: handle ? "operator" : "user",
-          text: said,
-          toolCalls: [],
-          at: state.date,
-          ...mark,
-        });
+        const inputIndex =
+          message === undefined && proposalChatIndex !== undefined
+            ? proposalChatIndex
+            : state.chat.length;
+        if (inputIndex === state.chat.length)
+          state.chat.push({
+            role: handle ? "operator" : "user",
+            text: said,
+            toolCalls: [],
+            at: state.date,
+            ...mark,
+          });
         try {
           const turn = await runGmTurn(
             state,
@@ -642,6 +709,13 @@ export function runTurnLocked(
             seedCalls,
             checkpoint,
           );
+          const inputTurn = state.chat[inputIndex];
+          if (inputTurn?.negotiationContactId)
+            Object.assign(mark, {
+              negotiationId: inputTurn.negotiationId,
+              negotiationContactId: inputTurn.negotiationContactId,
+              negotiationExchangeId: inputTurn.negotiationExchangeId,
+            });
           state.chat.push({
             role: "model",
             text: turn.text,

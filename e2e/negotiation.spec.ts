@@ -11,14 +11,14 @@ test("같은 상대와 대면·통화·제안서를 이어도 기록과 거래�
   await page.goto(`/game/${gameId}`);
   const input = page.getByTestId("chat-input");
   await expect(input).toBeEnabled({ timeout: COLD_MS });
-  const gate = page.getByTestId("negotiation-gate");
   const room = page.getByTestId("negotiation-room");
-  for (const method of ["meeting", "phone", "proposal"]) {
-    await input.fill(`${targetName} 협상하자`);
+  for (const [method, request] of [
+    ["meeting", "협상하자"],
+    ["phone", "전화로 협상하자"],
+    ["proposal", "제안서로 협상하자"],
+  ]) {
+    await input.fill(`${targetName} ${request}`);
     await page.getByTestId("chat-send").click();
-    await expect(gate).toBeVisible();
-    await gate.getByLabel("연락 방식").selectOption(method);
-    await page.getByTestId("negotiation-enter").click();
     await expect(room).toBeVisible();
     await expect(input).toBeEnabled();
     await expect(page.getByTestId("time-skip-toggle")).toBeDisabled();
@@ -48,7 +48,11 @@ test("같은 상대와 대면·통화·제안서를 이어도 기록과 거래�
     "proposal",
   ]);
   expect(
-    saved.negotiationContacts[0]!.lines.filter((line) => line.by === "us")
+    saved.chat
+      .filter(
+        (line) =>
+          line.negotiationContactId === saved.negotiationContacts[0]!.id && line.role === "user",
+      )
       .map((line) => line.text)
       .join("\n"),
   ).toContain("조건을 먼저 들어 보고 싶습니다");
