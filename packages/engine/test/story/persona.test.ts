@@ -18,7 +18,6 @@ import {
   HEAD_COACH_NAMES,
   generateHeadCoach,
   headCoachOf,
-  isFamousPlayer,
   speakerRoles,
   ownerOf,
   generateOwner,
@@ -38,8 +37,6 @@ import {
   MANAGER_ARCHETYPE_LABELS,
   personaKeywords,
   registerCharacters,
-  reseatClubPersonas,
-  staffOf,
   staffSalaryOf,
   STAFF_OPENINGS,
   type CharacterDraft,
@@ -183,79 +180,6 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
     }
   });
 
-  it("남의 팀 선수는 협상 테이블에 앉았을 때만 사전에 든다", () => {
-    const state = createTestGame(42, "manutd");
-    // 이름난 현역은 협상 없이도 사전에 있다 — 이 테스트의 자리는 무명의 것이다
-    const outsider = state.players.find(
-      (p) => p.teamId !== "manutd" && !isFamousPlayer(p.attributes.overall, p.name),
-    )!;
-    expect(speakerRoles(state)[normalizeSpeaker(outsider.name)]).toBeUndefined();
-
-    state.negotiations.push({
-      id: "neg-1",
-      gamePlayerId: outsider.id,
-      kind: "buy",
-      counterpartTeamId: outsider.teamId,
-      windowId: null,
-      openedOn: state.date,
-      expiresOn: state.date,
-      status: "open",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [],
-    });
-    expect(speakerRoles(state)[normalizeSpeaker(outsider.name)]).toEqual({ kind: "player" });
-  });
-
-  it("합의 뒤 메디컬을 기다리는 선수도 사전에 남는다 — open만 보면 자리가 사라진다", () => {
-    const state = createTestGame(42, "manutd");
-    const outsider = state.players.find((p) => p.teamId !== "manutd")!;
-    state.negotiations.push({
-      id: "neg-2",
-      gamePlayerId: outsider.id,
-      kind: "buy",
-      counterpartTeamId: outsider.teamId,
-      windowId: null,
-      openedOn: state.date,
-      expiresOn: state.date,
-      status: "agreed",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [],
-      medical: { onDate: state.date, status: "scheduled" },
-    });
-    expect(speakerRoles(state)[normalizeSpeaker(outsider.name)]).toEqual({ kind: "player" });
-  });
-
-  it("끝난 협상은 화자를 남기지 않는다", () => {
-    for (const status of ["completed", "rejected", "expired"] as const) {
-      const state = createTestGame(42, "manutd");
-      const outsider = state.players.find(
-        (p) => p.teamId !== "manutd" && !isFamousPlayer(p.attributes.overall, p.name),
-      )!;
-      state.negotiations.push({
-        id: `neg-${status}`,
-        gamePlayerId: outsider.id,
-        kind: "buy",
-        counterpartTeamId: outsider.teamId,
-        windowId: null,
-        openedOn: state.date,
-        expiresOn: state.date,
-        status,
-        pitched: [],
-        precontract: false,
-        terms: [],
-        buyout: false,
-        rounds: [],
-      });
-      expect(speakerRoles(state)[normalizeSpeaker(outsider.name)], status).toBeUndefined();
-    }
-  });
-
   it("이름이 겹치면 아무것도 붙이지 않는다 — 틀린 직책보다 없는 게 낫다", () => {
     const state = createTestGame(42, "manutd");
     const coach = headCoachOf(state);
@@ -268,7 +192,6 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
   it("세계 인물 명부가 직책 라벨과 함께 선다 — 유저 팀의 명부 감독만 빠진다", () => {
     const roles = speakerRoles({ seed: 1, userTeamId: "manutd", personas: [] });
     expect(roles[normalizeSpeaker("펩 과르디올라")]).toEqual({ kind: "manager", label: "감독" });
-    expect(roles[normalizeSpeaker("조르제 멘데스")]).toEqual({ kind: "agent", label: "에이전트" });
     expect(roles[normalizeSpeaker("게리 네빌")]).toEqual({ kind: "pundit", label: "해설위원" });
     // 유저가 맡은 팀의 명부 감독은 이 세계에 부임한 적이 없다
     expect(
@@ -397,23 +320,9 @@ describe("스태프 — 고용 정보를 든 인물 (people.md §2-2)", () => {
     );
   });
 
-  it("스태프는 구단의 사람이라 부임하면 갈린다 — 옛 구단의 사람은 따라오지 않는다", () => {
-    const state = createTestGame(42);
-    const before = staffOf(state).map((p) => p.name);
-    reseatClubPersonas(state, "chelsea", { crossedLeague: false });
-    const after = staffOf(state);
-    expect(after.map((p) => p.name)).not.toEqual(before);
-    expect(after.every((p) => p.employment?.teamId === "chelsea")).toBe(true);
-    // 자리는 그대로 채워진다 — 새 구단에도 코치 둘·의료진·스카우트가 이미 서 있다
-    for (const role of STAFF_ROLES) {
-      expect(staffOf(state, role), role).toHaveLength(STAFF_OPENINGS[role]);
-    }
-  });
-
   it("화자 표 — 갈래마다 그 역할의 사람이 서고, 자리가 비면 수석코치가 선다", () => {
     const state = createTestGame(42);
     expect(factSpeakerOf(state, "medical").role).toBe("medic");
-    expect(factSpeakerOf(state, "scouting").role).toBe("scout");
     expect(factSpeakerOf(state, "training").role).toBe("coach");
     expect(factSpeakerOf(state, "coach_eye").role).toBe("head_coach");
     // 의료진을 자른 세이브 — 부상 줄은 여전히 서야 하므로 수석코치가 대신 선다
@@ -764,7 +673,7 @@ describe("인물 사전 갱신", () => {
     const before = state.personas!.length;
     const squadName = state.players.find((p) => p.teamId === state.userTeamId)!.name;
 
-    // 우리 선수와 같은 이름의 에이전트 — 화면이 두 사람을 한 사람으로 읽는다
+    // 우리 선수와 같은 이름의 인물 — 화면이 두 사람을 한 사람으로 읽는다
     expect(registerCharacters(state, [draftOf({ characterId: squadName, name: squadName })])).toBe(
       0,
     );
@@ -838,7 +747,7 @@ describe("인물 사전 갱신", () => {
     // 압축이 적은 명부 인물·파생 선수의 기억은 조용히 버려지지 않는다
     expect(
       applyCharacterMemories(state, [
-        { characterId: "조르제 멘데스", text: "재계약 조건을 두고 한 차례 부딪혔다" },
+        { characterId: "게리 네빌", text: "중계석의 평가를 두고 한 차례 부딪혔다" },
         { characterId: outsider.name, text: "경기 뒤 터널에서 짧게 인사를 나눴다" },
       ]),
     ).toBe(2);
@@ -989,7 +898,7 @@ describe("관계 등급 — 이야기가 사이를 바꾼다 (people.md §6)", (
     expect(RELATION_TIERS.filter((t) => stanceOfTier(t) === null)).toEqual(["distant", "cordial"]);
   });
 
-  it("이적과 방출은 실제로 쌓인 관계를 지우지 않는다", () => {
+  it("계약 만료로 떠나도 실제로 쌓인 관계는 지워지지 않는다", () => {
     const state = structuredClone(base);
     const mates = playersOf(state, state.userTeamId);
     const [a, b] = [mates[0]!, mates[1]!];
@@ -998,7 +907,7 @@ describe("관계 등급 — 이야기가 사이를 바꾼다 (people.md §6)", (
     expect(state.relations!.length).toBe(2);
 
     const before = structuredClone(state.relations);
-    toFreeAgency(state, a, "release-agreed");
+    toFreeAgency(state, a);
     expect(a.teamId).not.toBe(state.userTeamId);
     expect(state.relations).toEqual(before);
     expect(relationTierOf(state, MANAGER_SUBJECT, a.id)).toBe("close");

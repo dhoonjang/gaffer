@@ -2,9 +2,6 @@ import {
   type GameState,
   openCallUp,
   openInjury,
-  transferRequestOf,
-  announcedInterestsOn,
-  teamNameIn,
   pendingApproach,
   playersOf,
   squadLevelOf,
@@ -15,8 +12,6 @@ import {
   type GamePlayer,
   pressFactText,
   capsOf,
-  TRANSFER_REQUEST_REASON_KO,
-  INTEREST_STAGE_KO,
   josa,
   normalizeSpeaker,
   numberWishOf,
@@ -25,7 +20,6 @@ import {
 import { internationalBreaksOf, daysUntilReturn } from "../../common/players/international";
 import { diffDays } from "../../common/core/dates";
 import { type NumberLineage, openSymbolicNumbers } from "../../common/players/numbers";
-import { isSettling } from "../../common/players/settling";
 import { formLabel } from "../../common/players/form";
 import { NO_MINUTES_PLACE_KO, type NoMinutesPlace } from "./mood";
 import { mentoringReadOf } from "./mentoring";
@@ -128,38 +122,11 @@ function factOf(
       : null; // 재활 초입은 이미 주의 줄의 부상 항목이 말한다
   }
   /**
-   * **대표팀은 뛸 수 없는 것 다음이고 나가겠다는 말보다 앞이다** (people.md §7).
+   * **대표팀은 뛸 수 없는 것 다음이다** (people.md §7).
    * 소집 중인 선수는 이번 주 클럽에 없다 — 그 사실 위에서 폼도 명단도 읽힌다.
    */
   const duty = callUpFactOf(state, player);
   if (duty) return duty;
-  /**
-   * **나가겠다고 말한 것은 폼보다 큰 사실이다** (transfer.md §1-1) — 뛸 수 없는 것
-   * 다음이고 나머지보다는 앞이다. 수락한 요청은 서지 않는다: 그 사실은 이적
-   * 리스트가 이미 말한다.
-   */
-  const request = transferRequestOf(state, player.id);
-  if (request && request.answer !== "accept") {
-    const reason = TRANSFER_REQUEST_REASON_KO[request.reason];
-    const said =
-      request.answer === "refuse"
-        ? "감독이 거부했다"
-        : request.answeredOn !== undefined
-          ? "감독이 면담으로 답했다"
-          : "아직 답하지 않았다";
-    return `이적 요청 (${reason}) — ${said}`;
-  }
-  /**
-   * **밖에서 묻는 것은 나가겠다고 말한 것보다는 뒤고 나머지보다는 앞이다**
-   * (transfer.md §1-2 · people.md §7). `watching`은 서지 않는다 — 아직 아무 말도
-   * 오지 않은 것이라 라커룸에 들릴 사실이 없다. 맨 앞 줄(사다리 위 칸)만 쓴다:
-   * 두 구단을 다 적으면 근황 한 조각이 시장 브리핑이 된다.
-   */
-  const interest = announcedInterestsOn(state, player.id)[0];
-  if (interest) {
-    return `${teamNameIn(state, interest.teamId)} 관심 — ${INTEREST_STAGE_KO[interest.stage]}`;
-  }
-  if (isSettling(state, player.id)) return "새 영입, 아직 적응 중";
   const form = player.state.form;
   if (form >= PEAK) return `폼 ${formLabel(form)}`;
   if (form <= SLUMP) return `폼 ${formLabel(form)}`;

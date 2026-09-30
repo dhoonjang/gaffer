@@ -37,7 +37,7 @@ const browserImports = {
     },
   ],
 };
-const domains = ["story", "negotiation", "match"];
+const domains = ["story", "match"];
 // 공개 배럴의 이름도 실제 선언 위치로 판정한다. 수동 목록은 export가 늘 때 경계를 놓친다.
 const packages = ["domain", "engine", "agents"];
 const entrypoints = packages.map((pkg) =>
@@ -60,7 +60,7 @@ const exportsByPackage = entrypoints.map((entry, i) => {
       if (!(declaration.flags & ts.SymbolFlags.Value)) return [];
       const file = declaration.declarations?.[0]?.getSourceFile().fileName ?? "";
       const owner = file.match(
-        /packages\/(?:domain|engine|agents)\/src\/(common|story|negotiation|match|app)\//,
+        /packages\/(?:domain|engine|agents)\/src\/(common|story|match|app)\//,
       )?.[1];
       return owner ? [{ name: symbol.name, owner }] : [];
     }),

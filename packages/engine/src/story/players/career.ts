@@ -101,23 +101,6 @@ export function matchMilestones(state: GameState, matchId: string): readonly Mil
 }
 
 /**
- * 그 시즌에 이 선수가 세운 마일스톤 — 드문 것부터. 협상 서류의 「선수의 지금」이 읽는다
- * (transfer.md §12-1).
- *
- * 장부는 **감독 팀 선수 것만** 담으므로(game-state.md §3.4) 남의 선수는 언제나 비어
- * 있다 — 없는 것을 세우지 않는 것이 그대로 규약이다.
- */
-export function seasonMilestonesOf(
-  state: GameState,
-  playerId: string,
-  season: number,
-): readonly Milestone[] {
-  return state.milestones
-    .filter((m) => m.gamePlayerId === playerId && m.season === season)
-    .sort(compareMilestones);
-}
-
-/**
  * 커리어 — **`SEASON_STAT` 전 행을 접은 것.** 저장하지 않는다
  * (→ docs/common/game-state.md §5).
  *

@@ -92,12 +92,6 @@ function grievanceSubject(fact: Extract<MoodFact, { cause: "grievance" }>): stri
       return "휴가를 반납한 소집";
     case "demotion":
       return "2군 강등";
-    case "listed":
-      return "이적 리스트에 오른 것";
-    case "blocked-move":
-      return "감독이 막은 이적";
-    case "contract":
-      return "재계약 이야기가 없는 것";
     case "out-of-position":
       return fact.count === null ? "자리 밖 기용" : `${fact.count}경기 이어진 자리 밖 기용`;
     case "promise":
@@ -208,11 +202,6 @@ function sentenceOf(fact: MoodFact): string {
         ? `오늘 2군으로 내려갔다 (${who})`
         : `2군에 내려간 지 ${fact.days}일째다 (${who})`;
     }
-    case "settling":
-      // 남은 날짜를 말하지 않는다 — 얼마나 걸릴지는 감독이 앞으로 뭘 하느냐에 달렸다
-      return fact.matches === 0
-        ? "아직 새 팀에서 겉돈다 — 그라운드를 밟아 본 적이 없다"
-        : `새 팀에 녹아드는 중이다 (${fact.percent}%)`;
     case "afterglow":
       return afterglowSentence(fact);
     case "no-minutes":
@@ -256,19 +245,6 @@ function sentenceOf(fact: MoodFact): string {
       }
       return `두 시즌 동안 ${fact.history.count}번 다쳐 ${fact.history.daysOut}일을 결장했다`;
     }
-    case "departure":
-      // 라커룸 전체가 같은 사실을 든다 — 누가 그와 가까웠는지는 아직 아무도 모른다
-      return `${dayWord(fact.days)} ${fact.name} 계약 해지 소식에 라커룸이 뒤숭숭하다`;
-    case "former-club":
-      /**
-       * 그날이 며칠 남았는가로 결이 갈린다 — 두 주 앞의 대진은 달력의 일이고,
-       * 전야는 그 사람의 일이다. 어떻게 떠났는지는 회견 카드의 것이라 여기 오지 않는다.
-       */
-      return fact.days === 0
-        ? `오늘 옛 소속 ${josa(fact.club, "을/를")} 상대한다`
-        : fact.days === 1
-          ? `내일 옛 소속 ${josa(fact.club, "과/와")} 만난다`
-          : `${fact.days}일 뒤 옛 소속 ${josa(fact.club, "과/와")}의 경기가 잡혀 있다`;
     case "contract-ending":
       return "계약이 반년 안에 끝난다";
     case "leader":

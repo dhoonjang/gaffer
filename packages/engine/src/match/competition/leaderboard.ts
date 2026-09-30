@@ -130,7 +130,7 @@ export function pickWinner(
  * 한 대회의 시즌 기록을 선수별로 합산한다 — **개인 순위와 시상이 같이 읽는 한 벌이다.**
  *
  * 행이 대회 축을 가지므로(→ docs/common/game-state.md §3.4) 리그의 표는 리그 경기만,
- * 컵의 표는 그 컵의 경기만 센다. 시즌 중 이적하면 행이 팀별로도 갈려 여기서 합쳐진다.
+ * 컵의 표는 그 컵의 경기만 센다. 시즌 중 소속이 바뀌면 행이 팀별로도 갈려 여기서 합쳐진다.
  */
 export function talliesOf(
   state: GameState,
@@ -145,7 +145,7 @@ export function talliesOf(
 
   for (const stat of state.seasonStats) {
     if (stat.season !== season || stat.competitionId !== competitionId) continue;
-    // 은퇴·이적으로 명단에서 빠진 선수는 이름을 채울 수 없다. 결산은 전환보다
+    // 은퇴로 명단에서 빠진 선수는 이름을 채울 수 없다. 결산은 전환보다
     // 앞이라 실제로는 다 있지만, 없으면 후보에서 뺀다 (빈 이름의 상은 사실이 아니다)
     const player = players.get(stat.gamePlayerId);
     if (!player) continue;

@@ -1,9 +1,7 @@
-import { type GameState, playerById } from "../../common/core/state";
+import { type GameState } from "../../common/core/state";
 import {
   type MatchRecord,
   type GamePlayer,
-  isRelease,
-  RELATION_TIER_RANK,
   type InjuryHistory,
   type RetirementReason,
   type PlayerIssueReason,
@@ -29,7 +27,6 @@ import { RATING_BASELINE, type FormLabel } from "../../common/players/form";
 import { milestonesOf } from "./career";
 import { squadStatusOf, startsInWindow } from "../../common/players/contract-status";
 import { playerArchetypeOf } from "../../common/people/player-persona";
-import { relationTierOf } from "../people/relations";
 import { numberLineageOf } from "../../common/players/numbers";
 import { mentoringReadOf } from "./mentoring";
 
@@ -145,35 +142,6 @@ export function grievanceOf(
 }
 
 /**
- * 최근 우리 구단에서 **계약이 해지된** 선수 — 원장에서 파생한다.
- *
- * 계약 만료도 해지도 `type: "free"`라 갈리는 것은 `reason` 코드뿐이다(`isRelease`).
- * 원장은 날짜 순이므로 뒤에서부터 훑고 창을 벗어나면 멈춘다 — 원장이 아무리 커도
- * 보는 줄은 몇 줄이다.
- *
- * ⚠️ **`mate`와 `close` 이상이던 사람에게만 선다** (people.md §5·§6). 떠난 사람의
- * 소속이 바뀌어도 관계 원장에 쌓인 사이를 그대로 읽는다.
- */
-export function recentDeparture(state: GameState, mate: GamePlayer): MoodFact | null {
-  for (let i = state.transfers.length - 1; i >= 0; i -= 1) {
-    const transfer = state.transfers[i];
-    if (transfer === undefined) continue;
-    const days = diffDays(transfer.date, state.date);
-    if (days < 0) continue;
-    if (days > DEPARTURE_ECHO_DAYS) break;
-    if (transfer.fromTeamId !== state.userTeamId) continue;
-    if (!isRelease(transfer)) continue;
-    if (transfer.gamePlayerId === mate.id) continue;
-    const name = playerById(state, transfer.gamePlayerId)?.name;
-    if (name === undefined) continue;
-    const tier = relationTierOf(state, transfer.gamePlayerId, mate.id);
-    if (RELATION_TIER_RANK[tier] < RELATION_TIER_RANK.close) continue;
-    return { cause: "departure", name, days };
-  }
-  return null;
-}
-
-/**
  * 감독이 옮긴 번호의 여운 — 물려받았나 내려놓았나, 아니면 null (people.md §5).
  *
  * ⚠️ **뺏긴 쪽을 먼저 가른다.** 번호를 잃은 선수도 그 자리에서 자리 관례로 새 번호를
@@ -219,7 +187,7 @@ export function numberEchoOf(state: GameState, player: GamePlayer): MoodFact | n
  * 장부를 고르는 것은 `mentoringReadOf`다: 서 있는 사이가 먼저고, 없으면 `MENTORING_ECHO_DAYS`
  * 안에 닫힌 사이다. 근황(`cues.ts`)이 같은 문을 지나므로 창이 두 벌로 갈리지 않는다.
  *
- * ⚠️ **상대를 못 찾으면 세우지 않는다.** 방출·은퇴로 명단에서 걷힌 사람의 이름은
+ * ⚠️ **상대를 못 찾으면 세우지 않는다.** 은퇴로 명단에서 걷힌 사람의 이름은
  * 장부에 없어, 이름 없는 관계는 감독이 읽을 사실이 못 된다.
  */
 export function mentoringFactOf(
@@ -256,10 +224,10 @@ export function mentoringFactOf(
  * 지친 것과 풀이 죽은 것은 다른 사실이다.
  *
  * 그래서 마음의 근거는 마음 쪽에서 읽는다 — **직전 경기의 결과와 그 선수의
- * 평점**, 불만, 2군 강등, 정착, 출전 기회, 폼. 체력은 문턱을 넘었다는 사실로만 곁들인다.
+ * 평점**, 불만, 2군 강등, 출전 기회, 폼. 체력은 문턱을 넘었다는 사실로만 곁들인다.
  *
  * 우선순위는 "감독이 지금 조치해야 하는 순서"다 — 못 뛰는 사유(부상·정지)가 먼저,
- * 그다음 마음(불만·2군 강등·정착·직전 경기의 여운), 출전 기회, 폼, 마지막이 몸이다.
+ * 그다음 마음(불만·2군 강등·직전 경기의 여운), 출전 기회, 폼, 마지막이 몸이다.
  */
 
 /**
@@ -276,11 +244,8 @@ export const recentReturn = (history: InjuryHistory): boolean =>
 /** 경기의 여운이 남아 있는 기간 — 이 안이면 심경이 그 경기에 매여 있다 */
 export const AFTERGLOW_DAYS = 3;
 
-/** 계약 해지의 여운이 라커룸에 남아 있는 기간 — 지나면 아무도 그 이름을 말하지 않는다 */
-export const DEPARTURE_ECHO_DAYS = 3;
-
 /**
- * 번호가 움직인 여운이 남아 있는 기간 (people.md §5) — 계약 해지보다 길다.
+ * 번호가 움직인 여운이 남아 있는 기간 (people.md §5).
  * 셔츠는 며칠이 아니라 시즌 단위로 입는 것이라, 물려받은 번호도 뺏긴 번호도
  * 그 주 안에 잊히지 않는다.
  */
@@ -362,7 +327,6 @@ export type MoodFact =
       /** **그 사람의 문턱** — 이 날을 넘기면 불만이 선다 (`demotionPatienceDaysOf`) */
       patienceDays: number;
     }
-  | { cause: "settling"; percent: number; matches: number }
   | {
       cause: "afterglow";
       days: number;
@@ -405,14 +369,6 @@ export type MoodFact =
    * 관측하는 것은 출전 기록과 일정이지 숫자가 아니다.
    */
   | { cause: "fatigue"; band: Extract<FatigueBand, "heavy" | "overloaded"> }
-  /** 최근 우리 구단에서 계약이 해지된 선수 — 남은 선수단 전원이 같은 카드를 든다 */
-  | { cause: "departure"; name: string; days: number }
-  /**
-   * **옛 소속 구단과의 대진이 다가온다** (people.md §4·§5) — `RETURN_FIXTURE_DAYS`
-   * 안의 우리 경기. 새 상태가 아니라 이적 원장의 파생이라, 어느 셔츠를 입고 있든
-   * 그가 그 구단에서 왔다는 사실은 장부에 이미 있다.
-   */
-  | { cause: "former-club"; club: string; days: number }
   | { cause: "contract-ending"; daysLeft: number }
   /**
    * 라커룸에서 선 자리 — 완장 둘과 리더 그룹 (people.md §5-1). 주장만 세우면 서열이
@@ -554,8 +510,6 @@ function factLine(fact: MoodFact): string {
         `2군 ${fact.days}일째 (문턱 ${fact.patienceDays}일)` +
         ` · ${PLAYER_ARCHETYPE_LABEL[fact.archetype]}`
       );
-    case "settling":
-      return `새 팀 정착 ${fact.percent}% · 출전 ${fact.matches}경기`;
     case "afterglow":
       return (
         `${dayWord(fact.days)} ${OUTCOME_WORD[fact.outcome]}` +
@@ -581,11 +535,6 @@ function factLine(fact: MoodFact): string {
     case "injury-history":
       // 등급은 적지 않는다 — 위태로운지는 이 사실을 읽는 쪽이 판단한다 (player.md §5.3)
       return `부상 이력 ${injuryHistoryText(fact.history) ?? "없음"}`;
-    case "departure":
-      return `${fact.name} 계약 해지 · ${dayWord(fact.days)}`;
-    // 어떻게 떠났는지는 회견 카드의 것이다 — 심경이 드는 것은 어느 구단과 언제인가다
-    case "former-club":
-      return `옛 소속 ${fact.club}전 D-${fact.days}`;
     case "contract-ending":
       return `계약 만료 ${fact.daysLeft}일`;
     case "leader":

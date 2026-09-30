@@ -166,10 +166,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         close(false, "경기 중 — 전술판 잠금");
         return NextResponse.json({ error: "경기 중 — 전술판 잠금" }, { status: 409 });
       }
-      // 무직 잠금 — userTeamId는 옛 구단을 가리키므로 막지 않으면 남의 선발을 짠다 (career.md §5.1)
+      // 커리어 종료 잠금 — userTeamId는 옛 구단을 가리키므로 막지 않으면 남의 선발을 짠다 (career.md §5)
       if (managedTeamId(state) === null) {
-        close(false, "무직 — 전술판 잠금");
-        return NextResponse.json({ error: "무직 — 전술판 잠금" }, { status: 409 });
+        close(false, "커리어 종료 — 전술판 잠금");
+        return NextResponse.json({ error: "커리어 종료 — 전술판 잠금" }, { status: 409 });
       }
 
       // 저장 전 모습 — 무엇이 달라졌는지는 결과로만 말한다 (`lineupChangeNote`)

@@ -5,9 +5,6 @@ import {
   type ApproachContext,
   type ApproachTopic,
   type GamePlayer,
-  type InterviewOutcome,
-  InterviewOutcomeSchema,
-  type Negotiation,
   type PlayerIssue,
   type PressFact,
   type ReactionInput,
@@ -17,42 +14,31 @@ import {
   isIssueTopic,
   josa,
 } from "@story-fm/domain";
-import { deltaItems, item } from "../../../../common/commands/brief";
+import { deltaItems } from "../../../../common/commands/brief";
 import { type CommandResult } from "../../../../common/commands/result";
 import { diffDays } from "../../../../common/core/dates";
 import { pickOurPlayer } from "../../../../common/core/player-ref";
 import {
   type GameState,
-  activeContract,
-  answerTransferRequest,
-  financeOf,
   managedTeamId,
   pendingApproach,
   playerById,
   pushApproach,
   pushNarrative,
   seasonStatOf,
-  teamNameIn,
-  transferRequestOf,
   userPlayers,
-  withdrawTransferRequest,
 } from "../../../../common/core/state";
-import { agentForPlayer, ownerOf } from "../../../../common/people/persona";
-import { awardFact, lastSeasonAwardsOf } from "../../../../common/players/career";
+import { ownerOf } from "../../../../common/people/persona";
 import { squadStatusOf, startsInWindow } from "../../../../common/players/contract-status";
 import { formLabel } from "../../../../common/players/form";
 import { leaderGroupOf, leaderRoleOf } from "../../../../common/players/hierarchy";
 import { type MoodLine, applyMoodNotes } from "../../../../common/players/mood-notes";
-import { settleInterview } from "../../../../negotiation/market/manager-market";
-import { windowOpenForTeam } from "../../../../negotiation/market/market";
-import { openPromise } from "../../../../negotiation/players/promises";
+import { openPromise } from "../../../../common/players/promises";
 import { type PromiseInput, promisePiece, recordIncident } from "../../../../story/commands/talk";
 import { recentOutcomes } from "../../../../story/players/slump";
 import {
   APPROACH_WINLESS_WINDOW,
   CHANNEL_OF,
-  INTEREST_WINDOW_DAYS,
-  type Interest,
   REVIEW_WINDOW_DAYS,
   SQUAD_SUBJECT,
   type Scene,
@@ -63,34 +49,8 @@ import {
   firstTeamForm,
   issueDays,
   lastBrokenPromise,
-  recentSellOffers,
-  topFeeOf,
 } from "../../../../story/world/approach";
 import { pendingPress } from "../../../../story/world/press";
-
-/** 실제로 기록된 최근 연락을 사실로 전달한다. 가격·선수 등급으로 동기를 대신 정하지 않는다. */
-function interestOf(
-  state: GameState,
-  player: GamePlayer,
-  index: Map<string, Negotiation[]> = recentSellOffers(state),
-): Interest | null {
-  const closed = index.get(player.id);
-  if (!closed || closed.length === 0) return null;
-  const recent = closed;
-  if (recent.length === 0) return null;
-  const top = recent.reduce<{ fee: number; teamId: string | null }>(
-    (best, n) => {
-      const fee = topFeeOf(n);
-      return fee > best.fee ? { fee, teamId: n.counterpartTeamId } : best;
-    },
-    { fee: 0, teamId: null },
-  );
-  return {
-    offers: recent.length,
-    topFee: top.fee,
-    buyerName: top.teamId === null ? "" : teamNameIn(state, top.teamId),
-  };
-}
 
 /** 선수 채널의 사실 — 불만 한 조각과 지금의 폼. 그 밖은 이 사람이 말할 것이 아니다 */
 function playerFacts(
@@ -142,20 +102,6 @@ function playerFacts(
           sharp,
         };
       }
-      case "contract": {
-        const contract = activeContract(state, player.id);
-        return {
-          kind: "contract-demand",
-          data: {
-            values: {
-              days: contract ? Math.max(0, diffDays(state.date, contract.until)) : 0,
-              wage: contract?.weeklyWage ?? 0,
-            },
-          },
-          about: player.id,
-          sharp,
-        };
-      }
       default: {
         /**
          * 어긴 약속은 사유 코드만으로 서지 않는다 (people.md §5-2) — **무엇을**
@@ -176,15 +122,8 @@ function playerFacts(
       }
     }
   })();
-  /**
-   * 지난 시즌 그 선수가 받은 상 — **계약 주제에만 한 장** (people.md §8 · season.md §6).
-   * 다른 사유의 다가옴에는 붙지 않는다: 에이전트가 값을 부르며 읽는 사실이지
-   * 불만의 근거가 아니다. 이름은 싣지 않는다 — `about`이 이미 그 사람이다.
-   */
-  const award = topic === "contract" ? lastSeasonAwardsOf(state, player.id)[0] : undefined;
   return [
     head,
-    ...(award ? [awardFact(award, { named: false })] : []),
     {
       kind: "slump",
       data: { tags: [formLabel(player.state.form)] },
@@ -206,26 +145,6 @@ function sceneFor(state: GameState, row: { subject: string; topic: ApproachTopic
     if (!player || player.teamId !== state.userTeamId || !issue) return null;
     /** 라커룸에서 선 자리 — 같은 불만이라도 주장이 들고 온 것은 다른 자리다 */
     const seat = leaderRoleOf(state, player);
-    /**
-     * **계약은 계단 1부터 에이전트가 대리한다** (people.md §8) — 협상 테이블 건너편의
-     * 일이라 선수가 감독실에 와서 자기 주급을 부르지 않는다. 대리할 사람이 없는
-     * 세계에서는 선수 본인이 온다(꼭대기 계단과 같은 폴백).
-     */
-    if (row.topic === "contract") {
-      const agent = agentForPlayer(state, player.id);
-      const contract = activeContract(state, player.id);
-      return {
-        channel: agent ? "agent" : "player",
-        speakerId: agent?.characterId ?? player.name,
-        about: player.id,
-        contextCard: {
-          code: "contract-demand",
-          reason: row.topic,
-          value: contract ? Math.max(0, diffDays(state.date, contract.until)) : 0,
-        },
-        facts: playerFacts(state, player, issue, row.topic, sharp),
-      };
-    }
     return {
       channel: "player",
       speakerId: player.name,
@@ -237,42 +156,6 @@ function sceneFor(state: GameState, row: { subject: string; topic: ApproachTopic
         value: issueDays(state, issue),
       },
       facts: playerFacts(state, player, issue, row.topic, sharp),
-    };
-  }
-
-  if (row.topic === "interest") {
-    const player = playerById(state, row.subject);
-    if (!player || player.teamId !== state.userTeamId) return null;
-    const interest = interestOf(state, player);
-    if (!interest) return null;
-    const agent = agentForPlayer(state, player.id);
-    return {
-      channel: agent ? "agent" : "player",
-      speakerId: agent?.characterId ?? player.name,
-      about: player.id,
-      contextCard: { code: "interest", value: interest.offers },
-      facts: [
-        {
-          kind: "interest",
-          data: {
-            ...(interest.buyerName ? { name: interest.buyerName } : {}),
-            values: {
-              days: INTEREST_WINDOW_DAYS,
-              offers: interest.offers,
-              fee: interest.topFee,
-              apps: seasonStatOf(state, player.id)?.apps ?? 0,
-            },
-          },
-          about: player.id,
-          sharp: true,
-        },
-        {
-          kind: "slump",
-          data: { tags: [formLabel(player.state.form)] },
-          about: player.id,
-          sharp: false,
-        },
-      ],
     };
   }
 
@@ -339,51 +222,14 @@ function sceneFor(state: GameState, row: { subject: string; topic: ApproachTopic
 // ── 하루 ───────────────────────────────────────────────────────
 
 export function tickApproaches(state: GameState, digest: TickSink): boolean {
-  withdrawRequests(state, digest);
   if (expireApproach(state, digest)) return false;
   return openSeasonReview(state, digest);
 }
 
-/**
- * **요청을 걷는 것은 원인이다** — 감독의 답도 스탠스도 걷지 못한다
- * (transfer.md §1-1 · people.md §8). 길이 둘 여기 있다:
- *
- *   - 불만이 받치는 요청(`grievance`·`blocked-move`) — 그 불만이 전부 풀리면.
- *     면담·승격·선발이 원인을 지운 자리다.
- *   - 불만이 없는 요청(`bigger-club`) — 창이 닫히면. 나갈 문이 없는 동안의 요청은
- *     감독이 답할 수도 시장이 받을 수도 없는 말이다.
- *
- * 셋째 길인 「팀을 떠나면」은 `clearDepartedState`가 다른 상태와 함께 지운다.
- */
-function withdrawRequests(state: GameState, digest: TickSink): void {
-  const windowOpen = windowOpenForTeam(state, state.userTeamId) !== null;
-  for (const player of userPlayers(state)) {
-    const request = transferRequestOf(state, player.id);
-    if (!request) continue;
-    const why =
-      request.reason === "bigger-club"
-        ? windowOpen
-          ? null
-          : "이적창이 닫혔다"
-        : state.issues.some((i) => i.gamePlayerId === player.id)
-          ? null
-          : "불만이 남아 있지 않다";
-    if (why === null) continue;
-    withdrawTransferRequest(state, player.id);
-    digest.push(`${player.name} 이적 요청 철회 — ${why}`);
-    pushNarrative(state, `${player.name} 이적 요청 철회`, 4);
-  }
-}
-
 function openSeasonReview(state: GameState, digest: TickSink): boolean {
-  // 무직에게는 마주 앉을 구단주가 없다 — 보드도 이제 남의 것이다 (career.md §5.1)
   if (managedTeamId(state) === null) return false;
   const since = diffDays(state.calendar.preseasonStart, state.date);
   if (since < 0 || since >= REVIEW_WINDOW_DAYS) return false;
-  /**
-   * **무직으로 맞은 시즌엔 열리지 않는다** — 그 시즌은 `SEASON_RECORD`를 남기지
-   * 않으므로, 마지막 줄이 지난 시즌 우리 것인가 하나가 그 조건을 함께 지킨다.
-   */
   const record = state.seasonRecords[state.seasonRecords.length - 1];
   if (!record || record.season !== state.season - 1 || record.teamId !== state.userTeamId) {
     return false;
@@ -420,12 +266,6 @@ function openSeasonReview(state: GameState, digest: TickSink): boolean {
       about: null,
       sharp: false,
     });
-  facts.push({
-    kind: "budget",
-    data: { values: { budget: financeOf(state, state.userTeamId).transferBudget } },
-    about: null,
-    sharp: false,
-  });
   const contextCard: ApproachContext = {
     code: "season-review",
     value: record.position,
@@ -459,14 +299,13 @@ export function respondToApproach(
       reason: import("@story-fm/domain").PlayerIssueReason;
     }[];
     reaction?: ReactionInput;
-    interview?: InterviewOutcome;
     decline?: boolean;
     /**
      * 감독이 이 자리에서 한 약속 — **당사자에게만이다** (people.md §5-2).
      * 주장·구단주가 온 자리에는 약속을 걸 사람이 없다.
      */
     promise?: PromiseInput;
-    /** 잔향 — 찾아온 당사자에게 남는 심경 한 문장. 면접·주장·구단주 자리에는 버린다 */
+    /** 잔향 — 찾아온 당사자에게 남는 심경 한 문장. 주장·구단주 자리에는 버린다 */
     mood?: MoodLine;
   },
 ): CommandResult {
@@ -476,22 +315,11 @@ export function respondToApproach(
    * **거절은 감독이 거절했을 때만이다.** 둘 다 비운 호출을 거절로 읽으면 감독이 하지
    * 않은 결정이 장부에 남는다 — 모델이 다시 부르게 하는 편이 낫다 (press.ts와 같은 결).
    */
-  if (input.decline !== true && !input.reaction && !input.interview) {
-    return { ok: false, message: "답변에는 reaction 또는 면접 판정이 필요합니다" };
+  if (input.decline !== true && !input.reaction) {
+    return { ok: false, message: "답변에는 reaction이 필요합니다" };
   }
   const parsed = ReactionSchema.safeParse(input.reaction ?? { reason: "면담 거절" });
   if (!parsed.success) return { ok: false, message: "유효한 면담 반응이 필요합니다" };
-  if (approach.topic === "interview" && input.resolveIssues?.length)
-    return { ok: false, message: "면접에서는 선수 불만을 해소할 수 없습니다" };
-  if (approach.topic === "interview") {
-    const outcome = InterviewOutcomeSchema.safeParse(
-      input.decline === true ? { offer: false, leverage: 0, reason: "면접 거절" } : input.interview,
-    );
-    if (!outcome.success)
-      return { ok: false, message: "면접의 제안 여부와 계약 조건 판정이 필요합니다" };
-    approach.status = input.decline ? "declined" : "answered";
-    return settleInterview(state, approach, outcome.data);
-  }
   const resolutions = (input.resolveIssues ?? []).map((request) => {
     const pick = pickOurPlayer(state, request.playerId);
     return { ...request, playerId: pick.ok ? pick.player.id : request.playerId };
@@ -514,27 +342,13 @@ export function respondToApproach(
   /**
    * ── 약속은 **답을 닫은 뒤에** 장부에 선다 ── (people.md §5-2)
    *
-   * **채널이 가른다** — 선수 본인의 자리와 대리로 온 에이전트의 자리에서만 열린다.
-   * 주장·구단주 자리에는 약속을 걸 사람이 없다: 구단주가 지목한 선수(`sell-player`)는
-   * 그 자리의 `about`이지만 감독실에 있지는 않다 (career.md §5.2). 갈래가 대상에
-   * 맞는지는 `openPromise`가 다시 본다.
+   * **채널이 가른다** — 선수 본인의 자리에서만 열린다. 주장·구단주 자리에는 약속을
+   * 걸 사람이 없다. 갈래가 대상에 맞는지는 `openPromise`가 다시 본다.
    */
-  const inTheRoom = approach.channel === "player" || approach.channel === "agent";
+  const inTheRoom = approach.channel === "player";
   if (input.mood && inTheRoom && approach.about) {
     applyMoodNotes(state, [{ ...input.mood, playerId: approach.about }], new Set([approach.about]));
   }
-  /**
-   * ── 요청을 든 사람이 온 자리에서 한 답은 **요청의 답이다** ── (transfer.md §1-1)
-   *
-   * 책상에서만 내려간다(`answeredOn`) — 팔지·거부할지는 명령의 결정이고, 값은 위의
-   * 스탠스 표가 이미 치렀다. 돌려보낸 자리는 아무것도 답하지 않는다.
-   */
-  const answeredRequest =
-    input.decline !== true && inTheRoom && approach.about
-      ? transferRequestOf(state, approach.about)?.answeredOn === undefined
-        ? answerTransferRequest(state, approach.about)
-        : null
-      : null;
   // 다가옴의 스탠스는 판정이 아니라 자르지 않는다 — 그 자리에는 사실 줄만 선다 (career.md §2)
 
   const promised = input.promise
@@ -546,7 +360,6 @@ export function respondToApproach(
               input.promise.kind,
               input.promise.days,
               input.promise.number,
-              input.promise.position,
             )
           : { ok: false, message: "약속은 당사자에게만 할 수 있습니다" },
       )
@@ -567,9 +380,7 @@ export function respondToApproach(
   return {
     ok: true,
     tone: net >= 0 ? ("good" as const) : ("bad" as const),
-    message:
-      `${approach.speakerId} 응대(${label})${effectSuffix(effect)}${promised ? promised.text : ""}` +
-      (answeredRequest ? " · 이적 요청 답함" : ""),
+    message: `${approach.speakerId} 응대(${label})${effectSuffix(effect)}${promised ? promised.text : ""}`,
     brief: {
       head: `${approach.speakerId} 응대(${label})`,
       items: [
@@ -580,9 +391,6 @@ export function respondToApproach(
           ["팀 사기", effect.team],
         ]),
         ...(promised ? [promised.item] : []),
-        ...(answeredRequest
-          ? [item({ label: "이적 요청", text: "답함 — 팔지·거부할지는 market_orders" })]
-          : []),
       ],
     },
   };
@@ -607,8 +415,8 @@ export function recordStoryIncident(
     const press = pendingPress(state);
     if (press && diffDays(press.date, state.date) < APPROACH_PATIENCE_DAYS)
       return { ok: false, message: "현재 열린 회견에 먼저 답해야 합니다" };
-    if (request.topic === "season-review" || request.topic === "interview")
-      return { ok: false, message: "시즌 리뷰와 면접은 해당 원장이 엽니다" };
+    if (request.topic === "season-review")
+      return { ok: false, message: "시즌 리뷰는 시즌 원장이 엽니다" };
     const pick = request.playerId ? pickOurPlayer(state, request.playerId) : null;
     if (request.topic !== "morale" && (!pick || !pick.ok))
       return { ok: false, message: "면담의 당사자는 현재 우리 선수여야 합니다" };

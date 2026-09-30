@@ -9,9 +9,6 @@ import { groupChips, groupPieces, splitStaging, weaveTurn } from "../lib/turn-pi
 import type { Utterance } from "../lib/turn-pieces";
 import { BROADCAST_SPEAKER, formatScore, normalizeSpeaker } from "@story-fm/domain";
 import type { TickEvent } from "@story-fm/domain";
-import { MarketCardView } from "@/domains/negotiation/ui/market-card";
-import { splitMarketCalls } from "@/domains/negotiation/lib/market-calls";
-import { ScoutingReportView } from "@/domains/negotiation/ui/scouting-report";
 import { tickEventLook } from "@/domains/common/lib/tick-event-display";
 import { CALL_LABEL } from "@/domains/common/lib/call-label";
 import type { SpeakerRole } from "@story-fm/engine";
@@ -256,7 +253,7 @@ function BookingCard({ card }: { card: CardMark }) {
 /**
  * 사건 카드 — **넘긴 시간이 남긴 사실 하나에 카드 하나** (design-system.md §6).
  *
- * 시간을 넘기면 그 사이 벌어진 일이 여럿 온다(부상·추첨·이적 관심·경기일). 그것들을
+ * 시간을 넘기면 그 사이 벌어진 일이 여럿 온다(부상·추첨·계약 만료·경기일). 그것들을
  * 한 문단으로 이어 붙이면 화면은 도로 쪼갤 수 없고, 여덟 줄짜리 지문 하나가 되어
  * 어디까지가 한 사건인지 눈이 짚지 못한다. 코어가 배열로 내므로(`ChatTurn.events`)
  * 화면은 원소 하나를 줄 하나로 세운다.
@@ -297,6 +294,7 @@ function TickEvents({ events }: { events: readonly TickEvent[] }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? events : events.slice(0, TICK_EVENTS_SHOWN);
   const rest = events.length - shown.length;
+  if (events.length === 0) return null;
   return (
     <div className="tick-events">
       {shown.map((event, i) => (
@@ -437,10 +435,11 @@ export function ChatTurnView({
   // 감독의 말은 오른쪽 말풍선이라 그 자체로 갈린다 — 구간 표시는 모델 턴이 맡는다.
   // 다만 문법은 같다: 감독이 쓴 `*…*`도 연출로 서고, 새어 든 id도 이름으로 편다.
   // 이름이 손잡이가 되는 것도 같다 — 감독이 부른 선수도 그 자리에서 열린다
-  if (turn.role === "user") {
+  if (turn.role !== "model") {
+    if (turn.role === "operator") return null;
     return (
       <div className="turn-user" {...press}>
-        {renderStaging(text, prose, "u")}
+        <div>{renderStaging(text, prose, "u")}</div>
       </div>
     );
   }
@@ -538,38 +537,20 @@ export function ChatTurnView({
           );
         if (mark.kind === "goal") return <GoalCard goal={mark.goal} key={mark.key} />;
         if (mark.kind === "card") return <BookingCard card={mark.card} key={mark.key} />;
-        /**
-         * 호출 결과가 서는 길은 둘이다 — **갈 장부가 있으면 칩, 없으면 카드.**
-         * 카드를 그리는 호출은 칩을 세우지 않는다: 같은 사실이 두 번 나면 카드가
-         * 칩의 부연처럼 읽힌다.
-         */
-        const { cards, chips } = splitMarketCalls(mark.calls);
+        // 같은 자리에서 연달아 불린 호출은 한 줄에 나란히 — 칩마다 문단을 끊지 않는다
         return (
-          <Fragment key={mark.key}>
-            {/* 같은 자리에서 연달아 불린 호출은 한 줄에 나란히 — 칩마다 문단을 끊지 않는다 */}
-            {chips.length > 0 && (
-              <div className="tool-chips">
-                {groupChips(chips).map((group, j) => (
-                  <ToolChip
-                    calls={group}
-                    key={j}
-                    onReveal={onRevealHint}
-                    revealed={group[0] === revealedCall}
-                  />
-                ))}
-              </div>
-            )}
-            {cards.map((card, j) => (
-              <MarketCardView card={card} key={j} propose={turn.inNegotiation !== true} />
+          <div className="tool-chips" key={mark.key}>
+            {groupChips(mark.calls).map((group, j) => (
+              <ToolChip
+                calls={group}
+                key={j}
+                onReveal={onRevealHint}
+                revealed={group[0] === revealedCall}
+              />
             ))}
-          </Fragment>
+          </div>
         );
       })}
-      {/* 보고서는 대화 뒤 — 서류는 "이런 게 왔습니다" 다음에 놓인다 */}
-      {turn.reports?.map((report) => (
-        <ScoutingReportView report={report} key={report.id} />
-      ))}
-      {/* 임무 보고도 서류다 — 지목 보고와 같은 자리에 선다 */}
     </div>
   );
 }

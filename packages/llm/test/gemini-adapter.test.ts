@@ -216,6 +216,46 @@ describe("GeminiGameLLM", () => {
     expect(saved[1]?.parts?.[1]?.thoughtSignature).toBe("opaque-signature");
   });
 
+  it("넘김 도구가 성공하면 결과를 보내지 않고 끝내며, 같은 응답의 뒤 호출은 돌지 않는다", async () => {
+    // 응답은 하나뿐이다 — 두 번째 요청이 나가면 stub이 던진다
+    const stub = makeStubClient([
+      response({
+        role: "model",
+        parts: [
+          { functionCall: { id: "call-1", name: "request_board", args: {} } },
+          { functionCall: { id: "call-2", name: "set_lineup", args: {} } },
+        ],
+      }),
+    ]);
+    const handled: string[] = [];
+    const tool = (name: string, endsTurn: boolean): GameToolSpec => ({
+      name,
+      description: name,
+      inputSchema: { type: "object", properties: {} },
+      handle() {
+        handled.push(name);
+        return { ok: true, message: "ok", endsTurn };
+      },
+    });
+    const llm = new GeminiGameLLM(testConfig, stub.client as never);
+    const result = await llm.runTurn({
+      system: "고정 프롬프트",
+      history: [],
+      user: "협상하자",
+      tools: [tool("request_board", true), tool("set_lineup", false)],
+    });
+
+    expect(handled).toEqual(["request_board"]);
+    expect(stub.sent).toHaveLength(1);
+    expect(result.stopReason).toBe("handoff");
+    expect(result.toolCallCount).toBe(1);
+    // 짝 없는 호출이 이력에 남으면 다음 요청이 거부된다 — 둘 다 결과로 닫혀 있어야 한다
+    const closing = (result.history.messages as Content[]).at(-1);
+    expect(closing?.role).toBe("user");
+    expect(closing?.parts?.map((part) => part.functionResponse?.id)).toEqual(["call-1", "call-2"]);
+    expect(closing?.parts?.[1]?.functionResponse?.response).toHaveProperty("error");
+  });
+
   it("다른 제공자 이력은 버리고, model로 시작하는 일반 이력은 Gemini 교대로 정규화한다", async () => {
     const mismatched = makeStubClient([
       response({ role: "model", parts: [{ text: "@수석코치: 새 이력입니다." }] }),

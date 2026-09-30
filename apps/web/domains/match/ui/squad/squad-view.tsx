@@ -137,9 +137,9 @@ export function SquadView({
       view.style.removeProperty("--squad-sticky-top");
     };
   }, []);
-  /** 직접 저장할 수 있는가 — 경기 중과 무직에는 아니다 (뷰의 `editable`이 판정한다) */
+  /** 직접 저장할 수 있는가 — 경기 중과 커리어가 끝난 뒤에는 아니다 (뷰의 `editable`이 판정한다) */
   const live = squad.editable;
-  /** 무직 — 판은 옛 구단의 것이라 잠겨 있다 (career.md §5.1). 여기서는 문구만 가른다 */
+  /** 커리어 종료 — 판은 옛 구단의 것이라 잠겨 있다 (career.md §5). 여기서는 문구만 가른다 */
   const dismissed = game.views.career.dismissal !== null;
   /** 경기 중이지만 **판으로 지시할 수는 있다** */
   const advisory = !live && onOrder !== undefined;
@@ -161,11 +161,7 @@ export function SquadView({
       points: starters.map((p) => p.assignedPoint ?? anchorOf(p.assignedPosition ?? "CM")),
       occupants: starters.map((p) => p.id),
       bench: players.filter((p) => p.role === "벤치").map((p) => p.id),
-      // 임대 나간 선수는 **2군이 아니다** — 달고 있는 층은 빌린 구단의 값이라
-      // 여기 넣으면 승격·강등 diff(`lineupBody`)에 실려 서버가 반려한다
-      reserve: players
-        .filter((p) => p.loan === null && p.squadLevel === "reserve")
-        .map((p) => p.id),
+      reserve: players.filter((p) => p.squadLevel === "reserve").map((p) => p.id),
       roles: Object.fromEntries(
         players.filter((p) => p.roleId !== null).map((p) => [p.id, p.roleId!]),
       ),
@@ -185,7 +181,7 @@ export function SquadView({
   const [saveError, setSaveError] = useState<string | null>(null);
   /** 경기 중 판에서 만들었지만 아직 다음 진행 턴으로 보내지 않은 작업 사본 */
   const [advisoryPending, setAdvisoryPending] = useState(false);
-  const [squadFilter, setSquadFilter] = useState<"first" | "reserve" | "loan">("first");
+  const [roster, setRoster] = useState<"first" | "reserve">("first");
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "role", desc: false });
 
   // 자동 저장 — rev는 로컬 변경 번호. 저장된 번호보다 앞서 있으면 아직 서버에 안 갔다
@@ -310,19 +306,7 @@ export function SquadView({
   const onPitch = new Set(board.occupants);
   // 로컬 편집 기준 — 방금 올린 2군 선수가 저장 전까지 2군 탭에 남아 있으면 안 된다
   const localReserve = new Set(board.reserve);
-  /**
-   * 임대 나간 선수 — **부릴 수 있는 인원이 아니다.** 명단에는 서지만 판·벤치·층
-   * 어디에도 들지 않으므로, 인원을 세는 자리는 전부 이 집합을 먼저 뺀다.
-   */
-  const onLoan = new Set(players.filter((p) => p.loan !== null).map((p) => p.id));
-  /**
-   * 지금 실제로 서는 책갈피 — **임대가 없으면 임대 칸도 없다.** 마지막 한 명이
-   * 돌아온 턴에 고른 칸이 사라지므로, 고른 값을 그대로 두면 빈 표만 남는다.
-   */
-  const roster = squadFilter === "loan" && onLoan.size === 0 ? "first" : squadFilter;
-  const benchPlayers = players.filter(
-    (p) => !onLoan.has(p.id) && !localReserve.has(p.id) && !onPitch.has(p.id),
-  );
+  const benchPlayers = players.filter((p) => !localReserve.has(p.id) && !onPitch.has(p.id));
   const benchSet = new Set(board.bench.filter((id) => !onPitch.has(id)));
   const benchDesignated = benchPlayers.filter((p) => benchSet.has(p.id));
   /**
@@ -360,7 +344,7 @@ export function SquadView({
   ) as SetPieceTakersView;
   /**
    * 키커 후보 — **선발이 먼저**다. 지금 찰 수 있는 사람이 그들이고, 벤치·예비는 다음
-   * 경기의 선발일 수 있어 지정만 받는다(그 경기엔 기본값이 선다). 임대·2군은 부를 수
+   * 경기의 선발일 수 있어 지정만 받는다(그 경기엔 기본값이 선다). 2군은 부를 수
    * 있는 인원이 아니라 목록에 세우지 않는다 — 이미 걸린 지정은 셀렉트가 따로 세운다.
    */
   const takerStarting = board.occupants.flatMap((id) => {
@@ -447,7 +431,7 @@ export function SquadView({
 
   /** 비선발 선수를 매치데이 벤치(최대 9)로 지정/해제 — 나머지는 예비 스쿼드 */
   function toggleBench(id: string) {
-    if (!live || onLoan.has(id)) return;
+    if (!live) return;
     const leaving = benchSet.has(id);
     /*
      * 정원이 찼으면 넣을 자리가 없다 — **저장까지 가지 않는다.** 바뀐 것 없는 판을
@@ -500,10 +484,9 @@ export function SquadView({
     } else {
       const slot = (a.kind === "slot" ? a : b) as { kind: "slot"; index: number };
       const incoming = (a.kind === "bench" ? a : b) as { kind: "bench"; id: string };
-      // 2군 선수는 승격 전에는 라인업에 넣을 수 없다 (서버도 반려한다).
-      // 임대 나간 선수는 승격으로도 못 올린다 — 먼저 불러들여야 한다 (transfer.md §2)
+      // 2군 선수는 승격 전에는 라인업에 넣을 수 없다 (서버도 반려한다)
       const incomingRow = byId.get(incoming.id);
-      if (incomingRow && (incomingRow.loan !== null || incomingRow.squadLevel === "reserve")) {
+      if (incomingRow && incomingRow.squadLevel === "reserve") {
         return setSelection(null);
       }
       const outgoing = occupants[slot.index]!;
@@ -569,9 +552,8 @@ export function SquadView({
     setSelection(same ? null : here);
   }
 
-  /** 이 선수가 지금 속한 칸 — **임대가 먼저다**(판의 어느 통에도 들지 않는다) */
+  /** 이 선수가 지금 속한 칸 */
   function tierOf(id: string): Tier {
-    if (onLoan.has(id)) return "임대";
     if (board.occupants.includes(id)) return "선발";
     if (board.reserve.includes(id)) return "2군";
     return board.bench.includes(id) ? "벤치" : "예비";
@@ -585,9 +567,6 @@ export function SquadView({
    * 한 명 내려간다) — 라우트가 승격→배치→강등 순으로 한 요청에 처리한다.
    */
   function swapWithRow(rowId: string) {
-    // 임대는 맞바꿀 수 있는 칸이 아니다 — 화살표도 뜨지 않지만 문을 여기서 닫는다
-    const picked = selection?.kind === "bench" ? selection.id : null;
-    if (onLoan.has(rowId) || (picked !== null && onLoan.has(picked))) return;
     if (advisory) {
       const aId = selection?.kind === "slot" ? board.occupants[selection.index] : selection?.id;
       if (!aId || aId === rowId) return;
@@ -699,7 +678,7 @@ export function SquadView({
    * `squadLevels` 차이로 실어 보내고, 라우트가 승격 → 배치 → 강등 순으로 처리한다.
    */
   function moveSquad(playerId: string, level: "first" | "reserve") {
-    if (!live || onLoan.has(playerId)) return;
+    if (!live) return;
     const reserve = board.reserve.filter((x) => x !== playerId);
     // 강등은 매치데이 벤치 지정도 함께 거둔다 — 코어가 배치에서 빼기 때문이다(`setSquadLevel`)
     commit({
@@ -782,14 +761,7 @@ export function SquadView({
     () => (
       <SquadTable
         players={localRows.filter((p) =>
-          /* 임대는 제 탭에만 선다 — 1군·2군은 **부릴 수 있는 인원**의 층이다 */
-          roster === "loan"
-            ? onLoan.has(p.id)
-            : onLoan.has(p.id)
-              ? false
-              : roster === "reserve"
-                ? localReserve.has(p.id)
-                : !localReserve.has(p.id),
+          roster === "reserve" ? localReserve.has(p.id) : !localReserve.has(p.id),
         )}
         sort={sort}
         onSort={onSortRow}
@@ -812,7 +784,7 @@ export function SquadView({
               <>
                 {/* 벤치 지정 — 명단의 배지 열을 없앤 뒤 이 조작이 여기로 왔다.
                 비선발 1군에게만 뜻이 있다 (선발은 이미 나가고, 2군은 승격이 먼저) */}
-                {live && !onLoan.has(p.id) && !onPitch.has(p.id) && !localReserve.has(p.id) && (
+                {live && !onPitch.has(p.id) && !localReserve.has(p.id) && (
                   <button
                     className="ghost-btn"
                     /* 정원이 차면 넣는 길만 잠긴다 — **빼는 길은 늘 열려 있다** */
@@ -830,30 +802,24 @@ export function SquadView({
                   </button>
                 )}
                 {/* 선발을 그대로 내리면 판이 열 명이 된다 — 코어가 배치에서 함께 빼기 때문이다.
-                옆의 벤치 지정이 선발 행에서 빠져 있는 것과 같은 이유다.
-                임대 행에는 **잠긴 버튼도 두지 않는다** — 조작 대상이 아닌 것은 손잡이가
-                없는 것으로 알린다 (조작법을 문장으로 적지 않는다) */}
-                {!onLoan.has(p.id) && (
-                  <button
-                    className="ghost-btn"
-                    disabled={!live || onPitch.has(p.id)}
-                    /* 잠긴 이유는 **사실로만** — 다음에 무엇을 하라는 말은 붙이지 않는다 */
-                    title={
-                      !live
-                        ? dismissed
-                          ? "무직 — 전술판 잠금"
-                          : "경기 중 — 1·2군 이동 잠금"
-                        : onPitch.has(p.id)
-                          ? "선발 배치 중 — 1·2군 이동 잠금"
-                          : undefined
-                    }
-                    onClick={() =>
-                      onMoveSquadRow(p.id, localReserve.has(p.id) ? "first" : "reserve")
-                    }
-                  >
-                    {localReserve.has(p.id) ? "1군 승격" : "2군 강등"}
-                  </button>
-                )}
+                옆의 벤치 지정이 선발 행에서 빠져 있는 것과 같은 이유다. */}
+                <button
+                  className="ghost-btn"
+                  disabled={!live || onPitch.has(p.id)}
+                  /* 잠긴 이유는 **사실로만** — 다음에 무엇을 하라는 말은 붙이지 않는다 */
+                  title={
+                    !live
+                      ? dismissed
+                        ? "커리어 종료 — 전술판 잠금"
+                        : "경기 중 — 1·2군 이동 잠금"
+                      : onPitch.has(p.id)
+                        ? "선발 배치 중 — 1·2군 이동 잠금"
+                        : undefined
+                  }
+                  onClick={() => onMoveSquadRow(p.id, localReserve.has(p.id) ? "first" : "reserve")}
+                >
+                  {localReserve.has(p.id) ? "1군 승격" : "2군 강등"}
+                </button>
               </>
             }
           />
@@ -940,7 +906,7 @@ export function SquadView({
               다음 진행에 반영
             </span>
           )}
-          {/* 등록 명단 — 영입·승격의 진짜 벽이라 늘 보여야 한다 (U21은 명단 밖) */}
+          {/* 등록 명단 — 승격의 진짜 벽이라 늘 보여야 한다 (U21은 명단 밖) */}
           <span
             className={`reg-chip${squad.registration.issues.length > 0 ? " over" : ""}`}
             data-testid="registration"
@@ -965,7 +931,7 @@ export function SquadView({
             </button>
           )}
         </div>
-        {/* 무직 잠금은 버튼이 아니다 — 돌아갈 경기가 없고, 판의 잠긴 모양이 이미 말한다 */}
+        {/* 커리어 종료 잠금은 버튼이 아니다 — 돌아갈 경기가 없고, 판의 잠긴 모양이 이미 말한다 */}
         {!live && !advisory && !dismissed && (
           <button className="ghost-btn" onClick={onGoToChat}>
             경기 중 — 채팅으로
@@ -1147,11 +1113,8 @@ export function SquadView({
             <div className="roster-tabs" role="tablist">
               {(
                 [
-                  ["first", "1군", players.length - onLoan.size - localReserve.size],
+                  ["first", "1군", players.length - localReserve.size],
                   ["reserve", "2군", localReserve.size],
-                  // 임대는 **있을 때만 선다** — 대부분의 세이브에 임대가 없고,
-                  // 빈 책갈피는 눌러 봐야 빈 표다
-                  ...(onLoan.size > 0 ? ([["loan", "임대", onLoan.size]] as const) : []),
                 ] as const
               ).map(([key, label, count]) => (
                 <button
@@ -1159,7 +1122,7 @@ export function SquadView({
                   role="tab"
                   aria-selected={roster === key}
                   className={`roster-tab${roster === key ? " on" : ""}`}
-                  onClick={() => setSquadFilter(key)}
+                  onClick={() => setRoster(key)}
                 >
                   {label}
                   <span className="roster-tab-n">{count}</span>
@@ -1188,9 +1151,9 @@ export function SquadView({
  * **스태프** — 구단이 고용한 사람들 (docs/story/people.md §2-2). 수석코치가 맨 앞이고
  * 그다음이 코치·의료진·스카우트다 — 코어가 그 순서로 실어 보낸다.
  *
- * **읽는 값이다.** 고용·해고는 채팅으로 하는 일이라(「피지컬 코치 하나 데려오자」)
- * 여기엔 손잡이가 없고, 그래서 유스 후보 줄처럼 테두리 없는 칸으로만 선다 — 버튼처럼
- * 생긴 것이 하나라도 있으면 감독은 여기서 사람을 자를 수 있다고 읽는다.
+ * **읽는 값이다.** 고용·해고가 없어 여기엔 손잡이가 없고, 그래서 유스 후보 줄처럼
+ * 테두리 없는 칸으로만 선다 — 버튼처럼 생긴 것이 하나라도 있으면 감독은 여기서
+ * 사람을 자를 수 있다고 읽는다.
  *
  * 아이콘은 채팅의 화자 머리와 **같은 표**(`SPEAKER_ICON`)를 본다: 훈련장에서 본 얼굴이
  * 대화에서 말을 걸 때 같은 그림이어야 그 사람인 줄 안다.

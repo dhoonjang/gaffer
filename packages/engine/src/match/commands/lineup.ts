@@ -79,7 +79,6 @@ import {
   registrationLine,
   squadRegistrationOf,
 } from "../../common/players/registration";
-import { creditSettling, settlingOf } from "../../common/players/settling";
 // 면담에서 한 약속은 장부에 선다 (people.md §5-2 · career.md §2)
 // 감독이 지목한 번호는 코어가 배정하고, 사실만 돌려준다 (player.md §1.1)
 import { assignRequestedNumber, numberBlockText } from "../../common/players/numbers";
@@ -111,7 +110,7 @@ import type { CommandResult } from "../../common/commands/result";
 // ── 선수 지목 ───────────────────────────────────────────
 //
 // 이름 해석은 코어가 한 벌만 갖는다 (`pickOurPlayer`·`pickRivalPlayer`, core/player-ref.ts) —
-// 이적·교체 명령도 같은 것을 쓴다. 명령이 고를 수 있는 자격이 문을 고른다.
+// 교체 명령도 같은 것을 쓴다. 명령이 고를 수 있는 자격이 문을 고른다.
 
 /** 라인업 한 자리 — 풀리면 id로 바뀐 자리, 아니면 그 이유 */
 function ourSlot(state: GameState, slot: LineupSlotInput): LineupSlotInput | string {
@@ -899,7 +898,7 @@ export function setLineup(
     levelMoved.first.push(player.name);
   }
 
-  // 처음 배치되는 선수(2군에서 올라왔거나 갓 영입된)는 이 전술을 훈련한 적이 없다.
+  // 처음 배치되는 선수(2군에서 올라왔거나 갓 합류한)는 이 전술을 훈련한 적이 없다.
   // 기준선(60)을 그냥 주면 **팀이 재적응 중일 때 신입이 고참보다 전술을 잘 아는**
   // 역전이 생긴다 — 팀 수준을 넘지 못하게 막는다.
   const teamLevel = currentFamiliarity(tactics);
@@ -1584,16 +1583,8 @@ export function setCaptain(
       player.state.captainedOn = state.date;
       player.state.condition = clampCondition(player.state.condition + CAPTAIN_FIRST_LIFT);
     }
-    // 새 영입에게 완장을 채우는 건 라커룸 한가운데 세우는 일이다 (settling.ts)
-    const settled = creditSettling(state, player.id, "captain") > 0;
-    const settling = settled ? settlingOf(state, player.id) : null;
     notes.push(`${josa(player.name, "을/를")} 주장으로 지명했습니다`);
     items.push(item({ label: "주장", text: player.name, note: armbandNote(state, player) }));
-    if (settling) {
-      const percent = Math.round(settling.progress * 100);
-      notes.push(`적응 ${percent}%`);
-      items.push(item({ label: "적응", text: `${percent}%` }));
-    }
   }
 
   if (input.vice !== undefined) {
@@ -1609,7 +1600,7 @@ export function setCaptain(
       for (const p of userPlayers(state)) p.isViceCaptain = false;
       vice.isViceCaptain = true;
       /**
-       * **부주장에는 체력도 정착 크레딧도 붙지 않는다** (career.md §2) — 완장 둘에
+       * **부주장에는 체력이 붙지 않는다** (career.md §2) — 완장 둘에
        * 같은 값을 매기면 감독이 두 번 받으려고 두 자리를 채운다.
        */
       notes.push(`${josa(vice.name, "을/를")} 부주장으로 지명했습니다`);
@@ -1792,7 +1783,7 @@ export function rememberTactics(tactics: TeamTactics, on: string): void {
  *
  * 세 축을 고른 이유: 시야는 그림을 그리는 힘, 위치선정은 그 그림에서 제 자리를 찾는
  * 힘, 침착성은 익숙지 않은 상황에서도 판단이 무너지지 않는 힘이다. 셋 다
- * **판단 계열**이라 스카우팅으로도 오차가 남는 축이고(player.md §9),
+ * **판단 계열**이라 관측으로도 오차가 남는 축이고(player.md §9),
  * 그래서 "왜 쟤만 못 따라오지"가 감독에게 흥미로운 질문이 된다.
  */
 export function tacticalUptake(player: Player): number {
@@ -1881,41 +1872,9 @@ export function memoryRetention(player: Player | null): number {
   return Math.max(0.7, Math.min(1.5, 0.7 + (tacticalUptake(player) - 40) * 0.012));
 }
 
-/**
- * **새 영입은 기억을 갖고 온다** — 직전 소속 팀의 전술과 그 팀이 익힌 수준.
- *
- * 처음엔 이걸 거리 보정으로 넣었다("아는 축구면 덜 낯설다"). 그러면 손실이 0까지
- * 줄 뿐 **오르지는 못한다** — 곱셈이라 아무리 가까워도 기억 위로 올라갈 길이 없다.
- * 그런데 사실은 단순하다: 첼시에서 온 선수는 **첼시 축구를 이미 안다.** 그건
- * 보정이 아니라 **기억**이고, 우리가 그 전술로 바꾸면 그는 그 값을 되찾는다.
- *
- * 정착이 끝나면 더는 얹지 않는다 — 그때쯤이면 자기 기억이 쌓여 있고, 우리 축구가
- * 그의 축구가 된다 (settling.ts).
- */
-function memoriesOf(state: GameState, assignment: TacticAssignment): readonly DrilledTactics[] {
-  const own = assignment.drilled ?? [];
-  const settling = settlingOf(state, assignment.playerId);
-  if (!settling || settling.done) return own;
-  const from = state.transfers.find(
-    (t) =>
-      t.gamePlayerId === assignment.playerId &&
-      t.date === settling.joinedOn &&
-      t.fromTeamId !== null,
-  )?.fromTeamId;
-  if (!from) return own;
-  const theirs = state.tactics.find((t) => t.teamId === from);
-  if (!theirs) return own;
-  const signature = tacticsSignature(theirs.spec);
-  if (own.some((d) => d.signature === signature)) return own;
-  return [
-    ...own,
-    {
-      signature,
-      // 그 팀이 그 전술을 익힌 수준 — 그가 몸으로 겪은 값이다
-      familiarity: currentFamiliarity(theirs),
-      lastUsedOn: settling.joinedOn,
-    },
-  ];
+/** 그 선수가 몸으로 익힌 전술들 */
+function memoriesOf(assignment: TacticAssignment): readonly DrilledTactics[] {
+  return assignment.drilled ?? [];
 }
 
 /**
@@ -1932,7 +1891,7 @@ function retuneFamiliarity(
 ): void {
   for (const a of tactics.assignments) {
     const player = playerById(state, a.playerId);
-    const arrival = familiarityForSetup(memoriesOf(state, a), after, state.date, {
+    const arrival = familiarityForSetup(memoriesOf(a), after, state.date, {
       distanceOf: (memory, next) => personalDistance(player, memory, next),
       retention: memoryRetention(player),
     });
@@ -1992,7 +1951,7 @@ export function setTactics(state: GameState, spec: Partial<TacticsSpec>): Comman
    * 기억에서 **자기 자로 잰 거리**만큼 깎아 물려받는다(`personalDistance`).
    *
    * 팀 적응도는 이 값들의 평균(파생)이다 — 전원을 같은 값으로 덮지 않으므로
-   * 개인차가 보존되고, 새 영입은 자기가 하던 축구 쪽 변경에서 덜 잃는다.
+   * 개인차가 보존되고, 새로 합류한 선수는 자기가 하던 축구 쪽 변경에서 덜 잃는다.
    */
   /**
    * **경기 중 조정은 새 전술을 배우는 것이 아니다.**

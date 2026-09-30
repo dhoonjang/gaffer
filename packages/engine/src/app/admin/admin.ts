@@ -278,7 +278,7 @@ function departureBlock(
 }
 
 /**
- * 소속 팀 이동 — 방출은 무소속(`freeagents`)으로 옮기는 것이다.
+ * 소속 팀 이동 — 소속을 떼는 것은 무소속(`freeagents`)으로 옮기는 것이다.
  * 옮겨 가는 쪽엔 상한이 없고, 떠나는 쪽만 라인업 하한을 지킨다.
  */
 function moveEntry(

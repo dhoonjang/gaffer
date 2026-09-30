@@ -11,7 +11,6 @@
  */
 import type { TickEventKind } from "@story-fm/domain";
 import {
-  IconArrowRight,
   IconContract,
   IconMatch,
   IconMedic,
@@ -32,7 +31,6 @@ const LOOK: Record<TickEventKind, TickEventLook> = {
   injury: { label: "부상", Icon: IconMedic },
   board: { label: "보드", Icon: IconOwner },
   draw: { label: "추첨", Icon: IconTrophy },
-  interest: { label: "이적", Icon: IconArrowRight },
   contract: { label: "계약", Icon: IconContract },
   matchday: { label: "경기", Icon: IconMatch },
   news: { label: "소식", Icon: IconReporter },

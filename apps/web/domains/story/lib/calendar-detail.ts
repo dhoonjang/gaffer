@@ -12,7 +12,7 @@ import type { OfficeViews } from "@story-fm/engine";
 type CalEntry = OfficeViews["calendar"]["entries"][number];
 
 /** 행의 아이콘 — 일지 블록(`EventIcon`)과 같은 체계를 쓴다 */
-export type CalRowIcon = "match" | "training" | "rest" | "draw" | "window";
+export type CalRowIcon = "match" | "training" | "rest" | "draw";
 
 export interface CalScheduleRow {
   id: string;
@@ -32,7 +32,7 @@ export interface CalScheduleRow {
   win: "W" | "D" | "L" | null;
   /** 이름 옆에 붙는 작은 조각 — 훈련 축 */
   tags: string[];
-  /** 이름 아래 붙는 잔글씨 — 득점자, 이적창 기간 */
+  /** 이름 아래 붙는 잔글씨 — 득점자 */
   note: string | null;
   /** 날짜만 잡혀 있고 대진은 아직 없다 (`cup-round`) */
   pending: boolean;
@@ -115,5 +115,5 @@ export function scheduleRowOf(e: CalEntry): CalScheduleRow {
     };
   }
 
-  return { ...base, icon: "window", name: e.title, note: e.detail };
+  return { ...base, icon: "draw", name: e.title, note: e.detail };
 }

@@ -5,13 +5,11 @@ import { z } from "zod";
 import {
   DEFAULT_SKILL_DESCRIPTIONS,
   CORE_COMMANDS,
-  MARKET_OPS,
+  FINANCE_OPS,
   MATCH_OPS,
   MATCH_TOOL_DEFINITIONS,
-  NEGOTIATION_TOOL_DEFINITIONS,
   TACTIC_CAPS,
   TACTIC_OPS,
-  TABLE_OPS,
   TRAINING_OPS,
   instructionCommands,
   applyOps,
@@ -53,8 +51,6 @@ import {
   PROMISE_KINDS,
   SET_PIECE_ROUTINE_AXES,
   SET_PIECE_ROUTINE_NEUTRAL,
-  SQUAD_STATUS_KO,
-  SQUAD_STATUSES,
   TACTIC_TOGGLES,
 } from "@story-fm/domain";
 import { AXIS_AGING, agingDelta, createGame } from "@story-fm/engine";
@@ -107,7 +103,7 @@ describe("스킬 설명 — 코드가 유일한 원본이다", () => {
 describe("규칙이 사는 자리", () => {
   /**
    * 설명은 고정층에 매 턴 실린다 — 길이 예산이 없으면 규칙 하나를 지울 때마다 설명
-   * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈6,770자)에 한 도구
+   * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈5,300자)에 한 도구
    * 몫(600자)의 여유를 얹은 값이다 — **도구가 늘 때만** 그만큼 올린다. **도구가 줄면
    * 함께 내린다**: 상한이 총량의 두 배로 남으면 설명이 한 벌씩 더 붙어도 걸리지 않는다.
    */
@@ -116,15 +112,15 @@ describe("규칙이 사는 자리", () => {
     for (const skill of SKILL_CATALOG) {
       expect(skill.description.length, skill.name).toBeLessThanOrEqual(600);
     }
-    expect(total).toBeLessThanOrEqual(7_400);
+    expect(total).toBeLessThanOrEqual(5_900);
   });
 
   it("GM은 직접 명령 대신 역할별 해석 스킬을 받는다", () => {
-    for (const tool of [...TOOLS, ...MATCH_TOOL_DEFINITIONS, ...NEGOTIATION_TOOL_DEFINITIONS]) {
+    for (const tool of [...TOOLS, ...MATCH_TOOL_DEFINITIONS]) {
       expect(CORE_COMMANDS.has(tool.name), tool.name).toBe(false);
     }
     expect(TOOLS.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(["tactic_orders", "training_orders", "market_orders"]),
+      expect.arrayContaining(["tactic_orders", "training_orders", "finance_orders"]),
     );
   });
 
@@ -152,8 +148,7 @@ describe("규칙이 사는 자리", () => {
    *
    * 열거가 내는 것은 토큰뿐이고 `toToolSchema`는 JSDoc을 싣지 않는다 — 뜻이 주석에만
    * 있으면 모델은 **뜻 없는 낱말 열**을 받고, 잘못 고른 갈래를 코어가 사실 대조해 조용히
-   * 벌한다. 설득 논거가 그 자리였다: 감독이 자기 오퍼를 두고 한 "정말 마지막입니다"가
-   * 그 **선수**의 사정을 뜻하는 `last_chance`로 옮겨져 거짓이 되고 인내가 깎였다.
+   * 벌한다.
    *
    * 뜻이 서는 자리는 셋 중 하나다 — 그 도구의 설명 · 그 인자의 `description` · 그 호출의
    * 시스템 프롬프트. 어디에 서든 **낱말은 코어의 표에서 와야 한다**: 손으로 적으면 갈래가
@@ -186,17 +181,6 @@ describe("규칙이 사는 자리", () => {
          * 낱말만으로는 감독의 말이 어느 갈래인지 서지 않는다 (people.md §5-2).
          */
         tables: [PROMISE_KIND_KO, PROMISE_KIND_MEANING] as Array<Record<string, string>>,
-        reads: "",
-      },
-      {
-        /**
-         * 오퍼·재계약이 싣는 지위와 조정이 되부르는 지위는 **같은 줄**을 읽는다
-         * (`SQUAD_STATUS_LINE`) — 서류는 지위를 낱말로 적고 모델은 토큰으로 답한다.
-         */
-        where: "send_offer.squadStatus",
-        node: enumArg(SKILL_TOOLS, "send_offer", "squadStatus"),
-        kinds: SQUAD_STATUSES as readonly string[],
-        tables: [SQUAD_STATUS_KO as Record<string, string>],
         reads: "",
       },
     ];
@@ -336,11 +320,11 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
   it("직접 지시의 명령은 코어 스키마를 공유하고 명령별 상한을 보존한다", () => {
     const specs = new Map(SKILL_TOOLS.map((tool) => [tool.name, tool] as const));
     const before = JSON.stringify(SKILL_TOOLS.map((tool) => tool.inputSchema));
-    const names = [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS];
+    const names = [...TACTIC_OPS, ...TRAINING_OPS, ...FINANCE_OPS];
     const commands = instructionCommands(specs, names);
     expect(commands.map((command) => command.name)).toEqual(names);
     // 해제 목록의 명시성처럼 별도 구조가 필요한 명령을 제외한 스키마는 코어의 것을 그대로 쓴다.
-    for (const name of ["substitute", "set_tactics", "set_training", "set_transfer_list"]) {
+    for (const name of ["substitute", "set_tactics", "set_training", "request_board"]) {
       const spec = specs.get(name)!;
       expect(commands.find((command) => command.name === name)?.inputSchema, name).toBe(
         spec.instructionSchema ?? spec.inputSchema,
@@ -358,12 +342,12 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
 
   /**
    * **받아쓰기는 동기 명령만 지난다** (`applyOps`). 해석기의 JSON은 한 번에 여럿을
-   * 부르므로 프로미스를 돌려주는 손잡이(`tactic_orders`·`market_orders`…)가 목록에 들면
+   * 부르므로 프로미스를 돌려주는 손잡이(`tactic_orders`·`finance_orders`…)가 목록에 들면
    * 적용이 그 자리에서 터진다 — 이름 한 줄로 벌어지는 일이라 여기서 막는다.
    */
   it("ops 목록의 명령은 전부 동기다 — 손잡이는 목록에 들지 않는다", () => {
     const specs = new Map(SKILL_TOOLS.map((t) => [t.name, t] as const));
-    for (const name of [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS]) {
+    for (const name of [...TACTIC_OPS, ...TRAINING_OPS, ...FINANCE_OPS]) {
       expect(specs.get(name)!.handle.constructor.name, name).not.toBe("AsyncFunction");
     }
   });
@@ -374,15 +358,13 @@ describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
    * 명령이 두 해석기에서 다른 문맥으로 채워진다.
    */
   it("코어 명령은 어느 해석기 목록에 정확히 한 번 선다", () => {
-    const lists = [...TACTIC_OPS, ...TRAINING_OPS, ...MARKET_OPS, ...TABLE_OPS];
+    const lists = [...TACTIC_OPS, ...TRAINING_OPS, ...FINANCE_OPS];
     for (const name of CORE_COMMANDS) {
       expect(
         lists.filter((n) => n === name),
         name,
       ).toHaveLength(1);
     }
-    // 상대 접촉은 협상 해석기 하나만 실행한다.
-    for (const name of TABLE_OPS) expect(MARKET_OPS.includes(name), name).toBe(false);
     /**
      * 판독기도 판 해석의 부분집합이다 — 적용은 `TACTIC_OPS`의 순서를 지나므로
      * (`applyTacticOrders`), 그 목록에 없는 이름은 판독기가 채워도 조용히 버려진다.
@@ -468,13 +450,13 @@ describe("같은 종류의 인자는 같은 검증을 지난다", () => {
 
   /** 장부·피드에 영구히 남는 자유 문구 — 상한이 없으면 감독 발화가 통째로 실린다 */
   it("자유 문구에는 길이 상한이 있다", () => {
-    const notes = only(["note", "label", "settlingNote"]);
+    const notes = only(["note", "label"]);
     expect(notes.length).toBeGreaterThan(0);
     for (const a of notes) expect(a.node.maxLength, where(a)).toBeTypeOf("number");
   });
 
   it("금액은 정수이고 상한을 갖는다", () => {
-    const money = only(["fee", "weeklyWage", "askingPrice", "amount", "delta"]);
+    const money = only(["fee", "weeklyWage", "amount", "delta"]);
     expect(money.length).toBeGreaterThan(0);
     for (const a of money) {
       expect(a.node.type, where(a)).toBe("integer");
@@ -490,92 +472,19 @@ describe("같은 종류의 인자는 같은 검증을 지난다", () => {
 
   /** 빈 목록은 아무에게도 닿지 않으면서 하루 한도만 쓴다 */
   it("대상 목록은 빈 배열을 받지 않는다", () => {
-    const lists = only(["playerIds", "targetIds"]).filter((arg) => arg.tool !== "request_scouting");
+    const lists = only(["playerIds", "targetIds"]);
     expect(lists.length).toBeGreaterThan(0);
     for (const a of lists) expect(a.node.minItems, where(a)).toBeGreaterThanOrEqual(1);
   });
 
   it("필수 인자는 전부 선언된 인자다", () => {
-    for (const tool of [...TOOLS, ...NEGOTIATION_TOOL_DEFINITIONS, ...OUTPUT_SCHEMAS]) {
+    for (const tool of [...TOOLS, ...OUTPUT_SCHEMAS]) {
       for (const [, node] of [["", tool.inputSchema] as const, ...walk(tool.inputSchema)]) {
         const declared = Object.keys((node.properties ?? {}) as Record<string, unknown>);
         for (const key of (node.required ?? []) as string[]) {
           expect(declared, `${tool.name}.${key}`).toContain(key);
         }
       }
-    }
-  });
-});
-
-/**
- * **감독이 부르지 않은 액수는 코어에 닿지 않는다** (docs/negotiation/transfer.md §1).
- *
- * `send_offer`의 `fee`가 스키마에서 필수이던 자리다 — 해석기는 명령을 부르는 순간
- * 숫자를 만들어야 했고, 지어낸 0이 **£0 매각 오퍼**가 되어 코어를 지났다. 프롬프트가
- * 지어내지 말라고 적어도 규칙이 두 곳에서 반대로 서면 모델은 스키마를 따른다.
- */
-describe("액수는 감독이 부른 것만 실린다", () => {
-  /** 받아쓰기가 코어를 부르는 그 문 — `applyOps`와 같은 자리다 (동기 명령만) */
-  function call(name: string, input: unknown): { ok: boolean; message: string } {
-    const spec = SKILL_TOOLS.find((t) => t.name === name);
-    if (!spec) throw new Error(`${name} 명령이 없다`);
-    const result = spec.handle(input);
-    if (result instanceof Promise) throw new Error(`${name}: 동기 명령이 아니다`);
-    return result;
-  }
-
-  const ours = STATE.players.find((p) => p.teamId === STATE.userTeamId)!;
-  const theirs = STATE.players.find((p) => p.teamId !== STATE.userTeamId)!;
-  const buyer = STATE.teams.find((t) => t.id !== STATE.userTeamId)!.id;
-
-  it("이적료가 빠지면 협상이나 임의 가격이 생기지 않는다", () => {
-    const before = STATE.negotiations.length;
-    for (const input of [
-      { playerId: theirs.name },
-      { playerId: ours.name, kind: "sell", teamId: buyer },
-      { playerId: ours.name, kind: "loan_out", teamId: buyer },
-    ]) {
-      const result = call("send_offer", input);
-      expect(result.ok, JSON.stringify(input)).toBe(false);
-      expect(result.message).not.toMatch(/£/);
-    }
-    expect(STATE.negotiations, "액수 없는 오퍼는 협상을 남기지 않는다").toHaveLength(before);
-  });
-
-  /**
-   * 재계약과 해지도 같은 규약이다 — 협상을 여는 셋이 한 절 아래 있다 (transfer.md §1).
-   * 여기서 기대치를 대신 싣는 것이 특히 조용한 것은, 첫 제시액이 되부르기 상한과 선수
-   * 관문을 함께 정하기 때문이다: 지어낸 값 하나가 협상 전체의 폭이 된다.
-   */
-  it("재계약의 주급과 해지의 정산금도 빠지면 협상이 열리지 않는다", () => {
-    const before = STATE.negotiations.length;
-    for (const [name, input] of [
-      ["open_renewal", { playerId: ours.name }],
-      ["open_renewal", { playerId: ours.name, years: 3 }],
-      ["open_release", { playerId: ours.name }],
-    ] as const) {
-      const result = call(name, input);
-      expect(result.ok, JSON.stringify(input)).toBe(false);
-      if (name === "open_renewal") expect(result.message).not.toMatch(/£/);
-    }
-    expect(STATE.negotiations, "액수 없는 제안은 협상을 남기지 않는다").toHaveLength(before);
-  });
-
-  /**
-   * 반려는 **코어의 판단**이어야 한다 — 스키마가 필수로 걸면 해석기는 액수를 비운
-   * 채로는 명령을 부를 수조차 없어, 「감독이 말하지 않았다」가 어디에도 남지 않는다.
-   */
-  it("액수 자리를 스키마가 필수로 걸지 않는다", () => {
-    for (const [name, amounts] of [
-      ["send_offer", ["fee", "weeklyWage"]],
-      // 연수도 비울 수 있지만 실제 제안은 명시된 조건이 있어야 한다
-      ["open_renewal", ["weeklyWage", "years"]],
-      ["open_release", ["severance"]],
-    ] as const) {
-      const spec = SKILL_TOOLS.find((t) => t.name === name)!;
-      const required = ((spec.inputSchema as Record<string, unknown>).required ?? []) as string[];
-      expect(required, name).toContain("playerId");
-      for (const amount of amounts) expect(required, `${name}.${amount}`).not.toContain(amount);
     }
   });
 });
@@ -624,11 +533,11 @@ describe("출력 스키마는 제공자의 문을 지난다", () => {
   };
 
   /**
-   * 열은 전부 도구 없이 답한다 — GM 셋을 뺀 에이전트 이름과 목록이 하나씩 맞는다.
+   * 열은 전부 도구 없이 답한다 — GM 둘을 뺀 에이전트 이름과 목록이 하나씩 맞는다.
    * 에이전트가 하나 늘면 설정(`AGENT_NAMES`)과 이 목록 중 하나가 먼저 빨개진다.
    */
-  it("GM 셋을 뺀 에이전트 전부가 출력 스키마로 답한다 — 도구 이름은 없다", () => {
-    const GMS = new Set(["gm", "match-gm", "negotiation-gm"]);
+  it("GM 둘을 뺀 에이전트 전부가 출력 스키마로 답한다 — 도구 이름은 없다", () => {
+    const GMS = new Set(["gm", "match-gm"]);
     const expected = AGENT_NAMES.filter((name) => !GMS.has(name));
     expect(DECLARED.map((entry) => entry.agent).sort()).toEqual([...expected].sort());
     for (const entry of DECLARED) expect(entry.schema.type, entry.agent).toBe("object");

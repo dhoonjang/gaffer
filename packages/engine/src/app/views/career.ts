@@ -16,9 +16,6 @@ import { headCoachOf, staffOf } from "../../common/people/persona";
 import { ourYouthCandidates, youthIntakeDeadline } from "../season";
 import { youthCandidateFog } from "../../common/players/observation";
 import { managerTenureOf, managerTrophiesOf } from "../../match/competition/records";
-import { openManagerOffers } from "../../negotiation/market/manager-market";
-import { tierOfTeamIn } from "../../common/core/club-tier";
-import { diffDays } from "../../common/core/dates";
 import { competitionName } from "../../common/data/cup-catalog";
 import { leagueName } from "../../common/data/league-catalog";
 
@@ -132,7 +129,7 @@ export function careerTotalsView(t: CareerTotals): CareerTotalsView {
  * 감독이 그 판을 볼 이유가 없다.
  *
  * 수석코치는 자리가 비지 않는다 (`headCoachOf`는 없으면 던진다).
- * 자른 자리는 그냥 줄이 하나 없다 — 빈 칸을 세우지 않는다.
+ * 사람이 없는 자리는 그냥 줄이 하나 없다 — 빈 칸을 세우지 않는다.
  */
 export function staffViews(state: GameState): StaffMemberView[] {
   const rows: Array<{ persona: Persona; role: StaffMemberView["role"] }> = [
@@ -178,19 +175,14 @@ export function youthIntakeView(state: GameState): YouthIntakeView | null {
 
 export type CareerView = {
   /**
-   * **경질 카드** — 서 있으면 감독은 무직이다 (career.md §5.1). 코어는 사실만
+   * **커리어의 끝** — 서 있으면 게임이 끝났다 (career.md §5.1). 코어는 사실만
    * 넘기고("어느 구단에서 몇 위, 기대는 무엇") 문장은 화면이 쓴다.
    */
   dismissal: {
     on: string;
     season: number;
-    /** 경질·만료·사임·이적 — 무직은 상태지 사유가 아니다 (career.md §5.4) */
-    kind: "sacked" | "expired" | "resigned" | "moved";
-    /**
-     * 위약금 — 경질이면 구단이 문 돈, 사임이면 감독이 문 돈, 이적이면 새 구단이
-     * 옛 구단에 문 보상금이다 (career.md §5.4 · §5.1)
-     */
-    severance: number | null;
+    /** 경질·만료 (career.md §5.4) */
+    kind: "sacked" | "expired";
     teamName: string;
     tier: number;
     /** 경질일의 리그 순위 — 아직 리그전을 치르지 않았으면 null */
@@ -199,63 +191,13 @@ export type CareerView = {
     expectation: string;
   } | null;
   /**
-   * **경질 이력** — 부임이 카드를 옮겨 남긴 지난 경질들 (career.md §6).
-   * 잘린 시즌은 `SEASON_RECORD`가 없으므로 시즌 표가 이 줄로 그 해를 채운다.
-   */
-  dismissals: Array<{
-    on: string;
-    season: number;
-    /** 경질·만료·사임·이적 (career.md §5.4) */
-    kind: "sacked" | "expired" | "resigned" | "moved";
-    teamName: string;
-    position: number | null;
-    target: number;
-    expectation: string;
-  }>;
-  /**
-   * **지금 답할 수 있는 감독직 제안** — 만료가 가까운 것이 앞이다.
-   * 수락은 채팅으로 한다(`accept_manager_offer`) — 화면은 무엇이 걸려 있는지만 세운다.
-   */
-  offers: Array<{
-    id: string;
-    /**
-     * 어떻게 선 제안인가 — `vacancy`만 무직에게 붙는다. 재계약(`renewal`)과 이직
-     * 제안(`poach` · 재직 중의 `knock`)은 재직 중에 선다 (career.md §5.1 · §5.4)
-     */
-    via: "vacancy" | "knock" | "renewal" | "poach";
-    teamName: string;
-    tier: number;
-    expiresOn: string;
-    position: number | null;
-    target: number;
-    expectation: string;
-    /** 제시 조건 (career.md §5.1) */
-    salary: number;
-    years: number;
-    budgetPledge: number;
-    /** 서 있으면 흥정은 끝났다 — 한 차례뿐이다 */
-    counteredOn: string | null;
-    /**
-     * 새 구단이 지금 구단에 물 **이적 보상금** — 재직 중에 온 제안에만 있다
-     * (career.md §5.1)
-     */
-    compensation: number | null;
-  }>;
-  /**
-   * **공석 명부** — 감독이 먼저 지원할 수 있는 자리 (career.md §5.1). 재직 중에도
-   * 쌓인다 — 계약을 남기고 떠나는 길이 열려 있다.
-   * 지원은 채팅으로 한다(`apply_manager_job`) — 화면은 어느 문이 열려 있는지만 세운다.
-   */
-  vacancies: Array<{ teamName: string; tier: number; on: string; position: number | null }>;
-  /**
-   * 감독 계약 — 무직이면 null (career.md §5.1 · §5.4). `renewal`은 보드가 만료
-   * 90일 전에 내린 판정이다: 재계약 제안이 섰거나(`offered`), 비갱신 통보(`declined`).
+   * 감독 계약 — 커리어가 끝났으면 null (career.md §5.4). `renewal`은 보드가 만료
+   * 90일 전에 내린 비갱신 통보(`declined`)다 — 재계약이면 계약이 그날 다시 선다.
    */
   contract: {
     salary: number;
     until: string;
-    daysLeft: number;
-    renewal: "offered" | "declined" | null;
+    renewal: "declined" | null;
   } | null;
   trophies: Array<{ competition: string; season: number; teamName: string }>;
   /**
@@ -319,7 +261,6 @@ export function buildCareerView(state: GameState): CareerView {
           on: state.dismissal.on,
           season: state.dismissal.season,
           kind: state.dismissal.kind,
-          severance: state.dismissal.severance ?? null,
           teamName: teamNameIn(state, state.dismissal.teamId),
           tier: state.dismissal.tier,
           position: state.dismissal.position ?? null,
@@ -327,37 +268,6 @@ export function buildCareerView(state: GameState): CareerView {
           expectation: expectationTextOf(state.dismissal),
         }
       : null,
-    dismissals: state.dismissals.map((d) => ({
-      on: d.on,
-      season: d.season,
-      kind: d.kind,
-      teamName: teamNameIn(state, d.teamId),
-      position: d.position ?? null,
-      target: d.target,
-      expectation: expectationTextOf(d),
-    })),
-    offers: openManagerOffers(state).map((o) => ({
-      id: o.id,
-      via: o.via,
-      teamName: teamNameIn(state, o.teamId),
-      tier: o.tier,
-      expiresOn: o.expiresOn,
-      position: o.position ?? null,
-      target: o.target,
-      expectation: expectationTextOf(o),
-      salary: o.salary,
-      years: o.years,
-      budgetPledge: o.budgetPledge,
-      counteredOn: o.counteredOn ?? null,
-      compensation: o.compensation ?? null,
-    })),
-    // 재직 중에도 문이다 — 명부는 14일이 지나면 코어가 내린다 (career.md §5.1)
-    vacancies: state.managerVacancies.map((v) => ({
-      teamName: teamNameIn(state, v.teamId),
-      tier: tierOfTeamIn(state, v.teamId),
-      on: v.on,
-      position: v.position ?? null,
-    })),
     /**
      * 계약 — **수치와 기간만** 내려간다 (career.md §5.4 · overview.md §1 철칙 4).
      * `renewal`은 보드가 만료 90일 전에 내린 판정이고, 문장은 화면과 GM이 쓴다.
@@ -366,13 +276,11 @@ export function buildCareerView(state: GameState): CareerView {
       ? {
           salary: state.manager.contract.salary,
           until: state.manager.contract.until,
-          daysLeft: Math.max(0, diffDays(state.date, state.manager.contract.until)),
           renewal:
-            state.manager.contract.renewalDecidedOn === undefined
-              ? null
-              : state.manager.contract.renewalOffered
-                ? ("offered" as const)
-                : ("declined" as const),
+            state.manager.contract.renewalDecidedOn !== undefined &&
+            state.manager.contract.renewalOffered === false
+              ? ("declined" as const)
+              : null,
         }
       : null,
     /**

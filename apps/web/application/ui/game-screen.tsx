@@ -1,5 +1,4 @@
 "use client";
-import type { NegotiationMethod } from "@story-fm/domain";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -10,13 +9,8 @@ import { mergeSlice } from "@/application/lib/game-slice";
 import { reducedMotion } from "@/domains/common/lib/motion";
 import type { AttentionItemView, ChatTurn } from "@story-fm/engine";
 import type { TurnOperation } from "@story-fm/agents";
-import type { ProposalInput } from "@story-fm/domain";
 import { ChatTurnView, turnStamp } from "./chat";
 import { chatForActiveMatch } from "@/domains/match/lib/match-chat";
-import {
-  NEGOTIATION_STATUS_KO,
-  chatForActiveNegotiation,
-} from "@/domains/negotiation/lib/negotiation-chat";
 import { buildTraceIndex } from "@/domains/common/lib/turn-trace-index";
 import { TurnTracePopup } from "../../domains/common/ui/turn-trace";
 import { mergeMatchOrders, type MatchBoardOrder } from "@/domains/match/lib/match-orders";
@@ -39,10 +33,7 @@ import {
 import { StageSplitHandle } from "../../domains/common/ui/stage-split-handle";
 import { Crest, clubStyle } from "../../domains/common/ui/crest";
 import { KickoffGate } from "../../domains/match/ui/kickoff-gate";
-import { NegotiationGate } from "../../domains/negotiation/ui/negotiation-gate";
-import { NegotiationRoom } from "../../domains/negotiation/ui/negotiation-room";
-import { PlayerCardHost } from "./player-card-host";
-import { ProposalProvider, type ProposalDraft } from "../../domains/negotiation/ui/proposal-form";
+import { PlayerCardProvider } from "../../domains/common/ui/player-card";
 import {
   IconBoard,
   IconInsight,
@@ -51,7 +42,6 @@ import {
   IconCareer,
   IconChat,
   IconChevron,
-  IconContract,
   IconFinance,
   IconMark,
   IconSquad,
@@ -118,27 +108,23 @@ const MATCH_PANELS = [
 type MatchTab = (typeof MATCH_PANELS)[number]["key"];
 
 /**
- * 경기·협상 구간을 한 덩어리로 묶는다 — **끝난 것은 메인 채팅에서 접힌다.**
+ * 경기 구간을 한 덩어리로 묶는다 — **끝난 것은 메인 채팅에서 접힌다.**
  *
  * 경기 하나가 중계 수십 턴을 남기는데 그게 평시 대화 사이에 그대로 흐르면,
  * 한 시즌을 보낸 뒤 "지난주에 뭘 지시했더라"를 찾을 수 없다. 경기는 그 자체로
  * 하나의 사건이므로 결과 한 줄로 접고, 펼치면 그때의 중계와 지시가 그대로 나온다.
- * 협상 방의 턴도 같다 (transfer.md §12-2) — 끝난 협상은 선수 · 갈래 · 결과 한 줄이다.
  *
- * `matchId`·`negotiationId`가 없는 옛 이력의 턴은 묶지 않고 그대로 흐른다 — 어느
+ * `matchId`가 없는 옛 이력의 턴은 묶지 않고 그대로 흐른다 — 어느
  * 것의 기록인지 모르는 채로 접으면 무엇을 펼치는지 알 수 없다.
  */
-type BlockKind = "match" | "negotiation";
 type ChatBlock =
   | { kind: "turn"; turn: ChatTurn; at: number }
-  | { kind: BlockKind; id: string; turns: Array<{ turn: ChatTurn; at: number }> };
+  | { kind: "match"; id: string; turns: Array<{ turn: ChatTurn; at: number }> };
 
-/** 이 턴이 속한 구간 — 경기인가 협상인가, 그리고 어느 것인가. 둘 다 아니면 null */
-function blockOf(turn: ChatTurn): { kind: BlockKind; id: string } | null {
+/** 이 턴이 속한 경기 — 경기 턴이 아니면 null */
+function blockOf(turn: ChatTurn): { kind: "match"; id: string } | null {
   if (turn.inMatch === true && turn.matchId !== undefined)
     return { kind: "match", id: turn.matchId };
-  if (turn.inNegotiation === true && turn.negotiationId !== undefined)
-    return { kind: "negotiation", id: turn.negotiationId };
   return null;
 }
 
@@ -230,20 +216,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
     (pendingMatch.beforeKickoff === true && !(busy && entering === pendingMatch.matchId))
       ? null
       : pendingMatch;
-  /**
-   * 협상 방 — 경기와 같은 두 걸음이다 (transfer.md §12-2). `start_negotiation`은 방을
-   * 세울 뿐이고 감독이 나서는 게이트를 지나야 무대가 방으로 바뀐다. 나서는 손잡이를
-   * 누른 순간을 `enteringNegotiation`이 적어 두고, 코어가 `seated`를 돌려주기 전에도
-   * 무대는 이미 방이다 — 그 턴이 실패하면 `fail`이 이 값을 지워 게이트로 돌아간다.
-   */
-  const pendingNegotiation = game?.views.negotiation ?? null;
-  const [enteringNegotiation, setEnteringNegotiation] = useState<string | null>(null);
-  const liveNegotiation =
-    pendingNegotiation === null ||
-    (pendingNegotiation.beforeSeating &&
-      !(busy && enteringNegotiation === pendingNegotiation.negotiationId))
-      ? null
-      : pendingNegotiation;
   /** 열린 장부 뷰 — null이면 무대(채팅 / 경기+채팅)가 보인다 */
   const [panel, setPanel] = useState<Panel | null>(null);
   /**
@@ -397,11 +369,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
     return last?.role === "model" ? (last.suggestion ?? null) : null;
   }, [game?.chat]);
   /**
-   * **첨부된 제안서** — 폼이 써 낸 구조체가 입력창에 붙어 다음 전송에 함께 나간다
-   * (overview.md §5). 코어가 반려하면 그대로 남아 감독이 칩을 눌러 값을 고친다.
-   */
-  const [draft, setDraft] = useState<ProposalDraft | null>(null);
-  /**
    * 원문 창이 열린 턴의 자리 (`game.chat`의 절대 인덱스) — 개발 모드에서만 찬다.
    * 게임의 일부가 아니라 개발 도구라 세이브에도 URL에도 남기지 않는다.
    */
@@ -525,19 +492,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
     wasInMatch.current = now;
   }, [liveMatch?.matchId, matchGone]);
   /**
-   * 감독이 나서는 순간 — 열어 두었던 장부를 닫는다. 오른쪽 칸의 주인은 방이고, 장부는
-   * 레일이 그대로 서 있어 감독이 다시 열 수 있다(채팅 탭이 방으로 돌아오는 문이다).
-   * 종료 화면은 없다 — 방을 나온 뒤의 장부는 방이 없던 때와 같고, 결과는 카드가 이미
-   * 채팅에 세웠다 (transfer.md §12-2).
-   */
-  const wasAtTable = useRef<string | null>(null);
-  useEffect(() => {
-    const now = liveNegotiation?.negotiationId ?? null;
-    if (wasAtTable.current === null && now !== null) setPanel(null);
-    wasAtTable.current = now;
-  }, [liveNegotiation?.negotiationId]);
-
-  /**
    * 턴 전송 — `text`를 주면 입력창 대신 그 문장을 보낸다 (시간 이동 버튼).
    *
    * 버튼이 API를 직접 부르지 않고 **채팅으로 도는** 이유: 시간이 흐르면 그동안
@@ -545,21 +499,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 세계는 아무 말도 하지 않는다 — 이 게임에서 시간 진행은 서사의 입구다.
    */
   const send = useCallback(
-    async (
-      text?: string,
-      operation?: TurnOperation,
-      /**
-       * **제안 폼**이 낸 구조체 — 말과 함께 갈 수도, 혼자 갈 수도 있다 (transfer.md §12-3).
-       * 코어가 반려하면 서버는 턴을 돌리지 않고 그 이유를 보내므로, 실패를 되돌려 줘야
-       * 폼이 그 줄을 세우고 감독이 값을 고친다.
-       */
-      proposal?: ProposalInput,
-    ): Promise<TurnStreamFailure | null> => {
+    async (text?: string, operation?: TurnOperation): Promise<TurnStreamFailure | null> => {
       const message = operation ? "" : (text ?? input).trim();
-      // 첨부된 제안서는 감독의 말과 함께 나간다 — 손잡이 턴에는 붙지 않는다
-      const attached = proposal ?? (operation ? undefined : draft?.input);
-      const sentDraft = attached !== undefined && attached === draft?.input;
-      if ((!message && !operation && !attached) || busy || !game) return null;
+      if ((!message && !operation) || busy || !game) return null;
       const seq = ++turnSeqRef.current;
       setBusy(true);
       setError(null);
@@ -618,27 +560,15 @@ export function GameScreen({ gameId }: { gameId: string }) {
        * `phase`가 `match`이면 경기 이력이다(lib/turn-runner.ts).
        */
       const activeMatchId = liveMatch?.matchId;
-      // 협상 방도 같은 규칙이다 — 방 안에서 친 말은 그 협상의 이력이다 (lib/turn-runner.ts)
-      const activeNegotiationId = liveNegotiation?.negotiationId;
-      const optimistic =
-        operation || !message
-          ? null
-          : {
-              role: "user" as const,
-              text: message,
-              toolCalls: [],
-              at: game.date,
-              ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
-              ...(activeNegotiationId
-                ? {
-                    inNegotiation: true as const,
-                    negotiationId: activeNegotiationId,
-                    ...(liveNegotiation?.contactId
-                      ? { negotiationContactId: liveNegotiation.contactId }
-                      : {}),
-                  }
-                : {}),
-            };
+      const optimistic = operation
+        ? null
+        : {
+            role: "user" as const,
+            text: message,
+            toolCalls: [],
+            at: game.date,
+            ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
+          };
       if (optimistic) setGame((g) => (g ? { ...g, chat: [...g.chat, optimistic] } : g));
 
       /**
@@ -666,8 +596,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
          * 지시·입력과 달리 이 낙관은 서버에 두 번 실릴 것이 없다.
          */
         setEntering(null);
-        // 협상의 문도 같다 — 앉는 턴이 실패하면 무대는 게이트로 돌아간다
-        setEnteringNegotiation(null);
         setError(failure.reason);
         setErrorDetail(failure.detail ?? null);
         setErrorRetry(failure.retry);
@@ -717,8 +645,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
         stopPump();
         // 지난 알림의 "읽음"은 새 GM 턴이 들어오는 렌더에서 함께 풀린다 (`hintTurn`)
         if (payload) setGame(payload);
-        // 제안서는 턴이 서면 떼어진다 — 반려된 턴은 첨부를 그대로 둔다
-        if (payload && sentDraft) setDraft(null);
         setStreamText("");
         setBusy(false);
         /**
@@ -775,7 +701,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
         {
           ...(operation ? { operation } : message ? { message } : {}),
           orders,
-          ...(attached ? { proposal: attached } : {}),
         },
         {
           onDelta: (text) => {
@@ -794,19 +719,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
       if (!pendingPayloadRef.current) commit(null);
       return failure ?? null;
     },
-    [
-      input,
-      busy,
-      game,
-      liveMatch?.matchId,
-      liveMatch?.live,
-      liveNegotiation?.negotiationId,
-      liveNegotiation?.contactId,
-      gameId,
-      saver,
-      draft,
-      pauseLive,
-    ],
+    [input, busy, game, liveMatch?.matchId, liveMatch?.live, gameId, saver, pauseLive],
   );
   sendRef.current = send;
 
@@ -833,46 +746,19 @@ export function GameScreen({ gameId }: { gameId: string }) {
     void send(undefined, { kind: "enter_match" });
   }, [pendingMatch?.matchId, send]);
   /**
-   * 협상의 문을 지난다 — 경기의 문과 같은 순서다 (transfer.md §12-2). 나서는 것은
-   * 감독이므로 방은 누름과 함께 서고, 코어가 `seated`를 세우는 것은 그다음이다. 게이트가
-   * 물러나는 시간도 한 벌이다 — 두 문이 한 화면에 함께 서는 일은 없다.
-   */
-  const enterNegotiation = useCallback(
-    (method: NegotiationMethod) => {
-      const id = pendingNegotiation?.negotiationId;
-      if (id === undefined) return;
-      setEnteringNegotiation(id);
-      if (!reducedMotion()) {
-        setGateLeaving(true);
-        if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
-        gateLeaveTimer.current = setTimeout(() => setGateLeaving(false), GATE_LEAVE_MS);
-      }
-      void send(undefined, { kind: "enter_negotiation", method });
-    },
-    [pendingNegotiation?.negotiationId, send],
-  );
-  /** 협상에서 물러난다 — 협상은 열린 채 방만 닫힌다. 손잡이는 방의 칸에 선다 */
-  const leaveNegotiation = useCallback(() => {
-    void send(undefined, { kind: "leave_negotiation" });
-  }, [send]);
-
-  /**
    * 마지막으로 화면에 선 시각 — 흘러오는 턴이 같은 시각을 다시 적지 않게 한다.
    * ⚠️ 훅이라 **이른 반환 전부보다 앞**에 서야 한다 — 하나라도 뒤에 두면 그 갈래를
    * 지난 렌더와 그러지 않은 렌더의 훅 개수가 달라져 "Rendered more hooks than
    * during the previous render"로 화면이 통째로 죽는다 (실제로 그랬다).
    */
   const lastStamp = useMemo(() => {
-    const visible = chatForActiveNegotiation(
-      chatForActiveMatch(game?.chat ?? [], liveMatch?.matchId ?? null),
-      liveNegotiation ? (liveNegotiation.contactId ?? "") : null,
-    );
+    const visible = chatForActiveMatch(game?.chat ?? [], liveMatch?.matchId ?? null);
     for (let i = visible.length - 1; i >= 0; i--) {
       const stamp = turnStamp(visible[i]!);
       if (stamp) return stamp;
     }
     return null;
-  }, [game, liveMatch?.matchId, liveNegotiation]);
+  }, [game, liveMatch?.matchId]);
   /**
    * 턴 → 원문 기록의 자리. ⚠️ **걸러지지 않은 `game.chat`**으로 만든다 —
    * 화면이 그리는 목록은 경기 중 턴을 걸러내므로 그 자리를 쓰면 남의 턴이 열린다.
@@ -906,8 +792,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 달력 뷰가 이미 표시해 둔 값이라(`isNext`) 따로 계산하지 않는다.
    */
   const nextMatchDate = game?.views.calendar.entries.find((e) => e.isNext)?.date ?? null;
-  /** 경기 중에는 시간을 경기가 밀고, 협상 방 안에서는 날짜가 흐르지 않는다 — 손잡이를 쥐어 주지 않는다 */
-  const canSkip = game?.phase !== "match" && game?.phase !== "negotiation";
+  /** 경기 중에는 시간을 경기가 민다 — 손잡이를 쥐어 주지 않는다 */
+  const canSkip = game?.phase !== "match";
 
   /**
    * 경기 중인가 — **채팅의 주인이 바뀐다.**
@@ -917,16 +803,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 화면에 없다. 배너로 적지 않고 **창의 결**로 알린다.
    */
   const inMatch = liveMatch !== null;
-  /** 협상 방 안인가 — 채팅의 주인은 협상 GM이고 옆 칸은 조건서다 (transfer.md §12-2) */
-  const inNegotiation = liveNegotiation !== null;
-  /**
-   * 중계 화면은 코어의 별도 `casterHistory`와 같은 경계로 현재 경기만 보여 준다.
-   * 협상 방도 같은 갈림이다 — 둘은 함께 설 수 없으므로 한쪽은 늘 그대로 지난다.
-   */
-  const visibleChat = chatForActiveNegotiation(
-    chatForActiveMatch(game.chat, liveMatch?.matchId ?? null),
-    liveNegotiation ? (liveNegotiation.contactId ?? "") : null,
-  );
+  /** 중계 화면은 코어의 별도 `casterHistory`와 같은 경계로 현재 경기만 보여 준다 */
+  const visibleChat = chatForActiveMatch(game.chat, liveMatch?.matchId ?? null);
   /**
    * 오른쪽 칸에 무엇이 서는가 — **경기 판이 우선이고 장부가 그것을 덮는다.**
    * 경기 중에 장부를 열면(달력·재정) 판 대신 장부가 선다: 그때 감독이 보려는 건
@@ -934,10 +812,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const showBoard = inMatch && panel === null;
   const matchPanelOpen = showBoard && matchTab !== "판세";
-  /** 협상 방의 칸 — 경기 판과 같은 자리에 선다 (`with-board`) */
-  const showRoom = inNegotiation && panel === null;
   /** 오른쪽 칸이 열려 있는가 — 폭이 0인지 반쪽인지를 가른다 */
-  const rightOpen = showBoard || showRoom || panel !== null;
+  const rightOpen = showBoard || panel !== null;
   /**
    * 전술판이 **채팅 자리까지 받아야 하는가** — 판이 서 있는 화면에서만 참이다.
    *
@@ -946,7 +822,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 결과도 같아야 한다 — 다른 탭(판세·대회·달력)에서는 켜 둔 상태여도 아무 일이
    * 없어야 하므로 지금 무엇이 서 있는지를 함께 본다.
    */
-  const boardOnStage = showBoard ? matchTab === "팀" : !showRoom && shownPanel === "스쿼드";
+  const boardOnStage = showBoard ? matchTab === "팀" : shownPanel === "스쿼드";
   /** 나가는 중에도 서랍은 그려져 있어야 한다 — 그동안 오른쪽으로 미끄러진다 */
   const boardTakesStage = !inMatch && (boardOpen || boardClosing) && boardOnStage;
   /**
@@ -997,7 +873,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const chatPane = (
     <section
-      className={`chat-pane${inMatch ? " broadcasting" : ""}${inNegotiation ? " at-table" : ""}`}
+      className={`chat-pane${inMatch ? " broadcasting" : ""}`}
       aria-hidden={matchPanelOpen || undefined}
       inert={matchPanelOpen}
     >
@@ -1013,11 +889,17 @@ export function GameScreen({ gameId }: { gameId: string }) {
            */
           let prevStamp: string | null = null;
           const render = (turn: ChatTurn, i: number) => {
-            if (turn.role === "operator") return null;
             // 감독의 발화를 눌러도 열리는 것은 **그 발화가 실려 나간 호출**이다 —
             // 인덱스를 아는 이 자리가 그것을 해석한다 (`buildTraceIndex`)
             if (turn.role !== "model")
-              return <ChatTurnView key={i} turn={turn} onLongPress={traceOpener(turn)} />;
+              return (
+                <ChatTurnView
+                  key={i}
+                  turn={turn}
+                  playerNames={game.playerNames}
+                  onLongPress={traceOpener(turn)}
+                />
+              );
             const node = (
               <ChatTurnView
                 key={i}
@@ -1041,53 +923,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
           const blocks = groupChatTurns(visibleChat);
           return blocks.map((block, bi) => {
             if (block.kind === "turn") return render(block.turn, block.at);
-            if (block.kind === "negotiation") {
-              const log = game.negotiationLogs[block.id];
-              /**
-               * 열린 협상(방을 나왔어도 `open`)은 접지 않는다 — 편지가 그 뒤를 잇고
-               * 다시 앉을 수 있는 자리다. 끝난 협상만 접힌다 — **자리마다 한 덩어리**로,
-               * 머리는 선수 · 갈래 · 그 자리의 날짜이고 결과는 **마지막 자리**의 머리에만
-               * 선다: 한 협상에 세 번 앉았으면 「합의」가 세 번 서지 않는다.
-               */
-              const head = log !== undefined && log.status !== "open" ? log : null;
-              const lastSeat = !blocks.some(
-                (b, j) => j > bi && b.kind === "negotiation" && b.id === block.id,
-              );
-              const seatDate = block.turns[0]?.turn.at ?? head?.date;
-              const open = head === null || openLogs.has(block.id);
-              return (
-                <div
-                  className="negotiation-log"
-                  key={`n${bi}`}
-                  data-testid={`negotiation-log-${block.id}`}
-                >
-                  {head && (
-                    <button
-                      className={`match-log-head negotiation-log-head${open ? " open" : ""}`}
-                      onClick={() => toggleLog(block.id)}
-                      aria-expanded={open}
-                      {...(lastSeat ? { "data-status": head.status } : {})}
-                    >
-                      <IconContract size={14} />
-                      <b>{head.playerName}</b>
-                      <span className="match-log-title">{head.kindLabel}</span>
-                      {lastSeat && (
-                        <span className="negotiation-log-status">
-                          {NEGOTIATION_STATUS_KO[head.status]}
-                        </span>
-                      )}
-                      <span className="match-log-date">{humanDate(seatDate ?? head.date)}</span>
-                      <IconChevron size={14} />
-                    </button>
-                  )}
-                  {open && (
-                    <div className="match-log-body">
-                      {block.turns.map(({ turn, at }) => render(turn, at))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
             const log = game.matchLogs[block.id];
             // 진행 중인 경기(결과가 아직 없다)는 접지 않는다 — 지금 보고 있는 것이다
             const done = log?.score != null;
@@ -1181,12 +1016,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
         onOperate={(operation) => void send(undefined, operation)}
         busy={busy}
         inMatch={inMatch}
-        inNegotiation={inNegotiation}
         canSkip={canSkip}
         nextMatchDate={nextMatchDate}
         inputRef={inputRef}
-        draft={draft}
-        onRemoveDraft={() => setDraft(null)}
         suggestion={suggestion}
         liveControl={
           liveMatch?.live && !liveMatch.live.finished
@@ -1206,370 +1038,333 @@ export function GameScreen({ gameId }: { gameId: string }) {
      * **이름을 눌러 여는 카드는 무대 전체를 감싼다** (player.md §9.5) — 손잡이가
      * 장부 뷰 깊은 곳(재정 줄·평점표)과 채팅 산문에 함께 서기 때문이다. 사본을
      * 버리는 눈금(`stamp`)은 날짜와 대화 길이다: 시간이 흐르면 폼도 기록도 달라진다.
-     *
-     * **제안 폼이 그 바깥을 감싼다** — 여는 손잡이가 선수 카드 안에도 서므로, 카드를
-     * 그리는 자리가 폼의 문을 볼 수 있어야 한다. 보내는 길은 턴 하나다(`send`): 코어가
-     * 먼저 걸고 GM이 읽는다 (transfer.md §12-3).
      */
-    <ProposalProvider gameId={gameId} busy={busy} onDraft={setDraft}>
-      <PlayerCardHost
-        gameId={gameId}
-        playerNames={game.playerNames}
-        stamp={`${game.date}/${game.chat.length}`}
-        inMatch={inMatch}
-      >
-        {/* `data-phase` — 화면에 단계를 적지 않는 대신 e2e가 읽는 자리. 감독에게는
+    <PlayerCardProvider
+      gameId={gameId}
+      playerNames={game.playerNames}
+      stamp={`${game.date}/${game.chat.length}`}
+      inMatch={inMatch}
+    >
+      {/* `data-phase` — 화면에 단계를 적지 않는 대신 e2e가 읽는 자리. 감독에게는
           달력·채팅이 이미 말해 주므로 배지가 자리를 차지할 이유가 없었다 */}
-        {/* 구단 색은 여기서 선다 — 세이브 팀의 `--club*` 한 벌이다 (ui/design-system.md
+      {/* 구단 색은 여기서 선다 — 세이브 팀의 `--club*` 한 벌이다 (ui/design-system.md
           §2 「주입」). 아래 어디서든 `var(--club-wash)`가 이 값이다 */}
-        <div
-          className={`app${liveMatch ? " in-match in-live-match" : ""}${matchViewport.focused ? " match-input-focus" : ""}${liveNegotiation ? " in-negotiation" : ""}`}
-          data-phase={game.phase}
-          style={{
-            ...clubStyle(game.team.colours, game.team.id, game.team.shortName),
-            ...(matchViewport.height ? { height: matchViewport.height } : {}),
-          }}
-        >
-          <header className="topbar">
-            {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) */}
-            <Link href="/" className="brand" data-testid="home-link" title="게임 목록으로">
-              <IconMark />
-            </Link>
-            {/**
-             * 내가 누구이고 지금이 언제인가 — **제목 한 줄 + 각주 한 줄.**
-             *
-             * 셋을 같은 크기·같은 회색으로 나란히 늘어놓았던 때는 어느 것이 무엇인지
-             * 눈이 매번 세 덩어리를 다 읽어야 했다. 구단이 제목이고 감독과 시각은 그
-             * 각주다 — 굵기와 색으로 층을 두면 훑을 때 하나만 읽힌다.
-             *
-             * 좁아지면 두 줄로 갈린다(`.topbar-sub`). 지우지는 않는다 — 셋 다 화면이
-             * 바뀌어도 그대로여야 하는 좌표다. 대신 **줄임말이 붙는다**: 직함(감독)과
-             * 연도, 경기 중이면 대회 이름까지. 이름과 날짜 자체는 남는다.
-             */}
-            <div className="topbar-meta">
-              {/* 문장 + 이름 — 셸이라 구단 색은 서지 않는다. 어느 구단인지는 문장이 말한다 (§2 규칙 5) */}
-              <span className="topbar-club-line">
-                <Crest
-                  id={game.team.id}
-                  shortName={game.team.shortName}
-                  colours={game.team.colours}
-                  size={20}
-                />
-                <span className="meta topbar-club" data-testid="team-name">
-                  {game.teamName}
-                </span>
+      <div
+        className={`app${liveMatch ? " in-match in-live-match" : ""}${matchViewport.focused ? " match-input-focus" : ""}`}
+        data-phase={game.phase}
+        style={{
+          ...clubStyle(game.team.colours, game.team.id, game.team.shortName),
+          ...(matchViewport.height ? { height: matchViewport.height } : {}),
+        }}
+      >
+        <header className="topbar">
+          {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) */}
+          <Link href="/" className="brand" data-testid="home-link" title="게임 목록으로">
+            <IconMark />
+          </Link>
+          {/**
+           * 내가 누구이고 지금이 언제인가 — **제목 한 줄 + 각주 한 줄.**
+           *
+           * 셋을 같은 크기·같은 회색으로 나란히 늘어놓았던 때는 어느 것이 무엇인지
+           * 눈이 매번 세 덩어리를 다 읽어야 했다. 구단이 제목이고 감독과 시각은 그
+           * 각주다 — 굵기와 색으로 층을 두면 훑을 때 하나만 읽힌다.
+           *
+           * 좁아지면 두 줄로 갈린다(`.topbar-sub`). 지우지는 않는다 — 셋 다 화면이
+           * 바뀌어도 그대로여야 하는 좌표다. 대신 **줄임말이 붙는다**: 직함(감독)과
+           * 연도, 경기 중이면 대회 이름까지. 이름과 날짜 자체는 남는다.
+           */}
+          <div className="topbar-meta">
+            {/* 문장 + 이름 — 셸이라 구단 색은 서지 않는다. 어느 구단인지는 문장이 말한다 (§2 규칙 5) */}
+            <span className="topbar-club-line">
+              <Crest
+                id={game.team.id}
+                shortName={game.team.shortName}
+                colours={game.team.colours}
+                size={20}
+              />
+              <span className="meta topbar-club" data-testid="team-name">
+                {game.teamName}
               </span>
-              <span className="topbar-sub">
-                <span className="meta">
-                  {game.managerName}
-                  <span className="abbr"> 감독</span>
-                </span>
-                {/* 시즌 번호는 여기 두지 않는다 — 상단 바에서 매 순간 필요한 건 **지금이
+            </span>
+            <span className="topbar-sub">
+              <span className="meta">
+                {game.managerName}
+                <span className="abbr"> 감독</span>
+              </span>
+              {/* 시즌 번호는 여기 두지 않는다 — 상단 바에서 매 순간 필요한 건 **지금이
                 언제인가**뿐이고, 몇 번째 시즌인지는 커리어·대회 화면이 갖는다 */}
-                {/* 경기 중에는 대회 이름이 이 자리를 쓴다 — 시계는 스코어보드에 선다 */}
-                {liveMatch ? (
-                  <MatchTitle match={liveMatch} />
-                ) : (
-                  <span className="meta" data-testid="game-date">
-                    {/* 연도는 좁아지면 접힌다 — 한 시즌 안에서 바뀌는 건 월·일이다 */}
-                    <span className="abbr">{game.date.slice(0, 4)}년 </span>
-                    {humanDate(game.date)} {game.timeOfDay}
-                  </span>
-                )}
-              </span>
-              {/* 안건은 **평시에만** 선다 — 90분은 답할 자리가 아니고, 그 칸은 경기
+              {/* 경기 중에는 대회 이름이 이 자리를 쓴다 — 시계는 스코어보드에 선다 */}
+              {liveMatch ? (
+                <MatchTitle match={liveMatch} />
+              ) : (
+                <span className="meta" data-testid="game-date">
+                  {/* 연도는 좁아지면 접힌다 — 한 시즌 안에서 바뀌는 건 월·일이다 */}
+                  <span className="abbr">{game.date.slice(0, 4)}년 </span>
+                  {humanDate(game.date)} {game.timeOfDay}
+                </span>
+              )}
+            </span>
+            {/* 안건은 **평시에만** 선다 — 90분은 답할 자리가 아니고, 그 칸은 경기
                 시계의 것이다 (장부 아이콘 줄이 경기 중에 서지 않는 것과 같은 결) */}
-              {liveMatch === null && <Agenda items={game.views.attention} />}
-            </div>
-            {/*
-             * 장부 뷰 — 무대의 주인은 채팅이므로 오른쪽 끝에 아이콘 줄로만 둔다.
-             * **경기 중에는 서지 않는다** — 재정·커리어는 90분 안에 갈 곳이 아니고,
-             * 화면이 통째로 경기의 것이 되어야 지금 무엇을 하는 중인지가 분명하다.
-             */}
-            {liveMatch !== null && (
-              <nav className="rail match-rail" aria-label="경기 화면 이동">
-                {MATCH_PANELS.map(({ key, label, Icon }) => (
-                  <button
-                    key={key}
-                    className={matchTab === key ? "active" : ""}
-                    onClick={() => setMatchTab(key)}
-                    data-testid={`mtab-${key}`}
-                    title={label}
-                    aria-label={label}
-                    aria-pressed={matchTab === key}
-                  >
-                    <Icon />
-                  </button>
-                ))}
-              </nav>
-            )}
-            {liveMatch === null && (
-              <nav className="rail" aria-label="화면 이동">
+            {liveMatch === null && <Agenda items={game.views.attention} />}
+          </div>
+          {/*
+           * 장부 뷰 — 무대의 주인은 채팅이므로 오른쪽 끝에 아이콘 줄로만 둔다.
+           * **경기 중에는 서지 않는다** — 재정·커리어는 90분 안에 갈 곳이 아니고,
+           * 화면이 통째로 경기의 것이 되어야 지금 무엇을 하는 중인지가 분명하다.
+           */}
+          {liveMatch !== null && (
+            <nav className="rail match-rail" aria-label="경기 화면 이동">
+              {MATCH_PANELS.map(({ key, label, Icon }) => (
                 <button
-                  className={panel === null ? "active" : ""}
-                  onClick={() => setPanel(null)}
-                  data-testid="tab-채팅"
-                  title="채팅"
-                  aria-label="채팅"
+                  key={key}
+                  className={matchTab === key ? "active" : ""}
+                  onClick={() => setMatchTab(key)}
+                  data-testid={`mtab-${key}`}
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={matchTab === key}
                 >
-                  <IconChat />
+                  <Icon />
                 </button>
-                <span className="rail-sep" />
-                {PANELS.map(({ key, Icon }) => (
-                  <button
-                    key={key}
-                    className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
-                    onClick={() => {
-                      rail.markSeen(key);
-                      setPanel(panel === key ? null : key);
-                    }}
-                    data-testid={`tab-${key}`}
-                    title={key}
-                    aria-label={key}
-                  >
-                    <Icon />
-                  </button>
-                ))}
-                {/**
-                 * 바뀐 장부를 알리는 말풍선 — **다음 클릭에 닫히고, 칩으로 다시 부른다.**
-                 *
-                 * 아무 표시도 없으면 지시가 먹혔는지 확인하러 탭을 열어야 한다. 그렇다고
-                 * 상주하면 알림이 화면의 일부가 되어 신호가 죽는다. 놓쳐도 그 지시는
-                 * 채팅에 칩으로 남아 있어 눌러 되부를 수 있다(`pinnedHint`).
-                 *
-                 * 아이콘 위의 점이 "여기가 바뀌었다"를 남긴다 — 말풍선을 닫아도 남는다.
-                 * 카드 자체의 생김새는 `RailHints`가 갖는다.
-                 */}
-                <RailHints hints={rail.shown} pinned={rail.pinned} />
-              </nav>
-            )}
-          </header>
-          {/* 경기 머리 — 어느 탭을 보든 스코어·시계·득점자는 사라지지 않는다.
-          휘슬 뒤에도 종료 카드가 닫힐 때까지 남아 있다가 위로 걷힌다 */}
-          {/* 경기 중에는 무대 안 경기장 칸 위에 선다 — 여기는 휘슬 뒤 걷히는 동안의 자리다 */}
-          {whistleView && !inMatch && (
-            <MatchHeadline match={whistleView} closing={whistleClosing} />
+              ))}
+            </nav>
           )}
-          {/* 입장 확인 — 경기의 문. 매치데이 프로그램 한 장이 그 자리에 선다.
+          {liveMatch === null && (
+            <nav className="rail" aria-label="화면 이동">
+              <button
+                className={panel === null ? "active" : ""}
+                onClick={() => setPanel(null)}
+                data-testid="tab-채팅"
+                title="채팅"
+                aria-label="채팅"
+              >
+                <IconChat />
+              </button>
+              <span className="rail-sep" />
+              {PANELS.map(({ key, Icon }) => (
+                <button
+                  key={key}
+                  className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
+                  onClick={() => {
+                    rail.markSeen(key);
+                    setPanel(panel === key ? null : key);
+                  }}
+                  data-testid={`tab-${key}`}
+                  title={key}
+                  aria-label={key}
+                >
+                  <Icon />
+                </button>
+              ))}
+              {/**
+               * 바뀐 장부를 알리는 말풍선 — **다음 클릭에 닫히고, 칩으로 다시 부른다.**
+               *
+               * 아무 표시도 없으면 지시가 먹혔는지 확인하러 탭을 열어야 한다. 그렇다고
+               * 상주하면 알림이 화면의 일부가 되어 신호가 죽는다. 놓쳐도 그 지시는
+               * 채팅에 칩으로 남아 있어 눌러 되부를 수 있다(`pinnedHint`).
+               *
+               * 아이콘 위의 점이 "여기가 바뀌었다"를 남긴다 — 말풍선을 닫아도 남는다.
+               * 카드 자체의 생김새는 `RailHints`가 갖는다.
+               */}
+              <RailHints hints={rail.shown} pinned={rail.pinned} />
+            </nav>
+          )}
+        </header>
+        {/* 경기 머리 — 어느 탭을 보든 스코어·시계·득점자는 사라지지 않는다.
+          휘슬 뒤에도 종료 카드가 닫힐 때까지 남아 있다가 위로 걷힌다 */}
+        {/* 경기 중에는 무대 안 경기장 칸 위에 선다 — 여기는 휘슬 뒤 걷히는 동안의 자리다 */}
+        {whistleView && !inMatch && <MatchHeadline match={whistleView} closing={whistleClosing} />}
+        {/* 입장 확인 — 경기의 문. 매치데이 프로그램 한 장이 그 자리에 선다.
           문이 닫힌 동안(`liveMatch`가 아직 null) 서고, 지나는 160ms 동안 더 그려져
           물러난다 — 그동안 스코어보드는 이미 내려오는 중이다 (match.md §8 모션) */}
-          {pendingMatch !== null && (liveMatch === null || gateLeaving) && (
-            <KickoffGate
-              match={pendingMatch}
-              date={game.date}
-              busy={busy}
-              leaving={liveMatch !== null}
-              onEnter={enterMatch}
-            />
-          )}
-          {/* 감독이 나서는 문 — 협상의 게이트. 킥오프 게이트와 한 쌍이라 같은 때 서고 같은
-          때 물러난다 (transfer.md §12-2 · design-system.md §7-1) */}
-          {pendingNegotiation !== null && (liveNegotiation === null || gateLeaving) && (
-            <NegotiationGate
-              room={pendingNegotiation}
-              date={game.date}
-              busy={busy}
-              leaving={liveNegotiation !== null}
-              onEnter={enterNegotiation}
-            />
-          )}
-          {/**
-           * 종료 화면 — **휘슬과 평시 사이의 한 걸음.**
-           *
-           * 곧장 오피스로 돌아가면 90분이 무엇으로 끝났는지 확인할 자리가 없다
-           * (중계는 이미 결과 카드로 접혀 있다). 달력 상세와 **같은 리포트 한 벌**을
-           * 세운다 — 둘이 각자 접으면 같은 경기가 두 가지로 보인다 (match.md §8).
-           */}
-          {finished !== null && game.matchLogs[finished] && (
-            <div
-              className="fulltime"
-              data-testid="fulltime"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="fulltime-heading"
-            >
-              <div className="fulltime-card">
-                <header className="fulltime-header">
-                  <span className="fulltime-tag" id="fulltime-heading">
-                    경기 종료
-                  </span>
-                </header>
-                {/* 리포트를 기다리는 동안에도 머리와 골은 이미 화면에 있다 — 접힌 경기
+        {pendingMatch !== null && (liveMatch === null || gateLeaving) && (
+          <KickoffGate
+            match={pendingMatch}
+            date={game.date}
+            busy={busy}
+            leaving={liveMatch !== null}
+            onEnter={enterMatch}
+          />
+        )}
+        {/**
+         * 종료 화면 — **휘슬과 평시 사이의 한 걸음.**
+         *
+         * 곧장 오피스로 돌아가면 90분이 무엇으로 끝났는지 확인할 자리가 없다
+         * (중계는 이미 결과 카드로 접혀 있다). 달력 상세와 **같은 리포트 한 벌**을
+         * 세운다 — 둘이 각자 접으면 같은 경기가 두 가지로 보인다 (match.md §8).
+         */}
+        {finished !== null && game.matchLogs[finished] && (
+          <div
+            className="fulltime"
+            data-testid="fulltime"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fulltime-heading"
+          >
+            <div className="fulltime-card">
+              <header className="fulltime-header">
+                <span className="fulltime-tag" id="fulltime-heading">
+                  경기 종료
+                </span>
+              </header>
+              {/* 리포트를 기다리는 동안에도 머리와 골은 이미 화면에 있다 — 접힌 경기
                 머리와 턴의 사건 표식이 같은 사실을 든다 (match.md §8) */}
-                <MatchReportPanel
-                  gameId={gameId}
-                  matchId={finished}
-                  head={matchHeadFacts(game.matchLogs[finished], game.chat, finished)}
-                />
-                <button
-                  className="primary-btn"
-                  onClick={closeFulltime}
-                  data-testid="fulltime-close"
-                >
-                  확인
-                </button>
-              </div>
+              <MatchReportPanel
+                gameId={gameId}
+                matchId={finished}
+                head={matchHeadFacts(game.matchLogs[finished], game.chat, finished)}
+              />
+              <button className="primary-btn" onClick={closeFulltime} data-testid="fulltime-close">
+                확인
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          <main className="stage">
-            {/* 같은 채팅 노드를 유지하고 경기 중에는 경기장 왼쪽·대화 오른쪽으로 배치한다. */}
-            <div
-              className={`stage-split panel-split${inMatch ? " live-match-layout" : ""}${matchPanelOpen ? " match-detail-open" : ""}${rightOpen ? " open" : ""}${
-                showBoard || showRoom ? " with-board" : " with-ledger"
-              }${boardTakesStage ? " board-open" : ""}${boardClosing ? " board-closing" : ""}`}
-            >
-              {/* 스코어보드는 경기장 칸 위에 붙는다 — 대화 칸은 무대 높이를 통째로 쓴다 */}
-              {liveMatch && <MatchHeadline match={liveMatch} clock={liveClock} />}
-              {chatPane}
-              {matchPanelOpen && liveMatch && (
-                <section className="match-side-panel" aria-labelledby="match-panel-title">
-                  <header className="match-detail-heading">
-                    <div>
-                      <b id="match-panel-title">
-                        {matchTab === "팀"
-                          ? "전술 · 선수 교체"
-                          : matchTab === "기록"
-                            ? "경기 기록"
-                            : "대회 현황"}
-                      </b>
-                      <span>
-                        {matchTab === "팀" && squadSide === "ours"
-                          ? "편집 중 · 경기 일시정지"
-                          : "터치라인"}
-                      </span>
-                    </div>
-                    <button onClick={() => setMatchTab("판세")}>대화로</button>
-                  </header>
-                  <div className="match-panel-scroll ledger-body" key={matchTab}>
-                    {matchTab === "팀" && (
-                      <>
-                        {/**
-                         * **구성은 같고 정확도만 다르다** — 양쪽 다 판 → 전술 → 명단
-                         * 순으로 읽힌다. 배치를 맞춰 둬야 감독이 오갈 때 눈이 매번
-                         * 자리를 다시 찾지 않는다. 상대 쪽은 안개를 지나고 조작이 없다.
-                         */}
-                        <div className="side-tabs" role="tablist">
-                          {(["ours", "theirs"] as const).map((s2) => (
-                            <button
-                              key={s2}
-                              role="tab"
-                              aria-selected={squadSide === s2}
-                              className={`side-tab${squadSide === s2 ? " on" : ""}`}
-                              onClick={() => setSquadSide(s2)}
-                              data-testid={`side-${s2}`}
-                            >
-                              {s2 === "ours" ? "우리 팀" : "상대 팀"}
-                            </button>
-                          ))}
-                        </div>
-                        {squadSide === "ours" ? (
-                          squadView(() => setMatchTab("판세"))
-                        ) : (
-                          <MatchOpponent
-                            match={liveMatch}
-                            boardOpen={boardOpen || boardClosing}
-                            onToggleBoard={toggleBoard}
-                          />
-                        )}
-                      </>
-                    )}
-                    {matchTab === "기록" && (
-                      <div className="match-record">
-                        <MatchOverview match={liveMatch} />
-                        <LiveEvents frame={live.frame} match={liveMatch} names={game.playerNames} />
+        <main className="stage">
+          {/* 같은 채팅 노드를 유지하고 경기 중에는 경기장 왼쪽·대화 오른쪽으로 배치한다. */}
+          <div
+            className={`stage-split panel-split${inMatch ? " live-match-layout" : ""}${matchPanelOpen ? " match-detail-open" : ""}${rightOpen ? " open" : ""}${
+              showBoard ? " with-board" : " with-ledger"
+            }${boardTakesStage ? " board-open" : ""}${boardClosing ? " board-closing" : ""}`}
+          >
+            {/* 스코어보드는 경기장 칸 위에 붙는다 — 대화 칸은 무대 높이를 통째로 쓴다 */}
+            {liveMatch && <MatchHeadline match={liveMatch} clock={liveClock} />}
+            {chatPane}
+            {matchPanelOpen && liveMatch && (
+              <section className="match-side-panel" aria-labelledby="match-panel-title">
+                <header className="match-detail-heading">
+                  <div>
+                    <b id="match-panel-title">
+                      {matchTab === "팀"
+                        ? "전술 · 선수 교체"
+                        : matchTab === "기록"
+                          ? "경기 기록"
+                          : "대회 현황"}
+                    </b>
+                    <span>
+                      {matchTab === "팀" && squadSide === "ours"
+                        ? "편집 중 · 경기 일시정지"
+                        : "터치라인"}
+                    </span>
+                  </div>
+                  <button onClick={() => setMatchTab("판세")}>대화로</button>
+                </header>
+                <div className="match-panel-scroll ledger-body" key={matchTab}>
+                  {matchTab === "팀" && (
+                    <>
+                      {/**
+                       * **구성은 같고 정확도만 다르다** — 양쪽 다 판 → 전술 → 명단
+                       * 순으로 읽힌다. 배치를 맞춰 둬야 감독이 오갈 때 눈이 매번
+                       * 자리를 다시 찾지 않는다. 상대 쪽은 안개를 지나고 조작이 없다.
+                       */}
+                      <div className="side-tabs" role="tablist">
+                        {(["ours", "theirs"] as const).map((s2) => (
+                          <button
+                            key={s2}
+                            role="tab"
+                            aria-selected={squadSide === s2}
+                            className={`side-tab${squadSide === s2 ? " on" : ""}`}
+                            onClick={() => setSquadSide(s2)}
+                            data-testid={`side-${s2}`}
+                          >
+                            {s2 === "ours" ? "우리 팀" : "상대 팀"}
+                          </button>
+                        ))}
                       </div>
-                    )}
-                    {matchTab === "대회" && competitionsView}
-                  </div>
-                </section>
-              )}
-              {/* 가라앉은 대화를 덮는 판 — 누르면 서랍이 닫힌다. 서랍이 설 수 없는
-              폭에서는 CSS가 걷어 낸다(`--drawer`) — 채팅을 가로막을 뿐이므로 */}
-              {boardTakesStage && !boardClosing && (
-                <button
-                  className="board-scrim"
-                  onClick={toggleBoard}
-                  aria-label="전술판 닫기"
-                  data-testid="board-scrim"
-                />
-              )}
-              <section
-                className="stage-right"
-                aria-hidden={!rightOpen}
-                /* 접힌 칸은 화면에도 손에도 없다 — 폭 0짜리 표에 탭 포커스가 빠지지 않게 */
-                inert={!rightOpen}
-              >
-                {showBoard && liveMatch ? (
-                  <div className="stage-board" data-testid="stage-board">
-                    <LivePitch
-                      frame={live.frame}
-                      match={liveMatch}
-                      running={liveClock?.running ?? false}
-                      error={live.error}
-                    />
-                  </div>
-                ) : showRoom && liveNegotiation ? (
-                  /**
-                   * 협상 방 — 경기 판의 자리에 선다 (design-system.md §7-1). 조건서 ·
-                   * 인내 · 건너편이 채팅 옆에 서고, 손잡이 둘도 여기 있다.
-                   */
-                  <div className="stage-board" data-testid="stage-room">
-                    <div className="board-tab ledger-body">
-                      <NegotiationRoom
-                        room={liveNegotiation}
-                        busy={busy}
-                        onLeave={leaveNegotiation}
-                      />
+                      {squadSide === "ours" ? (
+                        squadView(() => setMatchTab("판세"))
+                      ) : (
+                        <MatchOpponent
+                          match={liveMatch}
+                          boardOpen={boardOpen || boardClosing}
+                          onToggleBoard={toggleBoard}
+                        />
+                      )}
+                    </>
+                  )}
+                  {matchTab === "기록" && (
+                    <div className="match-record">
+                      <MatchOverview match={liveMatch} />
+                      <LiveEvents frame={live.frame} match={liveMatch} names={game.playerNames} />
                     </div>
-                  </div>
-                ) : (
-                  /**
-                   * 장부 뷰 — **채팅을 대신하지 않고 나눠 쓴다.**
-                   *
-                   * 패널이 무대를 통째로 덮으면 명단을 확인하려고 연 순간 대화가
-                   * 사라지고, 감독은 "방금 코치가 뭐라고 했더라"를 확인하러 다시
-                   * 채팅을 열어야 한다. 폭만 있으면 둘 다 서 있는 게 맞다.
-                   */
-                  <div
-                    className={wide ? "panel wide" : "panel"}
-                    data-testid={panel !== null ? `panel-${panel}` : undefined}
-                  >
-                    {/* 폭은 뷰가 정한다 — 전술판+명단(스쿼드)과 열두 달 격자(달력)는
+                  )}
+                  {matchTab === "대회" && competitionsView}
+                </div>
+              </section>
+            )}
+            {/* 가라앉은 대화를 덮는 판 — 누르면 서랍이 닫힌다. 서랍이 설 수 없는
+              폭에서는 CSS가 걷어 낸다(`--drawer`) — 채팅을 가로막을 뿐이므로 */}
+            {boardTakesStage && !boardClosing && (
+              <button
+                className="board-scrim"
+                onClick={toggleBoard}
+                aria-label="전술판 닫기"
+                data-testid="board-scrim"
+              />
+            )}
+            <section
+              className="stage-right"
+              aria-hidden={!rightOpen}
+              /* 접힌 칸은 화면에도 손에도 없다 — 폭 0짜리 표에 탭 포커스가 빠지지 않게 */
+              inert={!rightOpen}
+            >
+              {showBoard && liveMatch ? (
+                <div className="stage-board" data-testid="stage-board">
+                  <LivePitch
+                    frame={live.frame}
+                    match={liveMatch}
+                    running={liveClock?.running ?? false}
+                    error={live.error}
+                  />
+                </div>
+              ) : (
+                /**
+                 * 장부 뷰 — **채팅을 대신하지 않고 나눠 쓴다.**
+                 *
+                 * 패널이 무대를 통째로 덮으면 명단을 확인하려고 연 순간 대화가
+                 * 사라지고, 감독은 "방금 코치가 뭐라고 했더라"를 확인하러 다시
+                 * 채팅을 열어야 한다. 폭만 있으면 둘 다 서 있는 게 맞다.
+                 */
+                <div
+                  className={wide ? "panel wide" : "panel"}
+                  data-testid={panel !== null ? `panel-${panel}` : undefined}
+                >
+                  {/* 폭은 뷰가 정한다 — 전술판+명단(스쿼드)과 열두 달 격자(달력)는
                     본문 900px 안에 넣으면 읽을 수가 없다.
                     `key`로 장부마다 새로 세운다 — 탭을 옮길 때 흐려졌다 든다 */}
-                    <div
-                      key={shownPanel ?? "none"}
-                      className={`view-scroll ledger-body${wide ? " wide" : ""}`}
-                    >
-                      {shownPanel === "스쿼드" && squadView(() => setPanel(null))}
-                      {shownPanel === "달력" && (
-                        <CalendarView calendar={game.views.calendar} gameId={gameId} />
-                      )}
-                      {shownPanel === "재정" && <FinanceView finance={game.views.finance} />}
-                      {shownPanel === "대회" && competitionsView}
-                      {shownPanel === "커리어" && (
-                        <CareerView squad={game.views.squad} career={game.views.career} />
-                      )}
-                    </div>
+                  <div
+                    key={shownPanel ?? "none"}
+                    className={`view-scroll ledger-body${wide ? " wide" : ""}`}
+                  >
+                    {shownPanel === "스쿼드" && squadView(() => setPanel(null))}
+                    {shownPanel === "달력" && (
+                      <CalendarView calendar={game.views.calendar} gameId={gameId} />
+                    )}
+                    {shownPanel === "재정" && <FinanceView finance={game.views.finance} />}
+                    {shownPanel === "대회" && competitionsView}
+                    {shownPanel === "커리어" && (
+                      <CareerView squad={game.views.squad} career={game.views.career} />
+                    )}
                   </div>
-                )}
-              </section>
-              {/* 두 칸의 경계 — 끄는 대로 무대의 `--split`이 바뀌고 거기 붙은 것들
+                </div>
+              )}
+            </section>
+            {/* 두 칸의 경계 — 끄는 대로 무대의 `--split`이 바뀌고 거기 붙은 것들
               (덮개·전술판 서랍)이 함께 따라온다. 나란히 설 수 없는 폭에서는 CSS가
               걷어 낸다(`--split-live`) — 오른쪽 칸 **뒤에** 서야 그 위에 얹힌다 */}
-              <StageSplitHandle
-                key={inMatch ? "match" : "office"}
-                mode={inMatch ? "match" : "office"}
-              />
-            </div>
-          </main>
-          {/* 턴 원문 — 개발 모드에서 턴을 길게 눌렀을 때만 선다 (models.md §5) */}
-          {TRACE_ENABLED && traceAt !== null && (
-            <TurnTracePopup gameId={gameId} index={traceAt} onClose={closeTrace} />
-          )}
-        </div>
-      </PlayerCardHost>
-    </ProposalProvider>
+            <StageSplitHandle
+              key={inMatch ? "match" : "office"}
+              mode={inMatch ? "match" : "office"}
+            />
+          </div>
+        </main>
+        {/* 턴 원문 — 개발 모드에서 턴을 길게 눌렀을 때만 선다 (models.md §5) */}
+        {TRACE_ENABLED && traceAt !== null && (
+          <TurnTracePopup gameId={gameId} index={traceAt} onClose={closeTrace} />
+        )}
+      </div>
+    </PlayerCardProvider>
   );
 }

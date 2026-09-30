@@ -294,56 +294,6 @@ describe("API — 온보딩부터 경기까지", () => {
     expect(current.views.competitions.recentResults.length).toBeGreaterThan(0);
   });
 
-  it("제안 폼 — 구조체로 낸 오퍼가 그 턴의 카드로 서고, 반려는 턴 없이 돌아온다", async () => {
-    const created = await createGame(
-      json({ teamId: "arsenal", managerName: "폼", background: "분석가", seed: 31 }),
-    );
-    const game = (await created.json()) as GamePayload;
-    const state = loadGame(game.id)!;
-    const budget = state.finances.find((f) => f.teamId === state.userTeamId)!.transferBudget;
-    // 예산 안에서 살 수 있는 남의 선수 하나 — 시드가 고른다
-    const wanted = state.players.find(
-      (p) => p.teamId !== state.userTeamId && p.teamId !== "free" && p.attributes.overall < 70,
-    )!;
-    const fee = Math.min(budget, 3_000_000);
-    const events = async (res: Response) =>
-      (await res.text())
-        .split("\n")
-        .filter(Boolean)
-        .map(
-          (line) =>
-            JSON.parse(line) as {
-              type: string;
-              payload?: GamePayload;
-              error?: string;
-              detail?: string;
-            },
-        );
-    const proposal = { playerId: wanted.id, kind: "buy", fee, weeklyWage: 40_000, years: 4 };
-    const res = await postTurn(json({ proposal }), params(game.id));
-    expect(res.status).toBe(200);
-    const first = await events(res);
-    const payload = first.find((e) => e.type === "done")?.payload;
-    expect(payload, first.find((e) => e.type === "error")?.error).toBeDefined();
-    const last = payload!.chat[payload!.chat.length - 1]!;
-    // 코어가 턴 앞에서 건 오퍼가 이 턴의 호출 장부에 카드로 선다
-    const offer = last.toolCalls.find((c) => c.name === "send_offer");
-    expect(offer?.payload).toMatchObject({ kind: "offer", playerId: wanted.id });
-
-    // 남의 구단과 계약한 선수의 재계약을 폼으로 우회할 수 없다.
-    const beforeRejected = loadGame(game.id)!;
-    const unauthorized = { playerId: wanted.id, kind: "renew", weeklyWage: 40_000, years: 4 };
-    const failure = (
-      await events(await postTurn(json({ proposal: unauthorized }), params(game.id)))
-    ).find((e) => e.type === "error");
-    expect(failure?.error).toBe("제안을 넣지 못했습니다");
-    expect(failure?.detail).toBeTruthy();
-    const afterRejected = loadGame(game.id)!;
-    expect(afterRejected.chat).toEqual(beforeRejected.chat);
-    expect(afterRejected.negotiations).toEqual(beforeRejected.negotiations);
-    expect(afterRejected.contracts).toEqual(beforeRejected.contracts);
-  });
-
   it("달력 뷰가 유저 팀 일정(친선 + 리그 38 + 대항전)을 담는다", async () => {
     const created = await createGame(
       json({ teamId: "liverpool", managerName: "정", background: "분석가", seed: 5 }),
@@ -359,11 +309,9 @@ describe("API — 온보딩부터 경기까지", () => {
     expect(matches.every((e) => e.result === null)).toBe(true);
     expect(matches.filter((e) => e.isNext)).toHaveLength(1);
     expect(cal.seasonStart <= cal.seasonEnd).toBe(true);
-    // v6: 7/1 프리시즌 시작 + 이적창 일정
+    // 7/1 프리시즌 시작
     expect(cal.today).toBe("2026-07-01");
     expect(cal.preseasonStart).toBe("2026-07-01");
-    expect(cal.entries.some((e) => e.type === "window-open")).toBe(true);
-    expect(cal.windows.find((w) => w.kind === "여름")?.open).toBe(true);
   });
 
   it("라인업 편집 — 포메이션·포지션 변경 + 선발 확정이 반영된다", async () => {
@@ -652,16 +600,16 @@ describe("API — 온보딩부터 경기까지", () => {
     expect(res.status).toBe(400);
   });
 
-  it("라인업 편집 — 무직(경질)이면 409, 스쿼드 뷰도 잠긴다", async () => {
+  it("커리어가 끝나면(경질) 라인업 편집·턴이 409이고 스쿼드 뷰도 잠긴다", async () => {
     const created = await createGame(
-      json({ teamId: "brentford", managerName: "무직", background: "분석가", seed: 47 }),
+      json({ teamId: "brentford", managerName: "종료", background: "분석가", seed: 47 }),
     );
     const game = (await created.json()) as GamePayload;
     const starting = game.views.squad.players
       .filter((p) => p.role === "선발")
       .map((p) => ({ playerId: p.id, position: p.assignedPosition ?? p.position }));
 
-    // 경질 카드를 세운다 — userTeamId는 옛 구단을 그대로 가리킨다 (career.md §5.1)
+    // 경질 카드를 세운다 — userTeamId는 옛 구단을 그대로 가리킨다 (career.md §5)
     const state = loadGame(game.id)!;
     state.dismissal = {
       kind: "sacked",
@@ -679,7 +627,16 @@ describe("API — 온보딩부터 경기까지", () => {
     const body = (await res.json()) as { error: string; retry?: boolean };
     // retry가 아니다 — 화면 대기열이 같은 저장을 되보내면 안 된다
     expect(body.retry).toBeUndefined();
-    expect(body.error).toContain("무직");
+    expect(body.error).toContain("커리어 종료");
+
+    // 끝난 커리어에는 턴이 없다 — 다시 보내도 같다
+    const turn = await postTurn(json({ message: "훈련하자" }), params(game.id));
+    const events = (await turn.text()).split("\n").filter(Boolean);
+    const failure = events
+      .map((line) => JSON.parse(line) as { type: string; retry?: boolean })
+      .find((e) => e.type === "error");
+    expect(failure?.retry).toBe(false);
+    expect(loadGame(game.id)!.chat).toEqual(state.chat);
 
     // 화면 읽기 전용의 근거 — 뷰의 editable이 함께 꺼진다
     const after = await getGame(new Request("http://test.local"), params(game.id));
@@ -1215,7 +1172,7 @@ describe("계측 라우트 — 히트율의 문턱", () => {
     expect(gm.cacheHitRate).toBeNull();
     expect(compactor.cacheHitRate).toBeCloseTo(0.4, 6);
     // 부르지 않은 자리는 「캐시가 안 걸렸다」가 아니라 잰 것이 없다
-    expect(body.agents.find((a) => a.agent === "negotiation-gm")!.cacheHitRate).toBeNull();
+    expect(body.agents.find((a) => a.agent === "match-gm")!.cacheHitRate).toBeNull();
     expect(body.totals.billed).toBe(21_300);
     resetLlmUsage();
   });

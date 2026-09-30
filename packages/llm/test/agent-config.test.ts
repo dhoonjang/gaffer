@@ -71,11 +71,6 @@ describe("에이전트별 LLM 설정", () => {
     model: gpt-custom
     max_tokens: 200
     timeout_ms: 2000
-  negotiation-gm:
-    provider: openai
-    model: gpt-room
-    max_tokens: 200
-    timeout_ms: 2000
   history-compactor:
     provider: anthropic
     model: claude-compactor

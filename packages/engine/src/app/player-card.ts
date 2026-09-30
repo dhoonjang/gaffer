@@ -1,4 +1,3 @@
-import type { ScoutingReport } from "@story-fm/domain";
 import {
   type AttributeAxis,
   type FatigueBand,
@@ -20,6 +19,8 @@ import {
   fatigueLabel,
   fatigueOf,
   fatigueBand,
+  observedFit,
+  observedOverall,
 } from "@story-fm/domain";
 import {
   type RecentRatingView,
@@ -40,10 +41,8 @@ import {
   observationMargin,
   potentialBand,
 } from "../common/players/observation";
-import { observedFit, observedOverall } from "../negotiation/players/scouting";
 import { type MoodRead } from "../story/players/mood";
 import { moodOf } from "./workflows/story/players/mood";
-import { type ProposalView, proposalViewOf } from "../negotiation/market/proposal";
 import { type CareerSeasonView, type CareerTotalsView, careerTotalsView } from "./views/career";
 import {
   type GameState,
@@ -58,21 +57,15 @@ import {
   isOurPlayer,
   assignmentFor,
 } from "../common/core/state";
-import { observedMarketValue } from "../negotiation/market/market";
-import { listingOf } from "../negotiation/market/negotiation";
-import { scoutingReportsFor } from "../negotiation/views/scouting";
 import { INJURY_SEVERITY_KO, injuryHistoryOf } from "../common/players/injury";
 import { competitionShortName } from "../common/data/cup-catalog";
 import { careerSeasonRowsOf, foldCareer } from "../story/players/career";
-import { loanReportOf } from "../negotiation/market/departures";
 import { formLabel, formAngle, formTone } from "../common/players/form";
 import { conditionShown } from "../common/views/observation";
 import { squadStatusOf } from "../common/players/contract-status";
-import { openPromises } from "../negotiation/players/promises";
-import { contractTermLines } from "../negotiation/market/terms";
+import { openPromises } from "../common/players/promises";
 import { leaderGroupOf } from "../common/players/hierarchy";
 import { isHomegrownFor } from "../common/players/registration";
-import { settlingPercent } from "../common/players/settling";
 import { matchFatigueOf } from "@story-fm/sim";
 
 // ── 선수 카드 — 이름을 눌러 여는 한 장 (player.md §9.5) ──────
@@ -81,7 +74,7 @@ import { matchFatigueOf } from "@story-fm/sim";
  * 관측된 축 하나 — **값과 그 값이 얼마나 틀릴 수 있는가** (player.md §9).
  *
  * 폭을 함께 싣는 까닭은 명단의 `±N`과 같다: 흐리다는 사실만으로는 **얼마나**
- * 흐린지를 말하지 못해 스카우팅을 마친 선수와 소문으로만 아는 선수가 같아 보인다.
+ * 흐린지를 말하지 못해 직접 본 선수와 소문으로만 아는 선수가 같아 보인다.
  * 폭은 축마다 다르다 — 몸과 발(관측형)은 좁고 판단(분석형)은 넓다.
  */
 export interface PlayerCardAxisView {
@@ -119,13 +112,6 @@ export interface PlayerCardOursView {
    * 옆에 세우고 명단에는 세우지 않는다: 명단은 지금 뛰는 자리와 전력을 읽는 표다.
    */
   squadStatus: SquadStatus;
-  /** 바이아웃 조항 — 없으면 null (transfer.md §12-3) */
-  buyoutClause: number | null;
-  /**
-   * 계약에 적힌 조건 — 코어가 낸 줄 그대로다(`contractTermLines`). 화면은 엔진을 값으로
-   * 읽지 못하므로 문장이 여기 실려 간다. 없으면 빈 배열이다.
-   */
-  contractTerms: string[];
   /** 아직 기한 전인 감독의 약속 — 갈래와 기한뿐이다 (people.md §5-2) */
   promises: Array<{ kind: PromiseKind; dueOn: string }>;
   isCaptain: boolean;
@@ -133,8 +119,6 @@ export interface PlayerCardOursView {
   /** 라커룸 서열 — 리더 그룹 밖이면 null (people.md §5-1) */
   leaderRank: number | null;
   homegrown: boolean;
-  /** 정착 진행도 — 끝났거나 원소속이면 null. 이 값이 있는 동안 축은 참값이 아니다 */
-  settling: number | null;
   /**
    * 지금 전술판에서 맡은 것 — 배치가 없으면 null.
    *
@@ -150,7 +134,6 @@ export interface PlayerCardOursView {
     role: { id: string; ko: string } | null;
     familiarity: number;
   } | null;
-  loan: SquadViewRow["loan"];
   away: SquadViewRow["away"];
   /** 마일스톤 — 최근 것 몇 건 (`SQUAD_MILESTONES_SHOWN`). 장부는 우리 선수만 담는다 */
   milestones: MilestoneView[];
@@ -163,7 +146,7 @@ export interface PlayerCardOursView {
  * (`GET /api/games/[id]/player/[playerId]`) — 끝난 경기의 리포트와 같은 길이다
  * (match.md §8). 명단에 설 수 없는 남의 구단 선수가 화면에 서는 첫 자리라 **안개를
  * 통과한 값만 싣는다**: 참값을 보내고 화면이 흐리는 것이 아니라 코어가 흐린 값을
- * 낸다(player.md §9 · §10). 흐리는 것은 능력치와 시장가뿐이고 기록·계약·국적·부상
+ * 낸다(player.md §9 · §10). 흐리는 것은 능력치뿐이고 기록·계약·국적·부상
  * 이력은 신문에 실리는 사실이라 두 얼굴이 같다.
  */
 export interface PlayerCardView {
@@ -206,28 +189,9 @@ export interface PlayerCardView {
   /** 잠재력 **추정 구간** — 짐작할 근거가 없으면 null (player.md §9.1) */
   potential: { low: number; high: number; margin: number; confidence: string } | null;
 
-  /**
-   * **관측** 시장가 — 공개 정보 기준의 추정(`observedMarketValue`).
-   * 우리 선수는 흐림 폭이 0이라 참값이다.
-   */
-  marketValue: number | null;
   /** 주급·계약 만료일은 흐리지 않는다 — 공개 기록 계열이다 (player.md §10) */
   weeklyWage: number | null;
   contractUntil: string | null;
-  /** 이적 리스트 호가 — 올라 있지 않으면 null */
-  transferListed: number | null;
-  /**
-   * **제안 폼이 미리 채우는 자** — 이 선수에게 부를 수 있는 갈래와 코어가 아는 값
-   * (transfer.md §12-3). 부를 명령이 없는 선수(무소속·빌려 온 선수)는 null이고 그때 폼도 없다.
-   */
-  proposal: ProposalView | null;
-  /**
-   * **도착한 스카우팅 보고서** — 채팅 카드는 한 번 지나가고 사무실에 스카우팅 화면이
-   * 없으므로, 감독이 값을 되찾는 자리가 여기다 (player.md §9.4-1 · §9.5). 금액은
-   * 채팅 카드와 **같은 자**에서 낸다. 우리 계약에는 서지 않는다 — 데려온 뒤의
-   * 요구액은 그 선수에 대한 사실이 아니다.
-   */
-  scoutingReports: ScoutingReport[];
 
   /** 지금 부상 (없으면 null) — 공개 기록이라 남의 선수도 그대로 선다 */
   injury: { bodyPart: string; severity: string; expectedReturn: string } | null;
@@ -303,12 +267,8 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
       margin: observationMargin(state, p.id, key),
     })),
     potential: potentialBand(state, p),
-    marketValue: observedMarketValue(state, p),
     weeklyWage: contract?.weeklyWage ?? null,
     contractUntil: contract?.until ?? null,
-    transferListed: listingOf(state, p.id)?.askingPrice ?? null,
-    proposal: proposalViewOf(state, p.id),
-    scoutingReports: scoutingReportsFor(state, p.id),
     injury: injury
       ? {
           bodyPart: injury.bodyPart,
@@ -364,8 +324,6 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
  */
 export function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView {
   const assignment = assignmentFor(state, p.id);
-  const loan = loanReportOf(state, p.id);
-  const contract = activeContract(state, p.id);
   const slotted = assignment?.role === "starting";
   /** 자리가 있어야 역할이 있다 — 벤치 배치의 `position`은 주 포지션이 채운 값이다 */
   const role =
@@ -386,33 +344,18 @@ export function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView 
     fatigueBand: fatigueBand(fatigueOf(p.state)),
     mood: moodOf(state, p),
     squadStatus: squadStatusOf(state, p),
-    buyoutClause: contract?.buyoutClause ?? null,
-    contractTerms: contract ? contractTermLines(contract) : [],
     promises: openPromises(state, p.id).map((x) => ({ kind: x.kind, dueOn: x.dueOn })),
     isCaptain: p.isCaptain,
     isViceCaptain: p.isViceCaptain === true,
     leaderRank:
       leaderGroupOf(state, state.userTeamId).findIndex((row) => row.playerId === p.id) + 1 || null,
     homegrown: isHomegrownFor(p, state.userTeamId),
-    settling: settlingPercent(state, p.id),
     assignment: assignment
       ? {
           tier: assignment.role === "starting" ? "선발" : "벤치",
           position: assignment.position,
           role: role ? { id: role.id, ko: role.ko } : null,
           familiarity: assignment.familiarity,
-        }
-      : null,
-    loan: loan
-      ? {
-          teamId: loan.teamId,
-          team: teamShortNameIn(state, loan.teamId),
-          until: loan.until,
-          apps: loan.apps,
-          goals: loan.goals,
-          rating: loan.rating,
-          benchRun: loan.benchRun,
-          growth: loan.growth,
         }
       : null,
     away: awayViewOf(state, p),

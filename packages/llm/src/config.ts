@@ -6,28 +6,19 @@ import type { EvaluatorConfig } from "./game-evaluator";
 import type { LlmProvider } from "./game-llm";
 
 /** 실제로 LLM을 호출하는 단위 — 설정과 사용량 계측이 이 이름을 공유한다. */
-export const AGENT_NAMES = [
-  "gm",
-  "match-gm",
-  "negotiation-gm",
-  "history-compactor",
-  "onboarding-judge",
-] as const;
+export const AGENT_NAMES = ["gm", "match-gm", "history-compactor", "onboarding-judge"] as const;
 
 export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
 export const INSTRUCTION_AGENT_NAMES = [
   "tactic-orders",
   "training-orders",
-  "market-orders",
-  "table-orders",
+  "finance-orders",
 ] as const;
 export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
 export const EVALUATOR_NAMES = [
   ...INSTRUCTION_AGENT_NAMES,
   "match-reader",
   "training-rater",
-  "scouting",
-  "negotiation",
   "finalize-match",
 ] as const;
 export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
@@ -37,6 +28,11 @@ const RETIRED_AGENT_NAMES = [
   "reader-baseline",
   "match-sheet",
   "scout-rater",
+  "negotiation-gm",
+  "market-orders",
+  "table-orders",
+  "scouting",
+  "negotiation",
 ] as const;
 export const RECORDED_AGENT_NAMES = [
   ...AGENT_NAMES,
@@ -223,12 +219,9 @@ const LlmConfigFileSchema = z
       .object({
         "tactic-orders": RawEvaluatorConfigSchema.optional(),
         "training-orders": RawEvaluatorConfigSchema.optional(),
-        "market-orders": RawEvaluatorConfigSchema.optional(),
-        "table-orders": RawEvaluatorConfigSchema.optional(),
+        "finance-orders": RawEvaluatorConfigSchema.optional(),
         "match-reader": RawEvaluatorConfigSchema.optional(),
         "training-rater": RawEvaluatorConfigSchema.optional(),
-        scouting: RawEvaluatorConfigSchema.optional(),
-        negotiation: RawEvaluatorConfigSchema.optional(),
         "finalize-match": RawEvaluatorConfigSchema.optional(),
       })
       .strict()
@@ -237,7 +230,6 @@ const LlmConfigFileSchema = z
       .object({
         gm: RawAgentConfigSchema,
         "match-gm": RawAgentConfigSchema,
-        "negotiation-gm": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,
       })

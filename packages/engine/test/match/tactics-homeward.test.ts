@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  tacticsDistance,
-  MEMORY_FADE_DAYS,
-  familiarityForSetup,
-  tacticsSignature,
-} from "@story-fm/domain";
+import { MEMORY_FADE_DAYS, familiarityForSetup, tacticsSignature } from "@story-fm/domain";
 import {
   playersOf,
   setLineup,
@@ -15,158 +10,15 @@ import {
   memoryRetention,
   playerById,
 } from "@story-fm/engine";
-import { createTestGame, resultOf } from "../helpers";
+import { createTestGame } from "../helpers";
 
 /**
- * 전술을 바꿔도 **모두가 똑같이 헤매지는 않는다** (commands/index.ts `familiarityShift`·`memoryRetention`).
- * 갓 영입된 선수는 자기가 하던 축구를 기준으로 흔들린다 — 우리가 그쪽으로
- * 움직이면 오히려 편해지고, 멀어지면 남들보다 더 헤맨다.
+ * 전술을 바꿔도 **모두가 똑같이 헤매지는 않는다** (commands/lineup.ts `personalDistance`·`memoryRetention`).
+ * 각자 자기 기억과 성향을 기준으로 흔들린다.
  */
-
-/**
- * 첼시를 우리와 뚜렷이 다른 축구로 만들고 **그 축구를 익힌 팀**으로 둔다.
- * 초기값은 팀마다 같아서(전술도 적응도도) 그대로는 시험이 성립하지 않는다.
- */
-function makeChelseaDistinct(state: GameState, familiarity = 85) {
-  const theirs = state.tactics.find((t) => t.teamId === "chelsea")!;
-  theirs.spec = { ...theirs.spec, pressing: 5, tempo: 5, defensiveLine: 5, mentality: 5 };
-  for (const a of theirs.assignments) a.familiarity = familiarity;
-  return theirs.spec;
-}
-
-/** 첼시 선수를 영입해 선발에 세운다 (계약·정착 원장까지 흉내) */
-function signStarter(state: GameState, playerId?: string) {
-  const target = playerId
-    ? state.players.find((p) => p.id === playerId)!
-    : playersOf(state, "chelsea").find((p) => p.teamId !== state.userTeamId)!;
-  const out = userTactics(state).assignments.find((a) => a.role === "starting")!;
-  target.teamId = state.userTeamId;
-  target.squadLevel = "first";
-  state.transfers.push({
-    id: `t-${target.id}`,
-    gamePlayerId: target.id,
-    windowId: null,
-    fromTeamId: "chelsea",
-    toTeamId: state.userTeamId,
-    date: state.date,
-    type: "transfer",
-    fee: 0,
-  });
-  const starting = userTactics(state)
-    .assignments.filter((a) => a.role === "starting")
-    .map((a) => ({ playerId: a.playerId === out.playerId ? target.id : a.playerId }));
-  const res = setLineup(state, { starting });
-  expect(res.ok, res.message).toBe(true);
-  return target;
-}
 
 const famOf = (state: GameState, id: string) =>
   userTactics(state).assignments.find((a) => a.playerId === id)!.familiarity;
-
-describe("새 영입은 자기 축구를 기준으로 흔들린다", () => {
-  it("그가 하던 전술 쪽으로 바꾸면 남들보다 덜 잃는다", () => {
-    const toward = createTestGame(11);
-    const home = makeChelseaDistinct(toward);
-    const target = signStarter(toward);
-    const ours = userTactics(toward).spec;
-
-    // 첼시 전술로 통째로 옮긴다 — 그에게는 고향 축구다
-    const beforeFam = famOf(toward, target.id);
-    const teammate = userTactics(toward).assignments.find(
-      (a) => a.role === "starting" && a.playerId !== target.id,
-    )!.playerId;
-    const teammateBefore = famOf(toward, teammate);
-    setTactics(toward, { ...home });
-
-    const newcomerDrop = beforeFam - famOf(toward, target.id);
-    const teammateDrop = teammateBefore - famOf(toward, teammate);
-    expect(tacticsDistance(ours, home), "두 전술이 실제로 달라야 시험이 성립한다").toBeGreaterThan(
-      0,
-    );
-    expect(newcomerDrop).toBeLessThan(teammateDrop);
-  });
-
-  it("정착이 끝나면 고향 축구는 더 이상 기준이 아니다", () => {
-    /** 같은 영입에 같은 전술 변경 — 정착 여부만 다르게 둔다 */
-    const run = (settle: boolean) => {
-      const state = createTestGame(11);
-      const home = makeChelseaDistinct(state);
-      const target = signStarter(state);
-      if (settle) {
-        for (let i = 0; i < 40; i++) {
-          state.matches.push({
-            id: `m-${i}`,
-            season: state.season,
-            competitionId: "friendly",
-            stage: "league",
-            round: 1,
-            date: state.date,
-            time: "15:00",
-            homeTeamId: state.userTeamId,
-            awayTeamId: "opponent",
-            result: resultOf({ homeGoals: 1, awayGoals: 0, homeLineup: [target.id] }),
-          });
-        }
-      }
-      const before = famOf(state, target.id);
-      setTactics(state, { ...home });
-      return before - famOf(state, target.id);
-    };
-
-    // 아직 정착 중이면 자기 축구로 옮겨 온 덕을 본다 — 끝났으면 그 덕이 없다
-    expect(run(false)).toBeLessThan(run(true));
-  });
-
-  it("원소속 선수에게는 고향 축구가 없다 — 계산이 끼어들지 않는다", () => {
-    const a = createTestGame(11);
-    const b = createTestGame(11);
-    const id = userTactics(a).assignments[0]!.playerId;
-    setTactics(a, { pressing: 5, tempo: 5 });
-    setTactics(b, { pressing: 5, tempo: 5 });
-    expect(famOf(a, id)).toBeCloseTo(famOf(b, id), 6);
-  });
-});
-
-describe("올라갈 수도 있다", () => {
-  /**
-   * 첼시에서 온 선수는 **첼시 축구를 이미 안다**(`memoriesOf`가 그 기억을 얹는다).
-   * 우리가 그 전술로 바꾸면 그는 팀이 헤매는 동안 자기가 알던 수준을 되찾는다.
-   */
-  it("자기 축구로 옮겨 오면 오른다 — 그 전술의 기억을 갖고 왔기 때문이다", () => {
-    const rises = pool().filter(({ before, after }) => after > before);
-    expect(rises.length, "기억을 갖고 오지 않으면 아무도 오르지 않는다").toBeGreaterThan(0);
-  });
-
-  it("같은 변경에도 원소속 선수는 전원 떨어진다 — 면제는 새 영입의 것이다", () => {
-    const state = createTestGame(11);
-    const home = makeChelseaDistinct(state);
-    const ours = userTactics(state).assignments.filter((a) => a.role === "starting");
-    const before = ours.map((a) => famOf(state, a.playerId));
-    setTactics(state, { ...home });
-    const after = ours.map((a) => famOf(state, a.playerId));
-    expect(after.every((v, i) => v < before[i]!)).toBe(true);
-  });
-});
-
-/** 첼시 선수를 한 명씩 영입해 같은 전술 변경을 가한 결과 */
-function pool() {
-  const out: Array<{ before: number; after: number }> = [];
-  const probe = createTestGame(11);
-  const candidates = playersOf(probe, "chelsea")
-    .filter((p) => p.teamId !== probe.userTeamId)
-    .slice(0, 10)
-    .map((p) => p.id);
-
-  for (const id of candidates) {
-    const state = createTestGame(11);
-    const home = makeChelseaDistinct(state);
-    const target = signStarter(state, id);
-    const before = famOf(state, target.id);
-    setTactics(state, { ...home });
-    out.push({ before, after: famOf(state, target.id) });
-  }
-  return out;
-}
 
 describe("적합도는 절대 평가다 — 남과 견주지 않는다", () => {
   /**
@@ -207,8 +59,8 @@ describe("적합도는 절대 평가다 — 남과 견주지 않는다", () => {
   });
 });
 
-describe("면제는 방향 대칭이다", () => {
-  it("새 영입이 껴도 왕복은 닫힌다 — 오가는 것만으로 불릴 수 없다", () => {
+describe("왕복은 닫힌다", () => {
+  it("전술 기억이 없는 선수가 껴도 왕복은 닫힌다 — 오가는 것만으로 불릴 수 없다", () => {
     const state = createTestGame(11);
     const chelsea = state.tactics.find((t) => t.teamId === "chelsea")!;
     chelsea.spec = { ...chelsea.spec, pressing: 5, defensiveLine: 5 };
@@ -217,16 +69,6 @@ describe("면제는 방향 대칭이다", () => {
     const out = userTactics(state).assignments.find((a) => a.role === "starting")!;
     target.teamId = state.userTeamId;
     target.squadLevel = "first";
-    state.transfers.push({
-      id: "t1",
-      gamePlayerId: target.id,
-      windowId: null,
-      fromTeamId: "chelsea",
-      toTeamId: state.userTeamId,
-      date: state.date,
-      type: "transfer",
-      fee: 0,
-    });
     setLineup(state, {
       starting: userTactics(state)
         .assignments.filter((a) => a.role === "starting")

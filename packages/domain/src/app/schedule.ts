@@ -2,16 +2,14 @@ import { z } from "zod";
 import { DateString } from "../common/date-string";
 
 /**
- * 일정 축 (v6) — 경기·훈련·이적창·컵 추첨이 날짜+시간의 단일 축에 등록된다.
- * 언제(when)는 SCHEDULE_ENTRY, 무엇(what)은 type별 대상(MATCH / TRAINING_SESSION /
- * TRANSFER_WINDOW)이 갖는다. 훈련 반복 규칙 테이블은 없다 — 명령이 엔트리를 직접 생성한다.
+ * 일정 축 — 경기·훈련·컵 추첨이 날짜+시간의 단일 축에 등록된다.
+ * 언제(when)는 SCHEDULE_ENTRY, 무엇(what)은 type별 대상(MATCH / TRAINING_SESSION)이
+ * 갖는다. 훈련 반복 규칙 테이블은 없다 — 명령이 엔트리를 직접 생성한다.
  */
 
 export const ScheduleTypeSchema = z.enum([
   "match",
   "training",
-  "window-open",
-  "window-close",
   /**
    * 컵 대진 추첨 — 다음 라운드의 상대가 정해지는 날. 별도 엔티티를 두지 않고
    * `refId`가 `"<competitionId>:<stage>"`를 가리킨다 (예: `facup:r16`).
@@ -35,7 +33,7 @@ export const ScheduleEntrySchema = z.object({
   /** HH:mm — 표시·정렬 기준. 같은 날은 시간 순으로 처리된다 */
   time: z.string().regex(/^\d{2}:\d{2}$/),
   type: ScheduleTypeSchema,
-  /** type별 대상 id (match→Match, training→TrainingSession, window-*→TransferWindow, draw→"컵id:단계") */
+  /** type별 대상 id (match→Match, training→TrainingSession, draw·cup-round→"컵id:단계") */
   refId: z.string().min(1),
   /** 유저 팀 일정인가 — 훈련은 항상 유저 팀, 경기·추첨은 유저 팀 관련 여부 */
   teamId: z.string().min(1).nullable(),

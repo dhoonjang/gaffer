@@ -39,7 +39,7 @@ import {
   type ConditionRead,
   observedPlayerFacts,
 } from "../../common/players/observation";
-import { observedFit } from "../../negotiation/players/scouting";
+import { observedFit } from "@story-fm/domain";
 import { type MoodRead } from "../../story/players/mood";
 import { moodOf } from "../workflows/story/players/mood";
 import {
@@ -72,7 +72,6 @@ import { type TakerSlot, setPieceTakersOf, matchFatigueOf } from "@story-fm/sim"
 import { openCallUp } from "../../match/competition/international";
 import { internationalBreaksOf } from "../../common/players/international";
 import { type TacticsView } from "../../match/views/live";
-import { loanReports } from "../../negotiation/market/departures";
 import { lineupSlotsOf } from "../../match/flow/match-flow";
 import { leaderGroupOf } from "../../common/players/hierarchy";
 import { careerSeasonRowsOf, foldCareer } from "../../story/players/career";
@@ -83,13 +82,11 @@ import {
   occupiesSquadList,
   squadRegistrationOf,
 } from "../../common/players/registration";
-import { settlingPercent } from "../../common/players/settling";
-import { listingOf } from "../../negotiation/market/negotiation";
 import { formLabel, formAngle, formTone } from "../../common/players/form";
 import { conditionShown } from "../../common/views/observation";
 import { injuryHistoryOf, INJURY_SEVERITY_KO } from "../../common/players/injury";
 import { squadStatusOf } from "../../common/players/contract-status";
-import { openPromises } from "../../negotiation/players/promises";
+import { openPromises } from "../../common/players/promises";
 
 /**
  * 죽은 공 키커 한 자리 — **감독의 지정과 지금 실제로 설 사람이 나란히 선다**
@@ -178,7 +175,7 @@ export interface SquadViewRowMeta {
   /** 표시용 종합 — **관측된 축**에서 파생된 값 (`observedOverall`) */
   overall: number;
   /**
-   * **감독이 이 선수를 얼마나 정확히 아는가** (scouting.ts).
+   * **감독이 이 선수를 얼마나 정확히 아는가** (observation.ts).
    *
    * 화면이 자리를 옮겨 보며 같은 규칙으로 전력을 다시 낼 수 있도록 안개 자체를
    * 실어 보낸다 — 참값은 보내지 않는다. `margin`은 그 값이 얼마나 흐린지이고,
@@ -221,55 +218,22 @@ export interface SquadViewRowMeta {
   weight: number | null;
   /** 등록 명단을 차지하는가 (만 21세 초과). U21은 명단 밖이라 언제든 뛴다 */
   occupiesList: boolean;
-  /** 이적 리스트에 올라 있으면 호가, 아니면 null */
-  transferListed: number | null;
-  /**
-   * 새 팀 정착 진행도(0~100) — 끝났거나 원소속이면 null.
-   * 이 값이 있는 동안 위 능력치는 **참값이 아니다**(settling.ts).
-   */
-  settling: number | null;
   /**
    * 잠재력 **추정 구간** — 참값은 노출하지 않는다. 우리 선수도 단정할 수 없고
-   * (출전이 쌓이면 좁아진다), 근거가 없으면 null이다 (scouting.ts §잠재력).
+   * (출전이 쌓이면 좁아진다), 근거가 없으면 null이다 (observation.ts §잠재력).
    */
   potential: { low: number; high: number; margin: number; confidence: string } | null;
   squadLevel: "first" | "reserve";
   /**
-   * **우리가 임대 보낸 선수인가** — 아니면 null (`market/departures.ts`의 리포트).
-   *
-   * 계약이 우리 것이라 명단에 서지만 `squadLevel`은 **빌린 구단의 값**이고 우리
-   * 전술판에는 자리가 없다. 그래서 층(1군·2군)으로 가르는 자리는 전부 이 칸을
-   * 먼저 봐야 한다 — 안 그러면 임대 선수가 엉뚱한 탭에 서고 승격·강등 diff에 실린다.
-   *
-   * `team`은 **약칭**이다 — 화면은 카탈로그를 못 읽는다 (`CareerSeasonView.team`과
-   * 같은 이유).
-   */
-  loan: {
-    teamId: string;
-    team: string;
-    /** 복귀일 */
-    until: string;
-    /** 그 구단에서의 이번 시즌 1군 기록 */
-    apps: number;
-    goals: number;
-    /** 평균 평점 — 출전이 없으면 null (0.00과 "기록 없음"은 다르다) */
-    rating: number | null;
-    /** 그 구단 최근 경기의 연속 미출전 수 */
-    benchRun: number;
-    /** 임대 이후 오른 능력치 칸 수 */
-    growth: number;
-  } | null;
-  /**
    * **지금 클럽을 떠나 있는가** — A매치 소집이거나 여름 대회에서 아직 안 돌아왔다
    * (→ docs/match/competition.md §5-1 · season.md §8 불변식). 아니면 null.
    *
-   * 임대와 다른 갈래다: 임대는 계약이 남의 훈련장에 가 있는 것이고 이건 열흘 뒤
-   * 돌아온다. 부상·정지와 **같은** 갈래라 `available`이 셋을 함께 닫는다 —
+   * 부상·정지와 **같은** 갈래라 `available`이 셋을 함께 닫는다 —
    * 화면이 이 칸을 안 보면 소집된 주전이 선발 가능한 얼굴로 명단에 선다.
    *
    * ⚠️ **문장이 아니라 사실이다.** 「잉글랜드 소집 중 (2경기 1골)」을 여기서 이으면
    * 화면이 그 문자열을 다시 갈라야 한다 (competition.md §7 불변식). 나라 **표기**만
-   * 뷰가 붙인다 — 화면은 카탈로그를 못 읽는다 (`loan.team`이 약칭인 것과 같은 이유).
+   * 뷰가 붙인다 — 화면은 카탈로그를 못 읽는다.
    */
   away: {
     /** A매치 소집인가, 여름 메이저 대회의 늦은 합류인가 */
@@ -615,13 +579,7 @@ export type SquadView = {
 
 export function buildSquadView(state: GameState): SquadView {
   const userTeamId = state.userTeamId;
-  /**
-   * 명단 표는 **우리 계약**을 센다 — 임대 보낸 선수도 우리 선수다 (transfer.md §2).
-   * 넓히는 것은 이 표 하나뿐이다: 재정·등록 명단·전술은 **부릴 수 있는 인원**을
-   * 세는 자리라 소속(`playersOf`) 그대로다.
-   */
   const squad = ourPlayers(state);
-  const loanById = new Map(loanReports(state).map((r) => [r.playerId, r] as const));
   const tactics = tacticsOf(state, userTeamId);
   const assignments = new Map(tactics.assignments.map((a) => [a.playerId, a] as const));
   /**
@@ -849,8 +807,7 @@ export function buildSquadView(state: GameState): SquadView {
          * 역할이든 기본과 달라지면 그 값을 낸다.
          */
         slotOverall: slotValue !== null && slotValue !== shownOverall ? slotValue : null,
-        // 오피스는 우리 선수의 숫자를 그대로 보여준다 (player.md §10). 단 **적응 중인 새
-        // 영입**은 스카우트 수준의 오차가 남는다 — 훈련장에서 본 게 전부다.
+        // 오피스는 우리 선수의 숫자를 그대로 보여준다 (player.md §10).
         ...observed,
         potential: facts.potential,
         homegrown: isHomegrownFor(p, userTeamId),
@@ -862,24 +819,7 @@ export function buildSquadView(state: GameState): SquadView {
         height: p.height ?? null,
         weight: p.weight ?? null,
         occupiesList: occupiesSquadList(state, p),
-        settling: settlingPercent(state, p.id),
-        transferListed: listingOf(state, p.id)?.askingPrice ?? null,
         squadLevel: squadLevelOf(p),
-        loan: (() => {
-          const report = loanById.get(p.id);
-          return report
-            ? {
-                teamId: report.teamId,
-                team: teamShortNameIn(state, report.teamId),
-                until: report.until,
-                apps: report.apps,
-                goals: report.goals,
-                rating: report.rating,
-                benchRun: report.benchRun,
-                growth: report.growth,
-              }
-            : null;
-        })(),
         away: awayViewOf(state, p),
         form: Math.round(p.state.form * 100) / 100,
         formLabel: formLabel(p.state.form),
@@ -991,12 +931,10 @@ export function buildSquadView(state: GameState): SquadView {
     formation: tactics.spec.formation,
     tactics: { ...tactics.spec },
     familiarity: Math.round(squadFamiliarity(state, userTeamId)),
-    // 경기 중과 무직에 꺼진다 — 무직의 판은 옛 구단의 것이라 읽기 전용이다 (career.md §5.1)
+    // 경기 중과 커리어가 끝난 뒤에 꺼진다 (career.md §5.1)
     editable: state.phase !== "match" && !state.dismissal,
-    // 인원은 **부릴 수 있는 사람**을 센다 — 임대 나간 선수가 달고 있는 층은
-    // 빌린 구단의 값이라 우리 1군·2군 수에 들면 안 된다
-    firstTeamCount: players.filter((p) => p.loan === null && p.squadLevel === "first").length,
-    reserveCount: players.filter((p) => p.loan === null && p.squadLevel === "reserve").length,
+    firstTeamCount: players.filter((p) => p.squadLevel === "first").length,
+    reserveCount: players.filter((p) => p.squadLevel === "reserve").length,
     registration: squadRegistrationOf(state, userTeamId),
     setPieces: setPieceTakerViews(squad, tactics.setPieceTakers, starters, liveTakers),
     setPieceRoutine: Object.fromEntries(

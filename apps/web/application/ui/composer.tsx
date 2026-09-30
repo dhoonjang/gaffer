@@ -4,8 +4,6 @@ import { useState } from "react";
 import type { RefObject } from "react";
 import type { TurnOperation } from "@story-fm/agents";
 import {
-  IconClose,
-  IconContract,
   IconDay,
   IconMatch,
   IconPlay,
@@ -14,7 +12,6 @@ import {
   IconSkip,
   IconWeek,
 } from "../../domains/common/ui/icons";
-import { useProposal, type ProposalDraft } from "../../domains/negotiation/ui/proposal-form";
 
 /**
  * 시간을 넘기는 손잡이 — **버튼이 곧 조작이다.**
@@ -25,7 +22,7 @@ import { useProposal, type ProposalDraft } from "../../domains/negotiation/ui/pr
  * 서버가 그 구조체에서 만든다 (docs/common/llm/agents.md §2).
  *
  * 눈금을 셋으로 끊은 건 프리시즌 때문이다 — 7월엔 다음 경기가 몇 주 뒤라
- * "다음 경기로"만 있으면 이적·훈련을 들여다볼 틈 없이 개막까지 날아간다.
+ * "다음 경기로"만 있으면 선수단·훈련을 들여다볼 틈 없이 개막까지 날아간다.
  */
 const TIME_SKIPS = [
   { key: "day", label: "하루", op: (): TurnOperation => ({ kind: "skip_days", days: 1 }) },
@@ -57,12 +54,9 @@ export function Composer({
   onOperate,
   busy,
   inMatch,
-  inNegotiation,
   canSkip,
   nextMatchDate,
   inputRef,
-  draft = null,
-  onRemoveDraft,
   suggestion = null,
   liveControl,
 }: {
@@ -74,12 +68,7 @@ export function Composer({
   onOperate: (operation: TurnOperation) => void;
   busy: boolean;
   inMatch: boolean;
-  /**
-   * 협상 방 안인가 — 빈 입력의 버튼이 **잠긴다.** 방 안에서는 넘길 시간이 없고 진행할
-   * 구간도 없다. 물러나는 손잡이는 입력창이 아니라 방의 칸에 선다 (design-system §7-1).
-   */
-  inNegotiation: boolean;
-  /** 시간을 넘길 수 있는가 — 경기 중에도 협상 방 안에서도 시간은 달력이 밀지 않는다 */
+  /** 시간을 넘길 수 있는가 — 경기 중에는 시간을 달력이 밀지 않는다 */
   canSkip: boolean;
   /** 다음 경기 날짜 — 없으면(시즌 끝) "다음 경기" 눈금을 그리지 않는다 */
   nextMatchDate: string | null;
@@ -89,12 +78,6 @@ export function Composer({
    */
   inputRef: RefObject<HTMLTextAreaElement | null>;
   /**
-   * **첨부된 제안서** — 폼이 써 낸 구조체가 입력창 위에 칩으로 선다 (overview.md §5). 말과
-   * 함께 나가고, 말이 없어도 나간다. 칩을 누르면 같은 값으로 폼이 다시 열린다.
-   */
-  draft?: ProposalDraft | null;
-  onRemoveDraft?: () => void;
-  /**
    * **GM이 제안한 감독의 다음 말** — 마지막 model 턴의 `suggestion`이다 (agents.md §2). 입력이
    * 비어 있을 때 placeholder로 서고, Tab 또는 →가 그 문장을 입력에 채운다. 안내 문구는 없다 —
    * 보이는 문장이 곧 손잡이다 (design-system.md §6).
@@ -102,11 +85,10 @@ export function Composer({
   suggestion?: string | null;
   liveControl?: { paused: boolean; blocked: boolean; toggle: () => void };
 }) {
-  const proposal = useProposal();
   /** 시간 손잡이의 선택지가 펼쳐져 있는가 — 입력이 비었을 때만 열 수 있다 */
   const [skipOpen, setSkipOpen] = useState(false);
-  /** 쓸 말이 있으면 보내기, 없으면 시간 손잡이 — 버튼 하나가 두 뜻을 갖는다. 제안서가 붙어 있으면 보내기다 */
-  const hasInput = input.trim().length > 0 || draft !== null;
+  /** 쓸 말이 있으면 보내기, 없으면 시간 손잡이 — 버튼 하나가 두 뜻을 갖는다 */
+  const hasInput = input.trim().length > 0;
 
   /**
    * 시간 이동 — **자주 하는 지시라 손이 아니라 눈에 둔다.**
@@ -157,31 +139,6 @@ export function Composer({
             })}
           </div>
         </>
-      )}
-      {draft !== null && (
-        <div className="draft-chip" data-testid="proposal-draft">
-          <button
-            type="button"
-            className="draft-body"
-            onClick={() => proposal?.open(draft.playerId, draft.prefill)}
-            disabled={busy}
-            aria-label={`제안서 — ${draft.summary}`}
-          >
-            <IconContract size={14} />
-            <span className="draft-kind">제안서</span>
-            <span className="draft-summary">{draft.summary}</span>
-          </button>
-          <button
-            type="button"
-            className="draft-remove"
-            onClick={onRemoveDraft}
-            disabled={busy}
-            aria-label="제안서 떼기"
-            data-testid="proposal-draft-remove"
-          >
-            <IconClose size={14} />
-          </button>
-        </div>
       )}
       <div className="chat-input">
         <textarea
@@ -243,7 +200,6 @@ export function Composer({
             busy ||
             (!hasInput &&
               (liveControl?.blocked ||
-                inNegotiation ||
                 // 경기 중인데 굴릴 판이 없다 — 킥오프 게이트 앞이거나 마감을 기다린다
                 (inMatch && !liveControl) ||
                 (!inMatch && !canSkip)))
@@ -260,8 +216,6 @@ export function Composer({
                   ? "경기 재개"
                   : "시간 보내기"
           }
-          /* 잠긴 이유는 사실 한 줄 — 방 안에서 날짜는 흐르지 않는다 (transfer.md §12-2) */
-          title={!hasInput && inNegotiation ? "협상 방 안에서는 날짜가 흐르지 않습니다" : undefined}
           aria-expanded={hasInput || inMatch ? undefined : skipOpen}
         >
           {hasInput ? (

@@ -49,7 +49,7 @@ export function mentoringReadOf(state: GameState, playerId: string): MentoringRe
 /**
  * 이 멘티에게 붙어 있는 멘토 항 — 사이가 없으면 null.
  *
- * 성장·정착·화면이 같은 이 함수를 지난다. 배율을 저장하지 않는 이유가 여기다 —
+ * 성장·화면이 같은 이 함수를 지난다. 배율을 저장하지 않는 이유가 여기다 —
  * 리더십도 나이도 자리도 선수 표에 있어 언제든 다시 매길 수 있다.
  */
 export function mentorFactorFor(
@@ -87,7 +87,7 @@ export function mentorAxisBoost(
  *
  * 떠남(`clearDepartedState`)과 층 이동(`applySquadLevel`)은 그 자리에서 닫으므로
  * 여기 오지 않는다. 여기가 잡는 것은 사건이 없는 둘이다: 멘티가 나이를 넘긴 것과,
- * 어느 문도 지나지 않고 조용히 어긋난 줄(임대 송출·명단에서 사라진 선수).
+ * 어느 문도 지나지 않고 조용히 어긋난 줄(명단에서 사라진 선수).
  * 그리고 창을 넘긴 닫힌 줄을 걷는다.
  */
 export function pruneMentoring(state: GameState): void {
@@ -127,8 +127,8 @@ export function pruneMentoring(state: GameState): void {
  * 서사는 GM이 그렇게 써도 다음 달 성장 굴림을 한 톨도 바꾸지 못했다.
  *
  * ⚠️ **성격은 옮아가지 않는다.** 페르소나는 세이브 안에서 불변이므로(people.md §6)
- * FM식 특성 전이가 설 자리가 없다. 옮아가는 것은 셋이다 — 멘티의 **정신 6축 성장
- * 속도**, 새 영입 멘티의 **정착 속도**, 그리고 두 사람의 인물지에 서는 관계 한 줄.
+ * FM식 특성 전이가 설 자리가 없다. 옮아가는 것은 둘이다 — 멘티의 **정신 6축 성장
+ * 속도**, 그리고 두 사람의 인물지에 서는 관계 한 줄.
  *
  * 여기 있는 것은 전부 결정적 순수 판정이다. 난수도 LLM도 들어오지 않는다.
  */
@@ -218,7 +218,7 @@ export interface MentoringRead {
 
 // ── 자격 ─────────────────────────────────────────────
 
-/** 우리 선수인가 — 임대로 나가 있으면 `teamId`가 남의 것이라 여기서 빠진다 */
+/** 우리 선수인가 — 소속(`teamId`)이 우리 팀이어야 한다 */
 export function ourPlayer(state: GameState, player: GamePlayer): boolean {
   return player.teamId === state.userTeamId;
 }

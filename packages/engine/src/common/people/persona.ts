@@ -3,7 +3,6 @@ import {
   LEADER_ROLE_LABEL,
   CharacterMemorySchema,
   HEAD_COACH_ROLE_LABEL,
-  isOwnerArchetypeLabel,
   isStaffRole,
   normalizeSpeaker,
   OWNER_ARCHETYPE_LABELS,
@@ -11,7 +10,6 @@ import {
   PersonaSchema,
   STAFF_ROLES,
   type CharacterMemory,
-  type Negotiation,
   type OwnerArchetypeLabel,
   type Persona,
   type PersonaRole,
@@ -58,7 +56,7 @@ const KEYWORD_MIN_LENGTH = 2;
 /**
  * 자리를 부르는 말 — 이름 대신 직책으로 부른 턴에도 그 사람이 선다.
  *
- * ⚠️ **매 턴 나오는 말은 넣지 않는다.** 한 턴 상한이 3장이라 "이적" 같은 말이
+ * ⚠️ **매 턴 나오는 말은 넣지 않는다.** 한 턴 상한이 3장이라 "경기" 같은 말이
  * 자리를 다 채우면 정작 이름으로 불린 인물이 밀린다.
  */
 const ROLE_KEYWORDS: Partial<Record<PersonaRole, readonly string[]>> = {
@@ -221,8 +219,6 @@ function personaNames(
   owner: string;
   /** 자리 열쇠(`${역할}:${번호}`) → 이름 */
   staff: Record<string, string>;
-  /** 단장 — 협상 테이블 건너편의 구단 쪽 (people.md §2) */
-  director: string;
 } {
   const pool = personaNamePoolOf(countryOfTeam(teamId));
   const realCoach = realCoachNameOf(teamId);
@@ -250,14 +246,11 @@ function personaNames(
       );
     }
   }
-  // 단장은 맨 뒤다 — 나중에 생긴 자리라 앞으로 끼우면 진행 중인 세이브의 스태프 이름이 갈린다
-  const director = claimPersonaName(makeRng(seed, `persona:name:director:${teamId}`), pool, taken);
-  return { reporters, headCoach, owner, staff, director };
+  return { reporters, headCoach, owner, staff };
 }
 
 /**
  * 그 나라 사람다운 가상 이름 하나 — 수석코치·기자와 같은 풀을 쓴다.
- * 감독 시장(`manager-market.ts`)이 후임 감독의 이름을 여기서 얻는다.
  *
  * `taken`과 겹치면 같은 rng로 다시 뽑는다 — 이름이 곧 `characterId`(전역 유일)라,
  * 다른 벤치의 감독과 겹치면 두 벤치가 한 사람으로 읽힌다 (people.md §2).
@@ -269,28 +262,18 @@ export function inventPersonName(rng: () => number, teamId: string, taken?: Set<
 /**
  * 이미 서 있는 사람들의 이름 — 가상 감독 이름을 뽑을 때 피해야 할 집합이다.
  *
- * 벤치의 감독 전원과 세이브의 페르소나, 감독(유저) 본인, 그리고 **무직 감독 풀에
- * 앉은 사람들**까지 담는다. 선수 이름은 담지 않는다 — 선수 풀과 인물 풀은 성을
- * 나눠 가져 조합이 겹칠 수 없다 (people.md §2).
- *
- * ⚠️ **풀을 빼면 안 된다.** 무직인 사람은 벤치에 없어서 눈에 띄지 않지만 세계에
- * 있고, 이름이 곧 `characterId`(전역 유일)다. 지어낸 후임이 그 이름을 받으면 두
- * 사람이 한 사람으로 읽히고, 그가 다시 부임하는 날 같은 이름이 벤치 둘에 앉는다.
+ * 벤치의 감독 전원과 세이브의 페르소나, 감독(유저) 본인을 담는다. 선수 이름은 담지
+ * 않는다 — 선수 풀과 인물 풀은 성을 나눠 가져 조합이 겹칠 수 없다 (people.md §2).
  */
 export function occupiedPersonNames(state: {
   teams: Array<{ managerName?: string }>;
   personas?: Persona[];
   manager?: { name: string };
-  managerPool?: ReadonlyArray<{ name: string }>;
-  staffPool?: ReadonlyArray<{ name: string }>;
 }): Set<string> {
   return new Set([
     ...state.teams.map((t) => t.managerName).filter((n): n is string => n !== undefined),
     ...(state.personas ?? []).map((p) => p.name),
     ...(state.manager !== undefined ? [state.manager.name] : []),
-    ...(state.managerPool ?? []).map((e) => e.name),
-    // 스태프 풀도 세계에 있는 사람이다 — 감독 풀을 빼면 안 되는 이유가 그대로다
-    ...(state.staffPool ?? []).map((e) => e.name),
   ]);
 }
 
@@ -326,7 +309,7 @@ export function generateHeadCoach(seed: number, teamId: string, today?: string):
     keywords: personaKeywords({ name, role: "head_coach" }),
     /**
      * 고용 정보 — 스태프와 같은 칸이다 (people.md §2-2). **날짜를 모르면 서지 않는다**:
-     * 세계와 부임(`createGame`·`reseatClubPersonas`)은 오늘을 알고, 사람됨만 묻는 자리는
+     * 세계(`createGame`)는 오늘을 알고, 사람됨만 묻는 자리는
      * 계약을 지어내지 않는다.
      */
     employment:
@@ -471,7 +454,7 @@ const SCOUT_ARCHETYPES: readonly StaffArchetype[] = [
     title: "현장 스카우트",
     label: "발품형",
     traits: ["직접 본 것만 믿는다", "부지런함", "경기장 냄새"],
-    motivation: "아무도 안 간 경기장에서 다음 시즌의 주전을 찾아내고 싶다.",
+    motivation: "아무도 안 간 경기장에서 남들이 못 본 것을 찾아내고 싶다.",
     speech: {
       note: "존댓말. 자기가 몇 번 봤는지를 먼저 말하고, 영상으로만 본 선수에는 유보를 단다.",
       samples: [
@@ -498,13 +481,13 @@ const SCOUT_ARCHETYPES: readonly StaffArchetype[] = [
     key: "network",
     title: "수석 스카우트",
     label: "인맥형",
-    traits: ["발이 넓다", "소문에 밝다", "협상 감각"],
+    traits: ["발이 넓다", "소문에 밝다", "사람을 읽는다"],
     motivation: "남들이 알기 전에 이야기를 듣는 자리에 계속 있고 싶다.",
     speech: {
-      note: "존댓말. 누구에게 들었는지를 먼저 흘리고, 값과 분위기를 함께 말한다.",
+      note: "존댓말. 누구에게 들었는지를 먼저 흘리고, 사실과 분위기를 함께 말한다.",
       samples: [
-        "그쪽 단장과 어제 통화했습니다. 여름엔 열어 둘 생각이랍니다.",
-        "에이전트가 먼저 우리를 떠봤습니다. 값은 부르기 나름입니다.",
+        "그쪽 코치와 어제 통화했습니다. 주말엔 스리백으로 나온답니다.",
+        "그 팀 라커룸이 시끄럽다고 들었습니다. 주장이 벤치에 앉을 수도 있습니다.",
       ],
     },
   },
@@ -526,20 +509,12 @@ const STAFF_ARCHETYPES: Record<StaffRole, readonly StaffArchetype[]> = {
 export const STAFF_OPENINGS: Record<StaffRole, number> = { coach: 2, medic: 1, scout: 1 };
 
 /**
- * 역할별 자리 상한 — **훈련장의 자리는 유한하다** (people.md §2-2).
- *
- * 상한이 없으면 잔고가 허락하는 만큼 고용해 장부의 명명 줄이 스무 개가 된다. 그건
- * 사람이 아니라 목록이다.
- */
-export const STAFF_LIMIT: Record<StaffRole, number> = { coach: 4, medic: 2, scout: 3 };
-
-/**
  * 자리별 기준 연봉 (£/년) — **EPL 3등급 구단이 1.0 자리다** (people.md §2-2).
  *
  * 선수 주급 모델(`world/wages.ts`)이 아니라 **구단 경제 수준** 축을 탄다: 스태프 급여는
  * 선수 시장이 아니라 구단의 살림 크기를 따라가고, 고정비가 이미 그 축 위에 있다
  * (finance.md §6.2). 넷을 합쳐도 파생 스태프 급여 기준액의 한참 아래라, 명명된 몫을
- * 덜어 내도 장부 총액은 지금 실측 그대로다 (finance.md §6.4-1).
+ * 덜어 내도 장부 총액은 지금 실측 그대로다 (finance.md §6.3).
  */
 const STAFF_SALARY_BASE: Record<StaffRole, number> = {
   coach: 450_000,
@@ -637,10 +612,7 @@ export function generateStaff(seed: number, teamId: string, today: string): Pers
 }
 
 /**
- * 한 사람을 세운다 — **생성과 고용이 같은 문을 지난다.**
- *
- * 새 게임의 시작 인원도, 풀에서 데려온 사람도 여기서 같은 꼴이 된다. 두 곳에 적으면
- * 고용한 코치만 키워드가 없거나 말투가 비는 날이 온다.
+ * 한 사람을 세운다 — 원형·키워드·고용 정보가 한 꼴로 선다.
  */
 export function staffPersona(input: {
   seed: number;
@@ -651,7 +623,6 @@ export function staffPersona(input: {
   since: string;
   until: string;
   salary: number;
-  from?: string;
 }): Persona {
   const { archetype } = input;
   return {
@@ -668,32 +639,16 @@ export function staffPersona(input: {
       title: archetype.title,
       since: input.since,
       contract: { salary: input.salary, until: input.until },
-      ...(input.from === undefined ? {} : { from: input.from }),
     },
     seed: input.seed,
   };
-}
-
-/**
- * 원형 라벨 → 표의 줄. 세이브와 풀이 드는 것은 라벨이므로(사람이 읽는 데이터라
- * 생성이 키를 버린다) 그 사이를 되짚는 자리가 여기 하나다.
- *
- * 표에 없는 라벨은 `null` — `coachArchetypeKeyOf`와 같은 규약이다.
- */
-export function staffArchetypeOf(role: StaffRole, label: string): StaffArchetype | null {
-  return STAFF_ARCHETYPES[role].find((a) => a.label === label) ?? null;
-}
-
-/** 그 역할의 원형 전수 — 풀이 사람을 뽑을 때와 테스트가 훑을 때가 같은 표를 본다 */
-export function staffArchetypesOf(role: StaffRole): readonly StaffArchetype[] {
-  return STAFF_ARCHETYPES[role];
 }
 
 export type { StaffArchetype };
 
 /**
  * 이 세이브의 스태프 — 고용 정보를 든 사람들. **수석코치는 여기 없다**
- * (`headCoachOf`가 답한다). 감독이 다 자른 역할은 빈 배열이다.
+ * (`headCoachOf`가 답한다). 아무도 없는 역할은 빈 배열이다.
  */
 export function staffOf(state: { personas: readonly Persona[] }, role?: StaffRole): Persona[] {
   return state.personas.filter(
@@ -705,7 +660,7 @@ export function staffOf(state: { personas: readonly Persona[] }, role?: StaffRol
  * 구단주 원형 — **감독을 고용한 사람이지 옆에서 돕는 사람이 아니다.**
  *
  * 수석코치와 결이 갈리는 지점을 원형마다 다르게 잡았다: 무엇으로 감독을 평가하고
- * (성적·수익·상징성), 돈을 어떻게 다루며, 인내심이 얼마나 있는가. 같은 "영입해
+ * (성적·수익·상징성), 돈을 어떻게 다루며, 인내심이 얼마나 있는가. 같은 "구장을 넓혀
  * 주십시오"에 누구는 손익계산서를 펴고 누구는 트로피를 묻는다.
  */
 /** 구단주 원형의 **키** — 클럽 비전의 항목표(career.md §5)가 이것으로 갈린다 */
@@ -726,8 +681,8 @@ const OWNER_ARCHETYPES: readonly OwnerArchetype[] = [
     speech: {
       note: "간결한 존댓말. 숫자와 기한을 먼저 못 박고 감정은 드러내지 않는다. 요청에는 조건을 붙여 답한다.",
       samples: [
-        "예산은 드립니다. 다만 임금 총액은 지금보다 늘어나선 안 됩니다.",
-        "이번 창까지입니다. 그 뒤엔 성적으로 이야기하죠.",
+        "증설은 검토하겠습니다. 다만 임금 총액은 지금보다 늘어나선 안 됩니다.",
+        "이번 시즌까지입니다. 그 뒤엔 성적으로 이야기하죠.",
       ],
     },
   },
@@ -739,8 +694,8 @@ const OWNER_ARCHETYPES: readonly OwnerArchetype[] = [
     speech: {
       note: "차분한 존댓말. 지출을 늘 투자·회수의 언어로 옮긴다. 결론 앞에 조건을 단다.",
       samples: [
-        "8,000만이면 4년 상각입니다. 그 값이 장부에 남을 만한 선수입니까?",
-        "매각이 먼저입니다. 들어오는 돈이 확정되면 그만큼 열어 드리죠.",
+        "증설은 10년 상각입니다. 그 기간 내내 관중석이 찰 거라고 보십니까?",
+        "수입이 먼저입니다. 들어오는 돈이 확정되면 그만큼 열어 드리죠.",
       ],
     },
   },
@@ -765,7 +720,7 @@ const OWNER_ARCHETYPES: readonly OwnerArchetype[] = [
     speech: {
       note: "정중하고 격식 있는 존댓말. 서두르지 않고 큰 그림을 먼저 말한다. 거절도 완곡하다.",
       samples: [
-        "예산은 문제가 아닙니다. 다만 우리가 왜 그 선수여야 하는지는 설명해 주셔야죠.",
+        "돈은 문제가 아닙니다. 다만 우리가 왜 이 축구여야 하는지는 설명해 주셔야죠.",
         "3년을 봅니다. 첫해의 순위로 감독님을 판단하지 않겠습니다.",
       ],
     },
@@ -791,116 +746,12 @@ const OWNER_ARCHETYPES: readonly OwnerArchetype[] = [
     speech: {
       note: "활기찬 존댓말. 화제성과 이름값을 먼저 언급한다. 언론 반응을 자주 끌어온다.",
       samples: [
-        "그 이름이면 셔츠가 팔립니다. 데려오죠.",
+        "이기는 것만으론 부족합니다. 셔츠가 팔리는 경기를 해 주세요.",
         "기자들이 뭐라고 쓸지는 제가 감당합니다. 감독님은 경기만 보세요.",
       ],
     },
   },
 ];
-
-/**
- * 단장 원형 넷 — **협상 테이블 건너편에서 무엇을 먼저 보는가**로 갈린다 (people.md §2).
- * `patience`는 그 사람이 앉아 있을 인내의 배율이다 — 에이전트 원형의 `patience`와 같은 자리
- * (transfer.md §12-2).
- */
-interface DirectorArchetype {
-  key: string;
-  label: string;
-  traits: string[];
-  motivation: string;
-  speech: { note: string; samples: string[] };
-  patience: number;
-}
-
-const DIRECTOR_ARCHETYPES: readonly DirectorArchetype[] = [
-  {
-    key: "ledger",
-    label: "재무형",
-    traits: ["숫자 우선", "냉정", "상각과 분할을 먼저 본다"],
-    motivation: "장부가 깨끗해야 다음 여름에도 살 수 있다.",
-    speech: {
-      note: "짧은 존댓말. 금액을 연수와 분할로 쪼개 말하고, 감정을 값에 섞지 않는다.",
-      samples: [
-        "숫자부터 봅시다. 3년 분할이면 첫 회분이 얼마죠?",
-        "그 값은 장부에 안 맞습니다. 상각을 생각하면 저희가 손해예요.",
-      ],
-    },
-    patience: 1.25,
-  },
-  {
-    key: "scout",
-    label: "스카우팅형",
-    traits: ["선수 가치에 확신", "데이터 인용", "대체 선수를 이미 봐 뒀다"],
-    motivation: "이 선수의 값을 시장이 제대로 매기게 한다.",
-    speech: {
-      note: "차분한 존댓말. 선수의 기록과 나이·잠재력을 근거로 값을 지킨다.",
-      samples: [
-        "스물세 살에 그 기록이면 시장가는 이미 그 위입니다.",
-        "저희가 이 선수를 어떻게 키웠는지 아시면 그 값은 안 부르실 겁니다.",
-      ],
-    },
-    patience: 1.0,
-  },
-  {
-    key: "proxy",
-    label: "회장 대리인형",
-    traits: ["윗선의 뜻을 옮긴다", "결정을 미룬다", "체면을 본다"],
-    motivation: "회장이 원하는 결과를 회장이 원하는 모양으로 가져간다.",
-    speech: {
-      note: "정중하지만 확답을 피하는 존댓말. 「위에서」·「구단의 뜻」을 자주 든다.",
-      samples: [
-        "저 혼자 정할 수 있는 숫자가 아닙니다. 위에 올려 보겠습니다.",
-        "구단의 뜻은 분명합니다 — 이 값 아래로는 팔지 않겠다는 겁니다.",
-      ],
-    },
-    patience: 0.75,
-  },
-  {
-    key: "dealmaker",
-    label: "딜메이커형",
-    traits: ["빠르게 닫는다", "직설적", "조건을 먼저 던진다"],
-    motivation: "마감 전에 딜을 닫고 다음 딜로 간다.",
-    speech: {
-      note: "빠르고 직설적인 존댓말. 상대의 값을 바로 되받아 자기 값을 던진다.",
-      samples: [
-        "좋아요, 그 값에 분할 없이 일시금이면 오늘 닫습니다.",
-        "돌려 말할 시간이 없습니다. 얼마까지 가능하십니까?",
-      ],
-    },
-    patience: 1.0,
-  },
-];
-
-/** 단장의 원형 — 인내 배율을 읽는 자리가 페르소나 밖에서 같은 원형을 물어야 한다 */
-export function directorArchetypeOf(seed: number, teamId: string): DirectorArchetype {
-  return pick(makeRng(seed, `persona:director:${teamId}`), DIRECTOR_ARCHETYPES);
-}
-
-/**
- * 단장을 만든다 — 구단마다 한 사람, **저장하지 않고 (시드, 구단)에서 파생한다**
- * (people.md §2). 이름은 그 구단의 인물 이름 풀에서(`personaNames`), 사람됨은 원형 넷에서.
- * 협상 테이블의 구단 쪽 목소리가 이 사람이다 (transfer.md §12-1).
- */
-export function generateDirector(seed: number, teamId: string): Persona {
-  const archetype = directorArchetypeOf(seed, teamId);
-  const name = personaNames(seed, teamId).director;
-  return {
-    characterId: name,
-    name,
-    role: "director",
-    archetype: archetype.label,
-    traits: [...archetype.traits],
-    motivation: archetype.motivation,
-    speechStyle: { note: archetype.speech.note, samples: [...archetype.speech.samples] },
-    keywords: personaKeywords({ name, role: "director" }),
-    seed,
-  };
-}
-
-/** 그 구단의 단장 — 상대 구단이면 협상 테이블 건너편에 앉는 사람이다 */
-export function directorOf(state: { seed: number }, teamId: string): Persona {
-  return generateDirector(state.seed, teamId);
-}
 
 /**
  * 구단주를 만든다 — 수석코치와 같은 규칙이다.
@@ -929,28 +780,6 @@ export function generateOwner(seed: number, teamId: string): Persona {
 
 /** 원형 목록 — 테스트·어드민이 전수를 훑을 때 쓴다 */
 export { OWNER_ARCHETYPE_LABELS };
-
-/**
- * 저장된 구단주 원형 — **라벨과 키** (`coachArchetypeKeyOf`와 같은 규약이다).
- *
- * 세이브에 남는 것은 `"지역 유지형"` 같은 라벨인데(페르소나는 사람이 읽는 데이터라
- * `generateOwner`가 키를 버린다), 클럽 비전의 항목표(career.md §5)는 **키**로 갈리고
- * 보드 요청표(§5.2)는 라벨로 갈린다. 그 사이를 되짚는 자리가 여기 하나다.
- *
- * ⚠️ **여섯 원형 밖의 라벨이면 던진다.** 구단주는 `generateOwner`만 세우고 GM은 그
- * 자리에 인물을 등록할 수 없다(`REGISTERABLE_ROLES`) — 표 밖의 라벨은 세이브가 깨진 것이다.
- */
-export function ownerArchetypeOf(persona: Pick<Persona, "archetype">): {
-  key: OwnerArchetypeKey;
-  label: OwnerArchetypeLabel;
-} {
-  const label = persona.archetype;
-  const found = isOwnerArchetypeLabel(label)
-    ? OWNER_ARCHETYPES.find((a) => a.label === label)
-    : undefined;
-  if (!found) throw new Error(`구단주 원형 밖의 라벨: ${label}`);
-  return { key: found.key, label: found.label };
-}
 
 /** 원형 목록 — 테스트·어드민이 전수를 훑을 때 쓴다 */
 export const HEAD_COACH_ARCHETYPES = COACH_ARCHETYPES.map((a) => a.label);
@@ -1146,10 +975,7 @@ export function rivalVoiceOf(
  * 가상 감독을 만든다 — **저장하지 않고 (시드, 이름)에서 파생한다** (people.md §2).
  *
  * 선수 페르소나와 같은 규약이다: 리그 95개 벤치분 카드를 세이브에 넣을 이유가 없고,
- * 생성이 결정적이라 파생으로 충분하다. **채널에 팀이 없는 것이 핵심이다** — 감독은
- * 자리가 아니라 사람이라 잘렸다가 다른 벤치에 다시 서도 같은 원형·같은 말투다
- * (→ ../../../../docs/negotiation/transfer.md §7 「감독 풀」). 이름이 채널의 전부이므로
- * 경질 후임은 전임과 독립인 추첨을 받는다.
+ * 생성이 결정적이라 파생으로 충분하다. 이름이 채널의 전부다.
  *
  * 키워드는 명부 인물의 규칙을 따른다(전체 이름 + 성) — 이름 조각을 전부 담으면
  * 흔한 이름 조각이 남의 문장에 걸려 한 턴 상한 3장을 남의 이름이 먹는다.
@@ -1173,34 +999,23 @@ export function generateVirtualManager(seed: number, name: string): Persona {
 }
 
 /**
- * 끝난 협상 — 나머지(`open`·`agreed`)는 아직 테이블에 사람이 앉아 있다.
- * 종료 상태를 빼는 방향이라 상태가 하나 늘어도 화자가 조용히 사라지지 않는다.
- */
-const CLOSED_NEGOTIATION = new Set<string>([
-  "completed",
-  "rejected",
-  "expired",
-] satisfies Negotiation["status"][]);
-
-/**
  * **이름난 현역의 선** — 종합이 이만큼이면 세계가 그 이름을 안다 (people.md §6).
  *
- * 세계에 명성 필드가 없어 능력치로 긋는다. 시장가는 나이 먹은 레전드를 0으로 만들어
- * **정확히 담아야 할 이름을 떨어뜨리고**, 잠재력은 85 이상이 대부분 스물 미만이라
- * 더 나쁘다. 82는 세계 5,300명 중 58명이 서는 선이다 — 여기를 낮추면 동명이인이
+ * 세계에 명성 필드가 없어 능력치로 긋는다. 잠재력은 85 이상이 대부분 스물 미만이라
+ * 나이 먹은 레전드처럼 **정확히 담아야 할 이름을 떨어뜨린다**. 82는 세계 5,300명 중 58명이 서는 선이다 — 여기를 낮추면 동명이인이
  * 늘어 정작 우리 선수가 사라진다(`candidatesOf`).
  */
 const FAMOUS_PLAYER_OVERALL = 82;
 
 /**
- * 능력치가 답하지 못하는 이름들 — **시장 전용 리그(사우디·MLS)의 시드 명단**.
+ * 능력치가 답하지 못하는 이름들 — **명단 전용 리그(사우디·MLS)의 시드 명단**.
  *
  * 마흔한 살 호날두는 82지만 서른아홉 메시는 80이고 수아레스는 75다. 나이가 깎은
- * 것은 기량이지 이름값이 아니다. 그 표는 이미 "감독이 데려올 만한 이름"만 담기로
+ * 것은 기량이지 이름값이 아니다. 그 표는 이미 이름난 선수만 담기로
  * 하고 만든 명단이므로(`data/market-leagues.ts`), **표가 곧 명성의 선이다** —
  * 표에서 지우면 그 이름은 세계에서 사라진다.
  *
- * 팀이 아니라 이름으로 본다: 그 선수가 유럽으로 돌아와도 세계가 아는 이름은 그대로다.
+ * 팀이 아니라 이름으로 본다: 소속이 바뀌어도 세계가 아는 이름은 그대로다.
  */
 const MARKET_LEGEND_NAMES: ReadonlySet<string> = new Set(
   Object.values(MARKET_LEAGUE_SQUADS)
@@ -1231,11 +1046,8 @@ interface SpeakerSource {
     /** 이름난 현역 판정용 — 없으면(축약 픽스처) 이름난 현역으로 서지 않는다 */
     attributes?: { overall: number };
   }>;
-  negotiations?: Array<{ gamePlayerId: string; status: string }>;
   /** 가상 감독 판정용 — 없으면(축약 픽스처) 타 팀 벤치가 사전에 서지 않는다 */
   teams?: Array<{ id: string; managerName?: string }>;
-  /** 명부 감독이 지금 세계에 서 있는지 — 잘려서 풀에 앉은 사람도 이름을 갖는다 */
-  managerPool?: ReadonlyArray<{ name: string }>;
 }
 
 /**
@@ -1260,7 +1072,7 @@ export interface SpeakerRole {
  * ① **모델의 출력에 기대지 않는다.** LLM은 이름만 뱉고(태그에 직책을 쓰지 말라고
  *    지시했으니 당연하다), 직책은 세이브가 안다. 그래야 어떤 턴에서도 빠지지 않는다.
  * ② **수석코치만 특별대우하지 않는다.** 자리를 아는 화자는 다 알려 준다 — 페르소나(수석코치·구단주)·
- *    **주장**·**우리 선수단**·협상 테이블에 앉은 상대 선수, 그리고 **이름난 현역과
+ *    **주장**·**우리 선수단**, 그리고 **이름난 현역과
  *    세계 인물 명부, 타 팀 벤치의 가상 감독**까지(인물 사전의 세 겹 그대로 —
  *    people.md §6). 포지션은 넣지 않는다: 대화마다 따라붙기엔 시끄럽고, 그건
  *    명단이 답하는 정보다.
@@ -1338,20 +1150,6 @@ function collectSpeakers(state: SpeakerSource): Map<string, SpeakerRole | null> 
     } else put(player.name, { kind: "player" });
   }
 
-  // 협상 테이블의 상대 선수 — 남의 팀이지만 지금 대화에 앉아 있다.
-  // 합의 뒤 메디컬을 기다리는 자리(`agreed`)도 아직 진행 중이다
-  const negotiating = new Set(
-    (state.negotiations ?? [])
-      .filter((n) => !CLOSED_NEGOTIATION.has(n.status))
-      .map((n) => n.gamePlayerId),
-  );
-  if (negotiating.size > 0) {
-    for (const player of state.players ?? []) {
-      if (player.id !== undefined && negotiating.has(player.id))
-        put(player.name, { kind: "player" });
-    }
-  }
-
   // ── 이름난 현역 · 세계 인물 명부 — 인물 사전의 세 겹 그대로 (people.md §3·§6) ──
   // **이미 찬 자리는 넘보지 않는다**: 인물 사전이 후보를 모으는 순서와 같은 답이라,
   // 뒤 겹 때문에 우리 선수가 칩을 잃지 않는다. `put`의 "둘 다 버린다"는 우리
@@ -1377,22 +1175,12 @@ function collectSpeakers(state: SpeakerSource): Map<string, SpeakerRole | null> 
     if (team.id === state.userTeamId || team.managerName === undefined) continue;
     claim(team.managerName, { kind: "manager", label: personaRoleLabel("manager") });
   }
-  // 타 구단의 단장 — 협상 테이블 건너편의 구단 쪽 (people.md §2). 우리 구단에는 없다:
-  // 그 자리의 결정은 감독과 구단주의 것이다
-  for (const team of state.teams ?? []) {
-    if (team.id === state.userTeamId) continue;
-    claim(generateDirector(state.seed, team.id).name, {
-      kind: "director",
-      label: personaRoleLabel("director"),
-    });
-  }
-
   return seen;
 }
 
 /**
- * 이 세이브의 수석코치 — `personas`에 언제나 하나 있다 (`createGame`이 세우고
- * `reseatClubPersonas`가 갈아 세운다). 없으면 세이브가 불변식을 어긴 것이라 던진다.
+ * 이 세이브의 수석코치 — `personas`에 언제나 하나 있다 (`createGame`이 세운다).
+ * 없으면 세이브가 불변식을 어긴 것이라 던진다.
  */
 export function headCoachOf(state: { personas: readonly Persona[] }): Persona {
   const found = state.personas.find((p) => p.role === "head_coach");
@@ -1407,21 +1195,19 @@ export function headCoachOf(state: { personas: readonly Persona[] }): Persona {
  * | 갈래         | 무엇                                       | 누가     |
  * | ------------ | ------------------------------------------ | -------- |
  * | `medical`    | 부상 · 부상 이력 · 과부하                  | 의료진   |
- * | `scouting`   | 스카우팅 진행 · 도착한 보고서·임무          | 스카우트 |
  * | `coach_eye`  | 원형이 고른 사실 (people.md §7-1)          | 수석코치 |
- * | `training`   | 훈련 결산 · 임대 리포트 · 2군 유망주       | 코치     |
+ * | `training`   | 훈련 결산 · 2군 유망주                     | 코치     |
  *
- * **자리가 비면 수석코치가 대신 선다** — 의료진을 자른 세이브에서도 부상 줄은 서야
+ * **자리가 비면 수석코치가 대신 선다** — 의료진이 없는 세이브에서도 부상 줄은 서야
  * 하고, 화자 없는 사실 덩어리는 이 장치가 없애려던 바로 그 모습이다.
  *
  * 여럿이면 **명단의 첫 사람**이다. 굴림을 넣으면 같은 턴을 두 번 그릴 때 화자가 갈리고,
  * 이력에 굳은 카드와 어긋난다.
  */
-export type FactChannel = "medical" | "scouting" | "coach_eye" | "training";
+export type FactChannel = "medical" | "coach_eye" | "training";
 
 const FACT_SPEAKER_ROLE: Record<FactChannel, StaffRole | null> = {
   medical: "medic",
-  scouting: "scout",
   coach_eye: null,
   training: "coach",
 };
@@ -1498,7 +1284,7 @@ const REPORTER_ARCHETYPES: readonly ReporterArchetype[] = [
       note: "예의는 갖추되 찌르는 질문. 소문을 사실처럼 얹어 반응을 떠보고, 부인해도 한 번 더 묻는다.",
       samples: [
         "그 선수가 감독님 방식에 불만이 있다는 이야기가 있습니다. 사실입니까?",
-        "이적설이 도는데, 구단은 아니라고 하더군요. 감독님도 같은 말씀이십니까?",
+        "라커룸이 갈라졌다는 말이 도는데, 구단은 아니라고 하더군요. 감독님도 같은 말씀이십니까?",
       ],
     },
   },
@@ -1514,7 +1300,7 @@ const OUTLET_NAMES: Record<string, string[]> = {
 /**
  * 기자단 — 한 세이브에 셋. 구단이 아니라 **리그**를 따라다니므로 시드 채널에
  * 팀을 넣지 않는다. 같은 리그 안에서 팀을 옮기면 같은 기자를 만나고, 리그를
- * 건너면 부임이 갈아 세운다 (`reseatClubPersonas`).
+ * 건너면 갈린다.
  */
 export function generateReporters(seed: number, teamId: string): Persona[] {
   const names = personaNames(seed, teamId);
@@ -1581,33 +1367,26 @@ function worldFigurePersonaOf(seed: WorldFigureSeed): Persona {
 /**
  * 명부가 사는 세계 — **어디에 서 있는가를 묻는 쪽의 타입** (people.md §2-1).
  *
- * `teams`가 optional인 이유: 에이전트 한 사람을 뽑는 자리(`agentForPlayer`)처럼
- * 벤치를 들고 있지 않은 호출부가 있고, 그 자리가 묻는 시드에는 벤치가 애초에 없다.
+ * `teams`가 optional인 이유: 해설 한 사람을 뽑는 자리(`punditForRound`)처럼 벤치를
+ * 들고 있지 않은 호출부가 있고, 그 자리가 묻는 시드에는 벤치가 애초에 없다.
  */
 interface WorldFigureScope {
   userTeamId: string;
   teams?: readonly { id: string; managerName?: string }[];
-  managerPool?: readonly { name: string }[];
 }
 
 /**
  * 이 명부 인물이 **지금 세계에 서 있는가** (people.md §2-1).
  *
- * 감독만 자리를 묻는다 — 어느 벤치의 `managerName`이거나 무직 감독 풀에 있으면
- * 세계의 사람이고, 둘 다 아니면 없는 사람이다. 세계 생성 때 유저가 맡은 팀의 명부
- * 감독이 그 자리다: 그 벤치를 감독(유저)이 받았으므로 어디에도 서지 못했다.
- * 에이전트·해설은 구단의 자리가 아니라 언제나 세계에 있다.
- *
- * 벤치를 모르는 호출부는 **시드가 적은 팀**으로 떨어진다 — 감독이 옮겨 다니기
- * 전까지는 같은 답이고, 그런 호출부는 감독 시드를 묻지 않는다.
+ * 감독만 자리를 묻는다 — 어느 벤치의 `managerName`이면 세계의 사람이고, 아니면 없는
+ * 사람이다. 세계 생성 때 유저가 맡은 팀의 명부 감독이 그 자리다: 그 벤치를
+ * 감독(유저)이 받았으므로 어디에도 서지 못했다. 해설은 구단의 자리가 아니라 언제나
+ * 세계에 있다. 벤치를 모르는 호출부는 **시드가 적은 팀**으로 떨어진다.
  */
 function figureStands(state: WorldFigureScope, seed: WorldFigureSeed): boolean {
   if (seed.role !== "manager") return true;
   if (state.teams === undefined) return seed.teamId !== state.userTeamId;
-  return (
-    state.teams.some((t) => t.id !== state.userTeamId && t.managerName === seed.name) ||
-    (state.managerPool ?? []).some((e) => e.name === seed.name)
-  );
+  return state.teams.some((t) => t.id !== state.userTeamId && t.managerName === seed.name);
 }
 
 /**
@@ -1616,38 +1395,18 @@ function figureStands(state: WorldFigureScope, seed: WorldFigureSeed): boolean {
  * **세이브에 넣지 않는다** — 불변 초기치라 읽는 자리에서 파생하고, 표를 비우면 그
  * 인물은 세계에서 사라진다. 코치·구단주 시드와 같은 청산 구조다.
  *
- * 감독은 **지금 어디 있는가**로 걸러진다(`figureStands`) — 잘려도 풀에 남아 있는
- * 한 세계의 사람이고, 어디에도 서지 못한 사람만 빠진다.
+ * 감독은 **지금 어디 있는가**로 걸러진다(`figureStands`) — 어디에도 서지 못한 사람만
+ * 빠진다.
  */
 export function worldFigures(state: WorldFigureScope): Persona[] {
   return WORLD_FIGURE_SEEDS.filter((f) => figureStands(state, f)).map(worldFigurePersonaOf);
 }
 
 /**
- * 이 선수를 대리하는 에이전트 — **(시드, 선수)에서 결정적으로 뽑는다.** 같은 세이브의
- * 같은 선수는 언제나 같은 사람이 대리한다 (people.md §1 일관성).
- *
- * 이적 요청을 들고 오는 자리(`club/approach.ts`)와 협상 테이블 건너편
- * (`market/counterparty.ts`)이 같은 사람을 봐야 하므로, 규칙은 둘 다 의존하는 여기
- * 하나에 산다 (AGENTS.md §5).
- *
- * 명부에 에이전트가 한 사람도 없으면 `null`이다 — 코어는 화자를 지어내지 않는다.
- */
-export function agentForPlayer(
-  state: WorldFigureScope & { seed: number },
-  playerId: string,
-): Persona | null {
-  const agents = worldFigures(state).filter((f) => f.role === "agent");
-  if (agents.length === 0) return null;
-  return pick(makeRng(state.seed, `agent-of:${playerId}`), agents);
-}
-
-/**
  * 그 라운드의 평가를 낸 해설 — **(시드, 시즌, 라운드)에서 결정적으로 뽑는다**
  * (people.md §4-1). 같은 세이브의 같은 라운드는 언제나 같은 사람이 말한다.
  *
- * `agentForPlayer`와 **같은 자리, 같은 규약**이다: 명부에서 역할 하나로 한 사람을
- * 뽑는 규칙은 여기 하나에 산다 (AGENTS.md §5). 명부에 해설이 한 사람도 없으면
+ * 명부에서 역할 하나로 한 사람을 뽑는 규칙은 여기 하나에 산다 (AGENTS.md §5). 명부에 해설이 한 사람도 없으면
  * `null`이다 — 표를 비우는 것이 곧 라이선스 청산이라(§2-1), 코어는 화자를 지어내지
  * 않고 그 갈래가 세계에서 조용히 사라진다.
  */
@@ -1666,50 +1425,6 @@ export function worldFigureByName(state: WorldFigureScope, name: string): Person
   const seed = WORLD_FIGURE_SEEDS.find((f) => f.name === name);
   return seed && figureStands(state, seed) ? worldFigurePersonaOf(seed) : null;
 }
-
-/**
- * 부임 — 구단에 묶인 자리를 새 구단 기준으로 다시 세운다 (career.md §5.1).
- *
- * 수석코치·구단주는 구단의 사람이라 언제나 갈리고, 기자단은 리그를 따라다니므로
- * 리그를 건널 때만 갈린다. 생성이 시드로 결정적이라 같은 세이브가 같은 이직을
- * 하면 같은 사람을 만나고, 실명 시드가 있는 구단이면 그 실명 코치·구단주가 선다.
- *
- * `characterMemories`는 건드리지 않는다 — 기억은 `characterId`에 묶여 있어 옛
- * 코치의 기억은 옛 이름에 남고, 새 코치는 빈 채로 시작한다. GM이 등록한 인물
- * (friend·supporter)도 그대로다 — 구단이 아니라 감독의 사람들이다.
- */
-export function reseatClubPersonas(
-  state: { seed: number; date: string; personas?: Persona[] },
-  teamId: string,
-  options: { crossedLeague: boolean },
-): void {
-  const clubBound = new Set<PersonaRole>([
-    "head_coach",
-    "owner",
-    /**
-     * **스태프는 구단의 사람이다** (people.md §2-2) — 감독이 데려가는 것이 아니라
-     * 옛 구단에 남고, 새 구단에는 그 구단의 코치·의료진·스카우트가 이미 서 있다.
-     * 리그를 건너는지와 무관하다: 기자만 리그를 따라다닌다.
-     */
-    ...STAFF_ROLES,
-    ...(options.crossedLeague ? (["reporter"] satisfies PersonaRole[]) : []),
-  ]);
-  state.personas = [
-    ...(state.personas ?? []).filter((p) => !clubBound.has(p.role)),
-    generateHeadCoach(state.seed, teamId, state.date),
-    generateOwner(state.seed, teamId),
-    ...generateStaff(state.seed, teamId, state.date),
-    ...(options.crossedLeague ? generateReporters(state.seed, teamId) : []),
-  ];
-}
-
-/* ------------------------------------------------------------------ *
- * 인물 사전 갱신 — 이력이 접힐 때 그 구간이 남기는 것 (people.md §9-1)
- *
- * 맡기는 것은 둘뿐이다: **인물별 기억 한 줄**과 **새 화자 등록**. 인물지의
- * 성격·동기·말투는 시드가 정하고 LLM이 고쳐 쓰지 않는다 — 덮어쓰면 "같은
- * 세이브는 같은 사람을 만난다"가 깨진다 (AGENTS.md §6.4).
- * ------------------------------------------------------------------ */
 
 /** 인물당 남기는 기억 — 넘치면 오래된 것부터 민다 */
 export const CHARACTER_MEMORY_KEEP = 6;
@@ -1733,7 +1448,7 @@ interface CharacterMemorySource extends SpeakerSource {
 /**
  * 이 세계가 이름을 아는 사람 전부 — **인물 사전이 이름을 찾는 해석(`personaOf`)과
  * 같은 범위**다 (people.md §9-1): 화자 사전이 아는 자리 전부(페르소나·우리 선수단·
- * 협상 상대·이름난 현역·명부)에 **리그의 선수 전부**를 더한다. 선수 페르소나는
+ * 이름난 현역·명부)에 **리그의 선수 전부**를 더한다. 선수 페르소나는
  * 이름에서 파생하므로(`generatePlayerPersona`) 이름이 곧 그 사람이다.
  *
  * 기억 필터와 등록 검사가 같은 집합을 들어야 두 곳이 갈리지 않는다 — 필터가 화자
@@ -1816,7 +1531,7 @@ export interface CharacterDraft {
  *
  * ⚠️ **여기서 역할을 늘리지 마라.** `PersonaRoleSchema`는 열린 집합이라고 적혀 있지만
  * 실제로는 `z.enum`이고, 하나를 늘리려면 라벨·아이콘·화자 사전이 함께 움직여야
- * 한다. `manager`·`agent`·`pundit`은 등록이 아니라 **세계 인물 명부로 선다**
+ * 한다. `manager`·`pundit`은 등록이 아니라 **세계 인물 명부로 선다**
  * (people.md §2-1) — 표가 직접 적은 인격이라 GM이 세울 자리가 아니다.
  */
 export const REGISTERABLE_ROLES = ["reporter", "friend", "supporter"] as const;

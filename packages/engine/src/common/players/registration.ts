@@ -1,12 +1,6 @@
 import type { GamePlayer, RegistrablePlayer, SquadRegistration } from "@story-fm/domain";
 import type { RegistrationBlock } from "@story-fm/domain";
-import {
-  FIRST_TEAM_LIMIT,
-  canRegister,
-  isUnder21,
-  positionGroupOfPlayer,
-  squadRegistration,
-} from "@story-fm/domain";
+import { canRegister, isUnder21, positionGroupOfPlayer, squadRegistration } from "@story-fm/domain";
 
 import { seasonYear } from "../core/dates";
 import { countryOfTeam } from "../data/team-catalog";
@@ -16,7 +10,7 @@ import { firstTeamPlayers, type GameState } from "../core/state";
  * 등록 명단 — 도메인 규칙(squad-rules.ts)을 게임 상태에 붙이는 얇은 층.
  *
  * 홈그로운은 **협회 기준**이라 선수 혼자로는 판정할 수 없다. 잉글랜드에서 자란
- * 선수는 잉글랜드 안에서 이적해도 홈그로운이지만 라리가 클럽에선 아니다 —
+ * 선수는 잉글랜드의 어느 클럽에서도 홈그로운이지만 라리가 클럽에선 아니다 —
  * 그래서 언제나 "누구의" 홈그로운인지를 팀과 함께 묻는다.
  */
 
@@ -94,57 +88,6 @@ export function canRegisterAllFor(
     squad.push(entry);
   }
   return { ok: true };
-}
-
-/**
- * 도착한 선수가 설 자리 — **1군에 자리가 있으면 1군, 없으면 2군.**
- *
- * 등록 명단(25명)과는 다른 상한이다(`FIRST_TEAM_LIMIT` 30명). 받는 쪽을 안 보면
- * 매각과 자유계약이 상대 1군을 서른 넘게 불린다 — AI 시장은 계획과 실행 양쪽에서
- * 이 상한을 지키는데 감독이 만든 딜만 그냥 지나갔다 (transfer.md §2).
- *
- * ⚠️ **임대는 이 문을 지나지 않는다** — `admitOnLoan`이 따로 답한다. 빌린 구단은
- * 쓰려고 데려오는데(→ season.md §2 임대) 그쪽 2군 리그는 편성되지 않으므로, 2군에
- * 넣으면 임대가 출전 0인 주차장이 된다.
- */
-export function arrivingSquadLevel(
-  state: GameState,
-  player: Pick<GamePlayer, "id">,
-  teamId: string,
-): "first" | "reserve" {
-  const taken = firstTeamPlayers(state, teamId).filter((p) => p.id !== player.id).length;
-  return taken < FIRST_TEAM_LIMIT ? "first" : "reserve";
-}
-
-/**
- * 임대로 도착한 선수를 그 구단 명단에 앉힌다 — **자리를 만들어서라도 1군이다.**
- *
- * 임대는 출전을 사는 거래다(→ season.md §2 임대). 2군에 넣으면 한 경기도 못 뛴다 —
- * 그 구단 2군 리그는 편성되지 않기 때문이다. 그래서 도착 층 판정(`arrivingSquadLevel`)의
- * "차 있으면 2군"이 임대에는 그대로 걸리지 않는다: 명단이 `FIRST_TEAM_LIMIT`에
- * 닿아 있으면 **그 구단 1군에서 가장 약한 자원**이 2군으로 내려가 자리를 낸다.
- * 데려온 사람을 못 쓰는 자리에 두는 대신 자리를 비우는 것이 빌린 구단이 치르는
- * 값이다.
- *
- * 내려보내는 자리에서 **빌려 온 임대는 뺀다** — 그들에게도 같은 빚을 지고 있어서,
- * 한 임대를 앉히려고 다른 임대를 못 뛰는 자리로 미는 것은 값을 치른 게 아니다.
- *
- * ⚠️ 감독의 팀은 이 문을 쓰지 않는다. 우리가 빌려 오는 임대는 **등록 명단**이
- * 가르고(`canRegisterFor` — team.md §5), 자리가 없으면 2군으로 들어온다고 그 자리에서
- * 답한다.
- */
-export function admitOnLoan(
-  state: GameState,
-  player: Pick<GamePlayer, "id">,
-  teamId: string,
-): void {
-  const squad = firstTeamPlayers(state, teamId).filter((p) => p.id !== player.id);
-  if (squad.length >= FIRST_TEAM_LIMIT) {
-    const spare = squad
-      .filter((p) => p.loan === undefined)
-      .sort((a, b) => a.attributes.overall - b.attributes.overall)[0];
-    if (spare) spare.squadLevel = "reserve";
-  }
 }
 
 /** 등록 현황 한 줄 — GM 컨텍스트·조회 도구에 쓴다 */

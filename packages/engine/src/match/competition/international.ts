@@ -62,7 +62,7 @@ export const FORM_WEIGHT = 2;
 /**
  * 소집 점수 — **주사위가 없다.** 같은 세이브·같은 날이면 언제나 같은 명단이다
  * (competition.md §5-1). 종합은 참값을 쓴다: 대표팀 감독은 세계의 눈이지 우리
- * 스카우트가 아니라, 안개는 이 자리의 사실이 아니다.
+ * 감독이 읽은 값이 아니라, 안개는 이 자리의 사실이 아니다.
  */
 export function callUpScore(state: GameState, player: GamePlayer, apps: number): number {
   const age = ageOf(player.birthdate, state.date);
@@ -79,7 +79,7 @@ export function callUpScore(state: GameState, player: GamePlayer, apps: number):
  *
  * `seasonStatOf`를 선수마다 부르면 그 안의 `playerById`가 5,700명을 매번 다시
  * 훑는다 — 나라 스물여섯 × 후보 수백이면 그것만으로 tick 하루가 무거워진다.
- * 시즌 중 이적한 선수는 팀별로 행이 갈리므로 합쳐서 센다.
+ * 시즌 중 소속이 바뀐 선수는 팀별로 행이 갈리므로 합쳐서 센다.
  */
 export function appsIndexOf(state: GameState): Map<string, number> {
   const out = new Map<string, number>();

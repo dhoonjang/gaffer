@@ -85,7 +85,7 @@ export function friendlyDates(season: number): Array<{ round: number; date: stri
 /**
  * 친선을 치르는 팀 — **경기를 하는 리그의 전부**.
  *
- * 이적 시장 전용 리그(사우디·MLS)와 무소속은 경기를 하지 않으므로 빠지고, 컵
+ * 명단 전용 리그(사우디·MLS — `market-only`)와 무소속은 경기를 하지 않으므로 빠지고, 컵
  * 참가 2부는 들어온다. 승강 결과가 있으면 그것이 카탈로그를 이긴다.
  */
 export function friendlyPool(

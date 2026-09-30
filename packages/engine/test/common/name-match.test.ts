@@ -1,19 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   groupOf,
-  openRenewal,
   pickRivalPlayer,
   playerCard,
   playersOf,
   rankByName,
-  changeScoutingRequest,
   setCaptain,
-  setTransferList,
   startMatch,
   substitutePlayer,
   userPlayers,
   userSide,
-  type GameState,
   type NamedItem,
   claimPlayerId,
   playerCatalog,
@@ -21,6 +17,7 @@ import {
   transitionSeason,
 } from "@story-fm/engine";
 import { type GamePlayer } from "@story-fm/domain";
+import { pickOurPlayer } from "../../src/common/core/player-ref";
 import { advanceToMatchday, createTestGame } from "../helpers";
 
 /**
@@ -181,36 +178,14 @@ describe("카탈로그 — 실제 세계에서", () => {
   });
 
   /**
-   * 시장·경기 명령도 이름을 받는다. 다만 **상태에 남는 것은 언제나 id다** —
-   * 협상 id·`gamePlayerId`·장부의 actors에 감독이 부른 이름이 박히면 세이브가
+   * 경기 명령도 이름을 받는다. 다만 **상태에 남는 것은 언제나 id다** —
+   * 장부의 actors에 감독이 부른 이름이 박히면 세이브가
    * 그 선수를 다시 찾지 못한다.
    */
   const calledBy = (p: GamePlayer): string => p.name.replace(/\s/g, "");
   /** 붙여 쓴 채로도 그 풀에서 이 선수 하나에만 닿는가 */
   const reaches = (p: GamePlayer, pool: readonly GamePlayer[]): boolean =>
     p.name.includes(" ") && rankByName(calledBy(p), pool).best?.id === p.id;
-  const namedInWorld = (game: GameState): GamePlayer =>
-    userPlayers(game).find((p) => reaches(p, game.players))!;
-
-  it("이적 리스트도 이름으로 올린다 — 등재되는 것은 id다", () => {
-    const game = createTestGame(7);
-    const mine = namedInWorld(game);
-    const res = setTransferList(game, { playerId: calledBy(mine), listed: true });
-    expect(res.ok, res.message).toBe(true);
-    expect(game.transferList.map((l) => l.gamePlayerId)).toContain(mine.id);
-  });
-
-  it("재계약을 이름으로 열어도 협상에 남는 것은 id다", () => {
-    const game = createTestGame(7);
-    const mine = namedInWorld(game);
-    const said = calledBy(mine);
-    const res = openRenewal(game, { playerId: said, weeklyWage: 100_000, years: 3 });
-    expect(res.ok, res.message).toBe(true);
-    const negotiation = game.negotiations.at(-1)!;
-    expect(negotiation.gamePlayerId).toBe(mine.id);
-    expect(negotiation.id).toContain(mine.id);
-    expect(negotiation.id).not.toContain(said);
-  });
 
   it("교체도 이름으로 하고, 장부에 남는 actors는 id다", () => {
     const game = createTestGame(7);
@@ -233,19 +208,6 @@ describe("카탈로그 — 실제 세계에서", () => {
     expect(res.ok, res.message).toBe(true);
     const logged = match.live.ledger.events.filter((e) => e.type === "substitution").at(-1)!;
     expect(logged.actors).toEqual([out.id, incoming.id]);
-  });
-
-  it("갈리는 이름은 상태를 바꾸지 않고 후보를 돌려준다", () => {
-    const game = createTestGame(7);
-    // 마르티네스는 세계에 둘이고, 스카우트가 고를 수 있는 사람은 둘 다 남의 팀이다
-    const res = changeScoutingRequest(
-      game,
-      { action: "request", question: "조사", playerIds: ["마르티네스"] },
-      "조사해줘",
-    );
-    expect(res.ok).toBe(false);
-    expect(res.message).toContain("여러 선수와 맞습니다");
-    expect(game.scoutingRequests).toHaveLength(0);
   });
 });
 
@@ -271,9 +233,8 @@ describe("이름이 겹칠 때 — 자격이 문을 고른다", () => {
   const onlyOurs = ours[3]!;
 
   it("우리 선수 전용 명령은 남의 동명이인을 후보로 세지 않는다", () => {
-    const res = setTransferList(game, { playerId: mine.name, listed: true });
-    expect(res.ok, res.message).toBe(true);
-    expect(game.transferList.map((l) => l.gamePlayerId)).toContain(mine.id);
+    const res = pickOurPlayer(game, mine.name);
+    expect(res.ok && res.player.id).toBe(mine.id);
   });
 
   it("남의 선수 전용 명령은 우리 동명이인을 후보로 세지 않는다", () => {
@@ -297,9 +258,9 @@ describe("이름이 겹칠 때 — 자격이 문을 고른다", () => {
     const outside = pickRivalPlayer(game, namesake.name);
     expect(outside.ok).toBe(false);
     expect(outside.ok ? "" : outside.message).toContain("여러 선수와 맞습니다");
-    const inside = setTransferList(game, { playerId: ourOne.name, listed: true });
+    const inside = pickOurPlayer(game, ourOne.name);
     expect(inside.ok).toBe(false);
-    expect(inside.message).toContain("여러 선수와 맞습니다");
+    expect(inside.ok ? "" : inside.message).toContain("여러 선수와 맞습니다");
   });
 });
 
@@ -371,7 +332,7 @@ describe("게임 안의 id", () => {
     const seen = new Set(state.players.map((p) => p.id));
     transitionSeason(state);
     // 은퇴로 명단에서 빠져도 원장에는 남는다 — 그 id를 다시 쓰면 두 사람이 한 사람이 된다
-    const gone = state.transfers.filter((t) => t.type === "retire").map((t) => t.gamePlayerId);
+    const gone = state.moves.filter((m) => m.kind === "retire").map((t) => t.gamePlayerId);
     const newcomers = state.players.filter((p) => !seen.has(p.id)).map((p) => p.id);
     expect(newcomers.filter((id) => gone.includes(id))).toEqual([]);
   });

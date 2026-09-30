@@ -1,12 +1,12 @@
 import type { GamePlayer, LeaderRole } from "@story-fm/domain";
-import { ageOf, RATING_MAX, standingScore } from "@story-fm/domain";
+import { ageOf, standingScore } from "@story-fm/domain";
 import { playersOf, squadLevelOf, type GameState } from "../core/state";
 
 /**
  * 라커룸 서열 — **저장하지 않고 파생한다** (→ docs/story/people.md §5-1).
  *
  * 감독이 정하는 것은 완장 둘(주장·부주장)뿐이고, 나머지 서열은 리더십·나이·그 셔츠의
- * 출전·재적 시즌에서 나온다. 저장하면 영입·출전·시즌 롤오버마다 갱신해 줄 자리가 늘고,
+ * 출전·재적 시즌에서 나온다. 저장하면 합류·출전·시즌 롤오버마다 갱신해 줄 자리가 늘고,
  * 그중 하나만 빠뜨려도 화면과 판정이 다른 서열을 읽는다 — 등록 현황과 같은 원칙이다.
  *
  * ⚠️ 코어가 내는 것은 **수치와 코드**다. "베테랑 리더"도 "라커룸의 기둥"도 여기서
@@ -22,21 +22,6 @@ export { standingScore } from "@story-fm/domain";
 
 /** 리더 그룹의 크기 — 1군 상위 몇 명이 라커룸을 이끄는가 */
 export const LEADER_GROUP_SIZE = 5;
-
-/**
- * 리더 배수 — 선수가 떠날 때 남은 선수단에 미치는 사기 변화의 무게 (people.md §5-1).
- */
-export const LEADER_WEIGHT: Record<LeaderRole, number> = {
-  captain: 2,
-  vice: 1.6,
-  group: 1.3,
-};
-
-/** 리더가 아닌 선수의 배수 — 곱해도 아무것도 달라지지 않는다 */
-export const PLAIN_WEIGHT = 1;
-
-/** 리더가 선 라커룸이 새 영입의 필요 크레딧에서 덜어 주는 최대 폭 */
-const LEADER_SETTLING_RELIEF = 0.2;
 
 /** 서열 한 줄 — 저장되지 않는 파생값이다 */
 export interface LeaderStanding {
@@ -111,28 +96,6 @@ export function leaderRoleOf(state: GameState, player: GamePlayer): LeaderRole |
   return leaderGroupOf(state, player.teamId).some((row) => row.playerId === player.id)
     ? "group"
     : null;
-}
-
-/** 리더 배수 — 완장을 벗기기 전의 이탈 사기 정산이 읽는다 */
-export function leaderWeightOf(state: GameState, player: GamePlayer): number {
-  const role = leaderRoleOf(state, player);
-  return role === null ? PLAIN_WEIGHT : LEADER_WEIGHT[role];
-}
-
-/**
- * 새 영입의 필요 크레딧에 곱해지는 리더 항 (0.80~1.00) — **본인은 빼고 센다.**
- * "라커룸에 리더가 서 있다"는 다른 사람들에 대한 말이다.
- */
-export function leaderSettlingRelief(
-  state: GameState,
-  teamId: string,
-  playerId: string,
-): { multiplier: number; leadership: number } | null {
-  const others = leaderGroupOf(state, teamId).filter((row) => row.playerId !== playerId);
-  if (others.length === 0) return null;
-  const average = others.reduce((sum, row) => sum + row.leadership, 0) / others.length;
-  const multiplier = Math.round((1 - LEADER_SETTLING_RELIEF * (average / RATING_MAX)) * 100) / 100;
-  return multiplier === 1 ? null : { multiplier, leadership: Math.round(average) };
 }
 
 /**

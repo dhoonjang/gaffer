@@ -7,7 +7,7 @@ import { DateString } from "./date-string";
 export const SeasonStatSchema = z.object({
   gamePlayerId: z.string().min(1),
   season: z.number().int(),
-  /** 그 시즌 소속 — 시즌 중 이적하면 팀별로 row가 분리된다 */
+  /** 그 시즌 소속 — 시즌 중 소속이 바뀌면 팀별로 row가 분리된다 */
   teamId: z.string().min(1),
   /**
    * **어느 대회의 기록인가** — 행의 네 번째 열쇠다 (→ docs/common/game-state.md §3.4).

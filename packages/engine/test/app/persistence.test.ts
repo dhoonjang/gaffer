@@ -15,10 +15,6 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import {
-  changeScoutingRequest,
-  applyScoutingPlan,
-  captureScoutingEvidence,
-  failScouting,
   teamCatalog,
   advanceTime,
   startMatch,
@@ -36,7 +32,7 @@ import {
   type GameSummary,
   type UnreadableGame,
 } from "@story-fm/engine";
-import { createTestGame, recordTestScouting } from "../helpers";
+import { createTestGame } from "../helpers";
 
 /**
  * **세이브 하나하나가 다른 세계일 이유가 없다.** 여기서 재는 것은 파일이 쓰이고
@@ -837,34 +833,4 @@ describe("진행 중 경기의 흐름 저장 경계", () => {
     });
     expect(parsed).toMatchObject({ matchId: "m", live: { state: { seconds: 0 } } });
   });
-});
-
-it("보관 보고서와 실패한 조사 근거는 저장 후에도 그대로 이어진다", () => {
-  const state = createTestGame();
-  const target = state.players.find((p) => p.teamId !== state.userTeamId)!;
-  recordTestScouting(state, target.id);
-  state.pendingReportCards.push(state.scoutReports[0]!.id);
-  const result = changeScoutingRequest(
-    state,
-    { action: "request", question: "다음 경기에서 확인", playerIds: [target.id] },
-    "이 선수를 더 확인해줘",
-  );
-  if (!result.ok) throw new Error(result.message);
-  const request = result.request;
-  applyScoutingPlan(state, request.id, request.revision, {
-    status: "ready",
-    days: 0,
-    depth: "public_records",
-    focus: ["contract"],
-    expectations: [{ topic: "contract", precision: "supported" }],
-    evidenceRefs: [],
-    limitations: [],
-  });
-  captureScoutingEvidence(state);
-  failScouting(state, request.id, request.revision, "일시적 연결 오류");
-  saveGame(state);
-  const restored = loadGame(state.id)!;
-  expect(restored.scoutingRequests).toEqual(state.scoutingRequests);
-  expect(restored.scoutReports).toEqual(state.scoutReports);
-  expect(restored.pendingReportCards).toEqual(state.pendingReportCards);
 });

@@ -23,12 +23,11 @@ import {
   stateModifier,
   famFactor,
 } from "@story-fm/sim";
-import type { GamePlayer, PlayerState, PositionGroup } from "@story-fm/domain";
+import type { PlayerState } from "@story-fm/domain";
 import type { GameState } from "@story-fm/engine";
 import {
   bindJournal,
   familiarityOf,
-  leagueOfTeamIn,
   addDays,
   advanceTime,
   CALL_UP_FATIGUE_PER_APP,
@@ -39,13 +38,8 @@ import {
   seasonYear,
   assignmentsOf,
   financeOf,
-  groupOf,
   internationalBreaksOf,
   openCallUp,
-  simSquadOf,
-  LOAN_REST_LIMIT,
-  LOAN_ROTATION_OVR_DROP,
-  ROTATION_FATIGUE,
   openInjury,
   playersOf,
   PLAYER_REST_MAX_DAYS,
@@ -66,7 +60,6 @@ import {
   createTestGame,
   drillUserTactics,
   settleMatchdayQuick,
-  resultOf,
 } from "../helpers";
 
 describe("advance_time — 시간은 도구로만 흐른다 (season.md §5)", () => {
@@ -130,20 +123,6 @@ describe("advance_time — 시간은 도구로만 흐른다 (season.md §5)", ()
     } finally {
       bindJournal(null);
     }
-  });
-
-  it("게임 시작 시 여름 창은 이미 열려 있고, 폐장은 진행 중 안내된다", () => {
-    const state = createTestGame();
-    const summer = state.windows.find((w) => w.kind === "summer")!;
-    // 7/1 시작 = 개장일이므로 개장 엔트리는 소화된 상태로 출발
-    const openEntry = state.schedule.find((e) => e.type === "window-open" && e.refId === summer.id);
-    expect(openEntry?.status).toBe("done");
-    // 폐장 엔트리는 아직 예정
-    const closeEntry = state.schedule.find(
-      (e) => e.type === "window-close" && e.refId === summer.id,
-    );
-    expect(closeEntry?.status).toBe("scheduled");
-    expect(closeEntry?.date).toBe(summer.closesOn);
   });
 
   it("경기일에는 시간이 흐르지 않는다 — 경기가 우선", () => {
@@ -320,7 +299,7 @@ describe("advance_time — 시간은 도구로만 흐른다 (season.md §5)", ()
     expect(state.injuries.find((i) => i.id === "inj-test")?.returnedOn).toBeTruthy();
   });
 
-  it("AI 팀도 재정·주급이 돌아간다 (이적시장 기반)", () => {
+  it("AI 팀도 재정·주급이 돌아간다", () => {
     const state = createTestGame();
     const ai = state.teams.find((t) => t.id !== state.userTeamId)!;
     const before = financeOf(state, ai.id).balance;
@@ -361,91 +340,6 @@ describe("시각 축", () => {
     advanceTime(state, { clock: "19:00" });
     advanceTime(state, { days: 1 });
     expect(clockOf(state)).toBe("09:00");
-  });
-});
-
-/**
- * 시간 진행은 **경기와 정말 큰 일** 앞에서만 선다.
- *
- * 예전엔 오퍼 한 통·훈련 부상 하나·벤치 불만 하나가 전부 시계를 세웠다. 일주일을
- * 넘기라는 지시가 이튿날 멈추면 감독에게는 시간을 흘릴 방법이 없다 — 손잡이를
- * 몇 번이고 다시 눌러야 한다. 그 일들은 하루 뒤에 처리해도 결과가 같으므로
- * 브리핑으로 쌓이고, 멈추는 것은 **오늘이 지나면 기회가 없어지는 일**뿐이다.
- */
-describe("시간은 웬만하면 지나간다", () => {
-  it("들어온 오퍼는 시계를 세우지 않는다 — 브리핑에만 실린다", () => {
-    const state = createTestGame(5);
-    state.date = "2026-07-10";
-    const player = userPlayers(state)[0]!;
-    const buyer = state.teams.find((t) => t.id !== state.userTeamId)!;
-    state.negotiations.push({
-      id: "neg-in-test",
-      gamePlayerId: player.id,
-      kind: "sell",
-      counterpartTeamId: buyer.id,
-      windowId: null,
-      openedOn: state.date,
-      // 기한이 넉넉하면 오늘 답할 이유가 없다
-      expiresOn: "2026-08-20",
-      status: "open",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [
-        {
-          date: state.date,
-          by: "them",
-          fee: 20_000_000,
-          weeklyWage: 100_000,
-          contractYears: 4,
-          respondsOn: null,
-          verdict: null,
-        },
-      ],
-    });
-    const result = advanceTime(state, { days: 7 });
-    expect(result.stopped).not.toBe("attention");
-    expect(state.date).toBe("2026-07-17");
-  });
-
-  it.each([false, true])("명시된 협상 기한 앞에서는 선다 — 시즌 종료 직후=%s", (offseason) => {
-    const state = offseason ? createMiniGame() : createTestGame(5);
-    const start = offseason ? "2027-06-20" : "2026-07-10";
-    const deadline = addDays(start, 3);
-    state.date = start;
-    if (offseason) state.matches = [];
-    const player = userPlayers(state)[0]!;
-    const buyer = state.teams.find((t) => t.id !== state.userTeamId)!;
-    state.negotiations.push({
-      id: "neg-in-deadline",
-      gamePlayerId: player.id,
-      kind: "sell",
-      counterpartTeamId: buyer.id,
-      windowId: null,
-      openedOn: state.date,
-      expiresOn: deadline,
-      status: "open",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [
-        {
-          date: state.date,
-          by: "them",
-          fee: 20_000_000,
-          weeklyWage: 100_000,
-          contractYears: 4,
-          respondsOn: null,
-          verdict: null,
-        },
-      ],
-    });
-    const result = advanceTime(state, { days: 7 });
-    expect(result.stopped).toBe("attention");
-    expect(state.date).toBe(deadline);
-    expect(eventTexts(result.events).join(" ")).toContain("오늘이 기한");
   });
 });
 
@@ -496,163 +390,6 @@ describe("계약 만료 예고 — 문턱마다 한 번 (season.md §5)", () => 
       "90",
       String(diffDays(lastTicked, expiresOn)),
     ]);
-  });
-});
-
-/**
- * 빌린 구단이 임대 자원에게 치르는 값 — `simSquadOf`의 문 둘
- * (→ docs/common/season.md §2 임대).
- *
- * 재는 것은 **경계**다: 주전이 멀쩡할 때 서지 않고, 연속 미출전이 상한에 닿으면
- * 서고, 기량 창 밖이면 상한에 닿아도 서지 않는다. 화면이 드러내는 값이 아니라
- * AI 전 구단의 선발을 정하는 규칙이라 조용히 어긋난다.
- */
-describe("임대 자원이 서는 자리 (season.md §2 임대)", () => {
-  /** 감독 팀이 아닌 클럽 하나 — AI 라인업은 이쪽에서만 짜인다 */
-  function hostOf(state: GameState): string {
-    return state.teams.find((t) => t.id !== state.userTeamId)!.id;
-  }
-
-  /**
-   * 그 구단 1군에 임대로 들어온 선수 하나를 만든다 — 다른 클럽의 2군에서 데려와
-   * 종합만 원하는 값으로 맞춘다. 포지션군은 원본 선수의 것을 그대로 쓴다.
-   */
-  function lendInto(
-    state: GameState,
-    hostId: string,
-    pick: (p: GamePlayer) => boolean,
-    overall: number,
-  ): GamePlayer {
-    const lender = state.teams.find((t) => t.id !== hostId && t.id !== state.userTeamId)!.id;
-    const player = playersOf(state, lender).find(pick)!;
-    player.teamId = hostId;
-    player.squadLevel = "first";
-    player.attributes.overall = overall;
-    player.state.condition = 100;
-    player.loan = { fromTeamId: lender, until: "2027-06-30", wageShare: 0.5 };
-    return player;
-  }
-
-  /** 그 구단이 치른 경기 `count`개를 장부에 얹는다 — 명단에는 아무도 넣지 않는다 */
-  function pastMatches(state: GameState, hostId: string, count: number): void {
-    for (let i = 0; i < count; i++) {
-      state.matches.push({
-        id: `past-${hostId}-${i}`,
-        season: state.season,
-        competitionId: "test-league",
-        stage: "league",
-        round: i + 1,
-        date: addDays("2026-08-01", i),
-        time: "15:00",
-        homeTeamId: hostId,
-        awayTeamId: state.userTeamId,
-        result: resultOf({ homeGoals: 0, awayGoals: 0, homeLineup: [], awayLineup: [] }),
-      });
-    }
-  }
-
-  /** 그 포지션군에서 가장 약한 선발 */
-  function weakestStarter(state: GameState, hostId: string, group: PositionGroup): GamePlayer {
-    return assignmentsOf(state, hostId, "starting")
-      .map((a) => playersOf(state, hostId).find((p) => p.id === a.playerId)!)
-      .filter((p) => groupOf(p) === group)
-      .sort((a, b) => a.attributes.overall - b.attributes.overall)[0]!;
-  }
-
-  it("주전이 멀쩡하고 앉은 경기가 상한 아래면 임대 자원은 서지 않는다", () => {
-    const state = createMiniGame(42);
-    const host = hostOf(state);
-    const seat = weakestStarter(state, host, "MF");
-    const loanee = lendInto(state, host, (p) => groupOf(p) === "MF", seat.attributes.overall);
-    pastMatches(state, host, LOAN_REST_LIMIT - 1);
-
-    expect(
-      simSquadOf(state, host, leagueOfTeamIn(state, host)).starters.map((p) => p.id),
-    ).not.toContain(loanee.id);
-  });
-
-  it("연속 미출전이 상한에 닿으면 같은 포지션군의 가장 약한 선발과 자리를 바꾼다", () => {
-    const state = createMiniGame(42);
-    const host = hostOf(state);
-    const seat = weakestStarter(state, host, "MF");
-    const loanee = lendInto(state, host, (p) => groupOf(p) === "MF", seat.attributes.overall);
-    pastMatches(state, host, LOAN_REST_LIMIT);
-
-    const squad = simSquadOf(state, host, leagueOfTeamIn(state, host));
-    const ids = squad.starters.map((p) => p.id);
-    expect(ids).toContain(loanee.id);
-    expect(ids).not.toContain(seat.id);
-    expect(squad.starters).toHaveLength(11);
-    // 자리는 판의 것이다 — 좌표는 그대로고 숙련도만 들어온 선수의 것으로 다시 선다
-    const slot = (squad.slots ?? []).find((s) => s.player.id === loanee.id)!;
-    expect(slot.position).toBe(
-      assignmentsOf(state, host, "starting")[ids.indexOf(loanee.id)]!.position,
-    );
-  });
-
-  it("기량 창 밖이면 상한에 닿아도 서지 않는다 — 임대처 선택이 판단인 자리", () => {
-    const state = createMiniGame(42);
-    const host = hostOf(state);
-    const seat = weakestStarter(state, host, "MF");
-    const loanee = lendInto(
-      state,
-      host,
-      (p) => groupOf(p) === "MF",
-      seat.attributes.overall - LOAN_ROTATION_OVR_DROP - 1,
-    );
-    pastMatches(state, host, LOAN_REST_LIMIT + 5);
-
-    expect(
-      simSquadOf(state, host, leagueOfTeamIn(state, host)).starters.map((p) => p.id),
-    ).not.toContain(loanee.id);
-    // 창의 경계 — 딱 그만큼 낮으면 선다
-    loanee.attributes.overall = seat.attributes.overall - LOAN_ROTATION_OVR_DROP;
-    expect(
-      simSquadOf(state, host, leagueOfTeamIn(state, host)).starters.map((p) => p.id),
-    ).toContain(loanee.id);
-  });
-
-  it("임대 자원끼리는 자리를 뺏지 않는다 — 자리가 하나뿐이면 하나만 선다", () => {
-    const state = createMiniGame(42);
-    const host = hostOf(state);
-    // 골문은 선발 자리가 하나뿐이라, 서로의 자리를 뺏는지가 여기서만 드러난다
-    const seat = weakestStarter(state, host, "GK");
-    const first = lendInto(state, host, (p) => groupOf(p) === "GK", seat.attributes.overall);
-    const second = lendInto(
-      state,
-      host,
-      (p) => p.id !== first.id && groupOf(p) === "GK",
-      seat.attributes.overall,
-    );
-    pastMatches(state, host, LOAN_REST_LIMIT);
-
-    const ids = simSquadOf(state, host, leagueOfTeamIn(state, host)).starters.map((p) => p.id);
-    // 앞사람이 자리를 얻은 뒤 뒷사람이 그 자리를 다시 가져가지는 않는다
-    expect(ids.filter((id) => id === first.id || id === second.id)).toHaveLength(1);
-    expect(ids).not.toContain(seat.id);
-  });
-
-  it("로테이션 자리는 기량이 더 나은 스쿼드 자원보다 임대 자원이 먼저 받는다", () => {
-    const state = createMiniGame(42);
-    const host = hostOf(state);
-    const tired = weakestStarter(state, host, "MF");
-    tired.state.condition = 100 - ROTATION_FATIGUE - 5;
-    // 임대 자원은 그 자리를 놓고 겨루는 스쿼드 자원보다 약하다 — 그래도 먼저 선다
-    const loanee = lendInto(state, host, (p) => groupOf(p) === "MF", tired.attributes.overall - 5);
-    const rival = playersOf(state, host).find(
-      (p) =>
-        p.id !== loanee.id &&
-        groupOf(p) === "MF" &&
-        !assignmentsOf(state, host, "starting").some((a) => a.playerId === p.id),
-    )!;
-    rival.attributes.overall = tired.attributes.overall;
-    rival.state.condition = 100;
-    // 앉은 경기는 상한 아래다 — 서는 문은 로테이션 하나뿐이다
-    pastMatches(state, host, LOAN_REST_LIMIT - 1);
-
-    const ids = simSquadOf(state, host, leagueOfTeamIn(state, host)).starters.map((p) => p.id);
-    expect(ids).toContain(loanee.id);
-    expect(ids).not.toContain(rival.id);
   });
 });
 

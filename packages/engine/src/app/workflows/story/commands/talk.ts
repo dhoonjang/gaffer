@@ -18,8 +18,7 @@ import { pickOurPlayer } from "../../../../common/core/player-ref";
 import { clampForm, moraleToForm } from "../../../../common/players/form";
 import { signed, item, briefNames } from "../../../../common/commands/brief";
 import { applyMoodNotes, TEAM_TALK_MOODS } from "../../../../common/players/mood-notes";
-import { settlingAnchor, creditSettling, settlingOf } from "../../../../common/players/settling";
-import { openPromise } from "../../../../negotiation/players/promises";
+import { openPromise } from "../../../../common/players/promises";
 
 /**
  * **감독의 말 하나** — 팀토크와 면담이 같은 함수를 지난다 (career.md §2).
@@ -139,33 +138,6 @@ export function applyTalk(state: GameState, input: TalkInput): CommandResult {
   );
 
   /**
-   * **정착 크레딧의 앵커는 대상 수가 가른다** (player.md §9.3) — 마주 앉아 들은 말이
-   * `talk`(5±4), 라커룸 앞에서 이름이 불린 것이 `team_talk`(1.5±1.5)다.
-   *
-   * ⚠️ **사기가 움직이지 않은 대화(`neutral`)에는 방향이 없다** — 크레딧도 0이다.
-   * 부호로 방향을 가르면 0이 음수 쪽에 떨어져, 나쁘지도 않았던 대화가 적응을 뒤로
-   * 민다. 외침에는 크레딧이 아예 없다 — 새 영입을 라커룸으로 끌어들이는 것은 마주
-   * 앉아 한 말의 몫이지 90분 사이에 던진 한마디가 아니다.
-   */
-  const settlingKind = alone ? ("talk" as const) : ("team_talk" as const);
-  const settlingAnchorValue = settlingAnchor(settlingKind, {
-    direction: base > 0 ? 1 : -1,
-    intensity: Math.abs(base) * 2,
-  });
-  const settled =
-    base === 0 || shout
-      ? []
-      : heard.filter(
-          (p) =>
-            creditSettling(state, p.id, settlingKind, {
-              anchor: settlingAnchorValue,
-              ...(input.settling === undefined ? {} : { proposed: input.settling }),
-              ...(input.settlingNote === undefined ? {} : { note: input.settlingNote }),
-            }) !== 0,
-        );
-  const settling = alone && settled.length > 0 ? settlingOf(state, heard[0]!.id) : null;
-
-  /**
    * ── 약속은 **판정이 끝난 뒤에** 장부에 선다 ── (career.md §2 · people.md §5-2)
    *
    * **상대가 한 명일 때만 받는다** — 여럿에게 동시에 한 약속은 누가 그 약속의 주인인지
@@ -185,7 +157,6 @@ export function applyTalk(state: GameState, input: TalkInput): CommandResult {
             input.promise.kind,
             input.promise.days,
             input.promise.number,
-            input.promise.position,
           ),
         )
       : {
@@ -222,10 +193,6 @@ export function applyTalk(state: GameState, input: TalkInput): CommandResult {
       (capped ? ` · ${heard.length - moved}명은 대화 사기 상한에 닿아 그대로입니다` : "") +
       (relieved.length > 0 ? ` · 불만 해소 ${briefNames(relieved.map((p) => p.name))}` : "") +
       (shout ? ` · 이번 경기 외침 ${used}/${SHOUT_PER_MATCH}` : "") +
-      (settling ? ` · 적응 ${Math.round(settling.progress * 100)}%` : "") +
-      (!settling && settled.length > 0
-        ? ` · 적응 중인 ${settled.length}명이 한 걸음 가까워졌습니다`
-        : "") +
       (promised ? promised.text : "") +
       (unresolved.length > 0 ? ` · 찾지 못한 이름 ${unresolved.join(" · ")}` : ""),
     /**
@@ -260,11 +227,6 @@ export function applyTalk(state: GameState, input: TalkInput): CommandResult {
           : []),
         // 몇 번 남았는지는 감독이 아껴 쓸지 정하는 값이다 — 안내 문구가 아니라 눈금
         ...(shout ? [item({ label: "외침", text: `${used}/${SHOUT_PER_MATCH}` })] : []),
-        ...(settling
-          ? [item({ label: "적응", text: `${Math.round(settling.progress * 100)}%` })]
-          : settled.length > 0
-            ? [item({ label: "적응", text: `${settled.length}명` })]
-            : []),
         ...(promised ? [promised.item] : []),
       ],
     },

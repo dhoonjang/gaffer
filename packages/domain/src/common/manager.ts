@@ -90,9 +90,9 @@ export type TeamTalkOccasion = (typeof TEAM_TALK_OCCASIONS)[number];
 /**
  * **감독 계약** — 연봉·체결일·만료일 (career.md §5.1 · §5.4).
  *
- * 새 게임은 부임 구단 등급의 기본 조건(`MANAGER_TERMS_BY_TIER`)으로 시작하고,
- * 부임은 제안의 조건으로 계약을 다시 세운다. 만료일이 지나면 감독은 무직이 되고,
- * 경질은 계약을 지우며 위약금을 남긴다 (career.md §5.4).
+ * 새 게임은 부임 구단 등급의 기본 조건(`MANAGER_TERMS_BY_TIER`)으로 시작한다.
+ * 보드가 재계약을 정하면 같은 표로 계약이 다시 서고, 만료일이 지나거나 경질되면
+ * 커리어가 끝난다 (career.md §5.4).
  */
 export const ManagerContractSchema = z.object({
   /** 연봉 (£/년) — 매월 1일 구단 지출에 1/12로 선다 (finance.md §6) */
@@ -105,7 +105,7 @@ export const ManagerContractSchema = z.object({
    * 번복된다. 없으면 아직 판정하지 않았다.
    */
   renewalDecidedOn: DateString.optional(),
-  /** 그 판정이 재계약 제안으로 이어졌는가 — 아니면 비갱신 통보다 */
+  /** 그 판정이 재계약이었는가 — 재계약이면 계약이 그날 다시 서므로 남는 것은 비갱신 통보다 */
   renewalOffered: z.boolean().optional(),
 });
 export type ManagerContract = z.infer<typeof ManagerContractSchema>;
@@ -113,24 +113,20 @@ export type ManagerContract = z.infer<typeof ManagerContractSchema>;
 /**
  * **보드가 재계약 여부를 판정하는 시점** — 만료 며칠 전인가 (career.md §5.4).
  *
- * 판정을 내리는 자리(`market/manager-market.ts`)와 그 뒤 회견마다 감독의 거취를
- * 사실로 세우는 자리(`club/press.ts`)가 같은 값을 읽어야 한다 — 두 벌을 두면
+ * 판정을 내리는 자리와 그 뒤 회견마다 감독의 거취를 사실로 세우는 자리
+ * (`story/world/press.ts`)가 같은 값을 읽어야 한다 — 두 벌을 두면
  * 통보가 선 다음 날부터 기자가 묻지 않는 창이 생긴다.
  */
 export const RENEWAL_NOTICE_DAYS = 90;
 
 /**
- * **감독직 조건의 등급 표** — 제안의 기본 연봉·계약 연수·이적 예산 약속
- * (career.md §5.1). 흥정의 천장도 이 값에서 출발한다.
+ * **감독 계약 조건의 등급 표** — 기본 연봉·계약 연수 (career.md §5.4).
  */
-export const MANAGER_TERMS_BY_TIER: Record<
-  1 | 2 | 3 | 4,
-  { salary: number; years: number; budgetPledge: number }
-> = {
-  1: { salary: 6_000_000, years: 3, budgetPledge: 30_000_000 },
-  2: { salary: 3_000_000, years: 3, budgetPledge: 15_000_000 },
-  3: { salary: 1_500_000, years: 2, budgetPledge: 6_000_000 },
-  4: { salary: 800_000, years: 2, budgetPledge: 2_000_000 },
+export const MANAGER_TERMS_BY_TIER: Record<1 | 2 | 3 | 4, { salary: number; years: number }> = {
+  1: { salary: 6_000_000, years: 3 },
+  2: { salary: 3_000_000, years: 3 },
+  3: { salary: 1_500_000, years: 2 },
+  4: { salary: 800_000, years: 2 },
 };
 
 export const ManagerSchema = z.object({
@@ -143,15 +139,15 @@ export const ManagerSchema = z.object({
    * 적힌 시즌이 지금과 다르면 지난 시즌 장부라 읽는 쪽이 0에서 다시 센다.
    */
   reactionSeason: ReactionSeasonSchema,
-  /** 감독 계약 — 없으면 무직이다 (경질·만료가 지운다, 연봉 지출도 없다) */
+  /** 감독 계약 — 없으면 커리어가 끝났다 (경질·만료가 지운다, 연봉 지출도 없다) */
   contract: ManagerContractSchema.optional(),
 });
 export type Manager = z.infer<typeof ManagerSchema>;
 
 /**
- * **경질 — 감독이 그 구단의 사람이 아니게 된 날** (career.md §5.1).
+ * **커리어의 끝 — 감독이 그 구단의 사람이 아니게 된 날** (career.md §5.1).
  *
- * 이 카드가 서 있는 동안 감독은 무직이다. 시계는 그대로 흐르고, 부임하면 지워진다.
+ * 이 카드가 서면 게임이 끝난다. 시계는 더 흐르지 않고 턴도 받지 않는다.
  *
  * **사실만 적는다** — 등급·순위·기대가 있으면 "우승을 노리라는 구단에서 17위"와
  * "잔류가 기대인 구단에서 17위"가 갈리고, 그 문장은 화면과 GM이 쓴다
@@ -160,14 +156,8 @@ export type Manager = z.infer<typeof ManagerSchema>;
 export const DismissalSchema = z.object({
   on: DateString,
   season: z.number().int(),
-  /**
-   * 자리를 잃은 갈래 — 경질(`sacked`) · 계약 만료(`expired`) · 감독이 스스로 물고
-   * 나간 사임(`resigned`) · **다른 구단이 보상금을 물고 데려간 이적**(`moved` —
-   * career.md §5.1) (career.md §5.4). 무직은 **상태지 사유가 아니라서** 카드 하나가
-   * 넷을 다 든다. ⚠️ `moved`만 그 뒤가 무직이 아니다 — 같은 날 새 벤치에 서므로
-   * 이 카드는 `dismissal`에 서지 않고 곧장 이력에 적힌다.
-   */
-  kind: z.enum(["sacked", "expired", "resigned", "moved"]),
+  /** 자리를 잃은 갈래 — 경질(`sacked`) · 계약 만료(`expired`) (career.md §5.4) */
+  kind: z.enum(["sacked", "expired"]),
   /** 어느 구단에서 잘렸나 */
   teamId: z.string().min(1),
   /** 그 구단의 등급 — 같은 순위가 어디서는 성공이고 어디서는 해고인 이유 */
@@ -178,72 +168,5 @@ export const DismissalSchema = z.object({
   target: z.number().int().min(1),
   /** 기대의 갈래 — 이름은 화면이 만든다 (career.md §6) */
   expectationCode: BoardExpectationCodeSchema,
-  /**
-   * 위약금 (£) — **누가 물었는지는 `kind`가 안다** (career.md §5.4). 경질이면 구단이
-   * 물어 구단 원장에 나간 돈이고, 사임이면 옛 구단의 수입이며,
-   * 이적이면 **새 구단이 옛 구단에 문 보상금**으로 구단 간에 정산한다 (§5.1).
-   * 만료는 끝까지 간 계약이라 물 것이 없어 적지 않는다.
-   */
-  severance: z.number().int().min(0).optional(),
 });
 export type Dismissal = z.infer<typeof DismissalSchema>;
-
-/**
- * **감독직 제안** — 공석이 된 구단이 무직 감독을 부른 기록 (career.md §5.1).
- *
- * 이적 협상(`Negotiation`)과 달리 라운드 표가 없다 — 흥정은 제안당 **한 차례**라
- * `counteredOn` 하나로 충분하다. 답하지 않으면 만료된다.
- *
- * 여기 적힌 등급·순위·기대·조건도 **부를 때의 사실**이다. 문장은 화면과 GM이 쓴다.
- */
-export const ManagerOfferSchema = z.object({
-  id: z.string().min(1),
-  teamId: z.string().min(1),
-  madeOn: DateString,
-  /** 이 날이 지나면 사라진다 */
-  expiresOn: DateString,
-  tier: z.number().int().min(1).max(4),
-  /** 부를 때의 리그 순위 — 아직 리그전을 치르지 않았으면 없다 */
-  position: z.number().int().min(1).optional(),
-  /** 그 자리에 걸리는 기대 순위와 그 갈래 — 이름은 화면이 만든다 */
-  target: z.number().int().min(1),
-  expectationCode: BoardExpectationCodeSchema,
-  /** 제시 조건 — 연봉·계약 연수·이적 예산 약속 (career.md §5.1) */
-  salary: z.number().int().min(0),
-  years: z.number().int().min(1),
-  budgetPledge: z.number().int().min(0),
-  /**
-   * 어떻게 섰나 — 공석이 불렀나(`vacancy`), 감독이 두드렸나(`knock`), 지금 구단이
-   * 재계약을 걸었나(`renewal` — career.md §5.4), 아니면 다른 구단이 **재직 중인**
-   * 감독에게 손을 뻗었나(`poach` — career.md §5.1 「재직 중 접근·노크」).
-   *
-   * 재직 중에 설 수 있는 것은 셋이다 — `renewal`·`poach`, 그리고 재직 중에 두드려
-   * 얻은 `knock`. `vacancy`는 무직에게만 붙는다.
-   */
-  via: z.enum(["vacancy", "knock", "renewal", "poach"]),
-  /**
-   * **이 자리가 옛 구단에 물 보상금** (£) — 재직 중인 감독을 부르는 제안에만 실린다
-   * (career.md §5.1). 금액은 경질 위약금과 같은 식(`managerSeveranceOf`)으로 **부를
-   * 때** 재고, 수락일에 다시 재지 않는다 — 그 구단이 물기로 한 값이 곧 이 값이다.
-   */
-  compensation: z.number().int().min(0).optional(),
-  /** 조정이 오간 날 — 서 있으면 흥정은 끝났다 (한 차례뿐이다) */
-  counteredOn: DateString.optional(),
-  status: z.enum(["open", "accepted", "expired"]),
-});
-export type ManagerOffer = z.infer<typeof ManagerOfferSchema>;
-
-/**
- * **공석 명부의 한 줄** — AI 구단이 감독을 자른 자리 (career.md §5.1).
- *
- * 재직 중에도 쌓이고 14일 뒤 지워진다. 감독이 먼저 지원(`apply_manager_job`)할 수
- * 있는 문이고, 재직 중에 두드리면 보드 평판이 깎인다.
- */
-export const ManagerVacancySchema = z.object({
-  teamId: z.string().min(1),
-  /** 공석이 난 날 — 경질일 */
-  on: DateString,
-  /** 그날의 리그 순위 */
-  position: z.number().int().min(1).optional(),
-});
-export type ManagerVacancy = z.infer<typeof ManagerVacancySchema>;

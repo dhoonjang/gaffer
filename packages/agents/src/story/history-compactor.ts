@@ -54,10 +54,10 @@ export const HISTORY_COMPACTOR_SYSTEM = `당신은 구단의 기록 담당이다
 - 요약은 두 칸이다. 지난 일(past)은 ${HISTORY_DIGEST_CHARS}자 이내, 열린 일(open)은 ${HISTORY_OPEN_CHARS}자 이내.
 - 지난 일 — 감독이 내린 결정과 그 이유, 사람들 사이에 생긴 일. 짧게, 시간순으로.
 - 열린 일 — 끝나지 않은 대화와 의도: 감독이 하겠다고 했는데 아직 하지 않은 것, 누군가 답을 기다리는 말.
-  미해결 갈등·인물의 의도·이야기의 실마리는 보존한다. 협상·약속의 장부 수치는 뺀다. 없으면 비운다.
+  미해결 갈등·인물의 의도·이야기의 실마리는 보존한다. 약속의 장부 수치는 뺀다. 없으면 비운다.
 - 이전 요약이 함께 주어지면 새 구간과 합쳐 두 칸을 다시 쓴다. 이어 붙이지 않는다. 끝난 열린 일은 지난 일로 옮기거나 지운다.
 - [장부] 줄이 있는 일은 그 줄대로 적는다 — 대사에서 다시 짓지 않는다.
-- 버릴 것 — 장부가 이미 아는 수치(순위·이적료·평점·일정), 인사말, 되풀이된 말.
+- 버릴 것 — 장부가 이미 아는 수치(순위·평점·일정), 인사말, 되풀이된 말.
 - 원문에 없는 사실을 지어내지 마라.
 
 ## 인물별 기억
@@ -147,7 +147,7 @@ const ReportInputSchema = z.object({
     .max(HISTORY_OPEN_CHARS, `열린 일은 ${HISTORY_OPEN_CHARS}자 이내여야 합니다`)
     .optional()
     .describe(
-      `열린 일 — 끝나지 않은 대화·갈등·의도·이야기. 협상·약속의 장부 수치는 뺀다 (${HISTORY_OPEN_CHARS}자 이내)`,
+      `열린 일 — 끝나지 않은 대화·갈등·의도·이야기. 약속의 장부 수치는 뺀다 (${HISTORY_OPEN_CHARS}자 이내)`,
     ),
   memories: z
     .array(MemorySchema)
@@ -187,7 +187,7 @@ function speakerOf(role: HistoryFoldBrief["turns"][number]["role"]): string {
  * 접히는 원문.
  */
 export function buildCompactionPrompt(
-  // 명부의 감독은 **지금 어디 서 있는가**로 걸러지므로 벤치와 무직 풀이 함께 와야
+  // 명부의 감독은 **지금 어디 서 있는가**로 걸러지므로 벤치가 함께 와야
   // 한다 (people.md §2-1) — 없으면 잘린 뒤 다른 벤치에 선 사람이 목록에서 빠진다
   state: {
     personas?: Persona[];
@@ -227,7 +227,7 @@ export function buildCompactionPrompt(
 
   blocks.push(`## 접히는 구간 (${brief.turns.length}턴)`);
   for (const turn of brief.turns) {
-    // 장부 골격은 본문 뒤에 한 줄씩 — 이적 확정·약속·회견 답·시간 경과는 이 줄이 원본이다
+    // 장부 골격은 본문 뒤에 한 줄씩 — 약속·회견 답·시간 경과는 이 줄이 원본이다
     blocks.push(`### ${turn.at} · ${speakerOf(turn.role)}`, turn.text, ...turn.facts);
   }
   return blocks.join("\n");

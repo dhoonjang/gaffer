@@ -7,20 +7,15 @@ import {
   advanceShootout,
   awaitingShootout,
   resumeLiveInterval,
-  acceptDeal,
-  acceptManagerOffer,
   reviewBoard,
-  RENEWAL_NOTICE_DAYS,
   advanceTime,
   assignmentsOf,
   createGame,
-  resolveMedical,
   cupCatalogById,
   euroCompetitionOf,
   digestLines,
   finalizeMatch,
   isInjured,
-  isSettling,
   playerById,
   playersOf,
   startMatch,
@@ -34,7 +29,7 @@ import {
   assignmentsOf as assignmentsOfTeam,
   eventTexts,
 } from "@story-fm/engine";
-import { diffDays, type GamePlayer, type MatchResult } from "@story-fm/domain";
+import { diffDays, RENEWAL_NOTICE_DAYS, type GamePlayer, type MatchResult } from "@story-fm/domain";
 
 /** 간이 시뮬 입력 조립 — 배치 선발에서 가용 선수를 뽑는다 (테스트용) */
 export function simSquad(state: GameState, teamId: string) {
@@ -132,7 +127,7 @@ export function playFullSeason(state: GameState, limit = 400): boolean {
  * 인내하는 보드 — 측정용. 경질은 시계를 멈추므로(state.dismissal) 재정·시즌
  * 분포를 재는 하네스는 자리를 지킨 채 한 시즌을 다 돌아야 한다.
  *
- * 재계약을 판단할 수 있는 기간에는 보드 승인과 감독 수락을 명시적으로 실행한다.
+ * 재계약을 판단할 수 있는 기간에는 보드 승인을 명시적으로 실행한다.
  * 제품의 자동 판단이 아니라 재임을 유지하기 위한 측정 조건이다.
  */
 export function keepSeat(state: GameState): void {
@@ -154,11 +149,6 @@ export function keepSeat(state: GameState): void {
     });
     if (!reviewed.ok) throw new Error(reviewed.message);
   }
-
-  const renewal = (state.managerOffers ?? []).find(
-    (o) => o.via === "renewal" && o.status === "open" && o.teamId === state.userTeamId,
-  );
-  if (renewal && !state.dismissal) acceptManagerOffer(state, renewal.id);
 }
 
 /**
@@ -367,27 +357,6 @@ export function resultOf(
   };
 }
 
-/**
- * 정착이 끝날 때까지 우리 팀 경기 출전을 쌓는다 — 안개가 걷힌 상태를 만드는 용도.
- * 날짜를 밀어서는 안 끝난다(정착은 달력이 아니라 겪은 양이다).
- */
-export function settleFully(state: GameState, playerId: string): void {
-  for (let i = 0; i < 60 && isSettling(state, playerId); i++) {
-    state.matches.push({
-      id: `settle-${playerId}-${i}`,
-      season: state.season,
-      competitionId: "friendly",
-      round: 1,
-      date: state.date,
-      homeTeamId: state.userTeamId,
-      awayTeamId: "opponent",
-      stage: "league",
-      time: "15:00",
-      result: resultOf({ homeGoals: 0, awayGoals: 0, homeLineup: [playerId] }),
-    });
-  }
-}
-
 export { advanceTime };
 
 /**
@@ -400,81 +369,4 @@ export function afterSquadReturn(state: GameState): GameState {
   const back = squadReturnOf(state.calendar);
   if (state.date < back) state.date = back;
   return state;
-}
-
-/**
- * 합의된 딜을 **끝까지** 민다 — 메디컬을 지나 계약까지.
- *
- * `acceptDeal` 한 번은 이제 검진 일정만 잡는다(medical.ts). 장부가 움직이는 것을
- * 보려는 테스트는 검진일까지 시계를 옮기고 결과를 받아야 하고, 소견이 나오면
- * 감독이 강행하는 경로(같은 도구를 한 번 더)까지 따라가야 한다 — 이 게임에서
- * "이적이 끝났다"는 그 셋을 다 지난 상태다.
- *
- * @returns 마지막 호출의 결과 (실패 이유를 그대로 볼 수 있게)
- */
-export function completeDeal(state: GameState, negotiationId: string) {
-  const negotiation = state.negotiations.find((n) => n.id === negotiationId);
-  if (!negotiation) return { ok: false, message: `협상 "${negotiationId}"을 찾지 못했습니다` };
-  const medical = negotiation.medical;
-  if (medical?.status === "scheduled") {
-    if (state.date < medical.onDate) state.date = medical.onDate;
-    const player = playerById(state, negotiation.gamePlayerId);
-    if (!player) return { ok: false, message: "선수가 없습니다" };
-    const result = resolveMedical(state, negotiation, player);
-    if (!result.passed) return { ok: false, message: "메디컬 소견의 명시적 재평가가 필요합니다" };
-  }
-  return acceptDeal(state, negotiationId);
-}
-
-/** A dated observation fixture, not an automatic knowledge upgrade from elapsed time. */
-export function recordTestScouting(state: GameState, playerId: string) {
-  const player = playerById(state, playerId)!;
-  const report: import("@story-fm/domain").ScoutingReport = {
-    id: `report-fixture-${playerId}-${state.scoutReports.length}`,
-    requestId: `request-fixture-${playerId}`,
-    revision: 1,
-    requestedOn: state.date,
-    completedOn: state.date,
-    evidenceOn: state.date,
-    question: "선수 관측 기록",
-    plan: {
-      status: "ready",
-      days: 0,
-      depth: "match_review",
-      focus: ["ability"],
-      expectations: [],
-      evidenceRefs: [],
-      limitations: [],
-    },
-    candidates: [
-      {
-        evidence: {
-          playerId,
-          name: player.name,
-          teamId: player.teamId,
-          team: player.teamId,
-          age: 23,
-          position: player.positions[0]!.position,
-          positions: player.positions.map((p) => p.position),
-          contractUntil: null,
-          weeklyWage: null,
-          listed: false,
-          marketEstimate: null,
-          sources: [{ id: "match:fixture", date: state.date, text: "공개 경기 관측" }],
-        },
-        assessment: {
-          playerId,
-          fit: "consider",
-          overall: { low: 60, high: 80 },
-          potential: { low: 65, high: 90 },
-          attributes: {},
-          evidenceRefs: ["match:fixture"],
-          strengths: [],
-          concerns: [],
-        },
-      },
-    ],
-  };
-  state.scoutReports.push(report);
-  return report;
 }

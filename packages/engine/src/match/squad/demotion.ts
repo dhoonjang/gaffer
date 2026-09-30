@@ -12,14 +12,6 @@ import { archetypeTraitsOf } from "../../common/people/player-persona";
 export const DEMOTION_PATIENCE_DAYS = 21;
 
 /**
- * **이적 리스트에 올린 채 둘 수 있는 기간** — 강등보다 짧다 (→ docs/story/people.md §5).
- *
- * 등재는 감독이 값을 부르며 시장에 내놓은 **공개된 결정**이라, 2군행처럼 되돌릴
- * 여지를 두고 지켜볼 일이 아니다.
- */
-export const LISTED_PATIENCE_DAYS = 14;
-
-/**
  * **그 사람의 문턱** — 기준 일수에 원형의 `patience`를 곱한다 (people.md §6).
  *
  * 저울질하는 스타는 21일 기준에서 13일에 문을 두드리고 팀 우선 베테랑은 30일을
@@ -39,13 +31,8 @@ export function demotionPatienceDaysOf(state: GameState, player: GamePlayer): nu
   return patienceDaysOf(state, player, DEMOTION_PATIENCE_DAYS);
 }
 
-/** 이적 리스트 등재의 문턱 — 이 날을 넘기면 불만이 선다 */
-export function listedPatienceDaysOf(state: GameState, player: GamePlayer): number {
-  return patienceDaysOf(state, player, LISTED_PATIENCE_DAYS);
-}
-
 /**
- * **누적 피로가 「과부하」에 머물러도 참는 기간** — 강등·등재보다 짧다
+ * **누적 피로가 「과부하」에 머물러도 참는 기간** — 강등보다 짧다
  * (→ docs/common/player.md §5.5 · docs/story/people.md §5).
  *
  * 몸의 일이라 저 둘과 시간의 결이 다르다: 2군행은 되돌릴 여지를 두고 지켜볼 결정이고

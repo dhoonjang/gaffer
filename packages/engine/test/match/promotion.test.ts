@@ -126,12 +126,12 @@ describe("승강 — 시즌 전환에서 자리를 바꾼다", () => {
 });
 
 describe("승격 클럽 보강 — 스무 명으로 1부를 돌지 않는다", () => {
-  /** 이 팀이 이번 전환에서 받은 보강 선수들 (원장의 `tr-promo-` 항목) */
+  /** 이 팀이 이번 전환에서 받은 보강 선수들 (이동 원장의 `reinforcement` 항목) */
   function signingsOf(state: GameState, teamId: string) {
     const ids = new Set(
-      state.transfers
-        .filter((t) => t.id.startsWith("tr-promo-") && t.toTeamId === teamId)
-        .map((t) => t.gamePlayerId),
+      state.moves
+        .filter((m) => m.kind === "reinforcement" && m.toTeamId === teamId)
+        .map((m) => m.gamePlayerId),
     );
     return state.players.filter((p) => ids.has(p.id));
   }

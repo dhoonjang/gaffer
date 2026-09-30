@@ -1,14 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { loadGame } from "@story-fm/engine";
 
-import { seedFinishedSeason, seedTransferTarget } from "./seed";
+import { seedFinishedSeason } from "./seed";
 import { COLD_MS } from "./timeouts";
 
 /**
- * 핵심 루프의 **뒷걸음** — 시즌 전환과 이적 성사.
+ * 핵심 루프의 **뒷걸음** — 시즌 전환.
  *
- * 나머지 스펙은 부임에서 시작해 화면을 밟아 나가지만, 이 둘은 그 앞을 다 지나야
- * 닿는다: 시즌 전환은 유저 경기 쉰 번 뒤에, 이적 성사는 상대의 답이 온 뒤에 있다.
+ * 나머지 스펙은 부임에서 시작해 화면을 밟아 나가지만, 시즌 전환은 그 앞을 다 지나야
+ * 닿는다: 유저 경기 쉰 번 뒤에 있다.
  * 그 앞부분을 브라우저로 다시 걷는 것은 CI가 낼 수 없는 값이라, **닿기까지는
  * 코어가 걷고 재려는 그 한 걸음만 브라우저가 밟는다** (`e2e/seed.ts`).
  */
@@ -53,23 +52,4 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
   await page.getByTestId("tab-달력").click();
   await expect(page.getByTestId("view-calendar")).toContainText("시즌 일정");
   await expect(page.locator('[data-testid^="cal-fixture-"]').first()).toBeVisible();
-});
-
-test("양쪽이 승인한 계약은 감독의 확정 지시로 한 번만 체결된다", async ({ page }) => {
-  const { gameId, targetName, playerId } = seedTransferTarget("arsenal", 4061, true);
-  await page.goto(`/game/${gameId}`);
-  const input = page.getByTestId("chat-input");
-  await expect(input).toBeEnabled({ timeout: COLD_MS });
-  await input.fill("이적 건 마무리하자");
-  await page.getByTestId("chat-send").click();
-  await expect(input).toBeEnabled();
-  await expect.poll(() => loadGame(gameId)!.negotiations[0]!.status).toBe("completed");
-  const saved = loadGame(gameId)!;
-  expect(saved.players.find((p) => p.id === playerId)?.teamId).toBe(saved.userTeamId);
-  const transfers = saved.transfers.filter((t) => t.gamePlayerId === playerId);
-  expect(transfers).toHaveLength(1);
-  await page.reload();
-  await expect(input).toBeEnabled();
-  expect(loadGame(gameId)!.transfers.filter((t) => t.gamePlayerId === playerId)).toHaveLength(1);
-  expect(saved.players.find((p) => p.id === playerId)?.name).toBe(targetName);
 });

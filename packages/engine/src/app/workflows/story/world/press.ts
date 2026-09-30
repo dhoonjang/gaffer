@@ -3,7 +3,6 @@ import {
   type PressConference,
   type PressFact,
   type PressTrigger,
-  type BoardExpectationCode,
   type TickSink,
   ageOf,
 } from "@story-fm/domain";
@@ -24,12 +23,10 @@ import {
   boardFacts,
   AWARD_FACTS_SHOWN,
   buildAppointmentPress,
-  biggestSigning,
   summerNumberInheritance,
   farewellFacts,
   buildDerbyPress,
   isSeasonOpener,
-  buildFormerClubPress,
   buildFarewellPress,
   retiringPlayers,
   RETIREMENT_PRESS_DAYS,
@@ -37,22 +34,13 @@ import {
   declinePendingPress,
   loadLeaks,
   loadIncidents,
-  loadTransferRequests,
-  loadRumours,
   loadCallUps,
-  loadSackings,
   loadManagerContract,
-  loadJobLink,
   KEPT_CONFERENCES,
 } from "../../../../story/world/press";
 import { recentOutcomes } from "../../../../story/players/slump";
 import { derbyOf, derbyNameOf } from "../../../../common/data/derbies";
 import { derbyRecordOf } from "../../../../common/world/derby";
-import {
-  formerClubFactsOf,
-  managerReturnOf,
-  isFirstMeeting,
-} from "../../../../story/world/former-club";
 import { formLabel } from "../../../../common/players/form";
 import { matchMilestones, careerTotalsOf } from "../../../../story/players/career";
 import { computeStandings } from "../../../../common/views/standings";
@@ -137,12 +125,6 @@ export function buildMatchPress(state: GameState, matchId: string): PressConfere
       sharp: true,
     });
   }
-  /**
-   * **옛 구단은 경기 뒤에도 자리를 남긴다** (people.md §4) — 전야의 자리가 섰든
-   * 안 섰든 이 카드는 붙는다. 리그 전야 회견이 서지 않는 컵·대항전의 복귀전은
-   * 이 자리가 유일하게 그 사실을 싣는 곳이다.
-   */
-  facts.push(...formerClubFactsOf(state, match, "post"));
   /**
    * **상대 벤치도 그날 마이크 앞에 섰다** (people.md §4) — 자리를 열지 않고 이미
    * 열리는 자리에 얹힌다. 결과 카드 바로 뒤인 것은 그 말이 이 경기에 대한 것이라서다.
@@ -275,7 +257,7 @@ export function seasonEndFacts(state: GameState): PressFact[] {
  * 최종전이 같은 함수를 쓴다 (season.md §6 「상이 사실로 서는 자리」).
  * 어느 셔츠로 받았는지는 묻지 않는다.
  *
- * ⚠️ **명단 배열 순서로 자르지 않는다** — 영입·은퇴가 배열을 흔들면 같은 세이브가
+ * ⚠️ **명단 배열 순서로 자르지 않는다** — 유스 승격·은퇴가 배열을 흔들면 같은 세이브가
  * 다른 두 장을 싣는다. `id`로 한 겹 정렬해 자르는 자리를 결정적으로 만든다.
  */
 export function awardFacts(state: GameState): PressFact[] {
@@ -290,14 +272,10 @@ export function awardFacts(state: GameState): PressFact[] {
 /**
  * 부임 회견을 연다 — **하루에 한 번.** 같은 날을 다시 지나도 자리가 둘이 되지 않는다.
  */
-export function openAppointmentPress(
-  state: GameState,
-  predecessor?: { position?: number; target: number; expectationCode: BoardExpectationCode },
-  digest?: TickSink,
-): void {
-  const conference = buildAppointmentPress(state, predecessor);
+export function openAppointmentPress(state: GameState): void {
+  const conference = buildAppointmentPress(state);
   if (state.pressConferences.some((c) => c.id === conference.id)) return;
-  openPress(state, conference, digest);
+  openPress(state, conference);
 }
 
 // ── 감독 자신의 거취 (career.md §5.4) ──────────────────
@@ -341,15 +319,6 @@ export function buildOpeningPress(
       },
       about: null,
       // 예상이 보드 기대보다 아래면 날 선 자리다 — 감독이 답해야 할 것이 그것이다
-      sharp: false,
-    });
-  }
-  const signing = biggestSigning(state);
-  if (signing) {
-    facts.push({
-      kind: "arrival",
-      data: { name: signing.player.name, values: { fee: signing.fee }, tags: ["summer-top"] },
-      about: signing.player.id,
       sharp: false,
     });
   }
@@ -400,37 +369,23 @@ export function openEvePress(state: GameState, digest?: TickSink): void {
   const derby = derbyNameOf(state.userTeamId, opponentId);
 
   /**
-   * **전야의 자리는 하나다** (people.md §4). 우선순위는 더비 > 개막 > 복귀전 > 작별이고,
+   * **전야의 자리는 하나다** (people.md §4). 우선순위는 더비 > 개막 > 작별이고,
    * 앞의 것이 그날을 이미 잡았으면 뒤의 것은 자리를 빼앗지 않고 카드만 얹힌다 —
    * 같은 날 회견 둘을 열면 하나가 방치로 닫힌다.
    */
   const farewell = farewellFacts(state, match);
-  const former = formerClubFactsOf(state, match, "eve");
-  /**
-   * 복귀전이 자리를 여는 조건은 둘이다: **감독의** 옛 구단이고(선수의 친정 대결은
-   * 카드로만 선다), 그 구단과 **이번 시즌 처음** 만나는 날이다.
-   */
-  const returning =
-    managerReturnOf(state, opponentId) !== null && isFirstMeeting(state, match, opponentId);
   const conference = derby
     ? buildDerbyPress(state, match, { derby, opponentId, opponent, home })
     : isSeasonOpener(state, match, leagueId)
       ? buildOpeningPress(state, { opponent, home })
-      : returning
-        ? buildFormerClubPress(state, match, { opponentId, opponent, facts: former })
-        : farewell.length > 0
-          ? buildFarewellPress(state, { opponent, facts: farewell })
-          : null;
+      : farewell.length > 0
+        ? buildFarewellPress(state, { opponent, facts: farewell })
+        : null;
   if (!conference) return;
   if (conference.trigger !== "farewell") conference.facts.push(...farewell);
-  if (conference.trigger !== "former-club") {
-    conference.facts.push(...former);
-    // 날 선 옛 구단 카드는 그 자리의 무게를 최소 2로 — 유출·루머·도발과 같은 규약
-    if (former.some((f) => f.sharp)) conference.weight = Math.max(conference.weight, 2);
-  }
   /**
    * 전야의 상대 감독 — 경기 뒤와 **다른 채널로 뽑는다** (people.md §4). 찌르는 말은
-   * 유출·루머와 같은 규약으로 자리를 키운다.
+   * 유출과 같은 규약으로 자리를 키운다.
    */
   const rivalQuote = rivalQuoteFact(state, match, "eve");
   if (rivalQuote) {
@@ -487,12 +442,8 @@ export function openPress(state: GameState, conference: PressConference, digest?
   declinePendingPress(state, digest);
   loadLeaks(state, conference);
   loadIncidents(state, conference);
-  loadTransferRequests(state, conference);
-  loadRumours(state, conference);
   loadCallUps(state, conference);
-  loadSackings(state, conference);
   loadManagerContract(state, conference);
-  loadJobLink(state, conference);
   state.pressConferences.push(conference);
   // 지나간 회견은 서사에 남지 상태로 쌓일 이유가 없다
   if (state.pressConferences.length > KEPT_CONFERENCES) {

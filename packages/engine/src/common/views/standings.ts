@@ -103,7 +103,7 @@ export function computeStandings(
   competitionId = leagueOfTeamIn(state, state.userTeamId),
   counts: (match: MatchRecord) => boolean = () => true,
 ): StandingRow[] {
-  // 이적 시장 전용 리그는 경기를 안 하므로 순위가 없다 — 국내 컵과 같은 취급
+  // 명단 전용 리그는 경기를 안 하므로 순위가 없다 — 국내 컵과 같은 취급
   if (isMarketOnlyLeague(competitionId)) return [];
   const members = isCup(competitionId)
     ? entrantsOf(state.euroEntrants, competitionId)

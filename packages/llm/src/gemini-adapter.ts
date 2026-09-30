@@ -22,6 +22,8 @@ import {
   type TurnResult,
   type TurnUsage,
   UNRUN_CALL,
+  HANDED_OFF,
+  endsTurn,
 } from "./game-llm";
 import {
   blockedTurnError,
@@ -418,14 +420,18 @@ export class GeminiGameLLM implements GameLLM {
       }
 
       const results: Part[] = [];
+      let handedOff = false;
       for (const call of calls) {
-        toolCallCount++;
         const name = call.name ?? "unknown_function";
         const spec = tools.find((tool) => tool.name === name);
+        if (!handedOff) toolCallCount++;
         // 이 반복의 텍스트까지 누적된 뒤다 — 도구가 불린 자리가 그대로 실린다
-        const outcome: ToolOutcome = spec
-          ? await spec.handle(call.args ?? {}, { text })
-          : { ok: false, message: `알 수 없는 도구: ${name}` };
+        const outcome: ToolOutcome = handedOff
+          ? { ok: false, message: HANDED_OFF }
+          : spec
+            ? await spec.handle(call.args ?? {}, { text })
+            : { ok: false, message: `알 수 없는 도구: ${name}` };
+        if (endsTurn(outcome)) handedOff = true;
         results.push({
           functionResponse: {
             ...(call.id ? { id: call.id } : {}),
@@ -439,7 +445,9 @@ export class GeminiGameLLM implements GameLLM {
        * **마지막 왕복**은 `NONE`으로 나가 여기 닿지 않는 것이 정상이다 — 제공자가 그
        * 모드를 무시하고 함수를 부른 경우에만 걸린다. 결과는 합성 content로 남기고 끝낸다.
        */
-      if (lastRound) {
+      // 넘김 도구의 결과는 모델에게 돌아가지 않는다 — 그 뒤의 장면은 다른 GM이 쓴다
+      if (handedOff) stopReason = "handoff";
+      if (lastRound || handedOff) {
         danglingResults = results;
         break;
       }

@@ -21,18 +21,17 @@ import {
   positionGroupOfPlayer,
   initialCaptainOf,
 } from "@story-fm/domain";
-import { buildScheduleEntries, buildTransferWindows } from "../match/competition/calendar";
+import { buildScheduleEntries } from "../match/competition/calendar";
 import { buildSeasonCalendar, FIRST_SEASON } from "../common/core/calendar";
 import { contractUntil, seasonYear } from "../common/core/dates";
 import { tierOfTeamIn } from "../common/core/club-tier";
 import { defaultXiIds, playerCatalog } from "../common/world/catalog";
 import { assertCatalogValid } from "./catalog-invariants";
-import { estimateSquadWages, wageSubjectOf } from "../negotiation/economy/wages";
+import { estimateSquadWages, wageSubjectOf } from "../common/finance/wages";
 import { clubEconomyLevel } from "../common/data/league-economy";
 import { worldFigureManagerOf } from "../common/data/world-figures";
 import { generateYouthPlayer } from "../common/world/generate";
 import { ensureSquadNumbers } from "../common/players/numbers";
-import { attachAiBuyout } from "../negotiation/market/buyout";
 import { hasCups, scopedTeams, type WorldScope } from "../common/world/scope";
 import {
   teamCatalog,
@@ -110,7 +109,7 @@ export interface CreateGameInput {
  *
  * 시드에 공개 주급이 있는 선수(EPL 1군)는 그 값을 쓴다. 실측이 모델보다 정확하고,
  * 무엇보다 **구단마다의 특수 사정**(장기 계약을 남긴 베테랑, 팔지 못한 고액자)은
- * 모델이 만들어낼 수 없는 사실이다. 그 왜곡이 곧 PSR·재계약 서사의 재료다.
+ * 모델이 만들어낼 수 없는 사실이다. 그 왜곡이 곧 급여 비중 서사의 재료다.
  *
  * 나머지는 `estimateSquadWages` — 구단 예산을 스쿼드에 나눈다 (wages.ts).
  */
@@ -136,26 +135,22 @@ function initialWages(players: GamePlayer[], onDate: string): Map<string, number
 }
 
 /**
- * 팀 tier → 시작 잔고·이적 예산. **EPL 기준이고 구단 경제 수준을 곱한다**
+ * 팀 tier → 시작 잔고. **EPL 기준이고 구단 경제 수준을 곱한다**
  * (`initialFinanceOf` — finance.md §6.2).
  *
- * 곱하지 않으면 PSG가 아스날과 똑같은 £120M/£90M로 시작해 6분의 1 중계 수입으로
+ * 곱하지 않으면 PSG가 아스날과 똑같은 £120M로 시작해 6분의 1 중계 수입으로
  * 같은 살림을 산다. 수입만 리그를 알던 비대칭이 초기치에도 있던 자리다.
  */
-const TIER_FINANCE: Record<number, { balance: number; budget: number }> = {
-  1: { balance: 120_000_000, budget: 90_000_000 },
-  2: { balance: 70_000_000, budget: 45_000_000 },
-  3: { balance: 40_000_000, budget: 22_000_000 },
-  4: { balance: 25_000_000, budget: 12_000_000 },
+const TIER_BALANCE: Record<number, number> = {
+  1: 120_000_000,
+  2: 70_000_000,
+  3: 40_000_000,
+  4: 25_000_000,
 };
 
-function initialFinanceOf(teamId: string, tier: number): { balance: number; budget: number } {
-  const base = TIER_FINANCE[tier] ?? TIER_FINANCE[4]!;
-  const level = clubEconomyLevel(teamId);
-  return {
-    balance: Math.round(base.balance * level),
-    budget: Math.round(base.budget * level),
-  };
+function initialFinanceOf(teamId: string, tier: number): { balance: number } {
+  const base = TIER_BALANCE[tier] ?? TIER_BALANCE[4]!;
+  return { balance: Math.round(base * clubEconomyLevel(teamId)) };
 }
 
 /**
@@ -231,8 +226,8 @@ const CORE_GK = 2;
  * 세계 인물 명부가 이 벤치에 세운 감독 — 없으면 빈 객체다 (people.md §2-1).
  *
  * **명부가 이름을 심는 자리는 여기 하나뿐이다.** 심고 나면 그 사람이 어디에 있는지는
- * 명부가 아니라 `managerName`이 답한다 — 경질과 선임은 감독 시장의 일이고
- * (`market/manager-market.ts`), 인물지에 변하는 값을 넣지 않는다는 원칙이 여기서도 같다.
+ * 명부가 아니라 `managerName`이 답한다 — 인물지에 변하는 값을 넣지 않는다는 원칙이
+ * 여기서도 같다.
  *
  * **유저가 맡은 팀은 비운다** — 그 자리를 감독(유저)이 받았으므로 명부의 그 사람은
  * 이 세계에 부임한 적이 없다 (`worldFigures`가 후보에서도 뺀다).
@@ -655,11 +650,9 @@ export function createGame(input: CreateGameInput): GameState {
   const teams: GameTeam[] = catalogTeams.map((t) => ({
     id: t.id,
     ...copiedTeamFields(t, profiles[t.id]),
-    managerSpells: [],
     ...(isClubTeam(t.id)
       ? {
           aiManagerTacticsRating: randInt(rng, 55, 82),
-          // 부임일 — 감독 시장이 "얼마나 됐나"를 여기서 잰다 (`manager-market.ts`)
           managerSince: calendar.preseasonStart,
           ...seededManagerName(t.id, { userTeamId: input.userTeamId }),
         }
@@ -737,13 +730,8 @@ export function createGame(input: CreateGameInput): GameState {
       return {
         teamId: t.id,
         balance: f.balance,
-        transferBudget: f.budget,
-        // 첫 시즌의 잉여도 제 값이어야 한다 — 없으면 시즌 2가 통째로 0을 읽는다 (finance.md §9.1)
-        seasonOpeningBalance: f.balance,
         ledger: [],
         prizesPaid: [],
-        budgetFrozen: false,
-        earmarked: [],
         assets: [],
       };
     });
@@ -758,22 +746,15 @@ export function createGame(input: CreateGameInput): GameState {
       teamId: p.teamId,
       weeklyWage: wages.get(p.id) ?? 0,
       since: calendar.preseasonStart,
-      // 계약 만료를 1~4년 뒤로 분산 (재계약 서사의 씨앗)
+      // 계약 만료를 1~4년 뒤로 분산 — 끝나는 해에 그 선수는 무소속으로 떠난다
       until: contractUntil(calendar.preseasonStart, 1 + (i % 4)),
       status: "active",
       ...(squadStatus === undefined ? {} : { squadStatus }),
     };
-    // 남의 구단 계약에는 바이아웃 조항이 붙을 수 있다 — 세계가 시작하는 날부터 (transfer.md §12-3)
-    attachAiBuyout(
-      { seed, date: calendar.preseasonStart, userTeamId: input.userTeamId },
-      contract,
-      p,
-    );
     return contract;
   });
 
-  // 일정 — 전 리그 + 유럽 대항전 경기 + 이적창 개장/폐장
-  const windows = buildTransferWindows(season);
+  // 일정 — 전 리그 + 유럽 대항전 경기
   // 다른 리그도 같은 캘린더 골격으로 동시에 진행된다
   const euroEntrants = hasCups(world) ? buildEuroEntrants(season, seed) : [];
   const matches = buildSeasonFixtures(
@@ -789,15 +770,8 @@ export function createGame(input: CreateGameInput): GameState {
   // tick이 간이 시뮬로 소화한다.
   const schedule = buildScheduleEntries(
     matches.filter((m) => isUserFixture(m, input.userTeamId)),
-    windows,
     input.userTeamId,
   );
-  // 게임은 여름 창이 열린 7/1에 시작한다 — 그 개장 엔트리는 이미 소화된 상태
-  for (const entry of schedule) {
-    if (entry.type === "window-open" && entry.date === calendar.preseasonStart) {
-      entry.status = "done";
-    }
-  }
 
   const uniqueSuffix = Math.random().toString(36).slice(2, 8);
   const state: GameState = {
@@ -805,13 +779,12 @@ export function createGame(input: CreateGameInput): GameState {
     seed,
     createdAt: new Date().toISOString(),
     season,
-    // 게임 시작 = 7월 1일, 여름 이적창 개장과 동시 (프리시즌)
+    // 게임 시작 = 7월 1일 (프리시즌)
     date: calendar.preseasonStart,
     calendar,
     userTeamId: input.userTeamId,
     phase: "idle",
     pendingMatch: null,
-    pendingNegotiation: null,
     ...(world ? { world } : {}),
 
     teams,
@@ -824,48 +797,26 @@ export function createGame(input: CreateGameInput): GameState {
     schedule,
     matches,
     trainingSessions: [],
-    windows,
 
     euroEntrants,
 
     injuries: [],
     bookings: [],
     suspensions: [],
-    transfers: [],
+    moves: [],
     growthLog: [],
     trainingReports: [],
     seasonStats: [],
     issues: [],
     promises: [],
-    scoutReports: [],
-    pendingReportCards: [],
-    settlingEvents: [],
-    transferList: [],
-    transferRequests: [],
-    interests: [],
     playerTraining: [],
     roleMemory: [],
-    aiDeals: [],
-    negotiations: [],
-    negotiationContacts: [],
-    negotiationExchanges: [],
-    negotiationEvaluations: [],
-    negotiationFollowups: [],
     pressConferences: [],
     approaches: [],
     pressLeaks: [],
-    pressSackings: [],
-    // 새 게임의 풀은 비어 있다 — 아직 아무도 자리를 잃지 않았다
-    managerPool: [],
     boardRequests: [],
     predictions: [],
     media: [],
-    delegations: [],
-    scoutingRequests: [],
-    competingBids: [],
-    dismissals: [],
-    managerOffers: [],
-    managerVacancies: [],
     developmentFocus: [],
     mentoring: [],
     retired: [],
@@ -875,7 +826,6 @@ export function createGame(input: CreateGameInput): GameState {
     characterMemories: [],
     incidents: [],
     openings: [],
-    paymentSchedules: [],
 
     boardAgenda: { teamId: input.userTeamId, expectations: [], assessment: "", reviewedOn: null },
     manager: {
@@ -933,10 +883,9 @@ export function createGame(input: CreateGameInput): GameState {
   // 통산 캡·골 — 없으면 서른 살 주전이 첫 소집에서 데뷔한다 (competition.md §5-1)
   seedInternationalCaps(state);
   /**
-   * **부임 회견** — 오늘이 부임 첫날이다 (people.md §4 · career.md §5.1). 이직과 같은
-   * 문을 지난다: 감독이 처음 마주하는 것이 수석코치 한 사람일 이유가 없다.
+   * **부임 회견** — 오늘이 부임 첫날이다 (people.md §4 · career.md §5.1). 감독이
+   * 처음 마주하는 것이 수석코치 한 사람일 이유가 없다.
    *
-   * 전임의 사실은 없다 — 새 게임의 구단에는 앞서 잘린 감독이 세계에 없다.
    * 세계·계약·훈련이 다 선 **뒤**여야 카드가 그 사실들을 읽는다.
    */
   openAppointmentPress(state);

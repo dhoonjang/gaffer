@@ -1,11 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type {
-  CharacterInjection,
-  GamePlayer,
-  Negotiation,
-  PressConference,
-} from "@story-fm/domain";
-import { createTestGame, recordTestScouting } from "../helpers";
+import type { CharacterInjection, GamePlayer, PressConference } from "@story-fm/domain";
+import { createTestGame } from "../helpers";
 import type { GameState } from "../../src/common/core/state";
 import {
   CHARACTER_INJECTION_LIMIT,
@@ -19,26 +14,6 @@ import { headCoachOf, reportersOf } from "../../src/common/people/persona";
 /** 이번 턴에 실린 이름들 — 순서까지 보는 케이스만 배열을 직접 읽는다 */
 function names(state: GameState, message: string, injected: CharacterInjection[] = []) {
   return selectCharacters(state, { message, injected }).map((e) => e.characterId);
-}
-
-/** 협상 테이블에 앉힌다 — 남의 팀 선수를 후보로 만드는 유일한 길 */
-function openNegotiation(state: GameState, playerId: string): void {
-  const negotiation: Negotiation = {
-    id: `neg-${playerId}`,
-    gamePlayerId: playerId,
-    kind: "buy",
-    counterpartTeamId: null,
-    windowId: null,
-    openedOn: state.date,
-    expiresOn: state.date,
-    status: "open",
-    rounds: [],
-    pitched: [],
-    precontract: false,
-    terms: [],
-    buyout: false,
-  };
-  state.negotiations.push(negotiation);
 }
 
 describe("인물 사전 — 이번 턴에 실을 인물지", () => {
@@ -145,29 +120,6 @@ describe("인물 사전 — 이번 턴에 실을 인물지", () => {
     expect(names(state, "")).not.toContain(target.name);
   });
 
-  it("지식 눈금이 오르면 더 자세한 판으로 다시 주입된다", () => {
-    const state = structuredClone(base);
-    const outsider = state.players.find((p) => p.teamId !== state.userTeamId)!;
-    openNegotiation(state, outsider.id);
-    const message = `${outsider.name} 영입 가능한가`;
-
-    const rumoured = selectCharacters(state, { message }).find(
-      (e) => e.characterId === outsider.name,
-    );
-    expect(rumoured?.depth).toBe("rumour");
-    expect(rumoured?.speechStyle).toBeUndefined();
-
-    const standing = [{ characterId: outsider.name, depth: "rumour" as const, memories: 0 }];
-    expect(selectCharacters(state, { message, injected: standing })).toEqual([]);
-
-    recordTestScouting(state, outsider.id);
-
-    const scouted = selectCharacters(state, { message, injected: standing }).find(
-      (e) => e.characterId === outsider.name,
-    );
-    expect(scouted).toBeUndefined();
-  });
-
   it("한 턴 상한을 넘으면 이름순으로 잘린다", () => {
     const state = structuredClone(base);
     const called = squad.slice(0, CHARACTER_INJECTION_LIMIT + 2);
@@ -252,10 +204,8 @@ describe("인물 사전 — 이번 턴에 실을 인물지", () => {
     expect(rumour.traits).toEqual(coach.traits);
   });
 
-  it("지식 눈금 다섯이 깊이 셋으로 접힌다", () => {
+  it("지식 눈금 셋이 깊이 셋으로 옮겨진다", () => {
     expect(characterDepthOf("own")).toBe("full");
-    expect(characterDepthOf("adapting")).toBe("full");
-    expect(characterDepthOf("scouted")).toBe("rumour");
     expect(characterDepthOf("seen")).toBe("outline");
     expect(characterDepthOf("rumoured")).toBe("rumour");
   });

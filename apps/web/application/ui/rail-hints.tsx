@@ -51,22 +51,11 @@ const SKILL_ICON: Record<string, IconComponent> = {
   // 1·2군 이동은 판이 아니라 사람이 오가는 일이다 — 라인업과 같은 그림을 쓰면 갈래가 겹친다
   set_squad_level: IconPerson,
   substitute: IconPerson,
-  set_transfer_list: IconPerson,
-  // 요청에 답하는 것도 사람이 오가는 일이다 — 등재와 한 갈래로 읽힌다
-  respond_transfer_request: IconPerson,
-  release_player: IconPerson,
-  // 해지 제안도 사람이 오가는 일이다 — 일방 해지(release_player)와 같은 그림으로 한 갈래로 읽힌다
-  open_release: IconPerson,
-  recall_loan: IconPerson,
-  exercise_buyback: IconPerson,
-  // 계약 확정은 재정 장부에도 서므로 사람 쪽으로 — 그 칸의 머리 아이콘이 이미 돈이다
-  accept_deal: IconPerson,
   record_incident: IconInsight,
   set_training: IconDay,
   start_match: IconMatch,
   finalize_match: IconTrophy,
   apply_finance_event: IconFinance,
-  adjust_transfer_budget: IconFinance,
 };
 
 /**
