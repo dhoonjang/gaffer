@@ -183,7 +183,7 @@ export type SquadNumberBlock =
   | { code: "out-of-range"; number: number }
   /** 같은 팀의 동료가 달고 있다 — `take` 없이는 넘겨받지 않는다 */
   | { code: "number-taken"; number: number; holder: NumberHolder }
-  /** 우리가 지금 쓰는 선수가 아니다 — 임대 나간 선수의 번호는 빌린 구단의 것이다 */
+  /** 우리가 지금 쓰는 선수가 아니다 — 남의 선수의 번호는 그 구단의 것이다 */
   | { code: "not-ours"; name: string };
 
 /** 막힌 이유를 사람 말로 — 문구는 여기 한 자리에만 있다 */

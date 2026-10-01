@@ -9,7 +9,7 @@ import {
   rolesFor,
   injuryHistoryText,
 } from "@story-fm/domain";
-import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
+import { contractUntil } from "@/domains/common/lib/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/domains/common/ui/player-facts";
 import { FitGauge, FormArrow, RatingTrend, StatusBadges } from "../../../common/ui/player-marks";
 import type { SquadRow } from "./types";
@@ -153,19 +153,6 @@ export function PlayerDetail({
         {p.injuryHistory.count > 0 && (
           <span>
             부상 이력 <b>{injuryHistoryText(p.injuryHistory)}</b>
-          </span>
-        )}
-        {/* 임대 — **그 구단의 사실만** 적는다. 아래 시즌 기록도 그 구단 장부라
-            어디서 낸 숫자인지가 이 줄 옆에 서 있어야 읽힌다. 무엇을 하라는 말은
-            여기 붙지 않는다 (근거 코드가 뜻하는 사실만 옮긴다) */}
-        {p.loan !== null && (
-          <span title={`${p.loan.team} 임대 — ${humanDate(p.loan.until)} 복귀`}>
-            임대{" "}
-            <b>
-              {p.loan.team} {contractUntil(p.loan.until)}
-            </b>
-            {p.loan.benchRun > 0 && ` · 최근 ${p.loan.benchRun}경기 출전 0`}
-            {p.loan.growth > 0 && ` · 임대 이후 성장 +${p.loan.growth}`}
           </span>
         )}
         {/* **없는 기록은 적지 않는다.** 개막 전에는 스물일곱 명 전원이 "0경기 ·

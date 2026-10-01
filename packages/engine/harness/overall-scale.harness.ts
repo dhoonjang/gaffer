@@ -6,13 +6,7 @@ import {
   weightSlotOf,
   type WeightSlot,
 } from "@story-fm/domain";
-import {
-  activeContract,
-  computeStandings,
-  marketValueOf,
-  wageExpectationOf,
-  type GameState,
-} from "@story-fm/engine";
+import { activeContract, computeStandings, type GameState } from "@story-fm/engine";
 import { createTestGame } from "../test/helpers";
 import { potentialGapBand } from "../src/common/world/synthesis";
 import { OVERALL_SCALE } from "./catalog";
@@ -55,8 +49,6 @@ function scaleReadings(state: GameState): Readings<typeof OVERALL_SCALE> {
   // 돈은 EPL만 — 전 세계 5,700명에 계약 조회를 걸면 몇 분이 된다
   const eplTeams = new Set(computeStandings(state, "epl").map((r) => r.teamId));
   const epl = all.filter((p) => eplTeams.has(p.teamId));
-  const values = epl.map((p) => marketValueOf(state, p)).sort((a, b) => a - b);
-  const wants = epl.map((p) => wageExpectationOf(state, p)).sort((a, b) => a - b);
   const wages = epl.map((p) => activeContract(state, p.id)?.weeklyWage ?? 0).sort((a, b) => a - b);
   const last = (xs: number[]) => xs[xs.length - 1] ?? 0;
   const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -92,13 +84,6 @@ function scaleReadings(state: GameState): Readings<typeof OVERALL_SCALE> {
     "등급 strong(75+) 비율": share(overalls.filter((v) => v >= 75 && v < 85).length),
     "등급 solid(65+) 비율": share(overalls.filter((v) => v >= 65 && v < 75).length),
     "등급 low 비율": share(overalls.filter((v) => v < 65).length),
-    "시장가 p50": quantile(values, 0.5),
-    "시장가 p90": quantile(values, 0.9),
-    "시장가 최대": last(values),
-    "시장가 총액": total(values),
-    "희망 주급 p50": quantile(wants, 0.5),
-    "희망 주급 p90": quantile(wants, 0.9),
-    "희망 주급 최대": last(wants),
     "실제 주급 p50": quantile(wages, 0.5),
     "실제 주급 p90": quantile(wages, 0.9),
     "실제 주급 최대": last(wages),

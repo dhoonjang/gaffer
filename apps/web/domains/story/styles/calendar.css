@@ -17,27 +17,6 @@
 .cal-legend .view-title {
   margin: 0;
 }
-/* 이적시장 아이콘 · 이름 · 마감일. 조작 버튼이 아닌 읽는 정보다. */
-.cal-focus {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-  white-space: nowrap;
-}
-.cal-focus .ev-icon {
-  width: 14px;
-  height: 14px;
-}
-.cal-focus b {
-  padding-left: 8px;
-  margin-left: 2px;
-  border-left: 1px solid var(--border);
-  color: var(--text);
-  font-weight: 500;
-}
 .cal-months {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -306,7 +285,7 @@
   line-height: 1.7;
 }
 
-/* 표식 — 훈련(회색)·그 밖의 일정(파랑, 이적창)·추첨(보라)·소식(회색)을 점으로만 알린다.
+/* 표식 — 훈련(회색)·추첨(보라)·소식(회색)을 점으로만 알린다.
    무엇인지는 툴팁과 칸을 눌러 여는 상세가 말한다 */
 /* 표식은 날짜 바로 아래에 붙인다 — 칸 바닥으로 밀면 빈 칸에서 홀로 떠 보인다 */
 .cal-marks {
@@ -328,10 +307,7 @@
 .cal-mark.train.gained {
   background: var(--text);
 }
-.cal-mark.event {
-  background: var(--accent-2);
-}
-/* 추첨 — 그날 상대가 정해진다. 이적창 개폐(파랑)와 다른 종류의 사건이라 색을 나눈다 */
+/* 추첨 — 그날 상대가 정해진다 */
 .cal-mark.draw {
   background: var(--violet);
 }
@@ -345,7 +321,7 @@
   box-shadow: inset 0 0 0 1px var(--text-3);
 }
 /**
- * 소식 — 다른 표식은 전부 **앞날의 일정**(훈련·이적창 파랑·추첨 보라)인데
+ * 소식 — 다른 표식은 전부 **앞날의 일정**(훈련·추첨 보라)인데
  * 이것만 **이미 벌어진 일**이다. 그래서 뜻을 가진 색을 쓰지 않고 채도 없는
  * 회색을 **속이 찬 원**으로 쓴다 — 속을 비운 휴식 점과는 형태로, 일정 색들과는
  * 뜻으로 갈린다. 소식은 거의 매일 서므로 톤을 낮춰 얼룩이 되지 않게 한다.

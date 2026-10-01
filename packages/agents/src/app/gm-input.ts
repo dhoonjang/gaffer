@@ -1,3 +1,6 @@
+import { offerSeat, offerTerms } from "../story/employment-context";
+import { vacancyRows, managerSeatLines } from "./workflows/story/employment-context";
+import { playerName } from "@story-fm/engine";
 import {
   type GameState,
   type ChatTurn,
@@ -42,19 +45,12 @@ import {
   suspensionScopeName,
   isInjured,
   injuryHistoryOf,
-  pendingVerdicts,
-  expiringContracts,
-  pendingContractOf,
   coachCues,
-  describeNegotiations,
   describeNextFixture,
   squadReturnOf,
   squadFamiliarity,
   weeklyWagesOf,
-  loanedOut,
-  scoutingSummary,
   describeBoardRequests,
-  describeBuyBackRights,
   type ScenePoint,
   isPeaceTurn,
   historyStart,
@@ -86,7 +82,6 @@ import {
   internationalGoalsOf,
   associationName,
   diffDays,
-  type ScoutingReport,
   injuryHistoryText,
   fatigueBand,
   fatigueOf,
@@ -94,8 +89,6 @@ import {
   type CharacterBookInjection,
   characterBookText,
 } from "@story-fm/domain";
-import { offerSeat, offerTerms } from "../negotiation/context";
-import { vacancyRows, managerSeatLines } from "./workflows/negotiation/context";
 
 /** 경기 다이제스트가 "방금 있었던 일"로 치는 기간 (일) */
 const MATCH_DIGEST_DAYS = 3;
@@ -309,13 +302,6 @@ export function buildTrainingSchedule(state: GameState): string {
 }
 
 const EXPIRING_SHOWN = 3;
-
-/**
- * 떠나기로 한 선수를 몇 명까지 이름으로 적나 — **만료 임박보다 짧다.** 그 자리는
- * 감독이 아직 할 일이 있는 목록이라 길이가 뜻을 갖지만, 이쪽은 이미 끝난 일이라
- * 「몇 명이고 누가 먼저 가는가」면 족하다 (transfer.md §1-4).
- */
-const PRECONTRACTED_SHOWN = 2;
 
 const AT_RISK_SHOWN = 3;
 
@@ -629,11 +615,11 @@ const associationPart = (code: string): string => `${associationName(code)}(${co
  *
  * 이 덩어리가 있는 이유는 하나다: **없으면 모델이 대표팀을 지어낸다.** 데뷔도
  * 캡 수도 프롬프트에 없으면 「드디어 첫 대표팀 데뷔」가 서른 살 주전에게 붙는다
- * (agents.md §6 · `scout_reports`와 같은 이유).
+ * (agents.md §6).
  *
  * ⚠️ 물음표도 권고도 없는 장부 줄이다 — 「로테이션을 고려하시죠」는 이 자리의 것이
  * 아니다. 근거가 되는 사실을 짚고 그 사실로 무슨 말을 할지는 GM이 쓴다
- * (overview.md §1 철칙 4 · `loanDigestLine`과 같은 계약).
+ * (overview.md §1 철칙 4).
  */
 function internationalFacts(state: GameState): string | null {
   const players = userPlayers(state);
@@ -715,15 +701,8 @@ function internationalFacts(state: GameState): string | null {
   return sections.join("\n");
 }
 
-export function buildGmStateNote(
-  state: GameState,
-  passed?: TimePassed | null,
-  /** 이번 턴에 카드로 서는 보고서 — 카드가 프롬프트에 못 가므로 값은 여기로 온다 */
-  arrivedReports: readonly ScoutingReport[] = [],
-): string {
-  // 무직이면 실을 것이 다른 것들이다 (career.md §5.1)
+export function buildGmStateNote(state: GameState, passed?: TimePassed | null): string {
   if (managedTeamId(state) === null) return buildUnemployedNote(state, passed);
-
   const standings = computeStandings(state);
   const rank = standings.findIndex((r) => r.teamId === state.userTeamId) + 1;
   // 0경기 순위는 싣지 않는다 — 정렬 순서일 뿐인데 모델이 구단의 처지로 읽는다
@@ -789,42 +768,30 @@ export function buildGmStateNote(
 
   const alerts = [
     // 판정 대기 협상이 맨 앞 — 답은 다음 턴 입력에 실리므로 여기서 세우지 않으면 잊힌다
-    ...pendingVerdicts(state).map((v) => `❗ ${v.label} (${v.negotiation.id})`),
     suspended.length > 0 ? `정지 ${suspended.length} (${suspended.join(", ")})` : null,
     /**
      * 만료 임박 계약 — 재계약 서사의 씨앗. 놓치면 자유계약으로 떠난다.
      *
      * **이미 다른 구단과 사전 계약을 맺은 선수는 이 줄에서 빠진다**
-     * (→ docs/negotiation/transfer.md §1-4). 그는 재계약을 열 수 있는 사람이 아니라
+     * (→ docs/common/season.md §6). 그는 재계약을 열 수 있는 사람이 아니라
      * 떠나기로 한 사람이라, 같은 줄에 세우면 GM이 매 턴 감독에게 없는 손잡이를
      * 권한다. 아래 별도의 줄이 그 사실을 든다.
      */
     (() => {
-      const expiring = expiringContracts(state, EXPIRING_ALERT_DAYS).filter(
-        (row) => pendingContractOf(state, row.player.id) === null,
-      );
+      const ours = new Set(players.map((p) => p.id));
+      const expiring = state.contracts
+        .filter(
+          (c) =>
+            c.status === "active" &&
+            ours.has(c.gamePlayerId) &&
+            diffDays(state.date, c.until) <= EXPIRING_ALERT_DAYS,
+        )
+        .sort((a, b) => (a.until < b.until ? -1 : a.until > b.until ? 1 : 0));
       return expiring.length > 0
         ? `계약 만료 임박 ${expiring.length} (${expiring
             .slice(0, EXPIRING_SHOWN)
-            .map((row) => `${row.player.name}~${row.contract.until}`)
+            .map((c) => `${playerName(state, c.gamePlayerId)}~${c.until}`)
             .join(", ")}${expiring.length > EXPIRING_SHOWN ? " …" : ""})`
-        : null;
-    })(),
-    /**
-     * **떠나기로 한 선수** — 다른 구단과 사전 계약을 맺어 발효일에 나갈 사람들
-     * (transfer.md §1-4). 감독이 할 수 있는 일은 없지만 스쿼드 계획의 사실이라,
-     * 이 줄이 없으면 GM은 여름에 사라질 주전을 이번 시즌 내내 붙박이로 말한다.
-     */
-    (() => {
-      const leaving = userPlayers(state).flatMap((player) => {
-        const pending = pendingContractOf(state, player.id);
-        return pending ? [{ player, pending }] : [];
-      });
-      return leaving.length > 0
-        ? `사전 계약으로 떠남 ${leaving.length} (${leaving
-            .slice(0, PRECONTRACTED_SHOWN)
-            .map((row) => `${row.player.name}→${teamName(row.pending.teamId)} ${row.pending.since}`)
-            .join(", ")}${leaving.length > PRECONTRACTED_SHOWN ? " …" : ""})`
         : null;
     })(),
   ].filter((x): x is string => x !== null);
@@ -849,12 +816,10 @@ export function buildGmStateNote(
   ].filter((x): x is string => x !== null);
 
   // 스카우팅 진행과 도착한 보고서는 **같은 사람의 것이다** — 덩어리 둘의 이름이 하나다
-  const scout = factSpeakerOf(state, "scouting");
 
   const coach = coachCues(state);
   const offseason = offseasonFacts(state);
   const international = internationalFacts(state);
-  const negotiations = describeNegotiations(state);
   const edits = state.pendingEdits ?? [];
   const news = state.pendingNews ?? [];
 
@@ -882,7 +847,7 @@ export function buildGmStateNote(
         // 6축 슬라이더는 싣지 않는다 — 화자가 입에 담지 않는 수치이고 `get_squad`가
         // 배치와 함께 낸다. 모양과 적응도는 코치의 말에 그대로 실린다
         `전술: ${tac.formation} · 선발 평균 적응 ${familiarityLabel(squadFamiliarity(state, state.userTeamId))}`,
-        `재정: 잔고 ${formatMoney(finance.balance)} · 주급 ${formatMoney(weeklyWagesOf(state, state.userTeamId))}/주 · 이적예산 ${formatMoney(finance.transferBudget)}`,
+        `재정: 잔고 ${formatMoney(finance.balance)} · 주급 ${formatMoney(weeklyWagesOf(state, state.userTeamId))}/주`,
         /**
          * 완장 — **선수단 명단 위에 자기 줄로 선다.** 이름 뒤의 괄호로 붙이면 스물다섯
          * 이름 한가운데에 묻혀 GM이 축구 상식의 주장을 라커룸에 세운다 (agents.md §6).
@@ -890,7 +855,7 @@ export function buildGmStateNote(
         armbandLine(state),
         /**
          * 선수단 — **이름 명단이다. 이름뿐이다.** "누가 우리 팀인가"는 매 장면의 전제라
-         * 입력에 없으면 GM이 없는 선수를 세우고, 명단은 영입·승격마다 바뀌어 캐시 층에
+         * 입력에 없으면 GM이 없는 선수를 세우고, 명단은 승격·만료마다 바뀌어 캐시 층에
          * 둘 수도 없다. 그래서 캐시가 걸리지 않는 이 층이 이름을 진다.
          *
          * 능력치·컨디션·계약·배치는 따라오지 않는다 — 그것까지 실으면 이 층의 절반을
@@ -904,21 +869,10 @@ export function buildGmStateNote(
             players.filter((p) => squadLevelOf(p) === level).map((p) => p.name);
           const first = named("first");
           const reserve = named("reserve");
-          /**
-           * 임대 보낸 선수는 **합계에 들지 않고 따로 선다.** 1군 + 2군이 곧 오늘
-           * 부릴 수 있는 인원이라, 합계에 넣으면 GM이 남의 경기장에 있는 사람을
-           * 오늘의 선택지로 센다. 계약은 우리 것이므로 명단에서 지우지도 않는다
-           * (transfer.md §2 · season.md §2 임대).
-           *
-           * ⚠️ 여기도 **이름뿐이다** — 어느 구단에 가 있는지도, 그 구단에서의
-           * 기록도 싣지 않는다. 그건 코치 카드와 조회의 몫이다.
-           */
-          const loaned = loanedOut(state).map((p) => p.name);
           return lines(
             `선수단 ${players.length}명`,
             first.length > 0 ? `- 1군 ${first.length}: ${first.join(" · ")}` : null,
             reserve.length > 0 ? `- 2군 ${reserve.length}: ${reserve.join(" · ")}` : null,
-            loaned.length > 0 ? `- 임대 ${loaned.length}: ${loaned.join(" · ")}` : null,
           );
         })(),
       ),
@@ -929,11 +883,6 @@ export function buildGmStateNote(
         state.manager.name,
         // 감독 자신의 계약 — 연봉·만료일과 보드의 재계약 판정 (career.md §5.4)
         managerContractLine(state),
-        /**
-         * 그 아래가 감독의 거취다 — 열린 제안(재계약·접근·노크)과 두드릴 수 있는
-         * 공석 (career.md §5.1). 계약 줄과 **같은 자리**인 것은 셋 다 감독 자신의
-         * 일이기 때문이다.
-         */
         ...managerSeatLines(state),
       ),
     ),
@@ -945,11 +894,6 @@ export function buildGmStateNote(
     opponentBlock(state),
     block("last_match", matchDigest(state)),
     block("time_passed", timePassedLine(state, passed)),
-    block(
-      "scout_reports",
-      arrivedReports.map((report) => JSON.stringify(report)).join("\n"),
-      ` name="${scout.name}"`,
-    ),
     block("offseason", offseason),
     block("international", international),
     block(
@@ -959,7 +903,6 @@ export function buildGmStateNote(
         : null,
     ),
     // 파견 중인 스카우트 — 도착한 보고서(<scout_reports>)와 같은 사람의 덩어리다
-    block("scouting", scoutingSummary(state).join("\n"), ` name="${scout.name}"`),
     // 선수 근황 — 선수단 중 **사실이 붙는** 셋이다.
     // 코어는 경기와 훈련의 사실만 낸다 — 누가 말할지, 무슨 말을 할지는 GM의 몫
     /**
@@ -975,15 +918,10 @@ export function buildGmStateNote(
     block("edits", edits.map((e) => `- ${e.text}`).join("\n")),
     block("media", mediaBlock(state)),
     /**
-     * 감독이 보드에 건 요청 — 답을 기다리는 것·공사 중인 구장·열려 있는 주급 상향
-     * (finance.md §9.6). 답이 도착한 날은 `<time_passed>`가 나른다.
+     * 감독이 보드에 건 요청 — 답을 기다리는 것·공사 중인 구장 (finance.md §9.3). 답이
+     * 도착한 날은 `<time_passed>`가 나른다.
      */
     block("board", describeBoardRequests(state)),
-
-    // 협상은 있을 때만 — 매 턴 정가로 읽히는 블록이다
-    block("negotiations", negotiations.startsWith("진행 중인 협상 없음") ? null : negotiations),
-    // 쓸 수 있는 되사기 권리 — 이 덩어리가 없으면 모델은 그 자리가 있는 줄도 모른다
-    block("buybacks", describeBuyBackRights(state)),
     /**
      * 시작 사건 — 부임 첫 몇 주의 실마리. **개폐가 코어의 것**이라 여기
      * 실리는 것은 아직 열린 줄뿐이다: 감독이 그 실마리에 걸린 일을 하면 다음 턴에
@@ -1156,36 +1094,11 @@ function inMatchNow(state: GameState): boolean {
 }
 
 /**
- * 지금 열린 협상 방 — 이력을 가르는 셋째 기준이다. 방이 닫힌 뒤 마지막 장면을 쓰는 턴
- * (일어서는 손잡이 턴)은 `phase`가 이미 돌아가 있어, 부르는 쪽이 턴 앞에서 잡아 둔 id를
- * 넘긴다 (`buildGmHistory`의 `negotiationId`).
+ * 평시·경기의 이력을 가른다 — 섞이면 토큰만이 아니라 맥락이 오염된다 (agents.md §5).
+ * 평시 → 경기는 buildMatchBrief·matchDigest가 잇는다. 평시 턴의 정의는 코어의 것이다
+ * (`isPeaceTurn`).
  */
-function roomIdNow(state: GameState): string | undefined {
-  return state.phase === "negotiation" ? state.pendingNegotiation?.negotiationId : undefined;
-}
-
-/**
- * 평시·경기·협상 방의 이력을 가른다 — 섞이면 토큰만이 아니라 맥락이 오염된다
- * (경기 중 이력의 이적 이야기를 중계가 끌어오고, 평시 GM이 협상 스무 턴을 읽는다 —
- * agents.md §5). 평시 → 경기는 buildMatchBrief·matchDigest가, 평시 → 방은 서류와
- * `<situation>`이, 방 → 평시는 장부가 잇는다. 평시 턴의 정의는 코어의 것이다(`isPeaceTurn`).
- */
-function roomContactNow(state: GameState): string | undefined {
-  return state.negotiationExchanges.find(
-    (exchange) => exchange.id === state.pendingNegotiation?.exchangeId,
-  )?.contactId;
-}
-function relevantTurns(
-  state: GameState,
-  room = roomIdNow(state),
-  contact = roomContactNow(state),
-): typeof state.chat {
-  if (contact !== undefined)
-    return state.chat.filter((turn) => turn.negotiationContactId === contact);
-  if (room !== undefined) {
-    // 방 안 — 이 협상의 턴만. 방을 나갔다 다시 앉아도 같은 협상이면 지난 자리의 대화가 이력이다
-    return state.chat.filter((t) => t.inNegotiation === true && t.negotiationId === room);
-  }
+function relevantTurns(state: GameState): typeof state.chat {
   const inMatch = inMatchNow(state);
   const here = state.pendingMatch?.matchId;
   return state.chat.filter((t) =>
@@ -1221,16 +1134,12 @@ export function recordCharacterInjection(
  * 코어가 고르는 평시 턴(`peaceTurns`)과 `relevantTurns`의 평시 갈래가 같은 필터
  * (`isPeaceTurn`)라 접힌 지점의 인덱스가 이 목록에 그대로 맞는다.
  */
-function windowOf(
-  state: GameState,
-  room = roomIdNow(state),
-  contact = roomContactNow(state),
-): { turns: GameState["chat"] } {
-  const chat = relevantTurns(state, room, contact);
+function windowOf(state: GameState): { turns: GameState["chat"] } {
+  const chat = relevantTurns(state);
   const upto = historyEnd(chat);
-  // 경기와 방의 이력은 접히지 않는다 — 경기마다·협상마다 갈려 자라지 않는다 (agents.md §5-1).
+  // 경기의 이력은 접히지 않는다 — 경기마다 갈려 자라지 않는다 (agents.md §5-1).
   // 접은 지점은 평시의 것이라 이 목록에 먹이면 엉뚱한 자리를 자른다
-  const start = inMatchNow(state) || room !== undefined ? 0 : historyStart(state);
+  const start = inMatchNow(state) ? 0 : historyStart(state);
   return { turns: chat.slice(start, upto) };
 }
 
@@ -1278,29 +1187,15 @@ export function renderTurnGroup(
 export function buildGmTurnMessage(
   state: GameState,
   cards: readonly CharacterBookInjection[],
-  /** 협상 방의 턴 — 그 협상의 꼬리를 그린다. 방이 이미 닫힌 턴도 id를 넘기면 방의 것이다 */
-  options: { negotiationId?: string; negotiationContactId?: string } = {},
 ): string {
-  const chat = relevantTurns(
-    state,
-    options.negotiationId ?? roomIdNow(state),
-    options.negotiationContactId ?? roomContactNow(state),
-  );
+  const chat = relevantTurns(state);
   return renderTurnGroup(state, chat.slice(historyEnd(chat)), cards);
 }
 
 export function buildGmHistory(
   state: GameState,
-  /** 협상 방의 턴 — 그 협상의 채팅 턴이 이력이다 (agents.md §5) */
-  options: { negotiationId?: string; negotiationContactId?: string } = {},
 ): Array<{ role: "user" | "assistant"; content: string }> {
-  return groupTurns(
-    windowOf(
-      state,
-      options.negotiationId ?? roomIdNow(state),
-      options.negotiationContactId ?? roomContactNow(state),
-    ).turns,
-  ).map((group) =>
+  return groupTurns(windowOf(state).turns).map((group) =>
     group[0]?.role === "model"
       ? { role: "assistant" as const, content: group.map((turn) => turn.text).join("\n\n") }
       : {

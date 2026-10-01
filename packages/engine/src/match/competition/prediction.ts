@@ -33,10 +33,10 @@ export const W_STATURE = 0.2;
 export const W_NET = 0.1;
 
 /**
- * 여름 순이적이 한 항을 다 채우는 크기 (OVR) — **선발에 닿는 만큼**의 합이다.
+ * 여름의 들고 남이 한 항을 다 채우는 크기 (OVR) — **선발에 닿는 만큼**의 합이다.
  *
- * 열한 명 평균 위로 5쯤 되는 영입 셋이면 한 항이 다 찬다 — 실제로 감독이 여름 하나에
- * 할 수 있는 최대치다. 머릿수로 재면 스물다섯을 사고 다섯을 판 팀이 우승 후보가 된다.
+ * 열한 명 평균 위로 5쯤 되는 합류 셋이면 한 항이 다 찬다. 머릿수로 재면 유스를
+ * 여럿 올린 팀이 우승 후보가 된다.
  */
 export const NET_TRANSFER_SCALE = 15;
 
@@ -94,23 +94,23 @@ export function lastSeasonPlaces(state: GameState, leagueId: string): Map<string
 }
 
 /**
- * 여름 순이적 — **선수 수가 아니라 선발에 닿는 만큼**을 −1\~+1로 (season.md §2).
+ * 여름의 들고 남 — **선수 수가 아니라 선발에 닿는 만큼**을 −1\~+1로 (season.md §2).
  *
- * 상위 열한 명 평균(`rating`) 아래의 영입은 그 열한 명을 바꾸지 못하므로 0으로 센다.
- * 매각도 같은 자로 재어 빼므로, 벤치를 정리한 여름과 주전을 판 여름이 갈린다.
+ * 상위 열한 명 평균(`rating`) 아래의 합류는 그 열한 명을 바꾸지 못하므로 0으로 센다.
+ * 계약 만료로 떠난 선수도 같은 자로 재어 뺀다.
  */
 export function netTransferScore(state: GameState, teamId: string, rating: number): number {
   const from = state.calendar.preseasonStart;
   const overallOf = new Map(state.players.map((p) => [p.id, p.attributes.overall]));
   let net = 0;
-  for (const transfer of state.transfers) {
-    if (transfer.date < from || transfer.date > state.date) continue;
-    const overall = overallOf.get(transfer.gamePlayerId);
+  for (const move of state.moves) {
+    if (move.date < from || move.date > state.date) continue;
+    const overall = overallOf.get(move.gamePlayerId);
     if (overall === undefined) continue;
     const above = Math.max(0, overall - rating);
     if (above === 0) continue;
-    if (transfer.toTeamId === teamId) net += above;
-    else if (transfer.fromTeamId === teamId) net -= above;
+    if (move.toTeamId === teamId) net += above;
+    else if (move.fromTeamId === teamId) net -= above;
   }
   return Math.max(-1, Math.min(1, net / NET_TRANSFER_SCALE));
 }

@@ -18,17 +18,14 @@ export const ManagerContractSchema = z.object({
 export type ManagerContract = z.infer<typeof ManagerContractSchema>;
 
 /**
- * **감독직 조건의 등급 표** — 제안의 기본 연봉·계약 연수·이적 예산 약속
+ * **감독직 조건의 등급 표** — 제안의 기본 연봉·계약 연수
  * (career.md §5.1). 새 게임의 초기 계약에 사용한다.
  */
-export const MANAGER_TERMS_BY_TIER: Record<
-  1 | 2 | 3 | 4,
-  { salary: number; years: number; budgetPledge: number }
-> = {
-  1: { salary: 6_000_000, years: 3, budgetPledge: 30_000_000 },
-  2: { salary: 3_000_000, years: 3, budgetPledge: 15_000_000 },
-  3: { salary: 1_500_000, years: 2, budgetPledge: 6_000_000 },
-  4: { salary: 800_000, years: 2, budgetPledge: 2_000_000 },
+export const MANAGER_TERMS_BY_TIER: Record<1 | 2 | 3 | 4, { salary: number; years: number }> = {
+  1: { salary: 6_000_000, years: 3 },
+  2: { salary: 3_000_000, years: 3 },
+  3: { salary: 1_500_000, years: 2 },
+  4: { salary: 800_000, years: 2 },
 };
 
 export const ManagerSchema = z.object({
@@ -90,10 +87,9 @@ export const ManagerOfferSchema = z.object({
   tier: z.number().int().min(1).max(4),
   /** 부를 때의 리그 순위 — 아직 리그전을 치르지 않았으면 없다 */
   position: z.number().int().min(1).optional(),
-  /** 제시 조건 — 연봉·계약 연수·이적 예산 약속 (career.md §5.1) */
+  /** 제시 조건 — 연봉·계약 연수 (career.md §5.1) */
   salary: z.number().int().min(0),
   years: z.number().int().min(1),
-  budgetPledge: z.number().int().min(0),
   /**
    * 어떻게 섰나 — 공석이 불렀나(`vacancy`), 감독이 두드렸나(`knock`), 지금 구단이
    * 재계약을 걸었나(`renewal` — career.md §5.4), 아니면 다른 구단이 **재직 중인**

@@ -34,8 +34,6 @@ import {
   leagueTones,
   topLeagues,
   buildMatches,
-  buildTransferWindows,
-  windowOpenOn,
   playerCatalog,
   checkArmbandSeeds,
   buildTeamSquad,
@@ -404,13 +402,10 @@ describe("리그 색 — 카탈로그가 내는 다섯 (ui/design-system.md §2-
 describe("게임 생성 (7월 1일 프리시즌 시작)", () => {
   const state = createTestGame();
 
-  it("7월 1일에 시작하고 여름 이적창이 열려 있다", () => {
+  it("7월 1일 프리시즌에 시작한다", () => {
     expect(state.date).toBe("2026-07-01");
     expect(state.calendar.preseasonStart).toBe("2026-07-01");
     expect(state.date < state.calendar.start).toBe(true); // 프리시즌
-    const summer = state.windows.find((w) => w.kind === "summer");
-    expect(summer?.opensOn).toBe("2026-07-01");
-    expect(state.date >= (summer?.opensOn ?? "")).toBe(true);
   });
 
   it("2군을 메운 유스까지 팀 안에서 이름이 겹치지 않는다", () => {
@@ -716,44 +711,15 @@ describe("시즌 일정 (일정 축)", () => {
     }
   });
 
-  it("경기·이적창이 SCHEDULE_ENTRY로 등록된다 (시간 포함)", () => {
+  it("경기가 SCHEDULE_ENTRY로 등록된다 (시간 포함)", () => {
     const state = createTestGame();
     const matchEntries = state.schedule.filter((e) => e.type === "match");
     // 우리 리그 380경기 전체 + 우리 팀 대항전 경기 (남의 대항전은 달력에 없다)
     expect(matchEntries).toHaveLength(380 + (userFixtureCount(state) - 38));
     for (const e of matchEntries) expect(e.time).toMatch(/^\d{2}:\d{2}$/);
-    // 이적창 개장·폐장 = 창 2개 × 2
-    expect(state.schedule.filter((e) => e.type === "window-open")).toHaveLength(2);
-    expect(state.schedule.filter((e) => e.type === "window-close")).toHaveLength(2);
     // 정렬 — 날짜·시간 순
     const dates = state.schedule.map((e) => `${e.date} ${e.time}`);
     expect([...dates].sort()).toEqual(dates);
-  });
-
-  it("이적창은 여름(7/1~9/1)·겨울(1/1~2/1)", () => {
-    // 우리 창은 leagueId가 없다 — 사우디·MLS는 자기 리그 창을 따로 갖는다
-    const windows = buildTransferWindows(1).filter((w) => w.leagueId === undefined);
-    expect(windows.map((w) => w.kind)).toEqual(["summer", "winter"]);
-    expect(windows[0]?.opensOn).toBe("2026-07-01");
-    expect(windows[0]?.closesOn).toBe("2026-09-01");
-    expect(windows[1]?.opensOn).toBe("2027-01-01");
-  });
-
-  it("이적 시장 전용 리그는 창이 우리와 다르다 — 사우디는 늦게 닫힌다", () => {
-    const windows = buildTransferWindows(1);
-    const ours = windows.find((w) => w.leagueId === undefined && w.kind === "summer")!;
-    const saudi = windows.find((w) => w.leagueId === "saudi" && w.kind === "summer")!;
-    const mls = windows.filter((w) => w.leagueId === "mls");
-
-    // 우리 창이 닫힌 뒤에도 사우디는 열려 있다 — 팔 수는 있고 대체 영입은 못 한다
-    expect(saudi.closesOn > ours.closesOn).toBe(true);
-    expect(windowOpenOn(windows, "2026-09-20")).toBeNull();
-    expect(windowOpenOn(windows, "2026-09-20", "saudi")).not.toBeNull();
-    // 리그를 안 주면 우리 창만 본다 — 섞이면 "사우디가 열렸으니 우리도"가 된다
-    expect(windowOpenOn(windows, "2026-08-01")?.leagueId).toBeUndefined();
-    // MLS는 아예 다른 계절에 연다 (북미 시즌이 봄에 시작한다)
-    expect(mls.length).toBe(2);
-    expect(mls.some((w) => w.opensOn.includes("-02-"))).toBe(true);
   });
 });
 

@@ -18,10 +18,10 @@ export type PanelKey = "스쿼드" | "달력" | "재정" | "대회" | "커리어
 /**
  * 호출이 바꾼 장부 — **호출 하나에 화면 하나.**
  *
- * 여러 장부를 건드리는 호출도 있지만(계약 확정은 선수도 옮기고 돈도 쓴다) 알림은
- * **감독이 확인하러 갈 화면**을 가리키는 것이지 바뀐 곳을 다 세는 장부가 아니다.
- * 둘에 걸치면 같은 문장이 두 칸에 서서, 한 번 벌어진 일이 두 번 일어난 것처럼 읽힌다.
- * 걸치는 호출은 **감독이 먼저 볼 쪽**으로 보낸다 — 영입은 누가 왔는지가 먼저다.
+ * 여러 장부를 건드리는 호출도 있지만 알림은 **감독이 확인하러 갈 화면**을 가리키는
+ * 것이지 바뀐 곳을 다 세는 장부가 아니다. 둘에 걸치면 같은 문장이 두 칸에 서서,
+ * 한 번 벌어진 일이 두 번 일어난 것처럼 읽힌다. 걸치는 호출은 **감독이 먼저 볼
+ * 쪽**으로 보낸다.
  */
 export const PANEL_OF: Record<string, PanelKey> = {
   // ── 스쿼드 — 선수단과 판이 바뀐 것 ──
@@ -29,16 +29,11 @@ export const PANEL_OF: Record<string, PanelKey> = {
   set_squad_level: "스쿼드",
   set_retirement: "스쿼드",
   set_tactics: "스쿼드",
-  // 손잡이 넷은 기록되지 않는다 — 뒤의 명령들이 칩·말풍선·카드를 세운다
+  // 손잡이 셋은 기록되지 않는다 — 뒤의 명령들이 칩·말풍선을 세운다
   tactic_orders: "스쿼드",
   training_orders: "달력",
-  market_orders: "재정",
-  negotiation_orders: "재정",
+  finance_orders: "재정",
   // 방을 세우는 스킬 — 협상이 실리는 장부는 이적 예산이 선 재정이다
-  start_negotiation: "재정",
-  evaluate_negotiation: "재정",
-  receive_market_contact: "재정",
-  request_scouting: "스쿼드",
   set_player_tactic: "스쿼드",
   // 세트피스는 판의 사실이다 — 키커도 인원도 확인하러 갈 화면은 전술판이 선 스쿼드다
   set_set_piece_takers: "스쿼드",
@@ -50,12 +45,9 @@ export const PANEL_OF: Record<string, PanelKey> = {
   set_mentor: "스쿼드",
   set_reserve_training: "스쿼드",
   sign_youth: "스쿼드",
+  hire_staff: "스쿼드",
+  release_staff: "스쿼드",
   substitute: "스쿼드",
-  set_transfer_list: "스쿼드",
-  release_player: "스쿼드",
-  recall_loan: "스쿼드",
-  exercise_buyback: "스쿼드",
-  accept_deal: "스쿼드",
   // ── 달력 — 일정과 훈련 ──
   set_training: "달력",
   start_match: "달력",
@@ -63,13 +55,9 @@ export const PANEL_OF: Record<string, PanelKey> = {
   finalize_match: "대회",
   // ── 재정 ──
   apply_finance_event: "재정",
-  adjust_transfer_budget: "재정",
   // 요청과 승인·거절, 집행된 지원을 재정 화면에서 확인한다
   request_board: "재정",
   set_ticket_price: "재정",
-  // 달라지는 것은 **누가 서 있는가**다 — 스쿼드 화면의 스태프 줄이 그 답을 든다.
-  hire_staff: "스쿼드",
-  release_staff: "스쿼드",
   // ── 커리어 — 세계가 감독을 보는 눈 ──
   review_board: "커리어",
   offer_manager_job: "커리어",
@@ -82,24 +70,6 @@ export const PANEL_OF: Record<string, PanelKey> = {
   // 사임도 자리를 잃는 사건이다 — 카드와 계약 정산 기록이 서는 곳이 커리어 화면이다
   resign: "커리어",
 };
-
-/**
- * **카드로 서는 호출** — 갈 장부가 없어서 채팅에 카드를 남긴다 (`MarketCard`).
- *
- * 진행 중인 흥정은 어느 장부에도 실리지 않고, 파견한 스카우트는 아직 아무것도
- * 바꾸지 않았다. 대신 조건·평가·후속 일정이 다음 판단의 입력이라 카드로 정리해 세운다.
- *
- * 이 목록에도 `PANEL_OF`에도 없는 조작형 호출은 **화면에 서는 길이 없다** —
- * 그런 호출이 생기면 `skill-surface.test.ts`가 실패해 결정을 요구한다.
- */
-export const CARD_CALLS: ReadonlySet<string> = new Set([
-  "send_offer",
-  "respond_offer",
-  "open_renewal",
-  "open_release",
-  "withdraw_offer",
-  "accept_negotiation",
-]);
 
 /**
  * 말풍선 한 줄 — **세 자리로 읽힌다.**
@@ -141,9 +111,8 @@ const HINT_LINES = 3;
 /**
  * **레일 말풍선을 갖는 호출인가** — 채팅 칩을 눌러 그 말풍선을 다시 부를 수 있다.
  *
- * 호출 결과가 화면에 서는 길은 둘뿐이다: 갈 장부가 있으면 **칩 + 그 탭의 말풍선**,
- * 없으면 **채팅 카드**(협상·스카우트 — `MarketCard`). 어느 쪽도 아닌 것은 아예
- * 노출하지 않는다(조회 도구는 기록조차 남기지 않고, 코어가 한 일은 `silent`).
+ * 갈 장부가 있는 호출은 **칩 + 그 탭의 말풍선**으로 선다. 조회 도구는 기록조차
+ * 남기지 않고, 코어가 한 일은 `silent`다.
  */
 export function hasRailHint(name: string): boolean {
   return PANEL_OF[name] !== undefined;

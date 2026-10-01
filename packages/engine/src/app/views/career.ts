@@ -1,3 +1,5 @@
+import { openManagerOffers } from "../../story/world/manager-employment";
+import { tierOfTeamIn } from "../../common/core/club-tier";
 import { personaBookOf } from "../../common/people/character-book";
 import {
   type StaffRole,
@@ -14,8 +16,6 @@ import { headCoachOf, staffOf } from "../../common/people/persona";
 import { ourYouthCandidates, youthIntakeDeadline } from "../season";
 import { youthCandidateFog } from "../../common/players/observation";
 import { managerTenureOf, managerTrophiesOf } from "../../match/competition/records";
-import { openManagerOffers } from "../../negotiation/market/manager-market";
-import { tierOfTeamIn } from "../../common/core/club-tier";
 import { competitionName } from "../../common/data/cup-catalog";
 import { leagueName } from "../../common/data/league-catalog";
 
@@ -121,7 +121,7 @@ export function careerTotalsView(t: CareerTotals): CareerTotalsView {
  * 감독이 그 판을 볼 이유가 없다.
  *
  * 수석코치는 자리가 비지 않는다 (`headCoachOf`는 없으면 던진다).
- * 자른 자리는 그냥 줄이 하나 없다 — 빈 칸을 세우지 않는다.
+ * 사람이 없는 자리는 그냥 줄이 하나 없다 — 빈 칸을 세우지 않는다.
  */
 export function staffViews(state: GameState): StaffMemberView[] {
   const rows: Array<{ persona: Persona; role: StaffMemberView["role"] }> = [
@@ -173,14 +173,10 @@ export type CareerView = {
   dismissal: {
     on: string;
     season: number;
-    /** 경질·만료·사임·이적 — 무직은 상태지 사유가 아니다 (career.md §5.4) */
+    /** 경질·만료 (career.md §5.4) */
     kind: "sacked" | "expired" | "resigned" | "moved";
-    /**
-     * 위약금 — 경질이면 구단이 문 돈, 사임이면 감독이 문 돈, 이적이면 새 구단이
-     * 옛 구단에 문 보상금이다 (career.md §5.4 · §5.1)
-     */
-    severance: number | null;
     teamName: string;
+    severance: number | null;
     tier: number;
     /** 경질일의 리그 순위 — 아직 리그전을 치르지 않았으면 null */
     position: number | null;
@@ -216,7 +212,6 @@ export type CareerView = {
     /** 제시 조건 (career.md §5.1) */
     salary: number;
     years: number;
-    budgetPledge: number;
     /**
      * 새 구단이 지금 구단에 물 **이적 보상금** — 재직 중에 온 제안에만 있다
      * (career.md §5.1)
@@ -313,7 +308,6 @@ export function buildCareerView(state: GameState): CareerView {
 
       salary: o.salary,
       years: o.years,
-      budgetPledge: o.budgetPledge,
       compensation: o.compensation ?? null,
     })),
     vacancies: state.managerVacancies.map((v) => ({

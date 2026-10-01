@@ -54,7 +54,7 @@ export type PersonaRole = z.infer<typeof PersonaRoleSchema>;
  * 수석코치·코치·의료진·스카우트가 갖고 **구단주는 갖지 않는다** — 그는 고용된 사람이
  * 아니라 고용하는 쪽이다. 선수의 계약(`Contract`)과 다른 표인 이유는 자리가 다르기
  * 때문이다: 스태프는 등록 명단에도 이적 시장에도 서지 않고, 장부에서 `staff_wages`로
- * 선다 (→ ../../../docs/negotiation/finance.md §6.4-1).
+ * 선다 (→ ../../../docs/common/finance.md §6.4-1).
  */
 export const EmploymentSchema = z.object({
   /** 어느 구단의 사람인가 — 감독이 이직해도 이 사람은 옛 구단에 남는다 */

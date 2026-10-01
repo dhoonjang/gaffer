@@ -14,9 +14,6 @@ import { DateString } from "./date-string";
  *
  * 화면과 코어가 함께 쓰므로 도메인에 산다 (AGENTS.md §5).
  */
-export const NegotiationMethodSchema = z.enum(["meeting", "phone", "proposal"]);
-export type NegotiationMethod = z.infer<typeof NegotiationMethodSchema>;
-
 export type TurnOperation =
   /** 시간 이동 — 하루·일주일. 눈금은 화면이 정하고 코어는 일수만 본다 */
   | { kind: "skip_days"; days: number }
@@ -31,18 +28,7 @@ export type TurnOperation =
    * 경기가 멈췄다 — 정지점(`STOP_EVENT_TYPES`)이 체크포인트로 확정된 자리. 판독기가 판을 다시
    * 읽고 매치 GM이 그 사건을 중계한다. 시계는 실행기가 민다 (live-match.md §8.3)
    */
-  | { kind: "match_stop" }
-  /** 협상에서 물러난다 — 협상은 열린 채 그 자리만 닫힌다 */
-  | { kind: "leave_negotiation" }
-  /** 합의한 계약서에 서명한다 — 서버가 계약 확정을 먼저 걸고 협상 GM이 그 장면을 쓴다 */
-  | { kind: "sign_contract"; negotiationId: string }
-  /**
-   * **제안 폼** — 화면이 정확한 값으로 낸 제안 (proposal.ts). 감독의 말이 없는 제안 턴은
-   * 이 손잡이로 선다: 서버가 코어 명령을 먼저 걸고 그 문장을 `label`에 담는다. 화면은
-   * 이 갈래를 보내지 않는다 — 요청에는 `proposal`이 따로 실리고 서버가 여기로 옮긴다
-   * (`TurnOperationSchema`에 없는 이유).
-   */
-  | { kind: "propose"; label: string };
+  | { kind: "match_stop" };
 
 /**
  * 한 번의 조작이 넘길 수 있는 최대 일수 — 한 시즌.
@@ -62,8 +48,6 @@ export const TurnOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("skip_to_next_match"), date: DateString }),
   z.object({ kind: z.literal("enter_match") }),
   z.object({ kind: z.literal("match_stop") }),
-  z.object({ kind: z.literal("leave_negotiation") }),
-  z.object({ kind: z.literal("sign_contract"), negotiationId: z.string().min(1) }),
 ]);
 
 /**
@@ -83,11 +67,5 @@ export function operationLabel(operation: TurnOperation): string {
       return "경기장에 들어선다";
     case "match_stop":
       return "경기 중단";
-    case "leave_negotiation":
-      return "돌아가기";
-    case "sign_contract":
-      return "계약서에 서명";
-    case "propose":
-      return operation.label;
   }
 }

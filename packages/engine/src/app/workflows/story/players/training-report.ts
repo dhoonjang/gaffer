@@ -89,7 +89,7 @@ export function applyTrainingOutcomes(
     /**
      * 판정을 받는 사이에 **팀을 떠난 선수**는 더 이상 우리 장부의 대상이 아니다.
      * 브리프는 구간이 끝난 자리에서 짓지만 판정은 그 뒤에 돌아오므로, 그 사이의
-     * 이적·임대가 남긴 선수를 여기서 다시 걸러 낸다.
+     * 계약 만료·은퇴로 떠난 선수를 여기서 다시 걸러 낸다.
      */
     if (player.teamId !== state.userTeamId) continue;
 

@@ -76,9 +76,7 @@ function OfferCard({ offer: o }: { offer: OfferRow }) {
         <span className="until">{humanDate(o.expiresOn)}까지</span>
       </div>
       {o.position !== null && <div className="offer-why">제안 당시 리그 {o.position}위</div>}
-      <div className="offer-why">
-        연봉 {formatMoney(o.salary)} · {o.years}년 · 이적 예산 약속 {formatMoney(o.budgetPledge)}
-      </div>
+      <div className="offer-why"></div>
       {/* 보상금은 감독의 돈이 아니다 — 구단이 구단에 무는 돈이다 (career.md §5.1) */}
       {o.compensation !== null && (
         <div className="offer-why">보상금 {formatMoney(o.compensation)} — 지금 구단이 받는다</div>

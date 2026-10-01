@@ -2,23 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   activeContract,
   applyFinanceEvent,
-  arrivedResponses,
-  respondOffer,
   buildOfficeViews,
   buildPlayerCard,
-  marketValueOf,
   seasonStatOf,
   cupProgressOf,
   type BracketStageView,
   financeOf,
   humanizePlayerIds,
-  loanPlayer,
   motmOf,
   type MatchReportPlayerView,
-  openNegotiationFor,
-  pendingVerdicts,
-  playersOf,
-  sendOffer,
   setTraining,
   startMatch,
   userPlayers,
@@ -139,43 +131,8 @@ describe("오피스 뷰 — 스쿼드", () => {
   });
 });
 
-/**
- * **임대 보낸 선수는 명단에 선다** — 계약이 우리 것이라 표가 소속이 아니라 계약을
- * 읽는다 (transfer.md §2). 다만 부릴 수 있는 인원은 아니라, 인원을 세는 자리에
- * 섞이면 감독이 없는 선수로 판을 짠다.
- */
-describe("오피스 뷰 — 임대 보낸 선수", () => {
-  const state = createTestGame();
-  const target = userPlayers(state)
-    .filter((p) => p.squadLevel === "reserve" && p.positions[0]?.position !== "GK")
-    .sort((a, b) => a.attributes.overall - b.attributes.overall)[0]!;
-  const loaned = loanPlayer(state, { playerId: target.id, teamId: "chelsea" });
-  const views = buildOfficeViews(state);
-
-  it("명단에 임대 행이 서고 loan 칸이 채워진다", () => {
-    expect(loaned.ok, loaned.message).toBe(true);
-    const row = views.squad.players.find((p) => p.id === target.id);
-    expect(row).toBeDefined();
-    expect(row!.loan).not.toBeNull();
-    expect(row!.loan!.teamId).toBe("chelsea");
-    // 약칭이다 — 화면은 카탈로그를 못 읽는다
-    expect(row!.loan!.team).not.toBe("chelsea");
-    expect(row!.loan!.until).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  it("선발·벤치와 1·2군 인원에는 섞이지 않는다", () => {
-    const row = views.squad.players.find((p) => p.id === target.id)!;
-    expect(row.role).toBe("스쿼드");
-    expect(views.squad.players.filter((p) => p.role === "선발")).toHaveLength(11);
-    // 층으로 센 둘의 합이 임대 하나만큼 명단보다 적다
-    expect(views.squad.firstTeamCount + views.squad.reserveCount).toBe(
-      views.squad.players.length - 1,
-    );
-  });
-});
-
 describe("오피스 뷰 — 달력 (일정 축)", () => {
-  it("경기·훈련·이적창이 한 축에 시간과 함께 나온다", () => {
+  it("경기·훈련이 한 축에 시간과 함께 나온다", () => {
     const state = createTestGame();
     setTraining(state, {
       sessions: [
@@ -192,9 +149,6 @@ describe("오피스 뷰 — 달력 (일정 축)", () => {
     // 유저 팀 경기만 (리그 38 + 대항전)
     expect(cal.entries.filter((e) => e.type === "match")).toHaveLength(userFixtureCount(state));
     expect(cal.entries.some((e) => e.title?.includes("패스 훈련"))).toBe(true);
-    // 이적창 엔트리
-    expect(cal.entries.some((e) => e.type === "window-open")).toBe(true);
-    expect(cal.windows.find((w) => w.kind === "여름")?.open).toBe(true);
   });
 
   it("일지는 저장하지 않고 기록 테이블에서 파생된다", () => {
@@ -215,7 +169,7 @@ describe("오피스 뷰 — 달력 (일정 축)", () => {
   it("일지에는 미래 일정이 들어가지 않는다 (지나간 일만)", () => {
     const state = createTestGame();
     const cal = buildOfficeViews(state).calendar;
-    // 7/1 시작 시점 — 겨울 이적창(2027-01)은 아직 일어나지 않았다
+    // 7/1 시작 시점 — 앞으로의 일정은 아직 일어나지 않았다
     for (const [date, lines] of Object.entries(cal.events)) {
       expect(date <= state.date).toBe(true);
       expect(lines.length).toBeGreaterThan(0);
@@ -277,37 +231,11 @@ describe("오피스 뷰 — 달력 (일정 축)", () => {
 });
 
 describe("오피스 뷰 — 재정·순위·커리어", () => {
-  it("피드는 선수별 상각을 한 줄로 접고 합계·명세가 원장과 같다", () => {
-    const state = createTestGame();
-    advanceDays(state, 10);
-    const ledger = financeOf(state, state.userTeamId).ledger;
-    const raw = ledger.filter((e) => e.category === "amortisation" && e.label !== "");
-    expect(raw.length).toBeGreaterThan(10); // 매월 1일 선수마다 한 줄
-
-    const feed = buildOfficeViews(state).finance.feed;
-    const folded = feed.filter((row) => row.category === "amortisation");
-    // 상각이 원장에선 스물몇 줄인데 피드에선 그 날짜만큼만 선다
-    expect(folded.length).toBeLessThan(raw.length);
-
-    const days = new Set(raw.map((e) => e.date));
-    for (const date of days) {
-      const perPlayer = raw.filter((e) => e.date === date && !e.label.includes(" — "));
-      const row = folded.find((r) => r.date === date && r.label === "")!;
-      expect(row.items).toHaveLength(perPlayer.length);
-      expect(row.amount).toBe(perPlayer.reduce((sum, e) => sum + e.amount, 0));
-      expect(new Set(row.items!.map((i) => i.label))).toEqual(
-        new Set(perPlayer.map((e) => e.label)),
-      );
-      expect(row.noncash).toBe(true);
-    }
-  });
-
-  it("접은 뒤 세므로 상각이 다른 사건을 피드 밖으로 밀지 않는다", () => {
+  it("접은 뒤 세므로 선수별 주급이 다른 사건을 피드 밖으로 밀지 않는다", () => {
     const state = createTestGame();
     advanceDays(state, 10);
     const feed = buildOfficeViews(state).finance.feed;
-    // 접기 전엔 최근 30건이 상각 한 날짜로 덮였다
-    expect(feed.some((row) => row.category !== "amortisation")).toBe(true);
+    expect(feed.some((row) => row.category !== "player_wages")).toBe(true);
     expect(new Set(feed.map((row) => row.id)).size).toBe(feed.length);
     // 한 건짜리 줄은 접지 않는다
     expect(feed.find((row) => row.category === "staff_wages")!.items).toBeUndefined();
@@ -353,14 +281,14 @@ describe("오피스 뷰 — 재정·순위·커리어", () => {
     const state = createTestGame();
     advanceDays(state, 10);
     const finance = financeOf(state, state.userTeamId);
-    const head = FINANCE_CATEGORY_KO.amortisation;
+    const head = FINANCE_CATEGORY_KO.player_wages;
     finance.ledger = finance.ledger.map((e) =>
-      e.category === "amortisation" && !e.label.includes(" — ")
+      e.category === "player_wages" && !e.label.includes(" — ")
         ? { ...e, label: `${head} — ${e.label}` }
         : e,
     );
     const row = buildOfficeViews(state)
-      .finance.feed.filter((r) => r.category === "amortisation")
+      .finance.feed.filter((r) => r.category === "player_wages")
       .find((r) => (r.items?.length ?? 0) > 1)!;
     expect(row.label).toBe("");
     expect(row.items!.every((i) => !i.label.includes(head))).toBe(true);
@@ -974,16 +902,11 @@ describe("선수 카드 — 남의 구단 선수의 안개 (player.md §9.5)", (
     }
   });
 
-  it("참 능력치도 참 시장가도 그대로 실리지 않는다", () => {
+  it("참 능력치가 그대로 실리지 않는다", () => {
     const shifted = cards.filter((c, i) => c.overall !== theirs[i]!.attributes.overall);
-    const fuzzed = cards.filter((c, i) => c.marketValue !== marketValueOf(state, theirs[i]!));
     expect(
       shifted.length,
       "종합이 참값 그대로면 안개가 표현 계층에 닿지 않은 것이다",
-    ).toBeGreaterThan(0);
-    expect(
-      fuzzed.length,
-      "시장가가 참값 그대로면 `deal_odds`와 카드가 다른 자를 든 것이다",
     ).toBeGreaterThan(0);
   });
 
@@ -1015,41 +938,5 @@ describe("선수 카드 — 남의 구단 선수의 안개 (player.md §9.5)", (
     expect(card.contractUntil).toBe(activeContract(state, player!.id)?.until ?? null);
     expect(card.nationality).toBe(player!.nationality ?? null);
     expect(card.season.goals).toBe(seasonStatOf(state, player!.id)?.goals ?? 0);
-  });
-});
-
-/**
- * **안건 띠** — 답을 미루면 기한이 지나가는 일 (overview.md §5).
- *
- * 화면이 그리는 것은 이 목록 그대로라 칩이 사라지면 눈에 보이지만, **접는 규칙과
- * 겹침**은 조용히 어긋난다: 이름이 셋 늘어서도, 협상 하나가 칩 둘로 서도 화면은
- * 멀쩡해 보인다.
- */
-describe("안건 띠 — views.attention", () => {
-  /**
-   * **협상은 갈래 하나로만 접힌다** (overview.md §5). 답할 날이 된 라운드는 그날의 tick이
-   * 앵커로 굳히므로(transfer.md §12-1) 띠가 드는 것은 감독의 차례로 남은 자리뿐이고,
-   * 그 자리가 칩 둘로 갈리면 화면은 멀쩡해 보이는 채로 같은 협상을 두 번 센다.
-   */
-  it("답할 차례의 협상은 칩 하나로 선다 — 굳기 전에는 서지 않는다", () => {
-    const state = createTestGame();
-    const target = playersOf(state, "chelsea").find((p) => p.teamId !== state.userTeamId)!;
-    expect(
-      sendOffer(state, { playerId: target.id, fee: 20_000_000, weeklyWage: 90_000, years: 4 }).ok,
-    ).toBe(true);
-    const negotiation = openNegotiationFor(state, target.id)!;
-    // 답할 날이 됐다 — 굳히는 것은 코어이고 감독이 할 일은 아직 없다
-    negotiation.rounds[negotiation.rounds.length - 1]!.respondsOn = state.date;
-    expect(arrivedResponses(state)).toHaveLength(1);
-    expect(buildOfficeViews(state).attention.filter((i) => i.kind === "verdicts")).toHaveLength(0);
-
-    // 상대가 되불러야 감독의 차례다
-    expect(respondOffer(state, { negotiationId: negotiation.id, verdict: "counter" }).ok).toBe(
-      true,
-    );
-    expect(pendingVerdicts(state).map((v) => v.negotiation.id)).toContain(negotiation.id);
-    expect(buildOfficeViews(state).attention.filter((i) => i.kind === "verdicts")).toMatchObject([
-      { count: 1, name: target.name },
-    ]);
   });
 });

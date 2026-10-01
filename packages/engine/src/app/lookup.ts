@@ -1,7 +1,10 @@
+import { observedOverall } from "@story-fm/domain";
+import type { PlayerMoveKind } from "@story-fm/domain";
+import { describeStaffPool } from "../story/people/staff-employment";
+import { openManagerOffers } from "../story/world/manager-employment";
 import { pendingManagerInterviews } from "../common/core/state";
 import { interviewFactText } from "@story-fm/domain";
 import { personaBookOf } from "../common/people/character-book";
-import { scoutingReportLine } from "../negotiation/views/scouting";
 import type {
   CallUp,
   Contract,
@@ -61,7 +64,7 @@ import {
 } from "@story-fm/domain";
 import { rankByName } from "../common/core/name-match";
 import { pickTeam } from "../common/core/team-ref";
-import { formatMoney } from "../negotiation/finance/finance";
+import { formatMoney } from "../common/finance/finance";
 import { observedPlayerFacts, youthCandidateFog } from "../common/players/observation";
 import { derbyRecordOf } from "../common/world/derby";
 import { derbyOf } from "../common/data/derbies";
@@ -95,7 +98,6 @@ import {
 } from "../match/flow/preview";
 import { numberLineageOf } from "../common/players/numbers";
 import { squadStatusOf } from "../common/players/contract-status";
-import { contractTermsOf } from "../negotiation/market/terms";
 import {
   isHomegrownFor,
   occupiesSquadList,
@@ -122,7 +124,7 @@ import {
   resolveCompetition,
   resolveCompetitionId,
   type PlayerPool,
-} from "../negotiation/players/player-pool";
+} from "../common/players/player-pool";
 import { domesticStageMatches } from "../match/competition/domestic-cup";
 import { drawParts, drawTitle } from "../match/competition/draw-schedule";
 import { isClubTeam } from "../common/data/team-catalog";
@@ -152,18 +154,14 @@ import {
   seasonHistoryOf,
   seasonLabelOf,
 } from "../match/competition/records";
-import { openManagerOffers } from "../negotiation/market/manager-market";
-import { observedMarketValue } from "../negotiation/market/market";
 import {
-  arrivedScoutReport,
   attributeLine,
   KNOWLEDGE_RANK,
   knowledgeNote,
-  observedOverall,
   overallView,
   potentialView,
   strengthsAndWeaknesses,
-} from "../negotiation/players/scouting";
+} from "../common/players/observation-view";
 import {
   knowledgeOf,
   observationOf,
@@ -180,7 +178,6 @@ import {
   groupOf,
   isAvailableFor,
   isOurPlayer,
-  onLoanFromUs,
   openInjury,
   ourPlayers,
   playerById,
@@ -197,23 +194,16 @@ import {
   teamShortNameIn,
   type GameState,
 } from "../common/core/state";
-import {
-  loanReportOf,
-  loanedOut,
-  unsignedYouthOriginOf,
-  type LoanReport,
-} from "../negotiation/market/departures";
 import { headCoachOf, staffOf } from "../common/people/persona";
-import { describeStaffPool } from "../negotiation/market/staff-market";
 
 /**
  * 읽기 전용 조회 (lookup) — GM이 온디맨드로 부르는 조회 도구의 엔진 구현.
  *
  * 왜 컨텍스트 대신 도구인가: 매 턴 스쿼드 표를 프롬프트에 밀어넣으면 (a) 캐시
  * 밖 토큰을 매번 다시 읽고 (b) 그래도 타 팀·순위·일정은 못 담는다. 조회를
- * 도구로 열면 필요할 때만 읽고, 안개(scouting.ts)를 같은 자리에서 적용할 수 있다.
+ * 도구로 열면 필요할 때만 읽고, 안개(observation.ts)를 같은 자리에서 적용할 수 있다.
  *
- * 규약: 상태를 절대 바꾸지 않는다. 타 팀 정보는 반드시 scouting.ts를 거친다 —
+ * 규약: 상태를 절대 바꾸지 않는다. 타 팀 정보는 반드시 observation.ts를 거친다 —
  * 여기서 참값 숫자를 흘리면 안개가 무의미해진다.
  */
 
@@ -311,36 +301,22 @@ function banWarningFor(state: GameState, p: GamePlayer): string {
 /**
  * 우리 팀 선수 한 줄 — 정확 수치 (오피스 뷰가 이미 보여주는 정보).
  *
- * **임대 보낸 선수도 여기 선다** — 계약이 우리 것이라 지식 눈금이 `own`이다
- * (transfer.md §2). 다만 두 칸의 뜻이 갈린다:
- * - 역할 칸은 우리 배치가 아니라 **어디에 가 있는가**다. 임대 중에는 우리 전술판에
- *   그 선수의 자리가 없으므로(`assignmentFor`는 송출과 함께 지워졌다) `[1군]`으로
- *   서면 부릴 수 있는 인원으로 읽힌다.
- * - **전술 적응도는 빼고 그 구단의 연속 미출전을 적는다.** 우리 전술을 얼마나
- *   익혔는가는 남의 훈련장에 가 있는 동안 재는 값이 아니고, 그 자리에서 감독이
- *   알아야 하는 사실은 "뛰고 있는가"다 (`no-minutes`의 근거 수치).
- *
- * 시즌 기록(`statLine`)은 `seasonStatOf`가 **지금 소속의 행**을 읽으므로 빌린
- * 구단의 기록이 그대로 선다 — 갈아 끼울 것이 없다.
  */
 function ourRow(state: GameState, p: GamePlayer): string {
-  const loan = onLoanFromUs(state, p) ? loanReportOf(state, p.id) : null;
   const assignment = assignmentFor(state, p.id);
   const contract = activeContract(state, p.id);
   const stat = seasonStatOf(state, p.id);
   const injury = openInjury(state, p.id);
   const suspension = activeSuspension(state, p.id);
-  const role = loan
-    ? `[임대:${teamShortNameIn(state, loan.teamId)} ~${loan.until}]`
-    : squadLevelOf(p) === "reserve"
+  const role =
+    squadLevelOf(p) === "reserve"
       ? state.developmentFocus.includes(p.id)
         ? "[2군·집중 육성]"
         : "[2군]"
       : assignment
         ? `[${assignment.role === "starting" ? "선발" : "벤치"}:${assignment.position}]`
         : "[1군]";
-  const adaptation = loan ? "" : `적응${familiarityOf(state, p.id)} `;
-  const benched = loan && loan.benchRun > 0 ? ` · 최근 ${loan.benchRun}경기 명단 밖` : "";
+  const adaptation = `적응${familiarityOf(state, p.id)} `;
   const status = injury
     ? ` 부상(${injury.bodyPart}, ~${injury.expectedReturn})`
     : suspension
@@ -358,7 +334,7 @@ function ourRow(state: GameState, p: GamePlayer): string {
     `OVR${p.attributes.overall} 폼 ${formLabel(p.state.form)} ` +
     `체력${p.state.condition} ${adaptation}` +
     `${formatMoney(contract?.weeklyWage ?? 0)}${contractLabel(contract)} ` +
-    `${role} ${statLine(stat)}${benched}${status}${armband(p)}` +
+    `${role} ${statLine(stat)}${status}${armband(p)}` +
     // 홈그로운은 **우리 협회** 기준이다 — 임대 나간 선수를 빌린 구단 기준으로 재면
     // 같은 선수의 자격이 나가 있는 동안만 뒤집힌다 (searchPlayers의 필터와 같은 자)
     `${isHomegrownFor(p, state.userTeamId) ? " [홈그로운]" : ""}${occupiesSquadList(state, p) ? "" : " [U21·명단 밖]"}`
@@ -452,7 +428,7 @@ function statLine(
 
 /**
  * 계약 만료 꼬리 — ` ~YYYY-MM-DD`, 계약이 없으면 빈 문자열. **안개를 걸지 않는다**:
- * 계약 만료일은 부상·징계·이적과 같은 공개 기록 계열이다 (player.md §10).
+ * 계약 만료일은 부상·징계와 같은 공개 기록 계열이다 (player.md §10).
  */
 function contractLabel(contract: Contract | null): string {
   // 주급 바로 뒤에 서므로 사이를 띄운다 — 붙이면 `£150k~2028-06-30`이 금액 구간으로 읽힌다
@@ -460,8 +436,8 @@ function contractLabel(contract: Contract | null): string {
 }
 
 /**
- * 타 팀 선수 한 줄 — 능력치는 안개, **값과 계약은 시장의 공개 정보**다.
- * 시장가는 공개 정보의 추정이며, 계약 만료일은 계약 원장을 읽는다.
+ * 타 팀 선수 한 줄 — 능력치는 안개, **계약은 공개 정보**다. 계약 만료일은 계약
+ * 원장을 읽는다.
  *
  * 등번호는 싣지 않는다 — 셔츠에 적힌 공개 사실이지만 이 줄이 답하는 물음은 값·계약·
  * 기량이고, 남의 구단 번호로 감독이 할 일은 없다. 우리 번호를 GM이 지어내던 것이
@@ -470,19 +446,18 @@ function contractLabel(contract: Contract | null): string {
 function theirRow(state: GameState, p: GamePlayer): string {
   const stat = seasonStatOf(state, p.id);
   const knowledge = knowledgeOf(state, p.id);
-  const source = knowledge === "scouted" ? "스카우팅" : knowledge === "seen" ? "직접 관전" : "평판";
+  const source = knowledge === "seen" ? "직접 관전" : "평판";
   const injury = openInjury(state, p.id);
   const contract = activeContract(state, p.id);
   return (
     `${p.id} ${p.name} ${ageOf(p.birthdate, state.date)}세 ${naturalPositionOf(p).position} ` +
     `${teamShortNameIn(state, p.teamId)} · ${overallView(state, p)} (${source}) · ` +
-    `최근 기록 이적료 ${observedMarketValue(state, p) === null ? "미확인" : formatMoney(observedMarketValue(state, p)!)} · ` +
-    `계약 ${contract ? contract.until : "없음(자유계약)"} · ` +
+    `계약 ${contract ? contract.until : "없음(무소속)"} · ` +
     `${statLine(stat)}${injury ? ` · 부상 중(~${injury.expectedReturn})` : ""}`
   );
 }
 
-/** 우리 행인가 남의 행인가 — **소속이 아니라 계약이 가른다** (transfer.md §2) */
+/** 우리 행인가 남의 행인가 */
 function playerRow(state: GameState, p: GamePlayer): string {
   return isOurPlayer(state, p) ? ourRow(state, p) : theirRow(state, p);
 }
@@ -497,7 +472,7 @@ function sortRating(state: GameState, p: GamePlayer): number {
 
 /**
  * 체력은 지식 5단계가 아니라 §9.2의 채널 — 경기 밖 **우리 선수**는 참값이고 타 팀은
- * 읽은 값이다. 임대 나간 선수도 우리 계약이라 참값이다(`ourRow`가 찍는 값과 같은 자다).
+ * 읽은 값이다(`ourRow`가 찍는 값과 같은 자다).
  */
 function sortCondition(state: GameState, p: GamePlayer): number {
   return isOurPlayer(state, p)
@@ -521,7 +496,7 @@ function contractIndexOf(state: GameState): Map<string, Contract> {
 }
 
 /**
- * 계약 잔여 일수 — **계약이 없으면 0일이다.** 자유계약 선수는 "이미 끝난 계약"이라
+ * 계약 잔여 일수 — **계약이 없으면 0일이다.** 무소속 선수는 "이미 끝난 계약"이라
  * 잔여가 가장 짧은 쪽이고, 거르는 자와 세우는 자가 같은 규칙을 읽는다.
  */
 function daysLeftOn(state: GameState, contract: Contract | undefined): number {
@@ -543,7 +518,7 @@ function sortKeyOf(
   competitionId: string | null,
 ): (p: GamePlayer) => number {
   if (sortBy === "age") return () => 0;
-  if (sortBy === "rating" || sortBy === "fatigue" || sortBy === "value" || sortBy === "potential") {
+  if (sortBy === "rating" || sortBy === "fatigue" || sortBy === "potential") {
     // 안개 키는 지식 수준 파생이라 비싸다 — 풀당 한 번만 뽑고 비교는 그 값으로 한다
     const fogged = new Map(pool.map((p) => [p.id, foggedKeyOf(state, p, sortBy)] as const));
     return (p) => fogged.get(p.id) ?? 0;
@@ -555,7 +530,7 @@ function sortKeyOf(
       : (p) => daysLeftOn(state, contracts.get(p.id));
   }
   /**
-   * 스탯은 시즌·팀까지 같아야 그 선수의 줄이다 — 시즌 중 이적하면 팀별로 갈린다.
+   * 스탯은 시즌·팀까지 같아야 그 선수의 줄이다 — 시즌 중 소속이 바뀌면 팀별로 갈린다.
    *
    * **대회로 좁힌 물음은 그 대회의 행으로 답한다** ("우리 리그 최다 득점"). 안 좁혔으면
    * 대회 행을 모두 접은 시즌 합계다 — 화면의 "출전 N"과 같은 수여야 한다
@@ -589,19 +564,17 @@ function sortKeyOf(
   }
 }
 
-/** 안개에서 파생하는 정렬 키 — 넷 다 그 행이 찍는 값과 같은 관측값이다 */
+/** 안개에서 파생하는 정렬 키 — 셋 다 그 행이 찍는 값과 같은 관측값이다 */
 function foggedKeyOf(
   state: GameState,
   p: GamePlayer,
-  sortBy: "rating" | "fatigue" | "value" | "potential",
+  sortBy: "rating" | "fatigue" | "potential",
 ): number {
   switch (sortBy) {
     case "rating":
       return sortRating(state, p);
     case "fatigue":
       return sortCondition(state, p);
-    case "value":
-      return observedMarketValue(state, p) ?? -1;
     // 구간이 없으면 성장 여력을 짐작할 근거가 없다 — 0으로 두어 맨 뒤에 선다
     default:
       return potentialBand(state, p)?.low ?? 0;
@@ -629,21 +602,17 @@ export interface SearchPlayersInput {
   /** 부상·정지 제외 */
   availableOnly?: boolean;
   /**
-   * 계약이 이 일수 안에 끝나는 선수 — "1년 남은 선수를 싸게"(transfer.md §6)의 축.
-   * 무계약(자유계약)은 잔여 0일이라 언제나 걸린다.
+   * 계약이 이 일수 안에 끝나는 선수 — 만료되면 무소속으로 떠나는 사람들.
+   * 무계약(무소속)은 잔여 0일이라 언제나 걸린다.
    */
   contractEndsWithinDays?: number;
-  /** 관측 시장가 상한 (£) — 참값이 아니라 흐린 값으로 거른다 (player.md §10) */
-  maxValue?: number;
   /** 주급 상한 (£/주) — 계약서의 값 그대로, 흐리지 않는다 */
   maxWage?: number;
-  /** 이적 리스트 등재 여부 — 리스트는 우리가 세운 것뿐이다 (AI 구단은 세우지 않는다) */
-  listed?: boolean;
   /** 우리 협회 기준 홈그로운 — 등록 명단 8명 규칙(team.md §5)의 그 자격 */
   homegrown?: boolean;
   /** 관측 잠재력 구간의 **하한**이 이 값 이상. 구간이 없는 선수는 통과하지 못한다 */
   minPotential?: number;
-  /** 최소 지식 수준 — `"scouted"`면 스카우팅을 마쳤거나 그보다 잘 아는 선수만 */
+  /** 최소 지식 수준 — `"seen"`이면 직접 상대해 봤거나 그보다 잘 아는 선수만 */
   knowledge?: Knowledge;
   /** 주발 — 행이 찍는 그 세 갈래 (`footLabel`과 같은 자) */
   foot?: StrongFoot;
@@ -654,7 +623,6 @@ export interface SearchPlayersInput {
     | "goals"
     | "apps"
     | "wage"
-    | "value"
     | "contract"
     | "assists"
     | "seasonRating"
@@ -673,7 +641,7 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
   const competition = resolveCompetition(input.competition);
   if (!competition.ok) return competition;
   const competitionId = competition.competitionId;
-  // 대회·자리·나이는 스카우트 임무와 **같은 자로** 거른다 (world/player-pool.ts)
+  // 대회·자리·나이로 거른다 (common/players/player-pool.ts)
   const poolFilter: PlayerPool = playerPoolOf(state, {
     competitionId,
     ...(input.position === undefined ? {} : { position: input.position }),
@@ -686,12 +654,10 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
     input.contractEndsWithinDays !== undefined || input.maxWage !== undefined
       ? contractIndexOf(state)
       : null;
-  const listed =
-    input.listed === undefined ? null : new Set(state.transferList.map((l) => l.gamePlayerId));
 
   /**
-   * **싼 조건이 앞에 선다.** 안개에서 파생하는 셋(지식 수준·잠재력 구간·관측
-   * 시장가)은 선수마다 기록을 훑으므로, 앞의 조건이 좁혀 준 만큼만 계산한다.
+   * **싼 조건이 앞에 선다.** 안개에서 파생하는 둘(지식 수준·잠재력 구간)은 선수마다
+   * 기록을 훑으므로, 앞의 조건이 좁혀 준 만큼만 계산한다.
    */
   /**
    * 「지금 뛸 수 있나」는 **그 선수 팀의 다음 대회 경기**로 답한다 (match.md §6) —
@@ -706,30 +672,16 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
     nextCompetitionCache.set(ownerId, found);
     return found;
   };
-  /**
-   * 우리 팀을 물으면 풀은 **우리 계약**이다 — 임대 보낸 선수도 들어온다
-   * (transfer.md §2). 남의 팀 풀은 그대로 소속(`playersOf`)이다: 그 구단이 빌려 간
-   * 우리 선수는 그 구단 명단에 **실제로 있으므로** 거기서 빠지면 안 된다.
-   */
   const ourPool = teamId !== null && teamId === state.userTeamId;
   const pool0 = teamId ? (ourPool ? ourPlayers(state) : playersOf(state, teamId)) : state.players;
   const narrowed = pool0.filter((p) => {
     if (!inPlayerPool(state, p, poolFilter)) return false;
-    /**
-     * 1군·2군은 **우리 명단의 층**을 묻는 조건이다. 임대 나간 선수가 달고 있는 층은
-     * 빌린 구단의 것이라 우리 기준으로는 뜻이 없어, 우리 풀을 층으로 좁힐 때는 빠진다.
-     * 남의 팀을 그 조건으로 물으면 답은 그 구단의 층이라 그대로 선다.
-     */
-    if (input.squadLevel) {
-      if (ourPool && onLoanFromUs(state, p)) return false;
-      if (squadLevelOf(p) !== input.squadLevel) return false;
-    }
+    if (input.squadLevel && squadLevelOf(p) !== input.squadLevel) return false;
     if (input.foot !== undefined && strongFootOf(p.foot) !== input.foot) return false;
     // 홈그로운은 **우리 협회** 기준이다 — 지금 소속이 아니라 우리가 등록할 때의 자격
     if (input.homegrown !== undefined && isHomegrownFor(p, state.userTeamId) !== input.homegrown) {
       return false;
     }
-    if (listed && listed.has(p.id) !== input.listed) return false;
     if (input.availableOnly && !isAvailableFor(state, p, nextCompetitionFor(p.teamId))) {
       return false;
     }
@@ -754,9 +706,6 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
       const band = potentialBand(state, p);
       if (band === null || band.low < input.minPotential) return false;
     }
-    const recordedFee = observedMarketValue(state, p);
-    if (input.maxValue !== undefined && recordedFee !== null && recordedFee > input.maxValue)
-      return false;
     return true;
   });
   // 이름은 마지막에 — 다른 조건으로 좁힌 만큼만 자모까지 내려가면 된다
@@ -785,14 +734,9 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
   });
 
   // 무엇을 뒤졌는지 밝힌다 — 풀을 모르면 "리그 득점왕"이라는 답이 조용히 어긋난다
-  // 무엇을 뒤졌는지에는 **임대까지 포함했다는 사실**도 든다 — 우리 팀을 물었는데
-  // 남의 셔츠를 입은 이름이 서는 이유가 대상 줄에 없으면 그 줄이 곧 오독이 된다
-  const loanedInPool = ourPool && !input.squadLevel ? loanedOut(state).length : 0;
   const scope =
     [
-      teamId
-        ? `${teamNameIn(state, teamId)}${loanedInPool > 0 ? ` (임대 ${loanedInPool}명 포함)` : ""}`
-        : null,
+      teamId ? teamNameIn(state, teamId) : null,
       competitionId ? competitionName(competitionId) : null,
       input.squadLevel ? (input.squadLevel === "first" ? "1군" : "2군") : null,
     ]
@@ -831,19 +775,12 @@ function trainingNoteFor(state: GameState, playerId: string, date: string): stri
 }
 
 const CAUSE_KO: Record<string, string> = { match: "경기", training: "훈련", other: "기타" };
-/**
- * 이동 한 줄의 낱말 — **갈래 코드와 사유 코드를 한 표가 든다**(둘은 겹치지 않는다,
- * `PLAYER_EXIT_KO`와 같은 규약). 사유가 갈래보다 정확한 줄만 사유로 적는다: 계약을
- * 받지 못하고 아카데미를 나온 줄은 `type`이 `free`라 그대로 두면 「자유계약」이 되는데,
- * 그는 끝낼 계약을 가진 적이 없다.
- */
-const TRANSFER_KO: Record<string, string> = {
-  transfer: "이적",
-  loan: "임대",
-  free: "자유계약",
+/** 이동 한 줄의 낱말 — 갈래 코드마다 하나 */
+const MOVE_KO: Record<PlayerMoveKind, string> = {
   youth: "유스 승격",
+  reinforcement: "합류",
+  expiry: "계약 만료",
   retire: "은퇴",
-  "youth-unsigned": "유스 미계약",
 };
 
 /**
@@ -931,7 +868,7 @@ function careerLines(state: GameState, p: GamePlayer): string[] {
 /**
  * 선수의 **이력** — 부상·징계·이동. 현재 상태만 보여주면 "유리몸인가",
  * "경고 몇 장이야(5장이면 자동 정지)" 같은 판단을 감독이 할 수 없다.
- * 부상·징계·이적은 공개 기록이라 타 팀 선수에게도 안개를 걸지 않는다.
+ * 부상·징계·이동은 공개 기록이라 타 팀 선수에게도 안개를 걸지 않는다.
  */
 function historyLines(state: GameState, p: GamePlayer): string[] {
   const lines: string[] = [];
@@ -981,14 +918,13 @@ function historyLines(state: GameState, p: GamePlayer): string[] {
     );
   }
 
-  const moves = state.transfers
-    .filter((t) => t.gamePlayerId === p.id)
+  const moves = state.moves
+    .filter((m) => m.gamePlayerId === p.id)
     .slice(-3)
     .map(
-      (t) =>
-        `${t.date} ${TRANSFER_KO[t.reason ?? ""] ?? TRANSFER_KO[t.type] ?? t.type} ` +
-        `${t.fromTeamId ? teamShortNameIn(state, t.fromTeamId) : "—"}→${t.toTeamId ? teamShortNameIn(state, t.toTeamId) : "—"}` +
-        (t.fee > 0 ? ` ${formatMoney(t.fee)}` : ""),
+      (m) =>
+        `${m.date} ${MOVE_KO[m.kind]} ` +
+        `${m.fromTeamId ? teamShortNameIn(state, m.fromTeamId) : "—"}→${m.toTeamId ? teamShortNameIn(state, m.toTeamId) : "—"}`,
     );
   if (moves.length > 0) lines.push(`이동 이력: ${moves.join(" / ")}`);
 
@@ -1101,12 +1037,6 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
   const knowledge: Knowledge = facts.knowledge;
   const stat = seasonStatOf(state, p.id);
   const contract = activeContract(state, p.id);
-  /**
-   * **계약 없음과 정보 없음은 다른 사실이다** — 아카데미를 계약 없이 나온 아이는
-   * 「알 수 없다」가 아니라 「아직 아무도 계약을 주지 않았다」이고, 어느 아카데미가
-   * 놓았는지가 감독이 그를 판단할 근거다 (transfer.md §6 · season.md §6).
-   */
-  const youthOrigin = unsignedYouthOriginOf(state, p.id);
   const injury = openInjury(state, p.id);
   const suspension = activeSuspension(state, p.id);
   const lines: string[] = [
@@ -1116,20 +1046,6 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
     `능력치: ${attributeLine(state, p, facts)}`,
     `종합: ${overallView(state, p, facts)} · 잠재력: ${potentialView(state, p, facts)}`,
   ];
-  /**
-   * 끝난 스카우팅 — **도착한 보고서를 다시 읽는 자리다.**
-   *
-   * 사무실에 스카우팅 화면이 없어 채팅 카드 한 장이 유일한 자리였고, 그 한 장을
-   * 놓치면 며칠을 기다려 산 정보를 게임 안에서 되찾을 길이 없었다
-   * (player.md §9.4-1). 새 도구를 세우지 않는 것은 감독이 묻는 것이 「그 선수
-   * 어땠지」이고 그 물음의 자리가 이미 여기 하나이기 때문이다.
-   *
-   * ⚠️ 금액은 카드(`scoutReportCard`)와 **같은 자에서** 낸다 — 값이 갈리면 한 화면이
-   * 두 말을 한다. 우리 선수에게는 세우지 않는다: 데려온 뒤의 요구액·기대 주급은
-   * 그 선수에 대한 사실이 아니다.
-   */
-  const lastReport = arrivedScoutReport(state, p.id);
-  if (lastReport) lines.push(scoutingReportLine(lastReport));
 
   if (knowledge === "own") {
     // 등급이 아니라 이력이다 — 위태로운지는 읽는 쪽이 판단한다 (player.md §5.3)
@@ -1142,36 +1058,13 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
         .join(" / ")}`,
     );
     const assignment = assignmentFor(state, p.id);
-    /**
-     * **임대 나간 선수에게 "배치 없음 (예비 스쿼드)"는 거짓이다** — 우리 전술판에
-     * 자리가 없는 것이 아니라 남의 훈련장에 가 있다. 그 사실이 전술 칸을 대신하고,
-     * 아래 리포트 한 줄이 그 구단에서 무슨 일이 있었는지를 잇는다 (transfer.md §2).
-     */
-    const loan = onLoanFromUs(state, p) ? loanReportOf(state, p.id) : null;
     lines.push(
-      loan
-        ? `전술: 임대 중 — ${teamNameIn(state, loan.teamId)} · ${loan.until} 복귀`
-        : assignment
-          ? `전술: ${assignment.role === "starting" ? "선발" : "벤치"} ${assignment.position}` +
+      assignment
+        ? `전술: ${assignment.role === "starting" ? "선발" : "벤치"} ${assignment.position}` +
             ` (${roleLabel(assignment.position, assignment.roleId)})` +
             ` · 전술적응 ${assignment.familiarity}`
-          : "전술: 배치 없음 (예비 스쿼드)",
+        : "전술: 배치 없음 (예비 스쿼드)",
     );
-    if (loan) {
-      /**
-       * 임대 리포트 — **사실만.** `no-minutes`·`injury`는 리콜을 고민할 근거 코드이고
-       * (`LoanConcern`), 여기 적히는 것은 그 코드가 뜻하는 수치다. 부상은 카드가
-       * 이미 제 줄로 세우므로 여기서 두 번 적지 않는다.
-       */
-      const report = [
-        `${teamShortNameIn(state, loan.teamId)} 출전${loan.apps}/득점${loan.goals}/도움${loan.assists}` +
-          (loan.rating === null ? "" : `/평점${loan.rating.toFixed(2)}`),
-        loan.reserveApps > 0 ? `2군 출전${loan.reserveApps}` : null,
-        loan.benchRun > 0 ? `최근 ${loan.benchRun}경기 명단 밖` : null,
-        `임대 이후 성장 +${loan.growth}`,
-      ].filter((x): x is string => x !== null);
-      lines.push(`임대 리포트: ${report.join(" · ")}`);
-    }
     /**
      * 최근 성장 — **대상은 낱말로 싣는다.** `pos:CB`는 장부의 코드지 표기가
      * 아닌데, 그대로 실으면 모델이 그 코드를 그대로 감독에게 옮긴다.
@@ -1203,9 +1096,7 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
    * 감독이 한 말 그대로가 사실이라 그 줄이 그대로 선다.
    */
   const contractFacts =
-    knowledge === "own"
-      ? [`${SQUAD_STATUS_KO[squadStatusOf(state, p)]} 지위`, ...contractTermsOf(state, p.id)]
-      : [];
+    knowledge === "own" ? [`${SQUAD_STATUS_KO[squadStatusOf(state, p)]} 지위`] : [];
   /**
    * 등번호와 그 번호의 **계보** — 지위·약속과 같은 결의 장부 줄이다 (player.md §1.1).
    *
@@ -1258,11 +1149,7 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
             `계약: 주급 ${formatMoney(contract.weeklyWage)} · 만료 ${contract.until}`,
             ...contractFacts,
           ].join(" · ")
-        : youthOrigin
-          ? `계약: 없음 — 유스 출신 · ${
-              youthOrigin.teamId === null ? "아카데미" : teamShortNameIn(state, youthOrigin.teamId)
-            } 아카데미가 ${youthOrigin.on} 계약을 주지 않았다 · 프로 계약 이력 없음`
-          : "계약: 정보 없음",
+        : "계약: 정보 없음",
     ].join(" · "),
   );
   if (injury) {
@@ -1285,12 +1172,9 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
 
 export interface SquadViewInput {
   /**
-   * 1군 / 2군 / 임대 / 전체 — 기본 1군 (2군 18명까지 매번 읽을 이유가 없다).
-   *
-   * `loaned`는 우리가 **임대 보낸** 선수들이다. 계약이 우리 것이라 명단에 서지만
-   * (transfer.md §2) 전술 배치의 대상이 아니라 층이 아니라 제 구획을 갖는다.
+   * 1군 / 2군 / 전체 — 기본 1군 (2군 18명까지 매번 읽을 이유가 없다).
    */
-  level?: "first" | "reserve" | "all" | "loaned";
+  level?: "first" | "reserve" | "all";
   /** 배치 역할로 좁히기 — starting(선발 11) / bench / unassigned(예비) */
   role?: "starting" | "bench" | "unassigned";
 }
@@ -1351,7 +1235,7 @@ function assignedRow(
     `  ${position.padEnd(4)} ${p.name}${armband(p)} (${p.id}) ${ageOf(p.birthdate, state.date)}세 · ` +
     `${roleLabel(position, roleId)} · OVR${p.attributes.overall} 자리적합${roleFit(p.attributes, position, roleId)} 포지션적응${proficiencyAt(p, position)} ` +
     `전술적응${familiarity} · 폼 ${formLabel(p.state.form)} 체력${p.state.condition}` +
-    // **라인업을 세우는 자리가 재계약을 판단하는 자리이기도 하다** (finance.md §8.3) —
+    // **라인업을 세우는 자리가 계약 만료를 읽는 자리이기도 하다** —
     // 만료일이 없으면 감독은 여름에 사라질 주전을 붙박이로 세운다
     (contract ? ` · 계약${contractLabel(contract)}` : "") +
     ` · ${statLine(stat)}` +
@@ -1367,45 +1251,18 @@ function assignedRow(
  * 지어내지 않게 하려면 "현재 라인업"을 정확히 읽을 자리가 필요하다.
  *
  * 타 팀 스쿼드는 여기서 볼 수 없다 — 상대 라인업을 미리 아는 것은 안개 위반이다
- * (상대 전력은 `get_team`의 스카우팅 리포트로).
+ * (상대 전력은 `get_team`의 팀 프로필로).
  */
-/**
- * 임대 한 줄 — **그 구단의 장부다.** 우리 전술판의 자리·적응도가 없는 대신 어디에
- * 가 있고 언제 돌아오며 거기서 뛰고 있는지가 선다. 리콜의 근거는 코드가 아니라
- * **그 코드가 뜻하는 사실**로 적는다: "불러들이는 편이 좋겠습니다"는 GM의 몫이다
- * (overview.md §1 철칙 4).
- */
-function loanRow(state: GameState, p: GamePlayer, report: LoanReport): string {
-  const injury = report.injury;
-  const facts = [
-    `${teamShortNameIn(state, report.teamId)} · ~${report.until} 복귀`,
-    `OVR${p.attributes.overall}`,
-    statLine(seasonStatOf(state, p.id)),
-    report.benchRun > 0 ? `최근 ${report.benchRun}경기 명단 밖` : null,
-    report.growth > 0 ? `임대 이후 성장 +${report.growth}` : null,
-    injury ? `⚠부상(${injury.bodyPart}, ~${injury.expectedReturn})` : null,
-  ].filter((x): x is string => x !== null);
-  return (
-    `  ${naturalPositionOf(p).position.padEnd(4)} ${p.name} (${p.id}) ` +
-    `${ageOf(p.birthdate, state.date)}세 · ${facts.join(" · ")}`
-  );
-}
-
 export function squadView(state: GameState, input: SquadViewInput = {}): LookupResult {
   const teamId = state.userTeamId;
   const tactics = tacticsOf(state, teamId);
   const squad = playersOf(state, teamId);
-  // 임대 나간 선수는 전술 배치의 대상이 아니라 위 배치 버킷과 섞지 않는다
-  const loaned = loanedOut(state);
   const level = input.level ?? "first";
   const assignments = new Map(tactics.assignments.map((a) => [a.playerId, a]));
 
-  const inLevel =
-    level === "loaned"
-      ? []
-      : squad.filter((p) =>
-          level === "all" ? true : squadLevelOf(p) === (level === "reserve" ? "reserve" : "first"),
-        );
+  const inLevel = squad.filter((p) =>
+    level === "all" ? true : squadLevelOf(p) === (level === "reserve" ? "reserve" : "first"),
+  );
   const bucketOf = (p: GamePlayer): "starting" | "bench" | "unassigned" =>
     assignments.get(p.id)?.role ?? "unassigned";
   const sortRow = (a: GamePlayer, b: GamePlayer) => {
@@ -1447,10 +1304,10 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
       `선발 평균 적응 ${familiarityLabel(squadFamiliarity(state, teamId))}`,
     `1군 ${firstCount}명 (선발 ${tactics.assignments.filter((a) => a.role === "starting").length} · ` +
       `벤치 ${tactics.assignments.filter((a) => a.role === "bench").length}) · ` +
-      `2군 ${squad.length - firstCount}명 · 임대 ${loaned.length}명 · 조회 대상: ${
-        level === "all" ? "전체" : level === "reserve" ? "2군" : level === "loaned" ? "임대" : "1군"
+      `2군 ${squad.length - firstCount}명 · 조회 대상: ${
+        level === "all" ? "전체" : level === "reserve" ? "2군" : "1군"
       }`,
-    // 등록 명단 — 영입·승격 판단의 전제라 스쿼드를 볼 때 항상 함께 읽힌다
+    // 등록 명단 — 승격 판단의 전제라 스쿼드를 볼 때 항상 함께 읽힌다
     registrationLine(squadRegistrationOf(state, teamId)),
     `완장: ${
       squad
@@ -1473,20 +1330,6 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
     shown += rows.length;
     lines.push(`── ${label} ${rows.length}명 ──`, ...rows);
   }
-  /**
-   * 임대는 **자기 구획**이다 — 선발·벤치·예비는 전술판의 칸이고, 임대는 그 판에
-   * 올릴 수 없는 사람들이라 같은 목록에 섞으면 부릴 수 있는 인원으로 읽힌다.
-   * `role`로 좁힌 조회는 배치를 묻는 것이라 임대가 서지 않는다.
-   */
-  if ((level === "all" || level === "loaned") && !input.role && loaned.length > 0) {
-    const rows = loaned
-      .map((p) => ({ p, report: loanReportOf(state, p.id) }))
-      .filter((x): x is { p: GamePlayer; report: LoanReport } => x.report !== null)
-      .sort((a, b) => a.p.id.localeCompare(b.p.id))
-      .map(({ p, report }) => loanRow(state, p, report));
-    shown += rows.length;
-    lines.push(`── 임대 ${rows.length}명 ──`, ...rows);
-  }
   if (shown === 0) {
     lines.push("조건에 맞는 선수가 없습니다 (level·role을 확인하라)");
   }
@@ -1506,13 +1349,8 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
    * **스태프 구획** — 훈련장·의무실·보고서를 맡은 사람들 (people.md §2-2). 명단에
    * 섞지 않는 이유는 유스 후보와 같다: 판에 올릴 수 있는 인원이 아니다.
    *
-   * 자리를 찾는 풀까지 함께 서는 것은 감독이 "피지컬 코치 하나 데려오자"를 말할
-   * 근거가 여기 있어서다 — 지금 누가 있고 밖에 누가 있는가가 한 자리에서 읽힌다.
-   * 빈 절은 세우지 않는다.
-   *
    * ⚠️ **좁힌 조회에는 서지 않는다** — 층(`level`)도 역할(`role`)도 스쿼드의 칸이고
-   * 스태프는 그 칸에 없다. 층을 지정한 호출까지 이 절을 달면 「임대 1명」을 물은
-   * 답에 열세 줄이 딸려 온다.
+   * 스태프는 그 칸에 없다.
    */
   if (teamId === state.userTeamId && input.role === undefined && input.level === undefined) {
     // 수석코치는 자리가 비지 않는다 (`headCoachOf`) — 이 절은 언제나 한 줄 이상이다
@@ -1565,32 +1403,17 @@ function youthCandidateRow(state: GameState, row: YouthCandidate): string {
   );
 }
 
-/** 이력에 싣는 전 구단의 수 — 다 적으면 감독 줄 하나가 커리어 표가 된다 */
-const MANAGER_SPELLS_SHOWN = 2;
-
 /**
- * **벤치에 선 사람 한 줄** — 이름 · 재임 일수 · 전 구단
- * (→ ../../../../docs/negotiation/transfer.md §7 「감독 풀」).
- *
- * 감독은 자리가 아니라 사람이라, 상대 벤치를 읽을 때 **얼마나 오래 저기 있었고
- * 어디서 왔는가**가 이름 다음의 사실이다. 오늘 앉은 사람은 일수를 적지 않는다:
+ * **벤치에 선 사람 한 줄** — 이름 · 재임 일수. 오늘 앉은 사람은 일수를 적지 않는다:
  * 0인 칸은 적지 않는다.
  */
 function managerLine(state: GameState, bench: GameTeam): string {
   const since = bench.managerSince;
   const days = since === undefined ? 0 : diffDays(since, state.date);
-  const past = [...bench.managerSpells]
-    .reverse()
-    .slice(0, MANAGER_SPELLS_SHOWN)
-    .map((spell) => teamShortNameIn(state, spell.teamId));
-  return (
-    `감독: ${bench.managerName}` +
-    (days <= 0 ? "" : ` — 부임 ${days}일째`) +
-    (past.length === 0 ? "" : ` · 전 구단 ${past.join("·")}`)
-  );
+  return `감독: ${bench.managerName}` + (days <= 0 ? "" : ` — 부임 ${days}일째`);
 }
 
-// ── 팀 프로필 (상대 스카우팅 리포트) ───────────────────
+// ── 팀 프로필 (상대 전력) ───────────────────────────
 
 export function teamProfile(state: GameState, team: string): LookupResult {
   const resolved = resolveTeam(state, team);
@@ -1714,10 +1537,7 @@ export function teamProfile(state: GameState, team: string): LookupResult {
             `${nextH2h.neutral ? "중립" : nextH2h.homeTeamId === state.userTeamId ? "홈" : "원정"}`
         : "다음 맞대결: 남은 일정에 없음",
     );
-    lines.push(
-      `주력 선수 (안개 적용 — 정확한 수치는 스카우트 파견 후):`,
-      ...keyPlayers.map((p) => `  ${theirRow(state, p)}`),
-    );
+    lines.push(`주력 선수 (안개 적용):`, ...keyPlayers.map((p) => `  ${theirRow(state, p)}`));
   } else {
     lines.push(`주력 선수:`, ...keyPlayers.map((p) => `  ${ourRow(state, p)}`));
   }
@@ -2437,7 +2257,7 @@ export function leagueView(state: GameState, input: LeagueViewInput): LookupResu
   return fixturesView(state, input);
 }
 
-// ── 감독의 달력 (경기 + 훈련 + 이적창) ──────────────────
+// ── 감독의 달력 (경기 + 훈련) ────────────────────────
 
 export interface ScheduleViewInput {
   /** 시작일 — 기본 오늘 */
@@ -2447,7 +2267,7 @@ export interface ScheduleViewInput {
   /** to가 없을 때의 창 길이 (기본 14일) */
   days?: number;
   /** 종류로 좁히기 */
-  type?: "match" | "training" | "window";
+  type?: "match" | "training";
   /** 최대 엔트리 수 (기본 25) */
   limit?: number;
 }
@@ -2467,8 +2287,7 @@ const JOURNAL_KIND_KO: Record<CalendarEventView["kind"], string> = {
   return: "복귀",
   yellow: "경고",
   red: "퇴장",
-  transfer: "이적",
-  window: "이적창",
+  move: "들고 남",
   money: "돈",
 };
 
@@ -2484,8 +2303,8 @@ const JOURNAL_LIMIT = 40;
 /**
  * 지나간 날의 일지 — 화면의 달력이 세우는 것과 **같은 표**다(`pushRecordJournal`).
  *
- * 일정 축(경기·훈련·이적창)은 위의 일정 줄이 이미 세우므로 여기 다시 서지 않는다.
- * 남는 것은 기록 테이블과 서사 표 몫 — 성장·부상·카드·이적·돈·소식이고, 손잡이로
+ * 일정 축(경기·훈련)은 위의 일정 줄이 이미 세우므로 여기 다시 서지 않는다.
+ * 남는 것은 기록 테이블과 서사 표 몫 — 성장·부상·카드·이동·돈·소식이고, 손잡이로
  * 며칠을 넘긴 턴에 다이제스트로만 흘러간 사건이 여기 있다 (people.md §9).
  */
 function pastJournalLines(state: GameState, from: string, to: string): string[] {
@@ -2534,11 +2353,7 @@ export function scheduleView(state: GameState, input: ScheduleViewInput = {}): L
 
   const matchById = new Map(state.matches.map((m) => [m.id, m]));
   const sessionById = new Map(state.trainingSessions.map((s) => [s.id, s]));
-  const windowById = new Map(state.windows.map((w) => [w.id, w]));
-  const wanted = (e: ScheduleEntry) => {
-    if (!input.type) return true;
-    return input.type === "window" ? e.type.startsWith("window") : e.type === input.type;
-  };
+  const wanted = (e: ScheduleEntry) => !input.type || e.type === input.type;
 
   const entries = state.schedule
     .filter((e) => e.date >= from && e.date <= to && wanted(e))
@@ -2566,7 +2381,7 @@ export function scheduleView(state: GameState, input: ScheduleViewInput = {}): L
     );
   }
   /**
-   * 지나간 날은 일정만으로 답이 되지 않는다 — 오퍼 답이 언제 왔고 계약 경고가 언제
+   * 지나간 날은 일정만으로 답이 되지 않는다 — 보드 답이 언제 왔고 계약 경고가 언제
    * 섰는지는 일정 축이 아니라 일지에 있다. 앞날만 묻는 창(`from`이 오늘 이후)에는
    * 일지가 없으므로 한 줄도 붙지 않는다.
    */
@@ -2609,14 +2424,7 @@ export function scheduleView(state: GameState, input: ScheduleViewInput = {}): L
       // 상대는 추첨에서 정해진다 — 날짜만 공표된 자리다
       const { competition, stage } = drawParts(e.refId);
       lines.push(`${when} ${competition} ${stage} 예정 (상대 미정)`);
-      continue;
     }
-    const w = windowById.get(e.refId);
-    const kind = w?.kind === "winter" ? "겨울" : "여름";
-    lines.push(
-      `${when} ${kind} 이적시장 ${e.type === "window-open" ? "개장" : "마감"}` +
-        (w ? ` (${w.opensOn} ~ ${w.closesOn})` : ""),
-    );
   }
   if (entries.length > shown.length) {
     lines.push(`  …그 외 ${entries.length - shown.length}건 — 범위를 좁히거나 limit을 올려라`);
@@ -2643,14 +2451,13 @@ export function careerView(state: GameState): LookupResult {
   const m = state.manager;
 
   /**
-   * **무직이면 머리글부터 다르다** (career.md §5.1) — 옛 구단의 순위·경고를 재임
-   * 중인 것처럼 세우면 모델이 그 구단의 감독으로 장면을 쓴다. 잘린 사실과 지금
-   * 열린 제안이 그 자리에 선다.
+   * **커리어가 끝났으면 머리글부터 다르다** (career.md §5.1) — 옛 구단의 순위·경고를
+   * 재임 중인 것처럼 세우면 모델이 그 구단의 감독으로 장면을 쓴다.
    */
   const card = state.dismissal;
   const lines = card
     ? [
-        `[커리어] ${m.name} — 무직 (${card.on} ${teamNameIn(state, card.teamId)}에서 ${
+        `[커리어] ${m.name} — 커리어 종료 (${card.on} ${teamNameIn(state, card.teamId)}에서 ${
           card.kind === "expired" ? "계약 만료" : "경질"
         }) · ${seasonLabel(state.season)}`,
         `당시 구단 체급: ${card.tier}티어` +
@@ -2663,7 +2470,7 @@ export function careerView(state: GameState): LookupResult {
                 (o) =>
                   `  ${o.id} · ${teamNameIn(state, o.teamId)} (${o.tier}티어)` +
                   (o.position ? ` · 현재 ${o.position}위` : "") +
-                  ` · 연봉 ${formatMoney(o.salary)}·${o.years}년·이적 예산 약속 ${formatMoney(o.budgetPledge)}` +
+                  ` · 연봉 ${formatMoney(o.salary)}·${o.years}년` +
                   ` · ${o.expiresOn}까지`,
               ),
             ]
@@ -2691,7 +2498,6 @@ export function careerView(state: GameState): LookupResult {
         ...openManagerOffers(state).map(
           (o) =>
             `${o.via === "renewal" ? "재계약" : "감독직"} 제안: ${o.id} · ${teamNameIn(state, o.teamId)} · 연봉 ${formatMoney(o.salary)}·${o.years}년` +
-            `·이적 예산 약속 ${formatMoney(o.budgetPledge)}` +
             ` · ${o.expiresOn}까지`,
         ),
         row && row.played > 0
@@ -2757,10 +2563,7 @@ export function careerView(state: GameState): LookupResult {
   if (rows.length === 0) {
     lines.push("지난 시즌 기록: 없음 (첫 시즌이다)");
   } else {
-    lines.push(
-      `지난 시즌 기록 ${state.seasonRecords.length}시즌:` +
-        (sackings.length > 0 ? ` (자리를 잃은 것 ${sackings.length}회)` : ""),
-    );
+    lines.push(`지난 시즌 기록 ${state.seasonRecords.length}시즌:`);
     for (const r of rows.slice(0, 10)) lines.push(r.text);
     if (rows.length > 10) lines.push(`  …그 외 ${rows.length - 10}줄`);
   }
@@ -2904,7 +2707,7 @@ function pastSeasonLine(state: GameState, snapshot: SeasonHistory): string {
       ? ""
       : ` ${teamShortNameIn(state, snapshot.teamId)} ${competitionShortName(ourLeague.leagueId)} ` +
         `${ourLeague.rows.findIndex((r) => r.teamId === snapshot.teamId) + 1}위`;
-  // 감독의 팀이 리그 표에 없는 시즌(무직·리그 밖)도 표의 1위는 안다 — 그 표의 챔피언을 세운다
+  // 감독의 팀이 리그 표에 없는 시즌(커리어 끝·리그 밖)도 표의 1위는 안다 — 그 표의 챔피언을 세운다
   const league = ourLeague ?? snapshot.leagues[0];
   const champion = league?.rows[0];
   const crown =

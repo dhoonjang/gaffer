@@ -63,7 +63,6 @@ const SKILL_ICON: Record<string, IconComponent> = {
   start_match: IconMatch,
   finalize_match: IconTrophy,
   apply_finance_event: IconFinance,
-  adjust_transfer_budget: IconFinance,
 };
 
 /** 증감 색은 CommandBriefItem.delta의 부호로 정한다. 0과 생략된 값에는 색을 주지 않는다. */

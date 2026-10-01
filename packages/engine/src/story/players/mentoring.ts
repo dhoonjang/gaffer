@@ -69,7 +69,7 @@ export interface MentoringRead {
 
 // ── 자격 ─────────────────────────────────────────────
 
-/** 우리 선수인가 — 임대로 나가 있으면 `teamId`가 남의 것이라 여기서 빠진다 */
+/** 우리 선수인가 — 소속(`teamId`)이 우리 팀이어야 한다 */
 export function ourPlayer(state: GameState, player: GamePlayer): boolean {
   return player.teamId === state.userTeamId;
 }

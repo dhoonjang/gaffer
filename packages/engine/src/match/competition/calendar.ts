@@ -1,7 +1,6 @@
 import {
   isReserveMatch,
   type MatchStage,
-  type TransferWindow,
   type MatchRecord,
   type ScheduleEntry,
 } from "@story-fm/domain";
@@ -465,64 +464,6 @@ export function buildMatchweekDates(season: number): Matchweek[] {
   return withSlots(buildAnchors(season));
 }
 
-/** 시즌 이적창 2개 — 여름은 게임 시작(7/1)과 동시 개장, 개막 후 9월 초 폐장 */
-/**
- * 이적 시장 전용 리그의 창 — 우리와 시기가 다르다는 것이 이 리그들의 존재 이유
- * 절반을 차지한다 (docs/negotiation/transfer.md).
- *
- * 사우디는 우리보다 **한 달 이상 늦게 닫히고**, MLS는 아예 다른 계절에 연다
- * (북미 시즌이 봄에 시작하기 때문). 날짜는 실제 창의 어림값이다.
- */
-export const MARKET_LEAGUE_WINDOWS: Record<
-  string,
-  Array<{ kind: "summer" | "winter"; open: [number, number]; close: [number, number] }>
-> = {
-  saudi: [
-    { kind: "summer", open: [7, 1], close: [10, 6] },
-    { kind: "winter", open: [1, 8], close: [2, 6] },
-  ],
-  mls: [
-    // 북미 프리시즌 창 — 우리 시즌 한복판에 열린다
-    { kind: "winter", open: [2, 12], close: [4, 23] },
-    { kind: "summer", open: [7, 24], close: [8, 21] },
-  ],
-};
-
-export function buildTransferWindows(season: number): TransferWindow[] {
-  const year = seasonYear(season);
-  /** 시즌 안의 [월, 일] → 날짜. 7월 이후는 그 해, 그 전은 이듬해 */
-  const inSeason = (md: [number, number]) =>
-    `${md[0] >= 7 ? year : year + 1}-${String(md[0]).padStart(2, "0")}-${String(md[1]).padStart(2, "0")}`;
-  const marketWindows: TransferWindow[] = Object.entries(MARKET_LEAGUE_WINDOWS).flatMap(
-    ([leagueId, windows]) =>
-      windows.map((w) => ({
-        id: `w-${season}-${leagueId}-${w.kind}`,
-        season,
-        kind: w.kind,
-        opensOn: inSeason(w.open),
-        closesOn: inSeason(w.close),
-        leagueId,
-      })),
-  );
-  const ourWindows: TransferWindow[] = [
-    {
-      id: `w-${season}-summer`,
-      season,
-      kind: "summer",
-      opensOn: `${year}-07-01`,
-      closesOn: `${year}-09-01`,
-    },
-    {
-      id: `w-${season}-winter`,
-      season,
-      kind: "winter",
-      opensOn: `${year + 1}-01-01`,
-      closesOn: `${year + 1}-02-01`,
-    },
-  ];
-  return [...ourWindows, ...marketWindows];
-}
-
 /**
  * 후반기 라운드 순서 — 전반기 라운드 인덱스(0~18)의 재배열.
  *
@@ -701,12 +642,8 @@ export function membersOfLeague(
     .map((t) => t.id);
 }
 
-/** 경기·이적창 일정 엔트리 생성 — 훈련 엔트리는 명령이 따로 만든다 */
-export function buildScheduleEntries(
-  matches: MatchRecord[],
-  windows: TransferWindow[],
-  userTeamId: string,
-): ScheduleEntry[] {
+/** 경기 일정 엔트리 생성 — 훈련 엔트리는 명령이 따로 만든다 */
+export function buildScheduleEntries(matches: MatchRecord[], userTeamId: string): ScheduleEntry[] {
   const entries: ScheduleEntry[] = [];
   for (const m of matches) {
     const involvesUser = m.homeTeamId === userTeamId || m.awayTeamId === userTeamId;
@@ -718,29 +655,6 @@ export function buildScheduleEntries(
       type: "match",
       refId: m.id,
       teamId: involvesUser ? userTeamId : null,
-      status: "scheduled",
-    });
-  }
-  for (const w of windows) {
-    // 사우디·MLS 창은 달력에 올리지 않는다 — 감독의 달력은 우리 리그의 것이다.
-    // 그 창들이 언제 닫히는지는 GM이 오퍼가 왔을 때 말해 준다
-    if (w.leagueId !== undefined) continue;
-    entries.push({
-      id: `se-${w.id}-open`,
-      date: w.opensOn,
-      time: "00:00",
-      type: "window-open",
-      refId: w.id,
-      teamId: null,
-      status: "scheduled",
-    });
-    entries.push({
-      id: `se-${w.id}-close`,
-      date: w.closesOn,
-      time: "23:59",
-      type: "window-close",
-      refId: w.id,
-      teamId: null,
       status: "scheduled",
     });
   }

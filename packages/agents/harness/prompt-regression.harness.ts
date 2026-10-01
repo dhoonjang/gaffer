@@ -120,7 +120,6 @@ function corpusOf(state: GameState): ReadonlyArray<readonly [string, string]> {
     ["훈련 쉬자", "set_training"],
     [`${who} 주장 시키자`, "set_captain"],
     ["다들 모여봐", "team_talk"],
-    ["계약 만료 다가오는 선수 재계약 하자", "open_renewal"],
     [`${who} 면담 좀 하자`, "team_talk"],
     ["하루 넘기자", "시간 경과"],
   ] as const;

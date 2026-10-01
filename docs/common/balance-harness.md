@@ -1,11 +1,5 @@
 # 밸런스 하네스 (Balance Harness)
 
-선수 거래의 서비스 계약은 [협상 명세](../negotiation/transfer.md) §11을 따른다.
-`ai-market`은 AI 구단 사이의 거래 규모와 여름 비중만 측정한다. 감독에게 오는 연락과
-협상 응답은 GM·Jev의 맥락 판단이므로 고정 성공률이나 가격 배수로 평가하지 않는다.
-Jev의 판단 품질은 같은 상황·다른 설득·조건 변경·장기 기록을 비교하는 사례로 검토하고,
-원장·권한·예약의 정확성은 결정적 테스트로 검증한다.
-
 **밸런스를 재는 자리는 테스트가 아니다.** 시즌을 굴려 "숫자가 사람 사는 범위에
 있는가"를 보는 케이스에는 지킬 고정 기대값이 없고, 한 번에 몇 분을 쓴다. 회귀를
 잡지 못하면서 CI 스위트의 값만 낸다 (AGENTS.md §5).
@@ -37,11 +31,11 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 
 지표는 셋 중 하나다.
 
-| 역할        | 밴드를 벗어나면       | 무엇                                                                |
-| ----------- | --------------------- | ------------------------------------------------------------------- |
-| `guard`     | **하네스가 빨개진다** | 깨지면 게임이 성립하지 않는 선 (구단이 파산한다, 이적이 0건이다)    |
-| `reference` | 표에 ✗만 찍힌다       | 실제 축구·설계의 눈금. 지금 벗어나 있는 값이 있고, 그게 읽을 값이다 |
-| `measure`   | —                     | 지키려는 값이 아니라 재려는 값 (로테이션 발동률, 상각)              |
+| 역할        | 밴드를 벗어나면       | 무엇                                                                        |
+| ----------- | --------------------- | --------------------------------------------------------------------------- |
+| `guard`     | **하네스가 빨개진다** | 깨지면 게임이 성립하지 않는 선 (구단이 파산한다, 선수단이 명단을 못 채운다) |
+| `reference` | 표에 ✗만 찍힌다       | 실제 축구·설계의 눈금. 지금 벗어나 있는 값이 있고, 그게 읽을 값이다         |
+| `measure`   | —                     | 지키려는 값이 아니라 재려는 값 (로테이션 발동률)                            |
 
 구간은 **양 끝을 포함한다.**
 
@@ -61,13 +55,12 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 | `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                      | [live-match](../match/live-match.md) §6 · §9.3                                                    |
 | `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·홈 이점·전력 기울기가 같은 눈금인가     | [match](../match/match.md) §8.5 · [live-match](../match/live-match.md) §9.3                       |
 | `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                    | [match](../match/match.md) §4.1                                                                   |
-| `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입                                                    | [finance](../negotiation/finance.md) §10.1                                                        |
-| `finance-leagues`      | 리그별 잔고 — 어느 리그도 구조적 적자가 아니다                                                       | [finance](../negotiation/finance.md) §10.3                                                        |
-| `finance-second-tier`  | 리그전을 굴리지 않는 2부의 한 시즌 수지                                                              | [finance](../negotiation/finance.md) §9.5                                                         |
-| `finance-multi-season` | 세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다                                              | [finance](../negotiation/finance.md) §10.3                                                        |
+| `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입                                                    | [finance](finance.md) §10.1                                                                       |
+| `finance-leagues`      | 리그별 잔고 — 어느 리그도 구조적 적자가 아니다                                                       | [finance](finance.md) §10.3                                                                       |
+| `finance-second-tier`  | 리그전을 굴리지 않는 2부의 한 시즌 수지                                                              | [finance](finance.md) §9.1                                                                        |
+| `finance-multi-season` | 세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다                                              | [finance](finance.md) §10.3                                                                       |
 | `ai-fitness`           | 한 시즌 뒤 AI 스쿼드 체력 · 출전 분산 · 전술 적응도 · 누적 피로                                      | [match](../match/match.md) §8.6                                                                   |
 | `ai-bench`             | 감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래                                                   | [match](../match/match.md) §3.3                                                                   |
-| `ai-market`            | 한 시즌 AI 구단 사이의 팀당 이적·임대 건수 · 여름 비중                                               | [거래의 범위](../negotiation/transfer.md) §10                                                     |
 | `squad-longevity`      | 15시즌 뒤의 선발 XI·계약 · 리그 체급과 그 천장의 드리프트(가드)                                      | [season](season.md) §6·§9                                                                         |
 | `youth-development`    | 2군 경기 수 · 출전·집중 육성·임대가 가르는 성장 격차 · 다음 여름의 인테이크                          | [season](season.md) §2·§6                                                                         |
 | `youth-intake-tail`    | 한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히                              | [season](season.md) §6                                                                            |

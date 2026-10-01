@@ -11,8 +11,6 @@ import {
   teamName,
   managedTeamId,
   groupOf,
-  activeContract,
-  teamNameIn,
   tacticsOf,
   FAMILIARITY_BASELINE,
   inTransaction,
@@ -60,7 +58,6 @@ import {
   type GamePlayer,
   type RetirementReason,
   ageOf,
-  josa,
   type RetiredPlayer,
   naturalPositionOf,
   type PositionGroup,
@@ -69,7 +66,6 @@ import {
   type YouthCandidate,
   CONDITION_BASE,
   FATIGUE_BASE,
-  type Contract,
   anchorOf,
   openSeats,
   presetOf,
@@ -97,30 +93,16 @@ import {
 } from "../match/competition/records";
 import { payWinnerPrize } from "./workflows/match/competition/euro-prize";
 import { payDomesticCupPrizes } from "./workflows/match/competition/domestic-cup";
-import {
-  payLeaguePrizes,
-  paySeasonBonuses,
-  topUpTransferBudget,
-  seasonBudgetBaseOf,
-  closeSeasonBooks,
-} from "../negotiation/finance/finance";
+import { payLeaguePrizes, paySeasonBonuses, closeSeasonBooks } from "../common/finance/finance";
 import { derbyMatchesOf, derbyRecordFrom } from "../common/world/derby";
 import { predictedPlaceOf } from "../common/views/prediction";
-import { buildTransferWindows, buildScheduleEntries } from "../match/competition/calendar";
+import { buildScheduleEntries } from "../match/competition/calendar";
 import { assignSquadNumber } from "../common/players/numbers";
 import { contractUntil, seasonYear } from "../common/core/dates";
-import {
-  admitUnsignedYouth,
-  clearDepartedState,
-  dropStaleYouthFreeAgents,
-  toFreeAgency,
-} from "../negotiation/market/departures";
-import { settleEscalators } from "../negotiation/market/terms";
-import { makeRng, randInt } from "../common/core/rng";
-import { leagueOfTeam, isClubTeam } from "../common/data/team-catalog";
+import { expireContracts } from "../common/players/free-agency";
+import { leagueOfTeam } from "../common/data/team-catalog";
 import { generateYouthPlayer } from "../common/world/generate";
-import { estimateWeeklyWage, wageSubjectOf } from "../negotiation/economy/wages";
-import { attachAiBuyout } from "../negotiation/market/buyout";
+import { estimateWeeklyWage, wageSubjectOf } from "../common/finance/wages";
 import { buildAssignments } from "../match/squad/selection";
 import { successorCaptainOf } from "../common/players/hierarchy";
 import { type LeagueTables, buildEuroEntrants } from "../match/competition/europe";
@@ -129,12 +111,11 @@ import {
   applyPromotionRelegation,
   reinforcePromotedSquads,
 } from "./workflows/match/competition/promotion";
-import { euroCompetitionOf } from "../common/views/europe";
 import { recomputeClubTiers } from "../match/competition/club-tier-recompute";
 import { buildSeasonFixtures, isUserFixture } from "../match/competition/fixtures";
 import { applySummerTournament } from "../match/competition/international";
 import { installDefaultTraining } from "../story/players/training-plan";
-import { expireStaffContracts, refreshStaffPool } from "../negotiation/market/staff-market";
+import { expireStaffContracts, refreshStaffPool } from "../story/people/staff-employment";
 
 /**
  * 시즌 종료 판정 — **유저 리그 + 모든 컵** 기준. 다른 *리그*는 며칠 차이로 끝날 수
@@ -452,7 +433,7 @@ export function finalMotmOf(
   const player = playerById(state, best.id);
   if (!player) return null;
   /**
-   * 팀은 **그날 어느 쪽에 섰는가**다 — 지금 소속으로 적으면 결승 뒤 이적한 선수의
+   * 팀은 **그날 어느 쪽에 섰는가**다 — 지금 소속으로 적으면 결승 뒤 소속이 바뀐 선수의
    * 상이 새 셔츠로 남는다.
    */
   const home = result.homeLineup.includes(best.id);
@@ -537,7 +518,7 @@ export function awardReachesManager(state: GameState, award: SeasonAward): boole
 
 /**
  * 대항전 우승 **상금** — 구단이 받는 돈이라 감독의 커리어와 갈라져 있다.
- * 무직으로 맞은 시즌 끝에도 옛 구단의 장부에는 앉아야 한다 (career.md §5.1).
+ * 커리어가 끝난 뒤 맞은 시즌 끝에도 옛 구단의 장부에는 앉아야 한다 (career.md §5.1).
  */
 export function payEuropeanWinnerPrizes(state: GameState, digest: TickSink): void {
   for (const cup of cupCatalog()) {
@@ -578,7 +559,7 @@ export function reviewEuropeanCampaign(state: GameState): string[] {
 export function reviewSeason(state: GameState): string[] {
   const digest: string[] = [];
   /**
-   * **우승과 시상은 리그가 주는 것이지 감독의 것이 아니다** — 무직으로 맞은 시즌에도
+   * **우승과 시상은 리그가 주는 것이지 감독의 것이 아니다** — 커리어가 끝난 뒤 맞은 시즌에도
    * 선다(상금과 같은 결 — career.md §5.1). 그래서 아래 이른 return보다 앞이고,
    * 승강을 적용하기 전인 이 자리라야 옛 소속으로 매겨진다 (season.md §8).
    */
@@ -590,7 +571,7 @@ export function reviewSeason(state: GameState): string[] {
   if (!row) return digest;
 
   /**
-   * **무직으로 맞은 시즌 끝은 커리어에 남지 않는다** (career.md §5.1).
+   * **커리어가 끝난 뒤 맞은 시즌 끝은 커리어에 남지 않는다** (career.md §5.1).
    *
    * `SEASON_RECORD`·트로피·업적은 그 자리에 있던 감독의 것이라,
    * 잘린 뒤 옛 팀이 든 컵이 감독의 것이 되면 안 된다. **돈은 반대다** — 컵·대항전
@@ -602,7 +583,9 @@ export function reviewSeason(state: GameState): string[] {
     payDomesticCupPrizes(state, digest);
     payLeaguePrizes(state, digest);
     paySeasonBonuses(state, position, digest);
-    digest.push(`시즌 ${state.season} 종료 — 무직으로 맞았다. 이 시즌은 커리어에 남지 않는다`);
+    digest.push(
+      `시즌 ${state.season} 종료 — 감독 자리 없이 맞았다. 이 시즌은 커리어에 남지 않는다`,
+    );
     return digest;
   }
 
@@ -686,7 +669,7 @@ export function recordSeasonHistory(state: GameState): void {
   /**
    * 아래 경기 줄이 누구의 것인가. `managedTeamId`가 아니라 `state.userTeamId`인 이유는
    * **경질이 소속을 지우지 않기** 때문이다 — 잘린 감독의 옛 구단은 시즌 끝까지 그
-   * 팀이고, 그 경기를 무직이라는 이유로 버리면 그 시즌만 경기가 비어 남는다.
+   * 팀이고, 그 경기를 감독 자리가 비었다는 이유로 버리면 그 시즌만 경기가 비어 남는다.
    */
   const teamId = state.userTeamId;
   const leagues: SeasonLeagueTable[] = leaguesPlayedIn(state).map((leagueId) => ({
@@ -749,7 +732,7 @@ export function recordSeasonHistory(state: GameState): void {
  *
  * 유저 팀만 적던 시절엔 AI 구단의 우승이 어디에도 남지 않아, 세계에 기억이 없고
  * 스폰서 성과 조항이 감독 구단에만 붙었다(finance.md §5.3). 그래서 이것은 감독의
- * 일이 아니라 **리그가 주는 것**이다 — 시상·상금과 같이 무직이어도 돈다.
+ * 일이 아니라 **리그가 주는 것**이다 — 시상·상금과 같이 감독 자리가 비어도 돈다.
  *
  * 준우승은 **결승에서 진 팀**이라 녹아웃에만 선다 — 리그의 2위는 순위표가 이미 답한다.
  */
@@ -870,34 +853,6 @@ export const YOUTH_POOL_BY_TIER: Record<1 | 2 | 3 | 4, number> = { 1: 4, 2: 3, 3
 export const YOUTH_POOL_ACADEMY = 2;
 
 /**
- * **AI 아카데미가 자리보다 많이 길러 내는 수** — 그만큼이 계약을 받지 못하고 무소속
- * 명부로 간다 (season.md §6 「계약을 받지 못한 아이」).
- *
- * 위 두 체급뿐인 것은 강등을 다투는 구단의 문제가 자리가 아니라 사람이기 때문이다 —
- * 그들은 길러 낸 아이를 다 쥔다. 실제로도 방출 자원이 나오는 곳은 큰 아카데미이고
- * 그 아이를 줍는 곳은 아래 리그다. 여름마다 38명이 명부에 서는 수이고, 명부의
- * 상한(`FREE_AGENT_YOUTH_CAP` = 40)이 그 위에 선 문이다.
- */
-export const YOUTH_RELEASE_BY_TIER: Record<1 | 2 | 3 | 4, number> = { 1: 1, 2: 1, 3: 0, 4: 0 };
-
-/**
- * 방출반의 천장이 계약반보다 낮은 폭 — **`TIER_BASE` 한 칸**(체급 하나)이다.
- *
- * 같은 분포에서 뽑아 놓고 "자리가 없어서"라고 하면 1등급 아카데미의 방출 자원이
- * 1등급이 계약하는 아이와 같은 물건이 된다. 계약을 못 받은 이유가 이 폭이고,
- * 흩어짐과 꼬리는 그대로라 드물게 제 아카데미의 선 위에 서는 아이가 섞인다 —
- * 그게 「다른 구단이 놓친 아이」다.
- */
-export const YOUTH_RELEASE_CEILING_DROP = 4;
-
-/**
- * 방출반이 쓰는 난수 채널의 시작 번호 — 계약반의 인덱스와 **겹치지 않아야** 한다
- * (`generateYouthPlayer`의 채널은 `youth:팀:시즌:인덱스`다). 겹치면 한 아카데미에서
- * 같은 사람이 둘 난다.
- */
-export const YOUTH_RELEASE_INDEX_BASE = 100;
-
-/**
  * 아카데미 활용도가 **유스 천장의 평균**에 얹는 폭 (season.md §6).
  *
  * 여지의 위끝이 아니라 천장이다 — 위끝에 얹으면 활용도가 높은 구단의 유스만 여지가
@@ -926,7 +881,7 @@ export const ACADEMY_USE_NEUTRAL = 0.5;
  * 차지한 몫 (season.md §6).
  *
  * 2군을 늙은 백업으로 채우면 아카데미에 자리가 없고, 그해 인테이크가 얇고 낮아진다 —
- * 감독이 1·2군 이동과 임대로 내린 결정이 한 해 뒤 이 값으로 돌아온다.
+ * 감독이 1·2군 이동으로 내린 결정이 한 해 뒤 이 값으로 돌아온다.
  *
  * ⚠️ **지금 명단에 있는 사람의 출전만 센다.** 시즌 중에 떠난 선수는 나이를 되찾을
  * 자리가 없어 분모에도 분자에도 들지 않는다 — 한쪽에만 들면 몫이 거짓이 된다.
@@ -996,16 +951,13 @@ export function admitYouth(
   state.players.push(player);
   assignSquadNumber(state.players, player);
   // 유스 콜업도 원장에 (fromTeamId = null)
-  state.transfers.push({
-    id: `tr-youth-${player.id}`,
+  state.moves.push({
+    id: `mv-youth-${player.id}`,
     gamePlayerId: player.id,
-    windowId: null,
     fromTeamId: null,
     toTeamId: teamId,
     date: on,
-    type: "youth",
-    fee: 0,
-    reason: "youth-callup",
+    kind: "youth",
   });
   state.contracts.push({
     id: `c-${player.id}`,
@@ -1065,9 +1017,8 @@ export function youthIntakeDeadline(state: GameState): string {
 }
 
 /**
- * **지금 우리 구단의 후보만** — 감독이 여름 사이에 구단을 옮기면 옛 구단의 줄이 남는다
- * (career.md §5.1). 그 줄은 세계의 일이라 소집일에 그 구단이 채우지만, 새 구단의 감독이
- * 읽거나 고를 것은 아니다. 화면·조회·스냅샷이 모두 이 문을 지난다.
+ * **지금 우리 구단의 후보만** — 커리어가 끝났으면 없다. 화면·조회·스냅샷이 모두 이
+ * 문을 지난다.
  */
 export function ourYouthCandidates(state: GameState): YouthCandidate[] {
   const managed = managedTeamId(state);
@@ -1078,8 +1029,7 @@ export function ourYouthCandidates(state: GameState): YouthCandidate[] {
 /**
  * 후보를 계약시킨다 — **한 번의 확정** (season.md §6).
  *
- * 고른 이름이 계약을 받고 **나머지 후보는 구단을 떠난다** — 사라지는 것이 아니라
- * 무소속 명부로 간다(`admitUnsignedYouth` — transfer.md §6). 다만 고른 뒤에도
+ * 고른 이름이 계약을 받고 **나머지 후보는 세계에 남지 않는다.** 다만 고른 뒤에도
  * 포지션군이 최소 인원 아래면 코어가 남은 후보에서 그 자리를 채운다 — 소프트락
  * 방지는 감독의 결정 밖이다.
  *
@@ -1088,9 +1038,9 @@ export function ourYouthCandidates(state: GameState): YouthCandidate[] {
 export function signYouthCandidates(
   state: GameState,
   chosenIds: readonly string[],
-): { signed: GamePlayer[]; filled: GamePlayer[]; released: GamePlayer[]; turnedAway: number } {
+): { signed: GamePlayer[]; filled: GamePlayer[]; letGo: number } {
   const rows = state.youthCandidates;
-  if (rows.length === 0) return { signed: [], filled: [], released: [], turnedAway: 0 };
+  if (rows.length === 0) return { signed: [], filled: [], letGo: 0 };
   const teamId = rows[0]!.teamId;
   const chosen = new Set(chosenIds);
   const signed: GamePlayer[] = [];
@@ -1120,16 +1070,7 @@ export function signYouthCandidates(
   if (signed.length > 0 || filled.length > 0) {
     promoteToMatchdaySquad(playersOf(state, teamId), false);
   }
-  /**
-   * **감독이 놓은 아이는 세계로 나간다** (season.md §6). 계약을 받지 못한 후보가
-   * 여기서 버려지면 감독이 다시 부를 자리도, 다른 구단이 주울 자리도 없다.
-   */
-  const { admitted, turnedAway } = admitUnsignedYouth(
-    state,
-    pool.map((row) => row.player),
-    state.date,
-  );
-  return { signed, filled, released: admitted, turnedAway };
+  return { signed, filled, letGo: pool.length };
 }
 
 /**
@@ -1140,132 +1081,24 @@ export function settleYouthIntake(state: GameState, digest: TickSink): void {
   const rows = state.youthCandidates;
   if (rows.length === 0) return;
   const auto = rows.filter((row) => row.autoSign).map((row) => row.player.id);
-  const { signed, filled, released } = signYouthCandidates(state, auto);
+  const { signed, filled } = signYouthCandidates(state, auto);
   const all = [...signed, ...filled];
-  // 계약을 받지 못한 아이는 명부에 선다 — 다시 부를 수 있는지가 그 줄에 달렸다
-  if (released.length > 0) {
-    digest.push(`계약을 받지 못한 유스 ${released.length}명이 무소속 명부에 섰습니다`);
-  }
   if (all.length === 0) return;
   const line = `유스 계약: ${all.map((p) => p.name).join(", ")} — 감독이 답하지 않아 구단이 채웠다`;
   digest.push(line);
 }
 
-/**
- * **사전 계약의 발효** — 계약은 반년 전에 섰고, 사람은 오늘 온다 (transfer.md §1-4).
- *
- * ⚠️ **팀 루프보다 앞에 선다** (season.md §8). 뒤로 밀면 예약된 선수가 옛 구단에서
- * 만료로 나가거나 AI의 자동 갱신에 붙들려, 한 선수에게 활성 계약이 둘 남는다.
- * 옮긴 뒤에 도는 팀 루프에게 그는 이미 새 구단의 선수이고, 옛 구단의 빈자리는
- * 그 구단의 유스 유입이 그대로 메운다.
- *
- * **셋이 한 자리에서 끝난다** (§11) — 옛 계약을 `ended`로, `pending`을 `active`로,
- * 선수를 새 구단으로. 갈라 두면 「활성 계약 없는 선수」나 「계약 둘인 선수」가
- * 그 틈에 선다.
- */
-export function settlePrecontracts(state: GameState, on: string, digest: TickSink): void {
-  const managed = managedTeamId(state);
-  const nextSeason = state.season + 1;
-  // 발효가 계약의 status를 갈아 끼우므로 도는 동안 목록이 흔들리지 않게 먼저 뜬다
-  const due = state.contracts.filter((c) => c.status === "pending" && c.since <= on);
-
-  for (const pending of due) {
-    const player = state.players.find((p) => p.id === pending.gamePlayerId);
-    // 은퇴·삭제로 명단에 없는 사람은 조용히 접는다 — 알릴 자리도 옮길 사람도 없다
-    if (!player) {
-      pending.status = "ended";
-      continue;
-    }
-    // 이미 그 구단 소속이면 예약이 뜻을 잃었다
-    if (player.teamId === pending.teamId) {
-      pending.status = "ended";
-      continue;
-    }
-    const current = activeContract(state, player.id);
-    /**
-     * **발효일 뒤까지 가는 활성 계약이 예약을 걷는다** (§1-4 「무산되는 자리」) —
-     * 그 사이에 재계약했거나 다른 구단이 데려갔다는 뜻이다. 계약이 겹치는 채로
-     * 발효시키면 다음 시즌을 두 계약이 덮는다.
-     */
-    if (current && current.until > on) {
-      pending.status = "ended";
-      if (pending.teamId === managed) {
-        digest.push(
-          `사전 계약 무산: ${player.name} — 발효 전에 ${josa(teamNameIn(state, current.teamId), "과/와")} 새 계약이 섰다`,
-        );
-      }
-      continue;
-    }
-
-    const from = player.teamId;
-    if (current) current.status = "ended";
-    pending.status = "active";
-    // 떠나는 자리의 정리는 나가는 문 전부가 지나는 그 문이다 (transfer.md §11)
-    clearDepartedState(state, player, from);
-    player.teamId = pending.teamId;
-    player.squadNumber = undefined;
-    assignSquadNumber(state.players, player);
-    player.squadLevel = "first";
-    player.loan = undefined;
-    state.transfers.push({
-      id: `tr-pre-${player.id}-${nextSeason}`,
-      gamePlayerId: player.id,
-      windowId: null,
-      fromTeamId: from,
-      toTeamId: pending.teamId,
-      date: on,
-      type: "free",
-      fee: 0,
-      reason: "precontract",
-    });
-    if (pending.teamId === managed) {
-      digest.push(`${player.name} 합류 — ${teamNameIn(state, from)}에서 사전 계약`);
-    } else if (from === managed) {
-      digest.push(
-        `${player.name} 떠남 — ${josa(teamNameIn(state, pending.teamId), "과/와")} 사전 계약`,
-      );
-    }
-  }
-}
-
 export function applyTransition(state: GameState): string[] {
   const digest: string[] = [];
-  const rng = makeRng(state.seed, `transition:${state.season}`);
-  /**
-   * 무직으로 넘기는 시즌이면 옛 구단도 **AI 클럽으로** 넘어간다 (career.md §5.1) —
-   * 감독이 없는 구단의 계약이 자동 갱신되지 않으면 선수단이 통째로 걸어 나간다.
-   */
   const managed = managedTeamId(state);
   const nextSeason = state.season + 1;
   const nextCalendar = buildSeasonCalendar(nextSeason);
 
   /**
-   * **끝난 계약은 지우되 장부가 읽는 사슬은 남긴다.**
-   *
-   * 계약은 시즌마다 2,000줄씩 쌓여 세이브와 모든 순회를 무겁게 하므로 정리해야
-   * 한다. 그런데 상각의 취득원가와 잔존가는 **그 팀에서의 계약 이력**에서 파생하므로
-   * (finance.md §6.1) 통째로 지우면 재계약 행이 첫 계약 자리에 올라앉는다 —
-   * 취득원가가 재계약 시점으로 옮겨 다시 펴지고(총 상각 > 취득원가), 시작 스쿼드는
-   * 취득 갈래를 잃어 상각이 £0이 된다.
-   *
-   * 그래서 **그 팀에 아직 활성 계약이 있는 선수의 이력만** 남긴다. 떠난 선수·은퇴
-   * 선수의 끝난 계약은 아무도 읽지 않으므로 그대로 지운다 — 남는 줄은 시즌 수가
-   * 아니라 스쿼드 크기 × 재계약 횟수로 묶인다.
-   *
-   * ⚠️ **발효 대기 계약(`pending`)도 남긴다** (transfer.md §11) — 「활성이 아니면
-   * 버린다」로 재면 반년 전에 맺은 사전 계약이 바로 아래에서 발효하기도 전에
-   * 사라진다.
+   * **끝난 계약은 지운다** — 계약은 시즌마다 2,000줄씩 쌓여 세이브와 모든 순회를
+   * 무겁게 한다. 떠난 선수·은퇴 선수의 끝난 계약은 아무도 읽지 않는다.
    */
-  const bookedPlayers = new Set<string>();
-  for (const c of state.contracts) {
-    if (c.status === "active") bookedPlayers.add(`${c.teamId}:${c.gamePlayerId}`);
-  }
-  state.contracts = state.contracts.filter(
-    (c) =>
-      c.status === "active" ||
-      c.status === "pending" ||
-      bookedPlayers.has(`${c.teamId}:${c.gamePlayerId}`),
-  );
+  state.contracts = state.contracts.filter((c) => c.status === "active");
 
   /**
    * 선수 색인 — **팀 루프 안에서 선형 탐색을 하지 않기 위해서다.**
@@ -1281,7 +1114,7 @@ export function applyTransition(state: GameState): string[] {
    */
   const takenIds = new Set<string>([
     ...state.players.map((p) => p.id),
-    ...state.transfers.map((t) => t.gamePlayerId),
+    ...state.moves.map((m) => m.gamePlayerId),
   ]);
   /**
    * 새 유스가 쓸 수 없는 이름 — **세계 전체**다 (people.md §2). 팀 안에서만 피하면
@@ -1294,23 +1127,11 @@ export function applyTransition(state: GameState): string[] {
 
   /**
    * 후보 줄은 **전환마다 새로 선다** — 지난 여름의 미결이 남아 있을 자리는 없다
-   * (소집일이 이미 정리했다). 무직으로 넘긴 시즌이면 아무도 서지 않는다.
+   * (소집일이 이미 정리했다).
    */
   state.youthCandidates = [];
 
-  /**
-   * **한 시즌이 지나도록 아무도 부르지 않은 아이는 명부를 떠난다** (season.md §6) —
-   * 새 아이가 설 자리를 내는 문이다. 사전 계약 발효보다 앞에 서면 예약된 아이를
-   * 지울 수 있으므로 `boundElsewhere`가 그 자리를 지킨다(`departures.ts`).
-   */
-  const staleYouth = dropStaleYouthFreeAgents(state, nextCalendar.preseasonStart).length;
-  /** 이번 여름 아카데미가 계약을 주지 않은 아이 — 팀 루프가 끝난 뒤 한 번에 명부에 선다 */
-  const releasedYouth: GamePlayer[] = [];
-
-  // 사전 계약이 먼저 발효한다 — 계약 만료·유스 콜업·자동 갱신보다 앞이다 (season.md §6)
-  settlePrecontracts(state, nextCalendar.preseasonStart, digest);
-
-  /** 팀별 활성 계약 — 팀마다 전체 계약을 훑지 않는다. **발효 뒤**에 세운다 */
+  /** 팀별 활성 계약 — 팀마다 전체 계약을 훑지 않는다 */
   const contractsByTeam = new Map<string, typeof state.contracts>();
   for (const c of state.contracts) {
     if (c.status !== "active") continue;
@@ -1321,8 +1142,8 @@ export function applyTransition(state: GameState): string[] {
 
   for (const team of state.teams) {
     /**
-     * **무소속은 클럽이 아니다** — 은퇴만 태우고 유스 유입·배치·계약 갱신은
-     * 건너뛴다. 안 그러면 "무소속 아카데미"가 매년 신인을 찍어낸다.
+     * **무소속은 클럽이 아니다** — 은퇴만 태우고 유스 유입·배치는 건너뛴다. 안 그러면
+     * "무소속 아카데미"가 매년 신인을 찍어낸다.
      */
     const isFreePool = leagueOfTeam(team.id) === "free";
     const tier = tierOfTeamIn(state, team.id);
@@ -1372,18 +1193,15 @@ export function applyTransition(state: GameState): string[] {
           ...ours.map((p) => retiredRowOf(state, p, team.id, nextCalendar.preseasonStart)),
         ];
       }
-      // 은퇴도 팀 변경 원장에 남는다 (toTeamId = null)
+      // 은퇴도 이동 원장에 남는다 (toTeamId = null)
       for (const id of retirees) {
-        state.transfers.push({
-          id: `tr-retire-${id}-${nextSeason}`,
+        state.moves.push({
+          id: `mv-retire-${id}-${nextSeason}`,
           gamePlayerId: id,
-          windowId: null,
           fromTeamId: team.id,
           toTeamId: null,
           date: nextCalendar.preseasonStart,
-          type: "retire",
-          fee: 0,
-          reason: "retire",
+          kind: "retire",
         });
         const contract = state.contracts.find(
           (c) => c.gamePlayerId === id && c.status === "active",
@@ -1396,33 +1214,23 @@ export function applyTransition(state: GameState): string[] {
     }
 
     /**
-     * 계약 만료 — **우리 팀은 자동 갱신하지 않는다.**
+     * 계약 만료 — **모든 구단이 같은 규칙이다**: 끝난 계약의 선수는 무소속이 된다
+     * (`free-agency.ts`).
      *
-     * 자동 갱신하면 재계약을 한 번도 안 해도 아무도 떠나지 않아
-     * `open_renewal`이 서사용 버튼이 되고, 설득 논거 `last_chance`("계약이
-     * 1년 남았다")도 실제 위협이 아니게 된다.
-     *
-     * 은퇴 **바로 뒤**에 두는 이유는 아래 유망주 유입이 이 빈자리까지 세야
-     * 하기 때문이다 — 안 그러면 감독이 재계약을 놓칠 때마다 스쿼드가 마르고
-     * 열 시즌 뒤 골키퍼가 사라진다(소프트락).
+     * 은퇴 **바로 뒤**에 두는 이유는 아래 유망주 유입이 이 빈자리까지 세야 하기
+     * 때문이다 — 안 그러면 스쿼드가 마르고 열 시즌 뒤 골키퍼가 사라진다(소프트락).
      */
-    const leavers: string[] = [];
-    if (team.id === managed) {
-      for (const contract of contractsByTeam.get(team.id) ?? []) {
-        if (contract.status !== "active") continue;
-        if (contract.until > nextCalendar.preseasonStart) continue;
-        const player = playerIndex.get(contract.gamePlayerId);
-        if (!player) {
-          contract.status = "ended";
-          continue;
-        }
-        leavers.push(player.id);
-        toFreeAgency(state, player, "contract-expiry", nextCalendar.preseasonStart);
-        digest.push(`계약 만료로 떠남: ${player.name} (무소속)`);
-      }
-      if (leavers.length > 0) {
-        const gone = new Set(leavers);
-        squad = squad.filter((p) => !gone.has(p.id));
+    const leavers = expireContracts(
+      state,
+      contractsByTeam.get(team.id) ?? [],
+      nextCalendar.preseasonStart,
+      (id) => playerIndex.get(id),
+    );
+    if (leavers.length > 0) {
+      const gone = new Set(leavers.map((p) => p.id));
+      squad = squad.filter((p) => !gone.has(p.id));
+      if (team.id === managed) {
+        for (const player of leavers) digest.push(`계약 만료로 떠남: ${player.name} (무소속)`);
       }
     }
 
@@ -1493,32 +1301,6 @@ export function applyTransition(state: GameState): string[] {
       playerIndex.set(youth.id, youth);
       squad.push(youth);
     }
-    /**
-     * **아카데미는 자리보다 많이 길러 낸다** (season.md §6). 계약반의 **뒤에** 따로
-     * 태어나므로 계약반의 이름도 능력치도 오늘과 같다 — 고르기가 리그 체급을 밀어
-     * 올리면 `squad-longevity`의 잠재력 드리프트 가드가 이 문 하나에 흔들린다.
-     *
-     * 우리 아카데미에는 방출반이 없다 — 감독 앞에 선 후보 줄이 이미 그 여지이고,
-     * 고르지 않은 후보가 같은 명부로 간다(`signYouthCandidates`).
-     */
-    const releases = ours ? 0 : YOUTH_RELEASE_BY_TIER[tier];
-    for (let j = 0; j < releases; j++) {
-      releasedYouth.push(
-        generateYouthPlayer(
-          state.seed + YOUTH_INTAKE_SEED_OFFSET,
-          team.id,
-          nextSeason,
-          YOUTH_RELEASE_INDEX_BASE + j,
-          tier,
-          takenIds,
-          undefined,
-          seasonYear(nextSeason),
-          takenNames,
-          -YOUTH_RELEASE_CEILING_DROP,
-        ),
-      );
-    }
-
     if (ours) {
       state.youthCandidates = candidates;
       const line =
@@ -1528,35 +1310,6 @@ export function applyTransition(state: GameState): string[] {
     }
 
     promoteToMatchdaySquad(squad, !ours);
-
-    // 만료 계약 자동 갱신 — **AI 팀만.** 우리 팀은 위에서 이미 내보냈다
-    for (const contract of contractsByTeam.get(team.id) ?? []) {
-      if (contract.status !== "active") continue;
-      if (contract.until > nextCalendar.preseasonStart) continue;
-      const player = playerIndex.get(contract.gamePlayerId);
-      if (!player) {
-        contract.status = "ended";
-        continue;
-      }
-      contract.status = "ended";
-      const renewed: Contract = {
-        id: `c-${player.id}-${nextSeason}`,
-        gamePlayerId: player.id,
-        teamId: team.id,
-        weeklyWage: estimateWeeklyWage(
-          team.id,
-          wageSubjectOf(player, nextCalendar.preseasonStart),
-          playersOf(state, team.id).map((p) => wageSubjectOf(p, nextCalendar.preseasonStart)),
-          state,
-        ),
-        since: nextCalendar.preseasonStart,
-        until: contractUntil(nextCalendar.preseasonStart, randInt(rng, 2, 4)),
-        status: "active",
-      };
-      state.contracts.push(renewed);
-      // 자동 갱신에도 조항이 붙을 수 있다 — 서는 계약마다 같은 규칙이다 (transfer.md §12-3)
-      attachAiBuyout({ ...state, date: nextCalendar.preseasonStart }, renewed, player);
-    }
 
     // 새 스쿼드의 배치만 재구성한다 — 남은 선수의 기억은 이어진다.
     const tactics = tacticsOf(state, team.id);
@@ -1619,20 +1372,6 @@ export function applyTransition(state: GameState): string[] {
   }
 
   /**
-   * **계약을 받지 못한 아이가 명부에 선다** — 팀 루프가 끝난 뒤 한 번에 세운다.
-   * 구단마다 세우면 앞 구단의 아이가 상한을 채워, 명부에 서는지가 세계를 도는
-   * 순서로 정해진다 (season.md §6).
-   */
-  if (releasedYouth.length > 0) {
-    const { admitted } = admitUnsignedYouth(state, releasedYouth, nextCalendar.preseasonStart);
-    // 다이제스트 한 줄 — 명부가 여름마다 바뀐다는 사실이 감독이 시장에 나갈 근거다
-    digest.push(
-      `무소속 명부에 유스 ${admitted.length}명이 새로 섰습니다` +
-        (staleYouth > 0 ? ` (지난 여름의 ${staleYouth}명은 명부를 떠났다)` : ""),
-    );
-  }
-
-  /**
    * 주장이 비면 부주장이 우선 승계한다 (people.md §5-1).
    * 부주장도 없으면 포지션과 무관하게 1군에서 리더십·생일·id 순으로 배정한다.
    */
@@ -1680,29 +1419,14 @@ export function applyTransition(state: GameState): string[] {
    */
   const promoted = applyPromotionRelegation(state, finalTables, digest);
   /**
-   * **주급 인상 조항** — 지금 끝난 시즌의 사실로 한 번 집행한다 (transfer.md §12-3). 순위표와
-   * 승강은 위에서 읽었고, 대항전 진출은 아래 `euroEntrants`가 새로 서기 전의 **이번 시즌**
-   * 진출권이라 여기서 읽는다 — 새 시즌의 티켓은 다음 해의 조항이 읽을 사실이다.
-   */
-  settleEscalators(
-    state,
-    {
-      europe: euroCompetitionOf(state.euroEntrants, state.userTeamId) !== null,
-      title: Object.values(finalTables).some((table) => table[0] === state.userTeamId),
-      promotion: promoted.includes(state.userTeamId),
-    },
-    digest,
-  );
-  /**
    * 체급 재산정 — 승강 **뒤**여야 한다. 승격·강등한 팀은 리그가 바뀌면서 다른 풀에
-   * 들어가고, 그게 곧 완전 재산정이다 (team.md §2.1). 아래 이적 예산 보충도 새
-   * 체급을 읽어야 하므로 순서가 여기다.
+   * 들어가고, 그게 곧 완전 재산정이다 (team.md §2.1).
    */
   digest.push(...recomputeClubTiers(state));
 
   state.season = nextSeason;
   state.calendar = nextCalendar;
-  // 새 시즌은 7월 1일(프리시즌·여름 이적창 개장)에서 시작한다
+  // 새 시즌은 7월 1일(프리시즌)에서 시작한다
   state.date = nextCalendar.preseasonStart;
   pruneMentoring(state);
   /**
@@ -1710,8 +1434,7 @@ export function applyTransition(state: GameState): string[] {
    * ([../data/team.md](../data/team.md) §5). 시즌·날짜를 넘긴 뒤에 서는 이유는
    * 계약 시작일과 난수 채널이 **새 시즌**의 것이어야 하기 때문이다.
    */
-  reinforcePromotedSquads(state, promoted, digest);
-  const windows = buildTransferWindows(nextSeason);
+  reinforcePromotedSquads(state, promoted);
   state.euroEntrants = hasCups(state.world)
     ? buildEuroEntrants(
         nextSeason,
@@ -1740,11 +1463,9 @@ export function applyTransition(state: GameState): string[] {
     state.userTeamId,
     superCups,
   );
-  state.windows = windows;
   state.matches = matches;
   state.schedule = buildScheduleEntries(
     matches.filter((m) => isUserFixture(m, state.userTeamId, ourLeague)),
-    windows,
     state.userTeamId,
   );
   /**
@@ -1753,7 +1474,7 @@ export function applyTransition(state: GameState): string[] {
    * 경기는 굴리지 않으므로 대회가 남기는 것은 「누가 늦게 오나」 하나다. 기본 훈련
    * 배치보다 **먼저** 서야 한다: 늦게 오는 선수는 소집일부터 그 날짜까지 훈련장에
    * 없고, 그 사실을 훈련·친선이 함께 읽는다.
-   * 소집 명단은 **전환이 끝난 스쿼드**로 세운다 — 은퇴·이적·승강이 다 지나간 뒤라야
+   * 소집 명단은 **전환이 끝난 스쿼드**로 세운다 — 은퇴·만료·승강이 다 지나간 뒤라야
    * 그 선수가 실제로 새 시즌에 서는 사람이다.
    */
   applySummerTournament(state, nextSeason, squadReturnOf(nextCalendar), digest);
@@ -1770,24 +1491,12 @@ export function applyTransition(state: GameState): string[] {
   for (const s of state.suspensions) if (s.status === "active") s.status = "done";
   state.phase = "idle";
   state.pendingMatch = null;
-  // 이적 예산 보충 — 등급별 base. 일률 £15M이면 시즌 2부터 68~72 OVR밖에 못 사서
-  // 이적 루프가 첫 여름 이후 죽는다. 등급별 순이익과 같은 자리에 뒀다
-  // (transfer.md §3). 나머지는 선수 판매로 만든다.
-  // base 위에 **지난 시즌 잉여의 재투자분**이 얹히고, PSR 위반이면 동결된다 (§9.1).
-  for (const finance of state.finances) {
-    // 무소속은 구단이 아니다 — 영입할 주체가 없으니 예산도 없다 (team.md §7).
-    // 월초 정산은 이미 `isClubTeam`으로 거르는데 여기만 빠져 있어, 쓰이지 않는
-    // 예산이 자유계약 선수단에 매 시즌 쌓였다.
-    if (!isClubTeam(finance.teamId)) continue;
-    topUpTransferBudget(state, finance.teamId, seasonBudgetBaseOf(state, finance.teamId), digest);
-  }
-
   for (const name of expireStaffContracts(state, nextCalendar.preseasonStart))
     digest.push(`스태프 계약 만료 — ${name}`);
   refreshStaffPool(state, nextSeason);
 
   digest.push(
-    `시즌 ${nextSeason} 프리시즌 시작 — ${nextCalendar.preseasonStart}, 여름 이적시장이 열렸다. 개막전은 ${nextCalendar.start}이다`,
+    `시즌 ${nextSeason} 프리시즌 시작 — ${nextCalendar.preseasonStart}. 개막전은 ${nextCalendar.start}이다`,
   );
   return digest;
 }
@@ -1795,10 +1504,9 @@ export function applyTransition(state: GameState): string[] {
 /**
  * 시즌 종료 — 리뷰 → **마지막 달 마감** → 전환 (season.md §6).
  *
- * 마감이 가운데 서는 이유는 하나다: 리뷰가 상금·보너스를 그달 원장에 앉히고, 전환이
- * 그 시즌의 손익으로 이적 예산과 PSR을 정한다. 마감이 전환 뒤로 밀리면 상금이 앉은
- * 달은 두 달 뒤(다음 시즌 8월 1일)에야 보고서가 되고, 그 사이에 예산과 동결이
- * 마지막 달을 뺀 성과로 결정된다 (finance.md §7.1).
+ * 마감이 가운데 서는 이유는 하나다: 리뷰가 상금·보너스를 그달 원장에 앉힌다. 마감이
+ * 전환 뒤로 밀리면 상금이 앉은 달은 두 달 뒤(다음 시즌 8월 1일)에야 보고서가 된다
+ * (finance.md §7.1).
  */
 export function endSeason(state: GameState): string[] {
   return inTransaction(state, (draft) => {

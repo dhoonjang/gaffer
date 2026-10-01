@@ -1,7 +1,7 @@
 # 직접 지시 평가 — 합성 입력과 전체 턴
 
 `packages/agents/harness/instructions-eval.ts`는 GM 스킬 뒤에서 실행되는 역할별
-지시 평가의 수동 하네스다. 전술 예제는 `tactic-orders`, 이적 명단 예제는 `market-orders`,
+지시 평가의 수동 하네스다. 전술 예제는 `tactic-orders`, 이적 명단 예제는 `finance-orders`,
 등번호 예제는 `training-orders`의 명령 목록과 실제 문맥만 사용한다. 명령 목록은 해당 역할의 실제 카탈로그에서 읽는다.
 
 기본 실행은 오프라인이며 `--live`가 있어야 TypeSafe를 호출한다. `--turn`은 별도의

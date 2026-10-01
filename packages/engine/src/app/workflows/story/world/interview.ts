@@ -4,7 +4,7 @@ import {
   teamNameIn,
   type GameState,
 } from "../../../../common/core/state";
-import { managerTeam, settleInterview } from "../../../../negotiation/market/manager-market";
+import { managerTeam, settleInterview } from "../../../../story/world/manager-employment";
 import type { CommandResult } from "../../../../common/commands/result";
 
 export function respondToInterview(state: GameState, raw: unknown): CommandResult {

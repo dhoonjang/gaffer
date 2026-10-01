@@ -420,20 +420,13 @@
   background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text-3);
 }
-/* 임대 — 자격 표식이 아니라 **지금 어디에 있는가**라, 각주보다 한 층 앞에 선다
-   (행의 왼쪽 선 색과 같은 계열이라 둘이 한 사실로 읽힌다) */
-.squad-table .tag.loan {
-  background: color-mix(in srgb, var(--gold-soft) 12%, transparent);
-  color: var(--gold-soft);
-}
-/* 대표팀 소집 — 임대와 같은 층이다(지금 어디에 있는가). 색만 갈라 둔다:
-   임대는 시즌을 통째로 비우고 이쪽은 열흘이라, 한 색이면 둘이 한 사실로 읽힌다 */
+/* 대표팀 소집 — 자격 표식이 아니라 **지금 어디에 있는가**라, 각주보다 한 층 앞에 선다 */
 .squad-table .tag.intl {
   background: color-mix(in srgb, var(--accent-2) 12%, transparent);
   color: var(--accent-2);
 }
 /**
- * 상태 표식(부상·정지·불만·이적 리스트) — **자격 표식과 같은 크기·모양**이고
+ * 상태 표식(부상·정지·불만) — **자격 표식과 같은 크기·모양**이고
  * 갈리는 것은 톤뿐이다 — 크기·모양이 갈리면 같은 칸의 표식들이 서로 다른
  * 물건처럼 보인다.
  *

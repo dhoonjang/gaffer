@@ -44,7 +44,7 @@ export * from "./common/world/catalog";
 export * from "./common/people/persona";
 export * from "./common/people/player-persona";
 export * from "./common/world/generate";
-export * from "./negotiation/economy/wages";
+export * from "./common/finance/wages";
 export * from "./app/admin/admin";
 export * from "./app/admin/admin-team";
 export * from "./app/admin/admin-persona";
@@ -52,7 +52,7 @@ export * from "./common/people/persona-catalog";
 export * from "./app/admin/admin-competition";
 export * from "./app/catalog-invariants";
 export * from "./common/world/scope";
-export * from "./negotiation/players/player-pool";
+export * from "./common/players/player-pool";
 
 // competition — 시즌 달력·리그·컵·유럽 대항전
 export * from "./match/competition/calendar";
@@ -101,7 +101,7 @@ export * from "./match/flow/preview";
 export * from "./match/flow/quick-sim";
 export * from "./match/flow/ratings";
 
-// squad — 선수단 상태(폼·심경·부상·정착)와 성장·훈련·스카우팅
+// squad — 선수단 상태(폼·심경·부상)와 성장·훈련
 export * from "./common/players/squad-depth";
 export * from "./common/players/hierarchy";
 export * from "./story/players/mentoring";
@@ -111,13 +111,12 @@ export * from "./story/players/slump";
 export * from "./match/squad/other-clubs";
 export * from "./story/players/coach-cues";
 export * from "./app/workflows/story/players/coach-cues";
-export * from "./common/players/settling";
 export * from "./common/players/injury";
 export * from "./story/players/development";
 export * from "./common/players/registration";
 export * from "./common/players/contract-status";
 export * from "./common/players/observation";
-export * from "./negotiation/players/scouting";
+export * from "./common/players/observation-view";
 export * from "./story/players/training-plan";
 export * from "./story/players/training-report";
 export * from "./app/workflows/story/players/training-report";
@@ -126,33 +125,9 @@ export * from "./common/players/numbers";
 export * from "./story/players/career";
 
 // market — 이적 시장·협상·메디컬·감독 시장
-export * from "./negotiation/market/market";
-export * from "./negotiation/market/negotiation";
-export * from "./app/workflows/negotiation/market/negotiation";
-export * from "./negotiation/market/counter-bounds";
-export * from "./negotiation/market/counterparty";
-export * from "./negotiation/market/mandate";
-export * from "./app/workflows/negotiation/market/mandate";
-export * from "./negotiation/market/table";
-export * from "./negotiation/market/clauses";
-export * from "./negotiation/market/ai-market";
-export * from "./negotiation/market/medical";
-export * from "./negotiation/market/departures";
-export * from "./app/workflows/negotiation/market/departures";
-export * from "./negotiation/market/manager-market";
-export * from "./app/workflows/negotiation/market/manager-market";
-export * from "./negotiation/market/staff-market";
-export * from "./negotiation/market/persuasion";
-export * from "./negotiation/market/terms";
-export * from "./negotiation/market/buyout";
-export * from "./negotiation/market/proposal";
-export * from "./negotiation/economy/valuation";
 
 // club — 구단 재정·기자회견
-export * from "./negotiation/finance/finance";
 export * from "./story/world/media";
-export * from "./negotiation/finance/board-request";
-export * from "./app/workflows/negotiation/finance/board-request";
 export * from "./app/workflows/story/world/board";
 
 // commands — 감독 지시(도구·해석기)가 닿는 코어 명령의 실행부
@@ -160,27 +135,32 @@ export * from "./app/commands";
 
 // views — 오피스 뷰·읽기 전용 조회
 export * from "./app/calendar-view";
-export * from "./negotiation/views/finance";
+export * from "./common/views/finance";
 export * from "./match/views/live";
 export * from "./app/views/squad";
 export * from "./app/views/career";
 export * from "./match/views/competition";
 export * from "./app/views";
-export * from "./negotiation/views/room";
 export * from "./common/views/observation";
 export * from "./common/views/colours";
-export * from "./negotiation/views/scouting";
 export * from "./match/views/report";
 export * from "./app/player-card";
 export * from "./app/lookup";
-export * from "./negotiation/views/finance-outlook";
+export * from "./common/views/finance-outlook";
 
 export * from "./app/create-game";
 export * from "./match/squad/selection";
 
 export * from "./app/workflows/match/health/injury";
 
-export * from "./negotiation/market/evaluation";
-export * from "./negotiation/commands/incoming-contact";
+export * from "./common/finance/finance";
+export * from "./common/finance/request-board";
+export * from "./common/finance/board-request";
+
+export * from "./story/world/manager-employment";
+export * from "./app/workflows/story/world/manager-employment";
+export * from "./story/people/staff-employment";
+
+export * from "./common/players/free-agency";
 
 export * from "./app/workflows/story/world/interview";

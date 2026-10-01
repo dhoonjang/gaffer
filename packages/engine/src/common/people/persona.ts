@@ -7,7 +7,6 @@ import {
   personaRoleLabel,
   STAFF_ROLES,
   type CharacterBookContent,
-  type Negotiation,
   type Persona,
   type PersonaRole,
   type StaffRole,
@@ -983,7 +982,7 @@ const MANAGER_ARCHETYPES: readonly ManagerArchetype[] = [
  * 선수 페르소나와 같은 규약이다: 리그 95개 벤치분 카드를 세이브에 넣을 이유가 없고,
  * 생성이 결정적이라 파생으로 충분하다. **채널에 팀이 없는 것이 핵심이다** — 감독은
  * 자리가 아니라 사람이라 잘렸다가 다른 벤치에 다시 서도 같은 원형·같은 말투다
- * (→ ../../../../docs/negotiation/transfer.md §7 「감독 풀」). 이름이 채널의 전부이므로
+ * (→ ../../../../docs/story/career.md §8). 이름이 채널의 전부이므로
  * 경질 후임은 전임과 독립인 추첨을 받는다.
  *
  * 키워드는 명부 인물의 규칙을 따른다(전체 이름 + 성) — 이름 조각을 전부 담으면
@@ -1006,16 +1005,6 @@ export function generateVirtualManager(seed: number, name: string): Persona {
     seed,
   });
 }
-
-/**
- * 끝난 협상 — 나머지(`open`·`agreed`)는 아직 테이블에 사람이 앉아 있다.
- * 종료 상태를 빼는 방향이라 상태가 하나 늘어도 화자가 조용히 사라지지 않는다.
- */
-const CLOSED_NEGOTIATION = new Set<string>([
-  "completed",
-  "rejected",
-  "expired",
-] satisfies Negotiation["status"][]);
 
 /**
  * **이름난 현역의 선** — 종합이 이만큼이면 세계가 그 이름을 안다 (people.md §6).
@@ -1066,7 +1055,6 @@ interface SpeakerSource {
     /** 이름난 현역 판정용 — 없으면(축약 픽스처) 이름난 현역으로 서지 않는다 */
     attributes?: { overall: number };
   }>;
-  negotiations?: Array<{ gamePlayerId: string; status: string }>;
   /** 가상 감독 판정용 — 없으면(축약 픽스처) 타 팀 벤치가 사전에 서지 않는다 */
   teams?: Array<{ id: string; managerName?: string }>;
   /** 명부 감독이 지금 세계에 서 있는지 — 잘려서 풀에 앉은 사람도 이름을 갖는다 */
@@ -1171,20 +1159,6 @@ function collectSpeakers(state: SpeakerSource): Map<string, SpeakerRole | null> 
     else if (player.isViceCaptain === true) {
       put(player.name, { kind: "captain", label: LEADER_ROLE_LABEL.vice });
     } else put(player.name, { kind: "player" });
-  }
-
-  // 협상 테이블의 상대 선수 — 남의 팀이지만 지금 대화에 앉아 있다.
-  // 합의 뒤 메디컬을 기다리는 자리(`agreed`)도 아직 진행 중이다
-  const negotiating = new Set(
-    (state.negotiations ?? [])
-      .filter((n) => !CLOSED_NEGOTIATION.has(n.status))
-      .map((n) => n.gamePlayerId),
-  );
-  if (negotiating.size > 0) {
-    for (const player of state.players ?? []) {
-      if (player.id !== undefined && negotiating.has(player.id))
-        put(player.name, { kind: "player" });
-    }
   }
 
   // ── 이름난 현역 · 세계 인물 명부 — 인물 사전의 세 겹 그대로 (people.md §3·§6) ──

@@ -39,26 +39,20 @@ export function signYouth(state: GameState, input: { playerIds?: string[] }): Co
   const {
     signed: joined,
     filled,
-    released,
-    turnedAway,
+    letGo,
   } = signYouthCandidates(
     state,
     chosen.map((p) => p.id),
   );
   const names = (players: readonly GamePlayer[]) => briefNames(players.map((p) => p.name));
-  /** 돌려보낸 아이가 어디에 섰나 — 명부의 자리는 상한이 있다 (transfer.md §6) */
-  const freeAgentNote =
-    turnedAway > 0 ? `무소속 ${released.length}명 · 하부 리그 ${turnedAway}명` : "무소속 명부";
 
   if (joined.length === 0 && filled.length === 0) {
     return {
       ok: true,
-      message:
-        `유스 후보 ${rows.length}명을 전원 돌려보냈습니다 — 이번 여름 아카데미에서 올라오는 선수는 없습니다` +
-        (released.length > 0 ? ` (${released.length}명은 무소속 명부에 섰습니다)` : ""),
+      message: `유스 후보 ${rows.length}명을 전원 돌려보냈습니다 — 이번 여름 아카데미에서 올라오는 선수는 없습니다`,
       brief: {
         head: "유스 인테이크",
-        items: [item({ label: "방출", text: `${rows.length}명`, note: freeAgentNote })],
+        items: [item({ label: "방출", text: `${rows.length}명` })],
       },
     };
   }
@@ -73,8 +67,7 @@ export function signYouth(state: GameState, input: { playerIds?: string[] }): Co
       }),
     );
   }
-  const letGo = released.length + turnedAway;
-  if (letGo > 0) items.push(item({ label: "방출", text: `${letGo}명`, note: freeAgentNote }));
+  if (letGo > 0) items.push(item({ label: "방출", text: `${letGo}명` }));
   return {
     ok: true,
     message:
@@ -82,10 +75,7 @@ export function signYouth(state: GameState, input: { playerIds?: string[] }): Co
       (filled.length > 0
         ? ` (${josa(names(filled), "은/는")} 포지션군 최소 인원이 무너져 구단이 함께 올렸습니다)`
         : "") +
-      (letGo > 0
-        ? ` · 나머지 ${letGo}명은 돌려보냈습니다` +
-          (released.length > 0 ? ` (${released.length}명은 무소속 명부에 섰습니다)` : "")
-        : ""),
+      (letGo > 0 ? ` · 나머지 ${letGo}명은 돌려보냈습니다` : ""),
     brief: { head: "유스 인테이크", items },
   };
 }

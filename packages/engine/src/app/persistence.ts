@@ -66,7 +66,7 @@ const SHARD_FILE = /\.shard-([0-9a-f]+)\.json(?:\.bak)?$/;
  * 한 조각의 두 벌.
  *
  * 본체와 `.bak`은 보통 **같은** 조각을 가리킨다 — 해시가 같으려면 그 테이블이
- * 그대로여야 하고, `players`는 이적이나 1·2군 이동이 있어야 갈린다. 그래서 조각
+ * 그대로여야 하고, `players`는 소속 변경이나 1·2군 이동이 있어야 갈린다. 그래서 조각
  * 하나가 상하면 `.bak` 폴백이 가리키는 곳도 그 파일이고, 세이브의 86%가 백업 밖에
  * 놓인다. 여기서의 `.bak`은 직전 세대가 아니라 **같은 내용의 사본**이다.
  */
@@ -305,7 +305,7 @@ function attachShards(raw: unknown, id: string): unknown {
  * 버전이 다른 세이브는 로드를 거부한다 — 마이그레이션은 없다. 다만 감추지는 않는다:
  * 목록에는 실패 사유와 함께 선다.
  */
-export const SAVE_VERSION = 18;
+export const SAVE_VERSION = 19;
 
 /**
  * 세이브를 열지 못한 이유 — 문장은 화면이 쓴다, 코어는 사실만 싣는다.
@@ -343,7 +343,6 @@ const REQUIRED_TABLES = [
   "contracts",
   "schedule",
   "matches",
-  "windows",
   "calendar",
   "manager",
 ] as const;

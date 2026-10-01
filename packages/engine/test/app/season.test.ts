@@ -1,3 +1,10 @@
+import {
+  setRetirement,
+  toFreeAgency,
+  setSetPieceTakers,
+  successorCaptainOf,
+} from "@story-fm/engine";
+import { squadLevelOf } from "@story-fm/engine";
 import { describe, expect, it } from "vitest";
 import {
   ageOf,
@@ -5,6 +12,7 @@ import {
   GOALKEEPER_MIN,
   outcomeFor,
   RED_CARD_POINTS,
+  type Contract,
   type SeasonStat,
 } from "@story-fm/domain";
 import {
@@ -24,8 +32,11 @@ import {
   cupCatalogById,
   domesticCupById,
   financeOf,
-  FREE_AGENT_YOUTH_CAP,
   groupOf,
+  contractExpiresBy,
+  expireContracts,
+  FREE_AGENT_TEAM,
+  freeAgents,
   isFreeAgent,
   isFriendly,
   leagueOfTeamIn,
@@ -48,12 +59,8 @@ import {
   teamsOfLeagueIn,
   tierOfTeamIn,
   transitionSeason,
-  setRetirement,
-  successorCaptainOf,
-  squadLevelOf,
-  unsignedYouthOriginOf,
   userPlayers,
-  youthFreeAgents,
+  userTactics,
   weeklyWagesOf,
   type GameState,
 } from "@story-fm/engine";
@@ -439,7 +446,7 @@ describe("지나간 시즌의 개인 순위 (competition.md §2 「개인 순위
 });
 
 describe("시즌 전환 (season.md §6)", () => {
-  it("다음 시즌 7월 1일 프리시즌으로 이동하고 이적창이 새로 열린다", () => {
+  it("다음 시즌 7월 1일 프리시즌으로 이동한다", () => {
     const state = createTestGame(5);
     const known = assignmentsOf(state, state.userTeamId)[0]!;
     known.familiarity = 87.25;
@@ -461,16 +468,10 @@ describe("시즌 전환 (season.md §6)", () => {
     expect(state.calendar.start.startsWith("2027-08")).toBe(true);
     expect(state.matches.every((m) => m.result === null)).toBe(true);
     expect(state.matches.every((m) => m.season === 2)).toBe(true);
-    // 새 이적창 2개 + 일정 엔트리 (사우디·MLS 창은 별도라 우리 것만 센다)
-    expect(state.windows.filter((w) => w.season === 2 && w.leagueId === undefined)).toHaveLength(2);
-    expect(
-      state.windows.find((w) => w.kind === "summer" && w.leagueId === undefined)?.opensOn,
-    ).toBe("2027-07-01");
-    expect(digest.some((d) => d.includes("이적시장"))).toBe(true);
     expect(digest.some((d) => d.includes("프리시즌"))).toBe(true);
   });
 
-  it("나이는 birthdate에서 계산되고, 은퇴는 TRANSFER 원장에 남는다", () => {
+  it("나이는 birthdate에서 계산되고, 은퇴는 이동 원장에 남는다", () => {
     const state = createTestGame(5);
     const veteran = userPlayers(state)[0]!;
     veteran.birthdate = "1988-01-01";
@@ -484,9 +485,7 @@ describe("시즌 전환 (season.md §6)", () => {
     transitionSeason(state);
 
     expect(userPlayers(state).find((p) => p.id === veteran.id)).toBeUndefined();
-    const retire = state.transfers.find(
-      (t) => t.gamePlayerId === veteran.id && t.type === "retire",
-    );
+    const retire = state.moves.find((m) => m.gamePlayerId === veteran.id && m.kind === "retire");
     expect(retire).toBeTruthy();
     expect(retire?.toTeamId).toBeNull();
     // 은퇴자 계약은 종료된다
@@ -499,78 +498,23 @@ describe("시즌 전환 (season.md §6)", () => {
   });
 
   /**
-   * 사전 계약의 발효 (transfer.md §1-4 · season.md §8) — 셋이 한 자리에서 끝나야
-   * 한다: 옛 계약 `ended` · 예약 `active` · 선수가 새 구단으로. 발효가 팀 루프보다
-   * 앞이라는 것이 요점이라, 옛 구단이 그를 자동 갱신하지 않은 것까지 함께 잰다.
-   */
-  it("사전 계약이 전환에서 발효한다 — 옛 계약은 끝나고 활성 계약은 하나로 남는다", () => {
-    const state = createTestGame(5);
-    const club = state.teams.find((t) => isClubTeam(t.id) && t.id !== state.userTeamId)!;
-    const target = playersOf(state, club.id).find(
-      (p) => ageOf(p.birthdate, state.date) < 28 && p.loan === undefined,
-    )!;
-    // 만료일이 발효일 뒤로 가면 예약이 걷힌다 — 이 계약은 이번 시즌으로 끝난다
-    activeContract(state, target.id)!.until = "2027-06-30";
-    state.contracts.push({
-      id: "c-pre-test",
-      gamePlayerId: target.id,
-      teamId: state.userTeamId,
-      weeklyWage: 50_000,
-      since: "2027-07-01",
-      until: "2030-06-30",
-      status: "pending",
-    });
-
-    const digest = transitionSeason(state);
-
-    const joined = userPlayers(state).find((p) => p.id === target.id);
-    expect(joined).toBeTruthy();
-    expect(joined!.squadLevel).toBe("first");
-    expect(joined!.squadNumber).toBeDefined();
-    // 한 선수에게 활성 계약은 하나다 — 그리고 그것이 예약이던 그 줄이다
-    const active = state.contracts.filter(
-      (c) => c.gamePlayerId === target.id && c.status === "active",
-    );
-    expect(active).toHaveLength(1);
-    expect(active[0]!.id).toBe("c-pre-test");
-    expect(
-      state.contracts.some((c) => c.gamePlayerId === target.id && c.status === "pending"),
-    ).toBe(false);
-    // 옛 구단은 그를 만료로 내보내지도 자동 갱신하지도 않았다 — 발효가 앞에 섰다
-    expect(
-      state.contracts.filter(
-        (c) => c.gamePlayerId === target.id && c.teamId === club.id && c.status === "active",
-      ),
-    ).toHaveLength(0);
-    const ledger = state.transfers.find(
-      (t) => t.gamePlayerId === target.id && t.reason === "precontract",
-    );
-    expect(ledger?.fromTeamId).toBe(club.id);
-    expect(ledger?.toTeamId).toBe(state.userTeamId);
-    expect(ledger?.fee).toBe(0);
-    expect(ledger?.type).toBe("free");
-    expect(ledger?.date).toBe("2027-07-01");
-    expect(digest.some((d) => d.includes(`${target.name} 합류`))).toBe(true);
-  });
-
-  /**
    * **우리 팀은 전환이 계약시키지 않는다 — 후보로 세운다** (season.md §6). 계약이
    * 서는 것은 감독이 고른 자리이거나 소집일이고, 어느 쪽이든 원장 줄과 계약이
    * 한 자리에서 함께 선다.
    */
-  it("유스 콜업이 TRANSFER + CONTRACT와 함께 들어온다", () => {
+  it("유스 콜업이 이동 원장 + CONTRACT와 함께 들어온다", () => {
     const state = createTestGame(5);
     transitionSeason(state);
     // 전환 직후엔 후보만 서 있고 계약도 원장 줄도 없다
     expect((state.youthCandidates ?? []).length).toBeGreaterThan(0);
     expect(
-      state.transfers.filter((t) => t.type === "youth" && t.toTeamId === state.userTeamId),
+      state.moves.filter((m) => m.kind === "youth" && m.toTeamId === state.userTeamId),
     ).toHaveLength(0);
 
     settleYouthIntake(state, []);
     // 콜업은 원장에서 찾는다 — id 모양으로는 유스를 알 수 없다 (id에 출신이 없다)
-    const calledUp = state.transfers.filter(
-      (t) => t.type === "youth" && t.toTeamId === state.userTeamId,
+    const calledUp = state.moves.filter(
+      (m) => m.kind === "youth" && m.toTeamId === state.userTeamId,
     );
     expect(calledUp.length).toBeGreaterThan(0);
     for (const tr of calledUp) {
@@ -591,7 +535,7 @@ describe("시즌 전환 (season.md §6)", () => {
    * 바닥 1은 동시에 **아무도 나가지 않은 AI 구단도 매 시즌 한 명씩 는다**는 뜻이다 —
    * 스쿼드 크기가 어디로 수렴하는지는 밴드라 하네스가 잰다.
    */
-  it("유스 유입은 빠진 인원만큼이고, 아무도 나가지 않아도 한 명은 온다", () => {
+  it("유스 유입은 빠진 인원(은퇴 + 계약 만료)만큼이고, 아무도 나가지 않아도 한 명은 온다", () => {
     const state = createTestGame(5);
     const club = state.teams.find((t) => isClubTeam(t.id) && t.id !== state.userTeamId)!;
     // 이 구단에서만 은퇴 결정을 기록한다
@@ -604,24 +548,24 @@ describe("시즌 전환 (season.md §6)", () => {
     transitionSeason(state);
 
     const day = state.calendar.preseasonStart;
-    const youthAt = (teamId: string) =>
-      state.transfers.filter((t) => t.type === "youth" && t.toTeamId === teamId && t.date === day)
-        .length;
-    const retiredAt = (teamId: string) =>
-      state.transfers.filter(
-        (t) => t.type === "retire" && t.fromTeamId === teamId && t.date === day,
+    const movesAt = (kind: "youth" | "retire" | "expiry", teamId: string) =>
+      state.moves.filter(
+        (m) =>
+          m.kind === kind &&
+          (kind === "youth" ? m.toTeamId : m.fromTeamId) === teamId &&
+          m.date === day,
       ).length;
+    const leftAt = (teamId: string) => movesAt("retire", teamId) + movesAt("expiry", teamId);
 
-    // 은퇴가 난 구단은 **그 수만큼** — 최소 인원 보충 몫이 여기에 더해지지 않는다
-    expect(retiredAt(club.id)).toBeGreaterThanOrEqual(3);
-    expect(youthAt(club.id)).toBe(retiredAt(club.id));
+    // 빠진 구단은 **그 수만큼** — 최소 인원 보충 몫이 여기에 더해지지 않는다
+    expect(movesAt("retire", club.id)).toBeGreaterThanOrEqual(3);
+    expect(movesAt("youth", club.id)).toBe(leftAt(club.id));
 
-    // 아무도 나가지 않은 구단도 정확히 한 명을 받는다 (감독 팀은 계약 만료가 따로 센다)
+    // 아무도 나가지 않은 구단도 정확히 한 명을 받는다
     const quiet = state.teams.filter(
-      (t) => isClubTeam(t.id) && t.id !== state.userTeamId && retiredAt(t.id) === 0,
+      (t) => isClubTeam(t.id) && t.id !== state.userTeamId && leftAt(t.id) === 0,
     );
-    expect(quiet.length).toBeGreaterThan(0);
-    for (const t of quiet) expect(youthAt(t.id), t.id).toBe(1);
+    for (const t of quiet) expect(movesAt("youth", t.id), t.id).toBe(1);
   });
 
   it("배치가 재구성되고 주급 총액도 새 스쿼드 기준이 된다", () => {
@@ -643,11 +587,10 @@ describe("시즌 전환 (season.md §6)", () => {
   });
 
   /**
-   * 무소속은 구단이 아니다 (team.md §4) — 영입할 주체가 없으니 장부도 예산도 없다.
-   * 예전엔 £4.8M 장부를 갖고 시작해 쓰이지 않는 예산이 매 시즌 쌓였다. 이제 새
-   * 게임이 그 자리를 만들지 않으므로, **시즌 전환도 그 자리를 만들어 내면 안 된다.**
+   * 무소속은 구단이 아니다 (team.md §4) — 새 게임이 장부를 만들지 않으므로,
+   * **시즌 전환도 그 자리를 만들어 내면 안 된다.**
    */
-  it("무소속에는 장부도 시즌 이적 예산도 붙지 않는다", () => {
+  it("무소속에는 장부가 붙지 않는다", () => {
     const state = createTestGame(5);
     const nonClubs = () => state.finances.filter((f) => !isClubTeam(f.teamId));
     expect(nonClubs(), "새 게임의 무소속엔 장부가 없다").toHaveLength(0);
@@ -656,9 +599,8 @@ describe("시즌 전환 (season.md §6)", () => {
     transitionSeason(state);
 
     expect(nonClubs(), "시즌 전환이 무소속 장부를 만들었다").toHaveLength(0);
-    // 클럽은 그대로 보충된다 — 필터가 예산 보충 자체를 죽이면 안 된다
-    const club = state.finances.find((f) => isClubTeam(f.teamId))!;
-    expect(club.transferBudget).toBeGreaterThan(0);
+    // 클럽의 장부는 그대로 남는다 — 필터가 클럽 장부까지 걷으면 안 된다
+    expect(state.finances.some((f) => isClubTeam(f.teamId))).toBe(true);
   });
 
   /**
@@ -713,6 +655,156 @@ describe("시즌 전환 (season.md §6)", () => {
 });
 
 /**
+ * **계약이 끝나면 선수는 무소속이 된다** — 우리 팀도 AI 구단도 같은 규칙이다
+ * (season.md §6 · `free-agency.ts`). 경계는 `until == on`이다: 그날 끝나는 계약은
+ * 끝나고, 하루라도 뒤면 남는다. 어긋나면 화면에는 아무 표시 없이 선수단이 한 해
+ * 일찍 마르거나 떠났어야 할 선수가 남는다.
+ */
+describe("계약 만료 → 무소속 (season.md §6)", () => {
+  const contractUntil = (until: string, status: Contract["status"] = "active"): Contract => ({
+    id: "c-boundary",
+    gamePlayerId: "p-boundary",
+    teamId: "arsenal",
+    weeklyWage: 1_000,
+    since: "2024-07-01",
+    until,
+    status,
+  });
+
+  it("만료일이 그날이면 끝나고, 하루라도 뒤면 남는다", () => {
+    const on = "2027-07-01";
+    expect(contractExpiresBy(contractUntil("2027-07-01"), on)).toBe(true);
+    expect(contractExpiresBy(contractUntil("2027-06-30"), on)).toBe(true);
+    expect(contractExpiresBy(contractUntil("2027-07-02"), on)).toBe(false);
+    // 이미 끝난 계약은 다시 끝나지 않는다
+    expect(contractExpiresBy(contractUntil("2027-06-30", "ended"), on)).toBe(false);
+  });
+
+  it("무소속으로 보내면 소속·계약·배치·완장이 풀리고 이동 원장에 expiry 한 줄이 선다", () => {
+    const state = createTestGame(5);
+    const starterId = assignmentsOf(state, state.userTeamId, "starting")[0]!.playerId;
+    const player = state.players.find((p) => p.id === starterId)!;
+    player.isCaptain = true;
+    const contract = activeContract(state, player.id)!;
+    const movesBefore = state.moves.length;
+
+    toFreeAgency(state, player, "2027-07-01");
+
+    expect(isFreeAgent(player)).toBe(true);
+    expect(player.teamId).toBe(FREE_AGENT_TEAM);
+    expect(contract.status).toBe("ended");
+    expect(activeContract(state, player.id)).toBeNull();
+    expect(player.isCaptain).toBe(false);
+    expect(userPlayers(state).some((p) => p.id === player.id)).toBe(false);
+    expect(assignmentsOf(state, state.userTeamId).some((a) => a.playerId === player.id)).toBe(
+      false,
+    );
+    expect(state.moves).toHaveLength(movesBefore + 1);
+    expect(state.moves.at(-1)).toMatchObject({
+      gamePlayerId: player.id,
+      fromTeamId: state.userTeamId,
+      toTeamId: FREE_AGENT_TEAM,
+      date: "2027-07-01",
+      kind: "expiry",
+    });
+  });
+
+  it("그날까지 끝나는 계약만 끝내고, 선수를 찾지 못한 계약은 끝내기만 한다", () => {
+    const state = createTestGame(5);
+    const [leaving, staying] = userPlayers(state).filter((p) => !p.isCaptain);
+    const ending = activeContract(state, leaving!.id)!;
+    const kept = activeContract(state, staying!.id)!;
+    ending.until = "2027-07-01";
+    kept.until = "2027-07-02";
+    const playerOf = (id: string) => state.players.find((p) => p.id === id);
+
+    const leavers = expireContracts(state, [ending, kept], "2027-07-01", playerOf);
+
+    expect(leavers.map((p) => p.id)).toEqual([leaving!.id]);
+    expect(leaving!.teamId).toBe(FREE_AGENT_TEAM);
+    expect(staying!.teamId).toBe(state.userTeamId);
+    expect(kept.status).toBe("active");
+
+    const orphan = contractUntil("2027-06-30");
+    expect(expireContracts(state, [orphan], "2027-07-01", () => undefined)).toEqual([]);
+    expect(orphan.status).toBe("ended");
+  });
+
+  it("시즌 전환이 우리 팀과 AI 구단의 만료 선수를 똑같이 무소속으로 보낸다", () => {
+    const state = createTestGame(5);
+    const ai = state.teams.find((t) => isClubTeam(t.id) && t.id !== state.userTeamId)!.id;
+    /** 은퇴로 빠지지 않을 두 사람 — 하나는 만료일이 전환 전날, 하나는 전환 다음 날 */
+    const pair = (teamId: string) => {
+      const [gone, stays] = playersOf(state, teamId).filter(
+        (p) => !p.isCaptain && !p.isViceCaptain,
+      );
+      for (const p of [gone!, stays!]) {
+        p.birthdate = "2000-01-01";
+        delete p.state.retiringAfterSeason;
+      }
+      activeContract(state, gone!.id)!.until = "2027-06-30";
+      activeContract(state, stays!.id)!.until = "2027-07-02";
+      return { gone: gone!, stays: stays!, teamId };
+    };
+    const cases = [pair(state.userTeamId), pair(ai)];
+
+    const digest = transitionSeason(state);
+
+    const on = state.calendar.preseasonStart;
+    expect(on).toBe("2027-07-01");
+    for (const { gone, stays, teamId } of cases) {
+      const left = state.players.find((p) => p.id === gone.id)!;
+      expect(left.teamId, teamId).toBe(FREE_AGENT_TEAM);
+      expect(activeContract(state, gone.id), teamId).toBeNull();
+      expect(playersOf(state, teamId).some((p) => p.id === gone.id)).toBe(false);
+      expect(
+        state.moves.filter((m) => m.gamePlayerId === gone.id && m.kind === "expiry"),
+        teamId,
+      ).toMatchObject([{ fromTeamId: teamId, toTeamId: FREE_AGENT_TEAM, date: on }]);
+
+      expect(state.players.find((p) => p.id === stays.id)?.teamId, teamId).toBe(teamId);
+      expect(activeContract(state, stays.id)?.until, teamId).toBe("2027-07-02");
+    }
+    expect(digest).toContain(`계약 만료로 떠남: ${cases[0]!.gone.name} (무소속)`);
+  });
+
+  /**
+   * **죽은 공 지정은 완장과 같은 문을 지난다** (match.md §2 키커 지정) — 배치가
+   * 걷히는 자리(`releaseFromTactics`)에서 함께 걷힌다. 그 문이 새면 떠난 선수가
+   * 우리 코너를 차는 장부가 남고, 그 경기만 조용히 기본값으로 되돌린다.
+   */
+  it("떠난 선수의 죽은 공 지정이 걷힌다 — 남은 사람의 자리는 그대로다", () => {
+    const state = createTestGame(5);
+    const [target, stays] = userPlayers(state);
+    const set = setSetPieceTakers(state, { corner: target!.id, penalty: stays!.id });
+    expect(set.ok, set.message).toBe(true);
+
+    toFreeAgency(state, target!, "2027-07-01");
+
+    const takers = userTactics(state).setPieceTakers ?? {};
+    expect(takers.corner).toBeUndefined();
+    expect(takers.penalty).toBe(stays!.id);
+    expect(target!.squadNumber).toBeUndefined();
+  });
+
+  /**
+   * 무소속은 **클럽이 아니다** — 떠난 선수의 `teamId`가 가리킬 팀 엔티티 한 줄만 있고
+   * 재정도 전술도 AI 감독도 없다 (team.md §4).
+   */
+  it("무소속은 게임 시작 시 비어 있고, 재정·전술·AI 감독을 갖지 않는다", () => {
+    const state = createTestGame(5);
+    expect(freeAgents(state)).toHaveLength(0);
+    expect(isClubTeam(FREE_AGENT_TEAM)).toBe(false);
+    const team = state.teams.find((t) => t.id === FREE_AGENT_TEAM);
+    expect(team, "무소속 팀 엔티티가 없다").toBeDefined();
+    expect(team!.aiManagerTacticsRating).toBeUndefined();
+    expect(team!.managerSince).toBeUndefined();
+    expect(state.finances.some((f) => f.teamId === FREE_AGENT_TEAM)).toBe(false);
+    expect(state.tactics.some((t) => t.teamId === FREE_AGENT_TEAM)).toBe(false);
+  });
+});
+
+/**
  * 18팀 리그 — 문턱이 20팀 순위로 박혀 있던 자리들 (career.md §5).
  *
  * 분데스리가 17위는 **강등**인데 보드는 "잔류 충족"으로 읽어 평판 +8과 `survivor`를
@@ -762,7 +854,7 @@ describe("은퇴 — GM 선언·철회·시즌 실행", () => {
     transitionSeason(game);
     for (const player of [ours, theirs]) {
       expect(game.players.some((p) => p.id === player.id)).toBe(false);
-      expect(game.transfers.some((t) => t.gamePlayerId === player.id && t.type === "retire")).toBe(
+      expect(game.moves.some((t) => t.gamePlayerId === player.id && t.kind === "retire")).toBe(
         true,
       );
       expect(activeContract(game, player.id)).toBeNull();
@@ -794,27 +886,6 @@ describe("은퇴 — GM 선언·철회·시즌 실행", () => {
       setRetirement(game, { playerId: player.id, action: "declare", reason: "injury" }).ok,
     ).toBe(false);
     expect(player.state.retiringAfterSeason).toEqual(declared);
-  });
-
-  it("선언은 사전 계약을 취소하고 철회는 계약을 되살리지 않는다", () => {
-    const game = fresh();
-    const player = userPlayers(game)[0]!;
-    const active = activeContract(game, player.id)!;
-    const pending = {
-      ...active,
-      id: "pending-retirement",
-      status: "pending" as const,
-      since: "2027-07-01",
-      until: "2029-06-30",
-    };
-    game.contracts.push(pending);
-    expect(
-      setRetirement(game, { playerId: player.id, action: "declare", reason: "personal" }).ok,
-    ).toBe(true);
-    expect(pending.status).toBe("ended");
-    expect(active.status).toBe("active");
-    expect(setRetirement(game, { playerId: player.id, action: "withdraw" }).ok).toBe(true);
-    expect(pending.status).toBe("ended");
   });
 
   it("실행 전 선언은 나이와 무관하게 철회할 수 있다", () => {
@@ -1084,7 +1155,7 @@ describe("18팀 리그의 시즌 리뷰", () => {
  * 경기 소유 테스트가 검증하고, 여기서는 일정·시즌 기록·시상·전환을 확인한다.
  */
 describe("풀 시즌 통합 — 리그 완주 후 커리어 기록·전환", () => {
-  it("측정용 재임 유지는 재계약 기간 안에서만 명시적으로 승인하고 수락한다", () => {
+  it("측정용 재임 유지는 재계약 기간 안에서만 명시적으로 승인한다", () => {
     const state = createMiniGame(21);
     const contract = state.manager.contract!;
     contract.until = addDays(state.date, 90 + 1);
@@ -1096,10 +1167,8 @@ describe("풀 시즌 통합 — 리그 완주 후 커리어 기록·전환", () 
     keepSeat(state);
     expect(state.manager.contract!.until > until).toBe(true);
     const renewed = structuredClone(state.manager.contract);
-    const offers = structuredClone(state.managerOffers);
     keepSeat(state);
     expect(state.manager.contract).toEqual(renewed);
-    expect(state.managerOffers).toEqual(offers);
   });
 
   it("시즌을 끝까지 돌리면 SEASON_RECORD가 남고 시즌 2로 전환된다", () => {
@@ -1434,9 +1503,7 @@ describe("유스 인테이크 (season.md §6)", () => {
       expect(activeContract(READ, row.player.id)).toBeNull();
     }
     // AI 구단은 그대로 계약까지 마쳤다
-    const others = READ.transfers.filter(
-      (t) => t.type === "youth" && t.toTeamId !== READ.userTeamId,
-    );
+    const others = READ.moves.filter((m) => m.kind === "youth" && m.toTeamId !== READ.userTeamId);
     expect(others.length).toBeGreaterThan(0);
   });
 
@@ -1492,30 +1559,6 @@ describe("유스 인테이크 (season.md §6)", () => {
     }
   });
 
-  /**
-   * **명부는 여름마다 새로 서고 부풀지 않는다** (season.md §6 「계약을 받지 못한
-   * 아이」). 상한(`FREE_AGENT_YOUTH_CAP`)과 「한 시즌」 규칙이 함께 지키는 자리라
-   * 한 여름만 봐서는 보이지 않는다 — 이 하네스가 아니라 케이스인 것은 세 여름이
-   * 결정적이고, 여기서 어긋나면 세이브가 해마다 무거워지기 때문이다.
-   */
-  it("계약을 받지 못한 유스가 여름마다 명부에 서되 상한을 넘지 않는다", () => {
-    const state = createTestGame(7);
-    const perSummer: number[] = [];
-    for (let s = 0; s < 3; s++) {
-      transitionSeason(state);
-      const pool = youthFreeAgents(state);
-      perSummer.push(pool.length);
-      expect(pool.length).toBeLessThanOrEqual(FREE_AGENT_YOUTH_CAP);
-      // 아무도 부르지 않은 세계라 이번 여름의 아이만 서 있어야 한다
-      for (const youth of pool) {
-        expect(unsignedYouthOriginOf(state, youth.id)?.on, youth.id).toBe(
-          state.calendar.preseasonStart,
-        );
-      }
-    }
-    expect(Math.min(...perSummer), "여름마다 명부에 유스가 선다").toBeGreaterThan(0);
-  });
-
   it("답하지 않으면 코어가 앞에서부터 정해진 수만큼 계약한다", () => {
     const state = createTestGame(5);
     transitionSeason(state);
@@ -1532,26 +1575,15 @@ describe("유스 인테이크 (season.md §6)", () => {
       ).toBe(true);
       expect(activeContract(state, id), id).not.toBeNull();
     }
-    /**
-     * **나머지는 사라지지 않는다 — 무소속 명부로 간다** (season.md §6). 명부의 자리는
-     * 상한이 있어(`FREE_AGENT_YOUTH_CAP`) 세계의 또래에게 밀린 아이는 서지 못하지만,
-     * 어느 쪽이든 우리 명단에는 없다.
-     */
+    // 나머지는 세계에 남지 않는다 — 무소속 명부로도 가지 않는다 (season.md §6)
     const leftovers = rows.filter((row) => !auto.includes(row.player.id));
+    expect(leftovers.length).toBeGreaterThan(0);
     for (const row of leftovers) {
       expect(
-        userPlayers(state).some((p) => p.id === row.player.id),
+        state.players.some((p) => p.id === row.player.id),
         row.player.id,
       ).toBe(false);
-      const stood = state.players.find((p) => p.id === row.player.id);
-      if (!stood) continue;
-      expect(isFreeAgent(stood), row.player.id).toBe(true);
-      expect(unsignedYouthOriginOf(state, stood.id)?.teamId, row.player.id).toBe(state.userTeamId);
     }
-    expect(
-      leftovers.some((row) => state.players.some((p) => p.id === row.player.id)),
-      "돌려보낸 후보가 한 명도 명부에 서지 않았다",
-    ).toBe(true);
     expect(digest.length).toBeGreaterThan(0);
   });
 
@@ -1660,7 +1692,7 @@ describe("시즌 예상 순위 (season.md §2)", () => {
     expect(preseasonPrediction(createTestGame(), league)).toEqual(first);
   });
 
-  it("여름 순이적이 순서를 움직인다 — 스쿼드가 같아도", () => {
+  it("여름의 들고 남이 순서를 움직인다 — 스쿼드가 같아도", () => {
     const before = preseasonPrediction(state, league);
     const mid = Math.floor(before.length / 2);
     const above = before[mid]!;
@@ -1672,15 +1704,13 @@ describe("시즌 예상 순위 (season.md §2)", () => {
      */
     const mark = (teamId: string, arrived: boolean) => {
       for (const player of playersOf(state, teamId)) {
-        state.transfers.push({
-          id: `t-${player.id}`,
+        state.moves.push({
+          id: `mv-${player.id}`,
           gamePlayerId: player.id,
-          windowId: null,
           fromTeamId: arrived ? null : teamId,
-          toTeamId: arrived ? teamId : null,
+          toTeamId: arrived ? teamId : FREE_AGENT_TEAM,
           date: state.calendar.preseasonStart,
-          type: "transfer",
-          fee: 0,
+          kind: arrived ? "reinforcement" : "expiry",
         });
       }
     };
@@ -1689,7 +1719,7 @@ describe("시즌 예상 순위 (season.md §2)", () => {
 
     const after = preseasonPrediction(state, league);
     expect(after.indexOf(below), "보강한 팀이 위로 오지 않았다").toBeLessThan(after.indexOf(above));
-    state.transfers = [];
+    state.moves = [];
   });
 
   it("한 시즌의 예상표는 한 번만 선다 — 다시 부르면 그대로다", () => {

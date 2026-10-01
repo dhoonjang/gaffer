@@ -1745,7 +1745,7 @@ export function roleFit(axes: AxisValues, position: string, role?: string): numb
  *
  * `positions`는 그 선수가 볼 줄 아는 자리 목록(`PLAYER_POSITION`)이다. 주 포지션만
  * 보면 안 된다 — 시드의 주 포지션 표기는 출처마다 갈리고(EA는 윙어를 LM/RM으로 적는다),
- * 그 표기 하나 때문에 종합이 낮게 나오면 이적·라인업 판단이 통째로 어긋난다.
+ * 그 표기 하나 때문에 종합이 낮게 나오면 라인업 판단이 통째로 어긋난다.
  */
 export function bestOverall(axes: AxisValues, positions: readonly { position: string }[]): number {
   let best = 0;
@@ -1865,7 +1865,7 @@ export function fatigueOf(state: Pick<PlayerState, "fatigue">): number {
 }
 
 /**
- * **새 선수의 상태** — 시드 인스턴스·유스·보강 영입이 같은 함수로 출발한다.
+ * **새 선수의 상태** — 시드 인스턴스·유스·승격 보강 선수가 같은 함수로 출발한다.
  *
  * 폼·체력만 부르는 쪽이 정한다. 나머지는 아직 아무 일도 겪지 않은 몸의 장부라
  * 기준값에서 시작한다 — 새 선수를 만드는 자리가 셋이라 각자 적으면 조용히 갈린다.
@@ -1987,26 +1987,26 @@ export type PlayerPosition = z.infer<typeof PlayerPositionSchema>;
 /**
  * 게임 선수 (GAME_PLAYER) — 한 게임 안에서 변화하는 선수의 전부.
  * 카탈로그를 복사해 만들고 catalogId로 출처를 링크한다 (유스 등 생성 선수는 null).
- * 부상·징계·계약·이적·성장은 GameState의 기록 테이블이 gamePlayerId로 참조한다.
+ * 부상·징계·계약·이동·성장은 GameState의 기록 테이블이 gamePlayerId로 참조한다.
  */
 export const GamePlayerSchema = z.object({
   /** 시드 선수는 카탈로그 id 재사용, 생성 선수는 신규 슬러그 */
   id: z.string().min(1),
   catalogId: z.string().min(1).nullable(),
-  /** 소속 팀 — 이적 = 이 값 변경 (반드시 TRANSFER 기록과 원자적) */
+  /** 소속 팀 — 바뀌면 반드시 선수 이동 원장(`PlayerMove`)과 원자적으로 */
   teamId: z.string().min(1),
   /** 구단 내부 스쿼드. reserve는 별도 경기를 만들지 않는 개발 스쿼드다 */
   squadLevel: z.enum(["first", "reserve"]),
   name: z.string().min(1),
-  /** 현재 소속팀의 등번호. 미배정·자유계약 선수는 없음 */
+  /** 현재 소속팀의 등번호. 미배정·무소속 선수는 없음 */
   squadNumber: z.number().int().min(1).max(SQUAD_NUMBER_MAX).optional(),
   /** 출생년월일 (YYYY-MM-DD). 나이는 플레이 날짜 기준으로 계산 (ageOf) */
   birthdate: DateString,
   positions: z.array(PlayerPositionSchema).min(1),
   /**
    * 홈그로운 자격을 가진 **협회(나라)**. 등록 명단의 홈그로운 판정은 이 값과
-   * 소속 클럽의 리그 국가를 비교한다 — 잉글랜드에서 자란 선수는 잉글랜드 안에서
-   * 이적해도 홈그로운이지만, 라리가로 가면 아니다 (squad-rules.ts).
+   * 소속 클럽의 리그 국가를 비교한다 — 잉글랜드에서 자란 선수는 잉글랜드의 어느
+   * 구단에서도 홈그로운이지만, 라리가 구단에서는 아니다 (squad-rules.ts).
    * 없으면 어느 리그에서도 홈그로운이 아니다.
    */
   homegrownCountry: z.string().optional(),
@@ -2036,19 +2036,6 @@ export const GamePlayerSchema = z.object({
    * 주장이 없는 경기 명단에서 완장을 잇고, 주장 자리가 비면 우선 승계한다.
    */
   isViceCaptain: z.boolean(),
-  /**
-   * 임대 중이면 원소속과 복귀일 — `teamId`는 **지금 뛰는 팀**이라 임대를 나가면
-   * 그쪽으로 바뀐다. 되돌릴 근거가 여기 있어야 복귀가 파생된다.
-   * `wageShare`는 **임대 팀이 내는 주급 비율**(0~1) — 주급 총액이 계약 합계에서
-   * 파생되므로 분담도 파생으로 반영된다. 없으면 임대 중이 아니다.
-   */
-  loan: z
-    .object({
-      fromTeamId: z.string().min(1),
-      until: DateString,
-      wageShare: z.number().min(0).max(1),
-    })
-    .optional(),
   /**
    * **아직 한 칸을 못 채운 성장** — 축별로 −1 < x < 1.
    *
@@ -2110,7 +2097,7 @@ export interface PlayerCatalogMeta {
    * 없으면(합성 선수·시드 미상) `wages.ts`의 모델이 계산한다 —
    * 구단 예산을 스쿼드 서열·나이·포지션으로 나눈다.
    * 카탈로그는 불변 초기치이므로 여기 값은 "부임 시점의 계약"일 뿐,
-   * 이후 재계약·이적은 `CONTRACT` 원장이 갖는다.
+   * 이후 계약은 `CONTRACT` 원장이 갖는다.
    */
   weeklyWage?: number;
   /**
@@ -2236,20 +2223,4 @@ export function initialCaptainOf<
   const firstTeam = squad.filter((p) => p.squadLevel === "first");
   const candidates = starters.length > 0 ? starters : firstTeam.length > 0 ? firstTeam : squad;
   return [...candidates].sort(compareCaptainCandidates)[0] ?? null;
-}
-
-// ── 스카우팅 보고서 — 채팅이 카드로 그리는 구조체 ──────
-
-/**
- * 안개 아래의 값을 **말로** 자른 것 — 등급.
- *
- * 관측값에 ±N이 붙어 있는 숫자를 또렷하게 그리면 감독이 그걸 사실로 읽는다.
- * 등급은 그 폭을 품는 단위라 단정하지 않고도 "어느 정도인가"에 답한다.
- * `tier`는 화면이 색을 고르는 키다 (engine `RATING_TIERS`).
- */
-export interface ScoutGrade {
-  label: string;
-  tier: string;
-  /** 등급을 매긴 관측값 — 툴팁·정렬용. 화면의 얼굴은 어디까지나 `label`이다 */
-  value: number;
 }

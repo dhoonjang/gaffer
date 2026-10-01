@@ -1,10 +1,10 @@
 import { type GameState, managedTeamId, teamNameIn } from "../../../../common/core/state";
 import { BoardReviewSchema, formatMoney } from "@story-fm/domain";
 import { type CommandResult } from "../../../../common/commands/result";
-import { dismissUserManager } from "../../negotiation/market/manager-market";
-import { managerTeam, vacateManagerPost } from "../../../../negotiation/market/manager-market";
+import { dismissUserManager } from "./manager-employment";
+import { managerTeam, vacateManagerPost } from "../../../../story/world/manager-employment";
 import { reportAppointment, reportSacking } from "../../../../story/world/media";
-import { archiveEmployment } from "../../../../negotiation/market/staff-market";
+import { archiveEmployment } from "../../../../story/people/staff-employment";
 import { addDays } from "../../../../common/core/dates";
 import { item } from "../../../../common/commands/brief";
 

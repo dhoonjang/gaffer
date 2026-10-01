@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import { ManagerSpellSchema } from "./team-coach";
 
 /**
@@ -71,19 +70,11 @@ export const GameTeamSchema = z.object({
    */
   aiManagerTacticsRating: z.number().int().min(0).max(99).optional(),
   /**
-   * 현재 감독의 이름·부임일 — **경질과 선임이 있는 세계**의 최소 기록
-   * (`manager-market.ts`). 이름은 AI 감독이 앉은 벤치에만 있다 — 감독 자신의 벤치와
-   * 무소속에는 없다. 부임일은 클럽마다 있고 무소속에는 없다.
+   * 현재 감독의 이름·부임일 — 이름은 AI 감독이 앉은 벤치에만 있다 — 감독 자신의
+   * 벤치와 무소속에는 없다. 부임일은 클럽마다 있고 무소속에는 없다.
    */
   managerName: z.string().min(1).optional(),
   managerSince: z.string().optional(),
-  /**
-   * **지금 이 벤치에 선 사람의 지난 재임들** — 무직 감독 풀에서 데려왔으면 그가
-   * 들고 온 이력이다 (→ transfer.md §7 「감독 풀」). 지어낸 사람은 비어 있다.
-   *
-   * 이력이 풀이 아니라 벤치에 앉는 이유: 재직 중인 감독은 풀에 없다. 그가 다시
-   * 자리를 잃는 날 이 목록에 지금 재임이 더해져 풀로 돌아간다.
-   */
   managerSpells: z.array(ManagerSpellSchema),
 });
 export type GameTeam = z.infer<typeof GameTeamSchema>;

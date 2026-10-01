@@ -12,7 +12,6 @@ import {
   entrantsOf,
   buildSeasonCalendar,
   buildSeasonFixtures,
-  buildTransferWindows,
   clashesToClear,
   clearForCup,
   dayOfWeek,
@@ -306,7 +305,7 @@ describe("대진 편성", () => {
     const finalRound = matches.filter((m) => m.round === 38);
     expect(finalRound).toHaveLength(10);
     expect(new Set(finalRound.map((m) => m.date)).size).toBe(1);
-    const entries = buildScheduleEntries(matches, buildTransferWindows(1), "arsenal");
+    const entries = buildScheduleEntries(matches, "arsenal");
     const finalEntries = entries.filter((e) => finalRound.some((m) => e.refId === m.id));
     expect(new Set(finalEntries.map((e) => e.time))).toEqual(new Set(["16:00"]));
   });
@@ -314,7 +313,7 @@ describe("대진 편성", () => {
 
 describe("중계 슬롯", () => {
   const matches = buildMatches(1, ids);
-  const entries = buildScheduleEntries(matches, buildTransferWindows(1), "arsenal");
+  const entries = buildScheduleEntries(matches, "arsenal");
   const matchEntries = entries.filter((e) => e.type === "match");
 
   it("라운드 성격별로 실제 중계 슬롯을 따른다", () => {

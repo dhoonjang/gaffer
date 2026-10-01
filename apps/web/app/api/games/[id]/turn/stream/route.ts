@@ -1,7 +1,6 @@
 import { after } from "next/server";
 import { processCharacterBookJobs } from "@/application/lib/character-book-jobs";
 import { z } from "zod";
-import { ProposalInputSchema } from "@story-fm/domain";
 import { TurnOperationSchema } from "@story-fm/agents";
 import { llmErrorKind } from "@story-fm/llm";
 import {
@@ -32,21 +31,12 @@ const TurnSchema = z
      */
     // 선발 11명의 자리와 역할을 한 번에 다시 짜면 최대 22개가 자연스럽게 생긴다.
     orders: z.array(MatchBoardOrderSchema).max(64).optional(),
-    /**
-     * **제안 폼** — 정확한 값으로 낸 제안 (transfer.md §12-3). 감독의 말과 함께 올 수 있고,
-     * 혼자 오면 제안 자체가 손잡이 턴이다. 구조체라 문구가 계약이 아니다.
-     */
-    proposal: ProposalInputSchema.optional(),
   })
-  // 감독의 말이든 손잡이든 제안이든 **이 턴이 무엇인지**는 하나가 말해야 한다
-  .refine(
-    (body) =>
-      body.message !== undefined || body.operation !== undefined || body.proposal !== undefined,
-    {
-      message: "메시지나 조작 중 하나는 필요합니다",
-      path: ["message"],
-    },
-  );
+  // 감독의 말이든 손잡이든 **이 턴이 무엇인지**는 하나가 말해야 한다
+  .refine((body) => body.message !== undefined || body.operation !== undefined, {
+    message: "메시지나 조작 중 하나는 필요합니다",
+    path: ["message"],
+  });
 
 /**
  * ⚠️ **서버리스 배포에서만 읽힌다** — `next start`로 띄운 프로세스는 이 값을 보지
@@ -123,7 +113,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           (text) => send({ type: "delta", text }),
           body.data.operation,
           body.data.orders,
-          body.data.proposal,
         );
         if (outcome.ok) {
           send({ type: "done", payload: outcome.payload });
@@ -135,7 +124,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             type: "error",
             error: outcome.error,
             retry: outcome.retry,
-            saved: outcome.saved === true,
             ...(outcome.detail ? { detail: outcome.detail } : {}),
           });
       } catch (error) {

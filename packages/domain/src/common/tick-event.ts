@@ -18,7 +18,6 @@ export const TICK_EVENT_KINDS = [
   "injury",
   "board",
   "draw",
-  "interest",
   "contract",
   "matchday",
   "news",

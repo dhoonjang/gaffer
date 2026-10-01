@@ -5,7 +5,6 @@ import {
   SET_PIECE_ROLES,
   SET_PIECE_ROLE_KO,
   SET_PIECE_ROLE_MARK,
-  formatMoney,
   formatRating,
   positionProficiency,
   type SetPieceRole,
@@ -45,7 +44,7 @@ export const fitClass = (v: number) => `f${Math.min(9, Math.max(0, Math.floor(v 
  * **이 숫자를 얼마나 믿어도 되는가** — OVR 옆의 `±N`.
  *
  * `?` 하나로는 "정확하지 않다"는 사실만 전할 뿐 **얼마나** 정확하지 않은지를
- * 말하지 못해, 갓 데려온 선수와 거의 다 적응한 선수가 같은 표식을 달게 된다.
+ * 말하지 못해, 갓 올라온 유스와 오래 지켜본 선수가 같은 표식을 달게 된다.
  * `±3`과 `±1`은 감독이 그 숫자를 믿고 라인업을 짤지 말지를 가른다.
  *
  * 오차가 0이면 아무것도 그리지 않는다 — 우리 선수 대부분이 그렇고, 전원에게
@@ -68,10 +67,7 @@ export function ovrTitle(p: SquadRow): string | undefined {
         ? `${p.assignedPosition} 자리 기준 ${p.slotOverall} — 경기에서 쓰이는 값입니다`
         : null,
       `주 포지션(${p.position}) 기준 ${p.overall}`,
-      p.observation.margin > 0
-        ? `${p.observation.label} — 오차 ±${p.observation.margin}` +
-          (p.settling !== null ? ` (적응 ${p.settling}%, 진행할수록 좁아집니다)` : "")
-        : null,
+      p.observation.margin > 0 ? `${p.observation.label} — 오차 ±${p.observation.margin}` : null,
     ]
       .filter(Boolean)
       .join("\n") || undefined
@@ -290,11 +286,6 @@ export function StatusBadges({ p }: { p: SquadRow }) {
         </span>
       )}
       {p.suspended > 0 && <span className="tag st alert">정지 {p.suspended}</span>}
-      {p.transferListed !== null && (
-        <span className="tag st note" title={`호가 ${formatMoney(p.transferListed)}`}>
-          이적 리스트
-        </span>
-      )}
     </>
   );
 }

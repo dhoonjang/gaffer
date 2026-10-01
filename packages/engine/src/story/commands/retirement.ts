@@ -1,5 +1,5 @@
 import { RetirementDecisionSchema } from "@story-fm/domain";
-import { type GameState, playerById, voidPendingContract } from "../../common/core/state";
+import { type GameState, playerById } from "../../common/core/state";
 import type { CommandResult } from "../../common/commands/result";
 
 /** GM의 결정만 기록한다. 선수·계약·명단의 은퇴 정리는 시즌 전환이 실행한다. */
@@ -24,10 +24,9 @@ export function setRetirement(state: GameState, input: unknown): CommandResult {
     return { ok: true, unchanged: true, message: "이미 같은 은퇴 선언이 기록되어 있습니다" };
   }
   player.state.retiringAfterSeason = { on: state.date, reason: decision.reason };
-  const voided = voidPendingContract(state, player.id);
   return {
     ok: true,
-    message: `${player.name}의 시즌 말 은퇴를 기록했습니다${voided ? " · 사전 계약 무효" : ""}`,
+    message: `${player.name}의 시즌 말 은퇴를 기록했습니다`,
     brief: { head: "은퇴 선언", items: [{ label: player.name, text: "이번 시즌 종료 후 은퇴" }] },
   };
 }

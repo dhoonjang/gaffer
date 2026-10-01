@@ -194,25 +194,14 @@ export function registrationBlockText(block: RegistrationBlock): string {
 /**
  * 스쿼드 지위 — **계약에 적히는 약속**이다 (→ docs/story/people.md §5-2).
  *
- * 배열 순서가 곧 서열이라 `squadStatusRank`가 인덱스를 그대로 쓴다. 순서를 바꾸면
- * 흥정의 지위 항(transfer.md §3)과 되부르기의 상한이 함께 뒤집힌다.
+ * 배열 순서가 곧 서열이라 `squadStatusRank`가 인덱스를 그대로 쓴다.
  */
 export const SQUAD_STATUSES = ["prospect", "backup", "rotation", "starter", "key"] as const;
 export type SquadStatus = (typeof SQUAD_STATUSES)[number];
 
-/** 서열 — 큰 쪽이 위다. 한 칸 차이가 흥정의 한 칸이다 */
+/** 서열 — 큰 쪽이 위다 */
 export function squadStatusRank(status: SquadStatus): number {
   return SQUAD_STATUSES.indexOf(status);
-}
-
-/**
- * 서열을 다시 지위로 — `squadStatusRank`의 **역이라 같은 자리에 산다.**
- * 되부르기가 지위를 정수 사다리로 다루므로(transfer.md §1) 구간 밖의 정수는
- * 사다리의 양끝으로 접는다.
- */
-export function statusAtRank(rank: number): SquadStatus {
-  const index = Math.max(0, Math.min(SQUAD_STATUSES.length - 1, Math.round(rank)));
-  return SQUAD_STATUSES[index]!;
 }
 
 /** 지위의 이름 — 화면·카드·프롬프트가 같은 말을 쓴다 */

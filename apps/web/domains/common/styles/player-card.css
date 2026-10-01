@@ -256,13 +256,6 @@
 .pc-close:hover {
   background: color-mix(in srgb, white 8%, var(--panel-2));
 }
-.pc-propose {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-.pc-propose:hover {
-  background: color-mix(in srgb, white 10%, var(--accent));
-}
 .pc-actions button:focus-visible {
   outline: none;
   box-shadow: var(--ring);

@@ -13,16 +13,14 @@
 @import "../domains/common/styles/shared.css";
 @import "../domains/match/styles/squad.css";
 @import "../domains/story/styles/calendar.css";
-@import "../domains/negotiation/styles/finance.css";
+@import "../domains/common/styles/finance.css";
 @import "../domains/story/styles/career.css";
 @import "../domains/match/styles/competitions.css";
 /* 경기의 문 — 킥오프 게이트 한 장. 아래의 반응형이 이 값을 덮는다 */
 @import "../domains/match/styles/match-gate.css";
-@import "../domains/negotiation/styles/negotiation.css";
 @import "../domains/common/styles/responsive.css";
 @import "../domains/match/styles/match.css";
 /* 경기 리포트 — 달력 상세와 종료 카드가 같이 쓰는 한 벌이라 뷰 파일 밖에 선다 */
 @import "../domains/match/styles/match-report.css";
 /* 선수 카드 — 이름이 서는 모든 화면에서 열리므로 역시 뷰 파일 밖이다 */
 @import "../domains/common/styles/player-card.css";
-@import "../domains/negotiation/styles/proposal.css";

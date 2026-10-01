@@ -152,7 +152,7 @@ export function cupCatalogById(id: string): CupCatalogEntry | null {
 export const TOP_EURO_CUP_ID = "ucl";
 
 /**
- * 그 리그가 이 대회에 받는 티켓 수 — 티켓이 없는 리그(2부·이적 전용)는 0이다.
+ * 그 리그가 이 대회에 받는 티켓 수 — 티켓이 없는 리그(2부·명단 전용)는 0이다.
  * 순위표의 구역선(`buildStandingZones`)도 유럽 진출 업적도 이 수를 경계로 쓴다.
  */
 export function euroSlotsOf(cupId: string, leagueId: string): number {

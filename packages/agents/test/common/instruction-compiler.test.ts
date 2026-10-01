@@ -214,13 +214,13 @@ describe("source-grounded instruction compiler", () => {
 
   it("does not infer an absent amount from the reference context", async () => {
     const command: InstructionCommand = {
-      name: "send_offer",
-      description: "오퍼",
+      name: "set_ticket_price",
+      description: "티켓 가격",
       limit: 1,
       inputSchema: {
         type: "object",
-        properties: { fee: { type: "number", minimum: 0 } },
-        required: ["fee"],
+        properties: { price: { type: "number", minimum: 0 } },
+        required: ["price"],
       },
     };
     const model = evaluator((instructions, criteria, stage) => {
@@ -231,7 +231,7 @@ describe("source-grounded instruction compiler", () => {
     expect(
       (
         await interpretInstructions(
-          request([command], model, { said: "민수를 사자", context: "이적료 3000000" }),
+          request([command], model, { said: "티켓 값을 바꾸자", context: "티켓 가격 30" }),
         )
       ).ops,
     ).toEqual({});
@@ -336,7 +336,7 @@ describe("source-grounded instruction compiler", () => {
   it("rejects repeated identical command instances instead of applying a financial instruction twice", async () => {
     const command: InstructionCommand = {
       name: "request_board",
-      description: "보드 예산 요청",
+      description: "보드 구장 증설 요청",
       limit: 4,
       inputSchema: {
         type: "object",
@@ -345,10 +345,10 @@ describe("source-grounded instruction compiler", () => {
       },
     };
     const model = evaluator((instructions, criteria, stage) =>
-      stage === 1 ? "n2" : select(criteria, "= 30000000"),
+      stage === 1 ? "n2" : select(criteria, "= 30000"),
     );
     const output = await interpretInstructions(
-      request([command], model, { said: "보드에 이적 예산 3천만원을 더 요청해" }),
+      request([command], model, { said: "보드에 구장 3만 석 증설을 요청해" }),
     );
     expect(output.ops).toEqual({});
     expect(output.unresolved).toBeDefined();
@@ -482,7 +482,7 @@ describe("source-grounded instruction compiler", () => {
 describe("exact source numbers", () => {
   it("parses Korean monetary units without quantizing values", () => {
     expect(
-      sourceNumbers("이적료 2억 3천만, 주급 42,350.5, 계약 3년").map((number) => number.value),
+      sourceNumbers("상금 2억 3천만, 주급 42,350.5, 계약 3년").map((number) => number.value),
     ).toEqual([230_000_000, 42350.5, 3]);
     expect(sourceNumbers("금액 -12.5와 1.25억").map((number) => number.value)).toEqual([
       -12.5, 125_000_000,

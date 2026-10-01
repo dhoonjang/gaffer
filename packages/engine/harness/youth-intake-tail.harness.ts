@@ -1,12 +1,7 @@
 import { TIER_BASE } from "../src/common/data/team-catalog";
 import { describe, expect, it } from "vitest";
 import { ageOf } from "@story-fm/domain";
-import {
-  generateYouthPlayer,
-  isClubTeam,
-  transitionSeason,
-  youthFreeAgents,
-} from "@story-fm/engine";
+import { generateYouthPlayer, isClubTeam, transitionSeason } from "@story-fm/engine";
 import type { GameState } from "@story-fm/engine";
 import { createTestGame } from "../test/helpers";
 import { YOUTH_INTAKE_TAIL } from "./catalog";
@@ -42,16 +37,14 @@ function quantile(sorted: number[], p: number): number {
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : Number.NaN);
 
-/** 이 여름에 태어난 사람 전부 — AI가 그 자리에서 계약한 반 · 우리 후보 · 방출반 */
+/** 이 여름에 태어난 사람 전부 — AI가 그 자리에서 계약한 반 · 우리 후보 */
 function intakeOfSummer(state: GameState): { overall: number; potential: number; age: number }[] {
   const beforeIds = new Set(state.players.map((p) => p.id));
-  const beforeFree = new Set(youthFreeAgents(state).map((p) => p.id));
   // GM의 은퇴 결정 없이 생리적 성장과 시즌 전환만 측정한다.
   transitionSeason(state);
   const born = [
     ...state.players.filter((p) => !beforeIds.has(p.id)),
     ...state.youthCandidates.map((c) => c.player),
-    ...youthFreeAgents(state).filter((p) => !beforeFree.has(p.id)),
   ];
   return born.map((p) => ({
     overall: p.attributes.overall,

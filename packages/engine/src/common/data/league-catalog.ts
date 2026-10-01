@@ -10,9 +10,8 @@
  * 대기 위해서만 존재한다 — 자체 일정·순위표·승강은 없다 (`kind: "cup-only"`).
  * 그래서 2부를 추가해도 매일 tick의 간이 시뮬 부담은 컵 라운드만큼만 늘어난다.
  *
- * **사우디·MLS는 경기를 아예 하지 않는다** (`kind: "market-only"`). 이 게임에서
- * 그 리그들이 하는 일은 하나뿐이다 — 돈으로 선수를 흡수하고 레전드를 보관하는 것.
- * 일정·순위표·컵 어디에도 안 나오지만 선수 검색과 이적 협상에는 그대로 잡힌다.
+ * **사우디·MLS는 경기를 아예 하지 않는다** (`kind: "market-only"` — 명단 전용 리그).
+ * 일정·순위표·컵 어디에도 안 나오지만 선수 검색에는 그대로 잡힌다.
  *
  * 아래 표는 **시드**다. 어드민 편집본이 있으면 `leagueCatalog()`가 그것을 돌려준다 —
  * 리그를 읽는 자리는 상수가 아니라 접근자를 써야 편집이 새 게임에 닿는다.
@@ -36,9 +35,8 @@ export interface LeagueCatalogEntry {
    *
    * - `playable`   리그전·순위표·대항전 티켓. 감독이 부임할 수 있다 (5대 리그)
    * - `cup-only`   리그전 없이 국내 컵 참가만 (2부 64클럽)
-   * - `market-only` **경기를 아예 하지 않는다.** 이적 시장에만 존재한다 —
-   *   레전드를 보관하고, 돈으로 선수를 흡수하는 곳 (사우디·MLS)
-   * - `free`       **리그가 아니라 리그 밖.** 방출·계약 만료로 팀을 잃은 선수가
+   * - `market-only` **경기를 아예 하지 않는다.** 선수 명단만 있는 곳 (사우디·MLS)
+   * - `free`       **리그가 아니라 리그 밖.** 계약 만료로 팀을 잃은 선수가
    *   머무는 자리다. 클럽도 스쿼드도 아니므로 어떤 순회에도 끼지 않는다
    */
   kind: "playable" | "cup-only" | "market-only" | "free";
@@ -53,7 +51,7 @@ export interface LeagueCatalogEntry {
    *
    * ⚠️ **세기는 `kind`가 정한다** (team.md §4). `playable`은 **전체 시드**라
    * 클럽마다 11명 이상에 골키퍼 하나를 갖고, `market-only`는 **부분 시드**라
-   * "데려올 만한 이름" 몇만 있으면 된다 — 경기를 안 하는 클럽의 나머지 자리는
+   * 이름난 선수 몇만 있으면 된다 — 경기를 안 하는 클럽의 나머지 자리는
    * 절차 생성이 채운다. `cup-only`·`free`는 이 값이 false여야 한다.
    */
   realSquads: boolean;
@@ -122,9 +120,8 @@ export const LEAGUE_CATALOG_SEED: readonly LeagueCatalogEntry[] = [
     avgTicketPrice: 12,
   },
 
-  // ── 이적 시장 전용 리그 — 경기를 하지 않는다 (kind: "market-only") ──
+  // ── 명단 전용 리그 — 경기를 하지 않는다 (kind: "market-only") ──
   // 계수·중계권은 우리 세계에서 쓰이지 않지만(리그전이 없다) 타입을 맞춘다.
-  // 클럽 재정은 club-profile이 따로 주고, 이적 성향은 market.ts가 정한다.
   {
     id: "saudi",
     name: "사우디 프로 리그",
@@ -149,10 +146,9 @@ export const LEAGUE_CATALOG_SEED: readonly LeagueCatalogEntry[] = [
   /**
    * **무소속** — 리그가 아니라 *리그 밖*이다.
    *
-   * 방출·계약 만료로 팀을 잃은 선수가 머무는 곳. `GamePlayer.teamId`가 필수라
+   * 계약 만료로 팀을 잃은 선수가 머무는 곳. `GamePlayer.teamId`가 필수라
    * "어디에도 없는 선수"를 표현할 수 없어서 자리를 하나 만든 것이고, 경기도
-   * 순위표도 재정도 없다(`market-only`와 같은 취급). 계약이 없으므로 이적창과
-   * 무관하게 데려갈 수 있다 — 실제 자유계약이 그렇다.
+   * 순위표도 재정도 없다(`market-only`와 같은 취급).
    */
   {
     id: "free",
@@ -274,7 +270,7 @@ export function topLeagues(): readonly LeagueCatalogEntry[] {
   return leagueCatalog().filter((l) => l.kind === "playable");
 }
 
-/** 경기 없이 이적 시장에만 존재하는 리그 — 선수 검색의 대상은 된다 */
+/** 경기 없이 명단만 있는 리그 — 선수 검색의 대상은 된다 */
 export function marketLeagues(): readonly LeagueCatalogEntry[] {
   return leagueCatalog().filter((l) => l.kind === "market-only");
 }
@@ -290,8 +286,8 @@ export function isCupOnlyLeague(id: string | null): boolean {
 }
 
 /**
- * 경기를 하지 않고 **이적 시장에만** 존재하는 리그 (사우디·MLS).
- * 일정·순위표·컵 어디에도 안 나오지만 선수 검색과 협상에는 그대로 잡힌다.
+ * 경기를 하지 않고 **명단만** 있는 리그 (사우디·MLS).
+ * 일정·순위표·컵 어디에도 안 나오지만 선수 검색에는 그대로 잡힌다.
  */
 export function isMarketOnlyLeague(id: string | null): boolean {
   return leagueCatalogById(id)?.kind === "market-only";

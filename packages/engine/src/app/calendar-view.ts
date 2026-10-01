@@ -19,7 +19,7 @@ import {
   parseScorerEntry,
   formatScore,
 } from "@story-fm/domain";
-import { formatMoney, monthOf, isJournalMoney, userReports } from "../negotiation/finance/finance";
+import { formatMoney, monthOf, isJournalMoney, userReports } from "../common/finance/finance";
 import { drawParts, drawTitle } from "../match/competition/draw-schedule";
 import {
   isCup,
@@ -78,9 +78,8 @@ export interface CalendarEventView {
     | "return"
     | "yellow"
     | "red"
-    | "transfer"
-    | "window"
-    /** 큰 비정기 수입·지출 — 정액 항목은 서지 않는다 (docs/negotiation/finance.md §8.2) */
+    | "move"
+    /** 큰 비정기 수입·지출 — 정액 항목은 서지 않는다 (docs/common/finance.md §8.2) */
     | "money";
   text: string;
   /**
@@ -191,9 +190,10 @@ export function trainingReportLines(state: GameState, report: TrainingReport): s
 }
 
 /**
- * 기록 테이블 몫의 달력 일지 — 성장·부상·카드·이적·돈, 그리고 서사 표의 **소식**.
+ * 기록 테이블 몫의 달력 일지 — 성장·부상·카드·선수단의 들고 남·돈, 그리고 서사 표의
+ * **소식**.
  *
- * 일정 축(경기·훈련·이적창)은 부르는 쪽이 **먼저** 얹는다: 소식은 그 위에 겹치지
+ * 일정 축(경기·훈련)은 부르는 쪽이 **먼저** 얹는다: 소식은 그 위에 겹치지
  * 않으므로(같은 날 같은 문장은 한 번만) 순서가 규약이다.
  *
  * 화면(`buildOfficeViews`)과 조회(`scheduleView`)가 같은 표를 읽는다 — 두 벌로 두면
@@ -206,15 +206,14 @@ export function pushRecordJournal(
   const push = (date: string, event: CalendarEventView) => {
     (events[date] ??= []).push(event);
   };
-  // 일지는 **우리 스쿼드**의 일이다 — 임대 나가 있는 동안 남의 경기장에서 난 일은
-  // 달력이 아니라 매월 리포트로 온다 (transfer.md §2)
+  // 일지는 **우리 스쿼드**의 일이다
   const ourPlayerIds = new Set(playersOf(state, state.userTeamId).map((p) => p.id));
   const userTeamId = state.userTeamId;
   // 카드는 경기 id만 갖는다 — 날짜는 그 경기가 안다
   const matchById = new Map(state.matches.map((m) => [m.id, m] as const));
   /**
    * 성장은 **날짜별로 묶는다** — 전술 훈련 한 번에 스무 줄이 나온다. 일지에 그대로
-   * 펼치면 그날 있었던 다른 일(부상·경고·이적)이 스크롤 밖으로 밀린다.
+   * 펼치면 그날 있었던 다른 일(부상·경고)이 스크롤 밖으로 밀린다.
    * 요약 한 줄만 세우고 명단은 접어 둔다.
    */
   const growthByDate = new Map<string, { counts: Map<string, number>; lines: string[] }>();
@@ -277,35 +276,28 @@ export function pushRecordJournal(
       });
     }
   }
-  for (const t of state.transfers) {
-    if (t.fromTeamId !== userTeamId && t.toTeamId !== userTeamId) continue;
-    const name = playerName(state, t.gamePlayerId);
-    const label =
-      t.type === "retire"
-        ? `${name} 은퇴`
-        : t.type === "youth"
-          ? `${name} 유스 승격`
-          : t.toTeamId === userTeamId
-            ? `${name} 영입`
-            : `${name} 이적`;
-    // 이적료는 이 줄이 말한다 — 돈 줄을 따로 세우면 한 거래가 세 줄이 된다 (§8.2).
-    // 자유계약·유스·은퇴는 fee가 0이라 붙지 않는다.
-    push(t.date, {
-      kind: "transfer",
-      text: t.fee > 0 ? `${label} · ${formatMoney(t.fee)}` : label,
-    });
+  for (const move of state.moves) {
+    if (move.fromTeamId !== userTeamId && move.toTeamId !== userTeamId) continue;
+    const name = playerName(state, move.gamePlayerId);
+    const label = {
+      retire: "은퇴",
+      youth: "유스 승격",
+      expiry: "계약 만료로 떠남",
+      reinforcement: "합류",
+    }[move.kind];
+    push(move.date, { kind: "move", text: `${name} ${label}` });
   }
 
   const finance = financeOf(state, userTeamId);
 
   /**
    * ⚠️ **정액 항목은 달력에 올리지 않는다.** 주급·중계권처럼 매달 같은 자리에 같은
-   * 줄이 서면 그날 실제로 벌어진 일(부상·경고·이적)을 덮는다. 서는 것은 문턱을 넘는
+   * 줄이 서면 그날 실제로 벌어진 일(부상·경고)을 덮는다. 서는 것은 문턱을 넘는
    * **비정기** 항목뿐이고, 그 판정은 코어가 한다 — `isJournalMoney`.
    *
    * 파생 원본이 둘이다: 원장은 3개월 뒤 잘리므로 **진행 중인 달만** 원장에서 읽고,
    * 마감된 달은 보고서의 `highlights`(절단 전에 옮겨 적은 것)에서 읽는다. 마감은
-   * 지난달까지만 하므로 두 원본은 겹치지 않는다 (docs/negotiation/finance.md §8.2).
+   * 지난달까지만 하므로 두 원본은 겹치지 않는다 (docs/common/finance.md §8.2).
    */
   const moneyText = (m: { kind: "income" | "expense"; label: string; amount: number }) =>
     `${m.label} ${m.kind === "income" ? "+" : "−"}${formatMoney(m.amount)}`;
@@ -333,7 +325,6 @@ export type CalendarView = {
   entries: CalendarEntryView[];
   /** 일자별 사건 일지 — 기록 테이블에서 파생 (저장하지 않는다) */
   events: Record<string, CalendarEventView[]>;
-  windows: Array<{ kind: string; opensOn: string; closesOn: string; open: boolean }>;
 };
 
 export function buildCalendarView(
@@ -342,10 +333,9 @@ export function buildCalendarView(
   next: MatchRecord | null,
 ): CalendarView {
   const userTeamId = state.userTeamId;
-  // ── 일정 뷰 (유저 팀 관련 경기 + 훈련 + 이적창) ──
+  // ── 일정 뷰 (유저 팀 관련 경기 + 훈련 + 컵 추첨) ──
   const sessionById = new Map(state.trainingSessions.map((s) => [s.id, s] as const));
   const matchById = new Map(state.matches.map((m) => [m.id, m] as const));
-  const windowById = new Map(state.windows.map((w) => [w.id, w] as const));
   const entries: CalendarEntryView[] = state.schedule
     .filter((e) => e.type !== "match" || isUserMatch(state, e.refId))
     // 추첨 엔트리는 대회마다 남지만(진행 상태 기계), 달력엔 우리와 상관있는 것만
@@ -490,22 +480,7 @@ export function buildCalendarView(
           cup: null,
         };
       }
-      const w = windowById.get(e.refId);
-      const kindKo = w?.kind === "winter" ? "겨울" : "여름";
-      return {
-        id: e.id,
-        date: e.date,
-        time: e.time,
-        type: e.type,
-        status: e.status,
-        title: `${kindKo} 이적시장 ${e.type === "window-open" ? "개장" : "마감"}`,
-        detail: w ? `${w.opensOn} ~ ${w.closesOn}` : null,
-        result: null,
-        win: null,
-        isNext: false,
-        match: null,
-        cup: null,
-      };
+      return null;
     })
     .filter((x): x is CalendarEntryView => x !== null);
 
@@ -527,12 +502,9 @@ export function buildCalendarView(
       // 지나간 날의 기록 — 휴식도 감독이 정한 일이라 남기되 역기를 달지 않는다
       push(e.date, { kind: e.rest ? "rest" : "training", text: e.title });
     }
-    if (e.type === "window-open" || e.type === "window-close") {
-      push(e.date, { kind: "window", text: e.title });
-    }
   }
   /**
-   * 나머지 갈래(성장·부상·카드·이적·돈·소식)는 일정 축을 타지 않는다 — 조회
+   * 나머지 갈래(성장·부상·카드·들고 남·돈·소식)는 일정 축을 타지 않는다 — 조회
    * (`scheduleView`)도 같은 함수를 읽는다.
    */
   pushRecordJournal(state, events);
@@ -544,11 +516,5 @@ export function buildCalendarView(
     seasonEnd: seasonEndDate(state.matches) ?? state.calendar.start,
     entries,
     events,
-    windows: state.windows.map((w) => ({
-      kind: w.kind === "summer" ? "여름" : "겨울",
-      opensOn: w.opensOn,
-      closesOn: w.closesOn,
-      open: state.date >= w.opensOn && state.date <= w.closesOn,
-    })),
   };
 }

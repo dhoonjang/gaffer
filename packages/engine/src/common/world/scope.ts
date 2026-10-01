@@ -4,8 +4,8 @@ import { teamCatalog, isTopFlight, type TeamCatalogEntry } from "../data/team-ca
 /**
  * 이 게임에 실제로 존재하는 리그와 클럽.
  *
- * 기본(`undefined`)은 카탈로그 전체 — 5대 리그 96팀 + 컵용 2부 64팀 + 이적 시장
- * 전용 리그다. 값이 있으면 **같은 규칙의 작은 세계**가 만들어진다: 시즌 완주를
+ * 기본(`undefined`)은 카탈로그 전체 — 5대 리그 96팀 + 컵용 2부 64팀 + 명단 전용
+ * 리그(`market-only`)다. 값이 있으면 **같은 규칙의 작은 세계**가 만들어진다: 시즌 완주를
  * 검증하는 테스트가 2,100여 경기 대신 수십 경기만 굴린다.
  *
  * 축소 세계는 리그전만 돈다 — 컵은 실제 대회 규모(국내 32강·대항전 36팀)를 전제하므로
@@ -18,7 +18,7 @@ export interface WorldScope {
   teamsPerLeague: number;
   /** 국내 컵·유럽 대항전을 여는가 */
   cups: boolean;
-  /** 이적 시장 전용 리그(사우디·MLS)를 두는가 */
+  /** 명단 전용 리그(사우디·MLS — `market-only`)를 두는가 */
   markets: boolean;
 }
 
@@ -30,7 +30,7 @@ export const MINI_WORLD: WorldScope = {
   markets: false,
 };
 
-/** 두 리그가 도는 축소 세계 — 대항전 없이 타 리그 이적·비교가 필요할 때 */
+/** 두 리그가 도는 축소 세계 — 대항전 없이 타 리그 비교가 필요할 때 */
 export const MINI_WORLD_TWO_LEAGUES: WorldScope = {
   leagues: ["epl", "laliga"],
   teamsPerLeague: 8,
@@ -58,7 +58,7 @@ export function scopedTeamsOfLeague(leagueId: string, scope?: WorldScope): TeamC
 /**
  * 이 세계의 모든 클럽 — 리그 소속 + 무소속 자리.
  *
- * **무소속(`free`)은 언제나 있다.** 리그가 아니라 리그 밖이고, 방출·계약 만료가
+ * **무소속(`free`)은 언제나 있다.** 리그가 아니라 리그 밖이고, 계약 만료가
  * 갈 곳이 없으면 떠남을 표현할 수 없다.
  */
 export function scopedTeams(scope?: WorldScope): TeamCatalogEntry[] {

@@ -9,7 +9,6 @@ import type { LlmProvider } from "./game-llm";
 export const AGENT_NAMES = [
   "gm",
   "match-gm",
-  "negotiation-gm",
   "history-compactor",
   "character-book-editor",
   "onboarding-judge",
@@ -19,16 +18,13 @@ export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
 export const INSTRUCTION_AGENT_NAMES = [
   "tactic-orders",
   "training-orders",
-  "market-orders",
-  "table-orders",
+  "finance-orders",
 ] as const;
 export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
 export const EVALUATOR_NAMES = [
   ...INSTRUCTION_AGENT_NAMES,
   "match-reader",
   "training-rater",
-  "scouting",
-  "negotiation",
   "finalize-match",
 ] as const;
 export type EvaluatorName = (typeof EVALUATOR_NAMES)[number];
@@ -38,6 +34,11 @@ const RETIRED_AGENT_NAMES = [
   "reader-baseline",
   "match-sheet",
   "scout-rater",
+  "negotiation-gm",
+  "market-orders",
+  "table-orders",
+  "scouting",
+  "negotiation",
 ] as const;
 export const RECORDED_AGENT_NAMES = [
   ...AGENT_NAMES,
@@ -224,12 +225,9 @@ const LlmConfigFileSchema = z
       .object({
         "tactic-orders": RawEvaluatorConfigSchema.optional(),
         "training-orders": RawEvaluatorConfigSchema.optional(),
-        "market-orders": RawEvaluatorConfigSchema.optional(),
-        "table-orders": RawEvaluatorConfigSchema.optional(),
+        "finance-orders": RawEvaluatorConfigSchema.optional(),
         "match-reader": RawEvaluatorConfigSchema.optional(),
         "training-rater": RawEvaluatorConfigSchema.optional(),
-        scouting: RawEvaluatorConfigSchema.optional(),
-        negotiation: RawEvaluatorConfigSchema.optional(),
         "finalize-match": RawEvaluatorConfigSchema.optional(),
       })
       .strict()
@@ -238,7 +236,6 @@ const LlmConfigFileSchema = z
       .object({
         gm: RawAgentConfigSchema,
         "match-gm": RawAgentConfigSchema,
-        "negotiation-gm": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
         "character-book-editor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,

@@ -1,10 +1,5 @@
 import { dayOfWeek, addDays, seasonYear } from "./dates";
-import {
-  type ScheduleEntry,
-  type TransferWindow,
-  type MatchRecord,
-  isReserveMatch,
-} from "@story-fm/domain";
+import { type ScheduleEntry, type MatchRecord, isReserveMatch } from "@story-fm/domain";
 
 /**
  * 시즌 캘린더 — 게임은 7월 1일(여름 이적창 개장)에 시작해 프리시즌을 보내고
@@ -16,7 +11,7 @@ import {
 
 export interface SeasonCalendar {
   season: number;
-  /** 게임/시즌 시작일 = 7월 1일 (여름 창 개장과 동시) */
+  /** 게임/시즌 시작일 = 7월 1일 */
   preseasonStart: string;
   /**
    * **선수단 소집일** — 이날부터 훈련이 가능하다. 그 전은 여름 휴가다.
@@ -74,21 +69,6 @@ export function buildSeasonCalendar(season: number): SeasonCalendar {
 export function sortEntries(entries: ScheduleEntry[]): ScheduleEntry[] {
   return [...entries].sort((a, b) =>
     a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
-  );
-}
-
-/**
- * 그 날 열려 있는 창 — `leagueId`를 주면 그 리그의 창을, 안 주면 **5대 리그 공통**
- * 창을 찾는다. 리그 창과 공통 창을 섞어 찾으면 "사우디 창이 열렸으니 우리도
- * 영입할 수 있다"는 엉뚱한 결론이 나온다.
- */
-export function windowOpenOn(
-  windows: TransferWindow[],
-  date: string,
-  leagueId?: string,
-): TransferWindow | null {
-  return (
-    windows.find((w) => w.leagueId === leagueId && date >= w.opensOn && date <= w.closesOn) ?? null
   );
 }
 

@@ -41,7 +41,7 @@ export const HISTORY_STEP = 6;
 export const HISTORY_DIGEST_CHARS = 1_500;
 /**
  * **열린 일** 칸의 글자 상한 — 끝나지 않은 대화와 의도는 지난 일보다 짧다. 스냅샷이
- * 이미 드는 협상·약속는 여기 오지 않으므로(§5-1) 이만큼이면 남는 것이 다 든다.
+ * 이미 드는 약속은 여기 오지 않으므로(§5-1) 이만큼이면 남는 것이 다 든다.
  */
 export const HISTORY_OPEN_CHARS = 600;
 
@@ -79,15 +79,15 @@ export interface HistoryDigestDraft {
 }
 
 /**
- * 평시 턴인가 — 경기의 턴도 협상 방의 턴도 아니다 (docs/common/llm/agents.md §5).
- * 세 국면을 가르는 자는 이 하나다 — `gm-input.ts`의 `relevantTurns`도 여기서 읽는다.
+ * 평시 턴인가 — 경기의 턴이 아니다 (docs/common/llm/agents.md §5).
+ * 국면을 가르는 자는 이 하나다 — `gm-input.ts`의 `relevantTurns`도 여기서 읽는다.
  */
-export function isPeaceTurn(turn: Pick<ChatTurn, "inMatch" | "inNegotiation">): boolean {
-  return turn.inMatch !== true && turn.inNegotiation !== true;
+export function isPeaceTurn(turn: Pick<ChatTurn, "inMatch">): boolean {
+  return turn.inMatch !== true;
 }
 
 /**
- * 평시 턴 — 경기 이력은 경기마다, 방의 이력은 협상마다 갈리므로 여기서 자라지 않는다.
+ * 평시 턴 — 경기 이력은 경기마다 갈리므로 여기서 자라지 않는다.
  */
 export function peaceTurns(chat: readonly ChatTurn[]): ChatTurn[] {
   return chat.filter(isPeaceTurn);

@@ -1,6 +1,6 @@
 import { CALL_LABELS } from "@story-fm/domain";
 
-export type SkillGroup = "진행" | "전술·훈련" | "대화·서사" | "조회" | "이적" | "재정";
+export type SkillGroup = "진행" | "전술·훈련" | "대화·서사" | "조회" | "재정";
 
 export interface SkillCatalogEntry {
   name: string;
@@ -19,6 +19,36 @@ export interface SkillCatalogEntry {
  */
 export const SKILL_CATALOG = [
   {
+    name: "release_staff",
+    label: CALL_LABELS.release_staff,
+    group: "대화·서사",
+    readOnly: false,
+    description: "감독이 명시적으로 해고한 스태프의 재직을 종료한다",
+  },
+  {
+    name: "accept_manager_offer",
+    label: CALL_LABELS.accept_manager_offer,
+    group: "대화·서사",
+    readOnly: false,
+    description:
+      "감독이 이 제안의 현재 조건을 명시적으로 수락했을 때만 실행한다. 제안 생성·조건 흥정은 수락이 아니다.",
+  },
+  {
+    name: "counter_manager_offer",
+    label: CALL_LABELS.counter_manager_offer,
+    group: "대화·서사",
+    readOnly: false,
+    description:
+      "대화에서 구단이 동의해 제시한 수정 조건을 기록한다. 감독의 요구만으로 상대 승인을 만들지 않는다. 수정은 유저 수락이 아니며 횟수·인상률 제한은 없다.",
+  },
+  {
+    name: "apply_manager_job",
+    label: CALL_LABELS.apply_manager_job,
+    group: "대화·서사",
+    readOnly: false,
+    description: "감독이 지원한 구단과 감독직 면접을 연다",
+  },
+  {
     name: "tactic_orders",
     label: CALL_LABELS.tactic_orders,
     group: "전술·훈련",
@@ -28,7 +58,7 @@ export const SKILL_CATALOG = [
       "한 턴에 한 번 호출하고 적용·반려 결과를 따른다. " +
       "미반영 지시와 필요한 결정을 이번 장면에서 감독에게 알린다. " +
       '감독이 정하지 않고 맡긴 말("알아서 짜세요")에는 부르지 않는다 — 코치의 안을 장면으로 내놓고 감독이 못 박은 턴에 부른다. ' +
-      "훈련·육성은 training_orders, 이적·재정은 market_orders다. 인물 기록은 update_character로 갱신한다.",
+      "훈련·육성은 training_orders, 재정은 finance_orders다. 인물 기록은 update_character로 갱신한다.",
   },
 
   {
@@ -43,12 +73,12 @@ export const SKILL_CATALOG = [
   },
 
   {
-    name: "market_orders",
-    label: CALL_LABELS.market_orders,
-    group: "이적",
+    name: "finance_orders",
+    label: CALL_LABELS.finance_orders,
+    group: "재정",
     readOnly: false,
     description:
-      "이적 리스트·임대 복귀·이적 예산·표값·계약 해지·감독직 등 직접 관리 명령을 실행한다. 한 턴에 한 번 부른다. 선수 거래의 상대 연락과 조건 제안·협상은 start_negotiation으로 넘기며 여기서 중복 실행하지 않는다.",
+      "표값 변경을 실행한다. 한 턴에 한 번 부른다. 구장 증설 요청과 결정은 request_board로 기록한다.",
   },
 
   {
@@ -57,23 +87,15 @@ export const SKILL_CATALOG = [
     group: "재정",
     readOnly: false,
     description:
-      "보드 재정 요청을 접수하거나 requestId로 열린 안건의 결정을 기록한다. GM이 맥락을 읽고 decision(approved·rejected·conditional)·authorizedBy(현재 구단주 ID)·granted·respondOn과 조건·validUntil·deliversOn을 정한다. pending은 자동 판정되지 않는다. 이적 예산·영입은 £, 급여는 £/주, 구장은 좌석이다. 판단 근거와 맥락 조건 내용은 캐릭터북에 기록한다. 원장이 반려한 금액을 승인된 것으로 말하지 않는다.",
+      "보드 재정 요청을 접수하거나 requestId로 열린 안건의 결정을 기록한다. GM이 맥락을 읽고 decision(approved·rejected·conditional)·authorizedBy(현재 구단주 ID)·granted·respondOn과 조건·deliversOn을 정한다. pending은 자동 판정되지 않는다. 요청량과 승인량은 좌석 수다. 판단 근거와 맥락 조건 내용은 캐릭터북에 기록한다. 원장이 반려한 금액을 승인된 것으로 말하지 않는다.",
   },
   {
     name: "hire_staff",
     label: CALL_LABELS.hire_staff,
-    group: "이적",
+    group: "대화·서사",
     readOnly: false,
     description:
       "감독과 당사자가 합의한 스태프 고용·재계약을 기록한다. name·salary(연봉 £)·until(만료일)을 명시한다. 풀 밖 사람은 role·title·characterBook을 함께 제공한다. 기존 재직자는 같은 이름으로 갱신하며 급여·기한을 자동 결정하지 않는다. 제안만으로 체결하지 않는다. 합의 과정과 인물의 반응은 캐릭터북에 기록한다.",
-  },
-  {
-    name: "receive_market_contact",
-    label: CALL_LABELS.receive_market_contact,
-    group: "이적",
-    readOnly: false,
-    description:
-      "세계 쪽에서 먼저 연락할 맥락이 있을 때 실제 이적 명단 등재(listing)나 계약 기록(contract)을 근거로 상대 구단의 문의를 연다. 감독이 접촉을 지시한 경우는 start_negotiation이다. 선수가 우리 계약이고 상대가 다른 구단인지 검증하며 같은 근거의 연락을 중복 생성하지 않는다. 금액·주급·연수·감독 승인을 만들지 않는다. 상대 판단은 협상 평가가 반환한 결과만 전한다.",
   },
   {
     name: "start_match",
@@ -84,14 +106,6 @@ export const SKILL_CATALOG = [
       "경기일에 킥오프를 준비한다. 감독이 들어가자고 할 때, 또는 경기 전 점검(라인업·전술·팀토크)이 끝나 " +
       "그날 남은 일이 경기뿐일 때 되묻지 말고 부른다. " +
       "성공하면 이번 턴이 이 호출로 끝나고 장면을 쓰지 않는다. 같은 턴에 필요한 다른 호출은 먼저 부른다.",
-  },
-  {
-    name: "start_negotiation",
-    label: CALL_LABELS.start_negotiation,
-    group: "진행",
-    readOnly: false,
-    description:
-      "상대 구단·선수 측과의 접촉과 교섭을 연다. party=club은 구단 조건, agent는 개인 조건이다. method는 meeting·phone·proposal이며 같은 상대의 테이블을 이어 쓴다. mode=request는 감독이 맡긴 요청을 처리해 메인 대화로 결과를 돌려주고, continue는 감독이 직접 주고받는 협상 대화를 연다. continue가 성공하면 이번 턴이 이 호출로 끝나고 장면을 쓰지 않는다. 같은 턴에 필요한 다른 호출은 먼저 부른다. 열린 거래의 negotiationId 또는 대상 playerId·kind를 쓴다. 합의된 거래의 계약 확정도 그 거래를 continue로 연다 — 서명은 감독이 테이블의 계약서에서 한다. 감독이 말하지 않은 금액·계약 연수·발신 권한을 만들지 않는다. 결과가 대기·실패이면 합의한 것처럼 서술하지 않는다.",
   },
   {
     name: "review_board",
@@ -107,7 +121,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "구단이 실제로 제시한 감독 계약을 기록한다. team·salary·years·budgetPledge·expiresOn·reason을 명시한다. 현재 구단은 재계약, 다른 공석은 부임·접근 제안이다. 시기·횟수·할인 표가 없다. 유저의 수락을 대신하지 않는다. 같은 구단의 열린 제안 수정은 counter_manager_offer를 사용한다.",
+      "구단이 실제로 제시한 감독 계약을 기록한다. team·salary·years·expiresOn·reason을 명시한다. 현재 구단은 재계약, 다른 공석은 부임·접근 제안이다. 시기·횟수·할인 표가 없다. 유저의 수락을 대신하지 않는다. 같은 구단의 열린 제안 수정은 counter_manager_offer를 사용한다.",
   },
   {
     name: "set_retirement",
@@ -123,7 +137,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "열린 감독직 면접에서 채용 제안 여부와 계약 조건을 판정한다. 여러 구단과 면접 중이면 interviewId 또는 team(구단 id·이름·약칭)으로 대상을 지정한다. 면접이 하나면 생략할 수 있다. offer와 reason을 적고, 제안이면 terms에 salary·years·budgetPledge·expiresOn을 명시한다. 제안은 감독의 수락이 아니다. 감독이 답한 내용과 구단 사정에 근거하며, 일반적인 인물 대화는 캐릭터북에 기록한다.",
+      "열린 감독직 면접에서 채용 제안 여부와 계약 조건을 판정한다. 여러 구단과 면접 중이면 interviewId 또는 team(구단 id·이름·약칭)으로 대상을 지정한다. 면접이 하나면 생략할 수 있다. offer와 reason을 적고, 제안이면 terms에 salary·years·expiresOn을 명시한다. 제안은 감독의 수락이 아니다. 감독이 답한 내용과 구단 사정에 근거하며, 일반적인 인물 대화는 캐릭터북에 기록한다.",
   },
   {
     name: "update_character",
@@ -159,12 +173,12 @@ export const SKILL_CATALOG = [
     group: "조회",
     readOnly: true,
     description:
-      '포지션·이름·나이·가용 상태에 계약 잔여·값·주급·리스트·홈그로운·잠재력·주발까지 걸어 찾는다. team="mine"은 우리 팀, 팀 id·이름은 특정 팀. ' +
+      '포지션·이름·나이·가용 상태에 계약 잔여·주급·홈그로운·잠재력·주발까지 걸어 찾는다. team="mine"은 우리 팀, 팀 id·이름은 특정 팀. ' +
       "team을 생략하면 풀이 5대 리그 1·2부 전체이므로, 우리 리그 안에서 비교할 때는 competition(epl 등)으로 좁힌다. " +
       'squadLevel="reserve"는 2군 유망주. 조건은 도구가 걸어라 — limit만큼 훑어 고르지 마라. ' +
       "sortBy는 age·fatigue·contract만 낮은 쪽이 앞이다. " +
-      "우리 선수는 정확한 정보, 타 팀 선수는 지식 수준에 따른 평가와 값·계약 만료일을 준다. " +
-      "playerId를 주면 능력치·컨디션·계약·배치에 부상 이력과 이번 시즌 경고 누적·이동 이력, 이번 시즌과 지난 시즌의 대회별 기록(리그·컵·대항전 각각 몇 경기 몇 골), 타 팀 선수라면 끝난 스카우트 보고서(도착 날짜·요구액·기대 주급)까지 붙은 상세 카드가 나온다 — 감독이 특정 선수를 두고 물으면 그 선수를 논하기 전에 먼저 호출한다.",
+      "우리 선수는 정확한 정보, 타 팀 선수는 지식 수준에 따른 평가와 계약 만료일을 준다. " +
+      "playerId를 주면 능력치·컨디션·계약·배치에 부상 이력과 이번 시즌 경고 누적·이동 이력, 이번 시즌과 지난 시즌의 대회별 기록(리그·컵·대항전 각각 몇 경기 몇 골)까지 붙은 상세 카드가 나온다 — 감독이 특정 선수를 두고 물으면 그 선수를 논하기 전에 먼저 호출한다.",
   },
   {
     name: "get_squad",
@@ -194,7 +208,7 @@ export const SKILL_CATALOG = [
       'view="standings" 순위표(competition으로 다른 리그·대항전도) — 행마다 최근 5경기 폼이 붙고, split="home"·"away"면 홈·원정 소계로 다시 세운 표다. 국내 컵은 대진표가 온다. ' +
       'view="leaders" 그 대회의 개인 순위(득점·도움·평점·클린시트·징계 상위 10 · key로 한 축만)와 팀 열(득점·실점·무실점·슛·xG). 리그·국내 컵·대항전 모두 선다. ' +
       'view="fixtures" 일정 검색 — team(기준 팀, 생략하면 우리 팀, "all"이면 대회 전체), opponent(맞대결만 · 전적 요약), competition, when(past·upcoming·both), from·to, round, count. ' +
-      'view="calendar" 감독의 달력 — 경기·훈련·이적창을 날짜순으로. 기본 오늘부터 14일이고 from·to·days로 범위를, type="training"으로 훈련만 본다. 새 훈련을 잡기 전에 이걸로 확인하라. from이 지난 날이면 그 사이 벌어진 일이 일지로 함께 온다.',
+      'view="calendar" 감독의 달력 — 경기·훈련·컵 추첨을 날짜순으로. 기본 오늘부터 14일이고 from·to·days로 범위를, type="training"으로 훈련만 본다. 새 훈련을 잡기 전에 이걸로 확인하라. from이 지난 날이면 그 사이 벌어진 일이 일지로 함께 온다.',
   },
   {
     name: "get_match_report",
@@ -245,23 +259,7 @@ export const SKILL_CATALOG = [
     group: "조회",
     readOnly: true,
     description:
-      '구단 재정을 조회한다 — 잔고·이적 예산·주급 총액·주급 여력·미지급 분할 회분·부채·1년 안에 끝나는 계약 전원, 월간 보고서(수입·지출, 현금 순증과 장부 손익, 급여 비중, PSR 여유), 이번 달 잠정 집계. month를 주면 그 달 보고서만 본다("2026-08"). 영입은 오퍼 전에 이것부터 읽어라 — 주급 여력이 음수면 못 산다.',
-  },
-  {
-    name: "request_scouting",
-    label: "스카우팅 의뢰",
-    group: "조회",
-    readOnly: false,
-    description:
-      "선수 조사·후보 탐색·비교·추가 질문을 의뢰하거나 변경·취소·재시도한다. 감독이 말한 대상·조건·질문·기한만 싣는다. 조사 범위와 기한은 평가된 계획이 정하며, 조건 변경이 필요한 요청은 보류한다. 완료 보고서는 보존되므로 지난 보고서를 묻는 말에 재의뢰하지 않는다. 의뢰 자체는 접촉·오퍼·영입을 승인하지 않는다.",
-  },
-  {
-    name: "list_negotiations",
-    label: CALL_LABELS.list_negotiations,
-    group: "이적",
-    readOnly: true,
-    description:
-      "진행 중인 협상을 요약한다. negotiationId를 주면 교류 이력·조건서·당사자별 승인과 후속 연락을 자세히 본다.",
+      '구단 재정을 조회한다 — 잔고·주급 총액·부채·1년 안에 끝나는 계약 전원(만료되면 무소속으로 떠난다), 월간 보고서(수입·지출, 현금 순증과 장부 손익, 급여 비중), 이번 달 잠정 집계. month를 주면 그 달 보고서만 본다("2026-08").',
   },
 ] as const satisfies readonly SkillCatalogEntry[];
 

@@ -1,4 +1,4 @@
-import type { ScoutingReport, TickEvent } from "@story-fm/domain";
+import type { TickEvent } from "@story-fm/domain";
 import type { CardMark, GoalMark, CommandBrief } from "@story-fm/engine";
 
 /** GM 턴 결과 — mock/실모드 공통 계약 */
@@ -75,8 +75,6 @@ export interface GmTurnResult {
   goals?: GoalMark[];
   /** 이번 턴의 경고·퇴장 — 골과 같은 자리에 선다 */
   cards?: CardMark[];
-  /** 이번 턴에 도착한 스카우팅 보고서 — 채팅이 카드로 편다 */
-  reports?: ScoutingReport[];
   /**
    * **이번 턴에 시간이 지나간 자리에 남은 사건** — 화면이 하나를 카드 하나로 세운다
    * (overview.md §2 · `ChatTurn.events`).
@@ -131,15 +129,6 @@ export class GmTurnFailure extends Error {
  * GM과 턴 처리 모듈이 함께 참조하므로 공통 타입 모듈에 둔다.
  */
 export const TIME_PASSED = "시간 경과";
-
-/**
- * 감독이 화면의 손잡이로 협상에서 물러났다는 기록의 이름 — **시계 이동과 같은 자리**다.
- *
- * 방을 닫은 것은 모델이 부른 도구가 아니라 코어가 턴 앞에서 한 일이라(`closeNegotiation` —
- * transfer.md §12-2) 카탈로그에 이름이 없다. 같은 규약으로 한글 이름을 쓰고 `silent`로
- * 세운다 — 장면이 비어 돌아온 턴에 코어가 세우는 기록이 이 한 줄이다.
- */
-export const TABLE_LEFT = "물러나기";
 
 /**
  * 시간 이동 손잡이가 보내는 조작 — `{ kind: "skip_days", days: 1 }`

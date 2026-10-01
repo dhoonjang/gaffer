@@ -154,7 +154,7 @@ export type JournalEntry =
       message: string;
       /** 어느 문으로 왔나 — 모델·해석기가 지나는 `wrap`인가, 화면의 전술판인가 */
       source: "tool" | "board";
-      /** 부르기 전에 막힌 이유 — 인자 검증 실패 · 무직 */
+      /** 부르기 전에 막힌 이유 — 인자 검증 실패 · 커리어 끝 */
       blocked?: "input" | "dismissed";
       unchanged?: boolean;
       tone?: "good" | "bad";
@@ -289,8 +289,6 @@ export interface TurnDigest {
   phase: string;
   season: number;
   match: { matchId: string; minute: number; score: { home: number; away: number } } | null;
-  /** 열린 협상 방 — 어느 협상인가·앉았는가. 없으면 null */
-  negotiation: { negotiationId: string; seated: boolean } | null;
   board: {
     spec: TacticsSpec;
     starting: Array<{
@@ -319,12 +317,6 @@ export function turnDigestOf(state: GameState): TurnDigest {
           score: { ...pending.live.ledger.score },
         }
       : null,
-    negotiation: state.pendingNegotiation
-      ? {
-          negotiationId: state.pendingNegotiation.negotiationId,
-          seated: state.pendingNegotiation.seated === true,
-        }
-      : null,
     board: tactics
       ? {
           spec: { ...tactics.spec },
@@ -344,10 +336,6 @@ export function turnDigestOf(state: GameState): TurnDigest {
       players: state.players.length,
       injuries: state.injuries.length,
       suspensions: state.suspensions.length,
-      negotiations: state.negotiations.length,
-      transferList: state.transferList.length,
-      transfers: state.transfers.length,
-      scoutReports: state.scoutReports.length,
       pendingEdits: state.pendingEdits?.length ?? 0,
       pendingNews: state.pendingNews?.length ?? 0,
     },

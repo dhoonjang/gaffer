@@ -1,17 +1,9 @@
 import {
   acquireSaveLock,
-  applyProposal,
-  openNegotiationFor,
-  startNegotiation,
-  closeNegotiation,
-  acceptDeal,
   bindJournal,
   journal,
   loadGame,
-  playerName,
-  proposalCommandName,
   saveGame,
-  scoutingEvidence,
   setPlayerTactic,
   setSetPieceTakers,
   setTactics,
@@ -25,7 +17,6 @@ import {
 } from "@story-fm/engine";
 import {
   GmTurnFailure,
-  evaluateNegotiation,
   compactHistory,
   operationLabel,
   runGmTurn,
@@ -41,9 +32,7 @@ import {
   traceTurn,
   type LlmErrorKind,
 } from "@story-fm/llm";
-import type { BoardMove, ProposalInput } from "@story-fm/domain";
-import { proposalLabel } from "@story-fm/domain";
-import { recordCall, type GmToolCall } from "@story-fm/agents";
+import type { BoardMove } from "@story-fm/domain";
 import { NextResponse } from "next/server";
 import { toPayload, type GamePayload } from "./store";
 import type { MatchBoardOrder } from "../../domains/match/lib/match-orders";
@@ -258,8 +247,18 @@ export type TurnOutcome =
   | { ok: false; status: number; error: string; retry: boolean; detail?: string; saved?: boolean };
 
 /**
- * LLM 실패의 문구와 재시도 가능 여부를 오류 kind별로 함께 정의한다.
- * 새 게임 첫 장면과 일반 턴이 같은 표를 읽으며, 오류 문자열을 분류 근거로 사용하지 않는다.
+ * LLM 실패를 감독에게 보일 한 줄과, 그 배너에 「다시 시도」를 세울지 — **게임 밖의
+ * 사건**이므로 픽션 밖 말투로. 새 게임 첫 장면(`/api/games`)도 같은 문구를 쓴다 —
+ * 폴백 장면은 없다.
+ *
+ * **고르는 근거는 `kind` 하나다** (models.md §1-1). 오류 문자열에서 낱말을 찾던
+ * 예전 분류는 제공자가 메시지 문안을 손보는 날 조용히 무너졌고, 그 낱말을 지키느라
+ * 오류 문구까지 코드의 제약이 됐다.
+ *
+ * ⚠️ **문구와 버튼은 한 줄에 함께 적는다.** 종류를 세우는 기준이 "화면이 다른 말을
+ * 해야 하는가"라, 표가 둘로 갈리면 새 종류가 한쪽에만 들어가 문구는 바뀌었는데
+ * 버튼은 그대로인 배너가 선다. `invalid_request`가 그 자리다 — 몇 번을 불러도 같은
+ * 400이 오므로 다시 걸어 보라고 이르는 것은 사실과 다르다.
  */
 const TURN_ERROR: Record<LlmErrorKind, { message: string; retry: boolean }> = {
   overloaded: { message: "모델 서버가 혼잡합니다", retry: true },
@@ -329,12 +328,6 @@ export function runTurnLocked(
    * 경기를 진행할 때 한 묶음으로 전달된다 — 그래서 **한 번의 LLM 호출**로 끝난다.
    */
   orders?: readonly MatchBoardOrder[],
-  /**
-   * **제안 폼** — 화면이 정확한 값으로 낸 제안 (transfer.md §12-3). 전술판 조작과 같은
-   * 길이다: 코어 명령을 턴 앞에서 걸고, 모델에는 이미 반영된 사실을 넘기며, 그 카드는
-   * 이 턴에 선다. 감독의 말이 함께 오면 그 말이 턴이고, 없으면 제안 자체가 손잡이 턴이다.
-   */
-  proposal?: ProposalInput,
 ): Promise<TurnOutcome> {
   // 원문은 호출이 끝나는 즉시 이 게임의 사이드카에 앉고(models.md §5), 그 이름들이
   // model 턴을 채팅에 밀어 넣는 자리에서 턴 인덱스에 묶인다 — 턴이 실패해 묶이지
@@ -351,92 +344,6 @@ export function runTurnLocked(
             error: "게임을 찾을 수 없습니다",
             retry: false,
           };
-
-        const durableFacts = (value: GameState) =>
-          JSON.stringify({
-            date: value.date,
-            phase: value.phase,
-            requests: value.scoutingRequests,
-            reports: value.scoutReports,
-            evaluations: value.negotiationEvaluations,
-            followups: value.negotiationFollowups,
-            exchanges: value.negotiationExchanges,
-          });
-        const initialFacts = durableFacts(state);
-        let checkpointBase: GameState | null = null;
-        let durableCheckpoint: GameState | null = null;
-        const checkpoint = (current: GameState, scope: "opening" | "scouting" | "negotiation") => {
-          if (scope === "opening") {
-            checkpointBase = structuredClone(current);
-            if (durableFacts(current) !== initialFacts) durableCheckpoint = checkpointBase;
-            return;
-          }
-          if (!checkpointBase || current.date !== checkpointBase.date) return;
-          const next = structuredClone(durableCheckpoint ?? checkpointBase);
-          if (scope === "negotiation") {
-            const fields = [
-              "negotiations",
-              "negotiationContacts",
-              "negotiationExchanges",
-              "negotiationEvaluations",
-              "negotiationFollowups",
-              "pendingNegotiation",
-              "phase",
-            ] as const;
-            const allowed = new Set<string>([...fields, "chat"]);
-            // Only negotiation references may change on existing chat messages at this checkpoint.
-            // Every other saved field is a source or ledger boundary. Future fields default to protected.
-            const sourceFacts = (value: GameState) =>
-              JSON.stringify(
-                Object.fromEntries(Object.entries(value).filter(([key]) => !allowed.has(key))),
-              );
-            const withoutReferences = (chat: GameState["chat"]) =>
-              chat.map((turn) => {
-                const {
-                  negotiationId: _deal,
-                  negotiationContactId: _contact,
-                  negotiationExchangeId: _exchange,
-                  ...message
-                } = turn;
-                void _deal;
-                void _contact;
-                void _exchange;
-                return message;
-              });
-            if (
-              sourceFacts(current) !== sourceFacts(next) ||
-              JSON.stringify(withoutReferences(current.chat)) !==
-                JSON.stringify(withoutReferences(next.chat))
-            )
-              return;
-            next.chat = structuredClone(current.chat);
-            for (const key of fields) Object.assign(next, { [key]: structuredClone(current[key]) });
-            durableCheckpoint = next;
-            return;
-          }
-          if (current.phase !== next.phase) return;
-          for (const request of current.scoutingRequests) {
-            const prior = next.scoutingRequests.find((entry) => entry.id === request.id);
-            if (
-              request.evidenceOn === null ||
-              (prior?.evidenceOn === request.evidenceOn &&
-                JSON.stringify(prior.evidence) === JSON.stringify(request.evidence))
-            )
-              continue;
-            if (
-              request.evidenceOn !== next.date ||
-              JSON.stringify(scoutingEvidence(next, request)) !== JSON.stringify(request.evidence)
-            )
-              return;
-          }
-          next.scoutingRequests = structuredClone(current.scoutingRequests);
-          next.scoutReports = structuredClone(current.scoutReports);
-          next.pendingReportCards = [
-            ...new Set([...(next.pendingReportCards ?? []), ...(current.pendingReportCards ?? [])]),
-          ];
-          durableCheckpoint = next;
-        };
-
         /**
          * 경기 턴인가 — **턴을 시작할 때** 본다. 이 턴에서 경기가 끝나더라도 감독이
          * 말을 건 상대는 중계였으므로 그 턴은 경기 이력에 속하고, 반대로 이 턴에
@@ -445,28 +352,7 @@ export function runTurnLocked(
          */
         const inMatch = state.phase === "match";
         const matchId = state.pendingMatch?.matchId;
-        /**
-         * 협상 방의 턴도 같은 규칙이다 — 방 안의 턴부터 물러나는 턴까지가 그 협상의 이력이다.
-         * 방을 세운 `start_negotiation` 턴은 그 장면을 협상 GM이 쓰므로 코어가 입력 줄에
-         * 협상 표식을 달고(`linkNegotiationChat`), 모델 턴이 그 표식을 이어받는다 (agents.md §2).
-         * 방 안에서 낸 제안 폼의 줄도 이 표식을 달아 한 협상의 두 줄이 갈리지 않는다.
-         */
-        const inNegotiation = state.phase === "negotiation";
-        const negotiationId = state.pendingNegotiation?.negotiationId;
-        const exchange = state.negotiationExchanges.find(
-          (entry) => entry.id === state.pendingNegotiation?.exchangeId,
-        );
-        const mark = inMatch
-          ? { inMatch: true as const, ...(matchId ? { matchId } : {}) }
-          : inNegotiation
-            ? {
-                inNegotiation: true as const,
-                ...(negotiationId ? { negotiationId } : {}),
-                ...(exchange
-                  ? { negotiationContactId: exchange.contactId, negotiationExchangeId: exchange.id }
-                  : {}),
-              }
-            : {};
+        const mark = inMatch ? { inMatch: true as const, ...(matchId ? { matchId } : {}) } : {};
         /**
          * 턴 기록의 겉 — 감독이 무엇을 보냈고 그때 세계가 어디 있었나 (models.md §5-3).
          * 실패한 턴도 이 겉은 갖는다: 되짚을 때 「무엇을 보냈길래」가 먼저다.
@@ -476,7 +362,6 @@ export function runTurnLocked(
             kind: operation ? "operation" : "message",
             ...(message === undefined ? {} : { text: message }),
             ...(operation === undefined ? {} : { operation }),
-            ...(proposal === undefined ? {} : { proposal }),
             orders: orders ?? [],
             pendingEdits: state.pendingEdits ?? [],
             date: state.date,
@@ -539,173 +424,19 @@ export function runTurnLocked(
           });
         }
         /**
-         * **제안 폼** — 코어 명령을 턴 앞에서 건다 (transfer.md §12-3). 반려되면 턴은 없었던
-         * 일이고 그 이유가 화면으로 돌아간다 — 폼이 그 줄을 세우고 감독이 값을 고친다.
-         * 걸리면 그 명령은 이 턴의 호출 장부에 앉고, 모델에는 오퍼레이터 봉투로 「이미
-         * 넣었다」가 간다. 카드가 있는 명령(오퍼·재계약)은 카드로 서고, 카드가 없는 명령
-         * (개인 조건 선제안·조건만)은 `silent`다 — 제안 줄이 이미 그 사실이라, 명령 이름이
-         * 칩으로 한 번 더 서면 감독이 읽을 것이 없는 표식이 남는다.
-         */
-        const seedCalls: GmToolCall[] = [];
-        let proposed: TurnOperation | undefined;
-        let proposalChatIndex: number | undefined;
-        if (proposal !== undefined) {
-          const name = proposalCommandName(proposal.kind);
-          const result = applyProposal(state, proposal);
-          journal({
-            kind: "command",
-            name,
-            input: proposal,
-            ok: result.ok,
-            message: result.message,
-            source: "board",
-            ...(result.brief === undefined ? {} : { brief: result.brief }),
-          });
-          if (!result.ok) {
-            noteTurn({
-              outcome: {
-                ok: false,
-                saved: false,
-                error: "제안을 넣지 못했습니다",
-                detail: result.message,
-              },
-              after: turnDigestOf(state),
-            });
-            return {
-              ok: false as const,
-              status: 400,
-              error: "제안을 넣지 못했습니다",
-              // 같은 값을 다시 보내면 같은 자리에서 막힌다 — 값을 고쳐야 한다
-              retry: false,
-              detail: result.message,
-            };
-          }
-          const deal = openNegotiationFor(state, proposal.playerId);
-          if (deal) {
-            const wasInRoom = state.pendingNegotiation !== null;
-            if (!wasInRoom)
-              startNegotiation(state, {
-                negotiationId: deal.id,
-                method: "proposal",
-                mode: "request",
-                ...(proposal.kind === "personal" ? { party: "agent" as const } : {}),
-              });
-            const room = state.pendingNegotiation;
-            if (room?.negotiationId === deal.id) {
-              const contact = state.negotiationExchanges.find(
-                (entry) => entry.id === room.exchangeId,
-              );
-              if (contact)
-                Object.assign(mark, {
-                  negotiationId: deal.id,
-                  negotiationContactId: contact.contactId,
-                  negotiationExchangeId: contact.id,
-                });
-              proposalChatIndex = state.chat.length;
-              state.chat.push({
-                role: "operator",
-                text: proposalLabel(proposal, playerName(state, proposal.playerId)),
-                toolCalls: [],
-                at: state.date,
-                ...mark,
-              });
-              const response = await evaluateNegotiation(state, {
-                negotiationId: deal.id,
-                party: room.party,
-                exchangeId: room.exchangeId,
-                ending: !wasInRoom,
-              });
-              result.message += ` · ${response.message}`;
-              if (!wasInRoom) closeNegotiation(state, "left");
-            }
-          }
-          recordCall(seedCalls, name, result, {
-            input: proposal,
-            ...(result.payload === undefined ? { silent: true } : {}),
-          });
-          // 모델이 읽는 줄 — 무엇을 넣었고 코어가 무어라 답했는가. 되읽는 코드는 없다
-          const label =
-            `${proposalLabel(proposal, playerName(state, proposal.playerId))} — ${result.message} ` +
-            "(이미 넣었다 — 다시 넣지 말 것)";
-          appliedOrders.push(label);
-          proposed = { kind: "propose", label };
-        }
-        /**
-         * **서명** — 계약서 카드의 손잡이다 (transfer.md §7). 계약 확정을 턴 앞에서 건다.
-         * 반려(예산·창·메디컬)는 제안 폼과 같이 턴이 없었던 일이 되고 이유가 화면으로 간다.
-         */
-        if (operation?.kind === "sign_contract") {
-          const result = acceptDeal(state, operation.negotiationId);
-          journal({
-            kind: "command",
-            name: "accept_deal",
-            input: { negotiationId: operation.negotiationId },
-            ok: result.ok,
-            message: result.message,
-            source: "board",
-            ...(result.brief === undefined ? {} : { brief: result.brief }),
-          });
-          if (!result.ok) {
-            noteTurn({
-              outcome: {
-                ok: false,
-                saved: false,
-                error: "계약을 확정하지 못했습니다",
-                detail: result.message,
-              },
-              after: turnDigestOf(state),
-            });
-            return {
-              ok: false as const,
-              status: 400,
-              error: "계약을 확정하지 못했습니다",
-              retry: false,
-              detail: result.message,
-            };
-          }
-          recordCall(seedCalls, "accept_deal", result, {
-            input: { negotiationId: operation.negotiationId },
-          });
-          appliedOrders.push(
-            `계약서에 서명했다 — ${result.message} (이미 확정했다 — 다시 확정하지 말 것)`,
-          );
-        }
-        /**
          * 모델이 읽을 한 줄 — 조작이면 **구조체에서 만든다.** 감독이 친 말이 아니라
          * 손잡이라, 이 문장은 표시일 뿐이고 되읽는 코드가 없다 (agents.md §2).
          */
-        const handle = operation ?? (message === undefined ? proposed : undefined);
-        const said = handle ? operationLabel(handle) : (message ?? "");
-        const inputIndex =
-          message === undefined && proposalChatIndex !== undefined
-            ? proposalChatIndex
-            : state.chat.length;
-        if (inputIndex === state.chat.length)
-          state.chat.push({
-            role: handle ? "operator" : "user",
-            text: said,
-            toolCalls: [],
-            at: state.date,
-            ...mark,
-          });
+        const said = operation ? operationLabel(operation) : (message ?? "");
+        state.chat.push({
+          role: operation ? "operator" : "user",
+          text: said,
+          toolCalls: [],
+          at: state.date,
+          ...mark,
+        });
         try {
-          const turn = await runGmTurn(
-            state,
-            said,
-            onDelta,
-            handle,
-            appliedOrders,
-            boardMoves,
-            seedCalls,
-            checkpoint,
-          );
-          const inputTurn = state.chat[inputIndex];
-          if (inputTurn?.negotiationContactId)
-            Object.assign(mark, {
-              negotiationId: inputTurn.negotiationId,
-              negotiationContactId: inputTurn.negotiationContactId,
-              negotiationExchangeId: inputTurn.negotiationExchangeId,
-            });
+          const turn = await runGmTurn(state, said, onDelta, operation, appliedOrders, boardMoves);
           state.chat.push({
             role: "model",
             text: turn.text,
@@ -713,7 +444,6 @@ export function runTurnLocked(
             at: state.date,
             ...(turn.goals && turn.goals.length > 0 ? { goals: turn.goals } : {}),
             ...(turn.cards && turn.cards.length > 0 ? { cards: turn.cards } : {}),
-            ...(turn.reports && turn.reports.length > 0 ? { reports: turn.reports } : {}),
             // 넘긴 시간이 남긴 사건들 — 화면이 하나를 카드 하나로 세운다 (design-system.md §6)
             ...(turn.events && turn.events.length > 0 ? { events: turn.events } : {}),
             // GM이 낸 감독의 다음 말 — 입력창의 placeholder다. 모델 입력은 이 칸을 읽지 않는다 (agents.md §2)
@@ -754,8 +484,6 @@ export function runTurnLocked(
             characterUpdatesPending: state.characterBookJobs.length > 0,
           };
         } catch (error) {
-          const saved = durableCheckpoint !== null;
-          if (durableCheckpoint !== null) saveGame(durableCheckpoint);
           const kind = llmErrorKind(error);
           console.error(`[turn] GM 턴 실패 (game=${id}, kind=${kind}):`, error);
           /**
@@ -768,10 +496,10 @@ export function runTurnLocked(
           noteTurn({
             outcome: {
               ok: false,
-              saved,
+              saved: false,
               error: shown,
               kind,
-              retry: saved ? false : turnErrorRetry(kind),
+              retry: turnErrorRetry(kind),
               ...detail,
             },
             after: turnDigestOf(state),
@@ -779,9 +507,8 @@ export function runTurnLocked(
           return {
             ok: false as const,
             status: 502,
-            saved,
             error: shown,
-            retry: saved ? false : turnErrorRetry(kind),
+            retry: turnErrorRetry(kind),
             ...detail,
           };
         }

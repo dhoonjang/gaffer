@@ -1,26 +1,21 @@
 import {
   SUGGESTION_MAX_CHARS,
-  TABLE_LEFT,
   TIME_PASSED,
   applyInstructionBatch,
   buildOnboardingTurn,
   runGmTurn,
   takeSuggestion,
 } from "@story-fm/agents";
-import { MANAGER_TERMS_BY_TIER, STOP_EVENT_TYPES } from "@story-fm/domain";
+import { STOP_EVENT_TYPES } from "@story-fm/domain";
 import {
-  addDays,
   advanceLiveMatch,
   advanceShootout,
   advanceTime,
   awaitingShootout,
   createGame,
   liveFinished,
-  openNegotiationFor,
   resumeLiveInterval,
-  tableOf,
   tacticsOf,
-  tierOfTeamIn,
   turnFactLines,
   type GameState,
 } from "@story-fm/engine";
@@ -37,8 +32,6 @@ import { beforeAll, describe, expect, it } from "vitest";
  * 것이 계약이고, 그 계약 자체가 이 파일의 전제다.
  */
 process.env.LLM_MODE = "mock";
-
-/** 답이 수락으로 갈리는 확률 문턱 — `e2e/seed.ts`가 고르는 자와 같은 값이다 */
 
 function build(seed: number): GameState {
   const background = "프리미어리그에서 뛰었던 주장 출신 수비수";
@@ -250,115 +243,6 @@ describe("mock 대본 — 경기", () => {
   });
 });
 
-describe("mock 대본 — 이적 문의", () => {
-  it("금액 없는 영입 요청은 문의로 남고 승인·계약을 만들지 않는다", async () => {
-    const state = newGame();
-    const target = state.players.find(
-      (p) => p.teamId === "chelsea" && state.players.filter((q) => q.name === p.name).length === 1,
-    )!;
-    const owner = target.teamId;
-    const turn = await runGmTurn(state, `${target.name} 영입하자`);
-    expect(namesOf(turn)).toContain("start_negotiation");
-    const negotiation = openNegotiationFor(state, target.id)!;
-    expect(negotiation.rounds).toEqual([]);
-    expect(negotiation.feeAgreed).toBeUndefined();
-    expect(negotiation.status).toBe("open");
-    expect(target.teamId).toBe(owner);
-    expect(state.phase).toBe("idle");
-  });
-});
-
-/**
- * **협상 방** — 경기와 같은 골격의 모드다 (transfer.md §12-2). 문을 여는 것은 평시 GM의
- * 도구(`start_negotiation`), 앉는 것은 손잡이, 그 뒤의 턴은 협상 GM의 것이다. 재는 것은
- * 여기서도 **기록**이다 — 방 안의 말이 손잡이를 지나 코어 명령으로 남고, 상대의 답이
- * 앵커대로 장부에 서고, 방이 국면을 되돌려 놓는가.
- */
-describe("mock 대본 — 협상 방", () => {
-  function acceptableTarget(state: GameState) {
-    const target = state.players.find(
-      (p) => p.teamId === "chelsea" && state.players.filter((q) => q.name === p.name).length === 1,
-    );
-    if (!target) throw new Error("문의할 상대가 없습니다");
-    return target;
-  }
-
-  /**
-   * 방을 세우는 한 턴 — 케이스마다 같다. 여는 말이 건너편을 정한다. 평시 호출은
-   * `start_negotiation`에서 끝나고, 같은 턴의 장면은 협상 GM의 첫 장면이다.
-   */
-  async function seatWith(state: GameState, name: string, say = "협상하자") {
-    const opened = await runGmTurn(state, `${name} ${say}`);
-    expectGmGrammar(opened.text);
-    expect(namesOf(opened)).toEqual(["start_negotiation"]);
-    expect(state.phase).toBe("negotiation");
-    expect(state.pendingNegotiation?.seated).toBe(true);
-    expect(opened.suggestion).toBe("제안한 조건으로 갑시다");
-    return openNegotiationFor(state, acceptableTarget(state).id) ?? state.negotiations.at(-1)!;
-  }
-
-  it("명시된 조건 없는 동의는 값을 만들지 않고 상대별 문의를 보존한다", async () => {
-    const state = newGame();
-    const target = acceptableTarget(state);
-    const from = state.date;
-    const negotiation = await seatWith(state, target.name);
-    const spoke = await runGmTurn(state, "제안한 조건으로 갑시다");
-    expect(namesOf(spoke)).toContain("evaluate_negotiation");
-    expect(negotiation.rounds).toEqual([]);
-    expect(negotiation.feeAgreed).toBeUndefined();
-    const clubContact = tableOf(state, negotiation, "club")!.id;
-    await runGmTurn(state, "오늘은 여기까지 하죠");
-    const same = await seatWith(state, target.name, "에이전트 만나자");
-    expect(same.id).toBe(negotiation.id);
-    expect(tableOf(state, same, "agent")!.id).not.toBe(clubContact);
-    await runGmTurn(state, "제안한 조건으로 갑시다");
-    expect(same.personal).toBeUndefined();
-    expect(same.status).toBe("open");
-    expect(state.date).toBe(from);
-    const exchangeId = state.pendingNegotiation!.exchangeId;
-    await runGmTurn(state, "일상으로 돌아가기", undefined, { kind: "leave_negotiation" });
-    expect(state.negotiationEvaluations.at(-1)).toMatchObject({
-      party: "agent",
-      exchangeId,
-      ending: true,
-    });
-  });
-
-  it("값 없는 말에는 상대의 답만 서고, 일어서는 손잡이가 방을 닫되 협상은 열어 둔다", async () => {
-    const state = newGame();
-    const target = acceptableTarget(state);
-    const negotiation = await seatWith(state, target.name);
-
-    const talked = await runGmTurn(state, "음...");
-    expect(namesOf(talked)).toContain("evaluate_negotiation");
-    expect(namesOf(talked)).not.toContain("negotiation_orders");
-    expect(negotiation.rounds).toHaveLength(0);
-    expect(state.phase).toBe("negotiation");
-
-    const left = await runGmTurn(state, "협상 자리에서 일어선다", undefined, {
-      kind: "leave_negotiation",
-    });
-    expectGmGrammar(left.text);
-    // 코어가 턴 앞에서 방을 닫았다 — 기록은 남되 칩으로 서지 않는다
-    expect(left.toolCalls.find((c) => c.name === TABLE_LEFT)?.silent).toBe(true);
-    expect(state.phase).toBe("idle");
-    expect(negotiation.status).toBe("open");
-    expect(state.negotiationExchanges.at(-1)?.closedOn).toBe(state.date);
-  });
-
-  it("자리를 뜨는 말은 leave_negotiation로 방을 닫는다", async () => {
-    const state = newGame();
-    const target = acceptableTarget(state);
-    const negotiation = await seatWith(state, target.name);
-
-    const left = await runGmTurn(state, "오늘은 여기까지 하죠");
-    expectGmGrammar(left.text);
-    expect(namesOf(left)).toContain("leave_negotiation");
-    expect(state.phase).toBe("idle");
-    expect(negotiation.status).toBe("open");
-  });
-});
-
 describe("지시 묶음의 상태 경계", () => {
   it("연속 목록 추가는 앞선 명령의 결과를 유지한다", () => {
     const state = newGame();
@@ -391,189 +275,5 @@ describe("지시 묶음의 상태 경계", () => {
       ]).rejected,
     ).toBe(true);
     expect(state).toEqual(before);
-  });
-
-  it("위임 범위 생략은 전체 위임이나 전체 철회가 되지 않는다", () => {
-    const state = newGame();
-    for (const name of ["delegate_negotiation", "revoke_mandate"]) {
-      const before = structuredClone(state);
-      const result = applyInstructionBatch(state, [], { ops: { [name]: [{}] } }, [name]);
-      expect(result.rejected).toBe(true);
-      expect(state).toEqual(before);
-    }
-  });
-
-  it("부임이 지운 경질 상태는 원자적 반영 뒤에도 사라진다", () => {
-    const state = newGame();
-    state.dismissal = {
-      teamId: state.userTeamId,
-      on: state.date,
-      season: state.season,
-      kind: "sacked",
-      tier: 1,
-    };
-    delete state.manager.contract;
-    state.managerOffers = [
-      {
-        id: "mgr-offer-test",
-        teamId: "everton",
-        madeOn: state.date,
-        expiresOn: addDays(state.date, 10),
-        tier: tierOfTeamIn(state, "everton"),
-        salary: MANAGER_TERMS_BY_TIER[3].salary,
-        years: 2,
-        budgetPledge: MANAGER_TERMS_BY_TIER[3].budgetPledge,
-        via: "vacancy",
-        status: "open",
-      },
-    ];
-    const result = applyInstructionBatch(
-      state,
-      [],
-      { ops: { accept_manager_offer: [{ offer: "mgr-offer-test" }] } },
-      ["accept_manager_offer"],
-    );
-    expect(result).toMatchObject({ rejected: false, applied: 1 });
-    expect(state.dismissal).toBeUndefined();
-    expect(state.userTeamId).toBe("everton");
-    expect(state.manager.contract).toBeDefined();
-    expect(state.managerOffers[0]!.status).toBe("accepted");
-  });
-});
-
-import { openTalks } from "@story-fm/engine";
-import type { EvaluationRequest, GameEvaluator } from "@story-fm/llm";
-import { createTestGame } from "../../../engine/test/helpers";
-import {
-  evaluateNegotiation,
-  processNegotiationFollowups,
-} from "../../src/app/workflows/negotiation/evaluation";
-
-describe("협상 평가의 재시도와 후속 처리", () => {
-  const inquiry = () => {
-    const state = createTestGame(42);
-    const player = state.players.find((p) => p.teamId !== state.userTeamId && !p.loan)!;
-    const opened = openTalks(state, { playerId: player.id, kind: "buy" });
-    if (!opened.ok) throw new Error(opened.message);
-    return { state, id: opened.negotiation.id };
-  };
-  function reviewer(followup = false): GameEvaluator & { requests: EvaluationRequest[] } {
-    const requests: EvaluationRequest[] = [];
-    return {
-      requests,
-      async evaluate(request) {
-        requests.push(request);
-        return {
-          model: "test",
-          usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-          answers: Object.fromEntries(
-            Object.entries(request.questions).map(([key, q]) => {
-              if (q.type !== "choice") throw new Error("choice required");
-              const choice =
-                key === "position"
-                  ? "review"
-                  : key === "followup"
-                    ? followup
-                      ? "response"
-                      : "none"
-                    : key === "fact"
-                      ? "proposal"
-                      : key === "decision"
-                        ? "no"
-                        : Object.keys(q.criteria)[0]!;
-              return [
-                key,
-                {
-                  type: "choice" as const,
-                  choice,
-                  confidence: 1,
-                  probabilities: Object.fromEntries(
-                    Object.keys(q.criteria).map((k) => [k, k === choice ? 1 : 0]),
-                  ),
-                },
-              ];
-            }),
-          ),
-        };
-      },
-    };
-  }
-  it("모델 실패는 조건과 일정을 만들지 않으며 성공 뒤 같은 발화는 저장 결과를 재사용한다", async () => {
-    const { state, id } = inquiry();
-    const failed: GameEvaluator = {
-      async evaluate() {
-        throw new Error("unavailable");
-      },
-    };
-    const input = {
-      negotiationId: id,
-      party: "club" as const,
-      ending: true,
-    };
-    expect((await evaluateNegotiation(state, input, failed)).ok).toBe(false);
-    expect(state.negotiationEvaluations[0]!.status).toBe("pending");
-    expect(state.negotiationEvaluations[0]!.result).toBeNull();
-    expect(state.negotiationFollowups).toHaveLength(0);
-    expect(state.negotiations[0]!.rounds).toHaveLength(0);
-    const client = reviewer();
-    expect((await evaluateNegotiation(state, input, client)).ok).toBe(true);
-    const count = client.requests.length;
-    expect((await evaluateNegotiation(state, input, client)).ok).toBe(true);
-    expect(client.requests).toHaveLength(count);
-    expect(state.negotiationEvaluations).toHaveLength(1);
-  });
-  it("대화 중에는 후속 일을 묻지 않고 종료 때 응답을 재판정하지 않는다", async () => {
-    const { state, id } = inquiry();
-    const client = reviewer(true);
-    expect(
-      (await evaluateNegotiation(state, { negotiationId: id, party: "club" }, client)).ok,
-    ).toBe(true);
-    expect(client.requests.every((request) => !("followup" in request.questions))).toBe(true);
-    expect(state.negotiationFollowups).toHaveLength(0);
-    const before = client.requests.length;
-    expect(
-      (await evaluateNegotiation(state, { negotiationId: id, party: "club", ending: true }, client))
-        .ok,
-    ).toBe(true);
-    expect(
-      client.requests.slice(before).every((request) => !("position" in request.questions)),
-    ).toBe(true);
-    expect(state.negotiationFollowups).toHaveLength(1);
-    const count = client.requests.length;
-    await evaluateNegotiation(state, { negotiationId: id, party: "club", ending: true }, client);
-    expect(client.requests).toHaveLength(count);
-    expect(state.negotiationFollowups).toHaveLength(1);
-  });
-  it("턴 시작의 평가 재시도는 조건에 반영하되 내부 요약을 사건 카드에 넣지 않는다", async () => {
-    const { state, id } = inquiry();
-    await evaluateNegotiation(
-      state,
-      { negotiationId: id, party: "club", ending: true },
-      {
-        async evaluate() {
-          throw new Error("unavailable");
-        },
-      },
-    );
-    expect(state.negotiationEvaluations[0]!.status).toBe("pending");
-    const turn = await runGmTurn(state, "현재 상황을 알려줘");
-    expect(state.negotiationEvaluations[0]!.status).toBe("completed");
-    expect(state.negotiationEvaluations[0]!.result).not.toBeNull();
-    expect((turn.events ?? []).filter((event) => event.kind === "interest")).toHaveLength(0);
-  });
-  it("같은 날 생성된 후속은 다음 처리 단위로 남기며 완료 이벤트를 다시 처리하지 않는다", async () => {
-    const { state, id } = inquiry();
-    const client = reviewer(true);
-    expect(
-      (await evaluateNegotiation(state, { negotiationId: id, party: "club", ending: true }, client))
-        .ok,
-    ).toBe(true);
-    expect(state.negotiationFollowups[0]!.dueOn).toBe(state.date);
-    const result = await processNegotiationFollowups(state, client);
-    expect(result.events).toHaveLength(1);
-    expect(state.negotiationFollowups).toHaveLength(2);
-    expect(state.negotiationFollowups[0]!.status).toBe("completed");
-    expect(state.negotiationFollowups[1]!.status).toBe("pending");
-    expect(state.negotiations[0]!.status).toBe("open");
   });
 });

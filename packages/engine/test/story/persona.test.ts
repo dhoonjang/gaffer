@@ -15,7 +15,6 @@ import {
   HEAD_COACH_NAMES,
   generateHeadCoach,
   headCoachOf,
-  isFamousPlayer,
   speakerRoles,
   ownerOf,
   generateOwner,
@@ -36,8 +35,6 @@ import {
   generateVirtualManager,
   headCoachSalaryOf,
   personaKeywords,
-  reseatClubPersonas,
-  staffOf,
   staffSalaryOf,
   STAFF_OPENINGS,
 } from "../../src/common/people/persona";
@@ -153,79 +150,6 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
     }
   });
 
-  it("남의 팀 선수는 협상 테이블에 앉았을 때만 사전에 든다", () => {
-    const state = createTestGame(42, "manutd");
-    // 이름난 현역은 협상 없이도 사전에 있다 — 이 테스트의 자리는 무명의 것이다
-    const outsider = state.players.find(
-      (p) => p.teamId !== "manutd" && !isFamousPlayer(p.attributes.overall, p.name),
-    )!;
-    expect(speakerRoles(state)[normalizeSpeaker(outsider.name)]).toBeUndefined();
-
-    state.negotiations.push({
-      id: "neg-1",
-      gamePlayerId: outsider.id,
-      kind: "buy",
-      counterpartTeamId: outsider.teamId,
-      windowId: null,
-      openedOn: state.date,
-      expiresOn: state.date,
-      status: "open",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [],
-    });
-    expect(speakerRoles(state)[normalizeSpeaker(outsider.name)]).toEqual({ kind: "player" });
-  });
-
-  it("합의 뒤 메디컬을 기다리는 선수도 사전에 남는다 — open만 보면 자리가 사라진다", () => {
-    const state = createTestGame(42, "manutd");
-    const outsider = state.players.find((p) => p.teamId !== "manutd")!;
-    state.negotiations.push({
-      id: "neg-2",
-      gamePlayerId: outsider.id,
-      kind: "buy",
-      counterpartTeamId: outsider.teamId,
-      windowId: null,
-      openedOn: state.date,
-      expiresOn: state.date,
-      status: "agreed",
-      pitched: [],
-      precontract: false,
-      terms: [],
-      buyout: false,
-      rounds: [],
-      medical: { onDate: state.date, status: "scheduled" },
-    });
-    expect(speakerRoles(state)[normalizeSpeaker(outsider.name)]).toEqual({ kind: "player" });
-  });
-
-  it("끝난 협상은 화자를 남기지 않는다", () => {
-    for (const status of ["completed", "rejected", "expired"] as const) {
-      const state = createTestGame(42, "manutd");
-      const outsider = state.players.find(
-        (p) => p.teamId !== "manutd" && !isFamousPlayer(p.attributes.overall, p.name),
-      )!;
-      state.negotiations.push({
-        id: `neg-${status}`,
-        gamePlayerId: outsider.id,
-        kind: "buy",
-        counterpartTeamId: outsider.teamId,
-        windowId: null,
-        openedOn: state.date,
-        expiresOn: state.date,
-        status,
-        pitched: [],
-        precontract: false,
-        terms: [],
-        buyout: false,
-        rounds: [],
-      });
-      expect(speakerRoles(state)[normalizeSpeaker(outsider.name)], status).toBeUndefined();
-    }
-  });
-
   it("이름이 겹치면 아무것도 붙이지 않는다 — 틀린 직책보다 없는 게 낫다", () => {
     const state = createTestGame(42, "manutd");
     const coach = headCoachOf(state);
@@ -238,7 +162,6 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
   it("세계 인물 명부가 직책 라벨과 함께 선다 — 유저 팀의 명부 감독만 빠진다", () => {
     const roles = speakerRoles({ seed: 1, userTeamId: "manutd", personas: [] });
     expect(roles[normalizeSpeaker("펩 과르디올라")]).toEqual({ kind: "manager", label: "감독" });
-    expect(roles[normalizeSpeaker("조르제 멘데스")]).toEqual({ kind: "agent", label: "에이전트" });
     expect(roles[normalizeSpeaker("게리 네빌")]).toEqual({ kind: "pundit", label: "해설위원" });
     // 유저가 맡은 팀의 명부 감독은 이 세계에 부임한 적이 없다
     expect(
@@ -366,24 +289,9 @@ describe("스태프 — 고용 정보를 든 인물 (people.md §2-2)", () => {
     );
   });
 
-  it("스태프는 구단의 사람이라 부임하면 갈린다 — 옛 구단의 사람은 따라오지 않는다", () => {
-    const state = createTestGame(42);
-    const before = staffOf(state).map((p) => p.name);
-    state.userTeamId = "chelsea";
-    reseatClubPersonas(state, "chelsea", { crossedLeague: false });
-    const after = staffOf(state);
-    expect(after.map((p) => p.name)).not.toEqual(before);
-    expect(after.every((p) => p.employment?.teamId === "chelsea")).toBe(true);
-    // 자리는 그대로 채워진다 — 새 구단에도 코치 둘·의료진·스카우트가 이미 서 있다
-    for (const role of STAFF_ROLES) {
-      expect(staffOf(state, role), role).toHaveLength(STAFF_OPENINGS[role]);
-    }
-  });
-
   it("화자 표 — 갈래마다 그 역할의 사람이 서고, 자리가 비면 수석코치가 선다", () => {
     const state = createTestGame(42);
     expect(factSpeakerOf(state, "medical").role).toBe("medic");
-    expect(factSpeakerOf(state, "scouting").role).toBe("scout");
     expect(factSpeakerOf(state, "training").role).toBe("coach");
     expect(factSpeakerOf(state, "coach_eye").role).toBe("head_coach");
     // 의료진을 자른 세이브 — 부상 줄은 여전히 서야 하므로 수석코치가 대신 선다

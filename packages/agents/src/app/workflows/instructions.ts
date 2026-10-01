@@ -2,7 +2,6 @@ import {
   applyMatchReading,
   captureJournal,
   journal,
-  roomNegotiationOf,
   syncLiveTactics,
   userSide,
   type GameState,
@@ -35,19 +34,13 @@ import {
 } from "../../common/orders-ops";
 import { TACTIC_OPS, TACTIC_CAPS, MATCH_OPS } from "../../match/tactic-orders";
 import { TRAINING_OPS } from "../../story/training-orders";
-import { MARKET_OPS } from "../../negotiation/market-orders";
-import {
-  TABLE_OPS,
-  BY_NEGOTIATION,
-  BY_PLAYER,
-  buildTableOrdersContext,
-} from "../../negotiation/table-orders";
+import { FINANCE_OPS } from "../../common/finance-orders";
 import { buildToolSpecs } from "../gm-tools";
 import { buildTrainingSchedule } from "../gm-input";
 import { ordersScript } from "../mock-script";
 import { buildPeaceContext } from "./match/tactic-orders";
 import { buildTrainingContext } from "./story/training-orders";
-import { buildMarketContext } from "./negotiation/market-orders";
+import { buildFinanceContext } from "./common/finance-orders";
 import { buildBoardMovesBlock, buildLedgerNote } from "../../match/context";
 
 import { liveInputOf } from "@story-fm/sim";
@@ -105,21 +98,6 @@ export function instructionCommands(
         required: [...(inputSchema.required ?? []), "listMode"],
       };
     }
-    if (name === "delegate_negotiation" || name === "revoke_mandate") {
-      inputSchema = {
-        ...inputSchema,
-        properties: {
-          ...inputSchema.properties,
-          scope: {
-            type: "string",
-            enum: ["player", "kind", "all"],
-            description:
-              "명시한 한 선수=player, 명시한 협상 갈래=kind, 감독이 명시적으로 모든 협상을 맡기거나 거둔다고 했을 때만=all. 범위 불명확은 실행하지 않는다.",
-          },
-        },
-        required: [...(inputSchema.required ?? []), "scope"],
-      };
-    }
     return [
       {
         name,
@@ -135,16 +113,12 @@ export function instructionCandidates(
   state: GameState,
   said: string,
 ): Record<string, InstructionCandidate[]> {
-  const room = roomNegotiationOf(state);
-  const ids = new Set(state.negotiations.map((n) => n.gamePlayerId));
-  const players = state.players.filter((p) =>
-    room
-      ? p.id === room.gamePlayerId
-      : p.teamId === state.userTeamId ||
-        ids.has(p.id) ||
-        said.includes(p.name) ||
-        said.includes(p.id) ||
-        p.name.split(/\s+/).some((part) => part.length >= 2 && said.includes(part)),
+  const players = state.players.filter(
+    (p) =>
+      p.teamId === state.userTeamId ||
+      said.includes(p.name) ||
+      said.includes(p.id) ||
+      p.name.split(/\s+/).some((part) => part.length >= 2 && said.includes(part)),
   );
   const people = players.map((p) => ({
     label: `${p.name} (${p.id}, ${p.positions.map((x) => x.position).join("/")})`,
@@ -200,31 +174,11 @@ export function instructionCandidates(
       ].map((key) => [key, people]),
     ),
     "sign_youth.playerIds": youth,
-    negotiationId: state.negotiations
-      .filter((n) => !room || n.id === room.id)
-      .map((n) => ({
-        label: `${n.id} (${state.players.find((p) => p.id === n.gamePlayerId)?.name ?? n.gamePlayerId}, ${n.kind}, ${n.status})`,
-        value: n.id,
-      })),
     date: dates,
     from: dates,
     to: dates,
     until: dates,
     teamId: teamChoices,
-    "release_staff.name": state.personas
-      .filter(
-        (person) =>
-          ["head_coach", "coach", "medic", "scout"].includes(person.role) &&
-          person.employment !== undefined,
-      )
-      .map((person) => ({ label: person.name, value: person.name })),
-    offer: (state.managerOffers ?? [])
-      .filter((offer) => offer.status === "open")
-      .map((offer) => ({
-        label: `${state.teams.find((team) => team.id === offer.teamId)?.name ?? offer.teamId} (${offer.id})`,
-        value: offer.id,
-      })),
-    "apply_manager_job.team": teamChoices,
     "set_training.dow": ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"].map(
       (label, value) => ({ label, value }),
     ),
@@ -263,7 +217,7 @@ export function applyInstructionBatch(
   calls: GmToolCall[],
   orders: OpsOrders,
   names: readonly string[],
-  options: { deferNegotiationIds?: ReadonlySet<string>; reading?: Reading; source?: string } = {},
+  options: { reading?: Reading; source?: string } = {},
 ): InstructionOutcome {
   if (orders.unresolved)
     return {
@@ -275,9 +229,8 @@ export function applyInstructionBatch(
     return { notes: [], rejected: false, applied: 0 };
   const draft = structuredClone(state);
   const draftCalls: GmToolCall[] = [];
-  const room = roomNegotiationOf(draft);
   const specs = new Map(
-    buildToolSpecs(draft, draftCalls, options).map((spec) => [
+    buildToolSpecs(draft, draftCalls).map((spec) => [
       spec.name,
       {
         ...spec,
@@ -285,19 +238,6 @@ export function applyInstructionBatch(
           if (typeof row !== "object" || row === null || Array.isArray(row))
             return spec.handle(row);
           const input: Record<string, unknown> = { ...row };
-          if (spec.name === "delegate_negotiation" || spec.name === "revoke_mandate") {
-            const valid =
-              input.scope === "player"
-                ? typeof input.playerId === "string"
-                : input.scope === "kind"
-                  ? typeof input.kind === "string" && input.playerId === undefined
-                  : input.scope === "all" &&
-                    input.playerId === undefined &&
-                    input.kind === undefined;
-            if (!valid)
-              return { ok: false, message: "위임 또는 철회의 범위와 대상을 명시해 주세요" };
-            delete input.scope;
-          }
           const field = CLEAR_LISTS[spec.name];
           if (field && !Array.isArray(input[field])) {
             return { ok: false, message: "대상 목록 또는 명시적인 전체 해제가 필요합니다" };
@@ -328,11 +268,6 @@ export function applyInstructionBatch(
           }
           if (field && Array.isArray(input[field]) && input[field].length === 0)
             delete input[field];
-          if (room) {
-            if (BY_NEGOTIATION.has(spec.name)) input.negotiationId = room.id;
-            if (BY_PLAYER.has(spec.name)) input.playerId = room.gamePlayerId;
-            if (spec.name === "send_offer") input.kind = room.kind === "loan" ? "loan" : "buy";
-          }
           return spec.handle(input);
         },
       },
@@ -392,14 +327,10 @@ export async function runInstructions(
     agent: InterpreterAgent;
     evaluator?: GameEvaluator;
     boardMoves?: readonly BoardMove[];
-    deferNegotiationIds?: ReadonlySet<string>;
   },
 ): Promise<InstructionOutcome> {
   if (!said.trim()) return { notes: [], rejected: false, applied: 0 };
   const { agent } = options;
-  const room = roomNegotiationOf(state);
-  if (agent === "table-orders" && !room)
-    return { notes: ["열린 협상 자리가 없습니다"], rejected: true, applied: 0 };
   if (agent === "match-reader" && !state.pendingMatch)
     return { notes: ["진행 중인 경기가 없습니다"], rejected: true, applied: 0 };
   const names =
@@ -409,10 +340,8 @@ export async function runInstructions(
         ? TACTIC_OPS
         : agent === "training-orders"
           ? TRAINING_OPS
-          : agent === "table-orders"
-            ? TABLE_OPS
-            : MARKET_OPS;
-  const specs = new Map(buildToolSpecs(state, [], options).map((spec) => [spec.name, spec]));
+          : FINANCE_OPS;
+  const specs = new Map(buildToolSpecs(state, []).map((spec) => [spec.name, spec]));
   const live = state.pendingMatch?.live;
   const droppedEffects = new Set(
     live ? liveInputOf(live).sheet.dropped.map((drop) => drop.line) : [],
@@ -427,15 +356,13 @@ export async function runInstructions(
           buildRecentFlowBlock(state),
           `<active_effects>${JSON.stringify(activeEffects)}</active_effects>`,
         ]
-      : agent === "table-orders" && room
-        ? buildTableOrdersContext(state, room)
-        : agent === "training-orders"
-          ? buildTrainingContext(state, buildTrainingSchedule(state))
-          : agent === "market-orders"
-            ? buildMarketContext(state)
-            : buildPeaceContext(state);
+      : agent === "training-orders"
+        ? buildTrainingContext(state, buildTrainingSchedule(state))
+        : agent === "finance-orders"
+          ? buildFinanceContext(state)
+          : buildPeaceContext(state);
   const rules =
-    "전술판에서 이미 바꾼 값은 반복 적용하지 않는다. 서로 자리 교환은 양쪽을 지정하고 한 선수의 position과 move를 함께 지정하지 않는다. 상대 오퍼에 답하기와 우리 딜 확정은 구분한다. 감독이 명시하지 않은 위임·수락은 하지 않는다.";
+    "전술판에서 이미 바꾼 값은 반복 적용하지 않는다. 서로 자리 교환은 양쪽을 지정하고 한 선수의 position과 move를 함께 지정하지 않는다.";
   let orders: OpsOrders & { reading?: Reading };
   if (!options.evaluator && resolveLlmMode() === "mock") {
     orders = parseOrdersReport(ordersScript(state, said).output ?? {}, names, TACTIC_CAPS);
@@ -497,7 +424,6 @@ export function createInstructionTool(
     description: string;
     said?: string;
     boardMoves?: readonly BoardMove[];
-    deferNegotiationIds?: ReadonlySet<string>;
     allowed?: () => { ok: boolean; message: string } | undefined;
   },
 ): GameToolSpec {

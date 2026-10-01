@@ -193,7 +193,7 @@ export const TACTICAL_STYLES = Object.keys(TACTICAL_STYLE_KO) as TacticalStyle[]
 export const LEAGUE_KIND_KO: Record<LeagueKind, string> = {
   playable: "리그전 (playable)",
   "cup-only": "컵 전용 (cup-only)",
-  "market-only": "시장 전용 (market-only)",
+  "market-only": "명단 전용 (market-only)",
   free: "무소속 (free)",
 };
 export const LEAGUE_KINDS = Object.keys(LEAGUE_KIND_KO) as LeagueKind[];

@@ -40,7 +40,7 @@ export const MatchResultSchema = z.object({
   awayExpectedGoals: z.number().min(0),
   /**
    * 실제로 그라운드를 밟은 선수 id (교체 투입·퇴장 포함).
-   * "감독이 직접 뛰는 걸 본 선수"(스카우팅 지식 L2)의 파생 원본이다.
+   * "감독이 직접 뛰는 걸 본 선수"의 파생 원본이다.
    */
   homeLineup: z.array(z.string()),
   awayLineup: z.array(z.string()),

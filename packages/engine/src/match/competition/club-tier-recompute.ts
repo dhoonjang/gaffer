@@ -44,7 +44,7 @@ const TOP_LEAGUE_CUTS: readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[] = [
 ];
 
 /**
- * 2부의 컷 — **1·2가 없다.** 컵 인원인 2부 클럽이 1부 빅클럽과 같은 이적 예산·보드
+ * 2부의 컷 — **1·2가 없다.** 컵 인원인 2부 클럽이 1부 빅클럽과 같은 재정·보드
  * 기대를 받을 자리는 없다 (team.md §2.1).
  */
 const SECOND_TIER_CUTS: readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[] = [
@@ -118,7 +118,7 @@ function recentForm(state: GameState, teamId: string): number {
 function cutsFor(leagueId: string): readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[] | null {
   if (isTopLeague(leagueId)) return TOP_LEAGUE_CUTS;
   if (isCupOnlyLeague(leagueId)) return SECOND_TIER_CUTS;
-  // 이적 시장 전용·무소속은 리그전을 돌지 않는다 — 줄 세울 표가 없다
+  // 명단 전용 리그(`market-only`)·무소속은 리그전을 돌지 않는다 — 줄 세울 표가 없다
   return null;
 }
 

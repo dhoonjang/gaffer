@@ -35,7 +35,7 @@ export interface LineupSlot {
   proficiency: number;
   /**
    * 이 선수의 **전술 적응도** 0~100 (`TACTIC_ASSIGNMENT.familiarity`). 팀 평균이 아니라
-   * 개인 값이다 — 어제 영입한 선수와 3년 뛴 선수가 같은 전술을 같은 정도로 소화할 리 없다.
+   * 개인 값이다 — 어제 합류한 선수와 3년 뛴 선수가 같은 전술을 같은 정도로 소화할 리 없다.
    */
   familiarity: number;
 }

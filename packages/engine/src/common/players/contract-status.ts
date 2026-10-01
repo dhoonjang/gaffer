@@ -4,8 +4,20 @@ import { SQUAD_CORE_SIZE } from "./squad-depth";
 import { betterAtPosition } from "./squad-depth";
 import { isFriendly } from "../core/match-kinds";
 
-/** 최근 출전 현황을 읽는 경기 수. */
-export const RECENT_APPEARANCE_MATCHES = 8;
+/**
+ * **감독의 약속 — 갈래·기한·상태뿐인 장부** (→ docs/story/people.md §5-2).
+ *
+ * 이 게임의 인터페이스는 말이고 잘한 말은 잘 먹혀야 한다. 그런데 말이 공짜면 가장
+ * 잘 먹히는 말이 가장 값싼 말이 된다 — 불만 선수를 면담 한 번의 "다음 경기 선발이다"로
+ * 잠재우고 잊는 것이 최적 전략이 되고, "방치의 대가는 시간의 결과"라는 규약이
+ * 약속 앞에서만 빈다.
+ *
+ * ⚠️ **여기 어디에도 문장이 없다.** 무슨 말로 약속했는지는 장면의 것이고, 이행
+ * 판정은 전부 다른 장부에서 나온다 — 출전 명단 · 등번호 · 완장.
+ */
+
+/** 지위·약속을 재는 창 — 여덟 경기는 한 시즌의 다섯 번째쯤이고 두 달 남짓이다 */
+export const PROMISE_WINDOW_MATCHES = 8;
 
 /** `key`로 서려면 스쿼드 안에서 이 순위 안에 들어야 한다 */
 export const KEY_SQUAD_RANK = 5;
@@ -21,9 +33,7 @@ export function derivedSquadStatus(
   state: GameState,
   player: GamePlayer,
   /**
-   * 어느 스쿼드의 서열로 재는가 — 기본은 그의 소속이다. **영입은 우리 스쿼드로
-   * 잰다**: 파는 구단에서의 자리는 우리가 제시하는 지위와 견줄 값이 아니다
-   * (transfer.md §3).
+   * 어느 스쿼드의 서열로 재는가 — 기본은 그의 소속이다.
    */
   teamId: string = player.teamId,
 ): SquadStatus {
@@ -96,10 +106,9 @@ export function appearedIn(
  * 우리 공식 경기를 **최근 순으로** — 창을 여러 번 재는 호출이 원장을 한 번만 훑게
  * 하는 색인이다.
  *
- * 여러 선수의 출전 현황을 읽을 때 호출마다 원장을
- * 훑으면 멀티시즌 세이브의 한 주가 「선수 수 × 전체 경기 수」가 된다 — 스쿼드 깊이
- * 색인(`squadDepthOf`)이 있는 이유와 같은 자리다. **읽기 전용 파생**이라 원장이
- * 그대로인 동안만 유효하다: 한 번의 순회 안에서 세우고 버린다.
+ * `minutesShortfalls`는 월요일마다 1군 전원에게 창을 묻는다. 호출마다 원장을
+ * 훑으면 멀티시즌 세이브의 한 주가 「선수 수 × 전체 경기 수」가 된다. **읽기 전용 파생**이라
+ * 원장이 그대로인 동안만 유효하다: 한 번의 순회 안에서 세우고 버린다.
  */
 export function matchWindowOf(state: GameState): (typeof state.matches)[number][] {
   return state.matches
@@ -158,3 +167,6 @@ export function startsInWindow(
   }
   return { played, starts, apps, share: played > 0 ? starts / played : 1 };
 }
+
+/** 최근 출전 현황을 읽는 경기 수. */
+export const RECENT_APPEARANCE_MATCHES = 8;

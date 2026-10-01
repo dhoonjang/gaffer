@@ -244,10 +244,10 @@ export function checkDomesticCupInvariants(cups: readonly DomesticCupEntry[]): s
 export const MIN_SEEDED_SQUAD = 11;
 
 /**
- * 부분 시드(시장 전용 리그)의 하한 — **한 명.**
+ * 부분 시드(명단 전용 리그)의 하한 — **한 명.**
  *
  * 사우디·MLS 클럽은 경기를 하지 않으므로 스쿼드 전체가 필요 없다. 시드는
- * "감독이 데려올 만한 이름"만 담고 나머지는 절차 생성이 채운다
+ * 이름난 선수만 담고 나머지는 절차 생성이 채운다
  * (`MARKET_LEAGUE_TEMPLATE`의 앞머리가 골키퍼 둘이라 시드에 GK가 없어도 명단이
  * 선다). 그래도 한 명은 있어야 그 리그의 `realSquads`가 사실이다 (team.md §4).
  */
@@ -304,7 +304,7 @@ export function checkSeedInvariants(
       if (team.leagueId !== league.id) continue;
       const seeded = (SQUAD_SEEDS[team.id] ?? []).length;
       if (league.kind === "market-only") {
-        // 부분 시드 — 데려올 만한 이름만 있으면 된다 (나머지는 절차 생성)
+        // 부분 시드 — 이름난 선수만 있으면 된다 (나머지는 절차 생성)
         if (seeded < MIN_PARTIAL_SEED) {
           problems.push(`${team.name}: ${league.name}의 실선수 시드가 한 명도 없습니다`);
         }

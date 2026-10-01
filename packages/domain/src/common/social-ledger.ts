@@ -4,7 +4,6 @@ import { DateString } from "./date-string";
 export const ManagerOfferTermsSchema = z.object({
   salary: z.number().int().nonnegative().safe(),
   years: z.number().int().positive().max(100),
-  budgetPledge: z.number().int().nonnegative().safe(),
   expiresOn: DateString,
 });
 export type ManagerOfferTerms = z.infer<typeof ManagerOfferTermsSchema>;

@@ -9,7 +9,6 @@ import type {
   Injury,
   MatchSide,
   PositionGroup,
-  ScoutingReport,
   TickEvent,
   SeasonStat,
   SeasonStatTotal,
@@ -19,7 +18,6 @@ import type {
   TeamFinance,
   TeamTactics,
   TrainingReport,
-  TableSpeaker,
 } from "@story-fm/domain";
 import {
   FAMILIARITY_BASELINE,
@@ -27,14 +25,11 @@ import {
   SET_PIECE_ROLES,
   bestOverall,
   competitionRowsOf,
-  isReserveMatch,
   positionGroupOfPlayer,
   sumSeasonStats,
 } from "@story-fm/domain";
 import type { LiveMatch } from "@story-fm/sim";
-import type { AiDeal } from "../../negotiation/market/ai-market";
 import type { SeasonCalendar } from "./calendar";
-import { diffDays } from "./dates";
 import { rankByName } from "./name-match";
 import { suspensionApplies } from "../data/discipline-catalog";
 import type { WorldScope } from "../world/scope";
@@ -167,18 +162,10 @@ export interface ChatTurn {
   /** 이 턴에 나온 경고·퇴장 — 골과 같은 자리에 선다 */
   cards?: CardMark[];
   /**
-   * 이 턴에 도착한 **스카우팅 보고서** — 채팅이 카드로 편다.
-   *
-   * 스카우트 완료는 호출이 아니라 tick의 사건이라, 다이제스트 한 줄로만
-   * 남기면 화면에 뜨지 않는다 — 며칠을 기다려 얻은 정보를 보러 선수 검색을
-   * 다시 해야 한다.
-   */
-  reports?: ScoutingReport[];
-  /**
    * 이 턴 앞에서 **코어가 굴린 시간이 남긴 사건들** — 화면이 사건 하나를 카드 하나로
    * 세운다 (overview.md §2 · ui/design-system.md §6).
    *
-   * 보고서(`reports`)와 같은 이유로 턴에 남는다: tick의 사건이라 호출 칩이 없고, 한
+   * tick의 사건이라 호출 칩이 없어 턴에 남는다. 한
    * 문자열로 이어 붙이면 화면이 되쪼갤 수 없다. 카드가 서는 자리는 장면보다 **앞**이다 —
    * 돌아온 감독이 먼저 읽을 것이 그 사이 벌어진 일이다. 시간이 구르지 않은 턴엔 없다.
    */
@@ -188,7 +175,7 @@ export interface ChatTurn {
   /**
    * **경기 중에 오간 말인가** — 이력에서 중계와 평시를 가르는 표식.
    *
-   * 평시의 GM과 경기의 중계는 다른 에이전트이고 감독이 거는 말도 다르다(훈련·이적
+   * 평시의 GM과 경기의 중계는 다른 에이전트이고 감독이 거는 말도 다르다(훈련·명단
    * 지시 vs 교체·팀토크). 지나고 나서 대화를 거슬러 읽을 때 그 경계가 없으면
    * 한 시즌치 이력이 한 덩어리로 흐른다.
    *
@@ -197,16 +184,6 @@ export interface ChatTurn {
    * 없으면 평시 턴이다.
    */
   inMatch?: boolean;
-  /**
-   * **협상 방의 턴인가** — 방 안에서 감독이 하고 협상 GM이 답한 턴은 평시 이력에서
-   * 갈린다 (docs/common/llm/agents.md §5). 방을 여는 `start_negotiation` 턴은 평시다 —
-   * 이 표식이 없으면 방 밖의 턴이다. 방 밖의 접촉도 상대·교환 참조로 같은 채팅에 연결된다.
-   */
-  inNegotiation?: boolean;
-  /** 어느 협상인가 (`Negotiation.id`) — 일상에서 보낸 제안도 같은 거래에 연결한다 */
-  negotiationId?: string;
-  negotiationContactId?: string;
-  negotiationExchangeId?: string;
   /**
    * GM이 이 턴 끝에 낸 **감독의 다음 말 한 줄** — 입력창의 placeholder가 된다
    * (docs/common/llm/agents.md §2 · docs/common/ui/design-system.md §6).
@@ -338,32 +315,7 @@ export interface PendingMatch {
   };
 }
 
-export type GamePhase = "idle" | "matchday" | "match" | "negotiation";
-
-/**
- * **열린 협상 방** — 경기의 `pendingMatch`와 같은 자리다 (docs/negotiation/transfer.md §12-2).
- *
- * 방이 여는 것은 라우팅뿐이다 — 협상의 장부(오퍼·조건서·인내·줄)는 그대로
- * `Negotiation`이 든다. 방이 닫히면 `null`이 되고 `phase`는 들어서기 전의 것으로 돌아간다.
- */
-export interface PendingNegotiation {
-  negotiationId: string;
-  exchangeId: string;
-  method: "meeting" | "phone" | "proposal";
-  /**
-   * 방의 첫 장면을 썼는가 — `start_negotiation`이 방을 세운 그 요청 안에서 협상 GM이 첫
-   * 장면을 쓰면 선다 (agents.md §2). 서지 않은 방에 온 턴이 그 첫 장면이다.
-   */
-  seated?: boolean;
-  /**
-   * **건너편에 누가 앉는가** — 구단 쪽(단장)인가 선수 쪽(에이전트)인가 (transfer.md §12-2).
-   * 방 하나에 한 사람이다. 앉지 않은 쪽과는 다른 방에서 따로 만난다.
-   */
-  party: TableSpeaker;
-  /** 들어서기 전의 국면 — 방을 나오면 여기로 돌아간다 (`idle` · `matchday`) */
-  phaseBefore: "idle" | "matchday";
-  openedOn: string;
-}
+export type GamePhase = "idle" | "matchday" | "match";
 
 /** 하루가 열리는 시각 — 아무 선언도 없으면 여기서 시작한다 */
 export const DAY_START = "09:00";
@@ -395,19 +347,19 @@ export function formatClock(clock: string): string {
 /**
  * 게임 세이브 — 정규화된 테이블 집합.
  * 카탈로그(불변 초기치)는 코드에 있고, 여기엔 게임 중 변화하는 것만 담는다.
- * 선수 부속(부상·징계·계약·이적·성장·시즌기록)은 gamePlayerId로 참조하는 별도 배열.
+ * 선수 부속(부상·징계·계약·이동·성장·시즌기록)은 gamePlayerId로 참조하는 별도 배열.
  */
 export interface GameState extends GameTables {
   id: string;
   seed: number;
   createdAt: string;
   season: number;
-  /** 현재 날짜 — 게임 시작은 7월 1일 (프리시즌·여름 이적창 개장) */
+  /** 현재 날짜 — 게임 시작은 7월 1일 (프리시즌) */
   date: string;
   /**
    * 하루 안의 시각 "HH:MM" — **장부의 시간(날짜)과 장면의 시간을 가른다.**
    *
-   * 훈련·성장·부상·재정·협상 응답은 전부 하루 단위로 돌기 때문에 같은 날 안에서
+   * 훈련·성장·부상·재정은 전부 하루 단위로 돌기 때문에 같은 날 안에서
    * 아침이 저녁이 되어도 굴릴 것이 없다. 그래서 이 축은 tick 없이 움직이고,
    * 날짜가 넘어갈 때 하루의 시작으로 돌아온다.
    *
@@ -426,8 +378,6 @@ export interface GameState extends GameTables {
   userTeamId: string;
   phase: GamePhase;
   pendingMatch: PendingMatch | null;
-  /** 열린 협상 방 — `phase`가 `negotiation`일 때만 선다 */
-  pendingNegotiation: PendingNegotiation | null;
   /**
    * 이 세계의 범위 — 없으면 카탈로그 전체다(실게임).
    * 테스트가 리그·팀 수를 줄인 작은 세계를 만들 때만 채워진다 (`world/scope.ts`).
@@ -448,17 +398,6 @@ export interface GameState extends GameTables {
    * (`buildEuroEntrants`). 파생으로 되돌릴 수 없는 값이므로 저장한다.
    */
   euroEntrants: EuroEntry[];
-  /**
-   * **아직 성사되지 않은 AI 이적** — 이번 주에 정해진, 날짜가 흩어진 거래
-   * (`ai-market.ts`). 계획은 주 1회 세우고 실행은 그 날짜의 tick이 한다.
-   */
-  aiDeals: AiDeal[];
-  /**
-   * **AI 이적 계획이 덮은 마지막 날.** 이 날에 이르러야 다음 주치를 세운다
-   * (`ai-market.ts`) — 큐가 비었는지로 재면 성사가 없는 주에 매일 다시 계획한다.
-   * 없으면(아직 한 번도 세우지 않았다) 그날 바로 한 번 계획한다.
-   */
-  aiPlannedThrough?: string;
   /**
    * **아직 GM이 읽지 않은 화면 조작** — 전술판·명단·역할을 직접 만진 것.
    *
@@ -483,22 +422,6 @@ export interface GameState extends GameTables {
    * 비워진다(`takeNews`). 없으면 빈 줄이다.
    */
   pendingNews?: string[];
-  /**
-   * **아직 카드로 세우지 않은 스카우트 보고서** — 도착한 선수의 id.
-   *
-   * 카드는 모델이 그 값을 읽은 턴에만 선다. 시계가 도는 자리가 둘이라 그렇다 —
-   * 손잡이로 넘긴 턴은 코어가 장면보다 **먼저** 굴러 같은 턴에 읽히지만, 모델이
-   * 장면 헤더로 옮긴 턴은 코어가 장면 **뒤에** 구른다. 뒤쪽에서 그냥 카드를
-   * 붙이면 모델은 못 읽은 금액을 지어내고, 카드와 대사가 갈린다
-   * (→ [docs/common/llm/agents.md](../../../../docs/common/llm/agents.md) §6).
-   *
-   * ⚠️ **`pendingNews`와 비우는 조건이 다르다.** 저쪽은 실린 턴에 무조건 비워지고,
-   * 이 줄은 **카드가 실제로 선 것만** 비운다(`peekReportCards` → `consumeReportCards`).
-   * 조립에 실패한 id는 재시도를 위해 줄에 남는다 —
-   * 사무실에 스카우팅 화면이 없어 이 줄에서 사라진 보고서는 되찾을 자리가 없다
-   * (→ [docs/common/player.md](../../../../docs/common/player.md) §9.4-1). 없으면 빈 줄이다.
-   */
-  pendingReportCards: string[];
   chat: ChatTurn[];
 }
 
@@ -634,81 +557,21 @@ export function userPlayers(state: GameState): GamePlayer[] {
 }
 
 /**
- * 우리가 **임대 보낸** 선수인가 — 계약은 우리 것이고 `teamId`만 남의 것이다
- * (→ docs/negotiation/transfer.md §2).
+ * **감독이 자기 선수로 세는 사람** — 우리 스쿼드에 있다.
  *
- * ⚠️ 빌려 **온** 임대는 우리 `teamId`를 달아도 이게 아니다. 두 방향이 같은 칸
- * (`loan`)에 앉으므로 방향을 읽지 않으면 우리에게 온 임대가 함께 걸린다.
- */
-export function onLoanFromUs(state: GameState, player: GamePlayer): boolean {
-  return player.loan?.fromTeamId === state.userTeamId;
-}
-
-/**
- * **빌려 온 임대인가** — 그 팀에게.
- *
- * `loan`이 붙어 있는 동안 `teamId`는 언제나 **빌린 구단**이다(→
- * docs/negotiation/transfer.md §2). 그래서 방향을 따로 묻지 않아도 되고, 이 사람은
- * 자기 `teamId`의 스쿼드에서 임대 자원이다 — 빌린 구단이 그에게 치르는 값(라인업의
- * 자리)을 `simSquadOf`가 여기서 읽는다 (→ docs/common/season.md §2 임대).
- */
-export function isLoanedIn(player: Pick<GamePlayer, "loan">): boolean {
-  return player.loan !== undefined;
-}
-
-/**
- * 그 구단의 **1군 경기**에서 연속 몇 경기 출전이 없었나 — 뛴 경기가 나오면 멈춘다.
- *
- * ⚠️ **자리는 모른다.** 세는 것은 출전이 없는 경기 수이고, 그가 벤치에 앉았는지
- * 명단에 아예 없었는지는 다른 사실이다 — 매치데이 벤치는 우리 경기에만 장부에
- * 남으므로(schedule.ts `homeBench`) 빌린 구단의 벤치는 여기서 보이지 않는다.
- * 읽는 쪽이 「명단 밖」이라 부르면 벤치에 앉아 있던 선수에게 없던 일이 붙는다
- * (→ docs/story/people.md §7).
- *
- * 두 자리가 같은 수를 읽는다: 감독에게 가는 임대 리포트(`loanReportOf`의
- * `benchRun`)와 빌린 구단의 라인업(`simSquadOf`의 연속 미출전 상한). 갈라 두면
- * 리포트가 "4경기 출전 0"이라 적은 날 시뮬은 다른 수를 세게 된다.
- *
- * 2군 리그 경기는 세지 않는다: 그 대진은 감독 팀만 편성되므로(season.md §2) 상대
- * 클럽 선수에게는 "1군에서 못 뛰었다"의 반증이 되지 못한다.
- */
-export function benchRunOf(state: GameState, player: Pick<GamePlayer, "id" | "teamId">): number {
-  const played = state.matches
-    .filter(
-      (m) =>
-        m.result !== null &&
-        !isReserveMatch(m) &&
-        (m.homeTeamId === player.teamId || m.awayTeamId === player.teamId),
-    )
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  let run = 0;
-  for (const match of played) {
-    const lineup =
-      match.homeTeamId === player.teamId ? match.result?.homeLineup : match.result?.awayLineup;
-    if (lineup?.includes(player.id)) break;
-    run += 1;
-  }
-  return run;
-}
-
-/**
- * **감독이 자기 선수로 세는 사람** — 우리 스쿼드에 있거나 우리가 임대 보냈다.
- *
- * 안개(지식 눈금) · 월간 성장 · 조회 도구 · 명단 화면이 전부 이 문을 지난다. 한
- * 자리만 소속(`teamId`)으로 가르면 나머지와 어긋난다 — 능력치는 정확한데 검색에는
- * 안 나오거나, 화면에는 서는데 자라지 않는다.
+ * 안개(지식 눈금) · 월간 성장 · 조회 도구 · 명단 화면이 전부 이 문을 지난다.
  */
 export function isOurPlayer(state: GameState, player: GamePlayer): boolean {
-  return player.teamId === state.userTeamId || onLoanFromUs(state, player);
+  return player.teamId === state.userTeamId;
 }
 
-/** 그 사람들 전부 — 우리 스쿼드 + 우리가 임대 보낸 선수 */
+/** 그 사람들 전부 */
 export function ourPlayers(state: GameState): GamePlayer[] {
   return state.players.filter((p) => isOurPlayer(state, p));
 }
 
 /**
- * **감독이 지금 맡고 있는 팀** — 경질돼 무직이면 없다 (career.md §5.1).
+ * **감독이 지금 맡고 있는 팀** — 커리어가 끝났으면 없다 (career.md §5.1).
  *
  * `userTeamId`는 경질된 뒤에도 옛 구단을 가리킨다. 그 구단의 선수단과 장부는
  * 그대로 돌아야 하기 때문이다 — 세계가 감독을 따라 사라지지는 않는다. 그래서
@@ -958,92 +821,23 @@ export function activeContract(state: GameState, playerId: string): Contract | n
   return state.contracts.find((c) => c.gamePlayerId === playerId && c.status === "active") ?? null;
 }
 
-/**
- * **발효를 기다리는 계약** — 사전 계약이 남긴 줄 (→ docs/negotiation/transfer.md §1-4).
- *
- * `activeContract`의 짝이다. 활성 계약과 함께 설 수 있고(그가 아직 남의 선수인
- * 동안이 그 상태다) 서로를 대신하지 않는다 — 주급도 명단도 활성만 센다.
- * 한 선수에게 발효 대기 계약은 하나다 (§11).
- */
-export function pendingContractOf(state: GameState, playerId: string): Contract | null {
-  return state.contracts.find((c) => c.gamePlayerId === playerId && c.status === "pending") ?? null;
-}
-
-/**
- * 예약을 걷는다 — 발효 전에 그 선수의 사정이 달라졌을 때 (§1-4).
- *
- * **지우지 않고 `ended`로 접는다.** 원장의 다른 줄들과 같은 규약이다: 지워 버리면
- * 「예약이 있었다」는 사실이 세계에서 사라져, 무산을 알리는 줄이 무엇을 가리키는지
- * 되짚을 길이 없다.
- *
- * @returns 걷힌 계약 — 없었으면 null
- */
-export function voidPendingContract(state: GameState, playerId: string): Contract | null {
-  const pending = pendingContractOf(state, playerId);
-  if (!pending) return null;
-  pending.status = "ended";
-  return pending;
-}
-
-/**
- * 계약 잔여 연수 (소수, 만료 뒤는 0) — 몸값·설득·재계약이 같은 자를 읽는다.
- *
- * 이적가(`market.ts`)와 설득 판정(`persuasion.ts`)이 각자 적던 값이다. 그 둘은
- * `market → persuasion` 한 방향으로만 이어져 있어 아래쪽이 위를 부를 수 없었고,
- * 그래서 두 줄이 두 벌로 살았다 — 계약이 곧 상태라 자리는 여기다 (AGENTS.md §5).
- */
-export function contractYearsLeft(state: GameState, playerId: string): number {
-  const contract = activeContract(state, playerId);
-  if (!contract) return 0;
-  return Math.max(0, diffDays(state.date, contract.until) / 365);
-}
-
-/** 팀 주급 총액 — 활성 계약의 합 (저장하지 않는 파생값) */
 /** 이번 주 주급 한 줄 — 선수 한 명이 이 구단에 지우는 부담 */
 export interface WeeklyWageLine {
   gamePlayerId: string;
   weekly: number;
 }
 
-/**
- * 이 구단의 **선수별 주급 부담** — 합계(`weeklyWagesOf`)와 원장 명세가 같은 값을 본다.
- *
- * **임대는 주급을 나눈다.** 계약은 원소속에 남으므로 합계는 여전히 우리 것인데,
- * 임대 팀이 `wageShare`만큼을 낸다 — 그만큼 우리 부담에서 빠지고 그쪽에 얹힌다.
- * 저장하지 않고 계약 + `GamePlayer.loan`에서 파생한다.
- */
+/** 이 구단의 **선수별 주급 부담** — 합계(`weeklyWagesOf`)와 원장 명세가 같은 값을 본다 */
 export function weeklyWageLinesOf(state: GameState, teamId: string): WeeklyWageLine[] {
-  const byPlayer = new Map<string, number>();
-  for (const c of state.contracts) {
-    if (c.status === "active" && c.teamId === teamId) byPlayer.set(c.gamePlayerId, c.weeklyWage);
-  }
-  /**
-   * 임대 보정 — **임대 중인 선수만 훑는다.** 계약마다 선수를 찾으면 O(계약×선수)라
-   * 4,000명 세이브에서 주급 계산 한 번이 1,600만 번 비교가 된다(재정 tick이 팀마다
-   * 부른다). 임대는 드무니 그쪽에서 시작하는 게 맞다.
-   */
-  for (const player of state.players) {
-    const loan = player.loan;
-    if (!loan) continue;
-    if (loan.fromTeamId !== teamId && player.teamId !== teamId) continue;
-    const contract = state.contracts.find(
-      (c) => c.status === "active" && c.gamePlayerId === player.id,
-    );
-    if (!contract || contract.teamId !== loan.fromTeamId) continue;
-    const share = contract.weeklyWage * loan.wageShare;
-    if (loan.fromTeamId === teamId) {
-      byPlayer.set(player.id, (byPlayer.get(player.id) ?? 0) - share);
-    } else if (player.teamId === teamId) {
-      byPlayer.set(player.id, (byPlayer.get(player.id) ?? 0) + share);
-    }
-  }
   const lines: WeeklyWageLine[] = [];
-  for (const [gamePlayerId, weekly] of byPlayer) {
-    if (weekly > 0) lines.push({ gamePlayerId, weekly });
+  for (const c of state.contracts) {
+    if (c.status === "active" && c.teamId === teamId && c.weeklyWage > 0)
+      lines.push({ gamePlayerId: c.gamePlayerId, weekly: c.weeklyWage });
   }
   return lines;
 }
 
+/** 팀 주급 총액 — 활성 계약의 합 (저장하지 않는 파생값) */
 export function weeklyWagesOf(state: GameState, teamId: string): number {
   return weeklyWageLinesOf(state, teamId).reduce((sum, l) => sum + l.weekly, 0);
 }
@@ -1158,7 +952,7 @@ export function seasonStatsByCompetitionOf(
 }
 
 /**
- * 시즌·팀·**대회** 단위 스탯 확보 (없으면 생성) — 시즌 중 이적하면 팀별로도 갈린다.
+ * 시즌·팀·**대회** 단위 스탯 확보 (없으면 생성) — 시즌 중 소속이 바뀌면 팀별로도 갈린다.
  *
  * `competitionId`가 열쇠의 넷째다 (game-state.md §3.4): 리그 경기는 리그 행에, 컵
  * 경기는 컵 행에 쌓인다. 대회가 없는 경기(친선)는 애초에 이 문을 지나지 않으므로
@@ -1288,70 +1082,13 @@ export function humanizePlayerIds(state: GameState, text: string): string {
 /** 매치데이 벤치 규모 — 값은 도메인이 하나만 갖는다 (`squad-rules.ts`) */
 export { MATCHDAY_BENCH };
 
-// ── 스쿼드 하한·배치 정리 — 떠남을 다루는 모든 경로가 함께 쓴다 ──
-
-/** 매각·방출·임대 뒤 유지해야 하는 최소 인원 */
-export const MIN_SQUAD_AFTER_SALE = 18;
-
-/** 매각·방출·임대 뒤 남아야 하는 최소 골키퍼 수 */
-export const MIN_GK_AFTER_SALE = 2;
-
-/**
- * 스쿼드가 무너지는 갈래 — **코드와 수치**. 문장은 부르는 쪽이 만든다.
- *
- * 막히는 이유는 같아도 감독이 하려던 일은 매각·해지·임대 송출로 갈리고 동사가
- * 다르다. 코어가 한 문장으로 못 박아 두면 부르는 쪽이 그 문장의 동사를 바꿔치기해
- * 읽게 되고, 문구를 고치는 순간 그 자리가 깨진다 (overview.md §1 철칙 4).
- */
-export type SquadShortfall = {
-  code: "squad-min" | "gk-min";
-  /** 그 선수가 빠진 뒤 남는 수 — 인원 또는 골키퍼 */
-  remaining: number;
-  /** 그 수가 견주는 하한 */
-  limit: number;
-};
-
-/**
- * 스쿼드 하한 — **떠난 뒤에 남는 인원으로 잰다** (transfer.md §2).
- *
- * 감독의 매각·방출·임대 송출과 AI 시장이 **같은 상수·같은 부등호**를 쓰도록 판정을
- * 여기 하나로 둔다. 같은 규칙을 두 자리에 적으면 한쪽만 고쳐져 "AI는 19명 아래로 못
- * 파는데 감독은 18명까지 판다" 같은 어긋남이 소리 없이 생긴다.
- *
- * 남는 인원을 받는 것은 **부르는 쪽이 스쿼드를 어떻게 아는지가 다르기** 때문이다 —
- * 감독 경로는 전 선수를 훑고(`squadShortfall`), AI 시장은 하루 색인을 넘긴다.
- */
-export function squadFloorShortfall(remaining: readonly GamePlayer[]): SquadShortfall | null {
-  if (remaining.length < MIN_SQUAD_AFTER_SALE) {
-    return { code: "squad-min", remaining: remaining.length, limit: MIN_SQUAD_AFTER_SALE };
-  }
-  const keepers = remaining.filter((p) => groupOf(p) === "GK").length;
-  if (keepers < MIN_GK_AFTER_SALE) {
-    return { code: "gk-min", remaining: keepers, limit: MIN_GK_AFTER_SALE };
-  }
-  return null;
-}
-
-/**
- * 이 선수가 빠지면 스쿼드가 무너지는가 — 무너지면 그 갈래를 돌려준다.
- * `negotiation`·`departures`가 함께 쓰므로 여기 둔다(둘이 서로를 import하면 순환).
- */
-export function squadShortfall(
-  state: GameState,
-  teamId: string,
-  leaving: { id: string },
-): SquadShortfall | null {
-  return squadFloorShortfall(playersOf(state, teamId).filter((p) => p.id !== leaving.id));
-}
-
 /**
  * 떠난 선수를 전술 배치에서 뺀다 — **선반과 죽은 공 지정도 함께 비운다.**
  * 적응도는 이 팀의 전술에 대한 값이라 다른 팀에서 뜻이 없다 (player.md §7.3).
  *
  * **키커 지정은 완장과 같은 결이다** (match.md §2 키커 지정 · people.md §5-1) —
- * 우리 판에 설 수 없게 된 사람이 우리 코너를 차는 장부는 남지 않는다. 이탈 경로가
- * 여럿이라(매각·방출·계약 만료·임대 복귀) 호출부마다 따로 지우면 다음 경로가 생길 때
- * 또 샌다. 배치가 걷히는 문 하나가 지정도 함께 걷는다.
+ * 우리 판에 설 수 없게 된 사람이 우리 코너를 차는 장부는 남지 않는다. 배치가 걷히는
+ * 문 하나가 지정도 함께 걷는다.
  *
  * ⚠️ **2군 강등은 이 문이 아니다.** 내려간 선수는 여전히 우리 선수고, 지정은 한
  * 경기의 명단이 지우지 못하는 값이다 — 그 경기에만 기본값이 설 뿐이다 (match.md §1.4).
@@ -1434,45 +1171,6 @@ export function takeMedia(state: GameState): MediaFact[] {
   const media = state.media;
   state.media = [];
   return media;
-}
-
-/** 완료한 보고서 ID만 보관한다. 표시 상한은 보관 기간이나 큐의 한도가 아니다. */
-export function pushReportCards(state: GameState, ids: readonly string[]): void {
-  const queue = (state.pendingReportCards ??= []);
-  for (const id of ids) if (!queue.includes(id)) queue.push(id);
-}
-
-/**
- * 카드로 세울 후보를 줄 앞에서 `limit`개만 **본다** — 줄은 건드리지 않는다.
- *
- * 꺼내는 것과 지우는 것이 갈려 있는 이유는 조립이 실패할 수 있어서다(그 사이
- * 은퇴해 `state.players`에서 빠진 선수). 꺼내면서 지우면 카드가 서지 않은 보고서가
- * 아무 말 없이 없어지고, 사무실에 스카우팅 화면이 없어 되찾을 자리가 없다
- * (player.md §9.4-1).
- *
- * `skip`은 이번 턴에 이미 조립을 시도했다가 실패해 줄에 되돌린 id다 — 한 턴에 줄을
- * 두 번 보는 경로(손잡이가 시계를 옮긴 턴)가 같은 자리에서 다시 멎지 않게 한다.
- */
-export function peekReportCards(
-  state: GameState,
-  limit: number,
-  skip: ReadonlySet<string> = new Set(),
-): string[] {
-  const take = Math.max(0, limit);
-  if (take === 0) return [];
-  return (state.pendingReportCards ?? []).filter((id) => !skip.has(id)).slice(0, take);
-}
-
-/** 줄에서 id를 걷어낸다 — 아래 두 자가 쓰는 한 자리 */
-function removeReportCards(state: GameState, ids: readonly string[]): void {
-  if (ids.length === 0) return;
-  const gone = new Set(ids);
-  state.pendingReportCards = (state.pendingReportCards ?? []).filter((id) => !gone.has(id));
-}
-
-/** 카드가 **실제로 선** id만 줄에서 지운다 — 줄에서 빼는 두 자리 중 하나 */
-export function consumeReportCards(state: GameState, ids: readonly string[]): void {
-  removeReportCards(state, ids);
 }
 
 /** 지금 클럽을 떠나 있는 소집 — 없으면 null */

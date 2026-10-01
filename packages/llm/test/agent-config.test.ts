@@ -71,16 +71,6 @@ describe("에이전트별 LLM 설정", () => {
     model: gpt-custom
     max_tokens: 200
     timeout_ms: 2000
-  negotiation-gm:
-    provider: openai
-    model: gpt-room
-    max_tokens: 200
-    timeout_ms: 2000
-  character-book-editor:
-    provider: google
-    model: gemini-editor
-    max_tokens: 300
-    timeout_ms: 3000
   history-compactor:
     provider: anthropic
     model: claude-compactor
@@ -92,6 +82,11 @@ describe("에이전트별 LLM 설정", () => {
     model: gemini-judge
     max_tokens: 650
     timeout_ms: 6500
+  character-book-editor:
+    provider: google
+    model: gemini-editor
+    max_tokens: 500
+    timeout_ms: 5000
 `),
     );
 
