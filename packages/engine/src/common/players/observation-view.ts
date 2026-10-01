@@ -15,7 +15,6 @@ import {
   type ObservedPlayerFacts,
   observedPlayerFacts,
   observedRating,
-  potentialMargin,
 } from "./observation";
 
 /**
@@ -68,14 +67,12 @@ export function overallView(
   return ratingLabel(facts.overall);
 }
 
-export function potentialView(
+export function growthView(
   state: GameState,
   player: GamePlayer,
   facts: ObservedPlayerFacts = observedPlayerFacts(state, player),
 ): string {
-  const band = facts.potential;
-  if (!band) return "미지 (성장 여력을 짐작할 근거가 없다)";
-  return `${band.low}~${band.high} (${band.confidence} · ±${band.margin})`;
+  return facts.growth?.label ?? "판단 보류";
 }
 
 /** 한 줄 요약이 꼽는 강점·약점 축의 수 */
@@ -93,16 +90,15 @@ export function attributeLine(
 }
 
 /**
- * 안내문이 잠재력에 대해 할 수 있는 말 — **실제로 주는 구간과 어긋나면 안 된다.**
- * 구간을 주면서 "알 수 없다"고 하면 모델이 손에 든 정보를 버린다 (player.md §10).
+ * 안내문이 성장 가능성에 대해 할 수 있는 말 — **실제로 주는 것과 어긋나면 안 된다.**
+ * 등급을 주면서 "알 수 없다"고 하면 모델이 손에 든 정보를 버린다 (player.md §10).
  */
-export function potentialNote(state: GameState, playerId: string, knowledge: Knowledge): string {
-  const margin = potentialMargin(state, playerId, knowledge);
-  return margin === null ? "잠재력은 짐작할 근거가 없다" : `잠재력은 구간으로만 안다(±${margin})`;
+export function growthNote(knowledge: Knowledge): string {
+  return knowledge === "own" ? "성장 가능성은 등급으로 안다" : "성장 가능성은 판단할 근거가 없다";
 }
 
 /**
- * 안개 상태 **카드** — 눈금·오차폭·잠재력 마진의 사실만 싣는다.
+ * 안개 상태 **카드** — 눈금·오차폭·성장 가능성을 아는가의 사실만 싣는다.
  *
  * ⚠️ **지시문은 여기 서지 않는다.** 눈금이 낮을 때 어떻게 말할지는 그 선수에 대한
  * 사실이 아니라 모델에게 내리는 지시라 GM 시스템 프롬프트가 한 줄로 갖는다
@@ -110,12 +106,12 @@ export function potentialNote(state: GameState, playerId: string, knowledge: Kno
  */
 export function knowledgeNote(state: GameState, playerId: string): string {
   const knowledge = knowledgeOf(state, playerId);
-  const potential = potentialNote(state, playerId, knowledge);
-  if (knowledge === "own") return `우리 선수 — 능력치는 정확하다 · ${potential}`;
+  const growth = growthNote(knowledge);
+  if (knowledge === "own") return `우리 선수 — 능력치는 정확하다 · ${growth}`;
   const margin = KNOWLEDGE_MARGIN[knowledge];
   const analytical = OBSERVATION_MARGIN.analytical[knowledge];
   const source = knowledge === "seen" ? "직접 상대해 봤다" : "리그 평판·소문 수준";
-  return `${source} — 평가에 오차가 있다(실행 ±${margin} · 판단 ±${analytical}). ${potential}`;
+  return `${source} — 평가에 오차가 있다(실행 ±${margin} · 판단 ±${analytical}). ${growth}`;
 }
 
 /** 강점·약점 지목 — seen 이상에서만 의미가 있다 (관측값 기준) */

@@ -109,7 +109,8 @@ export const INJURY_CHANCE_PER_APPEARANCE = INJURY_PER_MATCH / ON_PITCH;
 export const FALL_PER_APPEARANCE = INJURY_CHANCE_PER_APPEARANCE * AVG_PRONENESS_RISE;
 
 /**
- * 실제 훈련 세션 하나가 팀에서 부상자 한 명을 낼 확률 (`tick.ts`의 굴림).
+ * 부하 1인 훈련 세션 하나가 팀에서 부상자 한 명을 낼 확률 (`tick.ts`의 굴림) — 그날
+ * 세션들의 부하 합(`sessionLoad`)에 비례한다.
  * 경기 눈금(`INJURY_PER_MATCH`)과 **같은 비율로** 잡아 둔다 — 실제 축구에서
  * 부상의 3분의 1가량이 훈련장에서 나온다.
  */
@@ -122,9 +123,9 @@ export const TRAINING_INJURY_PER_SESSION = 0.006;
  * 내려가게 두면 유저 팀은 훈련 부상만큼 계속 위로 밀린다 — 훈련이 없는 타 팀과
  * 눈금이 갈린다.
  */
-export function trainingExposure(hardSessions: number, squadSize: number): number {
+export function trainingExposure(load: number, squadSize: number): number {
   if (squadSize <= 0) return 0;
-  const perPlayer = (TRAINING_INJURY_PER_SESSION * hardSessions) / squadSize;
+  const perPlayer = (TRAINING_INJURY_PER_SESSION * Math.max(0, load)) / squadSize;
   return perPlayer / INJURY_CHANCE_PER_APPEARANCE;
 }
 

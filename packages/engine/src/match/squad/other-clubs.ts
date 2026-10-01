@@ -10,7 +10,7 @@ import {
   dailyRecovery,
   fatigueAfterDay,
   fatigueDayOf,
-  fatigueFromSessions,
+  fatigueFromTraining,
   type RecoveryKind,
 } from "@story-fm/sim";
 import { managedTeamId, openInjuryIds, type GameState } from "../../common/core/state";
@@ -59,15 +59,15 @@ function recoveryKindOf(state: GameState, teamId: string): RecoveryKind {
 }
 
 /**
- * **AI 팀이 본훈련 하루에 소화하는 세션 수** — 감독 팀의 기본 훈련 계획과 같은 하루다
- * (season.md §4: 평시 본훈련은 슬롯 하나).
+ * **AI 팀이 본훈련 하루에 지는 부하** — 감독 팀의 기본 훈련 계획과 같은 하루다
+ * (season.md §4: 평시 본훈련은 슬롯 하나 · 그 부하는 보통의 본훈련인 1이다).
  *
  * 남의 구단에는 훈련 일정이 없어(`state.schedule`은 감독 팀의 것이다) 세션 수를 셀
  * 표가 없다. 세지 않으면 AI의 잔고는 경기 분만으로 쌓여 감독 팀보다 구조적으로
  * 가벼워지고, `ai-fitness`의 격차 가드가 그 어긋남부터 잡는다. 감독이 얹는 오후 세션과
  * 프리시즌 이중 세션만이 그 위에 서는 감독의 몫이다.
  */
-const AI_SESSIONS_PER_TRAINING_DAY = 1;
+const AI_TRAINING_LOAD_PER_DAY = 1;
 
 /**
  * AI 구단의 하루 — 회복·폼 회귀·누적 피로 (감독 팀은 `dailyTick`이 같은 눈금으로 처리한다).
@@ -112,7 +112,7 @@ export function tickOtherClubs(state: GameState): void {
     player.state.fatigue = clampFatigue(
       fatigueAfterDay(
         fatigueOf(player.state) +
-          (away || kind !== "training" ? 0 : fatigueFromSessions(AI_SESSIONS_PER_TRAINING_DAY)),
+          (away || kind !== "training" ? 0 : fatigueFromTraining(AI_TRAINING_LOAD_PER_DAY)),
         fatigueDayOf(kind, away),
       ),
     );

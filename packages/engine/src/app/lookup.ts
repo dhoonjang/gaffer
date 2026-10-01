@@ -1,6 +1,12 @@
-import { boardAgendaLines, observedOverall, type PlayerMoveKind } from "@story-fm/domain";
+import {
+  boardAgendaLines,
+  GROWTH_OUTLOOKS,
+  observedOverall,
+  type PlayerMoveKind,
+} from "@story-fm/domain";
 import type {
   CallUp,
+  GrowthOutlookKey,
   Contract,
   GamePlayer,
   GameTeam,
@@ -162,13 +168,13 @@ import {
   KNOWLEDGE_RANK,
   knowledgeNote,
   overallView,
-  potentialView,
+  growthView,
   strengthsAndWeaknesses,
 } from "../common/players/observation-view";
 import {
   knowledgeOf,
   observationOf,
-  potentialBand,
+  growthOutlook,
   readCondition,
   type Knowledge,
 } from "../common/players/observation";
@@ -512,7 +518,7 @@ function daysLeftOn(state: GameState, contract: Contract | undefined): number {
  * 풀 하나의 정렬 키 — **선수당 한 번만** 뽑는다.
  *
  * 원장에서 읽는 키(득점·출전·주급·계약)는 원장을 한 번 훑어 색인으로 세우고,
- * 안개에서 파생하는 키(평점·체력·값·잠재력)는 지식 수준을 다시 세지 않도록
+ * 안개에서 파생하는 키(평점·체력·값·성장 가능성)는 지식 수준을 다시 세지 않도록
  * 풀당 한 번 뽑아 둔다.
  */
 function sortKeyOf(
@@ -523,7 +529,7 @@ function sortKeyOf(
   competitionId: string | null,
 ): (p: GamePlayer) => number {
   if (sortBy === "age") return () => 0;
-  if (sortBy === "rating" || sortBy === "fatigue" || sortBy === "potential") {
+  if (sortBy === "rating" || sortBy === "fatigue" || sortBy === "growth") {
     // 안개 키는 지식 수준 파생이라 비싸다 — 풀당 한 번만 뽑고 비교는 그 값으로 한다
     const fogged = new Map(pool.map((p) => [p.id, foggedKeyOf(state, p, sortBy)] as const));
     return (p) => fogged.get(p.id) ?? 0;
@@ -573,16 +579,16 @@ function sortKeyOf(
 function foggedKeyOf(
   state: GameState,
   p: GamePlayer,
-  sortBy: "rating" | "fatigue" | "potential",
+  sortBy: "rating" | "fatigue" | "growth",
 ): number {
   switch (sortBy) {
     case "rating":
       return sortRating(state, p);
     case "fatigue":
       return sortCondition(state, p);
-    // 구간이 없으면 성장 여력을 짐작할 근거가 없다 — 0으로 두어 맨 뒤에 선다
+    // 판단 보류는 맨 뒤에 선다
     default:
-      return potentialBand(state, p)?.low ?? 0;
+      return growthOutlook(state, p)?.tier ?? -1;
   }
 }
 
@@ -615,8 +621,8 @@ export interface SearchPlayersInput {
   maxWage?: number;
   /** 우리 협회 기준 홈그로운 — 등록 명단 8명 규칙(team.md §5)의 그 자격 */
   homegrown?: boolean;
-  /** 관측 잠재력 구간의 **하한**이 이 값 이상. 구간이 없는 선수는 통과하지 못한다 */
-  minPotential?: number;
+  /** 성장 가능성이 이 단계 이상. 판단 보류인 선수는 통과하지 못한다 */
+  minGrowth?: GrowthOutlookKey;
   /** 최소 지식 수준 — `"seen"`이면 직접 상대해 봤거나 그보다 잘 아는 선수만 */
   knowledge?: Knowledge;
   /** 주발 — 행이 찍는 그 세 갈래 (`footLabel`과 같은 자) */
@@ -631,7 +637,7 @@ export interface SearchPlayersInput {
     | "contract"
     | "assists"
     | "seasonRating"
-    | "potential";
+    | "growth";
   limit?: number;
 }
 
@@ -661,7 +667,7 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
       : null;
 
   /**
-   * **싼 조건이 앞에 선다.** 안개에서 파생하는 둘(지식 수준·잠재력 구간)은 선수마다
+   * **싼 조건이 앞에 선다.** 안개에서 파생하는 둘(지식 수준·성장 가능성)은 선수마다
    * 기록을 훑으므로, 앞의 조건이 좁혀 준 만큼만 계산한다.
    */
   /**
@@ -706,10 +712,10 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
     ) {
       return false;
     }
-    if (input.minPotential !== undefined) {
-      // 짐작할 근거가 없는 선수를 통과시키면 모르는 것을 "넘는다"고 답하게 된다
-      const band = potentialBand(state, p);
-      if (band === null || band.low < input.minPotential) return false;
+    if (input.minGrowth !== undefined) {
+      // 판단 보류인 선수를 통과시키면 모르는 것을 "넘는다"고 답하게 된다
+      const growth = growthOutlook(state, p);
+      if (growth === null || growth.tier < GROWTH_OUTLOOKS.indexOf(input.minGrowth)) return false;
     }
     return true;
   });
@@ -1064,7 +1070,7 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
       `${nationalityText(p)} · 주포지션 ${naturalPositionOf(p).position} (${groupOf(p)}) · id ${p.id}`,
     knowledgeNote(state, p.id),
     `능력치: ${attributeLine(state, p, facts)}`,
-    `종합: ${overallView(state, p, facts)} · 잠재력: ${potentialView(state, p, facts)}`,
+    `종합: ${overallView(state, p, facts)} · 성장 가능성: ${growthView(state, p, facts)}`,
   ];
 
   if (knowledge === "own") {
@@ -1420,15 +1426,15 @@ function staffRow(persona: Persona): string {
 
 /**
  * 유스 후보 한 줄 — **안개가 낀 사실이다** (season.md §6 · player.md §9). 아직 우리
- * 선수가 아니라 종합도 잠재력도 참값이 아니고, GM 스냅샷의 오프시즌 블록·스쿼드 화면과
+ * 선수가 아니라 종합도 성장 가능성도 참값이 아니고, GM 스냅샷의 오프시즌 블록·스쿼드 화면과
  * 같은 함수(`youthCandidateFog`)를 읽어 같은 숫자를 낸다.
  */
 function youthCandidateRow(state: GameState, row: YouthCandidate): string {
-  const { overall, potential } = youthCandidateFog(state.seed, row.player);
+  const { overall, growth } = youthCandidateFog(state.seed, row.player);
   const age = ageOf(row.player.birthdate, state.date);
   return (
     `${row.player.name} (${naturalPositionOf(row.player).position}) ${age}세 · ` +
-    `종합 ~${overall} · 잠재력 ${potential.low}~${potential.high} ${potential.confidence} · ` +
+    `종합 ~${overall} · 성장 가능성 ${growth.label} · ` +
     `주급 ${formatMoney(row.weeklyWage)}/주 ${row.years}년` +
     (row.autoSign ? " · 답이 없으면 구단이 계약" : "")
   );

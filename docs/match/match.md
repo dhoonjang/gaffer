@@ -359,7 +359,7 @@ EventCause { code, playerIds, values?, pointId? }
   게임 시스템으로 서는 자리는 아직 없다(§10).
 - **정산도 이 값 그대로**(`matchFatigueOf(pendingMatch.live)`) — 화면에서 본 소모와 장부에 남는 소모는
   같은 숫자다. 상대 팀도 같은 장부에서 정산된다.
-- **누적 피로**(시즌의 몸)는 출전 분과 본훈련이 쌓고 휴식이 뺀다(`fatigueFromMinutes` ·
+- **누적 피로**(시즌의 몸)는 출전 분과 훈련 세션의 부하(`sessionLoad`)가 쌓고 휴식이 뺀다(`fatigueFromMinutes` ·
   `fatigueAfterDay` — [player.md](../common/player.md) §5.5). 회복에만 걸고 소모에는 걸지 않는다 —
   양쪽에 걸면 12월의 스쿼드가 통째로 바닥에 눕는다.
 

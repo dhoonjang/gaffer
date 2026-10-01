@@ -12,7 +12,6 @@ import {
   type GamePlayer,
   pressFactText,
   capsOf,
-  josa,
   normalizeSpeaker,
   numberWishOf,
   naturalPositionOf,
@@ -22,7 +21,6 @@ import { diffDays } from "../../common/core/dates";
 import { type NumberLineage, openSymbolicNumbers } from "../../common/players/numbers";
 import { formLabel } from "../../common/players/form";
 import { NO_MINUTES_PLACE_KO, type NoMinutesPlace } from "./mood";
-import { mentoringReadOf } from "./mentoring";
 import { playerArchetypeOf } from "../../common/people/player-persona";
 
 /**
@@ -138,18 +136,6 @@ function factOf(
   if (benched.count >= BENCHED_RUN) {
     const where = benched.place === null ? "" : ` · ${NO_MINUTES_PLACE_KO[benched.place]}`;
     return `${benched.count}경기 연속 출전 0${where}`;
-  }
-  /**
-   * **멘토링** — 번호와 함께 맨 뒤다 (people.md §7). 지금 벌어지는 일이 아니라 그 밑에
-   * 깔린 **서 있는 사이**라, 끝난 사이는 여기 오지 않는다: 그것은 심경의 자리이고
-   * (§5) 근황은 「지금 세계에 무슨 이야기가 있는가」다.
-   */
-  const mentoring = mentoringReadOf(state, player.id);
-  if (mentoring && mentoring.pair.until === undefined && mentoring.other) {
-    return mentoring.side === "mentor"
-      ? `${josa(mentoring.other.name, "을/를")} 데리고 있다 (멘토 · ${mentoring.days}일째` +
-          `${mentoring.count > 1 ? ` · ${mentoring.count}명` : ""})`
-      : `${mentoring.other.name}에게 붙어 있다 (멘티 · ${mentoring.days}일째)`;
   }
   /**
    * **사실 열 중 마지막이다** — 뛰지 못하는 것도 나가겠다는 말도 폼도 지금

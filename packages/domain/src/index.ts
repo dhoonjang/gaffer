@@ -27,7 +27,6 @@ export * from "./common/finance";
 export * from "./match/prediction";
 export * from "./common/manager-career";
 export * from "./common/player-awards";
-export * from "./story/mentoring";
 export * from "./story/narrative";
 export * from "./common/memory";
 export * from "./match/international";

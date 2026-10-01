@@ -319,7 +319,7 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
 
       <div className="pc-facts">
         <Fact label="성장 가능성">
-          <GrowthOutlook overall={card.overall} potential={card.potential} />
+          <GrowthOutlook growth={card.growth} />
         </Fact>
         {card.weeklyWage !== null && <Fact label="현 주급">{formatMoney(card.weeklyWage)}/주</Fact>}
         {card.contractUntil !== null && (

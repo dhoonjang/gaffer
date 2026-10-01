@@ -22,6 +22,7 @@ import {
   addDays,
   advanceTime,
   applyTrainingOutcomes,
+  trainingSlots,
   assignmentsOf,
   buildTrainingBrief,
   createGame,
@@ -93,6 +94,9 @@ function fingerprint() {
   );
   return { sha256: hash(stableJson(sha256ByPath)), sha256ByPath };
 }
+/** 픽스처가 까는 훈련 날짜 수 — 판정 하나에 날짜가 여럿 실린다 */
+const TRAINING_DAYS = 3;
+
 function fixture(): { state: GameState; brief: TrainingBrief } {
   const state = createGame({
     seed: 42,
@@ -108,7 +112,12 @@ function fixture(): { state: GameState; brief: TrainingBrief } {
       )
       .map((match) => match.date),
   );
-  for (let attempts = 0; matchDates.has(addDays(state.date, 1)) && attempts < 60; attempts++)
+  // 여러 훈련 날짜가 한 판정에 실려야 날짜별 능력치 질문이 잰다
+  const busy = (from: string) =>
+    Array.from({ length: TRAINING_DAYS }, (_, i) => addDays(from, i + 1)).some((day) =>
+      matchDates.has(day),
+    );
+  for (let attempts = 0; busy(state.date) && attempts < 60; attempts++)
     state.date = addDays(state.date, 1);
   const player = state.players.find(
     (item) => item.teamId === state.userTeamId && item.squadLevel !== "reserve",
@@ -121,14 +130,16 @@ function fixture(): { state: GameState; brief: TrainingBrief } {
   });
   if (!personal.ok) throw new Error("Fixture personal training was rejected");
   const from = state.date;
-  const date = addDays(from, 1);
   const training = setTraining(state, {
-    sessions: [
-      { date, slot: "am", label: "전술 조직과 체력 훈련", focus: ["tactical", "stamina"] },
-    ],
+    sessions: Array.from({ length: TRAINING_DAYS }, (_, i) => ({
+      date: addDays(from, i + 1),
+      slot: "am" as const,
+      label: "전술 조직과 체력 훈련",
+      focus: ["tactical" as const, "stamina" as const],
+    })),
   });
   if (!training.ok) throw new Error("Fixture training was rejected");
-  const progressed = advanceTime(state, { days: 1 });
+  const progressed = advanceTime(state, { days: TRAINING_DAYS });
   const sessions = progressed.trained?.sessions ?? [];
   const brief = buildTrainingBrief(state, sessions, { from, to: state.date });
   if (
@@ -289,6 +300,11 @@ async function main() {
         ),
         noDuplicateSubjects:
           new Set(outcomes.map((outcome) => outcome.playerId)).size === outcomes.length,
+        attributeDatesInSlots: outcomes.every((outcome) =>
+          (outcome.attributes ?? []).every((change) =>
+            trainingSlots(brief).some((slot) => slot.date === change.date),
+          ),
+        ),
         cardMatchesGrowthLedger: stableJson(moved) === stableJson(logged),
         playerValuesInBounds: allInBounds,
         settled: trainingSettled(state, brief),

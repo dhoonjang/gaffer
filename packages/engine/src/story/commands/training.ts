@@ -2,7 +2,6 @@ import {
   type GameState,
   squadLevelOf,
   pushNarrative,
-  playerName,
   type CommandBriefItem,
   userPlayers,
 } from "../../common/core/state";
@@ -10,8 +9,6 @@ import { type CommandResult } from "../../common/commands/result";
 import {
   type GamePlayer,
   josa,
-  type ReserveTrainingPolicy,
-  reserveTrainingTitle,
   AXIS_KO,
   type ScheduleEntry,
   type Slot,
@@ -21,23 +18,11 @@ import {
   slotOfTime,
   attributeAxisOf,
   positionGroupOf,
-  ageOf,
   ATTRIBUTE_AXES,
 } from "@story-fm/domain";
 import { pickOurPlayer } from "../../common/core/player-ref";
 import { DEVELOPMENT_FOCUS_LIMIT, pruneDevelopmentFocus } from "../players/development";
 import { briefNames, item } from "../../common/commands/brief";
-import {
-  pruneMentoring,
-  mentorBlock,
-  menteeBlock,
-  MENTEES_PER_MENTOR,
-  menteePairsOf,
-  mentorBoost,
-  mentorStrength,
-} from "../players/mentoring";
-import { mentorPairOf, closeMentorings } from "../../common/players/mentoring";
-import { reserveTrainingAxes } from "../players/training-plan";
 import { squadReturnOf, sortEntries } from "../../common/core/calendar";
 import { diffDays, addDays } from "../../common/core/dates";
 
@@ -100,182 +85,6 @@ export function setDevelopmentFocus(
     brief: {
       head: "집중 육성",
       items: [item({ label: "지정", text: briefNames(players.map((p) => p.name)) })],
-    },
-  };
-}
-
-/**
- * 멘토링 — 감독이 고참에게 유망주를 맡긴다 (→ docs/story/people.md §5-3).
- *
- * **목록 교체다** — 집중 육성과 같은 규약(`set_development_focus`). 부를 때마다 그
- * 멘토의 멘티 전체를 다시 적고, 목록을 비우면 그 멘토의 사이가 다 닫힌다. 더하기·
- * 빼기를 따로 받으면 감독이 지금 명단을 모른 채 상한에 걸린다.
- *
- * 자격은 `mentorBlock`·`menteeBlock` 한 벌이 갖는다 — 반려 문구를 여기서 다시 지으면
- * 같은 규칙이 자리마다 다른 말로 선다.
- */
-export function setMentor(
-  state: GameState,
-  input: { mentorId: string; menteeIds?: string[] },
-): CommandResult {
-  /**
-   * **장부를 먼저 추린다** — 명령과 월간 성장이 같은 문을 지나야 어느 쪽이 먼저 와도
-   * 명단이 같다 (`pruneDevelopmentFocus`가 그런 것과 같은 이유). 나이를 넘긴 멘티가
-   * 남아 있으면 감독이 상한에 걸리지 않을 자리에서 걸린다.
-   */
-  pruneMentoring(state);
-
-  const picked = pickOurPlayer(state, input.mentorId);
-  if (!picked.ok) return picked;
-  const mentor = picked.player;
-  const blocked = mentorBlock(state, mentor);
-  if (blocked) return { ok: false, message: blocked };
-
-  const mentees: GamePlayer[] = [];
-  for (const ref of input.menteeIds ?? []) {
-    const pick = pickOurPlayer(state, ref);
-    if (!pick.ok) return pick;
-    const mentee = pick.player;
-    if (mentee.id === mentor.id) {
-      return { ok: false, message: `${josa(mentor.name, "을/를")} 자기 자신에게 맡길 수 없습니다` };
-    }
-    const block = menteeBlock(state, mentee);
-    if (block) return { ok: false, message: block };
-    /**
-     * **한 선수는 한 멘토다.** 누구에게 가 있는지를 말해야 감독이 다음 수를 둔다 —
-     * 이름 없이 반려하면 그 아이를 데려오려고 장부를 뒤져야 한다.
-     */
-    const held = mentorPairOf(state, mentee.id);
-    if (held && held.mentorId !== mentor.id) {
-      return {
-        ok: false,
-        message:
-          `${josa(mentee.name, "은/는")} 이미 ${playerName(state, held.mentorId)}에게 맡겨져 있습니다 — ` +
-          `한 선수는 한 멘토입니다`,
-      };
-    }
-    if (!mentees.some((p) => p.id === mentee.id)) mentees.push(mentee);
-  }
-  if (mentees.length > MENTEES_PER_MENTOR) {
-    return {
-      ok: false,
-      message: `한 멘토는 ${MENTEES_PER_MENTOR}명까지입니다 — 고참 하나의 눈은 거기까지 닿습니다`,
-    };
-  }
-
-  const before = menteePairsOf(state, mentor.id).map((pair) => pair.menteeId);
-  const after = mentees.map((p) => p.id);
-  if (before.length === after.length && before.every((id) => after.includes(id))) {
-    return {
-      ok: true,
-      unchanged: true,
-      message:
-        mentees.length === 0
-          ? `${josa(mentor.name, "이/가")} 맡은 유망주가 없습니다`
-          : `이미 그 명단입니다 — ${mentor.name}: ${briefNames(mentees.map((p) => p.name))}`,
-    };
-  }
-
-  /**
-   * **그 멘토의 빠진 짝만 닫는다** — `closeMentoringsFor`는 그가 멘티로 든 사이까지
-   * 함께 닫는다. 그리고 닫는 것이지 지우는 것이 아니다: 놓인 아이의 심경이 며칠
-   * 그 줄을 읽는다 (people.md §5-3).
-   */
-  const released = closeMentorings(
-    state,
-    (pair) => pair.mentorId === mentor.id && !after.includes(pair.menteeId),
-    "manager",
-  );
-  for (const mentee of mentees) {
-    if (before.includes(mentee.id)) continue;
-    state.mentoring.push({ mentorId: mentor.id, menteeId: mentee.id, since: state.date });
-  }
-
-  const releasedNames = released.map((pair) => playerName(state, pair.menteeId));
-  if (mentees.length === 0) {
-    pushNarrative(state, `멘토링 해제 — ${mentor.name}`, 1);
-    return {
-      ok: true,
-      message: `${josa(mentor.name, "이/가")} 맡고 있던 유망주를 모두 풀었습니다 — ${releasedNames.join(", ")}`,
-      brief: {
-        head: "멘토링",
-        items: [
-          item({ label: "멘토", text: mentor.name, note: mentorNote(state, mentor) }),
-          item({ label: "해제", text: briefNames(releasedNames) }),
-        ],
-      },
-    };
-  }
-
-  const items: CommandBriefItem[] = [
-    item({ label: "멘토", text: mentor.name, note: mentorNote(state, mentor) }),
-    ...mentees.map((mentee) =>
-      item({ label: "멘티", text: mentee.name, note: menteeNote(state, mentor, mentee) }),
-    ),
-  ];
-  if (releasedNames.length > 0) {
-    items.push(item({ label: "해제", text: briefNames(releasedNames) }));
-  }
-  const names = mentees.map((p) => p.name).join(", ");
-  pushNarrative(state, `멘토링 — ${mentor.name}에게 ${names}`, 1);
-  return {
-    ok: true,
-    message:
-      `${mentor.name}에게 ${josa(names, "을/를")} 맡겼습니다 — 멘티의 정신 6축 성장이 빨라집니다` +
-      (releasedNames.length > 0 ? ` · ${josa(releasedNames.join(", "), "은/는")} 풀렸습니다` : ""),
-    brief: { head: "멘토링", items },
-  };
-}
-
-/**
- * 2군 훈련 방침 — 코치진이 어느 축을 겨냥해 유망주를 기르는가 (season.md §2).
- *
- * **총량을 옮길 뿐 늘리지 않는다** — 겨냥한 축이 빨라지는 만큼 나머지 필드 축이
- * 느려진다. 그래서 메시지는 얻는 것과 함께 포기하는 것도 말한다: 무엇을
- * 포기했는지가 이 손잡이의 값이다. `balanced`가 기본값이자 해제고, 상태에 남는
- * 것은 코드 하나다.
- */
-export function setReserveTraining(
-  state: GameState,
-  input: { policy: ReserveTrainingPolicy },
-): CommandResult {
-  const { policy } = input;
-  const title = reserveTrainingTitle(policy);
-  const current = state.reserveTraining ?? "balanced";
-  if (current === policy) {
-    return {
-      ok: true,
-      unchanged: true,
-      message:
-        policy === "balanced"
-          ? "2군 훈련 방침이 없습니다 — 어느 축도 겨냥하지 않습니다"
-          : `이미 ${title} 방침입니다`,
-    };
-  }
-
-  state.reserveTraining = policy;
-  if (policy === "balanced") {
-    pushNarrative(state, "2군 훈련 방침 해제 — 겨냥하는 축 없음", 1);
-    return {
-      ok: true,
-      message: "2군 훈련 방침을 해제했습니다 — 유망주는 다시 고르게 자랍니다",
-      brief: { head: "2군 훈련 방침", items: [item({ text: "해제" })] },
-    };
-  }
-
-  const aimed = reserveTrainingAxes(policy)
-    .map((axis) => AXIS_KO[axis])
-    .join("·");
-  pushNarrative(state, `2군 훈련 방침 — ${title}`, 1);
-  return {
-    ok: true,
-    message: `2군 훈련 방침을 ${josa(title, "으로/로")} 잡았습니다 — ${josa(aimed, "이/가")} 빨리 자라는 대신 나머지 필드 축은 그만큼 느려집니다`,
-    brief: {
-      head: "2군 훈련 방침",
-      items: [
-        item({ label: "겨냥", text: title }),
-        item({ label: "축", text: aimed, note: "나머지 필드 축은 느려집니다" }),
-      ],
     },
   };
 }
@@ -723,16 +532,6 @@ export function setPlayerTraining(
     message: `${player.name} 개인 훈련 — ${parts.join(" · ")}${where}`,
     brief: { head: `${player.name} 개인 훈련`, items },
   };
-}
-
-/** 멘토를 고른 근거 한 줄 — 나이와 리더십이 결과 항목에 그대로 선다 (`armbandNote`와 같은 결) */
-export function mentorNote(state: GameState, mentor: GamePlayer): string {
-  return `${ageOf(mentor.birthdate, state.date)}세 · 리더십 ${mentor.attributes.leadership}`;
-}
-
-/** 이 짝의 멘토 항 한 조각 — 저장하지 않고 그때그때 다시 매긴다 (people.md §5-3) */
-export function menteeNote(state: GameState, mentor: GamePlayer, mentee: GamePlayer): string {
-  return `정신 6축 ×${mentorBoost(mentorStrength(mentor, mentee, state.date)).toFixed(2)}`;
 }
 
 // ---- 훈련: 명령이 일정 엔트리를 직접 생성한다 (규칙 테이블 없음) ----

@@ -1,4 +1,4 @@
-import { type GameState, playersOf, playerById } from "../../common/core/state";
+import { type GameState, playersOf } from "../../common/core/state";
 import {
   type PersonaRelation,
   stanceOfTier,
@@ -7,43 +7,6 @@ import {
   relationTierStep,
   relationTierIntensity,
 } from "@story-fm/domain";
-import { activeMentorings } from "../../common/players/mentoring";
-
-/**
- * **감독이 세운 사이** — 서 있는 멘토링만 (people.md §5-3).
- *
- * `characterId`는 선수의 경우 **이름**이므로(`personaFrom`) 우리 선수단에서 이름으로
- * 찾는다. 순서는 장부 순이라 세이브를 다시 열어도 같다.
- *
- * ⚠️ **날짜도 수치도 싣지 않는다** — 카드는 이력에 굳으므로(§6) 변하는 값이 들어가면
- * 3주 전 카드가 오늘의 사실인 척한다. 며칠째인가는 사실 카드가 매 턴 새로 낸다.
- */
-export function mentoringRelations(state: GameState, characterId: string): PersonaRelation[] {
-  const self = playersOf(state, state.userTeamId).find((p) => p.name === characterId);
-  if (!self) return [];
-
-  const relations: PersonaRelation[] = [];
-  for (const pair of activeMentorings(state)) {
-    const bond = pair.mentorId === self.id ? "mentor" : pair.menteeId === self.id ? "mentee" : null;
-    if (bond === null) continue;
-    const other = playerById(state, bond === "mentor" ? pair.menteeId : pair.mentorId);
-    if (!other) continue;
-    /**
-     * `stance`는 등급이 아니라 **감독이 그렇게 정했다**는 사실이 정한다 — 그것이 이
-     * 줄의 근거다. 등급은 결이 설 때만 얹혀 「붙여 준 사이인데 틀어졌다」가 카드에
-     * 설 수 있게 한다.
-     */
-    const tier = relationTierOf(state, self.id, other.id);
-    relations.push({
-      characterId: other.name,
-      name: other.name,
-      stance: "aligned",
-      ...(stanceOfTier(tier) === null ? {} : { tier }),
-      bond,
-    });
-  }
-  return relations;
-}
 
 /** 장부의 줄이 없으면 중립(cordial)이다. */
 export function relationTierOf(state: GameState, a: string, b: string): RelationTier {

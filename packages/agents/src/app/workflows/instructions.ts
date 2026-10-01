@@ -55,7 +55,6 @@ type Reading = { points: Point[]; sheet: SheetLine[] };
 const CLEAR_LISTS: Readonly<Record<string, string>> = {
   sign_youth: "playerIds",
   set_development_focus: "playerIds",
-  set_mentor: "menteeIds",
 };
 
 export function instructionCommands(
@@ -83,7 +82,7 @@ export function instructionCommands(
         required: [...new Set([...(inputSchema.required ?? []), field])],
       };
     }
-    if (name === "set_development_focus" || name === "set_mentor") {
+    if (name === "set_development_focus") {
       inputSchema = {
         ...inputSchema,
         properties: {
@@ -163,8 +162,6 @@ export function instructionCandidates(
         "playerId",
         "playerIds",
         "players",
-        "mentorId",
-        "menteeIds",
         "in",
         "out",
         "vice",
@@ -242,7 +239,7 @@ export function applyInstructionBatch(
           if (field && !Array.isArray(input[field])) {
             return { ok: false, message: "대상 목록 또는 명시적인 전체 해제가 필요합니다" };
           }
-          if (field && (spec.name === "set_development_focus" || spec.name === "set_mentor")) {
+          if (field && spec.name === "set_development_focus") {
             const selected = input[field];
             const mode = input.listMode;
             if (
@@ -254,12 +251,7 @@ export function applyInstructionBatch(
             ) {
               return { ok: false, message: "목록을 바꾸는 방식과 대상을 확인해 주세요" };
             }
-            const current =
-              spec.name === "set_development_focus"
-                ? draft.developmentFocus
-                : draft.mentoring
-                    .filter((pair) => pair.mentorId === input.mentorId && pair.until === undefined)
-                    .map((pair) => pair.menteeId);
+            const current = draft.developmentFocus;
             if (mode === "clear") input[field] = [];
             else if (mode === "add") input[field] = [...new Set([...current, ...selected])];
             else if (mode === "remove")

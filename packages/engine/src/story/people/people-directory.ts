@@ -8,7 +8,7 @@ import {
   isDeeperThan,
   type CharacterInjection,
 } from "@story-fm/domain";
-import { mentoringRelations, tierRelations, RELATION_CARD_LIMIT } from "./relations";
+import { tierRelations, RELATION_CARD_LIMIT } from "./relations";
 import {
   headCoachOf,
   ownerOf,
@@ -48,24 +48,20 @@ export function characterEntryOf(
 }
 
 /**
- * 인물지에 관계를 붙인다 — **`full` 깊이에만** (people.md §6 · §5-3).
+ * 인물지에 관계를 붙인다 — **`full` 깊이에만** (people.md §6).
  *
  * `characterEntry`가 아니라 여기서 붙이는 이유는 관계가 세이브의 다른 사람을 봐야
  * 나오기 때문이다 — 순수 함수인 그쪽은 상대가 누구인지 모른다. 비면 필드 자체를
  * 두지 않는다: 가운데 둘뿐인 사이는 카드에 서지 않는다.
  *
- * 세 벌이 이어 붙되 **한 상대에 한 줄이고, 먼저 온 줄이 자리를 지킨다.** 근거가
- * 풍부한 순서다: 원형 축을 든 저장 페르소나끼리 → 감독이 세운 멘토링 → 등급만 든
- * 나머지(감독과의 사이 · 우리 선수). 같은 쌍이 두 벌에 걸리면 축이나 `bond`를 든
- * 앞줄이 남고, 등급은 어느 줄이든 같은 장부에서 나오므로 갈리지 않는다.
+ * 두 벌이 이어 붙되 **한 상대에 한 줄이고, 먼저 온 줄이 자리를 지킨다.** 근거가
+ * 풍부한 순서다: 원형 축을 든 저장 페르소나끼리 → 등급만 든 나머지(감독과의 사이 ·
+ * 우리 선수). 같은 쌍이 두 벌에 걸리면 축을 든 앞줄이 남고, 등급은 어느 줄이든 같은 장부에서 나오므로 갈리지 않는다.
  */
 function withRelations(state: GameState, entry: CharacterEntry): CharacterEntry {
   if (entry.depth !== "full") return entry;
   const rows = new Map<string, PersonaRelation>();
-  for (const relation of [
-    ...mentoringRelations(state, entry.characterId),
-    ...tierRelations(state, entry.characterId),
-  ]) {
+  for (const relation of [...tierRelations(state, entry.characterId)]) {
     if (!rows.has(relation.characterId)) rows.set(relation.characterId, relation);
   }
   const relations = [...rows.values()].slice(0, RELATION_CARD_LIMIT);

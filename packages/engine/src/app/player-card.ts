@@ -21,6 +21,7 @@ import {
   fatigueBand,
   observedFit,
   observedOverall,
+  type GrowthOutlook,
 } from "@story-fm/domain";
 import {
   type RecentRatingView,
@@ -39,7 +40,7 @@ import {
   observedRating,
   KNOWLEDGE_KO,
   observationMargin,
-  potentialBand,
+  growthOutlook,
 } from "../common/players/observation";
 import { type MoodRead } from "../story/players/mood";
 import { moodOf } from "./workflows/story/players/mood";
@@ -186,8 +187,8 @@ export interface PlayerCardView {
   overall: number;
   /** 16축 — 축마다의 관측값과 오차폭 */
   attributes: PlayerCardAxisView[];
-  /** 잠재력 **추정 구간** — 짐작할 근거가 없으면 null (player.md §9.1) */
-  potential: { low: number; high: number; margin: number; confidence: string } | null;
+  /** 성장 가능성 — 판단 보류면 null (player.md §9.1) */
+  growth: GrowthOutlook | null;
 
   /** 주급·계약 만료일은 흐리지 않는다 — 공개 기록 계열이다 (player.md §10) */
   weeklyWage: number | null;
@@ -266,7 +267,7 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
       value: observed[key],
       margin: observationMargin(state, p.id, key),
     })),
-    potential: potentialBand(state, p),
+    growth: growthOutlook(state, p),
     weeklyWage: contract?.weeklyWage ?? null,
     contractUntil: contract?.until ?? null,
     injury: injury

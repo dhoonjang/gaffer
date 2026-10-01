@@ -15,7 +15,6 @@ import {
   InjurySchema,
   ManagerSchema,
   MatchRecordSchema,
-  MentoringSchema,
   OpeningSchema,
   NarrativeNoteSchema,
   PersonaSchema,
@@ -28,7 +27,6 @@ import {
   MediaFactSchema,
   SeasonPredictionSchema,
   RelationSchema,
-  ReserveTrainingPolicySchema,
   RetiredPlayerSchema,
   YouthCandidateSchema,
   CallUpSchema,
@@ -122,7 +120,6 @@ export const GameTablesSchema = z.object({
   playerTraining: z.array(PlayerTrainingSchema),
   trainingReports: z.array(TrainingReportSchema),
   developmentFocus: z.array(z.string()),
-  mentoring: z.array(MentoringSchema),
   roleMemory: z.array(RoleMemorySchema),
   pressConferences: z.array(PressConferenceSchema),
   approaches: z.array(ApproachSchema),
@@ -148,7 +145,6 @@ export const GameTablesSchema = z.object({
   /** 이력 압축의 자국 — 없으면 아직 한 번도 접지 않았다 (agents.md §5-1) */
   historyDigest: HistoryDigestSchema.optional(),
   /** 2군 훈련 방침 — 없으면 감독이 고르지 않은 것이고 `balanced`로 읽는다 */
-  reserveTraining: ReserveTrainingPolicySchema.optional(),
 });
 
 export type GameTables = z.infer<typeof GameTablesSchema>;

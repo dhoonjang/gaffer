@@ -21,19 +21,11 @@ import { type GameState, type ChatTurn, isPeaceTurn, type ScenePoint } from "@st
  * 블록은 영어 태그로 싼다 (prompts.md §5) — 읽는 것(꺾쇠)과 쓰는 것(@ 줄)이 갈린다.
  */
 /**
- * 관계 한 줄 — 근거가 있으면 함께 적는다.
- *
- * **감독이 붙여 준 사이**(멘토링 — people.md §5-3)에는 원형 축이 없다: 그 자리에
- * 섰다는 사실 하나가 근거다. **원형에서 시작한 사이**는 먼저 보는 것을 함께 든다.
- * 어느 쪽이든 앞에 서는 것은 지금의 등급이고, 등급이 빠지는 것은 가운데 둘
+ * 관계 한 줄 — 앞에 서는 것은 지금의 등급이고, 등급이 빠지는 것은 가운데 둘
  * (`distant`·`cordial`)일 때다 — 결이 서지 않는 사이는 카드에 등급을 세우지 않는다.
  */
 function relationLine(r: PersonaRelation): string {
   const grade = r.tier ? RELATION_TIER_KO[r.tier] : null;
-  if (r.bond) {
-    const seat = r.bond === "mentor" ? "멘토" : "멘티";
-    return `관계: ${r.name} — 감독이 붙여 준 사이 (내가 ${seat})${grade ? ` · ${grade}` : ""}`;
-  }
   return `관계: ${r.name} — ${grade ?? (r.stance === "aligned" ? "결이 맞는다" : "결이 부딪힌다")}`;
 }
 

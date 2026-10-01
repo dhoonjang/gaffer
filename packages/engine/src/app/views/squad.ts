@@ -33,6 +33,7 @@ import {
   seasonRating,
   SET_PIECE_ROUTINE_KEYS,
   setPieceRoutineLevel,
+  type GrowthOutlook,
 } from "@story-fm/domain";
 import {
   type Observation,
@@ -218,11 +219,8 @@ export interface SquadViewRowMeta {
   weight: number | null;
   /** 등록 명단을 차지하는가 (만 21세 초과). U21은 명단 밖이라 언제든 뛴다 */
   occupiesList: boolean;
-  /**
-   * 잠재력 **추정 구간** — 참값은 노출하지 않는다. 우리 선수도 단정할 수 없고
-   * (출전이 쌓이면 좁아진다), 근거가 없으면 null이다 (observation.ts §잠재력).
-   */
-  potential: { low: number; high: number; margin: number; confidence: string } | null;
+  /** 성장 가능성 — 코어가 매긴 단계. 판단 보류면 null (player.md §9.1) */
+  growth: GrowthOutlook | null;
   squadLevel: "first" | "reserve";
   /**
    * **지금 클럽을 떠나 있는가** — A매치 소집이거나 여름 대회에서 아직 안 돌아왔다
@@ -565,7 +563,7 @@ export type SquadView = {
    * **여름의 유스 후보** — 아직 계약하지 않은 사람들이라 명단 행이 아니라 제 구획을
    * 갖는다 (season.md §6). 소집일이 지나면 null이다.
    *
-   * ⚠️ 종합도 잠재력도 **관측값**이다 (`youthCandidateFog` — player.md §9). 화면이
+   * ⚠️ 종합도 성장 가능성도 **관측값**이다 (`youthCandidateFog` — player.md §9). 화면이
    * 참값을 그리면 안개가 뚫린다.
    */
   youthIntake: YouthIntakeView | null;
@@ -809,7 +807,7 @@ export function buildSquadView(state: GameState): SquadView {
         slotOverall: slotValue !== null && slotValue !== shownOverall ? slotValue : null,
         // 오피스는 우리 선수의 숫자를 그대로 보여준다 (player.md §10).
         ...observed,
-        potential: facts.potential,
+        growth: facts.growth,
         homegrown: isHomegrownFor(p, userTeamId),
         nationality: p.nationality ?? null,
         secondNationality: p.secondNationality ?? null,

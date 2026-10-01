@@ -125,7 +125,7 @@ export function PlayerDetail({
         <span>
           성장 가능성{" "}
           <b>
-            <GrowthOutlook overall={p.overall} potential={p.potential} />
+            <GrowthOutlook growth={p.growth} />
           </b>
         </span>
         {/* 체력은 여기 두지 않는다 — 바로 위 명단 행에 바가 있고, 왜 그런지는

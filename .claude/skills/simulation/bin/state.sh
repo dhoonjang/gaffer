@@ -38,7 +38,7 @@ case "$WHAT" in
     echo "--- 우리 온필드"; jq -r '.views.match | (.onPitch.home + .onPitch.away)[] | select(.ours) | "\(.position)\t\(.name)\t\(.id)\t체력\(.condition.value)\(if .gassed then " 지침!" else "" end)\t경고\(.tally.yellows)\(if .tally.red then " 퇴장" else "" end)\tG\(.tally.goals) A\(.tally.assists)"' "$S"
     echo "--- 우리 벤치"; jq -r '.views.match | (.bench.home + .bench.away)[] | select(.ours) | "\(.position)\t\(.name)\t\(.id)\t체력\(.condition.value)"' "$S"
     echo "--- 전술 포인트"; jq -r '.views.match.points[] | "· \(.text)"' "$S" 2>/dev/null ;;
-  youth) jq -r '.views.squad.youthIntake | if . == null then "후보 없음" else ("마감 " + .deadline), (.candidates[] | "\(.name)\t\(.age)세\t\(.position)\t종합\(.overall)\t잠재\(.potential.low)-\(.potential.high)\t£\(.weeklyWage)×\(.years)년\t\(.id)\(if .autoSign then "\t(방치 시 자동 계약)" else "" end)") end' "$S" ;;
+  youth) jq -r '.views.squad.youthIntake | if . == null then "후보 없음" else ("마감 " + .deadline), (.candidates[] | "\(.name)\t\(.age)세\t\(.position)\t종합\(.overall)\t성장 \(.growth.label)\t£\(.weeklyWage)×\(.years)년\t\(.id)\(if .autoSign then "\t(방치 시 자동 계약)" else "" end)") end' "$S" ;;
   registration) jq '.views.squad.registration' "$S" ;;
   reputation) jq '.views.squad.manager | {reputation, attributes}' "$S" ;;
   chat) jq -r ".chat[-${2:-4}:][] | \"[\\(.at) \\(.role)] \\(.text|.[0:400]|gsub(\"\\n\";\" \"))\" + (if .toolCalls then \"\\n    \" + (.toolCalls|map(\"· \"+.name+\": \"+.summary)|join(\"\\n    \")) else \"\" end)" "$S" ;;
