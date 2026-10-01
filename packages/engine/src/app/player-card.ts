@@ -1,6 +1,5 @@
 import {
   type AttributeAxis,
-  type FatigueBand,
   type SquadStatus,
   type PromiseKind,
   type Foot,
@@ -16,9 +15,7 @@ import {
   type GamePlayer,
   rolesFor,
   defaultRoleOf,
-  fatigueLabel,
   fatigueOf,
-  fatigueBand,
   observedFit,
   observedOverall,
   type GrowthOutlook,
@@ -105,8 +102,8 @@ export interface PlayerCardOursView {
    * 견주는 것만으로 안개가 걷힌다.
    */
   condition: ConditionRead;
-  fatigueLabel: string;
-  fatigueBand: FatigueBand;
+  /** 누적 피로 0~100 정수 — 체력 막대의 색이다 (player.md §5.5) */
+  fatigue: number;
   mood: MoodRead;
   /**
    * 계약에 적힌 지위 — **계약 정보의 한 칸**이다 (people.md §5-2). 카드는 주급·만료
@@ -341,8 +338,7 @@ export function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView 
     formTone: formTone(p.state.form),
     recentRatings: recentRatingsOf(state, p.id),
     condition: conditionShown(state, p.id, p.state.condition, liveWearOf(state, p.id)),
-    fatigueLabel: fatigueLabel(fatigueOf(p.state)),
-    fatigueBand: fatigueBand(fatigueOf(p.state)),
+    fatigue: Math.round(fatigueOf(p.state)),
     mood: moodOf(state, p),
     squadStatus: squadStatusOf(state, p),
     promises: openPromises(state, p.id).map((x) => ({ kind: x.kind, dueOn: x.dueOn })),

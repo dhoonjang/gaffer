@@ -3,7 +3,6 @@ import {
   type MilestoneCode,
   type AxisValues,
   type Foot,
-  type FatigueBand,
   type InjuryHistory,
   type BoardPoint,
   type SquadStatus,
@@ -26,9 +25,7 @@ import {
   competitionRowsOf,
   capsOf,
   internationalGoalsOf,
-  fatigueLabel,
   fatigueOf,
-  fatigueBand,
   defaultRoleOf,
   seasonRating,
   SET_PIECE_ROUTINE_KEYS,
@@ -275,15 +272,11 @@ export interface SquadViewRowMeta {
    */
   condition: ConditionRead;
   /**
-   * **누적 피로의 말** — "가뿐"·"쌓임"·"지침"·"과부하" (player.md §5.5).
-   *
-   * 체력 막대와 다른 축이다: 저건 오늘 아침의 예산이고 이건 시즌이 쌓아 둔 잔고라,
-   * 경기 다음 날 바닥인 선수와 12월까지 쉬지 못한 선수가 여기서 갈린다. **숫자는
-   * 싣지 않는다** — 감독이 관측하는 것은 출전 기록과 일정이다.
+   * **누적 피로** 0~100 정수 (player.md §5.5) — 체력 막대의 색이다. 체력이 오늘 아침의
+   * 예산이면 이건 시즌이 쌓아 둔 잔고라, 경기 다음 날 바닥인 선수와 12월까지 쉬지
+   * 못한 선수가 막대 색에서 갈린다.
    */
-  fatigueLabel: string;
-  /** 등급 자체 — 화면이 색과 정렬을 이 경계로 맞춘다 */
-  fatigueBand: FatigueBand;
+  fatigue: number;
   /**
    * **부상 이력** (player.md §5.3) — 2시즌 창 안의 건수·결장 일수·최근 부상.
    *
@@ -830,8 +823,7 @@ export function buildSquadView(state: GameState): SquadView {
           p.state.condition,
           liveSlot && liveMatchId ? { drain: worn[p.id] ?? 0, matchId: liveMatchId } : null,
         ),
-        fatigueLabel: fatigueLabel(fatigueOf(p.state)),
-        fatigueBand: fatigueBand(fatigueOf(p.state)),
+        fatigue: Math.round(fatigueOf(p.state)),
         injuryHistory: injuryHistoryOf(state, p.id),
         mood: moodOf(state, p),
         role: (liveMatchId
