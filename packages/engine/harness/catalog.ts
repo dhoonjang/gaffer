@@ -66,7 +66,6 @@ export const WORLD_SEASON = defineHarness({
     { metric: "감독 팀 순위", role: "measure", unit: "score", why: "지시하지 않는 감독의 성적 — 목표값을 두지 않는다" },
     { metric: "감독 팀 승점", role: "measure", unit: "score", why: "지시하지 않는 감독의 성적 — 목표값을 두지 않는다" },
     { metric: "리그 경기 수", role: "measure", unit: "count", why: "시즌을 끝까지 돌았는지 — 380이어야 한다" },
-    { metric: "상대 감독이 말하는 경기 비율", role: "reference", min: 0.18, max: 0.5, unit: "ratio", why: "감독의 리그 경기 중 반대편 벤치가 마이크 앞에 서는 몫 — 원형별 확률 0.20~0.45에 더비 가산(+0.25)이 얹힌 실측 (people.md §4). 38경기라 시드마다 ±7%p가 잡음이다. **위쪽 승점·득점 밴드와 함께 읽는다**: 설전이 리그 분포를 미는 힘은 이 횟수 × 한 번의 폭(`RIVAL_BAND` 6 = 상대 폼 0.139)이고, 폭의 상한은 `press.test.ts`가 지킨다" },
   ],
 });
 
@@ -408,23 +407,6 @@ export const AI_MARKET = defineHarness({
   ],
 });
 
-export const MANAGER_MARKET = defineHarness({
-  id: "manager-market",
-  what: "한 시즌에 감독을 바꾸는 1부 구단 수 · 그 자리를 무직 감독 풀이 채운 비중 · 재직 감독에게 온 접근",
-  doc: "docs/negotiation/transfer.md §7 · career.md §5.1",
-  cost: "전체 세계 한 시즌 · 수 분",
-  // prettier-ignore
-  bands: [
-    { metric: "경질 구단 수", role: "guard", min: 5, unit: "count", why: "`SACK_CHANCE`와 문턱이 만든 빈도가 사람 사는 범위인가" },
-    { metric: "경질 구단 비중", role: "guard", max: 0.5, unit: "ratio", why: "리그가 통째로 뒤집히지는 않는다" },
-    { metric: "풀 인원", role: "guard", max: 40, unit: "count", why: "`MANAGER_POOL_MAX` — 상한이 실제로 지켜지는가 (세이브가 무한히 자라지 않는다)" },
-    { metric: "풀에서 다시 선 감독 수", role: "measure", unit: "count", why: "아는 얼굴이 한 시즌에 몇 벤치에 서는가 — 비중이 감추는 절대량" },
-    { metric: "풀 재선임 비중", role: "guard", min: 0.15, max: 0.85, unit: "ratio", why: "0이면 감독 시장이 없는 것과 같고, 1이면 세계에 새 사람이 나지 않는다" },
-    { metric: "재직 감독에게 온 접근", role: "guard", max: 2, unit: "count", why: "career.md §5.1 — 한 시즌에 여러 번 오면 자리를 옮기는 일이 사건이 아니라 일상이 된다" },
-    { metric: "시즌말 감독 평판", role: "measure", unit: "score", why: "접근 건수를 읽을 자 — `(보드+미디어)/2`가 등급 문턱(tier 3은 50)을 넘는가가 그 문을 연다" },
-  ],
-});
-
 export const SQUAD_LONGEVITY = defineHarness({
   id: "squad-longevity",
   what: "15시즌을 넘긴 뒤에도 구단이 선발 XI·계약을 세우는가 · 리그 체급의 드리프트",
@@ -446,7 +428,7 @@ export const SQUAD_LONGEVITY = defineHarness({
     { metric: "시즌당 종합 드리프트", role: "measure", unit: "score", why: "성장과 노화의 수지 — 한 시즌에 리그 체급이 얼마나 움직이는가" },
     { metric: "리그 1군 상위 15 잠재력 — 시작", role: "measure", unit: "score", why: "체급의 천장 — 종합과 함께 읽어야 드리프트의 원인이 갈린다" },
     { metric: "리그 1군 상위 15 잠재력 — 15시즌 뒤", role: "measure", unit: "score", why: "같은 자로 잰 도착선" },
-    { metric: "시즌당 잠재력 드리프트", role: "guard", min: -0.1, max: 0.1, unit: "score", why: "**천장 자체가 움직였는가.** 세계는 닫혀 있어 여름마다 들어오는 사람의 천장이 곧 다음 세대 리그의 천장이므로(season.md §6), 이 줄이 0에서 멀어지면 리그가 세대마다 다른 게임이 된다 — 인테이크가 제 공식을 쥐고 있던 동안 −0.45였고, 열다섯 시즌에 체급이 6.7 내려앉았다. 폭이 ±0.1인 것은 열다섯 시즌에 1.5, 곧 **한 눈금 반**이 감독이 알아채지 못할 최대이기 때문이다. 종합 쪽은 성장 곡선(`youth-development`)과 함께 움직이므로 여기서 판정하지 않는다" },
+    { metric: "시즌당 잠재력 드리프트", role: "measure", unit: "score", why: "GM 은퇴 결정 없이 성장·노화·인테이크만 진행한 세계의 잠재력 변화" },
     { metric: "후보가 서지 않은 여름", role: "guard", max: 0, unit: "count", why: "인테이크는 후보가 서야 사건이다 (season.md §6) — 한 여름이라도 비면 그해 감독에게는 고를 것이 없고, 코어가 채우는 기본값마저 서지 않는다" },
     { metric: "우리 인테이크 후보 — 여름 평균", role: "measure", unit: "count", why: "감독 앞에 선 후보 수 — 코어가 채울 수 위에 체급·아카데미 활용도가 얹은 여지" },
     { metric: "우리 인테이크 계약 — 여름 평균", role: "measure", unit: "count", why: "그중 실제로 계약한 수. 이 하네스는 답하지 않는 감독이라 곧 **기본값**이고, 위 줄과의 차가 감독이 고를 수 있었던 폭이다" },
@@ -462,7 +444,7 @@ export const SQUAD_LONGEVITY = defineHarness({
  */
 export const YOUTH_DEVELOPMENT = defineHarness({
   id: "youth-development",
-  what: "2군 경기 수 · 출전·집중 육성·멘토링·임대가 가르는 성장 격차",
+  what: "2군 경기 수 · 출전·집중 육성·임대가 가르는 성장 격차",
   doc: "docs/common/season.md §2",
   cost: "세계 하나 · 한 시즌 완주 · 수 분",
   // prettier-ignore
@@ -470,7 +452,6 @@ export const YOUTH_DEVELOPMENT = defineHarness({
     { metric: "동일 곡선 축 빈도 최대비", role: "reference", max: 1.3, why: "8000시드에서 같은 노화 곡선 축의 선택 빈도" },
     { metric: "개인 결정력 훈련 선택비", role: "reference", min: 1.5, why: "3000시드 겨냥/기본 선택 횟수" },
     { metric: "개인 훈련 나머지 필드 선택비", role: "reference", max: 1, why: "겨냥한 만큼 나머지 축에서 걷는다" },
-    { metric: "멘토 정신축 선택비", role: "reference", min: 1, why: "1500시드 멘토/기본 정신축 선택 횟수" },
     { metric: "19세 축당 시즌 기대", role: "reference", min: 2, max: 3, why: "여유가 찬 유망주의 기본 성장 눈금" },
     { metric: "18세 집중육성 시즌 기대", role: "reference", min: 3.5, max: 5, why: "출전과 집중육성 최대 배율" },
     { metric: "기본 훈련 축 빈도비", role: "reference", max: 3, why: "시즌 달력의 훈련 축 최대/최소 빈도" },
@@ -490,15 +471,6 @@ export const YOUTH_DEVELOPMENT = defineHarness({
     { metric: "기량 창 밖의 임대", role: "measure", unit: "count", why: "창이 열린 구단이 없어 가장 약한 구단으로 보낸 아이 — 한 경기도 못 뛰어야 하고, 그때 켜지는 경보가 곧 리콜 판단이다. 재려는 값이지 지키려는 값이 아니다" },
     { metric: "창 안 임대 중 경보 전에 뛴 몫", role: "guard", min: 0.5, unit: "ratio", why: "창 안의 임대 중 그 구단 경기에서 **가장 긴 연속 미출전**이 `LOAN_BENCH_RUN_ALERT`(4) 미만인 몫 — 리콜 근거 `no-minutes`가 배경음인지 사건인지를 가른다. 연속 미출전 상한(`LOAN_REST_LIMIT` 3)이 경보 문턱보다 한 칸 앞이라 자리가 있는 임대는 경보가 켜지기 전에 뛴다. **1.0을 요구하지 않는다**: 부상·정지·로테이션으로 그 주의 가장 약한 선발이 창 밖으로 올라가면 자리가 잠시 닫히고 경보가 켜진다 — 그것은 사건이고 리포트가 그렇게 읽는다. 0이면 상한이 세계에 닿지 않은 것이다" },
     { metric: "임대 격차", role: "reference", unit: "score", why: "임대 − 타 팀 기준선. ⚠️ **밴드를 두지 않는다 — 눈금 아래의 값이다.** 한 시즌 U21의 종합 상승이 0.2인데 임대 배율이 1.2~1.3이라 격차의 참값은 0.05 안쪽이고, 종합은 정수라 한 사람의 잡음이 0.45다(표본 다섯이면 부호가 동전이다). 배율 자체가 사는지는 `growth-curve` 단위 테스트가 같은 시드·같은 난수열에서 지키고, **세계가 그 배율에 곱할 분을 주는가**는 위의 `임대처 평균 출전`이 지킨다" },
-    { metric: "멘토 자격자", role: "guard", min: 1, unit: "count", why: "우리 1군에서 `mentorBlock`을 통과하는 사람 수 — 서른 넘고 리더십 `MENTOR_LEADERSHIP_MIN` 이상. **0이면 손잡이가 세계에 존재하지 않는다**: 리더십 축은 꼭대기가 70대 중반이라(people.md §5-3) 하한을 몇 칸만 올려도 자격자가 사라진다. 이 줄이 그 선을 지킨다" },
-    { metric: "멘토링 표본", role: "guard", min: 2, unit: "count", why: "시즌 끝까지 사이가 서 있던 우리 2군 U21 — 자격자 하나가 `MENTEES_PER_MENTOR`(3)까지 데리므로 상한이 셋이다. 둘 아래면 아래 두 줄이 격차가 아니라 한 사람의 잡음이다" },
-    { metric: "멘토링 성장 로그", role: "guard", min: 1, unit: "count", why: "`origin === \"mentoring\"`인 성장 줄 수 — **배율이 실제로 곱해졌다는 결정적 증거다.** 격차가 잡음에 묻히는 표본에서도 이 줄은 0이거나 0이 아니다: 정리(`pruneMentoring`)가 사이를 조용히 닫아 버렸거나 축 가르기가 어긋나면 여기가 먼저 0이 된다" },
-    { metric: "멘토링 정신축 성장", role: "measure", unit: "score", why: "멘토가 붙은 우리 2군 U21의 **정신 6축 합** 상승. 종합이 아니라 축 합인 것은 멘토 항이 닿는 자리가 그 여섯뿐이어서다(season.md §2 멘토링) — 종합으로 읽으면 자리별 가중치가 그 몫을 반으로 접는다" },
-    { metric: "무지정 정신축 성장", role: "measure", unit: "score", why: "같은 층·같은 나이의 배율 없는 우리 2군 U21의 같은 값 — 위 줄의 짝이다" },
-    { metric: "멘토링 격차", role: "measure", unit: "score", why: "멘토링 − 무지정(정신축 합). ⚠️ **밴드를 두지 않는다 — 눈금 아래의 값이다.** 항이 1.05~1.25고 한 시즌 정신 6축 합의 상승이 열 몇 칸이라 참값은 두 칸 안쪽인데, 축마다 정수라 표본 셋의 표준오차가 그만큼이다(부호가 동전이다). 항이 사는지는 `growth-curve` 단위 테스트가 같은 시드·같은 난수열에서 지키고, **세계가 그 항을 실제로 곱하는가**는 위의 `멘토링 성장 로그`가 지킨다 — `임대 격차`와 같은 규약이다" },
-    { metric: "성실한 U21 표본", role: "guard", min: 20, unit: "count", why: "아래 줄의 분모 — 배율 없는 타 팀 2군 U21 중 `professionalism` ≥ 1.1. 표본이 줄면 격차가 아니라 잡음이다" },
-    { metric: "게으른 U21 표본", role: "guard", min: 20, unit: "count", why: "같은 줄의 반대쪽 — `professionalism` ≤ 0.95" },
-    { metric: "직업의식 격차", role: "reference", min: 0, unit: "score", why: "성실 − 게으름. 배율이 없는 표본이라 남는 차이는 원형뿐이다 — 0 이하면 계수가 세계에 닿지 않았다 (people.md §6)" },
     { metric: "아카데미 활용도", role: "guard", min: 0.3, max: 1, unit: "ratio", why: "그 시즌 우리 2군 출전 중 21세 이하의 몫 (season.md §6) — 다음 여름 인테이크의 수와 여지가 여기서 나온다. 하한은 '2군이 유망주의 자리로 돌아가고 있다'를 가르는 자리다: 그 아래면 2군이 늙은 백업의 대기실이라는 뜻이고, 그러면 아래 두 줄이 재는 것이 감독의 선택이 아니라 그 사실 하나가 된다" },
     { metric: "다음 여름 유스 후보", role: "guard", min: 3, unit: "count", why: "감독 앞에 선 후보 수 — 고를 것이 한둘이면 인테이크는 결정이 아니라 통보다" },
     { metric: "유스 후보 천장 — 평균", role: "reference", min: 82, max: 92, unit: "score", why: "후보의 `potential` 평균 — **인테이크의 무게 중심이다** (season.md §6). 우리 팀은 1등급이라 체급 기준선 `TIER_BASE[1]`(84)에 활용도 항이 얹힌 자리에 서야 한다. 밴드가 그보다 넓은 것은 후보 열몇의 평균이라 천장의 흩어짐(`YOUTH_CEILING_SPREAD`)이 그만큼 흔들기 때문이고, 평균 자체와 기준선의 차이는 youth-intake-tail의 체급 코호트가 잰다" },
@@ -546,38 +518,6 @@ export const YOUTH_INTAKE_TAIL = defineHarness({
     { metric: "시드 17~18세 종합 p99", role: "measure", unit: "score", why: "견주는 쪽 — 시드 클럽 명단의 열일곱~열여덟" },
     { metric: "17~18세 종합 최대", role: "measure", unit: "score", why: "그 여름 가장 완성돼 들어온 아이 — 분위가 가리는 한 사람" },
     { metric: "종합 ≥78 — 여름당", role: "guard", max: 7, unit: "count", why: "p99가 한 칸 눈금이라 놓치는 폭을 개수로 받는다 — 시드의 같은 나이는 열에 하나 비율(0.9%)이고, 인테이크가 그 두 배를 넘으면 그 여름 전체가 즉시 전력이 된다" },
-  ],
-});
-
-/**
- * 2군 강등이 낳는 불만 — **문턱이 로테이션과 방치를 가르는가** (`docs/story/people.md` §5).
- *
- * 상수 하나(21일)가 두 가지 플레이를 동시에 정한다: 짧으면 선수를 잠깐 내렸다
- * 올리는 로테이션이 곧 반란이 되고, 길면 강등이 지금처럼 **비용 0인 손잡이**로
- * 남는다. 어느 쪽인지는 한 시즌을 굴려 봐야 보인다 — 코드를 읽어서는 알 수 없고,
- * 고정 기댓값이 있는 단위 테스트로도 잡히지 않는다.
- *
- * 문턱에 원형의 `patience`가 곱해진 뒤로(people.md §6) 날짜 자체는 사람마다 다르다 —
- * 그래서 밴드는 날짜가 아니라 **제 문턱을 넘고 밀린 날**을 쥔다.
- */
-export const DEMOTION_GRIEVANCE = defineHarness({
-  id: "demotion-grievance",
-  what: "한 시즌 2군 강등이 낳는 불만 — 로테이션은 공짜고 방치는 값을 치르는가",
-  doc: "docs/story/people.md §5",
-  cost: "축소 세계 한 시즌 · 약 10초",
-  // prettier-ignore
-  bands: [
-    { metric: "로테이션 강등 횟수", role: "measure", unit: "count", why: "아래 두 줄의 표본 — 0이면 로테이션을 재지 못한 것이다" },
-    { metric: "로테이션 복귀 실패", role: "guard", max: 0, unit: "count", why: "올리지 못한 선수는 방치와 구분되지 않는다 — 실패가 있으면 아래 줄이 로테이션을 재는 것이 아니다" },
-    { metric: "로테이션 자원에 걸린 불만", role: "guard", max: 0, unit: "count", why: "열흘 안에 되돌리는 감독은 대가를 치르지 않는다 — 여기가 1이면 로테이션이 곧 반란이다" },
-    { metric: "방치한 핵심 자원", role: "guard", min: 3, max: 3, unit: "count", why: "아래 줄의 분모 — 스쿼드 하한에 걸려 덜 내려갔으면 밴드가 공허하다" },
-    { metric: "방치 끝에 불만이 걸린 수", role: "guard", min: 3, max: 3, unit: "count", why: "한 시즌을 그대로 두고도 조용하면 강등은 여전히 비용 0인 손잡이다" },
-    { metric: "첫 방치 불만까지 걸린 날", role: "measure", unit: "count", why: "가장 먼저 문을 두드린 사람이 며칠을 참았나 — 문턱이 사람마다 다르므로(people.md §6) 밴드는 아래 두 줄이 쥔다" },
-    { metric: "방치 자원의 문턱 폭", role: "reference", min: 1, unit: "count", why: "방치한 셋의 문턱 최대−최소. 0이면 셋이 같은 원형이거나 계수가 닿지 않은 것이다" },
-    { metric: "제 문턱을 넘고 밀린 날", role: "guard", min: 0, max: 6, unit: "count", why: "**그 사람의** 문턱을 넘은 뒤 실제로 걸리기까지. 판정이 주에 한 번이라 최대 엿새이고, 음수면 문턱을 안 지키고 걸린 것이다" },
-    { metric: "시즌 강등발 불만 건수", role: "measure", unit: "count", why: "감독 하나가 한 시즌에 몇 번 이 자리를 만나는가" },
-    { metric: "시즌 출전 불만 건수", role: "measure", unit: "count", why: "지위 대비 출전이 낳는 불만 (people.md §5). 강등 밴드의 분모를 흔드는 것이 이 줄이다 — 먼저 걸린 `minutes` 불만은 같은 선수의 `demotion` 불만을 막는다" },
-    { metric: "시즌 약속 파기 건수", role: "measure", unit: "count", why: "아무 약속도 하지 않는 감독에게는 0이어야 한다 (people.md §5-2)" },
   ],
 });
 
@@ -806,11 +746,9 @@ export const HARNESSES: readonly Harness[] = [
   AI_FITNESS,
   AI_BENCH,
   AI_MARKET,
-  MANAGER_MARKET,
   SQUAD_LONGEVITY,
   YOUTH_DEVELOPMENT,
   YOUTH_INTAKE_TAIL,
-  DEMOTION_GRIEVANCE,
   OVERALL_SCALE,
   ATTRIBUTE_MODEL,
   HISTORY_WINDOW,

@@ -19,7 +19,7 @@ import {
   type TrainingMark,
   TRAINING_MARKS,
 } from "@story-fm/domain";
-import { mentorFactorFor } from "./mentoring";
+import { mentorPairOf } from "../../common/players/mentoring";
 import { turnFactLines } from "../../common/core/turn-facts";
 import { SESSIONS_PER_WEEK } from "./training-plan";
 
@@ -81,12 +81,10 @@ export function buildTrainingBrief(
     // 개인 훈련 축은 팀 세션에 없어도 그 선수의 허용 축이다 — 판정자에게도 알린다
     const personal = attributeAxisOf(program?.axis);
     if (personal) axes.add(personal);
-    const mentor = mentorFactorFor(state, player.id);
+    const pair = mentorPairOf(state, player.id);
+    const mentor = pair ? state.players.find((p) => p.id === pair.mentorId) : undefined;
     subjects.push({
-      // 배율은 소수 둘째 자리까지 — 사실이되 판정자가 읽을 눈금이다
-      mentor: mentor
-        ? { name: mentor.mentor.name, boost: Math.round(mentor.boost * 100) / 100 }
-        : null,
+      mentor: mentor ? { playerId: mentor.id, name: mentor.name } : null,
       program: program
         ? {
             ...(program.axis ? { axis: program.axis } : {}),
@@ -277,13 +275,8 @@ export interface TrainingSubject {
    * 가져갈 수 있다 (`allowedAxesFor`).
    */
   program: { axis?: string; position?: string } | null;
-  /**
-   * 감독이 이 선수에게 붙여 준 **멘토** (없으면 null · people.md §5-3).
-   *
-   * `boost`는 그 선수의 **정신 6축 상승에만** 곱해지는 배율이다 — 어느 축이
-   * 그 문을 지나는지는 코어가 가르므로(`mentorAxisBoost`) 판정자는 사실만 읽는다.
-   */
-  mentor: { name: string; boost: number } | null;
+  /** 함께 훈련하도록 배정한 선수. 자동 성장 배수는 없다. */
+  mentor: { playerId: string; name: string } | null;
 }
 
 /** 한 구간의 훈련 결산 브리프 — LLM 입력의 원본 */

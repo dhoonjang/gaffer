@@ -7,7 +7,6 @@ import {
   ageOf,
 } from "@story-fm/domain";
 import { attributeGainScale, attributeDeclineScale } from "../world/attributes";
-import { archetypeTraitsOf } from "../people/player-persona";
 
 /**
  * 능력치가 한 번에 움직이는 폭 — **−1 ~ +1**.
@@ -89,17 +88,9 @@ export function applyAttributeStep(
    * 판정 한 번에 한 칸씩 오른다.
    */
   const age = ageOf(player.birthdate, state.date);
-  /**
-   * 사람됨도 한 항이다 — 원형의 `professionalism`이 **상승에만** 곱해진다
-   * (people.md §6 · player.md §6.2). 훈련 결산과 경기 결산이 같은 함수를 지나므로
-   * 두 경로가 같은 계수를 읽는다. ⚠️ 하락에 곱하면 성실한 선수가 천천히 늙어
-   * 직업의식이 나이를 되돌리는 축이 된다.
-   */
   const scale =
     move > 0
-      ? attributeGainScale(axis, value, player.attributes.potential, age) *
-        (opts.factor ?? 1) *
-        archetypeTraitsOf(state.seed, player).professionalism
+      ? attributeGainScale(axis, value, player.attributes.potential, age) * (opts.factor ?? 1)
       : attributeDeclineScale(axis, age);
   if (scale <= 0) return null;
 

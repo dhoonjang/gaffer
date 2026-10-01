@@ -2,7 +2,7 @@ import type { MatchRecord, MatchStage, TickSink } from "@story-fm/domain";
 import { pushEvent } from "@story-fm/domain";
 import { sortEntries } from "../../common/core/calendar";
 import { pairOf } from "./extra-time";
-import { pushNarrative, type GameState } from "../../common/core/state";
+import { type GameState } from "../../common/core/state";
 
 /**
  * 녹아웃 대회의 **공통 골격** — 단계의 경기 목록·대진의 차전·감독 달력 등재·단계 결과 보고.
@@ -67,5 +67,4 @@ export function reportOurTie(state: GameState, tie: TieReport, digest: TickSink)
   // 통과·탈락은 추첨이 아니라 **경기가 낸 결과**다 — 그 패스가 추첨으로 잡혀 있어도
   // 이 줄만 경기로 선다 (season.md §5)
   pushEvent(digest, "matchday", what);
-  pushNarrative(state, what, 4);
 }

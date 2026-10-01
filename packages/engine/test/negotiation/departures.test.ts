@@ -3,11 +3,9 @@ import {
   MIN_SQUAD_AFTER_SALE,
   activeContract,
   addDays,
-  departureSquadMorale,
   groupOf,
   loanPlayer,
   loanedOut,
-  moraleToForm,
   playersOf,
   recallLoan,
   releasePlayer,
@@ -114,61 +112,6 @@ describe("일방 해지 — 전액을 물고 자리를 비운다", () => {
     const state = createTestGame(11);
     const theirs = playersOf(state, "chelsea").find((p) => p.teamId !== state.userTeamId)!;
     expect(releasePlayer(state, { playerId: theirs.id }).ok).toBe(false);
-  });
-});
-
-/**
- * 방출이 라커룸에 남기는 것 — **돈으로만 끝나지 않는다** (transfer.md §2).
- * 회견이 열리느냐와 사기가 움직이느냐가 **같은 문**을 지나므로, 한쪽만 움직이면
- * 조용히 어긋난다.
- */
-describe("방출의 여파 — 회견과 남은 선수단", () => {
-  /** 스쿼드에서 가장 좋은 선수 — 회견이 열리는 쪽 */
-  const core = (state: GameState) =>
-    [...userPlayers(state)].sort((a, b) => b.attributes.overall - a.attributes.overall)[0]!;
-
-  /** 남은 1군의 폼을 선수별로 — 순서에 기대지 않는다 */
-  const formsById = (state: GameState) =>
-    new Map(
-      userPlayers(state)
-        .filter((p) => p.squadLevel !== "reserve")
-        .map((p) => [p.id, p.state.form] as const),
-    );
-
-  it("핵심 자원이 나가면 회견이 열리고 남은 1군의 사기가 내려간다", () => {
-    const state = createTestGame(11);
-    const target = core(state);
-    const before = formsById(state);
-    // 리더 배수는 완장을 벗기기 전에만 읽을 수 있다 (people.md §5-1)
-    const expected = departureSquadMorale(state, target);
-
-    expect(releasePlayer(state, { playerId: target.id }).ok).toBe(true);
-
-    const press = state.pressConferences?.find((c) => c.status === "pending");
-    expect(press?.facts[0]?.kind).toBe("departure");
-    expect(press?.facts[0]?.about).toBe(target.id);
-    // 카드는 장부 한 줄이다 — 문장이 아니라 코드와 수치다
-    expect(press?.facts[0]?.data.tags?.[0]).toBe("released");
-
-    const after = formsById(state);
-    expect(after.has(target.id)).toBe(false);
-    const drop = moraleToForm(expected);
-    for (const [id, form] of after) expect(form).toBeCloseTo(before.get(id)! + drop, 10);
-  });
-
-  it("백업 정리는 회견도 사기도 움직이지 않는다 — 회견이 흔해지면 무게를 잃는다", () => {
-    const state = createTestGame(11);
-    // 새 게임이 열어 둔 부임 회견을 치운다 — 여기서 재는 것은 방출이 자리를 여는가다
-    state.pressConferences = [];
-    const target = spare(state);
-    const before = formsById(state);
-
-    expect(releasePlayer(state, { playerId: target.id }).ok).toBe(true);
-
-    expect(state.pressConferences?.some((c) => c.status === "pending")).toBeFalsy();
-    const after = formsById(state);
-    expect(after.has(target.id)).toBe(false);
-    for (const [id, form] of after) expect(form).toBeCloseTo(before.get(id)!, 10);
   });
 });
 
@@ -386,49 +329,5 @@ describe("해지 값의 양 끝", () => {
     expect(unilateralSeveranceOf(state, target.id)).toBe(contract.weeklyWage * 104 * 3);
     contract.until = addDays(state.date, -700);
     expect(unilateralSeveranceOf(state, target.id)).toBe(0);
-  });
-});
-
-describe("불만의 수명 — 팀을 떠나면 불만도 끝난다 (people.md §5)", () => {
-  /** 픽스처는 describe당 하나 — 문마다 다른 선수를 내보내며 같은 불변식을 잰다 */
-  const state = createTestGame(11);
-  const gripe = (playerId: string) =>
-    state.issues.push({
-      gamePlayerId: playerId,
-      kind: "unhappy",
-      reason: "minutes",
-      since: state.date,
-    });
-  /** 불변식 — 장부의 불만이 전부 지금 우리 스쿼드의 것인가 */
-  const noGhosts = () => {
-    const ours = new Set(userPlayers(state).map((p) => p.id));
-    return state.issues.every((i) => ours.has(i.gamePlayerId));
-  };
-
-  it("방출 — 일방 해지 뒤 그 선수의 불만이 장부에 없다", () => {
-    const target = spare(state);
-    gripe(target.id);
-    const res = releasePlayer(state, { playerId: target.id });
-    expect(res.ok, res.message).toBe(true);
-    expect(state.issues.some((i) => i.gamePlayerId === target.id)).toBe(false);
-    expect(noGhosts()).toBe(true);
-  });
-
-  it("해지 — 합의 정산도 같은 문을 지나 불만을 지운다", () => {
-    const target = spare(state);
-    gripe(target.id);
-    const res = releasePlayer(state, { playerId: target.id, severance: 0 });
-    expect(res.ok, res.message).toBe(true);
-    expect(state.issues.some((i) => i.gamePlayerId === target.id)).toBe(false);
-    expect(noGhosts()).toBe(true);
-  });
-
-  it("임대 송출 — 라커룸을 떠나면 불만도 따라가지 않는다", () => {
-    const target = spare(state);
-    gripe(target.id);
-    const res = loanPlayer(state, { playerId: target.id, teamId: "chelsea" });
-    expect(res.ok, res.message).toBe(true);
-    expect(state.issues.some((i) => i.gamePlayerId === target.id)).toBe(false);
-    expect(noGhosts()).toBe(true);
   });
 });

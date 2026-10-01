@@ -1,32 +1,4 @@
 import { z } from "zod";
-import { BoardAgendaSchema } from "./social-ledger";
-
-// ── 감독 커리어 (정규화) ──────────────────────────────
-/**
- * 보드가 건 기대의 **갈래** — 이름이 아니다 (career.md §6).
- *
- * 라벨(`"유럽 대항전권(6위 이내)"`)을 박아 두면 순위 숫자가 `target`과 이중으로
- * 굳고, 체급 표를 손볼 때 지난 시즌의 줄만 옛 문구로 남는다. 문장은 화면이 코드와
- * `target`으로 만든다.
- */
-export const BoardExpectationCodeSchema = z.enum(["title", "europe", "mid", "survival"]);
-
-export type BoardExpectationCode = z.infer<typeof BoardExpectationCodeSchema>;
-
-/** 코드 → 기대의 이름. 순위는 `target`이 갖는다 — 문구를 고치면 지난 시즌의 줄도 함께 고쳐진다 */
-export function boardExpectationText(code: BoardExpectationCode, target?: number): string {
-  const scope = target === undefined ? "" : `(${target}위 이내)`;
-  switch (code) {
-    case "title":
-      return "우승 경쟁";
-    case "europe":
-      return `유럽 대항전권${scope}`;
-    case "mid":
-      return `중위권 안착${scope}`;
-    case "survival":
-      return `잔류${scope}`;
-  }
-}
 
 export const SeasonRecordSchema = z.object({
   season: z.number().int(),
@@ -38,10 +10,6 @@ export const SeasonRecordSchema = z.object({
   losses: z.number().int().min(0),
   goalsFor: z.number().int().min(0),
   goalsAgainst: z.number().int().min(0),
-  /**
-   * 그 시즌의 합의 기대와 보드 판단을 보존하는 스냅샷. 다음 시즌 의제가 지난 평가를 바꾸지 않는다.
-   */
-  board: BoardAgendaSchema,
   tier: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   /**
    * 그 시즌에 뛴 리그 — 승강이 생기면서 필요해졌다. 순위만으로는 챔피언십 1위와

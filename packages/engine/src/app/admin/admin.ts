@@ -1,4 +1,9 @@
-import type { AxisValues, PlayerCatalogEntry, PlayerPosition } from "@story-fm/domain";
+import type {
+  AxisValues,
+  CharacterBookContent,
+  PlayerCatalogEntry,
+  PlayerPosition,
+} from "@story-fm/domain";
 import {
   ATTRIBUTE_AXES,
   CatalogPlayerEditSchema,
@@ -22,7 +27,7 @@ import { leagueName } from "../../common/data/league-catalog";
 import { isClubTeam, teamCatalog, teamCatalogById } from "../../common/data/team-catalog";
 
 /**
- * 선수 카탈로그 어드민 — **게임과 무관한 초기치 DB만** 편집한다 (v6 2-레이어).
+ * 선수 카탈로그 어드민 — **게임과 무관한 초기치 DB만** 편집한다.
  *
  * 여기서의 편집은 `player-catalog.json`에 저장되고 **이후 새로 시작하는 게임**의
  * 초기치가 된다. 진행 중인 세이브는 시작 시 카탈로그를 복사해 GAME_PLAYER로
@@ -43,6 +48,7 @@ export interface AdminResult {
 }
 
 interface CatalogPlayerInputMeta {
+  characterBook?: CharacterBookContent;
   /** 표시 이름 (한글) */
   nameKo: string;
   /** 로마자 — id 슬러그·파생값의 기준 */
@@ -141,6 +147,7 @@ export function isCatalogEdited(): boolean {
 }
 
 function applyPatch(entry: PlayerCatalogEntry, patch: CatalogPlayerPatch): void {
+  if (patch.characterBook !== undefined) entry.characterBook = patch.characterBook;
   for (const key of NUMERIC_ATTRS) {
     const v = patch[key];
     if (v !== undefined) entry[key] = v;
@@ -230,6 +237,7 @@ export function adminAddCatalogPlayer(teamId: string, input: CatalogPlayerInput)
     teamId,
     nameKo: input.nameKo.trim(),
     nameEn,
+    ...(input.characterBook === undefined ? {} : { characterBook: input.characterBook }),
     birthdate: input.birthdate,
     positions,
     ...attrs,

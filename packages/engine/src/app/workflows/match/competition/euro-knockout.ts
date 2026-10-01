@@ -1,9 +1,4 @@
-import {
-  type GameState,
-  teamNameIn,
-  pushNarrative,
-  teamShortNameIn,
-} from "../../../../common/core/state";
+import { type GameState, teamNameIn, teamShortNameIn } from "../../../../common/core/state";
 import { type MatchStage, type TickSink, type MatchRecord } from "@story-fm/domain";
 import {
   euroTieLegs,
@@ -82,7 +77,6 @@ function createStage(
     digest.push(
       `${short} ${label} 대진 확정 — 상대는 ${teamNameIn(state, opponent)} (${ours.date})`,
     );
-    pushNarrative(state, `${short} ${label} 진출 — vs ${teamNameIn(state, opponent)}`, 4);
   } else {
     digest.push(
       `${short} ${label} 대진: ${pairs

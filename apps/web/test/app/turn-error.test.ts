@@ -27,10 +27,15 @@ vi.mock("../../application/lib/store", async (importOriginal) => {
 });
 
 const reject = vi.fn();
+const editBook = vi.fn();
 
 vi.mock("@story-fm/agents", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@story-fm/agents")>();
-  return { ...actual, runGmTurn: (...args: unknown[]) => reject(...args) };
+  return {
+    ...actual,
+    runGmTurn: (...args: unknown[]) => reject(...args),
+    editCharacterBook: (...args: unknown[]) => editBook(...args),
+  };
 });
 
 const { GmTurnFailure } = await import("@story-fm/agents");
@@ -482,5 +487,89 @@ describe("기다리기를 멈춘 턴", () => {
     await drain(turn);
 
     expect((await settled).chat).toHaveLength(game.chat.length + 2);
+  });
+});
+
+describe("비동기 캐릭터북 저장", () => {
+  it("같은 인물을 순서대로 편집하며 모델 대기 중 저장된 다른 턴도 보존한다", async () => {
+    const { loadGame, saveGame, requestCharacterUpdate } = await import("@story-fm/engine");
+    const { processCharacterBookJobs } = await import("../../application/lib/character-book-jobs");
+    const { withGameLock } = await import("../../application/lib/turn-runner");
+    const game = await newGame();
+    const state = loadGame(game.id)!;
+    const entry = state.characterBook[0]!;
+    requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "첫 기록" });
+    requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "다음 기록" });
+    saveGame(state);
+    let finishFirst: (value: import("@story-fm/domain").CharacterBookEdit) => void = () => {
+      throw new Error("편집이 시작되지 않았습니다");
+    };
+    let signalStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    editBook.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+          signalStarted();
+        }),
+    );
+    editBook.mockImplementationOnce(
+      (existing: import("@story-fm/domain").CharacterBookEntry, extra: string) => ({
+        keywords: [],
+        description: "두번째 소개",
+        information: `${existing.information} / ${extra}`,
+      }),
+    );
+    const work = processCharacterBookJobs(game.id);
+    await started;
+    await withGameLock(game.id, 3000, async () => {
+      const current = loadGame(game.id)!;
+      current.chat.push({ role: "model", text: "새로운 턴", toolCalls: [], at: current.date });
+      saveGame(current);
+    });
+    finishFirst({ keywords: [], description: "첫 소개", information: "첫 편집 결과" });
+    await work;
+    const done = loadGame(game.id)!;
+    expect(done.chat.at(-1)?.text).toBe("새로운 턴");
+    expect(done.characterBookJobs).toEqual([]);
+    expect(done.characterBook.find((book) => book.id === entry.id)).toMatchObject({
+      name: entry.name,
+      version: 3,
+      information: "첫 편집 결과 / 다음 기록",
+    });
+    expect(editBook.mock.calls.at(-1)?.[0]).toMatchObject({
+      version: 2,
+      information: "첫 편집 결과",
+    });
+  });
+  it("실패한 작업과 이후 같은 인물의 작업을 보존하고 다음 실행에서 재시도한다", async () => {
+    const { loadGame, saveGame, requestCharacterUpdate } = await import("@story-fm/engine");
+    const { processCharacterBookJobs } = await import("../../application/lib/character-book-jobs");
+    const game = await newGame();
+    const state = loadGame(game.id)!;
+    const entry = state.characterBook[0]!;
+    requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "첫 기록" });
+    requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "다음 기록" });
+    saveGame(state);
+    editBook.mockRejectedValueOnce(new Error("모델 편집 실패"));
+    await processCharacterBookJobs(game.id);
+    const failed = loadGame(game.id)!;
+    expect(failed.characterBookJobs).toHaveLength(2);
+    expect(failed.characterBookJobs[0]).toMatchObject({ status: "failed", attempts: 1 });
+    expect(failed.characterBook[0]).toEqual(entry);
+    editBook.mockImplementation(
+      (existing: import("@story-fm/domain").CharacterBookEntry, extra: string) => ({
+        keywords: [],
+        description: existing.description,
+        information: `${existing.information} / ${extra}`,
+      }),
+    );
+    await processCharacterBookJobs(game.id);
+    const done = loadGame(game.id)!;
+    expect(done.characterBookJobs).toEqual([]);
+    expect(done.characterBook[0]!.version).toBe(3);
+    editBook.mockReset();
   });
 });

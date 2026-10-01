@@ -19,7 +19,6 @@ import {
   FINALIZE_MATCH_RULES,
   REPORT_DIGEST_INPUT,
   REPORT_ONBOARDING_INPUT,
-  ONBOARDING_JUDGE_SYSTEM,
   SKILL_CATALOG,
   SKILL_NAMES,
   TRAINING_RATER_RULES,
@@ -44,13 +43,6 @@ import {
 import {
   ATTRIBUTE_AXES,
   AXIS_KO,
-  INCIDENT_KIND_KO,
-  INCIDENT_KINDS,
-  OPENING_KIND_KO,
-  OPENING_KINDS,
-  PROMISE_KIND_KO,
-  PROMISE_KIND_MEANING,
-  PROMISE_KINDS,
   SET_PIECE_ROUTINE_AXES,
   SET_PIECE_ROUTINE_NEUTRAL,
   SQUAD_STATUS_KO,
@@ -162,33 +154,6 @@ describe("규칙이 사는 자리", () => {
   it("코어가 갈래표를 든 열거는 그 표가 모델에게 닿는다", () => {
     const rows = [
       {
-        where: "record_incident.kind",
-        node: enumArg(TOOLS, "record_incident", "kind"),
-        kinds: INCIDENT_KINDS as readonly string[],
-        tables: [INCIDENT_KIND_KO as Record<string, string>],
-        reads: TOOLS.find((t) => t.name === "record_incident")!.description,
-      },
-      {
-        where: "onboarding-judge.openings[].kind",
-        node: enumArg(OUTPUT_SCHEMAS, "onboarding-judge", "kind"),
-        kinds: OPENING_KINDS as readonly string[],
-        tables: [OPENING_KIND_KO as Record<string, string>],
-        reads: ONBOARDING_JUDGE_SYSTEM,
-      },
-      {
-        /** 대화와 다가옴의 응대가 **같은 인자 하나**를 쓴다 — 한 자리를 재면 둘 다 잰다 */
-        where: "team_talk.promise.kind",
-        node: enumArg(TOOLS, "team_talk", "kind"),
-        kinds: PROMISE_KINDS as readonly string[],
-        /**
-         * 여기도 표가 둘이다. 낱말은 장부 줄과 화면이 쓰는 이름이고(「출전」),
-         * **뜻**은 기한 날 장부가 무엇을 재는지를 가르는 문장이라(선발 비율)
-         * 낱말만으로는 감독의 말이 어느 갈래인지 서지 않는다 (people.md §5-2).
-         */
-        tables: [PROMISE_KIND_KO, PROMISE_KIND_MEANING] as Array<Record<string, string>>,
-        reads: "",
-      },
-      {
         /**
          * 오퍼·재계약이 싣는 지위와 조정이 되부르는 지위는 **같은 줄**을 읽는다
          * (`SQUAD_STATUS_LINE`) — 서류는 지위를 낱말로 적고 모델은 토큰으로 답한다.
@@ -220,6 +185,23 @@ describe("규칙이 사는 자리", () => {
  * 인자가 어느 도구에서든 같은 검증을 지난다.
  */
 describe("입력 스키마 — Zod 한 벌에서 파생한다", () => {
+  it("객체 분기는 공통 필드와 각 분기의 필수 입력을 함께 전달한다", () => {
+    const schema = z.discriminatedUnion("action", [
+      z.object({ action: z.literal("dismiss"), team: z.string() }),
+      z.object({ action: z.literal("appoint"), team: z.string(), name: z.string() }),
+    ]);
+    const derived = toToolSchema(schema);
+    expect(derived.type).toBe("object");
+    expect(derived.required).toEqual(["action", "team"]);
+    expect(derived.properties?.name).toEqual({ type: "string" });
+    expect(derived.anyOf).toEqual([
+      expect.objectContaining({ required: ["action", "team"] }),
+      expect.objectContaining({ required: ["action", "team", "name"] }),
+    ]);
+    expect(schema.safeParse({ action: "appoint", team: "arsenal" }).success).toBe(false);
+    expect(schema.safeParse({ action: "dismiss", team: "arsenal" }).success).toBe(true);
+  });
+
   it("문자·숫자·배열의 경계가 그대로 옮겨진다", () => {
     expect(
       toToolSchema(
@@ -486,13 +468,6 @@ describe("같은 종류의 인자는 같은 검증을 지난다", () => {
     const dates = only(["date", "from", "to", "month"]);
     expect(dates.length).toBeGreaterThan(0);
     for (const a of dates) expect(a.node.pattern, where(a)).toBeTypeOf("string");
-  });
-
-  /** 빈 목록은 아무에게도 닿지 않으면서 하루 한도만 쓴다 */
-  it("대상 목록은 빈 배열을 받지 않는다", () => {
-    const lists = only(["playerIds", "targetIds"]).filter((arg) => arg.tool !== "request_scouting");
-    expect(lists.length).toBeGreaterThan(0);
-    for (const a of lists) expect(a.node.minItems, where(a)).toBeGreaterThanOrEqual(1);
   });
 
   it("필수 인자는 전부 선언된 인자다", () => {
@@ -898,5 +873,39 @@ describe("명령 결과 집계", () => {
       applied: 1,
       rejected: 1,
     });
+  });
+});
+
+describe("GM financial decisions and staff agreements", () => {
+  it("exposes executable structured board adjudication and negotiated staff hiring directly", async () => {
+    const state = structuredClone(STATE);
+    const tools = buildGmTools(state, []);
+    const board = tools.find((tool) => tool.name === "request_board")!;
+    const staff = tools.find((tool) => tool.name === "hire_staff")!;
+    const finance = state.finances.find((row) => row.teamId === state.userTeamId)!;
+    finance.balance = 200_000_000;
+    const before = finance.transferBudget;
+    await board.handle({
+      kind: "transfer-budget",
+      amount: 1000,
+      decision: "approved",
+      authorizedBy: state.personas.find((p) => p.role === "owner")!.characterId,
+    });
+    expect(finance.transferBudget).toBe(before + 1000);
+    const name = "합의한 새 코치";
+    await staff.handle({
+      name,
+      role: "coach",
+      title: "기술 코치",
+      salary: 1000,
+      until: `${Number(state.date.slice(0, 4)) + 1}-03-17`,
+      characterBook: {
+        name,
+        keywords: [name],
+        description: "기술 코치",
+        information: "감독과 계약 조건을 합의했다.",
+      },
+    });
+    expect(state.personas.find((p) => p.name === name)?.employment?.contract.salary).toBe(1000);
   });
 });

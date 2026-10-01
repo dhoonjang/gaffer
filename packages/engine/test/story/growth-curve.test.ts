@@ -6,11 +6,6 @@ import {
   LOAN_APP_BOOST,
   LOAN_APP_BOOST_MAX,
   MAX_AXES_PER_MONTH,
-  MENTOR_AGE_GAP_FULL,
-  MENTOR_BOOST_MAX,
-  MENTOR_BOOST_MIN,
-  MENTOR_LEADERSHIP_FULL,
-  MENTOR_LEADERSHIP_MIN,
   RESERVE_APP_BOOST,
   RESERVE_APP_BOOST_MAX,
   ageGrowthFactor,
@@ -18,14 +13,10 @@ import {
   applyMonthlyDevelopment,
   attributeDeclineScale,
   attributeGainScale,
-  axisClockFactor,
   growChance,
-  isMentoredAxis,
   loanAppsBoost,
   loanAppsByPlayer,
   loanLevelFactor,
-  mentorBoost,
-  mentorStrength,
   monthlyChance,
   reserveAppsBoost,
   reserveAppsByPlayer,
@@ -36,8 +27,6 @@ import {
 } from "@story-fm/engine";
 import {
   ATTRIBUTE_AXES,
-  AXIS_GROUPS,
-  PLAYER_ARCHETYPE_TRAITS,
   type AttributeAxis,
   type AxisValues,
   type GamePlayer,
@@ -239,34 +228,6 @@ describe("나이 배율 — 월간·결산이 한 열을 읽는다", () => {
     expect(monthlyChance(100)).toBeLessThan(1);
     expect(monthlyChance(12)).toBeCloseTo(1 - Math.exp(-1));
   });
-
-  /**
-   * **직업의식은 자라는 나이에서도 갈라야 한다** (people.md §6).
-   *
-   * `GROW_MAX`가 여유 6 이상인 U21을 전부 0.35에 붙여 놓으므로, 계수를 대역 **안**에
-   * 곱하면 정작 자라는 나이에서만 아무것도 하지 않는다 — 이 자리가 그 회귀를 잡는다.
-   * 그래서 사람됨은 감독의 배율과 같은 자리, 대역 밖에서 곱한다.
-   */
-  it("직업의식은 유망주에게도 갈린다 — 상한이 계수를 삼키지 않는다", () => {
-    const [lazy, diligent] = [0.85, 1.25];
-    /**
-     * 난수를 고정값으로 훑어 **확률의 폭**을 센다 — 통과하는 눈금 수가 곧 확률이다.
-     * 격자는 [0, 1)을 통째로 덮어야 한다: 좁게 깔면 월 확률이 그 위로 올라간 순간
-     * 세 팔이 전부 만점을 받아 계수가 보이지 않는다.
-     */
-    const ROLLS = Array.from({ length: 2000 }, (_, i) => i / 2000);
-    const stepsAt = (age: number, value: number, professionalism: number) =>
-      ROLLS.filter((r) => rollAxis("pace", age, value, 80, () => r, 1, professionalism) !== 0)
-        .length;
-
-    // 18세 · 여유 20 — 대역 상한(0.35)에 붙어 있는 전형적인 유망주. 여기서도 갈린다
-    expect(stepsAt(18, 60, diligent)).toBeGreaterThan(stepsAt(18, 60, 1));
-    expect(stepsAt(18, 60, lazy)).toBeLessThan(stepsAt(18, 60, 1));
-    // 여유가 없으면 아무리 성실해도 안 자란다 — 천장은 사람됨 위에 있다
-    expect(rollAxis("pace", 18, 80, 80, () => 0, 1, diligent)).toBe(0);
-    // 노화 하락에는 붙지 않는다 — 성실한 선수가 천천히 늙지는 않는다
-    expect(stepsAt(34, 70, diligent)).toBe(stepsAt(34, 70, lazy));
-  });
 });
 
 /**
@@ -424,127 +385,6 @@ describe("2군 출전·집중 육성 배율 (season.md §2 2군 리그)", () => 
 });
 
 /**
- * 멘토링 배율 — **고참이 붙어 있는 아이는 정신 축에서 먼저 자란다**
- * (season.md §2 멘토링 배율 · people.md §5-3).
- *
- * 자격도 여닫기도 `mentoring.ts`의 몫이고, 여기서 지키는 것은 **합성 규약** 하나다:
- * 이 항은 정신 6축에만 서고, 감독의 다른 손잡이와 곱으로 얹혀 그 여섯 축의 꼭대기만
- * 연다. 축을 가리지 않고 곱하면 「집중 육성 한 칸 더」가 된다.
- */
-describe("멘토링 배율 (season.md §2)", () => {
-  const axisValues = (value: number): AxisValues =>
-    Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, value])) as AxisValues;
-
-  const input = (seed: number, mentor?: number) => ({
-    seed,
-    date: "2027-03-01",
-    playerId: "gp-42",
-    age: 19,
-    values: axisValues(50),
-    potential: 99,
-    ...(mentor === undefined ? {} : { mentor }),
-  });
-
-  /**
-   * 축 묶음을 따로 굴린다 — 열여섯을 한 번에 굴리면 월 상한(8)이 걸려, 정신 축이 더
-   * 오른 만큼 신체 축이 목록에서 밀려난다. 난수 채널은 (시드·날짜·선수·축)이라
-   * 묶음으로 잘라 굴려도 축마다의 결과는 전체 굴림과 같다.
-   */
-  it("몸과 기술은 그대로다 — 노장이 물려주는 것은 머리다", () => {
-    for (const group of [AXIS_GROUPS.physical, AXIS_GROUPS.technical, AXIS_GROUPS.goalkeeping]) {
-      for (let seed = 1; seed <= 200; seed++) {
-        expect(
-          rollMonthlyAxes(input(seed, MENTOR_BOOST_MAX), group),
-          `시드 ${seed} [${group.join(",")}]`,
-        ).toEqual(rollMonthlyAxes(input(seed), group));
-      }
-    }
-  });
-
-  it("멘토 항이 실제로 곱해진 줄만 표식을 든다 — 성장 로그의 origin이 여기서 갈린다", () => {
-    for (let seed = 1; seed <= 300; seed++) {
-      for (const rolled of rollMonthlyAxes(input(seed, MENTOR_BOOST_MAX))) {
-        expect(rolled.mentored, `시드 ${seed} ${rolled.axis}`).toBe(
-          isMentoredAxis(rolled.axis) && rolled.step > 0,
-        );
-      }
-      // 멘토가 없으면 어느 줄도 표식을 들지 않는다 — 그 달은 통째로 `monthly`다
-      expect(
-        rollMonthlyAxes(input(seed)).some((r) => r.mentored),
-        `시드 ${seed}`,
-      ).toBe(false);
-    }
-  });
-
-  it("집중 육성과 곱으로 합성된다 — 문턱 사이의 난수가 멘토 항까지 곱해야 넘어간다", () => {
-    const handles = RESERVE_APP_BOOST_MAX * FOCUS_BOOST;
-    const rate = (mentor: number) =>
-      monthlyChance(growChance(35, 19) * axisClockFactor("vision", 19) * handles * mentor);
-    // 감독의 손잡이만으로는 못 넘고 멘토 항까지 얹어야 넘는 자리
-    const rng = () => (rate(1) + rate(MENTOR_BOOST_MAX)) / 2;
-    expect(rollAxis("vision", 19, 50, 85, rng, handles)).toBe(0);
-    expect(rollAxis("vision", 19, 50, 85, rng, handles, 1, MENTOR_BOOST_MAX)).toBe(1);
-  });
-
-  it("꼭대기가 축마다 갈린다 — 정신 6축 2.5, 나머지 열 축 2.0", () => {
-    const professionalism = Math.max(
-      ...Object.values(PLAYER_ARCHETYPE_TRAITS).map((t) => t.professionalism),
-    );
-    const ten = RESERVE_APP_BOOST_MAX * FOCUS_BOOST * professionalism;
-    expect(ten, `열 축 꼭대기 ${ten}`).toBeCloseTo(2, 1);
-    const mental = ten * MENTOR_BOOST_MAX;
-    expect(mental, `정신 축 꼭대기 ${mental}`).toBeCloseTo(2.5, 1);
-    // **손잡이 하나의 몫** — 이보다 크면 유스의 답이 노장 수집 하나로 굳는다
-    expect(MENTOR_BOOST_MAX).toBe(FOCUS_BOOST);
-  });
-
-  it("멘토 항은 바닥과 꼭대기 밖으로 나가지 않는다 — 세기가 어디에 있든", () => {
-    for (let i = -20; i <= 120; i++) {
-      const boost = mentorBoost(i / 100);
-      expect(boost, `세기 ${i / 100}`).toBeGreaterThanOrEqual(MENTOR_BOOST_MIN);
-      expect(boost, `세기 ${i / 100}`).toBeLessThanOrEqual(MENTOR_BOOST_MAX);
-    }
-    expect(mentorBoost(0)).toBeCloseTo(MENTOR_BOOST_MIN, 10);
-    expect(mentorBoost(1)).toBeCloseTo(MENTOR_BOOST_MAX, 10);
-  });
-
-  /** 세 항이 저마다 0~1로 잘리므로 어떤 선수 조합이 와도 세기는 대역 안이다 */
-  it("세기는 0~1이다 — 자격을 겨우 채운 짝도, 세계 밖의 값도", () => {
-    const player = (leadership: number, birthdate: string, position: string) =>
-      ({
-        id: `p-${leadership}-${position}`,
-        birthdate,
-        attributes: { leadership },
-        positions: [{ position, proficiency: 90 }],
-      }) as unknown as GamePlayer;
-
-    const on = "2026-07-01";
-    const cases: Array<[number, string, string]> = [
-      // 자격선의 멘토 · 나이 차 0 · 다른 자리 — 세 항이 다 바닥이다
-      [MENTOR_LEADERSHIP_MIN, "1996-07-01", "GK"],
-      // 관측된 꼭대기 위 · 나이 차가 상한을 넘음 · 같은 자리
-      [MENTOR_LEADERSHIP_FULL + 30, "1980-07-01", "CB"],
-      [0, "2010-07-01", "CB"],
-    ];
-    const mentee = player(40, "1996-07-01", "CB");
-    for (const [leadership, birthdate, position] of cases) {
-      const strength = mentorStrength(player(leadership, birthdate, position), mentee, on);
-      const label = `리더십 ${leadership} · ${birthdate} · ${position}`;
-      expect(strength, label).toBeGreaterThanOrEqual(0);
-      expect(strength, label).toBeLessThanOrEqual(1);
-    }
-    // 리더십·나이 차·자리가 다 찬 짝만 1이다
-    const full = mentorStrength(
-      player(MENTOR_LEADERSHIP_FULL, `${1996 - MENTOR_AGE_GAP_FULL}-07-01`, "CB"),
-      mentee,
-      on,
-    );
-    expect(full).toBeCloseTo(1, 10);
-    expect(mentorBoost(full)).toBeCloseTo(MENTOR_BOOST_MAX, 10);
-  });
-});
-
-/**
  * 임대 — **2군과 1군 사이의 길** (season.md §2 임대).
  *
  * 계약이 우리 것이므로 성장 경로도 우리 쪽이다. 여기서 지키는 것은 눈금 하나다:
@@ -569,7 +409,7 @@ describe("임대 성장 (season.md §2 임대)", () => {
       birthdate: "2007-03-01",
       positions: [{ position: "CM", proficiency: 20 }],
       attributes: { ...values, overall: 45, potential: 80 },
-      state: { condition: 100, fatigue: 0, morale: 60, form: 0 },
+      state: { condition: 100, fatigue: 0, form: 0 },
       isCaptain: false,
       ...(options.onLoan
         ? { loan: { fromTeamId: "arsenal", until: "2027-06-30", wageShare: 0.5 } }

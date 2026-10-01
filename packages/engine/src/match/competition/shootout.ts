@@ -143,15 +143,8 @@ export function rollShootoutKick(
 }
 
 /**
- * 대진 하나를 끝까지 굴려 `decider.result.penalties`에 적는다 — **멱등**이다.
- *
- * 이미 적힌 승부차기는 다시 굴리지 않는다: 승자를 묻는 자리에서 새로 굴러가면
- * 화면이 브래킷을 그릴 때마다 결과가 바뀐다.
- *
- * ⚠️ **서든데스에 상한이 없다.** 성공률이 `PENALTY_FLOOR`~`PENALTY_CEILING`로
- * 클램프돼 0과 1 사이에 갇혀 있으므로 두 팀이 영원히 같이 넣거나 같이 놓칠 확률은
- * 0이다 — 종료가 확률 1로 보장된다. 옛 코드가 20라운드 뒤에 `h += 1`로 홈을
- * 이기게 한 자리이고, 그것은 장부에 없는 승자를 만드는 일이었다.
+ * 승부차기를 한 번 정산해 decider.result.penalties에 저장한다. 기존 결과는 재사용한다.
+ * 서든데스에 라운드 상한을 두지 않으며 성공률은 0보다 크고 1보다 작은 범위로 제한한다.
  */
 export function resolveShootout(
   state: GameState,

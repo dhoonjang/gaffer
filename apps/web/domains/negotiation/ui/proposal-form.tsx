@@ -12,12 +12,9 @@ import {
 import {
   DEAL_TERM_KO,
   DEAL_TERM_NOTE_MAX,
-  ESCALATOR_PCT_MAX,
-  ESCALATOR_PCT_MIN,
   ESCALATOR_TRIGGERS,
   ESCALATOR_TRIGGER_KO,
   MAX_PAYMENT_YEARS,
-  MAX_TABLED_TERMS,
   POSITION_CODES,
   PROPOSAL_KIND_KO,
   PROPOSAL_YEARS_MAX,
@@ -480,7 +477,6 @@ function ProposalBody({
   const effective: ProposalKind =
     party === "agent" && (kind === "buy" || kind === "loan") ? "personal" : kind;
   const termKinds = view.termKinds[kind === "buy" ? (precontract ? "precontract" : "buy") : kind];
-  const countable = terms.filter((t) => t.kind !== "other").length;
   const tabled = (termKind: DealTermKind) => terms.find((t) => t.kind === termKind);
   const toggleTerm = (termKind: DealTermKind) => {
     const standing = tabled(termKind);
@@ -488,7 +484,6 @@ function ProposalBody({
       setTerms(terms.filter((t) => t.id !== standing.id));
       return;
     }
-    if (termKind !== "other" && countable >= MAX_TABLED_TERMS) return;
     const base: TermDraft = { kind: termKind, id: nextId };
     setNextId(nextId + 1);
     switch (termKind) {
@@ -775,9 +770,7 @@ function ProposalBody({
               <div className="pf-row pf-terms">
                 <span className="pf-row-label">
                   조건
-                  <b className="pf-count fig">
-                    {countable}/{MAX_TABLED_TERMS}
-                  </b>
+                  <b className="pf-count fig">{terms.length}</b>
                 </span>
                 <div
                   className="pf-options"
@@ -795,7 +788,7 @@ function ProposalBody({
                         aria-checked={on}
                         className={on ? "on" : ""}
                         onClick={() => toggleTerm(k)}
-                        disabled={locked || (!on && k !== "other" && countable >= MAX_TABLED_TERMS)}
+                        disabled={locked}
                       >
                         {DEAL_TERM_KO[k]}
                       </button>
@@ -894,9 +887,8 @@ function TermRow({
               className="pf-money-input fig"
               type="number"
               inputMode="numeric"
-              min={ESCALATOR_PCT_MIN}
-              max={ESCALATOR_PCT_MAX}
-              step={5}
+              min={1}
+              step={1}
               value={term.pct ?? ""}
               style={{ width: `calc(${String(term.pct ?? "").length}ch + 3px)` }}
               onChange={(e) =>

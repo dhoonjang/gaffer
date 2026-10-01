@@ -21,7 +21,6 @@ import {
   markEntered,
   MATCH_PROFICIENCY_GAIN,
   MATCHDAY_BENCH,
-  OUT_OF_POSITION_RUN,
   playerById,
   playersOf,
   proficiencyAt,
@@ -47,14 +46,9 @@ import {
   createTestGame,
   playMockMatch,
   playPreseason,
+  resultOf,
 } from "../helpers";
-import {
-  positionGroupOf,
-  positionGroupOfPlayer,
-  tacticsSignature,
-  weightSlotOf,
-  type MatchEvent,
-} from "@story-fm/domain";
+import { tacticsSignature, weightSlotOf, type MatchEvent } from "@story-fm/domain";
 import {
   advanceLive,
   applyEvents,
@@ -654,53 +648,6 @@ describe("회귀: 장기 시즌 안정성", () => {
   });
 });
 
-/**
- * 자리 밖 기용 — **선발로 센다** (→ docs/story/people.md §5). 원장은 누가 뛰었는지만
- * 알고 어느 자리에 섰는지는 모르므로, 연속을 세는 눈금은 `PlayerState`가 든다.
- */
-describe("자리 밖 기용의 눈금 (people.md §5)", () => {
-  it("주 포지션 묶음 밖 선발이 이어지면 네 경기째에 불만이 선다", () => {
-    const state = atMatchday(5);
-    const starters = assignmentsOf(state, state.userTeamId, "starting");
-    const back = starters.find((a) => positionGroupOf(a.position) === "DF")!;
-    const front = starters.find((a) => positionGroupOf(a.position) === "FW")!;
-    const backSlot = back.position;
-    back.position = front.position;
-    front.position = backSlot;
-
-    const misplaced = playerById(state, back.playerId)!;
-    expect(positionGroupOfPlayer(misplaced)).not.toBe(positionGroupOf(back.position));
-    const inPlace = starters.find((a) => {
-      const p = playerById(state, a.playerId);
-      return (
-        a !== back && a !== front && p && positionGroupOfPlayer(p) === positionGroupOf(a.position)
-      );
-    })!;
-    misplaced.state.outOfPositionRun = OUT_OF_POSITION_RUN - 1;
-    playMockMatch(state);
-
-    expect(misplaced.state.outOfPositionRun).toBe(OUT_OF_POSITION_RUN);
-    expect(
-      state.issues.some((i) => i.gamePlayerId === misplaced.id && i.reason === "out-of-position"),
-    ).toBe(true);
-    expect(playerById(state, inPlace.playerId)!.state.outOfPositionRun).toBe(0);
-  });
-
-  it("제자리에 선발로 서면 눈금이 지워진다", () => {
-    const state = atMatchday(5);
-    const starters = assignmentsOf(state, state.userTeamId, "starting");
-    const inPlace = starters.find((a) => {
-      const p = playerById(state, a.playerId);
-      return p && positionGroupOfPlayer(p) === positionGroupOf(a.position);
-    })!;
-    const player = playerById(state, inPlace.playerId)!;
-    player.state.outOfPositionRun = OUT_OF_POSITION_RUN - 1;
-    playMockMatch(state);
-    expect(player.state.outOfPositionRun).toBe(0);
-    expect(state.issues.some((i) => i.reason === "out-of-position")).toBe(false);
-  });
-});
-
 describe("경기 후 전술 복원", () => {
   it("경기 중 바꾼 전술이 킥오프 전으로 돌아오고 판독은 경기와 함께 사라진다", () => {
     const state = atMatchday(5);
@@ -856,6 +803,43 @@ describe("출전 시간의 끝 — 교체와 퇴장이 같은 자격이다", () 
 });
 
 describe("감독 경기 마감의 대칭 (match.md §7)", () => {
+  it("대패와 연패가 출전하지 않은 선수의 폼을 바꾸지 않는다", () => {
+    const state = atMatchday(42, { afterPreseason: true });
+    expect(startMatch(state).ok).toBe(true);
+    const side = userSide(state);
+    const opponent = side === "home" ? "away" : "home";
+    const onPitch = new Set(ledgerOf(state)[side].onPitch);
+    const absent = userPlayers(state).filter((p) => !onPitch.has(p.id));
+    expect(absent.length).toBeGreaterThan(0);
+    const before = absent.map((p) => [p.id, p.state.form] as const);
+    const fixture = state.matches.find((m) => m.id === state.pendingMatch!.matchId)!;
+    const defeat =
+      side === "home" ? { homeGoals: 0, awayGoals: 4 } : { homeGoals: 4, awayGoals: 0 };
+    for (const [index, date] of ["2026-08-01", "2026-08-02", "2026-08-03"].entries()) {
+      state.matches.push({
+        ...fixture,
+        id: `prior-defeat-${index}`,
+        date,
+        result: resultOf(defeat),
+      });
+    }
+    const scorer = ledgerOf(state)[opponent].onPitch[10]!;
+    expect(
+      inject(
+        state,
+        [10, 20, 30, 40].map((minute) => ({
+          minute,
+          type: "goal" as const,
+          team: opponent,
+          actors: [scorer],
+          causes: [],
+        })),
+      ).ok,
+    ).toBe(true);
+    closeByHand(state);
+    expect(absent.map((p) => [p.id, p.state.form])).toEqual(before);
+  });
+
   it("상대의 출전·득점·도움·카드·정지가 우리와 같은 장부에 남는다", () => {
     const state = atMatchday(42, { afterPreseason: true });
     const fixture = state.matches.find(

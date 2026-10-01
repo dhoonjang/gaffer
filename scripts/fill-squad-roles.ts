@@ -21,7 +21,7 @@ import { sparql, UA } from "./wikidata";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SQUAD_STATUS_STARTS, type SquadStatus } from "../packages/domain/src/common/squad-rules";
+import type { SquadStatus } from "../packages/domain/src/common/squad-rules";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
 const SEED_FILES = [
@@ -299,12 +299,13 @@ function armbandsOf(text: string): Armband[] {
 /**
  * 직전 시즌 공식전 **선발 비율** → 계약 지위.
  *
- * 눈금은 기대 선발 비율 그대로다(`SQUAD_STATUS_STARTS`) — 지위가 부르는 기대와
- * 그 지위를 준 근거가 같은 자여야 개막 초에 없던 불만이 서지 않는다.
+ * 시드 생성에만 쓰는 출전 기록 분류다. 계약 약속이나 게임 중 이행 기준은 만들지 않는다.
  */
+const SEED_ROLE_START_SHARE = { key: 0.7, starter: 0.5 } as const;
+
 function statusOf(share: number): SquadStatus | undefined {
-  if (share >= SQUAD_STATUS_STARTS.key) return "key";
-  if (share >= SQUAD_STATUS_STARTS.starter) return "starter";
+  if (share >= SEED_ROLE_START_SHARE.key) return "key";
+  if (share >= SEED_ROLE_START_SHARE.starter) return "starter";
   return undefined;
 }
 

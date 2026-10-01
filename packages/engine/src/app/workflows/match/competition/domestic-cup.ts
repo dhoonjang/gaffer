@@ -1,4 +1,4 @@
-import { type GameState, teamName, pushNarrative } from "../../../../common/core/state";
+import { type GameState, teamName } from "../../../../common/core/state";
 import {
   type DomesticCupEntry,
   domesticStageLabel,
@@ -109,7 +109,6 @@ export function createStage(
     digest.push(
       `${cup.short} ${label} 대진 확정 — ${where}에서 ${teamName(opponent)} (${ours.date})`,
     );
-    pushNarrative(state, `${cup.short} ${label} vs ${teamName(opponent)}`, 4);
   }
 }
 

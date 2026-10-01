@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   HISTORY_DIGEST_CHARS,
+  HISTORY_CHAR_LIMIT,
+  HISTORY_STEP,
   HISTORY_OPEN_CHARS,
   RATING_BAND,
   MATCH_FAMILIARITY_MIN,
@@ -20,7 +22,7 @@ import {
   type TrainingBrief,
   type GameState,
 } from "@story-fm/engine";
-import { CharacterMemorySchema } from "@story-fm/domain";
+import { CharacterCandidateSchema, CHARACTER_CANDIDATES_MAX } from "@story-fm/domain";
 import type {
   EvaluationResult,
   EvaluationRequest,
@@ -43,7 +45,7 @@ import {
 import { buildTrainingRequest, evaluateTraining } from "../../src/story/training-rater";
 import { reportTraining } from "../../src/app/workflows/story/training-rater";
 import { createTestGame, createMiniGame, advanceToMatchday } from "../../../engine/test/helpers";
-import { REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
+import { compactHistory, REPORT_DIGEST_INPUT } from "../../src/story/history-compactor";
 
 const answered = (output: TurnResult["output"]): TurnResult => ({
   text: "",
@@ -168,24 +170,125 @@ describe("이력 압축 스키마의 수용 폭", () => {
    * ⚠️ 이력 압축의 상한은 **코어·세이브의 상수 그대로**여야 한다. 손으로 다시 적으면
    * 코어만 조여지고 모델은 옛 상한을 계속 믿는다 (agents.md §4).
    */
-  it("압축 산출의 상한은 코어 상수를 그대로 쓰고, 카드의 자유 문구는 전부 물려 있다", () => {
+  it("압축 산출과 인물 후보의 상한은 도메인 상수를 그대로 쓴다", () => {
     expect(schemaAt(REPORT_DIGEST_INPUT, "past").maxLength).toBe(HISTORY_DIGEST_CHARS);
     expect(schemaAt(REPORT_DIGEST_INPUT, "open").maxLength).toBe(HISTORY_OPEN_CHARS);
-    expect(schemaAt(REPORT_DIGEST_INPUT, "memories.[].text").maxLength).toBe(
-      CharacterMemorySchema.shape.text.maxLength,
+    expect(schemaAt(REPORT_DIGEST_INPUT, "candidates").maxItems).toBe(CHARACTER_CANDIDATES_MAX);
+    expect(schemaAt(REPORT_DIGEST_INPUT, "candidates.[].description").maxLength).toBe(
+      CharacterCandidateSchema.shape.description.maxLength,
     );
-    // 카드는 불린 턴마다 레퍼런스 층에 통째로 실린다 — 한 문장이 문단이 되면 그 층을 밀어낸다
-    const free = [
-      "characters.[].archetype",
-      "characters.[].motivation",
-      "characters.[].traits.[]",
-      "characters.[].speechStyle.note",
-      "characters.[].speechStyle.samples.[]",
-    ];
-    for (const path of free) {
-      expect(schemaAt(REPORT_DIGEST_INPUT, path).maxLength, path).toBeGreaterThan(0);
-    }
   });
+});
+
+describe("이력 요약 — 후보만 정규화하고 검증 전에는 원문을 보존한다", () => {
+  const base = createMiniGame();
+
+  function historyState(count = CHARACTER_CANDIDATES_MAX + 5): GameState {
+    const state = structuredClone(base);
+    state.players = [];
+    state.personas = [];
+    state.characterBook = Array.from({ length: count }, (_, i) => ({
+      id: `person:summary-${i}`,
+      kind: "person" as const,
+      version: 2,
+      name: `요약후보${i}`,
+      keywords: [`별칭${i}`],
+      description: `명부의 소개 ${i}`,
+      information: `요약이 고쳐서는 안 되는 인물 정보 ${i}`,
+    }));
+    state.chat = Array.from({ length: HISTORY_STEP * 4 }, (_, i) => ({
+      role: i % 2 === 0 ? ("user" as const) : ("model" as const),
+      text: `${i}번째 원문 ` + "대화".repeat(Math.ceil(HISTORY_CHAR_LIMIT / HISTORY_STEP)),
+      toolCalls: [],
+      at: state.date,
+    }));
+    state.historyDigest = {
+      foldedTurns: HISTORY_STEP,
+      text: "이전 결정",
+      open: "아직 끝나지 않은 이야기",
+      at: state.date,
+      rounds: 1,
+    };
+    return state;
+  }
+
+  it.each([3, CHARACTER_CANDIDATES_MAX + 5])(
+    "풀 %i명의 요약은 명부 설명만 최대 30명 남기고 캐릭터북은 편집하지 않는다",
+    async (count) => {
+      const state = historyState(count);
+      const before = structuredClone(state);
+      const chosen = state.characterBook.at(-1)!;
+      const runTurn = vi.fn<GameLLM["runTurn"]>().mockResolvedValue(
+        answered({
+          past: "  지난 결정과 이유  ",
+          open: "  계속할 이야기  ",
+          candidates: [
+            {
+              name: chosen.name,
+              description: "모델이 다시 지은 소개",
+              information: "주입할 상세 정보",
+            },
+            { name: chosen.name, description: "중복 소개" },
+            { name: "명부에 없는 사람", description: "임의로 지은 인물" },
+          ],
+        }),
+      );
+
+      await expect(compactHistory(state, { runTurn })).resolves.toEqual({ folded: true });
+      expect(runTurn).toHaveBeenCalledTimes(1);
+      expect(state.historyDigest).toMatchObject({
+        text: "지난 결정과 이유",
+        open: "계속할 이야기",
+        rounds: 2,
+      });
+      expect(state.historyDigest!.foldedTurns).toBeGreaterThan(before.historyDigest!.foldedTurns);
+      const candidates = state.historyDigest!.candidates!;
+      expect(candidates).toHaveLength(Math.min(count, CHARACTER_CANDIDATES_MAX));
+      expect(new Set(candidates.map(({ name }) => name)).size).toBe(candidates.length);
+      expect(candidates[0]).toEqual({ name: chosen.name, description: chosen.description });
+      for (const candidate of candidates) {
+        const canonical = before.characterBook.find(({ name }) => name === candidate.name)!;
+        expect(candidate).toEqual({ name: canonical.name, description: canonical.description });
+      }
+      // 원문·캐릭터북·편집 작업 원장은 요약 성공에도 그대로다.
+      expect(state).toEqual({ ...before, historyDigest: state.historyDigest });
+    },
+  );
+
+  it.each(["빈 요약", "후보 상한 초과", "재시도 실패"])(
+    "%s이면 원문과 기존 folded marker를 보존한다",
+    async (failure) => {
+      const state = historyState();
+      const before = structuredClone(state);
+      const invalid = answered(
+        failure === "후보 상한 초과"
+          ? {
+              past: "검증되지 않은 요약",
+              candidates: state.characterBook.map(({ name, description }) => ({
+                name,
+                description,
+              })),
+            }
+          : { past: " ", candidates: [] },
+      );
+      const runTurn = vi.fn<GameLLM["runTurn"]>().mockResolvedValue(invalid);
+      if (failure === "재시도 실패") {
+        runTurn
+          .mockReset()
+          .mockResolvedValueOnce(invalid)
+          .mockRejectedValueOnce(new ModelOutputError("재시도도 산출 실패"));
+      }
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      try {
+        await expect(compactHistory(state, { runTurn })).resolves.toEqual({ folded: false });
+        expect(runTurn).toHaveBeenCalledTimes(2);
+        expect(state).toEqual(before);
+        expect(warn).toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
 });
 
 describe("reader pipeline — atomic probabilistic pilot", () => {
@@ -354,7 +457,7 @@ function trainingBrief(): TrainingBrief {
     overall: 70,
     apps: 0,
     rating: null,
-    mentor: { name: "선배", boost: 1.2 },
+    mentor: { playerId: "mentor", name: "선배" },
   };
   return {
     teamName: "훈련팀",
@@ -848,7 +951,7 @@ describe("match settlement workflow", () => {
           state,
           brief,
           { evaluate },
-          { moods: [{ playerId: brief.players[0]!.playerId, text: "좋았다" }] },
+          { notes: [{ playerId: brief.players[0]!.playerId, note: "좋았다" }] },
         ),
       ).toEqual({ settled: 0 });
       expect(evaluate).toHaveBeenCalledTimes(2);
@@ -899,19 +1002,12 @@ describe("match settlement workflow", () => {
           { playerId, note: "덮어쓰면 안 됨" },
           { playerId: outsider.id, note: "뛰지 않음" },
         ],
-        moods: [
-          { playerId, text: "끝까지 버텼다", acknowledgesIssue: true },
-          { playerId: outsider.id, text: "뛰지 않았다", acknowledgesIssue: true },
-        ],
       },
     );
     expect(result.settled).toBe(brief.players.length);
     const notes = state.matches.find((match) => match.id === brief.matchId)?.result?.ratingNotes;
     expect(notes?.[playerId]).toBe("마감 설명은 별도");
     expect(notes).not.toHaveProperty(outsider.id);
-    expect(state.players.find((player) => player.id === playerId)?.state.moodNote?.text).toBe(
-      "끝까지 버텼다.",
-    );
     expect(outsider.state).toEqual(outsiderBefore);
     expect(matchRated(state, brief.matchId)).toBe(true);
     const after = structuredClone(state);

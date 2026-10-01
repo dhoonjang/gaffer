@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { MOOD_BATCH } from "@story-fm/engine";
-import { MoodNoteSchema } from "../common/mood-input";
 
 /** Prose supplied by the existing match GM; numeric judgments belong to Jev. */
 export const MatchClosingSchema = z
@@ -16,13 +14,6 @@ export const MatchClosingSchema = z
       )
       .max(30)
       .optional(),
-    moods: z
-      .array(MoodNoteSchema.strict())
-      .max(MOOD_BATCH)
-      .optional()
-      .describe(
-        "출전 선수의 심경. 불만이 걸린 선수는 그 사실을 담고 acknowledgesIssue를 true로 적는다",
-      ),
   })
   .strict();
 

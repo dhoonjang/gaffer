@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { processCharacterBookJobs } from "@/application/lib/character-book-jobs";
 import { z } from "zod";
 import { ProposalInputSchema } from "@story-fm/domain";
 import { TurnOperationSchema } from "@story-fm/agents";
@@ -123,7 +125,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           body.data.orders,
           body.data.proposal,
         );
-        if (outcome.ok) send({ type: "done", payload: outcome.payload });
+        if (outcome.ok) {
+          send({ type: "done", payload: outcome.payload });
+          if (outcome.characterUpdatesPending) after(() => processCharacterBookJobs(id));
+        }
         // `detail`은 개발 모드에서만 실려 온다 (turn-runner의 `errorDetail`)
         else
           send({

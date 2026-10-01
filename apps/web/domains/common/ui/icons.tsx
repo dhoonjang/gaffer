@@ -417,7 +417,7 @@ export const SPEAKER_ICON: Partial<Record<SpeakerKind, IconComponent>> = {
 };
 
 /**
- * 부주장 — 주장과 **같은 완장**, 안쪽 글자만 V. 서열 셋이 한 계열로 읽히도록
+ * 부주장 — 주장과 **같은 완장**, 안쪽 글자만 V. 두 직책이 한 계열로 읽히도록
  * 바깥 도형은 `IconCaptain`과 같다.
  */
 export function IconViceCaptain({ size = 15 }: IconProps) {
@@ -429,7 +429,7 @@ export function IconViceCaptain({ size = 15 }: IconProps) {
   );
 }
 
-/** 라커룸 리더 — 같은 완장에 L. 완장을 차지 않았지만 서열이 있는 자리다 */
+/** L 표기가 있는 완장 아이콘 */
 export function IconLeader({ size = 15 }: IconProps) {
   return (
     <svg {...base(size)}>

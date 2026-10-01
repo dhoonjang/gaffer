@@ -1,11 +1,5 @@
 import type { GamePlayer, NumberLineageEntry } from "@story-fm/domain";
-import {
-  naturalPositionOf,
-  SQUAD_NUMBER_MAX,
-  SQUAD_NUMBER_MIN,
-  SYMBOLIC_NUMBERS,
-  josa,
-} from "@story-fm/domain";
+import { naturalPositionOf, SQUAD_NUMBER_MAX, SQUAD_NUMBER_MIN, josa } from "@story-fm/domain";
 import { playerName, type GameState } from "../core/state";
 
 const ALL_NUMBERS = Array.from({ length: 99 }, (_, index) => index + 1);
@@ -181,19 +175,6 @@ export function numberLineageOf(state: GameState, teamId: string, number: number
 }
 
 /**
- * 지금 그 팀에서 **비어 있는 상징 번호**의 계보 — 근황(`number-open`)과 협상이
- * 같은 문을 지난다 (people.md §7 · §6의 `numberWishOf`).
- *
- * 계보가 없는 공석도 함께 낸다 — 원하는 선수를 고르는 것은 부르는 쪽의 일이고,
- * 여기서 걸러 내면 "아직 아무의 번호도 아닌 7번"이 어디에도 서지 못한다.
- */
-export function openSymbolicNumbers(state: GameState, teamId: string): NumberLineage[] {
-  return SYMBOLIC_NUMBERS.map((number) => numberLineageOf(state, teamId, number)).filter(
-    (lineage) => lineage.holder === null,
-  );
-}
-
-/**
  * 번호 배정이 막힌 이유 — **코드와 수치다** (등록 규칙의 `RegistrationBlock`과 같은 결).
  * 문장은 `numberBlockText` 한 자리가 만든다.
  */
@@ -236,8 +217,7 @@ export interface NumberAssignment {
  * 받는다**: 번호 없이 남겨 두면 명단에 번호 없는 줄이 생기고 다음 로드가 아무
  * 번호나 채운다.
  *
- * 불만은 여기서 세우지 않는다 — 무엇이 사실인지만 낸다(`displaced`). 그것이 라커룸에
- * 닿는지는 원형이 정하고(`numberGrievanceStands`) 그 판정은 부르는 쪽의 일이다.
+ * 번호를 받은 선수와 새 번호로 옮긴 선수를 사실로 돌려준다(`displaced`).
  */
 export function assignRequestedNumber(
   state: GameState,
@@ -271,8 +251,6 @@ export function assignRequestedNumber(
    * (계보는 위에서 이미 읽었으므로 순서가 값을 바꾸지 않는다.)
    */
   player.squadNumber = number;
-  if (from !== null) player.state.formerSquadNumber = from;
-  player.state.squadNumberOn = state.date;
 
   let displaced: NumberAssignment["displaced"] = null;
   if (holder) {
@@ -281,8 +259,6 @@ export function assignRequestedNumber(
       other.squadNumber = undefined;
       // 뺏긴 선수의 새 번호는 자리 관례가 고른다 — 위에서 이 번호는 이미 임자가 있다
       const gained = assignSquadNumber(state.players, other);
-      other.state.formerSquadNumber = number;
-      other.state.squadNumberOn = state.date;
       displaced = { player: other, lost: number, seasons: holder.seasons, gained };
     }
   }

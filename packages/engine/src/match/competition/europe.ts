@@ -249,7 +249,7 @@ export type CupWinners = Record<string, { uel?: string; uecl?: string } | undefi
  * 첫 우승팀의 연쇄로 목록의 주인이 이미 바뀌어 있어, 들어온 순서로 고르면 위
  * 순위 팀이 밀린다.
  *
- * 리그별 티켓 수는 그대로라 대회 정원(UCL 36·UEL 24·UECL 24)과 짝수 제약이
+ * 리그별 티켓 수는 그대로라 대회 정원(UCL 24·UEL 16·UECL 10)과 짝수 제약이
  * 흔들리지 않는다. 자리의 **주인만** 바뀐다.
  */
 export function allocateEuropeanSlots(

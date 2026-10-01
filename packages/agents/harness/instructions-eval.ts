@@ -292,11 +292,11 @@ async function main() {
       criterion: "Discussion only; no commands.",
     },
     {
-      name: "club-budget-request",
+      name: "transfer-list",
       role: "market-orders" as const,
-      said: "여름에 수비수를 보강해야 해. 구단주에게 이적 예산 천만 파운드를 더 요청해 줘.",
+      said: `${player.name}을 이적 명단에 올려 줘.`,
       criterion:
-        "Request the board for £10m transfer budget; no direct ledger adjustment or unrelated commands.",
+        "List the named player for transfer without setting a price or unrelated conditions.",
     },
     {
       name: "squad-number",
@@ -309,19 +309,19 @@ async function main() {
     const keys = Object.keys(ops).filter((key) => ops[key]!.length > 0);
     if (name === "discuss-pressing") return keys.length === 0;
     const command =
-      name === "club-budget-request"
-        ? "request_board"
+      name === "transfer-list"
+        ? "set_transfer_list"
         : name === "squad-number"
           ? "set_squad_number"
           : "set_tactics";
     if (keys.length !== 1 || keys[0] !== command || ops[command]?.length !== 1) return false;
     const row = object(ops[command][0]);
     if (!row) return false;
-    if (name === "club-budget-request")
+    if (name === "transfer-list")
       return (
-        Object.keys(row).every((key) => ["kind", "amount"].includes(key)) &&
-        row.kind === "transfer-budget" &&
-        row.amount === 10_000_000
+        Object.keys(row).every((key) => ["playerId", "listed"].includes(key)) &&
+        row.playerId === playerId &&
+        row.listed === true
       );
     if (name === "squad-number")
       return (
@@ -713,7 +713,6 @@ async function main() {
     limitations: [
       "Five synthetic semantic checks do not establish production quality or improvement. Directional checks permit model-selected intensity, not an exact numerical target.",
       "A failed or partial directional check is reported as failure, not accepted merely because a tool was called. Manual review remains necessary for legitimate alternative tactics.",
-      "Earlier numeric-slider and personal-funding reports are historical artifacts, not results for these coach-language cases. The previous left-focus failure remains unresolved evidence until a fresh measured run succeeds.",
       "Interpretation cases do not apply commands; full turns check skill routing, pressing behavior and scene presence, not narrative quality.",
       "All provider-reported failed attempt usage is retained. Unreported failure usage and hidden retries cannot be inferred.",
       "Full-turn ledger calls are logical calls, not HTTP attempts. Complete per-attempt accounting is available for direct synthetic evaluator stages only.",

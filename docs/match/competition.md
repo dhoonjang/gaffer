@@ -7,7 +7,7 @@
 
 이 문서는 **규정과 구조**를 다룬다. 그 규정이 달력 위에 어떻게 놓이는가 —
 시즌 편성·48시간 휴식·리그 연기·추첨 상태 기계·tick 진행 — 는
-[../simulation/season.md](../common/season.md)의 몫이다. 구단 쪽에서 본
+[season.md](../common/season.md)의 몫이다. 구단 쪽에서 본
 리그 소속·체급은 [team.md](../common/team.md).
 
 ## 1. 대회 카탈로그
@@ -37,7 +37,7 @@
 - `isCup`(유럽 + 국내) · `isEuroCup`(대항전 고유) · `isDomesticCup`이 판단의 문이고,
   대회 표시명은 `competitionName` 하나가 리그·컵 구분 없이 답한다.
 
-### 징계 규정 — 대회마다 다르고, 표는 따로 산다 (`common/data/discipline-catalog.ts`)
+### 징계 규정 — 대회마다 다르고, 표는 따로 산다 (`packages/engine/src/common/data/discipline-catalog.ts`)
 
 카탈로그 항목에 필드로 달려 있지 않다. **경고 눈금은 대회의 것이지만 퇴장 정지의
 범위는 협회의 것**이라(잉글랜드의 퇴장은 리그·FA컵·카라바오컵에 다 걸린다) 한
@@ -48,7 +48,7 @@
 `disciplineOf(competitionId)`가 그 대회의 규정을, `disciplineJurisdictionOf`가 관할
 (`eng`·`esp`·`ita`·`ger`·`fra`·`uefa`)을 답한다. 대회가 아닌 경기(친선·2군)는 널이라
 카드가 쌓이지도 정지가 소화되지도 않는다. 리그별 눈금과 그 근거는
-[../simulation/match.md](match.md) §6 징계.
+[match.md](match.md) §6 징계.
 
 ### 친선은 대회가 아니다
 
@@ -60,7 +60,7 @@
 `competitionId`가 널일 수 있다는 사실이 곧 **대회를 세는 자리마다 건너뛰라는
 표식**이다: 순위표, 시즌 종료 판정, 대회 화면·브래킷, 컵 연기(`reschedule`),
 상금·중계권 수당이 그렇다. 친선이 달력·장부에서 무엇인지는
-[../simulation/season.md](../common/season.md) §2.
+[season.md](../common/season.md) §2.
 
 ### 오버라이드 — 어드민 편집
 
@@ -126,9 +126,9 @@
   "그들끼리의 홈 표"라는 것이 없다. 세 표의 행은 같은 객체이고 **순서만 다르다** —
   화면은 순서를 만들지 않고 고르기만 한다([../overview.md](../overview.md) §5).
 
-### 개인 순위 — 대회 리더보드 (`match/competition/leaderboard.ts`)
+### 개인 순위 — 대회 리더보드 (`packages/engine/src/match/competition/leaderboard.ts`)
 
-시즌 끝에만 서던 시상(→ [../simulation/season.md](../common/season.md) §6)을
+시즌 끝에만 서던 시상(→ [season.md](../common/season.md) §6)을
 **시즌 중에 그대로 보여 준다.** `leaderboardOf(state, competitionId, key, limit, season)`는
 시상이 읽는 그 표(`SEASON_STAT`)를 같은 집계·같은 동점 사슬로 읽는다 — 최종 라운드가
 끝나는 순간 이 표의 1위가 그대로 그 대회 그해의 득점왕이다. 두 자리가 다른 답을 내면
@@ -150,7 +150,7 @@
   선다. 3점은 잉글랜드 협회의 징계 점수와 같은 눈금이다.
 - **평점 문턱은 순위표가 아니라 그 대회의 경기에서 센다** (`ratingFloorOf`) — 그 팀이
   그 대회에서 **결과가 나온 경기**를 `state.matches`에서 세어 절반(올림)으로 끊는다.
-  리그에서는 순위표의 `played`가 곧 그 수라 예전과 같은 값이고, 순위표가 없는 국내
+  리그에서는 순위표의 `played`가 곧 그 수이고, 순위표가 없는 국내
   컵과 녹아웃까지 도는 대항전에도 같은 자가 선다. 시상이 시즌 끝의 라운드 수로 나누는
   것과 꼴이 다른 이유는 하나다 — 10월의 표는 아직 치르지 않은 경기를 문턱에 넣을 수
   없다(그러면 평점 순위가 3월까지 비어 있다). **지금까지 치른** 경기로 끊으면 시즌
@@ -169,6 +169,9 @@
   **대회별로** 남아 있으므로 대항전 리그 페이즈에도 선다. 순위표와 같은 경기를 센다.
   순위표가 아예 없는 국내 컵과 지나간 시즌에는
   서지 않는다 — 그 대회의 탭과 조회에는 개인 순위만 남는다.
+- **화면에서는 「통계」 한 절에 둘이 선다** — 개인·팀을 고르는 탭이 있고 개인이 먼저
+  열린다. 개인 기록이 아직 없으면 개인 탭은 빈 자리로 선다. 팀 열이 없는 대회는 탭 없이
+  개인 순위만 선다.
 
 ### 진출권 구역
 
@@ -280,7 +283,7 @@
 | 쿠프 드 프랑스 | 32강 · 1/14                 | 16강 2/3 · 8강 2/25 · 준결승 4/1              | 5/22        | UEL       |
 
 목표일은 **자리를 찾기 시작하는 날**이지 확정된 경기일이 아니다 — 실제 배정은
-리그·대항전과 겹치지 않는 날을 찾아 잡는다 ([../simulation/season.md](../common/season.md) §3).
+리그·대항전과 겹치지 않는 날을 찾아 잡는다 ([season.md](../common/season.md) §3).
 
 ⚠️ **결승 목표일은 그 시즌의 요일로 먼저 당긴다**(사흘 안). 표의 값은 고정 월·일이라
 해가 바뀌면 요일이 밀리는데, 결승은 설 수 있는 요일이 둘뿐이라 그 밀림이 그대로
@@ -289,7 +292,7 @@
 
 ⚠️ **달력이 비운 주말은 그 라운드가 쓴다.** 리그 달력은 메이저 컵의 진입 라운드
 주말과 결승 주말을, 목표일이 걸리는 주말로 스냅해 통째로 비운다
-([../simulation/season.md](../common/season.md) §2). 그 판정(`cupBlankWeekend`)을
+([season.md](../common/season.md) §2). 그 판정(`cupBlankWeekend`)을
 편성이 그대로 읽지 않으면 비운 주말은 아무 경기 없이 지나가고 라운드는 주중으로
 간다 — FA컵 3라운드 목표일 1/10이 수요일인 시즌엔 화·수, 토요일인 시즌엔 뒤 절반이
 그 앞 수요일로 갔다. 그래서 **달력이 비운 라운드의 목표일은 그 주말의 토요일**이고,
@@ -302,12 +305,12 @@
 1부 리그의 몫에서 나가므로, 2부 클럽이 우승해도 같은 자리를 가져간다.
 확정은 매일 tick이 아니라 **시즌 리뷰 한 곳**에서만 한다. 중복 지급은 대항전과
 같은 방식으로 `FINANCE.prizesPaid`의 안정 키가 막는다 — 표시 항목명이 아니다
-([../simulation/finance.md](../negotiation/finance.md) §4.1).
+([finance.md](../negotiation/finance.md) §4.1).
 
 상금은 **실제 공표치를 £로 환산해 반올림한 값**이다 — FA컵 우승 £2M, 카라바오컵
 우승 £0.1M(리그컵 상금은 실제로 상징적이다), 포칼·코파 이탈리아 우승 £3~4M대.
 실제 국내 컵 상금은 대항전에 비해 아주 작고, 진짜 보상은 매치데이 수입과 서사다
-([../simulation/finance.md](../negotiation/finance.md)). 값은
+([finance.md](../negotiation/finance.md)). 값은
 `DOMESTIC_CUP_CATALOG_SEED.prize` 한 표에만 있고, 재정 규모에 주는 영향은
 finance 하네스(`pnpm balance finance`)의 밴드가 감시한다.
 
@@ -324,9 +327,7 @@ UEL 16 · UECL 10. 남는 자리를 2부로 채우지 않는다(§8).
 | UEL  | 16   | 8         | 4 / 3 / 3 / 3 / 3                      | 4직행 + 8플레이오프 (탈락 4)  |
 | UECL | 10   | 6         | 2 / 2 / 2 / 2 / 2                      | 2직행 + 4플레이오프 (탈락 4)  |
 
-- **1부 티켓 수는 한 칸도 바뀌지 않았다.** 정원이 준 것은 2부 몫이 빠졌기 때문이고,
-  그래서 **감독의 동기(4위로 마치면 UCL)도 유럽 상금도 시즌 경기 수도 움직이지
-  않는다.** 세계에서 사라진 것은 2부 34클럽의 유럽 출전뿐이다.
+- 참가권은 위 표의 1부 리그별 정원과 순위로 배정한다. 2부 클럽은 유럽 대항전에 참가하지 않는다.
 - **통과 팀 수는 언제나 `3 × directSlots`다** — `directSlots = playoffSlots / 2`이고
   본선 대진 수가 2의 거듭제곱이어야 하므로(§7) 고를 수 있는 값이 2·4·8뿐이다.
   24팀이면 12통과(절반 탈락), 16팀이면 12통과, 10팀이면 6통과.
@@ -334,8 +335,8 @@ UEL 16 · UECL 10. 남는 자리를 2부로 채우지 않는다(§8).
 - **UCL은 16강을 열지 않는다**(§4.3). 24팀에서 통과 12면 본선 대진이 여덟이다.
   단계 이름을 지키려고 24팀 전원을 통과시키면 리그 페이즈에서 아무도 떨어지지 않는다 —
   그쪽이 더 크게 어긋난다.
-- **달력은 그대로다.** 리그 페이즈는 매치데이 여덟 날에 얹히고(UCL 화·수 · UEL·UECL
-  목) 녹아웃도 이미 예약된 날짜를 쓴다.
+- 리그 페이즈는 UCL 화·수요일, UEL·UECL 목요일의 매치데이를 사용한다.
+  녹아웃은 대회 달력에 예약된 날짜에 진행한다.
 
 ### 4.1 티켓 배정
 
@@ -419,7 +420,7 @@ UEL 16 · UECL 10. 남는 자리를 2부로 채우지 않는다(§8).
 
 **대회 하나가 경기 하나다.** 리그 페이즈도 브래킷도 없고, 지난 시즌이 낳은 두
 우승자가 중립 구장에서 한 번 붙어 그날 트로피가 나온다. 그래서 카탈로그도 진행도
-국내 컵·대항전과 갈라 두었다(`common/data/super-cup-catalog.ts` · `match/competition/super-cup.ts`) —
+국내 컵·대항전과 갈라 두었다(`packages/engine/src/common/data/super-cup-catalog.ts` · `packages/engine/src/match/competition/super-cup.ts`) —
 라운드가 없는 대회에 라운드 기계를 붙이면 다섯 단계짜리 표에 빈 칸이 넷 생긴다.
 
 | 대회                   | id                | 대진                                | 상금 (우승 / 준우승) |
@@ -472,15 +473,15 @@ UEL 16 · UECL 10. 남는 자리를 2부로 채우지 않는다(§8).
   스쿼드가 절차 생성 클럽보다 늘 높아 매년 같은 셋이 올라온다. 서열 + 시즌을 섞은
   시드라 4·5위도 올라온다.
 - **감독이 2부에 있는 시즌만은 그 리그가 리그전을 돈다**(`LeagueMembership.extraLeagues`
-  — [../simulation/season.md](../common/season.md) §7). 순위표가 진짜로 있으므로
+  — [season.md](../common/season.md) §7). 순위표가 진짜로 있으므로
   승격도 전력 서열이 아니라 그 표를 쓴다. §1 표의 "리그전 없음"이 갈리는 자리가 여기다.
 - 강등·승격 두 목록을 **먼저** 정한다 — 방금 강등된 팀이 그 자리에서 다시 올라오지
   않게 한다.
 - 아래 리그가 세이브에 실제로 있어야 승강이 일어난다(`hasRelegation`) — 축소 세계엔 없다.
 - 강등에는 파라슈트 페이먼트가 따라붙고 승격하면 끝난다
-  ([../simulation/finance.md](../negotiation/finance.md) §9-1).
+  ([finance.md](../negotiation/finance.md) §9-1).
 
-## 5-1. 대표팀 소집 — 휴식기는 사건이다 (`match/competition/international.ts`)
+## 5-1. 대표팀 소집 — 휴식기는 사건이다 (`packages/engine/src/match/competition/international.ts`)
 
 A매치 휴식기는 리그가 쉬는 네 주말이자(§2 · `INTERNATIONAL_BREAKS`) **선수가
 클럽을 떠났다 돌아오는 열흘**이다. 감독의 9·10·11·3월은 주전 열 명이 흩어졌다
@@ -501,7 +502,7 @@ A매치 휴식기는 리그가 쉬는 네 주말이자(§2 · `INTERNATIONAL_BRE
 | 11월   | 11/12 ~ 11/18             | 첫날 | 마지막 날 |
 | 3월    | 3/22 ~ 3/31 (시즌 이듬해) | 첫날 | 마지막 날 |
 
-창 자체는 달력의 것이다(`INTERNATIONAL_BREAKS` — `match/competition/calendar.ts`).
+창 자체는 달력의 것이다(`INTERNATIONAL_BREAKS` — `packages/engine/src/match/competition/calendar.ts`).
 표가 거기 사는 이유는 **리그 라운드를 비우는 판정(`isBlankWeekend`)이 같은 표를
 읽기 때문**이다. 소집 쪽으로 옮기면 달력이 소집 모듈을 불러야 하고, 소집 모듈은
 세계 상태를 읽으므로 `calendar → international → state → calendar`가 된다.
@@ -566,7 +567,7 @@ MF 7 · FW 5. 정원이 없으면 미드필더 스물셋을 소집하는 나라�
   여덟이면 한 휴식기에 누군가 다쳐 돌아올 확률이 대략 10%, 시즌이면 3분의 1이다.
 - 소집 중인 선수는 **훈련 결산·훈련 부상·2군 경기·경기 명단에서 빠진다** —
   `isAvailable`이 부상·정지와 함께 소집을 본다(경기 명단은 그 경기의 대회로 묻는
-  `isAvailableFor`다 — [../simulation/match.md](match.md) §6). 3월
+  `isAvailableFor`다 — [match.md](match.md) §6). 3월
   휴식기 창에는 리그컵 결승이 걸릴 수 있으므로(§3.4) 이 문은 실제로 닫힌다.
 
 ### 장부 — 무엇이 남고 무엇이 접히는가
@@ -618,7 +619,7 @@ MF 7 · FW 5. 정원이 없으면 미드필더 스물셋을 소집하는 나라�
 - 승부차기는 5킥씩, 동점이면 서든데스. **킥 하나가 사건 하나로 장부에 남는다** —
   키커·골키퍼·성공 여부·그 킥의 확률(`ShootoutKick`). 차는 사람은 **그 경기를 끝낸
   열한 명**이고(소속 선수 상위 11이 아니다 →
-  [../simulation/match.md](match.md) §7) 성공률은 키커의 결정력·침착성·
+  [match.md](match.md) §7) 성공률은 키커의 결정력·침착성·
   킥력과 골키퍼의 골키핑·침착성이 함께 정하되 대역은 **0.62\~0.80**으로 좁다 — 실력이
   덜 갈리는 무대라 이변이 여기서 태어난다. 유럽 대항전과 국내 컵이 `penaltyRate`
   하나를 쓴다.
@@ -629,7 +630,7 @@ MF 7 · FW 5. 정원이 없으면 미드필더 스물셋을 소집하는 나라�
   **승부차기는 정지점을 하나 더 갖는다** — 감독이 키커 순서를 정하고 진행 한 번에 한
   발씩 중계된다. 타 팀 경기만 한 번에 굴린다. `MatchResult.aet`가 이중 적용의
   문지기다. 연장의 득점률·교체 한도·피로와 승부차기 절은
-  [../simulation/match.md](match.md).
+  [match.md](match.md).
 - **승자를 묻는 자리는 읽기만 한다** — `domesticTieWinner` · `euroTieWinner`는 이미
   적힌 결과를 읽고, 연장·승부차기를 굴리는 것은 `resolveDomesticTie` ·
   `resolveEuroTie`다. 그것을 부르는 곳은 대회를 진행시키는 `advanceDomesticCups` ·
@@ -680,7 +681,7 @@ MF 7 · FW 5. 정원이 없으면 미드필더 스물셋을 소집하는 나라�
 - **리그전을 도는 리그는 2\~20팀의 짝수다.** 홀수면 라운드로빈이 부전승을 만들고,
   20팀을 넘으면 38라운드 골격에 배치할 매치위크가 모자란다.
 - **어드민 편집도 이 불변식을 지킨다** — 저장 시점에 막힌다
-  (`app/catalog-invariants.ts`). 어기면 실패가 편집한 순간이 아니라 새 게임을
+  (`packages/engine/src/app/catalog-invariants.ts`). 어기면 실패가 편집한 순간이 아니라 새 게임을
   시작할 때 터진다. **새 게임도 같은 문을 지난다**(`createGame`의
   `assertCatalogValid`) — 손으로 고친 오버라이드는 저장 검사를 지나지 않는다
   ([team.md](../common/team.md) §1).
@@ -719,19 +720,16 @@ MF 7 · FW 5. 정원이 없으면 미드필더 스물셋을 소집하는 나라�
   구성이 함께 흔들린다.
 - **순위표 구역은 1위부터 빈틈없이 이어진다** (§2).
 
-## 8. 미해결
+## 8. 구현 범위와 한계
 
 - **국내 컵의 진입 라운드는 여전히 32클럽이다.** 나라마다 1부 + 2부 32클럽뿐이라
   FA컵 3라운드·포칼 1라운드(각 64팀)를 채울 수 없어, 32클럽이 서는 라운드의
-  이름으로 시작한다(§3.1). 나라마다 3부를 더하면 그 라운드를 실제 규모로 연다 —
-  클럽 수가 두 배가 되므로 세계 생성·매 tick 간이 시뮬 비용이 함께 는다.
+  이름으로 시작한다(§3.1).
 - **대항전 정원이 실제보다 작다** — UCL 24 · UEL 16 · UECL 10이다(§4). 아약스·벤피카·
   셀틱이 설 자리를 우리 세계가 갖고 있지 않기 때문이고, UCL이 16강을 열지 못하는 것도
-  같은 이유다. 그 나라들의 1부를 카탈로그에 추가하면 정원이 실제 규모로 자란다 —
-  클럽과 스쿼드가 함께 늘어나므로 세계 생성·매 tick 간이 시뮬 비용이 든다.
+  같은 이유다. 대회 규모는 현재 카탈로그와 참가 배분 규칙을 따른다.
 - **A매치는 굴리지 않는다** — 소집·출전·골은 결정적 추첨이고 경기 자체는 세계에
-  없다(§5-1). 실제 예선·본선의 조 편성과 순위표를 세우면 대표팀 감독이라는 인물이
-  필요해지고, 그때부터 그것은 이 게임의 두 번째 게임이다.
+  없다(§5-1). 대표팀 예선·본선의 조 편성과 순위표는 제공하지 않는다.
 
 ## 코드 위치
 
@@ -745,7 +743,7 @@ MF 7 · FW 5. 정원이 없으면 미드필더 스물셋을 소집하는 나라�
 | 카탈로그 오버라이드 (읽기·쓰기·캐시)             | `packages/engine/src/common/data/catalog-source.ts` · `cup-override.ts`                                                                             |
 | 리그·컵 어드민 (조회 · 편집 · 추가 · 삭제)       | `packages/engine/src/app/admin/admin-competition.ts`                                                                                                |
 | 카탈로그 불변식 (순수)                           | `packages/engine/src/app/catalog-invariants.ts`                                                                                                     |
-| 순위표 · 진출권 구역                             | `packages/engine/src/app/season.ts` · `app/views.ts`                                                                                                |
+| 순위표 · 진출권 구역                             | `packages/engine/src/app/season.ts` · `packages/engine/src/app/views.ts`                                                                            |
 | 국내 컵 진행                                     | `packages/engine/src/match/competition/domestic-cup.ts` · `packages/engine/src/app/workflows/match/competition/domestic-cup.ts`                     |
 | 대항전 배정 · 리그 페이즈 편성                   | `packages/engine/src/match/competition/europe.ts`                                                                                                   |
 | 대항전 녹아웃                                    | `packages/engine/src/match/competition/euro-knockout.ts` · `packages/engine/src/app/workflows/match/competition/euro-knockout.ts` · `euro-prize.ts` |

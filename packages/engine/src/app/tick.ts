@@ -1,3 +1,4 @@
+import { expireStaffContracts } from "../negotiation/market/staff-market";
 import {
   type TickEvent,
   type ScheduleEntry,
@@ -10,7 +11,6 @@ import {
   clampCondition,
   clampFatigue,
   fatigueOf,
-  FATIGUE_BAND_FLOOR,
   familiarityAwayDayOf,
   clampFamiliarity,
   familiarityAfterAwayDay,
@@ -31,12 +31,10 @@ import {
   type GameState,
   playerById,
   teamNameIn,
-  pushNarrative,
   managedTeamId,
   userPlayers,
   openInjuryIds,
   assignmentFor,
-  squadLevelOf,
   isInjured,
   teamShortNameIn,
   ensureSeasonStat,
@@ -60,9 +58,6 @@ import {
   expiringContracts,
 } from "../negotiation/market/negotiation";
 import { diffDays, dayOfWeek, addDays, MONDAY, seasonYear } from "../common/core/dates";
-import { demotionPatienceDaysOf, overloadPatienceDaysOf } from "../match/squad/demotion";
-import { betterThanInSquad, declinePendingPress } from "../story/world/press";
-import { SQUAD_CORE_SIZE } from "../common/players/squad-depth";
 import { makeRng } from "../common/core/rng";
 import {
   returnDueLoans,
@@ -101,15 +96,7 @@ import { tickOtherClubs, driftFamiliarity } from "../match/squad/other-clubs";
 import { settleCallUps } from "./workflows/match/competition/international";
 import { settleTactics } from "../match/commands/lineup";
 import { openInjuryFor } from "./workflows/match/health/injury";
-import {
-  retirementDeclarationDate,
-  declareRetirements,
-  youthIntakeDeadline,
-  settleYouthIntake,
-  allMatchesDone,
-  endSeason,
-} from "./season";
-import { tickMedia } from "./workflows/story/world/media";
+import { youthIntakeDeadline, settleYouthIntake, allMatchesDone, endSeason } from "./season";
 import {
   runMonthlyFinance,
   ensureMonthlyPosted,
@@ -118,24 +105,17 @@ import {
   applyAiMatchFinance,
 } from "../negotiation/finance/finance";
 import { applyMonthlyDevelopment } from "../story/players/development";
-import { tickPromises, minutesShortfalls, shortfallText } from "../negotiation/players/promises";
 import { runAiRenewals } from "./workflows/negotiation/market/negotiation";
 import { runAiTransfers } from "../negotiation/market/ai-market";
-import {
-  runManagerMarket,
-  reviewManagerContract,
-} from "./workflows/negotiation/market/manager-market";
-import { openEvePress } from "./workflows/story/world/press";
+import { reviewManagerContract } from "./workflows/negotiation/market/manager-market";
+import { expireStaleOffers } from "../negotiation/market/manager-market";
 import { tickBoardRequests } from "../negotiation/finance/board-request";
-import { tickApproaches } from "./workflows/story/world/approach";
-import { tickOpenings } from "../story/people/openings";
 import { simSquadOf, simSquadFor } from "../match/squad/simulation";
-import { derbyForMatch } from "../common/world/derby";
 import { quickSimulate, quickSimKeyOf, quickSimOptionsOf, playedIn } from "../match/flow/quick-sim";
 import { isFriendly } from "../common/core/match-kinds";
 import { journal } from "../common/core/journal";
 import { matchRating } from "../match/flow/ratings";
-import { applyResultMood } from "../story/players/slump";
+import { predictionsDue, standPredictions } from "../match/competition/prediction";
 import { recordCard } from "../match/flow/discipline";
 import { hasCups } from "../common/world/scope";
 import { advanceEuroKnockouts } from "./workflows/match/competition/euro-knockout";
@@ -162,7 +142,7 @@ export {
  * advance_time — 캘린더 시계가 흐르는 유일한 경로 (season.md §5).
  * 하루 단위 tick을 결정적으로 적용하고, 감독의 결정이 필요한 이벤트에서 멈춘다.
  *
- * v6: 훈련·경기·이적창이 모두 SCHEDULE_ENTRY로 등록돼 있으므로, 하루의 처리는
+ * 훈련·경기·이적창이 모두 SCHEDULE_ENTRY로 등록돼 있으므로, 하루의 처리는
  * "그 날짜의 엔트리를 시간 순으로 소화"하는 일이 된다. 성장·부상·징계·주급은
  * 각각 기록 테이블에 남는다 (로그 없는 변화 없음).
  */
@@ -262,7 +242,6 @@ function dailyTick(
   const players = managed ? userPlayers(state) : [];
   const dow = dayOfWeek(state.date);
   const rng = makeRng(state.seed, `tick:${state.date}`);
-  const issuePlayers = new Set(state.issues.map((i) => i.gamePlayerId));
   // 복귀일이 지난 임대는 오늘 돌아온다
   returnDueLoans(state, digest);
   // 경기일엔 훈련하지 않는다 — 나중에 편성된 컵 경기가 이미 깔린 훈련과 겹칠 수 있다.
@@ -358,16 +337,6 @@ function dailyTick(
       ),
     );
     /**
-     * **과부하가 시작된 날** — "며칠째인가"의 유일한 원본 (people.md §5).
-     * 문턱 아래로 내려가면 지운다: 감독이 손을 써서 잔고가 빠졌다면 그 시계는
-     * 이어지는 것이 아니라 **끝난** 것이고, 다시 넘으면 그날부터 새로 센다.
-     */
-    if (fatigueOf(player.state) >= FATIGUE_BAND_FLOOR.overloaded) {
-      player.state.overloadedOn ??= state.date;
-    } else {
-      delete player.state.overloadedOn;
-    }
-    /**
      * 폼은 **매일** 평균으로 조금 끌린다 (form.ts).
      *
      * 주 1회 계단으로 내리면 주 2경기 팀은 +2가 붙고 −1만 빠져 회귀가 늘
@@ -397,9 +366,6 @@ function dailyTick(
         );
       }
     }
-    if (issuePlayers.has(player.id)) {
-      player.state.condition = clampCondition(player.state.condition - 1);
-    }
   }
 
   tickOtherClubs(state);
@@ -408,7 +374,7 @@ function dailyTick(
    * **A매치 휴식기 — 첫날 소집, 마지막 날 복귀** (competition.md §5-1).
    *
    * 무직이어도 돈다 — 대표팀은 세계의 일이고, 감독이 없다고 명단이 서지 않는 것은
-   * 아니다 (`declareRetirements`와 같은 결).
+   * 아니다.
    *
    * ⚠️ 정산은 **그날의 회복이 이미 얹힌 뒤**에 선다(위 루프). 소집된 선수는 열흘
    * 내내 쉬는 날의 눈금으로 회복했고, 이동과 출전의 대가는 그 위에 한 번에 얹는다 —
@@ -488,7 +454,6 @@ function dailyTick(
           "injury",
           `훈련 중 부상: ${victim.name} — ${part}, 약 ${days}일 결장 예상`,
         );
-        pushNarrative(state, `${victim.name} 훈련 중 ${part} 부상 (${days}일)`, 3);
       }
       // 훈련도 노출이다 — 다치지 않고 소화한 만큼 성향이 내려간다
       const exposure = trainingExposure(hardSessions, candidates.length);
@@ -497,30 +462,17 @@ function dailyTick(
   }
 
   /**
-   * **은퇴 예고** — 1월 1일, 세계 전체가 같은 규칙으로 (season.md §6).
-   *
-   * 무직이어도 돈다: 판정은 세계의 일이고, 감독이 없다고 서른다섯이 한 시즌을 더
-   * 뛰지는 않는다. 우리 팀 이름만 다이제스트에 선다.
-   */
-  if (state.date === retirementDeclarationDate(state.season)) declareRetirements(state, digest);
-
-  /**
    * **유스 인테이크의 마감 — 선수단 소집일** (season.md §6).
    *
    * 날짜가 같은지가 아니라 **지났는지**를 묻는다: 조기 소집이 소집일 자체를 앞당기므로
    * (`recallSquadEarly`) 그 하루를 놓치면 후보가 여름을 넘겨 남는다. 답하지 않은 감독의
-   * 몫은 코어가 옛 규칙대로 채운다 — 방치는 시간의 결과다.
+   * 후보는 마감 시점에 코어가 정산한다.
    */
   if (state.youthCandidates.length > 0 && state.date >= youthIntakeDeadline(state)) {
     settleYouthIntake(state, digest);
   }
 
-  /**
-   * **언론 — 회견 밖의 기사** (people.md §4-1). 프리시즌의 예상표와 우리 리그 다섯
-   * 경기마다의 평가가 여기서 선다. 무직이어도 돈다: 예상표는 세계가 매기는 것이고,
-   * 감독이 없다고 리그의 순서를 아무도 짐작하지 않는 것은 아니다.
-   */
-  tickMedia(state);
+  if (predictionsDue(state)) standPredictions(state);
 
   // 월초 정산 — 지난달 마감(재정 보고서) + 이번 달 정액 항목 (finance.ts).
   // 게임/시즌이 시작하는 7월 1일엔 tick이 돌지 않으므로 첫 tick에서 보정한다
@@ -546,141 +498,6 @@ function dailyTick(
   // 기일은 요일을 모르므로 매일 본다 — 주급·월초 정산과 달리 조건이 없다
   settleDuePayments(state, digest);
 
-  /**
-   * 감독의 약속 — **기한이 된 것만 판정한다** (→ docs/story/people.md §5-2).
-   *
-   * 요일 문이 없다: 기한은 감독이 좁힐 수 있어 아무 날에나 떨어지고, 판정은 기한
-   * 하루뿐이라 그날을 지나치면 영영 판정되지 않는다. 이행 여부는 전부 다른 장부에서
-   * 나온다 — 출전 명단 · 이적 리스트 · 열린 협상 · 완장.
-   *
-   * ⚠️ **출전 불만보다 먼저 선다** — 한 선수에게 불만 줄은 하나라, 같은 날 둘이
-   * 겹치면 먼저 선 쪽이 자리를 지킨다. 어긴 약속이 이기는 것은 그것이 **감독 자신이
-   * 세운 원인**이기 때문이다 (people.md §5): 출전이 모자란 것과 세우겠다고 말해 놓고
-   * 안 세운 것은 라커룸에서 다른 사실이고, 다가옴의 눈금도 그렇게 말한다(§8 — 약속 9 ·
-   * 출전 7).
-   */
-  if (managed) tickPromises(state, digest);
-
-  /**
-   * 출전 기회 불만 — **주사위가 없다. 지위가 잰다** (→ docs/story/people.md §5).
-   *
-   * 최근 `PROMISE_WINDOW_MATCHES`(8)경기 선발 비율이 그의 **계약 지위**가 부르는
-   * 비율에 못 미치면 그 자리에서 선다. 확률을 걷어 낸 이유는 강등·등재와 같다 —
-   * 방치의 대가는 규칙이 아니라 시간의 결과여야 하고(overview.md §1 철칙 4),
-   * 감독이 예측할 수 없는 불만은 손잡이가 아니라 소음이다.
-   *
-   * 대상도 문턱도 전부 `minutesShortfalls`가 쥔다 — **약속 이행 판정과 같은 자다**
-   * (`promiseKept`). 자를 둘 두면 "약속은 지켰는데 불만이 서는" 상태가 생긴다.
-   * 리그 개막 후에만 본다: 프리시즌엔 논할 경기가 없다.
-   */
-  if (managed && dow === MONDAY && state.date >= state.calendar.start) {
-    const shortfalls = minutesShortfalls(state);
-    if (shortfalls.length > 0) {
-      for (const row of shortfalls) {
-        state.issues.push({
-          gamePlayerId: row.player.id,
-          kind: "unhappy",
-          reason: "minutes",
-          // 창 안에서 몇 번을 더 세웠어야 했는가 — 기간이 아니라 모자란 선발 수다
-          count: row.short,
-          since: state.date,
-        });
-      }
-      /** 여럿이 한날 문턱을 넘으면 전부 걸리되, 줄은 하나다 — 이름이 화면을 채우지 않게 */
-      const worst = Math.max(...shortfalls.map((row) => row.short));
-      const line =
-        shortfalls.length === 1
-          ? shortfallText(shortfalls[0]!)
-          : `출전 기회 불만 ${shortfalls.length}명 — 최대 선발 ${worst}회 부족`;
-      digest.push(line);
-      pushNarrative(state, line, 3);
-    }
-  }
-
-  /**
-   * 2군 방치 불만 — **추첨이 없다** (→ docs/story/people.md §5). 문턱을 넘으면 걸리므로
-   * 감독이 날짜를 셀 수 있고, 방치의 대가가 확률이 아니라 시간의 결과가 된다.
-   *
-   * 개막일 문을 걸지 않는 이유: 벤치 불만은 "아직 뛸 경기가 없다"가 성립하지만,
-   * 프리시즌에 2군으로 내려 21일을 둔 것은 개막 뒤와 같은 사실이다.
-   */
-  if (dow === MONDAY) {
-    const neglected = players.filter((p) => {
-      if (squadLevelOf(p) !== "reserve") return false;
-      const since = p.state.demotedOn;
-      // 문턱은 사람마다 다르다 — 방치의 대가는 시간의 결과이되 그 시간은 그의 것이다
-      if (!since || diffDays(since, state.date) < demotionPatienceDaysOf(state, p)) return false;
-      if (state.issues.some((i) => i.gamePlayerId === p.id)) return false;
-      return betterThanInSquad(state, p) < SQUAD_CORE_SIZE;
-    });
-    if (neglected.length > 0) {
-      for (const p of neglected) {
-        // `count`는 없다 — 기간은 `demotedOn`이 갖는다
-        state.issues.push({
-          gamePlayerId: p.id,
-          kind: "unhappy",
-          reason: "demotion",
-          since: state.date,
-        });
-      }
-      /** 여럿이 한날 문턱을 넘으면 전부 걸리되, 줄은 하나다 — 이름이 화면을 채우지 않게 */
-      const longest = Math.max(
-        ...neglected.map((p) => diffDays(p.state.demotedOn ?? state.date, state.date)),
-      );
-      const line =
-        neglected.length === 1
-          ? `${neglected[0]!.name} 2군 방치 불만 — 2군 ${longest}일째`
-          : `2군 방치 불만 ${neglected.length}명 — 최장 ${longest}일째`;
-      digest.push(line);
-      pushNarrative(state, line, 3);
-    }
-  }
-
-  /**
-   * 과부하 불만 — 2군·등재 방치와 **같은 결이다**: 추첨 없이 문턱을 넘으면 걸린다
-   * (→ docs/story/people.md §5 · docs/common/player.md §5.5).
-   *
-   * 대상을 핵심 자원으로 좁히지 않는 이유는 **원인이 출전이기 때문**이다. 백업이
-   * 「과부하」에 닿았다면 그는 이미 뛰고 있는 선수이고, 정리 대상이 조용한 것과는
-   * 다른 사실이다 — 강등·등재가 `betterThanInSquad` 문을 지나는 것은 그 둘이
-   * **안 쓰는 자원**에 대한 결정이어서다.
-   *
-   * 몸을 쓰지 않는 사람에게는 서지 않는다: 훈련에서 빠져 있거나 다쳐 있으면 잔고는
-   * 이미 가장 빠르게 빠지는 중이라, 그 며칠을 감독의 방치로 셀 수 없다.
-   */
-  if (dow === MONDAY) {
-    const overworked = players.flatMap((p): { player: GamePlayer; days: number }[] => {
-      const since = p.state.overloadedOn;
-      if (!since) return [];
-      if (restingOn(state, p.id) || isInjured(state, p.id)) return [];
-      const days = diffDays(since, state.date);
-      // 문턱은 사람마다 다르다 — 과부하의 대가도 시간의 결과이되 그 시간은 그의 것이다
-      if (days < overloadPatienceDaysOf(state, p)) return [];
-      if (state.issues.some((i) => i.gamePlayerId === p.id)) return [];
-      return [{ player: p, days }];
-    });
-    if (overworked.length > 0) {
-      for (const { player, days } of overworked) {
-        // `count`는 **며칠째**다 — 시작점은 `PlayerState.overloadedOn`이 갖는다
-        state.issues.push({
-          gamePlayerId: player.id,
-          kind: "unhappy",
-          reason: "overload",
-          count: days,
-          since: state.date,
-        });
-      }
-      /** 여럿이 한날 문턱을 넘으면 전부 걸리되, 줄은 하나다 — 이름이 화면을 채우지 않게 */
-      const longest = Math.max(...overworked.map((row) => row.days));
-      const line =
-        overworked.length === 1
-          ? `${overworked[0]!.player.name} 과부하 불만 — ${longest}일째`
-          : `과부하 불만 ${overworked.length}명 — 최장 ${longest}일째`;
-      digest.push(line);
-      pushNarrative(state, line, 3);
-    }
-  }
-
   if (managed) expireNegotiations(state, kind.interest);
   // 다른 구단의 재계약 — 노리던 선수를 놓칠 수 있다
   runAiRenewals(state, digest);
@@ -688,19 +505,10 @@ function dailyTick(
   if (windowOpenOn(state.windows, state.date)) signFreeAgents(state, digest);
   // 남의 팀끼리의 이적·임대 — 세계는 감독 없이도 돈다 (ai-market.ts)
   runAiTransfers(state, digest);
-  // 벤치의 사람도 바뀐다 — 라이벌의 경질·선임 (manager-market.ts)
-  // 무직이면 그 자리 중 하나가 감독의 것이 될 수도 있다 (career.md §5.1)
-  const offered = runManagerMarket(state, digest);
+  expireStaleOffers(state, digest);
   if (managed) {
     warnExpiringContracts(state, digest);
   }
-
-  /**
-   * 전야 회견 — 내일이 개막이거나 더비면 오늘 자리가 선다 (people.md §4).
-   * **다가옴보다 먼저** 부른다: 갓 열린 회견이 그날의 다가옴을 막는 문이 서려면
-   * 자리가 이미 있어야 한다.
-   */
-  if (managed) openEvePress(state, digest);
 
   /**
    * 세계가 먼저 말을 건다 — 압력이 임계를 넘으면 코어가 자리를 연다 (people.md §8).
@@ -708,21 +516,11 @@ function dailyTick(
    *
    * 무직에게는 찾아올 사람이 없다 — 선수단도 보드도 이제 남의 것이다 (career.md §5.1).
    */
-  /**
-   * 보드 요청 — 구단주 원형이 이적창마다 거는 조건 (career.md §5.2). 다가옴보다
-   * 먼저 판정해야 구단주가 오는 자리의 사실 카드가 오늘의 요청 상태를 싣는다.
-   * 무직에게는 요청이 서지도 판정되지도 않는다 — 보드도 이제 남의 것이다.
-   */
-  /**
-   * 감독이 보드에 건 요청 — 오늘 답이 도착했으면 판정하고 그 자리에서 반영한다
-   * (finance.md §9.6). 구단주 요청과 방향이 반대인 별개 상태라 눈금을 나누지
-   * 않는다. 무직에게는 답할 보드가 없다.
-   */
-  if (managed !== null) tickBoardRequests(state, kind.board);
-  const approached = managed !== null && tickApproaches(state, digest);
 
-  // 시작 사건은 기한이 닫는다 (career.md §1).
-  tickOpenings(state, digest);
+  // Recorded club obligations settle even when the manager leaves.
+  for (const name of expireStaffContracts(state, state.date))
+    kind.board.push(`스태프 계약 만료 — ${name}`);
+  tickBoardRequests(state, kind.board);
 
   // 이적창 개장·폐장 안내
   for (const entry of todays) {
@@ -736,7 +534,6 @@ function dailyTick(
         ? `${kindKo} 이적시장이 열렸다 (${w.opensOn} ~ ${w.closesOn})`
         : `${kindKo} 이적시장이 닫혔다`,
     );
-    pushNarrative(state, `${kindKo} 이적시장 ${entry.type === "window-open" ? "개장" : "마감"}`, 3);
   }
 
   /**
@@ -752,7 +549,7 @@ function dailyTick(
   );
   for (const item of deadlineDue)
     pushEvent(digest, "interest", `${item.label} — 오늘이 기한입니다`);
-  return approached || offered || deadlineDue.length > 0;
+  return deadlineDue.length > 0;
 }
 
 /**
@@ -822,7 +619,6 @@ export function warnExpiringContracts(state: GameState, digest: TickSink, final 
       "contract",
       `${player.name}의 계약이 ${left}일 남았습니다 (${contract.until}) — 재계약하지 않으면 시즌 뒤 떠납니다`,
     );
-    pushNarrative(state, `${player.name} 계약 ${left}일 남음`, stage <= 90 ? 4 : 3);
   }
 }
 
@@ -878,7 +674,6 @@ export function settleQuickMatch(
     away: simSquadOf(state, match.awayTeamId, match.competitionId),
   };
   // 라커룸이 읽는 열기 — 시뮬 입력은 `quickSimOptionsOf`가 같은 표에서 세운다
-  const derby = derbyForMatch(match);
   /**
    * 채널과 경기의 사실(중립·더비)을 조립하는 자리는 한 곳이다 — 킥오프에 굴리는
    * 라이브 스코어가 같은 함수를 읽어야 45분에 본 스코어가 여기 그대로 적힌다
@@ -1045,19 +840,6 @@ export function settleQuickMatch(
       // 폼은 감독 팀만의 것이 아니다 — 같은 함수로 리그 전체가 오르내린다
       p.state.form = clampForm(p.state.form + formDeltaFromMatch(p, rating, outcome));
     }
-    /**
-     * 연패·대패·연승이 라커룸에 남기는 것 (slump.ts) — 남의 팀도 겪는다.
-     * 친선도 겪는다: 라커룸이 움직이는 축은 **폼**이고, 폼은 친선이 닿는
-     * 자리다(season.md §2). 유저 경기(`finalizeMatch`)와 같은 규칙이라야
-     * 프리시즌의 분위기가 리그 전체에서 하나의 눈금으로 움직인다.
-     */
-    applyResultMood(
-      state,
-      teamId,
-      goalsFor - conceded,
-      onPitch[side].map((p) => p.id),
-      derby?.heat ?? 0,
-    );
   }
   // 결승의 평점은 두 팀을 다 센 뒤에 한 번 적는다 — 결승 MOM이 읽을 유일한 재료다
   if (finalRatings && match.result) match.result = { ...match.result, ratings: finalRatings };
@@ -1382,13 +1164,7 @@ export function advanceTime(
     if (allMatchesDone(state) && !pendingBeforeRollover) {
       // 남은 만료 문턱은 여기서 낸다 — 이 뒤로 그 계약에 닿는 tick이 없다
       warnExpiringContracts(state, digest, true);
-      /**
-       * **시즌 최종전의 회견은 시즌 안에서 닫힌다** (people.md §4). 넘기면 다음 시즌
-       * 개막 전야 회견이 그 자리를 방치로 읽어, 새 시즌 첫날에 지난 시즌의 대가가
-       * 청구된다. 대가는 거절과 같다 — 답하지 않은 것은 감독이다.
-       * 무직으로 맞은 시즌 끝에는 답할 자리가 애초에 없다 (career.md §5.1).
-       */
-      if (managedTeamId(state)) declinePendingPress(state, digest);
+
       const seasonEnded = state.season;
       captureScoutingEvidence(state);
       const seasonLines = endSeason(state);
@@ -1469,7 +1245,6 @@ export function advanceTime(
     // 통보가 선 날은 답할 자리가 생긴 날이다 — 경기일이 아니면 주의로 멈춘다
     if (
       needsAttention ||
-      contractDay === "notice" ||
       state.scoutingRequests.some((request) => request.status === "ready") ||
       dueNegotiationFollowups(state).length > 0
     ) {
@@ -1479,7 +1254,7 @@ export function advanceTime(
         events,
         stopped: "attention",
         trained,
-        pendingDateEvents: !needsAttention && contractDay !== "notice",
+        pendingDateEvents: !needsAttention,
       };
     }
     if (typeof until === "object" && d + 1 >= until.days) {

@@ -234,9 +234,6 @@ export type JournalEntry =
   | {
       kind: "history.compacted";
       folded: boolean;
-      memories: number;
-      characters: number;
-      relations: number;
     }
   | { kind: "warn"; where: string; text: string; detail?: string };
 
@@ -348,15 +345,11 @@ export function turnDigestOf(state: GameState): TurnDigest {
       injuries: state.injuries.length,
       suspensions: state.suspensions.length,
       negotiations: state.negotiations.length,
-      promises: state.promises.length,
-      issues: state.issues.length,
       transferList: state.transferList.length,
       transfers: state.transfers.length,
       scoutReports: state.scoutReports.length,
       pendingEdits: state.pendingEdits?.length ?? 0,
       pendingNews: state.pendingNews?.length ?? 0,
-      incidents: state.incidents.length,
-      narrative: state.narrative.length,
     },
   };
 }

@@ -16,7 +16,6 @@ import {
   firstTeamPlayers,
   groupOf,
   isInjured,
-  pushNarrative,
   squadFloorShortfall,
   squadLevelOf,
   teamShortNameIn,
@@ -35,18 +34,8 @@ import { clearDepartedState } from "./departures";
 import { marketBiasOf, marketValueOf, windowOpenForTeam } from "./market";
 
 /**
- * 남의 팀끼리의 이적 시장 — **세계가 감독 없이도 돈다.**
- *
- * 여기서 하는 일은 **거래 자체**다. 협상 과정(오퍼·조정·설득)은 감독의 것이고,
- * AI끼리는 결과만 남긴다 — 매 딜을 협상으로 굴리면 하루에 수백 번의 판정이
- * 필요한데 그 과정을 볼 사람이 없다.
- *
- * ## 빈도를 어떻게 잡았나
- *
- * 실제 5대 리그 구단은 한 시즌에 영입 5~7명 · 임대 아웃 3~5명쯤 한다. 다만
- * 그중 상당수는 우리가 모델링하지 않은 리그(에레디비시·프리메이라·하부리그)와의
- * 거래다. 그래서 **1부 클럽당 시즌 3~4건**을 목표로 잡았다 — 라이벌의 스쿼드가
- * 여름을 지나며 실제로 달라지되, 리그가 하루아침에 재편되지는 않는 정도.
+ * AI 구단 간 이적은 주간 계획과 날짜별 정산으로 처리한다.
+ * 사용자 구단을 제외하며, 시드 난수와 구단·선수·재정 규칙으로 거래를 결정한다.
  */
 
 /** 창이 열린 하루에 시도하는 거래 수 (성사되는 수가 아니다) */
@@ -58,14 +47,7 @@ const LOAN_SHARE = 0.42;
  * 전체 인원만 보면 2군을 잔뜩 안은 구단이 1군을 17명까지 팔아넘긴다.
  */
 const MIN_FIRST_TEAM = 20;
-/**
- * 사는 쪽 상한 — **1군 인원으로 잰다.** 세계를 세울 때 등록이 지키는 상한과
- * 같은 값이다 (`FIRST_TEAM_LIMIT`, domain/squad-rules.ts).
- *
- * ⚠️ 전체 스쿼드(2군·유스 포함)로 재면 안 된다. 1부 클럽의 전체 인원은 처음부터
- * 40~49명이라 상한 34로 두면 **거의 모든 구단이 살 수 없는 상태**가 된다 —
- * 시장이 열려도 하루 스물여섯 번의 시도가 전부 이 문에서 막혔다.
- */
+/** AI 영입의 1군 인원 상한. 등록 규칙의 FIRST_TEAM_LIMIT와 공유한다. */
 const MAX_FIRST_TEAM = FIRST_TEAM_LIMIT;
 /** 그래도 무한정 쌓이지는 않게 — 전체 인원의 최후 상한 */
 const MAX_SQUAD = 52;
@@ -78,28 +60,16 @@ const MAX_SQUAD = 52;
  */
 const CASH_FLOOR_TOP = -10_000_000;
 const CASH_FLOOR_OTHER = 0;
-/**
- * 수준 차 — 이보다 크게 벌어지면 애초에 거래가 성립하지 않는다.
- *
- * ⚠️ **종합의 눈금을 탄다.** 축 가중 평균으로 바뀌며 분포가 좁아졌으므로
- * (player.md §4) 7을 그대로 두면 같은 밴드가 더 넓은 인원을 덮어 AI가 덜 까다로워진다.
- */
+/** AI 구단의 선수단 수준과 영입 대상 종합 능력치 사이에 허용하는 차이. */
 const LEVEL_BAND = 6;
 /** 감독의 달력·브리핑에 올릴 만한 이적 — 이 아래는 조용히 지나간다 */
 const NOTABLE_FEE = 25_000_000;
-/** 옛 82와 같은 인원 비율(상위 8%)에 서는 값 — 눈금이 좁아진 몫이다 */
+/** 브리핑에 표시할 주요 이적의 종합 능력치 기준. */
 const NOTABLE_OVERALL = 78;
 /** 하루에 브리핑할 이적 수 — 창이 열린 날 열 줄씩 올라오면 소음이다 */
 const NOTABLE_PER_DAY = 2;
 
-/**
- * 하루치 스쿼드 색인 — **한 번 훑고 그 뒤로는 O(1)**.
- *
- * `playersOf`는 전 선수(5,700명)를 매번 필터한다. 하루 예순두 번의 시도가 각자
- * 서너 번씩 부르면 하루 tick이 37ms에서 86ms로 뛴다 — 시즌으로 치면 12초가
- * 29초다. 딜이 성사되면 색인도 함께 옮겨 준다(옮기지 않으면 같은 선수가 두 번
- * 팔린다).
- */
+/** 하루 동안 공유하는 구단별 선수 색인. 거래를 정산할 때 소속 이동을 함께 반영한다. */
 interface Squads {
   of(teamId: string): GamePlayer[];
   firstTeam(teamId: string): GamePlayer[];
@@ -199,13 +169,7 @@ function wants(state: GameState, squads: Squads, buyerId: string, player: GamePl
     return player.attributes.overall >= level - LEVEL_BAND * 2 && age >= 26;
   }
   if (Math.abs(level - player.attributes.overall) > LEVEL_BAND) return false;
-  /**
-   * 그 자리가 얇을수록 산다 — 이미 두터우면 굳이 더 쌓지 않는다.
-   *
-   * ⚠️ **1군 인원으로 센다.** 전체 스쿼드(2군·유스 포함)로 세면 포지션군 중앙값이
-   * 12명이라(최대 19) 문턱 8에 거의 모든 1부 구단이 걸린다 — 실제로 그 바람에
-   * 성사되는 딜의 대부분이 2부 구단의 쇼핑이었다.
-   */
+  /** 포지션별 영입 여유는 1군 선수 수로 계산한다. 2군·유스는 이 인원에 포함하지 않는다. */
   const atGroup = firstTeam.filter((p) => groupOf(p) === groupOf(player)).length;
   if (atGroup >= (groupOf(player) === "GK" ? 3 : 9)) return false;
   return bias.veteranAppetite > 1 || age <= 33;
@@ -293,7 +257,6 @@ function moveClub(
   if (voided?.teamId === state.userTeamId) {
     const line = `${player.name} 사전 계약 무산 — ${josa(teamShortNameIn(state, toTeamId), "으로/로")} 이적했습니다`;
     input.digest?.push(`${line}`);
-    pushNarrative(state, line, 4);
   }
 
   settlePlayerFee(state, {
@@ -744,6 +707,5 @@ export function runAiTransfers(state: GameState, digest: TickSink): void {
   for (const { player, deal } of notable) {
     const fee = deal.fee > 0 ? ` (${formatMoney(deal.fee)})` : " (자유계약)";
     digest.push(`${player.name} → ${teamShortNameIn(state, deal.toTeamId)}${fee}`);
-    pushNarrative(state, `${player.name} ${teamShortNameIn(state, deal.toTeamId)} 이적`, 2);
   }
 }

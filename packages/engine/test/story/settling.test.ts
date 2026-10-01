@@ -1,44 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { PLAYER_ARCHETYPE_LABEL, PLAYER_ARCHETYPE_TRAITS } from "@story-fm/domain";
 import {
-  EVENT_BAND,
-  EVENT_CREDIT,
   MATCH_CREDIT,
   addDays,
-  clampSettlingCredit,
-  settlingAnchor,
-  applyTalk,
-  setCaptain,
   SETTLING_TARGET,
   isSettling,
   knowledgeOf,
   loanPlayer,
-  MENTOR_SETTLING,
   observedRating,
-  playerArchetypeOf,
   playerById,
   playersOf,
-  pruneMentoring,
   recallLoan,
   returnDueLoans,
-  settlingFactorText,
   settlingOf,
   settlingPercent,
-  MANAGER_SUBJECT,
-  relationTierOf,
-  setRelationTier,
   type GameState,
 } from "@story-fm/engine";
 import { createTestGame, resultOf } from "../helpers";
-
-function closeOff(state: GameState, playerId: string): void {
-  const name = state.players.find((p) => p.id === playerId)!.name;
-  while (relationTierOf(state, MANAGER_SUBJECT, playerId) !== "hostile") {
-    if (!setRelationTier(state, state.manager.name, name, "hostile")) {
-      throw new Error("사이가 움직이지 않는다");
-    }
-  }
-}
 
 /**
  * 정착 — **날짜가 아니라 겪은 양이다** (settling.ts).
@@ -129,36 +106,22 @@ describe("정착은 감독이 무엇을 하느냐로 갈린다", () => {
     expect(after.matches).toBe(5);
   });
 
-  it("얼마나 큰 변화였는지가 필요량을 정한다 — 근거가 한 줄씩 남는다", () => {
+  it("같은 출전과 훈련 기록은 나이와 국적이 달라도 같은 정착 진행도를 낸다", () => {
     const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    const settling = settlingOf(state, target.id)!;
-    // 배수는 곱해져 목표에 그대로 반영된다
-    const expected = SETTLING_TARGET * settling.factors.reduce((mult, f) => mult * f.multiplier, 1);
-    expect(settling.target).toBeCloseTo(expected, 6);
-  });
-
-  /**
-   * 사람됨도 배수 한 줄이다 — 라커룸 리더는 첫 주에 이름을 부르고 다니고 불안한
-   * 유망주는 몇 달을 겉돈다 (people.md §6 · player.md §9.3).
-   */
-  it("원형이 배수 한 줄로 선다 — 배수 1인 원형에는 서지 않는다", () => {
-    const state = createTestGame(11);
-    for (const target of opponentsOf(state).slice(0, 8)) {
+    const [young, veteran] = opponentsOf(state);
+    young!.birthdate = "2007-01-01";
+    veteran!.birthdate = "1990-01-01";
+    young!.nationality = "ENG";
+    veteran!.nationality = "FRA";
+    for (const target of [young!, veteran!]) {
       sign(state, target.id);
-      const settling = settlingOf(state, target.id)!;
-      const key = playerArchetypeOf(state.seed, playerById(state, target.id)!);
-      const multiplier = PLAYER_ARCHETYPE_TRAITS[key].settling;
-      const row = settling.factors.find((f) => f.code === "archetype");
-      if (multiplier === 1) {
-        expect(row).toBeUndefined();
-        continue;
-      }
-      expect(row).toEqual({ code: "archetype", multiplier, archetype: key });
-      // 문장은 이름뿐이다 — 왜 빨리 녹아드는지는 인물 카드가 이미 안다
-      expect(settlingFactorText(state, row!)).toBe(PLAYER_ARCHETYPE_LABEL[key]);
+      play(state, target.id, 3);
     }
+    const a = settlingOf(state, young!.id)!;
+    const b = settlingOf(state, veteran!.id)!;
+    expect(a.target).toBe(SETTLING_TARGET);
+    expect(b.target).toBe(SETTLING_TARGET);
+    expect(a.progress).toBe(b.progress);
   });
 
   it("원소속 선수는 정착 과정이 없다", () => {
@@ -270,290 +233,5 @@ describe("임대 복귀는 새 영입이 아니다", () => {
     state.date = addDays(state.date, 30);
     loanIn(state, target.id);
     expect(settlingOf(state, target.id)!.joinedOn).toBe(state.date);
-  });
-});
-
-describe("감독의 말도 정착을 움직인다 (SETTLING_EVENT)", () => {
-  it("면담은 적응을 앞당긴다 — 아직 못 쓰는 선수에게도 할 일이 있다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    const before = settlingOf(state, target.id)!.progress;
-
-    const res = applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-    });
-    expect(res.ok).toBe(true);
-    expect(settlingOf(state, target.id)!.progress).toBeGreaterThan(before);
-  });
-
-  it("같은 날 면담을 반복해도 한 번이다 — 연타가 최적 전략이 되면 안 된다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-    });
-    const once = settlingOf(state, target.id)!.eventCredit;
-    for (let i = 0; i < 5; i++) {
-      applyTalk(state, {
-        occasion: "daily",
-        players: [target.id],
-        reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-      });
-    }
-    expect(settlingOf(state, target.id)!.eventCredit).toBe(once);
-  });
-
-  it("델타가 0인 면담은 정착을 움직이지 않는다 — 방향이 없으면 남기지 않는다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    play(state, target.id, 4); // 뒤로 밀리는 것을 보려면 쌓아 둔 게 있어야 한다
-    const before = settlingOf(state, target.id)!.progress;
-    // GM이 무게를 매겨 보내도 방향이 없는 자리에는 실리지 않는다
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0, team: 0 },
-      settling: 99,
-    });
-    expect(state.settlingEvents).toEqual([]);
-    expect(settlingOf(state, target.id)!.progress).toBe(before);
-  });
-
-  /**
-   * **정착 크레딧과 사기는 다른 자로 잘린다** (career.md §2 · player.md §9.3).
-   * 크레딧은 하루 한 번이고 사기는 합계 상한이다 — 같은 날 두 번째 대화가 사기를
-   * 옮기는데 크레딧은 그대로여야, 감독이 대화로 정착을 연타할 수 없으면서도 그날의
-   * 두 번째 대화가 없는 말이 되지 않는다.
-   */
-  it("같은 날 두 번째 대화도 사기는 움직인다 — 멈추는 것은 정착 크레딧뿐이다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    const player = playerById(state, target.id)!;
-    const talk = {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-    } as const;
-
-    applyTalk(state, talk);
-    const afterFirst = player.state.form;
-    const credit = settlingOf(state, target.id)!.eventCredit;
-    expect(credit).toBeGreaterThan(0);
-
-    applyTalk(state, talk);
-    expect(player.state.form).toBeGreaterThan(afterFirst);
-    expect(settlingOf(state, target.id)!.eventCredit).toBe(credit);
-  });
-
-  it("몰아세우면 오히려 더 겉돈다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    play(state, target.id, 4); // 바닥에서 깎이는 걸 보려면 쌓아 둔 게 있어야 한다
-    const before = settlingOf(state, target.id)!.progress;
-    closeOff(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: -0.5, team: -0.5 },
-    });
-    expect(settlingOf(state, target.id)!.progress).toBeLessThan(before);
-  });
-
-  it("팀토크는 정착 중인 선수 전원에게 조금씩 남는다", () => {
-    const state = createTestGame(11);
-    const [a, b] = opponentsOf(state);
-    sign(state, a!.id);
-    sign(state, b!.id);
-    applyTalk(state, { occasion: "daily", reaction: { reason: "면담 반응", target: 1, team: 1 } });
-    expect(settlingOf(state, a!.id)!.eventCredit).toBeGreaterThan(0);
-    expect(settlingOf(state, b!.id)!.eventCredit).toBeGreaterThan(0);
-  });
-
-  it("주장 지명은 소속 기간에 한 번만 쳐준다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    setCaptain(state, { playerId: target.id });
-    const once = settlingOf(state, target.id)!.eventCredit;
-    expect(once).toBeGreaterThan(0);
-    setCaptain(state, { playerId: playersOf(state, state.userTeamId)[0]!.id });
-    setCaptain(state, { playerId: target.id });
-    expect(settlingOf(state, target.id)!.eventCredit).toBe(once);
-  });
-
-  it("정착이 끝난 선수에겐 아무것도 남기지 않는다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    play(state, target.id, Math.ceil((SETTLING_TARGET * 2) / MATCH_CREDIT));
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-    });
-    expect(state.settlingEvents).toEqual([]);
-  });
-});
-
-describe("무게는 GM이 정하고 경계는 코어가 쥔다", () => {
-  const talkAnchor = settlingAnchor("talk", { intensity: 1 });
-
-  it("명령 인자로 준 무게가 그대로 실린다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-      settling: talkAnchor + 2,
-      settlingNote: "통역과 숙소 문제를 함께 풀어 줬다",
-    });
-    const [event] = state.settlingEvents;
-    expect(event!.credit).toBe(talkAnchor + 2);
-    expect(event!.note).toContain("통역");
-  });
-
-  it("앵커에서 EVENT_BAND 밖으로는 못 나간다 — 눈금이 통째로 밀리지 않는다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-      settling: 999,
-    });
-    expect(state.settlingEvents[0]!.credit).toBe(talkAnchor + EVENT_BAND.talk);
-  });
-
-  it("생략하면 코어 앵커 — 연속 반응 크기가 정한다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: 0.5, team: 0.5 },
-    });
-    expect(state.settlingEvents[0]!.credit).toBe(settlingAnchor("talk", { intensity: 1 }));
-  });
-
-  it("나쁜 면담은 GM이 후하게 매겨도 음수 쪽에 머문다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    closeOff(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      players: [target.id],
-      reaction: { reason: "면담 반응", target: -1, team: -1 },
-      settling: 50,
-    });
-    const anchor = settlingAnchor("talk", { direction: -1, intensity: 2 });
-    expect(state.settlingEvents[0]!.credit).toBe(anchor + EVENT_BAND.talk);
-    expect(state.settlingEvents[0]!.credit).toBeLessThan(0);
-  });
-
-  it("팀토크의 무게도 인자로 갈린다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    applyTalk(state, {
-      occasion: "daily",
-      reaction: { reason: "면담 반응", target: 1, team: 1 },
-      settling: 99,
-    });
-    expect(state.settlingEvents[0]!.credit).toBe(
-      settlingAnchor("team_talk", { intensity: 2 }) + EVENT_BAND.team_talk,
-    );
-  });
-});
-
-/**
- * 멘토 항 — **감독이 데리고 다니라고 붙여 준 고참은 같은 협회 출신과 같은 무게다**
- * (people.md §5-3 · player.md §9.3).
- *
- * 배수를 저장하지 않고 장부에서 다시 매기므로, 여기서 지키는 것은 전이 하나다:
- * 사이가 닫히는 순간 그 줄이 배수에서 빠진다.
- */
-describe("붙여 준 멘토가 정착을 앞당긴다", () => {
-  it("멘토가 팀을 떠나면 사이가 닫히고 배수에서 그 줄이 사라진다", () => {
-    const state = createTestGame(11);
-    const target = opponentsOf(state)[0]!;
-    sign(state, target.id);
-    // 같은 협회 출신 항이 함께 흔들리지 않게 — 재는 것은 멘토 항 하나다
-    const mentor = playersOf(state, state.userTeamId).find(
-      (p) => p.id !== target.id && p.homegrownCountry !== target.homegrownCountry,
-    )!;
-
-    const before = settlingOf(state, target.id)!;
-    state.mentoring = [{ mentorId: mentor.id, menteeId: target.id, since: state.date }];
-    const withMentor = settlingOf(state, target.id)!;
-    const row = withMentor.factors.find((f) => f.code === "mentor")!;
-    expect(row.multiplier).toBe(MENTOR_SETTLING);
-    expect(row.playerId).toBe(mentor.id);
-    expect(withMentor.target).toBeCloseTo(before.target * MENTOR_SETTLING, 6);
-    expect(settlingFactorText(state, row)).toContain(mentor.name);
-
-    // 멘토가 우리 구단에서 빠진다 — 줄은 지워지지 않고 닫히지만 배수는 그 자리에서 빠진다
-    mentor.teamId = "chelsea";
-    pruneMentoring(state);
-    const after = settlingOf(state, target.id)!;
-    expect(after.factors.some((f) => f.code === "mentor")).toBe(false);
-    expect(after.target).toBeGreaterThan(withMentor.target);
-  });
-});
-
-/**
- * 앵커와 대역의 **눈금 자체** — 명령을 거치지 않고 두 함수만 본다.
- *
- * 위 describe가 보는 건 "GM이 준 무게가 어떻게 실리는가"이고, 여기서 고정하는 건
- * 그 무게가 서는 자리다: 종류마다 기본 무게가 다르고(면담 > 팀토크, 주장 지명이
- * 가장 크다), 대역은 **앵커를 따라 움직인다**. 대역을 0에 고정하면 나쁜 면담을
- * GM이 후하게 매겨 좋은 일로 뒤집을 수 있다.
- */
-describe("앵커와 대역 (settlingAnchor · clampSettlingCredit)", () => {
-  const KINDS = ["talk", "team_talk", "captain"] as const;
-
-  it("앵커는 종류의 기본 무게 × 방향 × (강도/2)다", () => {
-    for (const kind of KINDS) {
-      // 강도 2가 기준 — 그때가 그 종류의 기본 무게 그대로다
-      expect(settlingAnchor(kind), kind).toBe(EVENT_CREDIT[kind]);
-      expect(settlingAnchor(kind, { intensity: 4 }), kind).toBe(EVENT_CREDIT[kind] * 2);
-      expect(settlingAnchor(kind, { direction: -1, intensity: 2 }), kind).toBe(-EVENT_CREDIT[kind]);
-      expect(settlingAnchor(kind, { intensity: 0 }), kind).toBe(0);
-    }
-    // 말은 계기이고 녹아드는 건 그라운드에서다 — 어느 대화도 경기 한 번을 못 넘는다
-    for (const kind of KINDS)
-      expect(Math.abs(EVENT_CREDIT[kind]), kind).toBeLessThan(MATCH_CREDIT * 2);
-    expect(EVENT_CREDIT.team_talk).toBeLessThan(EVENT_CREDIT.talk);
-  });
-
-  it("대역 안의 제안은 그대로 실리고, 밖은 앵커±EVENT_BAND에서 잘린다", () => {
-    for (const kind of KINDS) {
-      const anchor = settlingAnchor(kind);
-      const band = EVENT_BAND[kind];
-      expect(clampSettlingCredit(kind, anchor, anchor + band / 2), kind).toBe(anchor + band / 2);
-      expect(clampSettlingCredit(kind, anchor, 999), kind).toBe(anchor + band);
-      expect(clampSettlingCredit(kind, anchor, -999), kind).toBe(anchor - band);
-    }
-  });
-
-  it("대역은 앵커를 따라간다 — 나쁜 판정이 GM의 후한 무게로 뒤집히지 않는다", () => {
-    for (const kind of KINDS) {
-      const bad = settlingAnchor(kind, { direction: -1, intensity: 3 });
-      expect(clampSettlingCredit(kind, bad, 999), kind).toBe(bad + EVENT_BAND[kind]);
-      expect(clampSettlingCredit(kind, bad, 999), kind).toBeLessThan(0);
-    }
   });
 });

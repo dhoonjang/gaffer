@@ -1,13 +1,13 @@
+import { characterBookText } from "@story-fm/domain";
 import {
   type GameState,
   headCoachOf,
-  selectCharacters,
+  selectCharacterBook,
   humanizePlayerIds,
-  seedOpenings,
   formatClock,
   clockOf,
 } from "@story-fm/engine";
-import { parseSceneHeader, describeCharacters, sanitizeSceneText } from "../../../common/context";
+import { parseSceneHeader, sanitizeSceneText } from "../../../common/context";
 import {
   buildClubBlock,
   ONBOARDING_JUDGE_SYSTEM,
@@ -28,13 +28,10 @@ export function isValidOnboardingText(state: GameState, text: string): boolean {
   const lines = parseSceneHeader(text)
     .body.split("\n")
     .filter((line) => line.trim().length > 0);
-  const coachTag = `@${headCoachOf(state).characterId}:`;
   return (
-    lines.length >= 2 &&
-    lines.length <= 12 &&
+    lines.length >= 1 &&
     // 장면은 `@`로 연다 — 그 뒤의 태그 없는 줄은 이어쓰기다 (prompts.md §1)
     (lines[0] ?? "").startsWith("@") &&
-    lines.some((line) => line.startsWith(coachTag)) &&
     // 감독은 유저의 몫이다 — GM이 대신 말하면 첫 턴부터 규약이 깨진다
     !lines.some((line) => line.startsWith(`@${state.manager.name}:`))
   );
@@ -52,8 +49,8 @@ export function isValidOnboardingText(state: GameState, text: string): boolean {
  * 도구의 인자다.
  */
 export function buildOnboardingJudgePrompt(state: GameState, background: string): string {
-  const coach = describeCharacters(
-    selectCharacters(state, { pointed: [headCoachOf(state).characterId] }),
+  const coach = characterBookText(
+    selectCharacterBook(state.characterBook, headCoachOf(state).name, []),
   );
   return [
     buildClubBlock(state),
@@ -98,9 +95,6 @@ export async function runOnboarding(
     }
     return { report, text, usage: result.usage };
   });
-
-  const { report } = turn;
-  if (report.openings && report.openings.length > 0) seedOpenings(state, report.openings);
 
   // 첫 장면은 시계를 옮기지 않는다 — 헤더가 없으면 세워 준다
   const stamped = parseSceneHeader(turn.text).point

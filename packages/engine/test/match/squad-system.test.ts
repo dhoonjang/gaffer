@@ -175,7 +175,6 @@ describe("1·2군 스쿼드", () => {
       // 프리시즌에도 경기가 있다(친선) — 경기일에 멎으면 달이 넘어가지 않는다
       if (state.phase === "matchday") playMockMatch(state);
       else advanceTime(state, { days: 7 });
-      state.issues = [];
     }
     const ours = new Set(reservePlayers(state, state.userTeamId).map((p) => p.id));
     expect(

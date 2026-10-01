@@ -226,21 +226,13 @@ describe("경기 턴 — 지시는 판에 걸리고 시계는 턴 밖에서 구�
    * 선수와 말만 나눈 턴도, 아무것도 없는 턴도 시계를 옮기지 않는다 — 조금이라도 흘려
    * 주면 이기고 있을 때 말을 걸어 시간을 끄는 길이 열린다 (agents.md §3).
    */
-  it("지시를 거는 것만으로는 시계가 한 틱도 나가지 않는다 — 대화만 건 턴도 같다", () => {
+  it("빈 지시 턴은 경기 시계와 사건을 진행하지 않는다", () => {
     const state = matchState();
     const live = state.pendingMatch!.live;
     const tick = live.state.tick;
     const events = live.ledger.events.length;
-    const who = live.ledger[userSide(state)].onPitch[7]!;
 
     turn(state, { ops: {} });
-    turn(state, {
-      ops: {
-        team_talk: [
-          { occasion: "daily", players: [who], reaction: { reason: "격려가 닿았다", target: 0.5 } },
-        ],
-      },
-    });
     expect(state.pendingMatch!.live.state.tick).toBe(tick);
     expect(state.pendingMatch!.live.committedTick).toBe(tick);
     expect(state.pendingMatch!.live.ledger.events).toHaveLength(events);
@@ -302,23 +294,6 @@ describe("경기 턴 — 지시는 판에 걸리고 시계는 턴 밖에서 구�
 
     // 판을 건드리지 않은 턴은 그 표식이 서지 않는다
     expect(turn(state, { ops: {} }).applied.applied).toBe(0);
-  });
-
-  /**
-   * **외침은 경기당 셋이다** (career.md §2) — 넷째부터는 판정이 서지 않고 그 사실이
-   * 감독에게 돌아간다. 셈은 `PendingMatch.shouts` 하나가 갖는다.
-   */
-  it("외침은 경기당 셋까지 세고, 넷째는 판정 없이 되돌아간다", () => {
-    const state = matchState();
-    const talk = buildMatchTools(state, { calls: [], goals: [], cards: [] }).find(
-      (tool) => tool.name === "team_talk",
-    )!;
-    const shout = { occasion: "shout", players: [], reaction: { reason: "짧은 격려", team: 0.5 } };
-    for (let i = 0; i < 3; i++) talk.handle(shout);
-    expect(state.pendingMatch!.shouts).toBe(3);
-    const reply = talk.handle(shout);
-    expect(state.pendingMatch!.shouts).toBe(3);
-    expect(reply).toMatchObject({ message: expect.stringContaining("다 썼습니다") });
   });
 
   /**
@@ -583,8 +558,6 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
       season: state.season,
       kind: "sacked",
       tier: 1,
-      target: 10,
-      expectationCode: "mid",
     };
     const before = structuredClone(state);
     const calls: GmToolCall[] = [];
@@ -754,7 +727,7 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
     const playerId = state.pendingMatch!.live.ledger[userSide(state)].onPitch[0]!;
     const matchSquad = new Set(Object.keys(state.pendingMatch!.live.setup.players));
     const outsider = state.players.find((player) => !matchSquad.has(player.id))!;
-    const outsiderMood = structuredClone(outsider.state.moodNote);
+    const outsiderState = structuredClone(outsider.state);
     let finalizeReply = "";
     runTurn.mockImplementation(async (req: TurnRequest) => {
       const finalize = req.tools!.find((t) => t.name === "finalize_match")!;
@@ -764,10 +737,6 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
           notes: [
             { playerId, note: "상대의 공격을 차분하게 막아냈다" },
             { playerId: outsider.id, note: "출전하지 않은 선수의 평점 근거" },
-          ],
-          moods: [
-            { playerId, text: "오늘은 발이 가벼웠다", acknowledgesIssue: true },
-            { playerId: outsider.id, text: "출전하지 않은 선수의 심경", acknowledgesIssue: true },
           ],
         });
         expect(reply.ok).toBe(true);
@@ -807,14 +776,9 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
     for (const [id, anchor] of Object.entries(seen.anchors)) {
       expect(Math.abs(result.ratings![id]! - anchor)).toBeLessThanOrEqual(RATING_BAND);
     }
-    expect(state.players.find((p) => p.id === playerId)!.state.moodNote?.text).toContain(
-      "발이 가벼웠다",
-    );
     expect(result.ratingNotes?.[playerId]).toBe("상대의 공격을 차분하게 막아냈다");
     expect(result.ratingNotes).not.toHaveProperty(outsider.id);
-    expect(state.players.find((player) => player.id === outsider.id)!.state.moodNote).toEqual(
-      outsiderMood,
-    );
+    expect(state.players.find((player) => player.id === outsider.id)!.state).toEqual(outsiderState);
     expect(evaluate).toHaveBeenCalledTimes(1);
     expect(createEvaluator).toHaveBeenCalledWith("finalize-match");
     // 타입 평가도 이 경기의 중계를 읽었다
@@ -828,9 +792,6 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
   it("GM이 마감을 빠뜨려도 추가 생성 호출이나 새 메모 없이 결산한다", async () => {
     const state = finishedState();
     const matchId = state.pendingMatch!.matchId;
-    const moods = new Map(
-      state.players.map((player) => [player.id, structuredClone(player.state.moodNote)]),
-    );
     const seen = { anchors: {} as Record<string, number>, commentary: "" };
     evaluate.mockImplementation(settler(state, matchId, seen));
     runTurn.mockResolvedValue(answered("[90']\n@중계: 휘슬이 울립니다."));
@@ -840,7 +801,6 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
     expect(state.pendingMatch).toBeFalsy();
     expect(result.rated).toBe(true);
     expect(result.ratingNotes ?? {}).toEqual({});
-    for (const player of state.players) expect(player.state.moodNote).toEqual(moods.get(player.id));
     expect(last.toolCalls.map((call) => call.name)).toContain("finalize_match");
     expect(runTurn).toHaveBeenCalledTimes(1);
     expect(evaluate).toHaveBeenCalledTimes(1);
@@ -862,7 +822,6 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
       { ratings: [{ playerId: "player", rating: 10 }] },
       { notes: [{ playerId: "player", note: "근거", rating: 10 }] },
       { notes: [{ playerId: "player", note: 10 }] },
-      { moods: [{ playerId: "player", text: "심경", rating: 10 }] },
     ])
       expect((await finalize.handle(args)).ok).toBe(false);
     expect(state).toEqual(before);

@@ -502,6 +502,19 @@
   font-weight: 600;
 }
 
+/* 통계 절의 제목 줄 — 범위 고르기가 제목 오른쪽에 선다 */
+.stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0 var(--sp-2);
+}
+.stats-head .section-title,
+.stats-head .pill-picker {
+  margin: 0;
+}
+
 /* ── 순위표의 폼 열 — 최근 다섯 경기 ─────────────────────────── */
 
 /**

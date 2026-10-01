@@ -2,16 +2,13 @@
  * 구단 체급 **재산정** — 시즌 롤오버에서 승강을 적용한 뒤 한 번 (team.md §2.1).
  * 체급을 **읽는** 자리는 `core/club-tier.ts`다.
  *
- * 체급은 세이브의 값이므로 게임 안에서 움직일 수 있다. 움직이지 않으면 승격팀이
- * 1부에서 영원히 tier 4로 남아 보드가 잔류만 요구하고, 강등된 빅클럽이 2부에서
- * tier 1로 남아 우승 경쟁을 요구받는다.
+ * 구단의 규모·선수단·최근 성적과 현재 리그에서의 상대 체급을 계산한다.
  */
-import { boardExpectationText, josaOf } from "@story-fm/domain";
 import { savedClubProfile, teamNameIn, type GameState } from "../../common/core/state";
-import { boardExpectationOfTier, tierOfTeamIn } from "../../common/core/club-tier";
+import { tierOfTeamIn } from "../../common/core/club-tier";
 import { isCupOnlyLeague, isTopLeague } from "../../common/data/league-catalog";
 import { clubProfiles, type ClubProfile } from "../../common/data/club-profile";
-import { leagueOfTeamIn, leagueSizeIn } from "../../common/core/league-membership";
+import { leagueOfTeamIn } from "../../common/core/league-membership";
 import { squadRating } from "../../common/players/squad-depth";
 
 // ── 눈금 ──────────────────────────────────────────────
@@ -185,9 +182,5 @@ export function recomputeClubTiers(state: GameState): string[] {
 
   const after = tierOfTeamIn(state, state.userTeamId);
   if (after === before) return [];
-  const expectation = boardExpectationOfTier(after, leagueSizeIn(state, state.userTeamId));
-  const name = boardExpectationText(expectation.code, expectation.target);
-  return [
-    `${teamNameIn(state, state.userTeamId)} 구단 체급 ${before} → ${after} — 보드 기대는 "${name}"${josaOf(name, "이/가")} 됐다`,
-  ];
+  return [`${teamNameIn(state, state.userTeamId)} 구단 체급 ${before} → ${after}`];
 }

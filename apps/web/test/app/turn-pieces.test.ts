@@ -161,14 +161,14 @@ describe("호출 칩은 불린 자리에 선다", () => {
   const lines = [
     "@: *감독실 문이 닫힌다*",
     "@손흥민: 믿어주셔서 감사합니다.",
-    "@스티브 홀랜드: 사기가 올랐습니다.",
+    "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
   ];
 
   it("장면을 쓴 뒤에 불린 호출은 그 대사 뒤에 붙는다", () => {
-    expect(shape(lines, { calls: [call("team_talk", 2)] })).toEqual([
+    expect(shape(lines, { calls: [call("set_player_training", 2)] })).toEqual([
       "@: *감독실 문이 닫힌다*",
-      "team_talk",
-      "@스티브 홀랜드: 사기가 올랐습니다.",
+      "set_player_training",
+      "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
     ]);
   });
 
@@ -180,39 +180,41 @@ describe("호출 칩은 불린 자리에 선다", () => {
   });
 
   it("같은 자리의 호출은 한 줄에 나란히 — 칩마다 문단을 끊지 않는다", () => {
-    expect(shape(lines, { calls: [call("team_talk", 1), call("set_captain", 1)] })).toEqual([
+    expect(
+      shape(lines, { calls: [call("set_player_training", 1), call("set_captain", 1)] }),
+    ).toEqual([
       "@: *감독실 문이 닫힌다*",
-      "team_talk+set_captain",
+      "set_player_training+set_captain",
       "@손흥민: 믿어주셔서 감사합니다.",
     ]);
   });
 
   it("자리를 모르는 옛 기록은 지금까지처럼 맨 앞에 선다", () => {
-    expect(shape(lines, { calls: [call("team_talk")] })).toEqual([
-      "team_talk",
+    expect(shape(lines, { calls: [call("set_player_training")] })).toEqual([
+      "set_player_training",
       "@: *감독실 문이 닫힌다*",
     ]);
   });
 
   it("떼어 낸 헤더만큼 자리를 당긴다 — 시각 표시는 줄에서 빠졌다", () => {
     // 저장된 본문은 `[2026-08-15 AM 9:00]` 헤더를 포함해 세므로 3, 화면에서는 2다
-    expect(shape(lines, { calls: [call("team_talk", 3)], cuts: [0] })).toEqual([
+    expect(shape(lines, { calls: [call("set_player_training", 3)], cuts: [0] })).toEqual([
       "@: *감독실 문이 닫힌다*",
-      "team_talk",
-      "@스티브 홀랜드: 사기가 올랐습니다.",
+      "set_player_training",
+      "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
     ]);
   });
 
   it("본문 한복판에서 떼어 낸 헤더는 그 뒤의 자리만 당긴다", () => {
     // 원문 2번째 줄이 헤더였다 — 그 앞(1)은 그대로, 뒤(3)는 한 칸 당겨진다
     expect(
-      shape(lines, { calls: [call("get_squad", 1), call("team_talk", 3)], cuts: [2] }),
+      shape(lines, { calls: [call("get_squad", 1), call("set_player_training", 3)], cuts: [2] }),
     ).toEqual([
       "@: *감독실 문이 닫힌다*",
       "get_squad",
       "@손흥민: 믿어주셔서 감사합니다.",
-      "team_talk",
-      "@스티브 홀랜드: 사기가 올랐습니다.",
+      "set_player_training",
+      "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
     ]);
   });
 
@@ -541,8 +543,8 @@ describe("traceToolFlow", () => {
         parts: [
           {
             functionCall: {
-              name: "respond_to_media",
-              args: { reaction: { reason: "자신감을 보였다", media: 0.5 } },
+              name: "respond_to_interview",
+              args: { offer: false, reason: "채용 조건이 맞지 않는다" },
             },
           },
         ],
@@ -553,8 +555,8 @@ describe("traceToolFlow", () => {
           {
             functionResponse: {
               id: "call_1",
-              name: "respond_to_media",
-              response: { error: "지금 답할 기자회견이 없습니다" },
+              name: "respond_to_interview",
+              response: { error: "답할 감독직 면접이 없습니다" },
             },
           },
         ],
@@ -563,10 +565,10 @@ describe("traceToolFlow", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0]).toMatchObject({
       order: 1,
-      name: "respond_to_media",
+      name: "respond_to_interview",
       failed: true,
       unanswered: false,
-      summary: "지금 답할 기자회견이 없습니다",
+      summary: "답할 감독직 면접이 없습니다",
     });
   });
 

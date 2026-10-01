@@ -5,21 +5,18 @@ import { type CalendarView, buildCalendarView } from "./calendar-view";
 import { type FinanceView, buildFinanceView } from "../negotiation/views/finance";
 import { type CompetitionsView, buildCompetitionsView } from "../match/views/competition";
 import { type CareerView, buildCareerView } from "./views/career";
-import { type GameState, pendingApproach, playerName } from "../common/core/state";
-import { pendingPress } from "../story/world/press";
+import { type GameState, playerName } from "../common/core/state";
 import { pendingVerdicts } from "../negotiation/market/negotiation";
-import { duePromises } from "../negotiation/players/promises";
-import { diffDays } from "../common/core/dates";
 import { squadRatingsOf } from "../common/players/squad-depth";
 import { nextMatchFor } from "../common/core/calendar";
 
 /**
  * 안건 한 갈래 — **감독이 답을 미루면 기한이 지나가는 일** (overview.md §5).
  *
- * 네 갈래가 전부다: 열린 회견 · 찾아온 사람 · 답할 차례의 협상 · 기한이 다가온 약속.
+ * 답할 차례의 협상이 안건으로 선다.
  * 어느 것도 상시로 서지 않는다 — 없으면 목록에서 빠진다.
  */
-export type AttentionKind = "press" | "approach" | "verdicts" | "promises";
+export type AttentionKind = "press" | "approach" | "verdicts";
 
 /**
  * 안건 칩 하나가 읽는 **사실** — 문장은 화면이 조립한다 (overview.md §5).
@@ -30,15 +27,14 @@ export type AttentionKind = "press" | "approach" | "verdicts" | "promises";
  */
 export interface AttentionItemView {
   kind: AttentionKind;
-  /** 갈래의 이름 — 회견 · 면담 · 협상 · 약속 */
+  /** 갈래의 이름 — 협상 */
   label: string;
   /** 이 갈래에 몇인가 */
   count: number;
   /** 하나뿐일 때 그 하나의 이름 — 여럿이면 수로 접히므로 null이다 */
   name: string | null;
   /**
-   * 가장 이른 기한까지 남은 날 — **기한이 날짜로 서는 갈래만** 든다(약속).
-   * 나머지 셋은 서 있다는 것 자체가 기한이라 날수로 셀 것이 없다.
+   * 가장 이른 기한까지 남은 날 — 날짜가 없는 안건은 null이다.
    */
   daysLeft: number | null;
 }
@@ -51,7 +47,7 @@ export interface OfficeViews {
   negotiation: NegotiationRoomView | null;
   /**
    * **답을 기다리는 일** — 상단 띠의 안건 칩 (overview.md §5). 있을 때만 채워지고
-   * 없으면 빈 배열이다. 순서는 고정이다(회견 · 면담 · 협상 · 약속) — 매 턴
+   * 없으면 빈 배열이다. 순서는 고정이다(협상) — 매 턴
    * 자리가 바뀌면 감독은 띠를 훑는 대신 매번 읽어야 한다.
    */
   attention: AttentionItemView[];
@@ -84,20 +80,6 @@ export function attentionView(state: GameState): AttentionItemView[] {
   const items: AttentionItemView[] = [];
   // 방 안의 안건은 건너편 한 사람이다 — 띠에 다른 것을 세우지 않는다 (overview.md §5)
   if (state.phase === "negotiation") return items;
-  if (pendingPress(state) !== null) {
-    items.push({ kind: "press", label: "회견", count: 1, name: null, daysLeft: null });
-  }
-  const approach = pendingApproach(state);
-  if (approach !== null) {
-    // 화자는 이름 그대로 산다 — 인물 사전의 열쇠와 같은 값이다 (people.md §6)
-    items.push({
-      kind: "approach",
-      label: "면담",
-      count: 1,
-      name: approach.speakerId,
-      daysLeft: null,
-    });
-  }
   const verdicts = pendingVerdicts(state);
   if (verdicts.length > 0) {
     items.push({
@@ -106,19 +88,6 @@ export function attentionView(state: GameState): AttentionItemView[] {
       count: verdicts.length,
       name: verdicts.length === 1 ? playerName(state, verdicts[0]!.negotiation.gamePlayerId) : null,
       daysLeft: null,
-    });
-  }
-  // 이른 기한이 앞이라 첫 칸이 곧 가장 급한 약속이다 (`duePromises`)
-  const promises = duePromises(state);
-  const nearest = promises[0];
-  if (nearest !== undefined) {
-    items.push({
-      kind: "promises",
-      label: "약속",
-      count: promises.length,
-      name: promises.length === 1 ? playerName(state, nearest.gamePlayerId) : null,
-      // 기한 날은 0이다 — 판정이 그날 하루라 「오늘」이 곧 마지막 날이다
-      daysLeft: Math.max(0, diffDays(state.date, nearest.dueOn)),
     });
   }
   return items;

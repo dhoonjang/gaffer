@@ -21,6 +21,7 @@ import {
 } from "../../common/core/state";
 import { addDays } from "../../common/core/dates";
 import { observedPlayerFacts } from "../../common/players/observation";
+import { personaBookOf } from "../../common/people/character-book";
 import {
   acceptCounterTerms,
   agreedTermsOf,
@@ -82,6 +83,11 @@ export function negotiationEvaluationContext(
   const identity = contactIdentity(state, n, party);
   if (!identity) return null;
   const contract = activeContract(state, player.id);
+  const persona =
+    party === "club"
+      ? directorOf(state, n.counterpartTeamId!)
+      : (agentForPlayer(state, player.id) ??
+        state.personas.find((p) => p.characterId === player.id));
   const terms = negotiationTermsOf(n);
   const proposal =
     party === "club"
@@ -113,11 +119,7 @@ export function negotiationEvaluationContext(
         }
       : null,
     authority: identity,
-    persona:
-      party === "club"
-        ? directorOf(state, n.counterpartTeamId!)
-        : (agentForPlayer(state, player.id) ??
-          state.personas.find((p) => p.characterId === player.id)),
+    persona: persona ? { ...persona, characterBook: personaBookOf(state, persona) } : undefined,
     registration: state.windows,
     counterparty:
       party === "club"
@@ -137,7 +139,6 @@ export function negotiationEvaluationContext(
       deal: turn.negotiationId,
     })),
     listing: state.transferList.filter((l) => l.gamePlayerId === player.id),
-    recordedInterest: state.interests.filter((i) => i.gamePlayerId === player.id),
     proposal,
     availableTerms: party === "agent" ? termKindsOf(n) : [],
   };

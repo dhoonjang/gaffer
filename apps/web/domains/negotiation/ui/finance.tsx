@@ -33,7 +33,7 @@ type PaymentSide = FinancePayments["outgoing"];
 type ExpiringContract = OfficeViews["finance"]["expiringContracts"][number];
 
 /** 열린 요청이 선 자리 — 코어가 갈래를 내고 화면이 말을 고른다 */
-const BOARD_STATUS_TEXT: Record<NonNullable<FinanceBoard["request"]>["status"], string> = {
+const BOARD_STATUS_TEXT: Record<FinanceBoard["requests"][number]["status"], string> = {
   pending: "답 대기",
   conditional: "조건부",
 };
@@ -45,13 +45,13 @@ const BOARD_STATUS_TEXT: Record<NonNullable<FinanceBoard["request"]>["status"], 
  * 눈에 띄지 않는다.
  */
 function BoardBlock({ board }: { board: FinanceBoard }) {
-  const { request, earmarked } = board;
-  if (!request && earmarked.length === 0) return null;
+  const { requests, earmarked } = board;
+  if (requests.length === 0 && earmarked.length === 0) return null;
   return (
     <div className="fin-board" data-testid="fin-board">
       <div className="fin-board-title">보드 요청</div>
-      {request && (
-        <div className="fin-board-line">
+      {requests.map((request) => (
+        <div className="fin-board-line" key={request.id}>
           <div className="head">
             <span className="what">
               {request.label}
@@ -66,7 +66,7 @@ function BoardBlock({ board }: { board: FinanceBoard }) {
               : `${humanDate(request.askedOn)} 접수 · ${humanDate(request.respondOn)} 답`}
           </div>
         </div>
-      )}
+      ))}
       {earmarked.map((row, i) => (
         <div className="fin-board-line" key={`${row.playerName}-${row.until}-${i}`}>
           <div className="head">
@@ -391,13 +391,6 @@ export function FinanceView({ finance }: { finance: OfficeViews["finance"] }) {
             <div className="sub">3시즌 누적 {signed(finance.psr.rolling3Season)}</div>
           </div>
         )}
-        {/* 보드가 지금 지고 있는 기대 — 지난 시즌의 평가는 커리어 화면이 갖는다 */}
-        <div className="fin-stat">
-          <div className="label">보드 기대</div>
-          <div className="value words">
-            {finance.boardAgenda.join(" · ") || "아직 합의된 기대 없음"}
-          </div>
-        </div>
         <div className="fin-stat">
           <div className="label">홈 구장</div>
           <div className="value words">

@@ -1,6 +1,4 @@
 import { CALL_LABELS } from "@story-fm/domain";
-import { MAX_INCIDENTS_PER_DAY } from "@story-fm/engine";
-import { INCIDENT_KIND_KO, INCIDENT_KINDS } from "@story-fm/domain";
 
 export type SkillGroup = "진행" | "전술·훈련" | "대화·서사" | "조회" | "이적" | "재정";
 
@@ -30,7 +28,7 @@ export const SKILL_CATALOG = [
       "한 턴에 한 번 호출하고 적용·반려 결과를 따른다. " +
       "미반영 지시와 필요한 결정을 이번 장면에서 감독에게 알린다. " +
       '감독이 정하지 않고 맡긴 말("알아서 짜세요")에는 부르지 않는다 — 코치의 안을 장면으로 내놓고 감독이 못 박은 턴에 부른다. ' +
-      "훈련·육성은 training_orders, 이적·재정은 market_orders다. 회견·대화는 각자의 도구가 있다.",
+      "훈련·육성은 training_orders, 이적·재정은 market_orders다. 인물 기록은 update_character로 갱신한다.",
   },
 
   {
@@ -50,9 +48,25 @@ export const SKILL_CATALOG = [
     group: "이적",
     readOnly: false,
     description:
-      "이적 리스트·이적 요청 답·임대 복귀·이적 예산·보드 요청·표값·스태프 고용·계약 해지·감독직 등 직접 관리 명령을 실행한다. 한 턴에 한 번 부른다. 상대에게 연락하거나 조건을 제안·협상하는 요청은 start_negotiation으로 넘기며 여기서 중복 실행하지 않는다.",
+      "이적 리스트·임대 복귀·이적 예산·표값·계약 해지·감독직 등 직접 관리 명령을 실행한다. 한 턴에 한 번 부른다. 선수 거래의 상대 연락과 조건 제안·협상은 start_negotiation으로 넘기며 여기서 중복 실행하지 않는다.",
   },
 
+  {
+    name: "request_board",
+    label: CALL_LABELS.request_board,
+    group: "재정",
+    readOnly: false,
+    description:
+      "보드 재정 요청을 접수하거나 requestId로 열린 안건의 결정을 기록한다. GM이 맥락을 읽고 decision(approved·rejected·conditional)·authorizedBy(현재 구단주 ID)·granted·respondOn과 조건·validUntil·deliversOn을 정한다. pending은 자동 판정되지 않는다. 이적 예산·영입은 £, 급여는 £/주, 구장은 좌석이다. 판단 근거와 맥락 조건 내용은 캐릭터북에 기록한다. 원장이 반려한 금액을 승인된 것으로 말하지 않는다.",
+  },
+  {
+    name: "hire_staff",
+    label: CALL_LABELS.hire_staff,
+    group: "이적",
+    readOnly: false,
+    description:
+      "감독과 당사자가 합의한 스태프 고용·재계약을 기록한다. name·salary(연봉 £)·until(만료일)을 명시한다. 풀 밖 사람은 role·title·characterBook을 함께 제공한다. 기존 재직자는 같은 이름으로 갱신하며 급여·기한을 자동 결정하지 않는다. 제안만으로 체결하지 않는다. 합의 과정과 인물의 반응은 캐릭터북에 기록한다.",
+  },
   {
     name: "receive_market_contact",
     label: CALL_LABELS.receive_market_contact,
@@ -80,64 +94,44 @@ export const SKILL_CATALOG = [
       "상대 구단·선수 측과의 접촉과 교섭을 연다. party=club은 구단 조건, agent는 개인 조건이다. method는 meeting·phone·proposal이며 같은 상대의 테이블을 이어 쓴다. mode=request는 감독이 맡긴 요청을 처리해 메인 대화로 결과를 돌려주고, continue는 감독이 직접 주고받는 협상 대화를 연다. continue가 성공하면 이번 턴이 이 호출로 끝나고 장면을 쓰지 않는다. 같은 턴에 필요한 다른 호출은 먼저 부른다. 열린 거래의 negotiationId 또는 대상 playerId·kind를 쓴다. 합의된 거래의 계약 확정도 그 거래를 continue로 연다 — 서명은 감독이 테이블의 계약서에서 한다. 감독이 말하지 않은 금액·계약 연수·발신 권한을 만들지 않는다. 결과가 대기·실패이면 합의한 것처럼 서술하지 않는다.",
   },
   {
-    name: "team_talk",
-    label: CALL_LABELS.team_talk,
-    group: "대화·서사",
-    readOnly: false,
-    description:
-      "감독이 선수단이나 이름을 부른 선수에게 한 발화의 결과를 기록한다. " +
-      "판정은 의미 있는 대화가 마무리된 턴에 한 번 선다 — 감독이 자리를 뜨거나 화제가 닫히거나 장면이 넘어갈 때다. 대화 도중에는 부르지 않는다. " +
-      "players에 이름을 적으면 그 사람들, 비우면 선수단 전체다. " +
-      "reaction은 발화·기억·관계·처지에 근거해 target 또는 team에 -1~1의 반응을 적고 reason에 이유를 쓴다. " +
-      "" +
-      "불만은 이름을 부른 사람에게 사기가 오른 결과에서만 풀린다. " +
-      "아직 겉도는 새 영입의 적응은 settling(무게)과 settlingNote(근거)에, 감독이 이번 턴에 못 박은 약속만 promise에 — 상대가 한 명일 때만 장부에 서고, 지난 턴의 약속과 자리를 빼는 말에는 싣지 않는다. " +
-      "들은 선수 중 할 말이 생긴 이의 심경은 moods에.",
-  },
-  {
     name: "review_board",
     label: CALL_LABELS.review_board,
     group: "대화·서사",
     readOnly: false,
     description:
-      "구단주와의 장면에서 전한 판단을 기록한다. expectations는 합의한 기대, assessment는 근거, confidence는 신뢰 변화(-1~1)다. 완료된 시즌 평가에는 season을 지정한다. decision은 continue(경고 해제), warning, dismiss다. 경질에는 이전 날짜의 경고가 필요하다. 계약 만료 전 90일에는 renewal로 재계약 제안 여부를 한 번 판정한다. 순위·원형 표로 판정하지 않는다.",
+      "구단의 실제 감독 경질·선임을 실행한다. action=dismiss는 재직을 종료하고, appoint는 공석에 AI 감독을 선임한다. team·reason을 적고 선임은 managerName과 새 인물의 rating을 지정한다. 풀의 감독은 기존 역량과 이력을 유지한다. 유저 감독의 부임은 제안과 명시적 수락을 거친다. 기대·평가·경고는 캐릭터북에 기록한다.",
   },
   {
-    name: "respond_to_media",
-    label: CALL_LABELS.respond_to_media,
+    name: "offer_manager_job",
+    label: CALL_LABELS.offer_manager_job,
     group: "대화·서사",
     readOnly: false,
     description:
-      "감독이 기자회견에 답한 결과를 기록한다 — 스냅샷에 <press>가 없으면 쓰지 마라. " +
-      "그 자리를 장면으로 열고, 질문은 사실 카드를 기자의 말로 옮겨 써라 — 그대로 읽지 않는다. 감독이 아직 답하지 않은 턴에는 묻기만 하고 이 도구를 부르지 않는다. " +
-      "상대 감독 카드가 서면 기자가 그 말을 인용해 묻고, 감독이 그를 겨누면 targetManager에 이름을 적는다. " +
-      "감독의 실제 발화와 기자·선수의 맥락에서 reaction을 판단한다. reason에 근거, 축별 -1~1 연속값에 방향과 강도를 기록한다. 태도만으로 효과의 부호를 정하지 않는다. " +
-      "회견을 거절하거나 자리를 피했으면 decline: true. 이름이 불린 선수의 심경은 mood에.",
+      "구단이 실제로 제시한 감독 계약을 기록한다. team·salary·years·budgetPledge·expiresOn·reason을 명시한다. 현재 구단은 재계약, 다른 공석은 부임·접근 제안이다. 시기·횟수·할인 표가 없다. 유저의 수락을 대신하지 않는다. 같은 구단의 열린 제안 수정은 counter_manager_offer를 사용한다.",
   },
   {
-    name: "respond_to_approach",
-    label: CALL_LABELS.respond_to_approach,
+    name: "set_retirement",
+    label: CALL_LABELS.set_retirement,
     group: "대화·서사",
     readOnly: false,
     description:
-      "먼저 열린 자리에 감독이 답한 결과를 기록한다(스냅샷의 <approach>가 없으면 쓰지 마라). " +
-      "자리가 열려 있으면 지목된 화자로 장면을 열되 사실을 그대로 읽지 말고 그 사람의 말로 옮겨라. 감독이 아직 답하지 않은 턴에는 그 사람의 말까지만 쓰고 부르지 않는다. " +
-      "감독의 답과 상대의 사정에서 reaction의 근거와 축별 -1~1 반응을 판단한다. 자리를 주지 않고 돌려보냈으면 decline: true. 찾아온 선수의 심경은 mood에. " +
-      "보드의 기대와 평가는 review_board로 기록한다. " +
-      "불만은 대화·승격·선발로 풀린다. " +
-      "이적 요청이 선 선수의 자리에서 답하면 요청도 닫힌다 — 팔지·거부할지는 감독의 직접 지시로 정한다. " +
-      "감독직 면접에서는 interview에 제안 여부(offer), 협상 성과(leverage 0~1), 근거(reason)를 판단한다. 0은 기본 조건, 1은 계약 상한이다.",
+      "선수가 결정한 은퇴 선언 또는 철회를 기록한다. declare는 playerId와 reason(age·decline·idle·personal·injury), withdraw는 playerId를 적는다. 나이·출장·능력만으로 선언을 자동 판정하지 않는다. 선언은 시즌 종료 때 집행된다.",
   },
   {
-    name: "record_incident",
-    label: CALL_LABELS.record_incident,
+    name: "respond_to_interview",
+    label: CALL_LABELS.respond_to_interview,
     group: "대화·서사",
     readOnly: false,
     description:
-      "벌금·포상·휴가·병문안·공개 칭찬과 질책·사과·중재·라커룸 규칙·회식처럼 다른 도구가 없는 행동을 감독이 했을 때 세운다. " +
-      `kind는 사건의 종류다: ${INCIDENT_KINDS.map((k) => `${k}(${INCIDENT_KIND_KO[k]})`).join(" · ")}. ` +
-      "playerIds는 당사자의 이름, intensity는 기억의 중요도 1~3, summary는 무슨 일이었나 한 줄. reaction에는 근거와 target·team의 -1~1 반응을 판단한다. 종류만으로 효과를 정하지 않는다. 적응에 영향을 주었다면 settling에 -1~1 방향과 강도를 쓴다. " +
-      `사기만 움직이고 능력치·컨디션은 그대로다. 하루 ${MAX_INCIDENTS_PER_DAY}건까지. 당사자의 심경은 moods에.`,
+      "열린 감독직 면접에서 채용 제안 여부와 계약 조건을 판정한다. 여러 구단과 면접 중이면 interviewId 또는 team(구단 id·이름·약칭)으로 대상을 지정한다. 면접이 하나면 생략할 수 있다. offer와 reason을 적고, 제안이면 terms에 salary·years·budgetPledge·expiresOn을 명시한다. 제안은 감독의 수락이 아니다. 감독이 답한 내용과 구단 사정에 근거하며, 일반적인 인물 대화는 캐릭터북에 기록한다.",
+  },
+  {
+    name: "update_character",
+    label: CALL_LABELS.update_character,
+    group: "대화·서사",
+    readOnly: false,
+    description:
+      "대화와 사건으로 캐릭터에 기록할 내용이 생겼을 때 캐릭터북 갱신을 접수한다. characterId는 항목 id 또는 이름, additionalInformation은 새로 드러난 사정·행동·기억·관점이다. 이름을 바꾸지 않는다. 처음 등장한 인물은 newCharacter에 이름·키워드·한 줄 설명·정보를 함께 적는다. 편집은 비동기로 진행되며 접수만으로 완료됐다고 말하지 않는다.",
   },
   {
     name: "apply_finance_event",
@@ -147,7 +141,7 @@ export const SKILL_CATALOG = [
     description:
       "서사에서 벌어진 매출·비용을 장부에 남긴다 — 스폰서가 보너스를 얹거나(commercial), 유니폼이 동나거나(merchandising), 관중이 몰리거나(matchday), 시설이 망가지거나(facility), 원정 의료비가 들거나(travel_medical), 선수단에 포상을 주는(bonus) 일. " +
       "경기 운영비는 matchday_opex. 중계권·주급·이적료·상각·상금은 코어가 계산하므로 이 도구로 건드릴 수 없다. " +
-      "£10k 미만의 식사·회식·택시 같은 일상 비용은 기록하거나 금액을 올려 잡지 않는다. 원장에 들어가 월간 보고서와 PSR에 그대로 반영된다.",
+      "대화에서 확정된 지급 원인과 실제 금액을 기록한다. 원장에 들어가 월간 보고서와 PSR에 반영된다.",
   },
   {
     name: "resign",
@@ -179,7 +173,7 @@ export const SKILL_CATALOG = [
     readOnly: true,
     description:
       "우리 팀의 현재 배치를 본다 — 포메이션·팀 전술과 선발 11명·벤치·예비(배치 없음)를 자리 순서대로, " +
-      "각자의 자리 적합도·포지션 적응도·전술 적응도·폼·체력과 부상·정지·경고 누적·불만 경고까지. " +
+      "각자의 자리 적합도·포지션 적응도·전술 적응도·폼·체력과 부상·정지·경고 누적까지. " +
       'level="reserve"면 2군, role="starting"이면 선발만 본다. ' +
       "라인업·포지션·교체를 논하기 전에 호출한다. 타 팀 스쿼드는 볼 수 없다 — 상대 전력은 get_team으로.",
   },
@@ -230,7 +224,7 @@ export const SKILL_CATALOG = [
     group: "조회",
     readOnly: true,
     description:
-      "감독의 커리어 — 이번 시즌 진행 상황, 지난 시즌들의 순위·전적·보드 평가, 트로피, 업적, 맡은 팀이 받은 시상. " +
+      "감독의 커리어 — 이번 시즌 진행 상황, 지난 시즌들의 순위·전적, 트로피, 업적, 맡은 팀이 받은 시상. " +
       "지나간 시즌의 순위표·우승자·감독 팀의 경기는 get_history가 낸다.",
   },
   {

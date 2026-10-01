@@ -31,7 +31,7 @@ export const TRAINING_RATER_RULES = `축구 구단의 지난 훈련 구간을 �
 자리 적응도는 전향 개인 훈련 중인 선수만 0~${POSITION_TRAIN_MAX}다.
 대화는 감독의 주문과 근거이며 장면의 말은 여러 사람의 것이다. 실제 실행은 facts의 장부 줄이 말한다.
 실제로 없었던 경험·성과·태도를 만들지 않는다. 갈래와 날짜가 불명확하면 특정하지 않는다.
-수치는 분포의 기대값이며 자신감을 성장량에 곱하지 않는다. 기간·멘토 배율·잠재력·인원 한도는 코어가 적용하므로 중복 적용하지 않는다.`;
+수치는 분포의 기대값이며 자신감을 성장량에 곱하지 않는다. 기간·잠재력·인원 한도는 코어가 적용하므로 중복 적용하지 않는다.`;
 
 function attributeOptions(teamAxes: ReadonlySet<AttributeAxis>, subject: TrainingSubject) {
   return [...allowedAxesFor(teamAxes, attributeAxisOf(subject.program?.axis))].flatMap((axis) =>

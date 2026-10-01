@@ -1,19 +1,13 @@
 import type { GameTables } from "../../app/save-schema";
 import type {
-  Approach,
+  ManagerInterview,
   CallUp,
   MediaFact,
-  CharacterInjection,
   Contract,
   GamePlayer,
   GrowthEntry,
   Injury,
-  CompetingBid,
-  Interest,
   MatchSide,
-  NarrativeNote,
-  TransferRequest,
-  TransferRequestReason,
   PositionGroup,
   ScoutingReport,
   TickEvent,
@@ -29,12 +23,9 @@ import type {
 } from "@story-fm/domain";
 import {
   FAMILIARITY_BASELINE,
-  REPUTATION_MAX,
-  REPUTATION_MIN,
   MATCHDAY_BENCH,
   SET_PIECE_ROLES,
   bestOverall,
-  interestStageRank,
   competitionRowsOf,
   isReserveMatch,
   positionGroupOfPlayer,
@@ -192,14 +183,8 @@ export interface ChatTurn {
    * 돌아온 감독이 먼저 읽을 것이 그 사이 벌어진 일이다. 시간이 구르지 않은 턴엔 없다.
    */
   events?: TickEvent[];
-  /**
-   * 이 턴에 실린 **인물지** — 카드 텍스트가 아니라 **기록**이다 (people.md §6).
-   *
-   * 이력은 매 턴 `state.chat`에서 다시 렌더링되므로 남길 것은 누구를 어느 깊이로
-   * 실었는가뿐이고, 카드는 그 턴을 렌더링할 때 다시 붙는다. 텍스트를 저장하면
-   * 채팅 화면에 프롬프트가 새고, 이력이 세이브 시점의 문장으로 굳는다.
-   */
-  characters?: CharacterInjection[];
+  /** Exact book snapshots sent with this input; UI does not render prompt metadata. */
+  characterBook?: import("@story-fm/domain").CharacterBookInjection[];
   /**
    * **경기 중에 오간 말인가** — 이력에서 중계와 평시를 가르는 표식.
    *
@@ -301,12 +286,6 @@ export interface PendingMatch {
    * 킥오프 턴을 한 번 갖는다. 시계가 구르는 것은 그다음부터다.
    */
   entered: boolean;
-  /**
-   * **이 경기에서 쓴 외침의 수** — 정지점에서 팀 전체에 던진 짧은 말
-   * (`occasion: "shout"`, → docs/story/career.md §2). 90분 사이에 던지는 말이라
-   * 셋이 넘어가면 판정 자체가 서지 않는다.
-   */
-  shouts: number;
   /**
    * **캐스터가 이미 서술한 사건 수** — 다음 턴의 `<events>`는 장부의 이 자리 뒤부터다.
    * 시계는 클라이언트가 밀므로 한 턴 사이에 몇 개가 쌓였는지는 이 수가 말한다.
@@ -414,7 +393,7 @@ export function formatClock(clock: string): string {
 }
 
 /**
- * 게임 세이브 (v6) — 정규화된 테이블 집합.
+ * 게임 세이브 — 정규화된 테이블 집합.
  * 카탈로그(불변 초기치)는 코드에 있고, 여기엔 게임 중 변화하는 것만 담는다.
  * 선수 부속(부상·징계·계약·이적·성장·시즌기록)은 gamePlayerId로 참조하는 별도 배열.
  */
@@ -733,20 +712,11 @@ export function ourPlayers(state: GameState): GamePlayer[] {
  *
  * `userTeamId`는 경질된 뒤에도 옛 구단을 가리킨다. 그 구단의 선수단과 장부는
  * 그대로 돌아야 하기 때문이다 — 세계가 감독을 따라 사라지지는 않는다. 그래서
- * **감독에게 무언가를 적립하는 자리**(트로피·시즌 기록·평판)는 `userTeamId`가
+ * **감독에게 무언가를 적립하는 자리**(트로피·시즌 기록)는 `userTeamId`가
  * 아니라 이것을 물어야 한다. 안 그러면 잘린 뒤 옛 팀이 든 컵이 감독의 것이 된다.
  */
 export function managedTeamId(state: GameState): string | null {
   return state.dismissal ? null : state.userTeamId;
-}
-
-/**
- * 평판을 눈금 안으로 자른다 — 경기·시즌·컵·경질이 저마다 다른 폭으로 더하고 빼도
- * 나가는 값은 `ManagerReputationSchema`가 받는 0~100이라야 한다. **여기가 유일한
- * 문이다** — 호출부가 각자 `Math.min(100, …)`을 적으면 스키마를 옮긴 날 한쪽만 남는다.
- */
-export function clampReputation(value: number): number {
-  return Math.max(REPUTATION_MIN, Math.min(REPUTATION_MAX, value));
 }
 
 export function playerById(state: GameState, id: string): GamePlayer | null {
@@ -884,134 +854,6 @@ export function openInjuryIds(state: GameState): Set<string> {
     if (injury.returnedOn === null) ids.add(injury.gamePlayerId);
   }
   return ids;
-}
-
-/**
- * **마음이 떠 있는가** — 라커룸 불만(`state.issues`)이 걸린 선수.
- *
- * ⚠️ 이 질문에 `condition`으로 답하지 마라. 그 축은 경기 한 판에 30~50이 빠지는
- * **몸의 예산**이라, "체력 45 미만 = 사기가 낮다"로 읽으면 90분을 뛴 다음 날
- * 선발 전원이 팀을 떠나고 싶어 하는 선수가 된다 — 실제로 이적 확률·재계약
- * 확률·들어오는 오퍼가 그렇게 굴러가고 있었다. 마음은 마음 쪽에서 읽는다.
- */
-export function hasIssue(state: GameState, playerId: string): boolean {
-  return state.issues.some((i) => i.gamePlayerId === playerId);
-}
-
-/** **이 선수의 이적 요청** — 장부가 원본이다 (→ docs/negotiation/transfer.md §1-1) */
-export function transferRequestOf(state: GameState, playerId: string): TransferRequest | null {
-  return state.transferRequests.find((r) => r.gamePlayerId === playerId) ?? null;
-}
-
-/** 아직 감독이 답하지 않은 요청들 — 책상 위에 놓인 것 */
-export function openTransferRequests(state: GameState): TransferRequest[] {
-  return state.transferRequests.filter((r) => r.answeredOn === undefined);
-}
-
-/**
- * 요청을 세운다 — **한 선수에게 한 줄뿐이다** (transfer.md §11). 이미 서 있으면
- * 아무것도 하지 않고 `false`를 돌려준다: 사유가 셋이라 두 자리에서 같은 날 같은
- * 선수를 세울 수 있는데, 그러면 감독의 답 하나가 다른 줄을 남긴다.
- */
-export function standTransferRequest(
-  state: GameState,
-  playerId: string,
-  reason: TransferRequestReason,
-): boolean {
-  if (transferRequestOf(state, playerId) !== null) return false;
-  if (!playerById(state, playerId)) return false;
-  state.transferRequests.push({ gamePlayerId: playerId, since: state.date, reason });
-  return true;
-}
-
-/**
- * 요청에 답한다 — **답과 결정은 다른 칸이다** (transfer.md §1-1). `answeredOn`은
- * 책상에서 내려간 날이고 `answer`는 팔지·거부할지의 결정이다. 면담의 답은 날짜만
- * 찍고 결정을 비워 둔다 — 그래야 명령이 그 결정을 한 번 내릴 수 있다.
- *
- * 요청이 선 날과 감독이 답한 날은 다른 사실이라 회견이 둘 다 싣는다 — 실려 간
- * 자리(`pressedOn`)를 비운다. 요청이 없으면 `null`.
- */
-export function answerTransferRequest(
-  state: GameState,
-  playerId: string,
-  answer?: TransferRequest["answer"],
-): TransferRequest | null {
-  const request = transferRequestOf(state, playerId);
-  if (!request) return null;
-  request.answeredOn = state.date;
-  if (answer !== undefined) request.answer = answer;
-  delete request.pressedOn;
-  return request;
-}
-
-/** 요청을 걷는다 — 원인이 사라졌거나 그 선수가 팀을 떠났을 때 */
-export function withdrawTransferRequest(state: GameState, playerId: string): void {
-  state.transferRequests = state.transferRequests.filter((r) => r.gamePlayerId !== playerId);
-}
-
-/**
- * **이 선수에게 서 있는 관심들** — 사다리 위 칸이 먼저, 같은 칸이면 구단 id 순
- * (→ docs/negotiation/transfer.md §1-2).
- *
- * 정렬이 여기 있는 이유: 읽는 자리가 여섯이라(회견·근황·스냅샷·조회·협상 서류·딜
- * 확률) 각자 정렬하면 같은 날 같은 세이브가 자리마다 다른 순서를 낸다.
- *
- * ⚠️ **틱이 쓰는 장부는 이 배열이 아니다** — 여기서 돌려주는 것은 복사본이 아니라
- * 원본 row라 `stage`를 고치면 장부가 바뀐다. 고치는 것은 `market/interest.ts`
- * 한 곳뿐이다.
- */
-export function interestsOn(state: GameState, playerId: string): Interest[] {
-  return state.interests
-    .filter((i) => i.gamePlayerId === playerId)
-    .sort((a, b) =>
-      a.stage === b.stage
-        ? a.teamId < b.teamId
-          ? -1
-          : 1
-        : interestStageRank(b.stage) - interestStageRank(a.stage),
-    );
-}
-
-/** 이 구단이 이 선수를 보고 있는가 — 한 구단 × 한 선수에 한 줄이다 */
-export function interestOf(
-  state: GameState,
-  teamId: string,
-  playerId: string,
-): Interest | undefined {
-  return state.interests.find((i) => i.teamId === teamId && i.gamePlayerId === playerId);
-}
-
-/**
- * 밖에 난 관심만 — `enquired` 이상. `watching`은 아직 아무 말도 오지 않은 것이라
- * 회견도 근황도 물을 자리가 아니다 (transfer.md §1-2).
- */
-export function announcedInterestsOn(state: GameState, playerId: string): Interest[] {
-  return interestsOn(state, playerId).filter((i) => i.stage !== "watching");
-}
-
-/** 관심을 걷는다 — 그 선수가 팀을 떠났거나, 그 줄이 오퍼가 됐을 때 */
-export function clearInterests(state: GameState, match: (interest: Interest) => boolean): void {
-  state.interests = state.interests.filter((i) => !match(i));
-}
-
-/**
- * **이 선수에게 선 경쟁 입찰** — 늦게 선 것이 먼저 (→ transfer.md §1-2).
- *
- * 정렬이 여기 있는 이유는 관심과 같다: 읽는 자리가 셋(협상 서류·스냅샷·호가)이라
- * 각자 정렬하면 같은 날 같은 세이브가 자리마다 다른 순서를 낸다.
- */
-export function competingBidsOn(state: GameState, playerId: string): CompetingBid[] {
-  return state.competingBids
-    .filter((b) => b.gamePlayerId === playerId)
-    .sort((a, b) =>
-      a.date === b.date ? (a.teamId < b.teamId ? -1 : 1) : a.date < b.date ? 1 : -1,
-    );
-}
-
-/** 경쟁 입찰을 걷는다 — 그 협상이 끝났거나 선수가 우리 손을 떠났을 때 */
-export function clearCompetingBids(state: GameState, match: (bid: CompetingBid) => boolean): void {
-  state.competingBids = state.competingBids.filter((b) => !match(b));
 }
 
 export function isInjured(state: GameState, playerId: string): boolean {
@@ -1237,36 +1079,35 @@ export function financeOf(state: GameState, teamId: string): TeamFinance {
   return f;
 }
 
-// ── 다가옴의 장부 ──────────────────────────────────────────────
-//
-// 자리를 **여는 규칙**은 두 곳에 있다 — 압력이 여는 자리는 `club/approach.ts`,
-// 감독이 두드려 여는 면접은 `market/manager-market.ts`(career.md §5.1). 둘이 함께 쓰는
-// 것은 규칙이 아니라 **장부의 세 동작**뿐이라, 그것만 두 파일이 다 기대는 이 자리로
-// 내려와 있다 (AGENTS.md §5 — 한 규칙은 한 벌).
+/** Closed interview history is bounded; pending discussions remain available. */
+export const KEPT_MANAGER_INTERVIEWS = 20;
 
-/** 상태에 남기는 지난 다가옴 수 — 그 뒤는 서사에만 남는다 (회견과 같은 규약) */
-export const KEPT_APPROACHES = 20;
-
-/** 답을 기다리는 다가옴 — 언제나 하나뿐이다 */
-export function pendingApproach(state: GameState): Approach | null {
-  return state.approaches.find((a) => a.status === "pending") ?? null;
+export function pendingManagerInterviews(state: GameState): ManagerInterview[] {
+  return state.managerInterviews.filter((interview) => interview.status === "pending");
 }
 
-/** 자리를 장부에 앉힌다 — 오래된 것부터 밀려난다 */
-export function pushApproach(state: GameState, approach: Approach): void {
-  state.approaches = [...state.approaches, approach].slice(-KEPT_APPROACHES);
+/** Without a club selector, only an unambiguous pending interview is returned. */
+export function pendingManagerInterview(
+  state: GameState,
+  teamId?: string,
+): ManagerInterview | null {
+  const pending = pendingManagerInterviews(state);
+  if (teamId !== undefined) return pending.find((interview) => interview.teamId === teamId) ?? null;
+  return pending.length === 1 ? pending[0]! : null;
 }
 
-/**
- * 열린 자리를 **대가 없이** 닫는다 — 감독이 그 구단을 떠났을 때다 (career.md §5.1).
- *
- * 회견의 `expirePendingPress`와 같은 계약이다: 감독이 무시한 것이 아니라 물을 구단이
- * 없어진 것이라 값을 치르지 않는다. 그대로 두면 무직인 감독의 감독실에 앞 구단 선수가
- * 사흘째 서 있고, 부임 뒤에는 새 구단의 첫 자리가 그것을 방치로 읽는다.
- */
-export function expirePendingApproach(state: GameState): void {
-  const open = pendingApproach(state);
-  if (open) open.status = "expired";
+export function pushManagerInterview(state: GameState, interview: ManagerInterview): void {
+  const interviews = [...state.managerInterviews, interview];
+  const retained = new Set(
+    interviews.filter((entry) => entry.status !== "pending").slice(-KEPT_MANAGER_INTERVIEWS),
+  );
+  state.managerInterviews = interviews.filter(
+    (entry) => entry.status === "pending" || retained.has(entry),
+  );
+}
+
+export function expireManagerInterview(state: GameState): void {
+  for (const interview of pendingManagerInterviews(state)) interview.status = "expired";
 }
 
 /**
@@ -1420,59 +1261,6 @@ export function recordTrainingReport(state: GameState, report: TrainingReport): 
 export function latestTrainingReport(state: GameState): TrainingReport | null {
   const ring = state.trainingReports;
   return ring[ring.length - 1] ?? null;
-}
-
-/**
- * 서사 노트 보관 한도 — 넘치면 **오래된 것부터** 버린다.
- *
- * 세이브에 통째로 담기고 GM 프롬프트의 이력 층이 여기서 나오므로, 한도가 곧
- * 세이브 크기이자 컨텍스트 비용이다.
- */
-const NARRATIVE_LIMIT = 200;
-
-export function pushNarrative(
-  state: GameState,
-  text: string,
-  salience = 2,
-  /** 갈래 — 하루 한도를 세는 열쇠다. 접두 문장으로 가르지 않는다 (records.ts `NarrativeKind`) */
-  kind: NarrativeNote["kind"] = "other",
-): void {
-  state.narrative.push({ date: state.date, text, salience, kind });
-  if (state.narrative.length > NARRATIVE_LIMIT) {
-    state.narrative.splice(0, state.narrative.length - NARRATIVE_LIMIT);
-  }
-}
-
-/**
- * 무게의 반감기 — 이 일수가 지날 때마다 사건의 무게가 절반이 된다.
- *
- * salience 5는 반감기를 네 번 지나야 오늘의 1 아래로 내려간다 — 지난주의 경질
- * 임박이 어제의 스카우트 한 줄에 밀리지 않는 눈금이다 (people.md §9).
- */
-const NARRATIVE_HALF_LIFE_DAYS = 7;
-
-/**
- * 스냅샷에 실을 서사 기억 — **salience×recency 가중 상위 `limit`건** (people.md §9).
- *
- * 최신순이 아니다: `slice(-4)`는 무게 5의 사건을 나흘 만에 밀어냈다. 가중치가
- * 같으면 최신이 이기고, 뽑힌 뒤에는 시간순으로 선다 — GM이 읽는 것은 순위가 아니라
- * 흐름이다. 결정적이다 — 같은 날 같은 세이브면 같은 목록.
- */
-export function topNarrative(state: GameState, limit: number): NarrativeNote[] {
-  const day = (d: string) => new Date(`${d}T00:00:00Z`).getTime() / 86400000;
-  const today = day(state.date);
-  return state.narrative
-    .map((note, index) => ({
-      note,
-      index,
-      weight:
-        note.salience *
-        Math.pow(0.5, Math.max(0, today - day(note.date)) / NARRATIVE_HALF_LIFE_DAYS),
-    }))
-    .sort((a, b) => b.weight - a.weight || b.index - a.index)
-    .slice(0, limit)
-    .sort((a, b) => a.index - b.index)
-    .map((x) => x.note);
 }
 
 /** id를 이룰 수 있는 문자 — 앞뒤에 이것이 붙어 있으면 그 id가 아니라 더 긴 id의 일부다 */

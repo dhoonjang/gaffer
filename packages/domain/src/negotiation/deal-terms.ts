@@ -1,21 +1,9 @@
 import { z } from "zod";
 import { DateString } from "../common/date-string";
 import { formatMoney } from "../common/money";
-import { POSITION_GROUPS, SQUAD_NUMBER_MAX } from "../common/player";
+import { SQUAD_NUMBER_MAX } from "../common/player";
 import { SQUAD_NUMBER_MIN } from "../common/squad-rules";
 
-/**
- * 조건 — 협상 테이블에서 **돈 말고 오가는 것** (→ docs/negotiation/transfer.md §12-3).
- *
- * 감독은 주급·연수·지위 말고도 걸 것이 있고("여름에 윙어를 데려오겠다" · "£40M 오퍼가
- * 오면 보내 주겠다"), 상대도 그것을 부른다. 자유 문장으로 두면 코어가 이행을 판정할 수
- * 없으므로 조건은 **닫힌 갈래**로 서고, 갈래마다 코어가 지금 확인하는 것 · 서명 뒤 서는
- * 자리 · 이행을 재는 장부가 정해져 있다. 표에 없는 조건은 `other`로 **문장 그대로**
- * 남는다 — 코어는 확인도 판정도 못 하지만, 상대를 연기하는 호출과 그 뒤의 판정 호출이
- * 읽는 사실로는 산다.
- *
- * 설득 논거(`persuasion.ts`)와 약속 장부(people.md §5-2)가 이미 이 꼴이다.
- */
 export const DEAL_TERM_KINDS = [
   "signing",
   "captain",
@@ -51,10 +39,6 @@ export const ESCALATOR_TRIGGER_KO: Record<EscalatorTrigger, string> = {
   promotion: "승격",
 };
 
-/** 인상 폭(%) — 아래는 조항이 아니고 위는 재계약이다 */
-export const ESCALATOR_PCT_MIN = 5;
-export const ESCALATOR_PCT_MAX = 50;
-
 /** 조건의 원문 한 줄 — `other`는 이것이 조건의 전부다 */
 export const DEAL_TERM_NOTE_MAX = 160;
 
@@ -72,7 +56,7 @@ export const DEAL_TERM_MEANING: Record<DealTermKind, string> = {
     "임대 기간에 주전으로 세우겠다 — 임대에서만 조건이다. 영입·재계약의 주전 보장은 조건이 아니라 squadStatus다",
   buyout: "이 금액 이상의 오퍼가 오면 구단이 막지 않는다 — fee에 금액(£)",
   bonus: "서명하는 날 한 번 주는 돈 — fee에 금액(£)",
-  points: "골이나 도움 하나마다 주는 돈 — fee에 포인트당 금액(£). 미드필더·공격수에게만 조건이다",
+  points: "골이나 도움 하나마다 주는 돈 — fee에 포인트당 금액(£)",
   escalator: "그 일이 이뤄지면 주급을 올린다 — trigger(europe·title·promotion)와 pct(%)",
   other:
     "표에 없는 조건 — note에 그 말 그대로. 코어는 확인도 이행 판정도 못 하고, 건너편이 읽는 사실로만 남는다",
@@ -105,13 +89,7 @@ export const DealTermSchema = z.object({
     .min(0)
     .optional()
     .describe("buyout·bonus — 금액(£) · points — 포인트당 금액(£)"),
-  pct: z
-    .number()
-    .int()
-    .min(ESCALATOR_PCT_MIN)
-    .max(ESCALATOR_PCT_MAX)
-    .optional()
-    .describe("escalator — 인상 폭(%)"),
+  pct: z.number().int().positive().optional().describe("escalator — 인상 폭(%)"),
   trigger: z.enum(ESCALATOR_TRIGGERS).optional().describe("escalator — 걸리는 사건"),
   note: z
     .string()
@@ -137,29 +115,9 @@ export const TabledTermSchema = z.object({
 });
 export type TabledTerm = z.infer<typeof TabledTermSchema>;
 
-/**
- * 계약에 적힌 조건 — 합의된 조건서의 사본이다. 한 번 집행되는 조항(`bonus`·`escalator`)은
- * 집행된 날이 `settledOn`에 남아 두 번 집행되지 않는다. 약속 갈래의 이행은 약속 장부가
- * 판정하고(people.md §5-2), 여기 사본은 **무엇을 약속했는가**의 기록이다 — 감독도 상대를
- * 연기하는 호출도 그 계약을 볼 때 이 줄을 읽는다.
- */
+/** 합의한 조건의 기록. 한 번 집행하는 금전 조항은 집행일을 남긴다. */
 export const ContractTermSchema = DealTermSchema.extend({ settledOn: DateString.optional() });
 export type ContractTerm = z.infer<typeof ContractTermSchema>;
-
-/** 감독이 한 협상에 올릴 수 있는 조건 수 — 전부 걸면 흥정이 아니라 나열이다 (`other`는 따로 센다) */
-export const MAX_TABLED_TERMS = 5;
-
-/**
- * **공격 포인트 보너스가 서는 자리** — 골·도움을 재는 조항이라 미드필더·공격수에게만이다
- * (docs/negotiation/transfer.md §12-3). 수비수·골키퍼에게 걸면 코어가 반려하고 폼은 칩을 세우지
- * 않는다 — 같은 자를 둘이 읽는다.
- */
-export function pointsBonusEligible(position: string): boolean {
-  const group = POSITION_GROUPS[position.toUpperCase()];
-  return group === "MF" || group === "FW";
-}
-/** 상대가 한 답에서 부를 수 있는 조건 수 */
-export const MAX_TERM_ASKS = 2;
 
 /** 조건이 서는 갈래 — 협상의 종류가 정한다. 내보내는 갈래에는 우리가 걸 조건이 없다 */
 export function dealTermKindsFor(

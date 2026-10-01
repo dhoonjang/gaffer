@@ -12,7 +12,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  PROMISE_KIND_KO,
   SQUAD_STATUS_KO,
   formatMoney,
   formatRating,
@@ -21,7 +20,6 @@ import {
 } from "@story-fm/domain";
 import type { PlayerCardView } from "@story-fm/engine";
 import { useDialog } from "@/domains/common/lib/use-dialog";
-import { moodSentence } from "@/domains/common/lib/mood";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/domains/common/ui/player-facts";
 import { RatingTrend } from "@/domains/common/ui/player-marks";
@@ -312,7 +310,6 @@ function Fact({ label, title, children }: { label: string; title?: string; child
  */
 function PlayerCardBody({
   card,
-  inMatch,
   renderReports,
 }: {
   card: PlayerCardView;
@@ -353,7 +350,6 @@ function PlayerCardBody({
 
       {/* 지금 심경 한 줄 — 아래 숫자들이 왜 그런지 (우리 선수만 아는 사실이다).
           경기 중에는 서지 않는다 — 지난 경기까지의 마음이라 지금 경기와 어긋난다 */}
-      {ours && !inMatch && <p className="pc-mood">{moodSentence(ours.mood)}</p>}
 
       <div className="pc-facts">
         <Fact label="성장 가능성">
@@ -450,11 +446,6 @@ function PlayerCardBody({
             {ours.assignment.familiarity}
           </span>
         )}
-        {ours && ours.leaderRank !== null && (
-          <span className="pc-mark" title="라커룸 서열 — 리더 그룹 안의 순위 (people.md §5-1)">
-            라커룸 {ours.leaderRank}위
-          </span>
-        )}
         {ours?.homegrown && (
           <span className="pc-mark" title="등록 명단의 홈그로운 8명을 채우는 선수">
             홈그로운
@@ -462,13 +453,6 @@ function PlayerCardBody({
         )}
         {ours?.isCaptain && <span className="pc-mark">주장</span>}
         {ours?.isViceCaptain && <span className="pc-mark">부주장</span>}
-        {/* 감독이 한 말 — **갈래와 기한뿐이다**. 무슨 말로 약속했는지는 장면의 것이다
-            (people.md §5-2). 기한이 지난 약속은 코어가 이미 걷어 낸다 */}
-        {ours?.promises.map((promise) => (
-          <span className="pc-mark" key={`${promise.kind}-${promise.dueOn}`}>
-            {PROMISE_KIND_KO[promise.kind]} 약속 {humanDate(promise.dueOn)}까지
-          </span>
-        ))}
       </div>
 
       {/* 소화 포지션 — **읽는 값이다.** 자리를 바꾸는 손잡이는 전술판 하나뿐이라

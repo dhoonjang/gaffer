@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DealTermSchema, MAX_TABLED_TERMS, dealTermLabel, type DealTerm } from "./deal-terms";
+import { DealTermSchema, dealTermLabel, type DealTerm } from "./deal-terms";
 import { formatMoney } from "../common/money";
 import { MAX_PAYMENT_YEARS } from "../common/payments";
 import { SQUAD_STATUSES, SQUAD_STATUS_KO, type SquadStatus } from "../common/squad-rules";
@@ -37,10 +37,7 @@ export const ProposalInputSchema = z.object({
   weeklyWage: z.number().int().min(0).optional(),
   years: z.number().int().min(1).max(PROPOSAL_YEARS_MAX).optional(),
   squadStatus: z.enum(SQUAD_STATUSES).optional(),
-  terms: z
-    .array(DealTermSchema)
-    .max(MAX_TABLED_TERMS + 2)
-    .optional(),
+  terms: z.array(DealTermSchema).optional(),
 });
 export type ProposalInput = z.infer<typeof ProposalInputSchema>;
 

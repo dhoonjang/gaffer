@@ -5,6 +5,7 @@ import {
   describeNextFixture,
   formatClock,
   headCoachOf,
+  personaBookOf,
   makeRng,
   pick,
   teamName,
@@ -142,8 +143,7 @@ export function buildOnboardingTurn(state: GameState): GmTurnResult {
       `[${state.date} ${formatClock(clockOf(state))} · ${scene.place(team, clubProfileIn(state, state.userTeamId).stadium)}]`,
       scene.line(),
       pick(rng, ONBOARDING_WELCOMES)(state.manager.name, tag, persona.name),
-      // 코치의 사람됨을 첫 만남에 밝힌다 — motivation은 3인칭 서술이라 대사로 옮기지 않는다
-      `${tag} 저에 대해서는 ${persona.traits.join(" · ")} — 그렇게들 말합니다.`,
+      personaBookOf(state, persona).description,
       `${tag} “${state.manager.background}”${josaOf(state.manager.background, "이라는/라는")} 이력도 검토했습니다.`,
       `${tag} 스쿼드의 축은 ${views.squad.players
         .slice(0, 3)

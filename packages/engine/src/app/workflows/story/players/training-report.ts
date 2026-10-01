@@ -31,18 +31,10 @@ import {
 } from "@story-fm/domain";
 import { setPlayerPosition } from "../../../../match/commands/lineup";
 import { applyAttributeStep } from "../../../../common/players/attribute-growth";
-import { mentorAxisBoost } from "../../../../story/players/mentoring";
 
 /**
- * 판정을 장부에 반영한다 — **검증은 여기서만** 한다.
- *
- * 모델이 무엇을 돌려주든 이 함수를 통과한 것만 게임 상태가 된다 (AGENTS.md 6-7).
- * 밴드 밖의 값, 훈련하지 않은 축, 잠재력을 넘는 성장, 팀 총량 초과는 조용히 잘린다.
- *
- * @returns 이 구간이 장부에 남긴 **결산 카드 한 장** (이미 반영된 구간이면 null).
- *          카드는 `state.trainingReports`에 그대로 실린다 — 요약 줄을 돌려주던
- *          자리인데, 그 줄을 읽는 곳이 없어 근거 한 줄이 호출 자리에서 사라졌다
- *          (docs/common/season.md §4).
+ * 훈련 판정을 검증하고 앵커·성장 한도 안에서 장부에 반영한다.
+ * @return state.trainingReports에 저장한 결산 카드. 이미 반영한 구간이면 null.
  */
 export function applyTrainingOutcomes(
   state: GameState,
@@ -202,13 +194,6 @@ export function applyTrainingOutcomes(
       allowed: allowedAxesFor(teamAxes, attributeAxisOf(program?.axis)),
       spent: attrSpent,
       cap: attrCap,
-      /**
-       * **멘토 항**이 얹힌다 — 판정이 정신 6축을 가리켰고 그
-       * 선수에게 멘토가 붙어 있을 때만 1이 아니다 (player.md §6.2 · people.md §5-3).
-       * `origin`은 `training-settlement` 그대로다: 그 줄은 결산 카드와 이어져 있어
-       * 경로를 바꾸면 근거 한 줄을 잃는다.
-       */
-      factor: mentorAxisBoost(state, player.id, outcome.attribute),
       weeks,
       source: "training",
       origin: "training-settlement",

@@ -281,24 +281,6 @@ describe("advance_time — 시간은 도구로만 흐른다 (season.md §5)", ()
     expect(finance.balance).toBe(before + net);
   });
 
-  it("불만 이슈가 있는 선수는 체력이 계속 깎인다", () => {
-    const state = createTestGame();
-    const player = userPlayers(state)[8]!;
-    // 회복(+8~14/일)이 불만(−1/일)보다 크므로 상한에서 재야 이슈 효과가 보인다
-    const other = userPlayers(state)[9]!;
-    player.state.condition = 100;
-    other.state.condition = 100;
-    state.issues.push({
-      gamePlayerId: player.id,
-      kind: "unhappy",
-      reason: "minutes",
-      since: state.date,
-    });
-    advanceDays(state, 5);
-    // 같은 조건의 동료보다 낮아야 한다 — 방치가 값을 갉는다
-    expect(player.state.condition).toBeLessThan(other.state.condition);
-  });
-
   it("부상은 INJURY row로 기록되고 복귀 시 이력으로 닫힌다", () => {
     const state = createTestGame(3);
     const victim = userPlayers(state)[3]!;
@@ -813,32 +795,17 @@ describe("누적 피로 (player.md §5.5)", () => {
     expect(fatigueOf(theirs.state)).toBeLessThan(60);
   });
 
-  it("시즌 전환이 통을 비우고 과부하 시계도 지운다", () => {
+  it("시즌 전환이 누적 피로를 초기화한다", () => {
     const state = createTestGame(42, "arsenal");
     state.date = "2027-06-01";
     for (const p of state.players) {
       p.state.fatigue = 90;
-      p.state.overloadedOn = "2027-03-01";
     }
     endSeason(state);
     expect(state.players.length).toBeGreaterThan(0);
     for (const p of state.players) {
       expect(fatigueOf(p.state)).toBe(FATIGUE_BASE);
-      expect(p.state.overloadedOn).toBeUndefined();
     }
-  });
-
-  it("과부하 시계는 문턱을 넘는 날 서고 내려가면 지워진다", () => {
-    const state = createTestGame(7);
-    const player = userPlayers(state)[0]!;
-    // 하루치 해소를 지나고도 문턱 위에 남는 값에서 시작한다
-    player.state.fatigue = 90;
-    advanceDays(state, 1);
-    expect(player.state.overloadedOn).toBe(state.date);
-    // 감독이 손을 써서 내려가면 시계가 끝난다 — 이어지는 것이 아니라 다시 센다
-    player.state.fatigue = 10;
-    advanceDays(state, 1);
-    expect(player.state.overloadedOn).toBeUndefined();
   });
 
   it("개인 휴식 — 걸린 동안만 훈련장에서 빠지고, 기간이 끝나면 돌아온다", () => {
@@ -956,11 +923,7 @@ describe("A매치 휴식기 — 소집과 복귀", () => {
   it("이동과 출전만큼 깎여 돌아온다", () => {
     const { state, window } = atBreakEve();
     tickTo(state, addDays(window.to, -1));
-    // 불만 있는 선수는 하루에 −1을 따로 문다 — 정산의 몫만 남기려면 그를 피한다
-    const troubled = new Set(state.issues.map((i) => i.gamePlayerId));
-    const twoCaps = userPlayers(state).find(
-      (p) => !troubled.has(p.id) && openCallUp(state, p.id)?.apps === 2,
-    );
+    const twoCaps = userPlayers(state).find((p) => openCallUp(state, p.id)?.apps === 2);
     expect(twoCaps).toBeDefined();
     // 마지막 날의 회복은 상한에 막힌다 — 그 위에 얹히는 것이 정산뿐이 되도록
     twoCaps!.state.condition = CONDITION_MAX;

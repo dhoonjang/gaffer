@@ -8,6 +8,7 @@ import {
   rankByName,
   changeScoutingRequest,
   setCaptain,
+  setRetirement,
   setTransferList,
   startMatch,
   substitutePlayer,
@@ -369,9 +370,17 @@ describe("게임 안의 id", () => {
   it("떠난 선수의 id를 신인에게 다시 주지 않는다 — 기록이 합쳐진다", () => {
     const state = createTestGame(5);
     const seen = new Set(state.players.map((p) => p.id));
+    expect(
+      setRetirement(state, {
+        playerId: userPlayers(state)[0]!.id,
+        action: "declare",
+        reason: "personal",
+      }).ok,
+    ).toBe(true);
     transitionSeason(state);
     // 은퇴로 명단에서 빠져도 원장에는 남는다 — 그 id를 다시 쓰면 두 사람이 한 사람이 된다
     const gone = state.transfers.filter((t) => t.type === "retire").map((t) => t.gamePlayerId);
+    expect(gone.length).toBeGreaterThan(0);
     const newcomers = state.players.filter((p) => !seen.has(p.id)).map((p) => p.id);
     expect(newcomers.filter((id) => gone.includes(id))).toEqual([]);
   });

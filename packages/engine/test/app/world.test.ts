@@ -36,14 +36,6 @@ import {
   buildMatches,
   buildTransferWindows,
   windowOpenOn,
-  seedOpenings,
-  tickOpenings,
-  recordIncident,
-  activeOpenings,
-  describeOpenings,
-  MAX_OPENINGS,
-  OPENING_DAYS,
-  addDays,
   playerCatalog,
   checkArmbandSeeds,
   buildTeamSquad,
@@ -191,7 +183,7 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
     expect(twoClubs).toEqual([]);
   });
 
-  it("전 선수가 goalkeeping을 갖는다 — 예외 분기 없음 (v6)", () => {
+  it("전 선수가 goalkeeping을 갖는다 — 예외 분기 없음", () => {
     for (const e of catalog) {
       expect(e.goalkeeping).toBeGreaterThan(0);
     }
@@ -671,15 +663,14 @@ describe("게임 생성 (7월 1일 프리시즌 시작)", () => {
       attributes: { leadership },
     });
     const squad = [p("keeper", 90, "first"), p("winger", 60, "first"), p("kid", 80, "reserve")];
-    const asOf = "2026-07-01";
 
     // 선발이 후보를 정한다 — 리더십 90이 명단에 있어도 선발이 아니면 서지 않는다
-    expect(initialCaptainOf(squad, ["winger"], asOf)?.id).toBe("winger");
+    expect(initialCaptainOf(squad, ["winger"])?.id).toBe("winger");
     // 배치가 비면 1군 — 2군의 리더십 80보다 1군의 90이 앞선다
-    expect(initialCaptainOf(squad, [], asOf)?.id).toBe("keeper");
+    expect(initialCaptainOf(squad, [])?.id).toBe("keeper");
     // 1군도 비면 명단 전체 — 완장이 비지는 않는다
-    expect(initialCaptainOf([p("kid", 80, "reserve")], [], asOf)?.id).toBe("kid");
-    expect(initialCaptainOf([], [], asOf)).toBeNull();
+    expect(initialCaptainOf([p("kid", 80, "reserve")], [])?.id).toBe("kid");
+    expect(initialCaptainOf([], [])).toBeNull();
   });
 
   it("초기 상태 — 기록 테이블은 부임 전 이력만 갖고 기본 훈련이 깔려 있다", () => {
@@ -860,7 +851,7 @@ describe("축소 세계 — 같은 규칙의 작은 세계", () => {
  * 돌린 diff가 시드 변경분이 아니게 되거나(결정성) 한 클럽에 동명이인이 서서 화자
  * 판별이 무너진다(유일성 — people.md §2).
  */
-describe("가명 매핑 (sources.md §7.3)", () => {
+describe("가명 매핑 (sources.md §7)", () => {
   const clubs = SQUAD_TEAMS.map((t) => ({ id: t.id, country: countryOfTeam(t.id) }));
   const named = pseudonymClubs(clubs);
 
@@ -890,162 +881,5 @@ describe("가명 매핑 (sources.md §7.3)", () => {
     const names = pseudonymSquad("이탈리아", squad);
     expect(new Set(names.map((n) => n.nameKo)).size).toBe(squad.length);
     expect(new Set(names.map((n) => n.nameEn)).size).toBe(squad.length);
-  });
-});
-
-describe("온보딩 판정 — 능력치의 결과 시작 사건 (career.md §1)", () => {
-  /**
-   * 한 세계를 두 케이스가 나눠 쓴다 — 여는 것도 닫는 것도 세계가 아니라 목록의 일이라
-   * 케이스마다 `seedOpenings`가 목록을 새로 앉히고 날짜를 부임일로 되돌린다.
-   */
-  const openingsGame = createTestGame();
-  const openedOn = openingsGame.date;
-
-  it("시작 사건은 셋까지, 실재하는 사람에게만, 기한은 코어가 박고 지나면 닫힌다", () => {
-    const state = structuredClone(openingsGame);
-    state.date = openedOn;
-    const ours = state.players.find((p) => p.teamId === state.userTeamId)!;
-    const seeded = seedOpenings(state, [
-      { kind: "press", title: "낙하산", line: "지역지가 연줄을 물었다" },
-      {
-        kind: "dressing-room",
-        title: "주장의 시선",
-        line: `${ours.name}이 새 감독을 잰다`,
-        subjectId: ours.id,
-      },
-      { kind: "board", title: "없는 사람", line: "…", subjectId: "nobody" },
-      { kind: "personal", title: "빚", line: "부임 전의 빚" },
-      { kind: "personal", title: "넷째", line: "상한 밖" },
-    ]);
-    expect(seeded).toBe(MAX_OPENINGS);
-    expect(state.openings!.map((o) => o.title)).toEqual(["낙하산", "주장의 시선", "빚"]);
-    expect(state.openings![0]!.dueOn).toBe(addDays(state.date, OPENING_DAYS));
-    const digest: string[] = [];
-    tickOpenings(state, digest);
-    expect(state.openings!.every((o) => o.resolvedOn === null)).toBe(true);
-    state.date = addDays(state.date, OPENING_DAYS + 1);
-    tickOpenings(state, digest);
-    expect(state.openings!.every((o) => o.resolvedOn !== null)).toBe(true);
-    expect(digest).toHaveLength(MAX_OPENINGS);
-    expect(state.openings!.every((o) => o.resolvedBy === "expired")).toBe(true);
-  });
-
-  /**
-   * **닫는 것은 장부의 사실이다** (career.md §1). 재는 것은 상태 전이 넷이다: 사람이
-   * 가르는 자리, 갈래가 가르는 자리, 닫힌 실마리가 기한에 다시 서지 않는 것, 그리고
-   * 두 사유가 서로 다른 통으로 가는 것.
-   */
-  it("감독이 한 일이 닫는다 — 걸린 사람이 있으면 사람이, 없으면 갈래가 가른다", () => {
-    const state = structuredClone(openingsGame);
-    state.date = openedOn;
-    const ours = state.players.find((p) => p.teamId === state.userTeamId)!;
-    seedOpenings(state, [
-      { kind: "press", title: "낙하산", line: "지역지가 연줄을 물었다" },
-      {
-        kind: "dressing-room",
-        title: "주장의 시선",
-        line: `${ours.name}이 새 감독을 잰다`,
-        subjectId: ours.id,
-      },
-      { kind: "personal", title: "빚", line: "부임 전의 빚" },
-    ]);
-
-    // 선수단 전체에 한 말은 그 선수에게 걸린 실마리를 닫지 못한다
-    expect(activeOpenings(state)).toHaveLength(3);
-    // 그 사람과 있었던 일이 닫는다 — 갈래가 무엇이든
-    expect(
-      recordIncident(state, {
-        kind: "mediation",
-        summary: "실마리 해결",
-        reaction: { reason: "해소를 확인했다" },
-        playerIds: [ours.id],
-        intensity: 1,
-        resolveOpeningIds: [state.openings!.find((o) => o.subjectId === ours.id)!.id],
-      }).ok,
-    ).toBe(true);
-    const captain = state.openings!.find((o) => o.title === "주장의 시선")!;
-    expect(captain.resolvedOn).toBe(state.date);
-    expect(captain.resolvedBy).toBe("handled");
-    expect(describeOpenings(state)).not.toContain("주장의 시선");
-
-    // 걸린 사람이 없는 실마리는 갈래가 닫고, 다른 갈래는 그대로 선다
-    expect(
-      recordIncident(state, {
-        kind: "mediation",
-        summary: "실마리 해결",
-        reaction: { reason: "해소를 확인했다" },
-        playerIds: [ours.id],
-        intensity: 1,
-        resolveOpeningIds: [state.openings!.find((o) => o.kind === "press")!.id],
-      }).ok,
-    ).toBe(true);
-    expect(activeOpenings(state).map((o) => o.title)).toEqual(["빚"]);
-
-    // 해결로 닫힌 것은 기한이 지나도 다시 닫히지 않는다 — 일지에 서는 것은 손대지 않은 하나뿐
-    state.date = addDays(state.date, OPENING_DAYS + 1);
-    const digest: string[] = [];
-    tickOpenings(state, digest);
-    expect(digest).toHaveLength(1);
-    expect(state.openings!.map((o) => o.resolvedBy)).toEqual(["handled", "handled", "expired"]);
-
-    // 두 사유는 다른 통으로 간다 — 해결은 서사 기억으로, 만료는 그날의 다이제스트로
-    expect(state.narrative.filter((n) => n.text.startsWith("주장의 시선"))).toHaveLength(1);
-    expect(digest.every((d) => !d.startsWith("주장의 시선"))).toBe(true);
-  });
-
-  /**
-   * **줄이 걸린 사람을 정한다** (career.md §1). 판정이 채운 `subjectId`는 장부의 사실이
-   * 아니라 빈칸이라, 그 줄이 이름을 부르지 않으면 코어가 이름표를 뗀다 — 스냅샷은 사실
-   * 카드고, 서지 않은 이름이 괄호로 붙으면 GM이 없는 갈등 위에 다음 장면을 쌓는다.
-   */
-  it("줄이 부르지 않는 사람은 스냅샷에 서지 않는다 — 이름표만 떨어지고 줄은 남는다", () => {
-    const state = structuredClone(openingsGame);
-    state.date = openedOn;
-    // 이 줄이 아무도 부르지 않는다는 것이 케이스의 전제다 — 시드가 이름을 바꿔도 서게 두지 않는다
-    const blank = "이사회가 첫 몇 달을 지켜본다";
-    const names = (name: string): boolean =>
-      name.split(" ").some((part) => part.length > 1 && blank.includes(part));
-    const ours = state.players.find((p) => p.teamId === state.userTeamId && !names(p.name))!;
-    const family = ours.name.split(" ")[1]!;
-
-    seedOpenings(state, [
-      { kind: "board", title: "이사진의 시선", line: blank, subjectId: ours.id },
-      // 성만 부르는 줄이 오히려 보통이다 — 마디 하나로 맞힌다
-      {
-        kind: "dressing-room",
-        title: "라커룸",
-        line: `${family}가 새 감독을 잰다`,
-        subjectId: ours.id,
-      },
-    ]);
-    expect(state.openings!.map((o) => o.subjectId)).toEqual([undefined, ours.id]);
-
-    const lines = describeOpenings(state)!.split("\n");
-    expect(lines[0]).toContain("이사진의 시선");
-    expect(lines[0]).not.toContain("(");
-    expect(lines[1]).toContain(`(${ours.name})`);
-
-    // 이름표가 떨어진 실마리는 걸린 사람이 없는 실마리다 — 닫는 것도 갈래가 한다
-    expect(
-      recordIncident(state, {
-        kind: "mediation",
-        summary: "실마리 해결",
-        reaction: { reason: "해소를 확인했다" },
-        playerIds: [ours.id],
-        intensity: 1,
-        resolveOpeningIds: [state.openings!.find((o) => o.subjectId === ours.id)!.id],
-      }).ok,
-    ).toBe(true);
-    expect(activeOpenings(state).map((o) => o.title)).toEqual(["이사진의 시선"]);
-    expect(
-      recordIncident(state, {
-        kind: "mediation",
-        summary: "실마리 해결",
-        reaction: { reason: "해소를 확인했다" },
-        playerIds: [ours.id],
-        intensity: 1,
-        resolveOpeningIds: [state.openings!.find((o) => o.kind === "board")!.id],
-      }).ok,
-    ).toBe(true);
   });
 });

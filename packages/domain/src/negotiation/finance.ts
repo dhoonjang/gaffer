@@ -106,7 +106,6 @@ export const LedgerEntrySchema = z.object({
   accounting: z.enum(["cash", "noncash"]).optional(),
   /**
    * 서사가 만든 항목 — GM의 apply_finance_event로 들어온 것만 표시된다.
-   * 코어가 공식으로 낸 항목(중계권·매치데이·주급)과 섞이면 하루 상한을 셀 수 없다.
    */
   source: z.literal("narrative").optional(),
 });
@@ -140,20 +139,6 @@ export const TeamFinanceSchema = z.object({
    * 세계가 잉여를 예산으로 되돌린다.
    */
   seasonOpeningBalance: z.number(),
-  /**
-   * `adjust_transfer_budget`이 **오늘** 움직인 금액의 합 (날짜 + 절대값).
-   * 한도는 하루 누적이라 어제 것과 섞이면 안 된다 — 원장에 남지 않는 자본
-   * 이동이라 되짚을 곳이 여기밖에 없다. 오늘 움직인 것이 없으면 없다.
-   */
-  budgetAdjusted: z.object({ date: DateString, amount: z.number() }).optional(),
-  /**
-   * **주급 한도 상향** — 보드가 `request_board`로 내준 몫 (finance.md §9.6).
-   *
-   * 임금 천장(§6.3) 위에 얹히고 **만료일을 스스로 든다** — 그 시즌 6월 30일이다.
-   * 지우러 오는 tick이 없어야 하고, 영구히 얹히면 매 시즌 요청 한 번으로 천장이
-   * 계단처럼 올라가 천장이 하는 일(폭주 방지)이 사라진다. 감독의 구단에만 걸린다.
-   */
-  wageLift: z.object({ amount: z.number().min(0), until: DateString }).optional(),
   /**
    * **건별 영입 승인분** — 보드가 `request_board`의 `signing`으로 내준 몫
    * (finance.md §9.6).

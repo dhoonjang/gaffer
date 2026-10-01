@@ -23,7 +23,6 @@ import {
   adminUpdateDomesticCup,
   adminUpdateLeague,
   adminUpdateTeam,
-  boardExpectation,
   catalogPath,
   catalogTierOf,
   checkDomesticCupInvariants,
@@ -59,7 +58,7 @@ import { createTestGame, rebuildEveryFixture } from "../helpers";
 rebuildEveryFixture();
 
 /**
- * 팀·리그·컵 카탈로그 어드민 — **게임과 무관한 초기치 DB**를 편집한다 (v6).
+ * 팀·리그·컵 카탈로그 어드민 — **게임과 무관한 초기치 DB**를 편집한다.
  * 편집은 데이터 디렉터리의 오버라이드 파일에 저장되고 새 게임에만 반영된다.
  */
 
@@ -157,14 +156,13 @@ describe("팀 편집", () => {
 
 /**
  * 체급은 **세이브가 갖는다** (team.md §2). 카탈로그의 값은 게임 시작의 초기치일
- * 뿐이라, 어드민이 그것을 고쳐도 진행 중인 세이브의 보드 기대치와 경질 위험선은
+ * 뿐이라, 어드민이 그것을 고쳐도 진행 중인 세이브의 체급은
  * 움직이지 않는다 — 감독은 자기가 한 일이 아닌 이유로 자리가 흔들리지 않는다.
  */
 describe("체급 편집과 진행 중인 세이브", () => {
-  it("카탈로그의 체급을 고쳐도 세이브의 보드 기대치가 그대로다", () => {
+  it("카탈로그의 체급을 고쳐도 저장된 체급은 그대로다", () => {
     const state = createTestGame(7, "arsenal");
     const before = tierOfTeamIn(state, state.userTeamId);
-    const expected = boardExpectation(state, state.userTeamId);
 
     const res = adminUpdateTeam("arsenal", { tier: 4 });
     expect(res.ok).toBe(true);
@@ -172,11 +170,6 @@ describe("체급 편집과 진행 중인 세이브", () => {
     expect(catalogTierOf("arsenal")).toBe(4);
 
     expect(tierOfTeamIn(state, state.userTeamId)).toBe(before);
-    expect(boardExpectation(state, state.userTeamId)).toEqual(expected);
-    /**
-     * 경질 위험선(`manager-market.ts`의 SEAT)도 같은 값 하나에서 나온다 —
-     * 그 표는 모듈 밖으로 나오지 않으므로 입력인 체급으로 확인한다.
-     */
     expect(tierOfTeamIn(state, state.userTeamId)).not.toBe(catalogTierOf("arsenal"));
   });
 });

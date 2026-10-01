@@ -76,6 +76,11 @@ describe("에이전트별 LLM 설정", () => {
     model: gpt-room
     max_tokens: 200
     timeout_ms: 2000
+  character-book-editor:
+    provider: google
+    model: gemini-editor
+    max_tokens: 300
+    timeout_ms: 3000
   history-compactor:
     provider: anthropic
     model: claude-compactor

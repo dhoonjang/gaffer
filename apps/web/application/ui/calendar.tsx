@@ -84,14 +84,6 @@ function EventIcon({ kind }: { kind: IconKind }) {
         <circle cx="8" cy="8" r="1.9" {...line} />
       </>
     ),
-    // 소식 — 전해 들은 말이라 말풍선이다. 왼쪽 아래로 빠지는 꼬리와 지폐·창보다
-    // 큰 모서리 반경이 같은 "둥근 사각" 셋을 한눈에 가른다
-    news: (
-      <path
-        d="M5 3.2H11A2.4 2.4 0 0 1 13.4 5.6V7.8A2.4 2.4 0 0 1 11 10.2H7L4.2 12.6 5 10.2A2.4 2.4 0 0 1 2.6 7.8V5.6A2.4 2.4 0 0 1 5 3.2Z"
-        {...line}
-      />
-    ),
     // 추첨 — 둘이 만나 하나가 되는 대진표
     draw: (
       <>
@@ -215,16 +207,6 @@ export function CalendarView({
     }
     return map;
   }, [calendar.entries]);
-
-  // 날짜 → 그날의 소식 줄 — 칸마다 일지를 다시 훑지 않도록 한 번만 모은다
-  const newsByDate = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const [iso, events] of Object.entries(calendar.events)) {
-      const texts = events.filter((e) => e.kind === "news").map((e) => e.text);
-      if (texts.length > 0) map.set(iso, texts);
-    }
-    return map;
-  }, [calendar.events]);
 
   // 달력 범위 — 프리시즌 시작(7/1)부터 시즌 마지막 경기까지
   const start = new Date(`${calendar.preseasonStart}T00:00:00Z`);
@@ -353,7 +335,6 @@ export function CalendarView({
                   const gained = trainings.some((e) => e.result !== null);
                   const others = otherOf(cell.iso);
                   // 그날 일지에 오른 소식 — 몇 줄이든 점은 하나다
-                  const news = newsByDate.get(cell.iso) ?? [];
                   const pending = pendingRoundOf(cell.iso);
                   const dow = dowOf(cell.iso);
                   return (
@@ -456,13 +437,6 @@ export function CalendarView({
                             }
                           />
                         ))}
-                        {news.length > 0 && (
-                          <span
-                            className="cal-mark news"
-                            title={news.join("\n")}
-                            data-testid={`cal-news-${cell.iso}`}
-                          />
-                        )}
                       </div>
                     </button>
                   );

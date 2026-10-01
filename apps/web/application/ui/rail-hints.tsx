@@ -11,7 +11,6 @@ import {
   IconCareer,
   IconDay,
   IconFinance,
-  IconInsight,
   IconJersey,
   IconMatch,
   IconPerson,
@@ -52,8 +51,7 @@ const SKILL_ICON: Record<string, IconComponent> = {
   set_squad_level: IconPerson,
   substitute: IconPerson,
   set_transfer_list: IconPerson,
-  // 요청에 답하는 것도 사람이 오가는 일이다 — 등재와 한 갈래로 읽힌다
-  respond_transfer_request: IconPerson,
+  // 계약 해지는 선수가 떠나는 일이다
   release_player: IconPerson,
   // 해지 제안도 사람이 오가는 일이다 — 일방 해지(release_player)와 같은 그림으로 한 갈래로 읽힌다
   open_release: IconPerson,
@@ -61,7 +59,6 @@ const SKILL_ICON: Record<string, IconComponent> = {
   exercise_buyback: IconPerson,
   // 계약 확정은 재정 장부에도 서므로 사람 쪽으로 — 그 칸의 머리 아이콘이 이미 돈이다
   accept_deal: IconPerson,
-  record_incident: IconInsight,
   set_training: IconDay,
   start_match: IconMatch,
   finalize_match: IconTrophy,
@@ -69,13 +66,7 @@ const SKILL_ICON: Record<string, IconComponent> = {
   adjust_transfer_budget: IconFinance,
 };
 
-/**
- * 오르내림의 색 — **부호는 코어가 숫자로 낸다** (`CommandBriefItem.delta`).
- *
- * 값 문자열에서 `+`·`−`를 찾아 칠하던 자리다. 포메이션(`4-2-3-1`)이 같은 자를
- * 지나고, 코어가 문구를 바꾸는 날 색이 조용히 꺼졌다. `0`은 "안 움직였다"는
- * 사실이라 이득도 손해도 아니다 — 색이 붙지 않는다.
- */
+/** 증감 색은 CommandBriefItem.delta의 부호로 정한다. 0과 생략된 값에는 색을 주지 않는다. */
 function Delta({ delta, text }: { delta: number | undefined; text: string }) {
   if (delta === undefined || delta === 0) return <>{text}</>;
   return <b className={delta > 0 ? "up" : "down"}>{text}</b>;

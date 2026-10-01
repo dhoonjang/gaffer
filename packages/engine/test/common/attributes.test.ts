@@ -6,13 +6,7 @@ import {
   numberBlockText,
   numberLineageOf,
 } from "@story-fm/engine";
-import {
-  type GamePlayer,
-  freshPlayerState,
-  numberGrievanceStands,
-  numberWishOf,
-  PLAYER_ARCHETYPE_TRAITS,
-} from "@story-fm/domain";
+import { type GamePlayer, freshPlayerState } from "@story-fm/domain";
 import { describe, expect, it } from "vitest";
 import {
   ATTRIBUTE_AXES,
@@ -725,36 +719,6 @@ describe("shirt numbers", () => {
       expect(lineage.past[0]?.lastSeason).toBe(NUMBER_SEASON - 1);
       // 저장하지 않고 매번 파생하므로 결정적이어야 한다
       expect(numberLineageOf(state, NUMBER_TEAM, 9)).toEqual(lineage);
-    });
-  });
-
-  describe("번호의 뜻 (numberWishOf · numberGrievanceStands)", () => {
-    it("원형과 자리가 함께 서야 뜻이 선다 — 없는 것이 정상 결과다", () => {
-      const striker = { position: "ST", squadNumber: 20 };
-
-      // 야심가는 자리의 상징 번호를, 앞선 것부터
-      expect(numberWishOf("ambitious", striker)).toEqual({ motive: "symbolic", numbers: [9, 10] });
-      // 구단 애착형은 지금 번호를 지킨다
-      expect(numberWishOf("homegrown_heart", striker)).toEqual({ motive: "keep", numbers: [20] });
-      // 자리에 상징 번호가 없으면 야심가도 요구하지 않는다
-      expect(numberWishOf("ambitious", { position: "CB", squadNumber: 5 })).toBeNull();
-      // 우상은 계보가 만든다 — 물려받을 사람이 없으면 뜻도 서지 않는다
-      expect(numberWishOf("anxious_prospect", striker)).toBeNull();
-      const idol = { number: 9, playerId: "legend", name: "legend", seasons: 6, lastSeason: 1 };
-      expect(numberWishOf("anxious_prospect", striker, [idol])).toEqual({
-        motive: "idol",
-        numbers: [9],
-        after: idol,
-      });
-    });
-
-    it("불만은 원형·번호의 무게·재적이 함께 있어야 선다 (문턱 하나, 굴림 없음)", () => {
-      // 상징 번호라도 갓 받은 프로페셔널에게는 서지 않는다
-      expect(numberGrievanceStands(PLAYER_ARCHETYPE_TRAITS.professional.number, 10, 0)).toBe(false);
-      // 평범한 번호라도 네 시즌을 단 구단 애착형에게는 선다
-      expect(numberGrievanceStands(PLAYER_ARCHETYPE_TRAITS.homegrown_heart.number, 34, 4)).toBe(
-        true,
-      );
     });
   });
 });

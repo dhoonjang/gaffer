@@ -9,7 +9,6 @@ import {
   rolesFor,
   injuryHistoryText,
 } from "@story-fm/domain";
-import { moodSentence } from "@/domains/common/lib/mood";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/domains/common/ui/player-facts";
 import { FitGauge, FormArrow, RatingTrend, StatusBadges } from "../../../common/ui/player-marks";
@@ -22,7 +21,6 @@ export function PlayerDetail({
   action,
   onRole,
   roleId,
-  inMatch = false,
 }: {
   p: SquadRow;
   slotCode: string | null;
@@ -94,14 +92,9 @@ export function PlayerDetail({
   const showCareer = careerRows.length > 1 || (careerRows.length === 1 && p.seasonApps === 0);
   return (
     <div className="player-detail" data-testid="player-detail">
-      {(!inMatch || action) && (
+      {action && (
         <div className="pd-head">
-          {!inMatch && (
-            <p className="pd-mood" data-testid="player-mood">
-              {moodSentence(p.mood)}
-            </p>
-          )}
-          {action && <div className="pd-action">{action}</div>}
+          <div className="pd-action">{action}</div>
         </div>
       )}
 

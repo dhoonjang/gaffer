@@ -13,6 +13,10 @@ export function catalogPath(): string {
   return path.join(dataDir(), "player-catalog.json");
 }
 
+export function personaCatalogPath(): string {
+  return path.join(dataDir(), "persona-catalog.json");
+}
+
 /** 팀 오버라이드 — 정체성(TeamCatalogEntry) + 전술 정체성 + 구단 프로필을 한 파일에 */
 export function teamCatalogPath(): string {
   return path.join(dataDir(), "team-catalog.json");

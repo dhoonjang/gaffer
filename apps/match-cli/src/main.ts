@@ -109,7 +109,6 @@ function setupOf(matchSeed: number, matchId: string): LiveSetup {
     ai: true,
     managerTactics: side.managerTactics,
     kickoffTactics: side.tactics,
-    derbyHeat: 0,
   });
   return {
     seed: matchSeed,

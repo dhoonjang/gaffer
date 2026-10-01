@@ -28,7 +28,7 @@ export { dataDir };
 
 /**
  * 저장 — 프로토타입은 파일 기반 JSON. GameState 전체가 직렬화 가능하도록
- * 유지한다 (이벤트 소싱 정식 도입 전의 스냅샷 방식).
+ * 유지한다. 경기 사건 원장도 세이브 상태에 포함한다.
  *
  * 내구성 원칙 (유저 게임이 업데이트·재시작·크래시에도 살아남게):
  * 1. 쓰기는 원자적 — tmp에 먼저 쓰고 rename으로 교체. 쓰다 죽어도 본 파일 온전.
@@ -305,7 +305,7 @@ function attachShards(raw: unknown, id: string): unknown {
  * 버전이 다른 세이브는 로드를 거부한다 — 마이그레이션은 없다. 다만 감추지는 않는다:
  * 목록에는 실패 사유와 함께 선다.
  */
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 18;
 
 /**
  * 세이브를 열지 못한 이유 — 문장은 화면이 쓴다, 코어는 사실만 싣는다.

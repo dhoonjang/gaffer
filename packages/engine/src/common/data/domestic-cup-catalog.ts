@@ -285,19 +285,8 @@ export const DOMESTIC_CUP_CATALOG_SEED: readonly DomesticCupEntry[] = [
     // 규정: 시드(상위) 클럽이 단판 홈경기를 갖는다
     homeRule: "seeded",
     /**
-     * 8월 말 1라운드(primo turno) → 1월 16강(ottavi) → 2월 8강 → 3월 준결승
-     * → 5월 중순 올림피코 결승.
-     *
-     * ⚠️ **실제 primo turno는 8월 15~18일, 세리에 A 개막 앞주다** — 그래서 세리에 A가
-     * 다른 리그보다 한 주 늦게 연다. 우리는 다섯 리그가 한 골격·한 개막일을 공유하고
-     * 프리시즌 친선이 국경을 넘어 짝지어지므로 리그별 개막일을 따로 두지 못한다.
-     * 대신 다수 패턴(리그가 먼저 열리고 컵이 뒤따른다)을 따라 **개막 주말 뒤 첫
-     * 주중**으로 옮겼다. 실제 값은 `firstCupRoundFloor`가 개막일에서 정하므로 여기
-     * 8/26은 그 자리를 읽기 위한 표기다 (season.md §3).
-     *
-     * 준결승은 실제로 2월(2023-24)과 4월(2024-25) 사이를 오간다. 우리는 **3월**로
-     * 잡는다 — 4월에 두면 밀려난 세리에 A 경기가 5월에 쌓여, 결승 전날 결승 팀이
-     * 리그를 뛰는 자리가 생긴다(시드 42에서 실제로 그랬다).
+     * 코파 이탈리아는 공통 개막일 이후에 시작한다. 첫 라운드 하한은 firstCupRoundFloor가 정한다.
+     * 준결승은 3월, 결승은 5월 중순으로 편성한다. league·playoff의 날짜는 기준 표기다.
      */
     windows: {
       league: [8, 26],
@@ -332,7 +321,7 @@ export const DOMESTIC_CUP_CATALOG_SEED: readonly DomesticCupEntry[] = [
     // 포칼은 준결승까지 전부 단판이다
     twoLegged: [],
     drawStyle: "per-round",
-    // 실제 1라운드 추첨은 6월 15일(ZDF 생중계) — 게임 시작 직후로 옮겼다
+    // 게임 시작 직후에 첫 라운드를 추첨한다
     firstDraw: [7, 5],
     // 2라운드 추첨 8/31(1라운드 8/15~18) · 16강 추첨 11/2(2라운드 10/28~29) — 며칠 뒤에 뽑는다
     drawDelayDays: 4,
@@ -342,7 +331,7 @@ export const DOMESTIC_CUP_CATALOG_SEED: readonly DomesticCupEntry[] = [
     // 분데스리가 클럽이 실제로 1라운드부터 나오는 대회지만 그 라운드가 64팀이라,
     // 32클럽이 서는 2라운드의 이름으로 시작한다.
     // ⚠️ 날짜는 실제 1라운드(8/15~18)의 자리인데 그것이 **분데스리가 개막 앞주**라 —
-    // 코파 이탈리아와 같은 이유로 개막 뒤로 옮겼다 (`firstCupRoundFloor`, season.md §3).
+    // 첫 라운드 하한은 firstCupRoundFloor가 공통 개막일에서 계산한다.
     windows: {
       league: [8, 26],
       playoff: [8, 26],

@@ -1,5 +1,4 @@
 export const MARKET_OPS: readonly string[] = [
-  "respond_transfer_request",
   "revoke_mandate",
   "set_transfer_list",
   "delegate_negotiation",
@@ -7,10 +6,8 @@ export const MARKET_OPS: readonly string[] = [
   "exercise_buyback",
   "recall_loan",
   "adjust_transfer_budget",
-  "request_board",
   "set_ticket_price",
   "release_staff",
-  "hire_staff",
   "accept_manager_offer",
   "counter_manager_offer",
   "apply_manager_job",

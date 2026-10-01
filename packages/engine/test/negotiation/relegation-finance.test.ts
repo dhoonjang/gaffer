@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  addDays,
   careerView,
   clubEconomyLevel,
   clubEconomyLevelIn,
@@ -13,7 +12,6 @@ import {
   monthlyFixedCostOf,
   parachuteSeasonAmount,
   playersOf,
-  runManagerMarket,
   searchPlayers,
   seasonBudgetBaseOf,
   startParachute,
@@ -279,41 +277,5 @@ describe("강등된 감독의 조회 도구", () => {
     const career = careerView(state).message;
     expect(career).toContain("챔피언십 1위");
     expect(career).not.toContain("프리미어리그");
-  });
-});
-
-describe("감독 시장", () => {
-  it("승격한 클럽의 감독이 1부 순위로 평가받는다", () => {
-    const state = createTestGame(42, "arsenal");
-    const down = otherTopClub(state);
-    const up = teamsOfLeagueIn(state, "championship")[0]!;
-    moveTo(state, down, "championship");
-    moveTo(state, up, "epl");
-
-    // 강등된 팀의 1부 장부를 승격팀이 물려받는다 — 전패라 경질 문턱 아래다
-    for (const match of state.matches) {
-      if (match.competitionId !== "epl") continue;
-      if (match.homeTeamId === down) {
-        match.homeTeamId = up;
-        match.result = resultOf({ homeGoals: 0, awayGoals: 3 });
-      } else if (match.awayTeamId === down) {
-        match.awayTeamId = up;
-        match.result = resultOf({ homeGoals: 3, awayGoals: 0 });
-      }
-    }
-
-    const promoted = state.teams.find((t) => t.id === up)!;
-    const relegated = state.teams.find((t) => t.id === down)!;
-    const seatBefore = promoted.managerSince;
-    let date = addDays(state.calendar.start, 100); // 부임 유예 75일을 넘긴 시즌 중
-    for (let day = 0; day < 60 && promoted.managerSince === seatBefore; day++) {
-      state.date = date;
-      runManagerMarket(state, []);
-      date = addDays(date, 1);
-    }
-
-    expect(promoted.managerSince).not.toBe(seatBefore);
-    // 내려간 팀은 반대다 — 2부엔 순위표가 없으니 판단 자체가 없다
-    expect(relegated.managerSince).toBe(state.calendar.preseasonStart);
   });
 });

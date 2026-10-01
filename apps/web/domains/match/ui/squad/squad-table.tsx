@@ -1,12 +1,11 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
-import { PROMISE_KIND_KO, formatRating, josaOf } from "@story-fm/domain";
+import { formatRating, josaOf } from "@story-fm/domain";
 import { PlayerName } from "@/domains/common/ui/player-card";
 import { ConditionBar } from "@/domains/common/ui/condition-bar";
 import { IconChevron, IconChevronUp } from "@/domains/common/ui/icons";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
-import { moodSentence } from "@/domains/common/lib/mood";
 import {
   Armband,
   FitGauge,
@@ -18,13 +17,7 @@ import {
 } from "../../../common/ui/player-marks";
 import { TIER_SLUG, type SetPieceTakersView, type SquadRow, type Tier } from "./types";
 
-/**
- * 정렬 기준 — `role`이 **기본이자 돌아오는 자리**다 (칸 → 라인 → OVR).
- *
- * 이름순은 없앴다. 다른 기준으로 흩어 놓은 명단을 **칸 순으로 되돌릴 손잡이가
- * 없었고**, 스물몇 명짜리 표에서 이름으로 찾는 일은 칸으로 찾는 일보다 드물다 —
- * 첫 칸(선수)이 그 되돌리는 자리를 맡는다.
- */
+/** 기본 정렬은 칸 → 라인 → OVR 순서다. 선수 열 머리를 누르면 기본 정렬로 돌아간다. */
 export type SortKey =
   "role" | "position" | "overall" | "age" | "adaptation" | "form" | "condition" | "rating";
 const ROLE_ORDER: Record<string, number> = { 선발: 0, 벤치: 1, 스쿼드: 2 };
@@ -50,7 +43,6 @@ export function SquadTable({
   tierKey,
   setPieces,
   onSwapIn,
-  inMatch = false,
 }: {
   players: SquadRow[];
   sort: { key: SortKey; desc: boolean };
@@ -334,16 +326,6 @@ export function SquadTable({
                  * 임대 표식과 같은 모양인 이유도 같다 — 자격이 아니라 **언제까지
                  * 무엇을 해야 하는가**라, 좁은 화면에서도 이름 옆에 남는다.
                  */}
-                {p.promises.map((promise) => (
-                  <span
-                    key={promise.kind}
-                    className="tag st note"
-                    title={`${PROMISE_KIND_KO[promise.kind]} 약속 — ${humanDate(promise.dueOn)}까지`}
-                  >
-                    {PROMISE_KIND_KO[promise.kind]} {humanDate(promise.dueOn, { weekday: false })}
-                    까지
-                  </span>
-                ))}
               </td>
               {/* 지금 맡고 있는 자리를 그대로 보여준다 — 전술판에 RWB로 저장돼 있으면 RWB.
                 "주 포지션과 다르다"는 표시는 하지 않는다 (적합도는 전술판의 적응도 숫자로 읽는다) */}
@@ -378,7 +360,7 @@ export function SquadTable({
               </td>
               {/* 사기·피로를 하나로 합친 값 — 왜 이 값인지는 행을 펼치면 한 문장으로 나온다.
                   경기 중에는 판세 탭과 같은 읽은 값이라 막대에 모르는 폭이 붙는다 */}
-              <td title={inMatch ? undefined : moodSentence(p.mood)}>
+              <td>
                 <ConditionBar c={p.condition} />
               </td>
               {/* 골 대신 평점 — 골 수는 행을 펼치면 시즌 기록에 그대로 있다 */}

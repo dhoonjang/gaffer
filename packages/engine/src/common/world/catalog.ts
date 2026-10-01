@@ -30,6 +30,8 @@ import { isMarketOnlyLeague } from "../data/league-catalog";
 import { claimSyntheticName, syntheticNamePoolOf } from "../data/names";
 import { makeRng, randInt } from "../core/rng";
 import { claimPlayerId, slugifyName } from "./player-id";
+import { catalogPlayerBook } from "../people/player-persona";
+import { namedCatalogBook } from "../data/catalog-character-book";
 
 /**
  * 선수 카탈로그 (PLAYER_CATALOG) — 모든 게임이 공유하는 불변 초기치 DB.
@@ -37,7 +39,7 @@ import { claimPlayerId, slugifyName } from "./player-id";
  *
  * 시드 데이터(epl-players.ts)에서 결정적으로 파생한다:
  * - goalkeeping은 전 선수 보유 — GK는 시드값, 필드는 낮은 값을 이름 해시로 파생
- *   (예외 분기 없이 한 공식으로 다루기 위함, ERD v5)
+ *   (예외 분기 없이 한 공식으로 다루기 위함, 데이터 모델)
  * - positions[]는 주 포지션(높은 적응도) + 인접 포지션(중간 적응도)
  */
 
@@ -329,6 +331,7 @@ function entryFromSeed(teamId: string, s: RealPlayerSeed): CatalogDraft {
     teamId,
     nameKo: s.nameKo,
     nameEn: s.nameEn,
+    ...(s.characterBook === undefined ? {} : { characterBook: s.characterBook }),
     // 동명이인을 가르는 유일한 키 — 이름으로 잇는 표(부상 이력)가 이걸 쓴다
     ...(s.wikidataId === undefined ? {} : { wikidataId: s.wikidataId }),
     ...(s.squadNumber === undefined ? {} : { squadNumber: s.squadNumber }),
@@ -756,10 +759,12 @@ export function buildTeamSquad(
   taken: Set<string>,
   takenNames: Set<string> = new Set(),
 ): PlayerCatalogEntry[] {
-  return teamDrafts(team, takenNames).map((e) => ({
-    id: claimPlayerId(e.nameEn, e.birthdate, taken),
-    ...e,
-  }));
+  return teamDrafts(team, takenNames).map((e) =>
+    withPlayerBook({
+      id: claimPlayerId(e.nameEn, e.birthdate, taken),
+      ...e,
+    }),
+  );
 }
 
 function buildFromSeed(): PlayerCatalogEntry[] {
@@ -778,7 +783,9 @@ function buildFromSeed(): PlayerCatalogEntry[] {
    * 순서도 여기서 한 번에 정해진다.
    */
   const taken = new Set<string>();
-  return entries.map((e) => ({ id: claimPlayerId(e.nameEn, e.birthdate, taken), ...e }));
+  return entries.map((e) =>
+    withPlayerBook({ id: claimPlayerId(e.nameEn, e.birthdate, taken), ...e }),
+  );
 }
 
 /**
@@ -787,7 +794,7 @@ function buildFromSeed(): PlayerCatalogEntry[] {
  * 파일이 없으면 시드에서 파생한 기본 카탈로그를 쓴다.
  *
  * ⚠️ 진행 중인 게임에는 영향이 없다 — 게임은 시작 시 카탈로그를 복사해
- * `GAME_PLAYER`로 인스턴스화하기 때문이다 (v6 2-레이어 분리).
+ * `GAME_PLAYER`로 인스턴스화하기 때문이다.
  */
 let cache: { key: string; entries: PlayerCatalogEntry[] } | null = null;
 
@@ -812,7 +819,7 @@ export function playerCatalog(): PlayerCatalogEntry[] {
     }
   }
   entries ??= buildFromSeed();
-  cache = { key, entries: backfillNationality(backfillHomegrown(entries)) };
+  cache = { key, entries: backfillNationality(backfillHomegrown(entries)).map(withPlayerBook) };
   return cache.entries;
 }
 
@@ -846,8 +853,17 @@ function backfillNationality(entries: PlayerCatalogEntry[]): PlayerCatalogEntry[
   });
 }
 
+/** An explicit book survives factual edits; only its canonical name follows identity. */
+export function withPlayerBook(entry: PlayerCatalogEntry): PlayerCatalogEntry {
+  return {
+    ...entry,
+    characterBook: namedCatalogBook(entry.nameKo, entry.characterBook ?? catalogPlayerBook(entry)),
+  };
+}
+
 /** 카탈로그 저장 — 원자적 쓰기 (쓰다 죽어도 이전 파일 온전) */
 export function saveCatalog(entries: PlayerCatalogEntry[]): void {
+  entries = entries.map(withPlayerBook);
   const dir = dataDir();
   mkdirSync(dir, { recursive: true });
   const file = catalogPath();

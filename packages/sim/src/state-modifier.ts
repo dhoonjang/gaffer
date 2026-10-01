@@ -11,7 +11,7 @@ import type { PlayerState } from "@story-fm/domain";
  * 몸으로 기억하지 못하는 것이라, 같은 결장이라도 중원이 최전방보다 크게 문다.
  * 이 자리에 평면 감점을 하나 더 두면 같은 사실을 두 번 물린다.
  *
- * 부상은 여기서 다루지 않는다 — 부상자는 애초에 라인업에 배치되지 않는다 (v6).
+ * 부상은 여기서 다루지 않는다 — 부상자는 애초에 라인업에 배치되지 않는다.
  */
 export function stateModifier(state: PlayerState): number {
   // 폼은 −1~1 — 양 끝에서 ±9%

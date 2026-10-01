@@ -95,13 +95,8 @@ export function SquadView({
   /** 펼침을 뒤집는다 — 주지 않으면 손잡이를 그리지 않는다(경기 중 전술판 탭) */
   onToggleBoard?: () => void;
   /**
-   * 경기 중 조작 — **지시로 보낸다.**
-   *
-   * 경기 중 라인업·전술은 감독이 직접 저장하는 값이 아니다(교체 횟수·적응도
-   * 대가·상대 반응이 걸려 있다). 그래서 전술판을 잠가 뒀는데, 그러면 감독이
-   * 손에 쥔 판을 두고 채팅에 "손흥민 빼고 이강인"이라고 타이핑해야 했다.
-   * 지금은 판에서 조작하면 그것이 **오퍼레이터 지시**가 되어 GM이 받는다 —
-   * 시간 이동 손잡이와 같은 경로다.
+   * 경기 중 판 조작을 오퍼레이터 지시로 GM에 전달한다.
+   * 교체 횟수와 적응도 검증은 코어가 담당한다.
    */
   onOrder?: (order: MatchBoardOrder) => void;
   /**
@@ -396,14 +391,8 @@ export function SquadView({
   };
 
   /**
-   * 명단에 넘길 행 — **지금 화면의 배치·역할로 다시 맞춘 사본.**
-   *
-   * 서버가 준 `slotOverall`·`assignedPosition`·`adaptation`은 저장된 배치 기준이라
-   * 자동 저장(3초)과 왕복이 끝나야 바뀐다. 칩은 이미 좌표에서 즉시 계산하고 있었고,
-   * 명단만 한 박자 늦어 같은 선수의 두 숫자가 잠시 어긋나 보였다.
-   *
-   * ⚠️ 값은 `slotOverallOf` 하나가 낸다 — **전술판 칩과 같은 함수다.** 두 곳이
-   * 따로 계산하던 때는 같은 선수의 OVR이 왼쪽과 오른쪽에서 다르게 보였다.
+   * 화면의 현재 배치·역할에 맞춰 명단 행을 계산한다.
+   * 자동 저장을 기다리지 않고 전술판 칩과 같은 slotOverallOf를 사용한다.
    */
   const localRows = useMemo(
     () =>
@@ -449,11 +438,7 @@ export function SquadView({
   function toggleBench(id: string) {
     if (!live || onLoan.has(id)) return;
     const leaving = benchSet.has(id);
-    /*
-     * 정원이 찼으면 넣을 자리가 없다 — **저장까지 가지 않는다.** 바뀐 것 없는 판을
-     * 그대로 커밋하던 때는 저장 상태만 `saved`로 넘어가, 감독이 누른 것이 먹었는지
-     * 아닌지 화면 어디에도 남지 않았다. 이 자리에 오기 전에 버튼이 이미 잠겨 있다.
-     */
+    /** 벤치 정원이 찼으면 추가를 저장하지 않는다. 해제는 허용한다. */
     if (!leaving && benchFull) return;
     const next = leaving ? board.bench.filter((x) => x !== id) : [...board.bench, id];
     commit({ ...board, bench: next });
@@ -1115,7 +1100,6 @@ export function SquadView({
                               <IconClose size={10} />
                             </span>
                           )}
-                          {p.hasIssue && <span className="slot-flag warn">!</span>}
                         </>
                       )
                     }
@@ -1217,7 +1201,7 @@ function StaffPanel({ staff, today }: { staff: OfficeStaff[]; today: string }) {
                   <span className="cs-title">{person.title}</span>
                 </div>
                 <div className="cs-meta">
-                  <span>{person.archetype}</span>
+                  <span>{person.description}</span>
                   {person.since && (
                     <span title={`부임 ${humanDate(person.since, { year: true })}`}>
                       부임 {ageOf(person.since, today) + 1}년째

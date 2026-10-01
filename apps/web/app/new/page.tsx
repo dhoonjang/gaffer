@@ -17,8 +17,6 @@ interface TeamEntry {
   tier: number;
   /** 공식 색 — 카탈로그 항목이 그대로 내려온다. 없으면 문장이 id 해시로 색을 낸다 */
   colours?: ClubColours;
-  /** 시즌 평가가 쓰는 그 문구 — 화면이 tier로 따로 만들지 않는다 */
-  expectation: string;
 }
 
 interface LeagueEntry {
@@ -245,7 +243,7 @@ export default function NewGamePage() {
                 <Crest id={t.id} shortName={t.shortName} colours={t.colours} size={32} />
                 <span>
                   <div className="team-name">{t.name}</div>
-                  <div className="tier">{t.expectation}</div>
+                  <div className="tier">{t.tier}티어</div>
                 </span>
               </button>
             ))}
@@ -261,7 +259,7 @@ export default function NewGamePage() {
             <span>
               <div className="appointment-club">{team.name}</div>
               <div className="tier">
-                {league?.name ?? ""} · 구단 경쟁 기준: {team.expectation}
+                {league?.name ?? ""} · 구단 체급: {team.tier}티어
               </div>
             </span>
           </div>

@@ -5,7 +5,6 @@ import {
   boardRequestAmountText,
   BOARD_CONDITION_LABEL,
   boardConditionAmountText,
-  boardAgendaLines,
 } from "@story-fm/domain";
 import {
   type WageRatioTone,
@@ -23,10 +22,8 @@ import {
   playerName,
   clubProfileIn,
   weeklyWagesOf,
-  managedTeamId,
 } from "../../common/core/state";
 
-import { openBoardRequest } from "../finance/board-request";
 import {
   type DebtView,
   type FinanceOutlook,
@@ -183,35 +180,35 @@ export function foldFinanceFeed(ledger: readonly LedgerEntry[]): FinanceFeedRow[
 }
 
 /**
- * **보드에 걸려 있는 것** — 열린 요청 하나와 영입 승인분.
+ * **보드에 걸려 있는 것** — 열린 요청들와 영입 승인분.
  *
  * 기한이 지난 승인분은 세지 않는다. tick이 그날 지우므로 화면에 남을 자리는 없지만,
  * 만료를 읽는 자가 두 곳이면 하루 어긋난 날 유령 한 줄이 선다.
  */
 export function boardView(state: GameState): FinanceView["board"] {
-  const open = openBoardRequest(state);
+  const openRequests = state.boardRequests.filter(
+    (r) => r.teamId === state.userTeamId && (r.status === "pending" || r.status === "conditional"),
+  );
   const earmarked = financeOf(state, state.userTeamId).earmarked.filter(
     (row) => state.date <= row.until,
   );
   return {
-    request:
-      open && (open.status === "pending" || open.status === "conditional")
+    requests: openRequests.map((open) => ({
+      id: open.id,
+      label: BOARD_REQUEST_LABEL[open.kind],
+      amount: boardRequestAmountText(open.kind, open.amount),
+      playerName: open.playerId ? playerName(state, open.playerId) : null,
+      status: open.status as "pending" | "conditional",
+      askedOn: open.askedOn,
+      respondOn: open.respondOn,
+      condition: open.condition
         ? {
-            label: BOARD_REQUEST_LABEL[open.kind],
-            amount: boardRequestAmountText(open.kind, open.amount),
-            playerName: open.playerId ? playerName(state, open.playerId) : null,
-            status: open.status,
-            askedOn: open.askedOn,
-            respondOn: open.respondOn,
-            condition: open.condition
-              ? {
-                  label: BOARD_CONDITION_LABEL[open.condition.kind],
-                  amount: boardConditionAmountText(open.condition),
-                  until: open.condition.until,
-                }
-              : null,
+            label: BOARD_CONDITION_LABEL[open.condition.kind],
+            amount: boardConditionAmountText(open.condition),
+            until: open.condition.until,
           }
         : null,
+    })),
     earmarked: earmarked.map((row) => ({
       playerName: playerName(state, row.gamePlayerId),
       amount: row.amount,
@@ -226,14 +223,15 @@ export type FinanceView = {
   transferBudget: number;
   budgetFrozen: boolean;
   /**
-   * **감독이 보드에 건 것** (finance.md §9.6) — 답이 끝나지 않은 요청 하나와,
+   * **감독이 보드에 건 것** (finance.md §9.6) — 답이 끝나지 않은 요청들과,
    * 이름 하나 앞에 걸려 있는 영입 승인분.
    *
    * 값과 라벨만 낸다. 보드가 무슨 말로 그렇게 답했는지는 GM이 쓴다.
    */
   board: {
-    /** 답을 기다리거나(`pending`) 조건이 걸린(`conditional`) 요청 — 한 번에 하나다 */
-    request: {
+    /** 답을 기다리거나(`pending`) 조건이 걸린(`conditional`) 요청 */
+    requests: Array<{
+      id: string;
       /** 종류 이름 — `BOARD_REQUEST_LABEL` */
       label: string;
       /** 감독이 부른 값 — 단위(금액·주급·좌석)는 종류가 안다 */
@@ -253,16 +251,10 @@ export type FinanceView = {
         /** 이 날까지 못 채우면 거절이다 */
         until: string;
       } | null;
-    } | null;
+    }>;
     /** 걸려 있는 영입 승인분 — 그 선수 영입에만 쓰이고 기한이 지나면 지워진다 */
     earmarked: Array<{ playerName: string; amount: number; until: string }>;
   };
-  /**
-   * **보드가 지금 이 구단에 지고 있는 기대** — 체급이 정한다 (`boardExpectation`).
-   * 지난 시즌의 **평가**가 아니다: 그 둘을 한 칸에 겹쳐 두면 첫 시즌의 감독이
-   * 아무도 매기지 않은 평가를 읽는다.
-   */
-  boardAgenda: string[];
   stadium: { name: string; capacity: number };
   /**
    * **감독이 매긴 티켓 값과 기준가** (finance.md §5.2) — 기준가와 나란히 서야
@@ -342,7 +334,6 @@ export function buildFinanceView(state: GameState): FinanceView {
     transferBudget: finance.transferBudget,
     budgetFrozen: finance.budgetFrozen === true,
     board: boardView(state),
-    boardAgenda: managedTeamId(state) ? boardAgendaLines(state.boardAgenda) : [],
     stadium: { name: stadium.stadium, capacity: stadium.capacity },
     ticket: (() => {
       const { price, base } = ticketPriceOf(state, userTeamId);

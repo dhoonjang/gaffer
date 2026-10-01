@@ -5,7 +5,6 @@ import {
   addDays,
   applyMonthlyDevelopment,
   assignmentsOf,
-  declareRetirements,
   firstTeamPlayers,
   groupOf,
   isClubTeam,
@@ -122,12 +121,7 @@ describe("15시즌을 전환한 뒤의 스쿼드", () => {
         state.date = addDays(state.date, 30);
         applyMonthlyDevelopment(state);
       }
-      /**
-       * **예고를 함께 굴린다** — 전환은 집행일 뿐이고 명단은 1월의 예고가 정한다
-       * (season.md §6). 여기서 tick을 돌리지 않으므로 그 하루를 직접 부른다: 빼면
-       * 나이(35) 밖의 은퇴가 통째로 사라져 실제 게임보다 늙고 두꺼운 스쿼드를 잰다.
-       */
-      declareRetirements(state, []);
+      // GM의 은퇴 결정 없이 생리적 성장과 시즌 전환만 측정한다.
       transitionSeason(state);
       /**
        * **인테이크 정리도 함께 굴린다** — 전환은 우리 팀에 후보를 세울 뿐이고 계약은

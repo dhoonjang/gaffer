@@ -18,13 +18,11 @@ import {
   activeContract,
   type GameState,
   playerById,
-  pushNarrative,
   releaseFromTactics,
   squadShortfall,
   teamName,
   voidPendingContract,
 } from "../../../../common/core/state";
-import { withdrawRetirement } from "../../../../common/players/career";
 import {
   assignRequestedNumber,
   assignSquadNumber,
@@ -56,7 +54,6 @@ import {
   agreedTermsOf,
   AI_RENEWAL_CHANCE,
   AI_RENEWAL_WINDOW_DAYS,
-  clearIssueReason,
   executeLoanIn,
   executeLoanOut,
   executePrecontract,
@@ -77,8 +74,6 @@ import {
   statusLabel,
 } from "../../../../negotiation/market/negotiation";
 import { promisedNumberOf, settleTermsOnSigning } from "../../../../negotiation/market/terms";
-import { buildTransferPress } from "../../../../story/world/press";
-import { openPress } from "../../story/world/press";
 import { releasePlayer } from "./departures";
 
 function executeRelease(
@@ -130,43 +125,20 @@ function executeRenewal(
     squadStatus,
   };
   state.contracts.push(contract);
-  // 조건서가 제자리로 흩어진다 — 약속 장부·조항·사본 (§12-3)
+  // 합의 조건을 계약에 보존하고 금전 조항을 정산한다.
   const termNotes = settleTermsOnSigning(
     state,
     contract,
     player,
     agreedTermsOf(negotiation, agreed),
-    {
-      renewal: true,
-    },
   );
   negotiation.status = "completed";
-  /**
-   * **이 불만을 푸는 것은 성사 하나뿐이다** (→ docs/story/people.md §5·§8). 협상을
-   * 여는 것(`openRenewal`)은 압력을 멈출 뿐이라 불만은 그대로 있고, 계약이 실제로
-   * 갈아 끼워진 이 자리에서만 풀린다.
-   */
-  const freed = clearIssueReason(state, player.id, "contract");
-  /**
-   * **재계약이 예고를 거둔다 — 나이 상한 안에서** (season.md §6). 감독이 한 시즌을 더
-   * 설득한 것이 장부에 남지 않으면 1월의 예고가 7월에 그대로 집행돼, 방금 도장을 찍은
-   * 선수가 그 계약을 한 경기도 쓰지 않고 그만둔다. 판정일에 이미 `RETIRE_AGE`면 거둘 수
-   * 없다 — 서른다섯의 몸을 계약서가 되돌리지는 못한다.
-   */
-  const stays = withdrawRetirement(state, player);
-  pushNarrative(
-    state,
-    `${player.name} 재계약 — 주급 ${formatMoney(agreed.weeklyWage)} ${agreed.contractYears}년`,
-    4,
-  );
   return {
     ok: true,
     message:
       `${player.name} 재계약 완료 — 주급 ${formatMoney(agreed.weeklyWage)}, ` +
       `${contractUntil(state.date, agreed.contractYears)}까지${statusLabel(squadStatus)}. ` +
       "주급 총액이 늘어납니다" +
-      (freed ? " · 계약 불만이 풀렸습니다" : "") +
-      (stays ? " · 은퇴 예고를 거뒀습니다" : "") +
       (termNotes.length > 0 ? ` · ${termNotes.join(" · ")}` : ""),
     brief: {
       head: "재계약",
@@ -437,23 +409,10 @@ export function executeDeal(state: GameState, negotiation: Negotiation): Command
   const slot = canRegisterFor(state, player, state.userTeamId);
   // 빌려 온 선수는 이미 명단에 서 있다 — 그 자리를 그대로 둔다
   if (!loanee) player.squadLevel = slot.ok ? "first" : "reserve";
-  // 이제 우리 선수다 — 조건서가 약속 장부·조항·사본으로 흩어진다 (§12-3)
+  // 합의 조건을 계약에 보존하고 즉시 집행할 금전 조항을 정산한다.
   const termNotes = settleTermsOnSigning(state, contract, player, agreedTerms);
   negotiation.status = "completed";
-
-  pushNarrative(
-    state,
-    `${player.name} 영입 완료 — ${teamName(fromTeamId)}에서 ${formatMoney(agreed.fee)}` +
-      (loanee ? " (임대에서 완전 영입)" : ""),
-    4,
-  );
   // 큰 영입에는 회견이 붙는다 — 세계가 감독에게 설명을 요구하는 자리 (press.ts)
-  const arrivalPress = buildTransferPress(state, {
-    playerId: player.id,
-    kind: "in",
-    fee: agreed.fee,
-  });
-  if (arrivalPress) openPress(state, arrivalPress);
   return {
     ok: true,
     message:
@@ -620,18 +579,6 @@ function executeSale(
   // 사는 쪽 1군이 차 있으면 2군으로 들어간다 — AI 시장이 지키는 상한과 같은 자다
   player.squadLevel = arrivingSquadLevel(state, player, buyerTeamId);
   negotiation.status = "completed";
-
-  pushNarrative(
-    state,
-    `${player.name} 매각 — ${josa(teamName(buyerTeamId), "으로/로")} ${formatMoney(agreed.fee)}`,
-    wasCaptain ? 5 : 4,
-  );
-  const salePress = buildTransferPress(state, {
-    playerId: player.id,
-    kind: "out",
-    fee: agreed.fee,
-  });
-  if (salePress) openPress(state, salePress);
   const captainNote = wasCaptain ? " 주장이 떠났습니다 — 새 주장을 지명하세요." : "";
   return {
     ok: true,
@@ -665,20 +612,13 @@ function executeSale(
 }
 
 /**
- * **다른 구단도 계약을 관리한다.**
- *
- * AI 구단은 시즌 중에도 재계약을 한다 — **자기 팀 주전일수록, 어릴수록
- * 서둘러 잡는다.** 우리가 노리던 선수가 재계약하면 진행 중이던 협상은 그 자리에서
- * 끝난다. 그게 이 시스템의 요점이다: 기다리는 데에도 대가가 있다.
+ * AI 구단은 만료가 가까운 계약을 선수단 내 위치·나이와 시드 난수로 갱신한다.
+ * 갱신한 선수의 열린 사용자 협상은 거절 상태로 종료한다.
  */
 export function runAiRenewals(state: GameState, digest: TickSink): void {
   const limit = addDays(state.date, AI_RENEWAL_WINDOW_DAYS);
   const rng = makeRng(state.seed, `ai-renewal:${state.date}`);
-  /**
-   * 색인을 먼저 세운다 — 5,777건의 계약이 저마다 5,777명을 훑던 자리다.
-   * 이 순회는 **계약과 협상만** 갈아 끼우므로(선수의 소속·전력은 그대로) 색인이
-   * 도는 동안 어긋나지 않는다.
-   */
+  /** 선수 소속과 능력치가 바뀌지 않는 순회이므로 선수 색인을 공유한다. */
   const byId = new Map(state.players.map((p) => [p.id, p] as const));
   const depth = squadDepthOf(state);
 
@@ -688,10 +628,7 @@ export function runAiRenewals(state: GameState, digest: TickSink): void {
    * 계약의 만료가 검토 창(240일) 밖이라 무해하지만, 순회 중 변이는 창이 넓어지는
    * 날 조용히 이 순회를 자기가 만든 일로 채운다.
    */
-  /**
-   * 이미 갈 곳을 정한 사람에게 재계약할 것이 없다 (§1-4). 계약 건마다 원장을 다시
-   * 훑으면 5,777건이 5,777건을 훑으므로, 예약은 **한 번 훑어 집합으로** 든다.
-   */
+  /** 사전 계약이 있는 선수는 AI 재계약 대상에서 제외한다. 예약 선수 집합은 순회 전에 만든다. */
   const promised = new Set(
     state.contracts.filter((c) => c.status === "pending").map((c) => c.gamePlayerId),
   );
@@ -736,23 +673,13 @@ export function runAiRenewals(state: GameState, digest: TickSink): void {
       until: contractUntil(state.date, years),
       status: "active",
       /**
-       * **지위 칸은 비워 둔다** (transfer.md §1) — 남의 구단의 재계약은 감독이 아무
-       * 자리도 약속한 적 없는 계약이라, 적어 두면 그때의 서열이 굳어 약속인 척한다.
-       * 살아나는 자리는 감독이 그 구단으로 이직한 다음 날이다: 몇 시즌 전 서열로
-       * 굳은 지위가 그날부터 출전 불만을 낸다. 읽는 쪽이 그때그때 파생하면
-       * (`squadStatusOf`) 언제나 지금의 서열이다.
+       * 명시적으로 합의한 역할이 없으므로 지위 칸을 비워 둔다.
+       * 조회 시 `squadStatusOf`가 현재 선수단 기준으로 참고 역할을 파생한다.
        */
     };
     state.contracts.push(renewed);
-    // 남의 구단의 새 계약에는 조항이 붙을 수 있다 — 세계와 같은 규칙이다 (§12-3)
 
-    // 남의 구단의 재계약도 예고를 거둔다 — 규칙이 하나여야 세계가 같은 세계다 (season.md §6)
-    withdrawRetirement(state, player);
-
-    /**
-     * **우리가 노리던 선수라면 그 자리에서 끝난다.** 재계약은 협상 조건이
-     * 나빠지는 게 아니라 문이 닫히는 일이다 — 그래야 기다림에 대가가 생긴다.
-     */
+    /** AI 구단이 재계약한 선수의 열린 사용자 협상을 거절 상태로 종료한다. */
     const ours = state.negotiations.find(
       (n) => n.gamePlayerId === player.id && n.status === "open",
     );
@@ -761,7 +688,6 @@ export function runAiRenewals(state: GameState, digest: TickSink): void {
       digest.push(
         `${josa(teamName(contract.teamId), "이/가")} ${josa(player.name, "과/와")} 재계약했습니다 (${years}년) — 우리 협상은 끝났습니다`,
       );
-      pushNarrative(state, `${player.name} 재계약 — 영입 무산`, 4);
     } else if (
       state.scoutReports.some(
         (r) =>

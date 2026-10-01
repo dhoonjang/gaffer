@@ -68,12 +68,10 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 | `ai-fitness`           | 한 시즌 뒤 AI 스쿼드 체력 · 출전 분산 · 전술 적응도 · 누적 피로                                      | [match](../match/match.md) §8.6                                                                   |
 | `ai-bench`             | 감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래                                                   | [match](../match/match.md) §3.3                                                                   |
 | `ai-market`            | 한 시즌 AI 구단 사이의 팀당 이적·임대 건수 · 여름 비중                                               | [거래의 범위](../negotiation/transfer.md) §10                                                     |
-| `manager-market`       | 한 시즌 감독 경질 구단 수 · 풀에서 다시 선 감독의 비중 · 재직 감독에게 온 접근                       | [career](../story/career.md) §5.1·§8                                                              |
 | `squad-longevity`      | 15시즌 뒤의 선발 XI·계약 · 리그 체급과 그 천장의 드리프트(가드)                                      | [season](season.md) §6·§9                                                                         |
-| `youth-development`    | 2군 경기 수 · 출전·집중 육성·멘토링이 가르는 성장 격차 · 다음 여름의 인테이크                        | [season](season.md) §2·§6                                                                         |
+| `youth-development`    | 2군 경기 수 · 출전·집중 육성·임대가 가르는 성장 격차 · 다음 여름의 인테이크                          | [season](season.md) §2·§6                                                                         |
 | `youth-intake-tail`    | 한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히                              | [season](season.md) §6                                                                            |
 | `attribute-model`      | 자체 산정 모델이 낸 분포와 지금 시드 분포의 간격                                                     | [player](player.md) §13                                                                           |
-| `demotion-grievance`   | 한 시즌 2군 강등이 낳는 불만 건수 — 로테이션과 방치                                                  | [people](../story/people.md) §5                                                                   |
 | `overall-scale`        | 종합을 읽는 눈금 — 리그별·연령별 분포                                                                | [player](player.md) §4                                                                            |
 | `history-window`       | 평시 이력의 창 — 몇 턴이 남는가 · 압축 주기 · 렌더 배율                                              | [agents](llm/agents.md) §5-1                                                                      |
 | `prompt-regression`    | 프롬프트 층의 글자·프리픽스 안정성 · 장면 문법·도구                                                  | [prompts](llm/prompts.md) §7                                                                      |
@@ -155,9 +153,9 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 `playMockMatch`를 쓰는 별도 테스트가 검증한다. 두 경로의 역할을 섞지 않는다.
 
 재정처럼 재임이 측정 조건인 하네스의 `keepSeat`는 보드 판단의 대역이다. 계약 만료
-90일 안에 들어오면 `reviewBoard`로 재계약을 명시적으로 승인하고 열린 재계약 제안을
-수락한다. 이미 판단한 계약은 다시 판단하지 않는다. 제품에서 재계약을 자동 결정하는
-정책이 아니라 하네스가 고른 보드 판단이다.
+90일 안에 들어오면 `offerManagerJob`으로 연봉·기간·예산·기한을 명시한 재계약을
+제안하고 수락한다. 열린 제안은 중복 생성하지 않는다. 이 시점과 조건은 하네스의
+측정 정책이며 제품의 재계약 시점을 제한하지 않는다.
 
 ## 5. 주간 스케줄 (`.github/workflows/balance.yml`)
 

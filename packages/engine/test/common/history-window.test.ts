@@ -122,6 +122,8 @@ describe("이력 압축 판정", () => {
       applyHistoryDigest(state, brief, { past: "요약", open: "가".repeat(HISTORY_OPEN_CHARS + 1) }),
     ).toBe(false);
     expect(state.historyDigest).toBeUndefined();
+    expect(historyStart(state)).toBe(0);
+    expect(charsLeft(state)).toBeGreaterThan(HISTORY_CHAR_LIMIT);
     // 거절당했으니 다음 기회에 같은 지점을 다시 접는다
     expect(planHistoryFold(state)?.through).toBe(brief.through);
   });
@@ -131,5 +133,45 @@ describe("이력 압축 판정", () => {
     const brief = planHistoryFold(state)!;
     expect(applyHistoryDigest(state, brief, { past: "요약" })).toBe(true);
     expect(applyHistoryDigest(state, brief, { past: "다시 요약" })).toBe(false);
+  });
+});
+
+describe("캐릭터북을 포함한 요약 경계", () => {
+  it("본문이 짧아도 주입 정보의 무게로 접는 시점을 계산한다", () => {
+    const state = sourceOf(12, 1);
+    for (const turn of state.chat.filter((turn) => turn.role === "user"))
+      turn.characterBook = [
+        {
+          id: "player:one",
+          kind: "player",
+          version: 1,
+          name: "선수",
+          keywords: [],
+          description: "소개",
+          information: "기".repeat(7000),
+        },
+      ];
+    expect(planHistoryFold(state)?.through).toBe(HISTORY_STEP);
+  });
+  it("후보 상한과 이름 중복 검증 실패는 원문을 접지 않는다", () => {
+    const state = sourceOf(38, 1000);
+    const brief = planHistoryFold(state)!;
+    const candidate = { name: "인물", description: "소개" };
+    expect(
+      applyHistoryDigest(state, brief, { past: "요약", candidates: [candidate, candidate] }),
+    ).toBe(false);
+    expect(
+      applyHistoryDigest(state, brief, {
+        past: "요약",
+        candidates: Array.from({ length: 31 }, (_, index) => ({
+          ...candidate,
+          name: `인물${index}`,
+        })),
+      }),
+    ).toBe(false);
+    expect(historyStart(state)).toBe(0);
+    expect(applyHistoryDigest(state, brief, { past: "요약", candidates: [candidate] })).toBe(true);
+    candidate.description = "그 이후 소개";
+    expect(state.historyDigest?.candidates?.[0]?.description).toBe("소개");
   });
 });

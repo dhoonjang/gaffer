@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   activeContract,
   addDays,
-  advanceTime,
   careerView,
   assignmentsOf,
   ensureSeasonStat,
@@ -598,15 +597,6 @@ describe("조회 — 임대 보낸 우리 선수", () => {
 });
 
 describe("get_career", () => {
-  // 평판 3축도 판정이 코어에만 있는 눈금이다 — 재임 분기의 평판 줄에 숫자가 서면 안 된다
-  it("평판 줄은 날수치를 싣지 않는다", () => {
-    const state = createTestGame(21);
-    const line = careerView(state)
-      .message.split("\n")
-      .find((l) => l.startsWith("평판:"))!;
-    expect(line).not.toMatch(/\d/);
-  });
-
   /**
    * `TROPHY`는 **전 구단**의 우승을 드는 세계의 원장이다 (career.md §6) — 그대로
    * 세우면 AI 구단이 든 컵이 감독의 보관함에 선다. 재임은 (시즌, 팀)이 가른다.
@@ -971,29 +961,6 @@ describe("scheduleView — 감독의 달력", () => {
     });
     const training = scheduleView(state, { type: "training", days: 14 });
     for (const line of training.message.split("\n").slice(1)) expect(line).toContain("훈련");
-  });
-
-  /**
-   * 지나간 창은 일정만으로 답이 되지 않는다 — 손잡이로 며칠을 넘긴 사이 벌어진 일은
-   * 다이제스트로만 흘러가고, 되짚을 원본은 서사 표뿐이다 (people.md §9).
-   */
-  it("지나간 범위를 물으면 그 사이 벌어진 일을 일지로 함께 낸다", () => {
-    const state = createTestGame(21);
-    const start = state.date;
-    state.narrative.push({
-      date: start,
-      text: "리버풀에서 오퍼 답 도착",
-      salience: 3,
-      kind: "other",
-    });
-    advanceTime(state, { days: 5 });
-
-    const past = scheduleView(state, { from: start, to: state.date });
-    expect(past.message).toContain("[일지]");
-    expect(past.message).toContain("소식 리버풀에서 오퍼 답 도착");
-
-    // 앞날만 묻는 창에는 일지가 붙지 않는다 — 아직 벌어진 일이 없다
-    expect(scheduleView(state, { days: 14 }).message).not.toContain("[일지]");
   });
 
   it("우리 팀 경기만 달력에 올린다 (리그 타 팀 경기는 get_league의 몫)", () => {

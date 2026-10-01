@@ -1,4 +1,4 @@
-import { type GameState, teamNameIn, pushNarrative } from "../../../../common/core/state";
+import { type GameState, teamNameIn } from "../../../../common/core/state";
 import { type TickSink, pushEvent, josa } from "@story-fm/domain";
 import { SUPER_CUP_CATALOG } from "../../../../common/data/super-cup-catalog";
 import { superCupMatch } from "../../../../match/competition/super-cup";
@@ -58,10 +58,8 @@ export function advanceSuperCups(state: GameState, digest: TickSink): void {
         "news",
         `${cup.name} 우승 — ${josa(teamNameIn(state, runnerUp), "을/를")} 꺾었다`,
       );
-      pushNarrative(state, `${cup.name} 우승`, 4);
     } else if (runnerUp === state.userTeamId) {
       pushEvent(digest, "news", `${cup.short} 준우승 — ${teamNameIn(state, champion)}에 졌다`);
-      pushNarrative(state, `${cup.short} 준우승`, 3);
     } else {
       pushEvent(digest, "news", `${cup.short} 우승: ${teamNameIn(state, champion)}`);
     }

@@ -26,10 +26,6 @@ import {
   namedStaffMonthlyOf,
   staffWageBaseOf,
   seasonBudgetBaseOf,
-  NARRATIVE_EXPENSE_CATEGORIES,
-  NARRATIVE_FINANCE_WAGE_LIMIT,
-  NARRATIVE_INCOME_CATEGORIES,
-  narrativeEventCap,
   PSR_LOSS_LIMIT,
   adjustTransferBudget,
   amortisationOf,
@@ -1109,9 +1105,11 @@ describe("리그별 편차", () => {
 });
 
 describe("PSR", () => {
-  /** 구단주의 원형은 세이브의 데이터다 — 재투자 몫이 여기서 갈린다 (people.md §2) */
-  function ownerArchetype(state: GameState, archetype: string): void {
-    state.personas!.find((p) => p.role === "owner")!.archetype = archetype;
+  /** 페르소나를 바꿔도 동일한 재정 원장은 같은 예산을 돌려준다. */
+  function ownerDescription(state: GameState, description: string): void {
+    const owner = state.personas.find((p) => p.role === "owner")!;
+    state.characterBook.find((entry) => entry.id === `person:${owner.characterId}`)!.description =
+      description;
   }
 
   it("3시즌 누적 손실이 한도를 넘으면 이적 예산을 동결한다", () => {
@@ -1242,18 +1240,17 @@ describe("PSR", () => {
    * 상각이 비용의 3할이라 손익은 본전 근처인데 잔고는 시즌마다 £145M씩 불었고, 손익에
    * 건 예산은 그 잉여를 영영 돌려주지 않았다.
    */
-  it("지난 시즌 현금 잉여가 구단주의 몫만큼 예산으로 돌아온다", () => {
+  it("지난 시즌 현금 잉여가 기본 재투자 몫만큼 예산으로 돌아온다", () => {
     const state = createTestGame();
     state.season = 2;
     const finance = financeOf(state, state.userTeamId);
-    ownerArchetype(state, "국부펀드형"); // 재투자 몫 0.8
     finance.seasonOpeningBalance = finance.balance - 40_000_000; // 지난 시즌 잉여 £40M
     // 시작 예산이 base보다 크다 — 이월이 잘리는 상황인지 먼저 못박는다
     expect(finance.transferBudget).toBeGreaterThan(45_000_000);
     topUpTransferBudget(state, state.userTeamId, 45_000_000, []);
     expect(finance.budgetFrozen).toBe(false);
-    // 이월 45M(한 시즌치) + base 45M + 잉여 40M × 0.8
-    expect(finance.transferBudget).toBe(122_000_000);
+    // 이월 45M(한 시즌치) + base 45M + 잉여 40M × 0.5
+    expect(finance.transferBudget).toBe(110_000_000);
     // 기준점이 지금 잔고로 다시 선다 — 같은 잉여가 다음 시즌에 또 예산이 되지 않는다
     expect(finance.seasonOpeningBalance).toBe(finance.balance);
     finance.transferBudget = 0;
@@ -1261,15 +1258,12 @@ describe("PSR", () => {
     expect(finance.transferBudget).toBe(45_000_000);
   });
 
-  /**
-   * 같은 잉여에 원형이 다르면 다음 시즌 예산이 다르다 — 원형이 재정 눈금에 닿는
-   * 유일한 자리다 (people.md §2). AI 구단은 구단주 카드가 없어 중앙값으로 떨어진다.
-   */
-  it("재투자 몫은 구단주 원형이 정하고, 구단주 없는 구단은 중앙값이다", () => {
-    const budgetAfter = (archetype: string, teamId?: string) => {
+  /** 동일한 현금 잉여는 구단주 페르소나나 유저 구단 여부와 무관하게 재투자된다. */
+  it("구단주 페르소나와 무관하게 같은 잉여를 재투자한다", () => {
+    const budgetAfter = (description: string, teamId?: string) => {
       const state = createTestGame();
       state.season = 2;
-      ownerArchetype(state, archetype);
+      ownerDescription(state, description);
       const id = teamId ?? state.userTeamId;
       const finance = financeOf(state, id);
       finance.seasonOpeningBalance = finance.balance - 40_000_000;
@@ -1278,9 +1272,8 @@ describe("PSR", () => {
       return finance.transferBudget - 45_000_000;
     };
 
-    expect(budgetAfter("국부펀드형")).toBe(32_000_000); // 0.8
-    expect(budgetAfter("투자자형")).toBe(12_000_000); // 0.3
-    // 구단주 카드는 감독의 구단에만 선다 — 나머지 95개 구단은 중앙값 0.5다
+    expect(budgetAfter("국부펀드형")).toBe(20_000_000);
+    expect(budgetAfter("투자자형")).toBe(20_000_000);
     expect(budgetAfter("국부펀드형", "chelsea")).toBe(20_000_000);
   });
 
@@ -1291,7 +1284,6 @@ describe("PSR", () => {
   it("적자 시즌의 삭감은 base의 절반에서 멈춘다", () => {
     const state = createTestGame();
     state.season = 2;
-    ownerArchetype(state, "국부펀드형"); // 몫이 가장 큰 원형이어도 하한은 같다
     const finance = financeOf(state, state.userTeamId);
     finance.seasonOpeningBalance = finance.balance + 300_000_000; // 잉여 −£300M
     finance.transferBudget = 0;
@@ -1623,7 +1615,7 @@ describe("재정 구조 (t=0)", () => {
  * 두 축을 나누는 이유가 여기서 검증된다: 구단주 돈으로 PSR을 풀 수 없어야 한다.
  */
 describe("재정 이벤트 명령", () => {
-  it("£10k 미만의 일상 비용은 원장과 잔고에서 무시한다", () => {
+  it("확정된 일상 비용도 원장과 잔고에 반영된다", () => {
     const state = createTestGame(7, "tottenham");
     const finance = financeOf(state, state.userTeamId);
     const balanceBefore = finance.balance;
@@ -1636,9 +1628,9 @@ describe("재정 이벤트 명령", () => {
       note: "선수단 회식비",
     });
 
-    expect(res.ok).toBe(false);
-    expect(finance.balance).toBe(balanceBefore);
-    expect(finance.ledger).toHaveLength(ledgerBefore);
+    expect(res.ok).toBe(true);
+    expect(finance.balance).toBe(balanceBefore - 9_999);
+    expect(finance.ledger).toHaveLength(ledgerBefore + 1);
   });
 
   it("£10k부터는 서사 재정 이벤트로 기록할 수 있다", () => {
@@ -1674,7 +1666,6 @@ describe("재정 이벤트 명령", () => {
     const entry = finance.ledger.at(-1)!;
     expect(entry.category).toBe("merchandising");
     expect(entry.source).toBe("narrative");
-    // 코어가 낸 항목과 섞이면 하루 상한을 셀 수 없다
     expect(finance.ledger.filter((e) => e.source === "narrative")).toHaveLength(1);
   });
 
@@ -1696,115 +1687,28 @@ describe("재정 이벤트 명령", () => {
     }
   });
 
-  it("하루 상한은 구단 규모(주급 총액)에 비례하고 누적으로 센다", () => {
-    const state = createTestGame(7, "tottenham");
-    const daily = weeklyWagesOf(state, state.userTeamId) * NARRATIVE_FINANCE_WAGE_LIMIT;
-    const perEvent = narrativeEventCap(state, "commercial");
-    // 건당 상한만으론 하루를 지킬 수 없다 — 같은 장면을 나눠 부르면 넘어간다
-    expect(perEvent * 3).toBeGreaterThan(daily);
-
-    // 건당 상한 안의 값을 반복해 부르면 언젠가 하루 한도가 막는다
-    const calls = [1, 2, 3, 4].map((i) =>
-      applyFinanceEvent(state, {
-        kind: "income",
-        category: "commercial",
-        amount: Math.floor(perEvent),
-        note: `스폰서 성과 보너스 ${i}`,
-      }),
-    );
-    const accepted = calls.filter((r) => r.ok);
-    const firstReject = calls.find((r) => !r.ok)!;
-    expect(accepted.length).toBeGreaterThan(0); // 건당 상한 안이니 최소 한 번은 지나간다
-    expect(firstReject).toBeTruthy();
-    expect(firstReject.message).toContain("하루 한도");
-    // 받아들인 총액이 하루 한도를 넘지 않는다
-    expect(accepted.length * Math.floor(perEvent)).toBeLessThanOrEqual(daily);
-  });
-
-  /**
-   * 건당 상한 — 하루 누적만 있던 시절 모델의 유일한 앵커는 "£10k 미만은 적지 마라"였고,
-   * 그 위는 아스날에서 £5.5M까지 열려 있었다. 눈금은 거절당한 값이 가르치므로
-   * 거부 메시지에 허용 상한이 실려 있는 것까지 고정한다.
-   */
-  it("카테고리별 건당 상한이 막고, 거부 메시지가 허용 상한을 알려준다", () => {
-    const money = (amount: number) =>
-      Math.abs(amount) >= 1_000_000
-        ? `£${(amount / 1_000_000).toFixed(1)}M`
-        : `£${Math.round(amount / 1000)}k`;
-
-    const categories: readonly FinanceCategory[] = [
-      ...NARRATIVE_INCOME_CATEGORIES,
-      ...NARRATIVE_EXPENSE_CATEGORIES,
-    ];
-    // 거부는 상태를 바꾸지 않으므로 한 세이브로 다 본다
-    const rejected = createTestGame(7, "arsenal");
-    for (const category of categories) {
-      const kind = (NARRATIVE_INCOME_CATEGORIES as readonly FinanceCategory[]).includes(category)
-        ? "income"
-        : "expense";
-      const cap = narrativeEventCap(rejected, category);
-
-      const over = applyFinanceEvent(rejected, {
-        kind,
-        category,
-        amount: Math.floor(cap) + 1,
-        note: "한도 밖",
-      });
-      expect(over.ok, category).toBe(false);
-      expect(over.message, category).toContain(money(cap));
-
-      // 통과는 하루 누적을 쌓으므로 카테고리마다 새 세이브에서 본다
-      const fresh = createTestGame(7, "arsenal");
-      const within = applyFinanceEvent(fresh, {
-        kind,
-        category,
-        amount: Math.floor(narrativeEventCap(fresh, category)),
-        note: "한도 안",
-      });
-      expect(within.ok, `${category}: ${within.message}`).toBe(true);
+  it("확정된 금액은 크기와 일일 합계에 관계없이 같은 원장에 반영된다", () => {
+    const state = createMiniGame();
+    const finance = financeOf(state, state.userTeamId);
+    const before = finance.balance;
+    for (const amount of [1, 100_000_000, 100_000_000]) {
+      expect(
+        applyFinanceEvent(state, {
+          kind: "income",
+          category: "commercial",
+          amount,
+          note: "후원 계약 지급",
+        }).ok,
+      ).toBe(true);
     }
-    expect(
-      financeOf(rejected, rejected.userTeamId).ledger.some((e) => e.source === "narrative"),
-    ).toBe(false);
-  });
-
-  it("건당 상한은 구단 체급에 비례한다", () => {
-    const big = createTestGame(7, "arsenal");
-    const small = createTestGame(7, "lecce");
-
-    for (const category of [
-      "bonus",
-      "facility",
-      "matchday",
-      "commercial",
-      "merchandising",
-    ] as const) {
-      expect(narrativeEventCap(big, category), category).toBeGreaterThan(
-        narrativeEventCap(small, category),
-      );
+    expect(finance.balance).toBe(before + 200_000_001);
+    const snapshot = structuredClone(finance);
+    for (const amount of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(
+        applyFinanceEvent(state, { kind: "expense", category: "bonus", amount, note: "포상" }).ok,
+      ).toBe(false);
+      expect(finance).toEqual(snapshot);
     }
-    // 원정·의료비는 코어에서도 구단 규모를 타지 않는다 — 같은 부상은 어디서나 같은 돈이다
-    expect(narrativeEventCap(big, "travel_medical")).toBe(
-      narrativeEventCap(small, "travel_medical"),
-    );
-
-    // 큰 구단에서 통과하는 금액이 작은 구단에서는 막힌다
-    const amount = Math.floor(narrativeEventCap(big, "bonus"));
-    expect(
-      applyFinanceEvent(big, { kind: "expense", category: "bonus", amount, note: "우승 포상" }).ok,
-    ).toBe(true);
-    expect(
-      applyFinanceEvent(small, { kind: "expense", category: "bonus", amount, note: "우승 포상" })
-        .ok,
-    ).toBe(false);
-  });
-
-  it("한도 표에 없는 카테고리는 통과하지 않고 가장 좁은 자로 떨어진다", () => {
-    const state = createTestGame(7, "arsenal");
-    const fallback = narrativeEventCap(state, "bonus");
-    // 서사에 열린 축이 아니어도 한도 함수는 무한을 돌려주지 않는다
-    expect(narrativeEventCap(state, "prize")).toBe(fallback);
-    expect(narrativeEventCap(state, "agent_fee")).toBe(fallback);
   });
 
   it("구단주 출자는 이적 예산만 움직이고 PSR을 개선하지 않는다", () => {
@@ -2322,9 +2226,6 @@ describe("티켓 — 리그 폭과 감독이 매기는 값", () => {
     expect(dear.price).toBeCloseTo(max, 6);
     expect(dear.ratio).toBeCloseTo(max / base, 6);
 
-    // 시즌권과 예매가 이미 나갔다 — 같은 안건은 쿨다운이 지나야 다시 매긴다
-    expect(setTicketPrice(state, { price: Math.round(base) }).ok).toBe(false);
-    financeOf(state, teamId).ticketPrice!.setOn = addDays(state.date, -30);
     expect(setTicketPrice(state, { price: Math.round(base) }).ok).toBe(true);
     expect(ticketPriceOf(state, teamId).ratio).toBeCloseTo(1, 2);
   });

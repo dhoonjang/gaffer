@@ -225,6 +225,8 @@ function LeadersSection({ competition }: { competition: Competition }) {
   const leaders = competition.leaders;
   const boards = leaders?.players ?? [];
   const [pickedKey, setPickedKey] = useState<LeaderBoard["key"] | null>(null);
+  // 통계는 개인이 먼저 열린다 (competition.md 「개인 순위」)
+  const [scope, setScope] = useState<"players" | "teams">("players");
   const [ownerId, setOwnerId] = useState(competition.id);
   if (ownerId !== competition.id) {
     setOwnerId(competition.id);
@@ -233,11 +235,31 @@ function LeadersSection({ competition }: { competition: Competition }) {
   if (!leaders) return null;
   const board = boards.find((b) => b.key === pickedKey) ?? boards[0];
   const columns = board ? leaderColumns(board.key) : [];
+  const hasTeams = leaders.teams.length > 0;
+  if (!board && !hasTeams) return null;
+  // 팀 열이 없는 대회만 탭 없이 개인이 선다 — 개인 기록이 아직 없어도 탭은 그대로다
+  const shown = hasTeams ? scope : "players";
   return (
     <>
-      {board && (
+      {/* 범위(개인·팀)는 제목 줄에 선다 — 아래의 항목 고르기와 같은 무게로 쌓이지 않게 */}
+      <div className="stats-head">
+        <h2 className="section-title">통계</h2>
+        {hasTeams && (
+          <PillPicker
+            value={shown}
+            options={[
+              { value: "players", label: "개인" },
+              { value: "teams", label: "팀" },
+            ]}
+            onPick={setScope}
+            label="통계 범위"
+            testId="stats-scope"
+          />
+        )}
+      </div>
+      {!board && shown === "players" && <div className="empty">아직 기록된 개인 기록이 없어요</div>}
+      {board && shown === "players" && (
         <>
-          <h2 className="section-title">개인 순위</h2>
           <PillPicker
             value={board.key}
             options={boards.map((b) => ({ value: b.key, label: leaderboardTitle(b.key) }))}
@@ -273,9 +295,8 @@ function LeadersSection({ competition }: { competition: Competition }) {
           </table>
         </>
       )}
-      {leaders.teams.length > 0 && (
+      {shown === "teams" && (
         <>
-          <h2 className="section-title">팀 통계</h2>
           <table data-testid="team-stats">
             <thead>
               <tr>
@@ -807,7 +828,7 @@ export function CompetitionsView({
             </>
           )}
 
-          {/* 개인 순위·팀 열은 순위표와 같은 표 계열이라 일정 다음에 이어 선다 */}
+          {/* 통계(개인·팀)는 순위표와 같은 표 계열이라 일정 다음에 이어 선다 */}
           <LeadersSection competition={active} />
 
           {competitions.recentResults.length > 0 && (

@@ -1,16 +1,19 @@
+import { personaBookOf } from "../../common/people/character-book";
 import {
   formatMoney,
+  type CharacterBookContent,
+  HireStaffInputSchema,
+  type HireStaffInput,
   isStaffRole,
   PERSONA_ROLE_LABEL,
   STAFF_ROLES,
   type Persona,
   type StaffPoolEntry,
   type StaffRole,
-  josa,
 } from "@story-fm/domain";
-import { contractUntil } from "../../common/core/dates";
+import { addDays } from "../../common/core/dates";
 import { makeRng, randInt, shuffled } from "../../common/core/rng";
-import { teamNameIn, type GameState } from "../../common/core/state";
+import { teamNameIn, managedTeamId, financeOf, type GameState } from "../../common/core/state";
 import { userWageRoom } from "../finance/board-request";
 import { recordFinance } from "../finance/finance";
 import { item } from "../../common/commands/brief";
@@ -18,28 +21,13 @@ import type { CommandResult } from "../../app/commands";
 import {
   inventPersonName,
   occupiedPersonNames,
-  staffArchetypeOf,
   staffArchetypesOf,
-  staffOf,
   staffPersona,
   staffSalaryOf,
+  staffSeedBook,
   STAFF_LIMIT,
 } from "../../common/people/persona";
 import { managerSeveranceOf } from "./manager-market";
-
-/**
- * 스태프 시장 — **감독이 훈련장·의무실·보고서의 사람을 고르는 자리** (people.md §2-2).
- *
- * 감독 시장(`manager-market.ts`)과 같은 패턴이되 셋이 다르다:
- *
- * 1. 풀을 채우는 것이 경질이 아니라 **여름의 결정적 추첨**이다 — AI 구단엔 명명
- *    스태프가 없어 세계가 사람을 자르지 않는다.
- * 2. 부르는 쪽이 **감독뿐**이다. AI 구단은 이 시장을 돌지 않는다.
- * 3. **흥정 테이블이 없다** — 요구 연봉을 넘기면 그 자리에서 계약된다. 코치 자리
- *    하나에 3주짜리 협상을 붙이면 채팅이 사무 절차가 된다.
- *
- * 여기 있는 것은 전부 결정적 순수 로직이다 — 난수는 시드 채널을 지난다.
- */
 
 /** 풀에 앉는 사람 수 — 역할별 자리를 다 채우고도 고를 여지가 남는 크기다 */
 const STAFF_POOL_SIZE: Record<StaffRole, number> = { coach: 4, medic: 2, scout: 2 };
@@ -49,9 +37,6 @@ const ASK_MIN = 0.7;
 const ASK_MAX = 1.4;
 /** 배수를 끊는 눈금 — 정수 굴림 하나로 결정적으로 뽑기 위한 자리다 */
 const ASK_STEPS = 8;
-
-/** 계약의 길이 — 스태프는 두 시즌씩 맺는다 (people.md §2-2) */
-export const STAFF_CONTRACT_SEASONS = 2;
 
 /** 천 파운드 단위 — 연봉은 사람이 읽는 값이다 (`staffSalaryOf`와 같은 눈금) */
 const SALARY_ROUNDING = 1_000;
@@ -80,7 +65,7 @@ function drawPool(state: GameState, season: number): StaffPoolEntry[] {
         name,
         role,
         title: archetype.title,
-        archetype: archetype.label,
+        characterBook: staffSeedBook(state.seed, name, role, archetype),
         ask: Math.max(
           SALARY_ROUNDING,
           Math.round((base * factor) / SALARY_ROUNDING) * SALARY_ROUNDING,
@@ -131,20 +116,19 @@ export function refreshStaffPool(state: GameState, season: number): void {
   state.staffPool = [...kept, ...drawPool(state, season).filter((e) => !keptNames.has(e.name))];
 }
 
-/** 풀의 한 줄을 사람으로 — 원형 표가 성격·동기·말투를 답한다 (`StaffPoolEntry` 주석) */
+/** 확인된 스태프 풀의 한 줄에 실제 고용 계약을 붙인다. */
 export function staffPersonaOf(
   state: GameState,
   entry: StaffPoolEntry,
   contract: { salary: number; until: string; since: string },
-): Persona | null {
-  const archetype = staffArchetypeOf(entry.role, entry.archetype);
-  if (archetype === null) return null;
+): Persona {
   return staffPersona({
     seed: state.seed,
     teamId: state.userTeamId,
     name: entry.name,
     role: entry.role,
-    archetype,
+    title: entry.title,
+    characterBook: entry.characterBook,
     since: contract.since,
     until: contract.until,
     salary: contract.salary,
@@ -152,100 +136,151 @@ export function staffPersonaOf(
   });
 }
 
-/** 그 역할에 이미 선 사람 수 — 자리 상한을 재는 자다 */
-function seatedCount(state: GameState, role: StaffRole): number {
-  return staffOf(state, role).length;
-}
-
-/**
- * **고용** — 풀의 이름과 감독이 부른 연봉 (people.md §2-2).
- *
- * 문 넷을 차례로 지난다: 풀에 있는 이름인가 · 요구 연봉 이상인가 · 주급 여력 안인가 ·
- * 자리가 남았는가. 넷을 다 지나면 **그 자리에서 계약된다** — 되부르기가 없다.
- *
- * 주급 여력은 선수 계약과 **같은 자**(`userWageRoom`)를 쓴다. 연봉을 주 단위로 펴서
- * 재는 이유는 그 자가 주급의 자이기 때문이고, 두 벌을 두면 스태프만 다른 세계의
- * 임금 천장을 산다.
- */
-export function hireStaff(
-  state: GameState,
-  input: { name: string; salary: number },
-): CommandResult {
-  ensureStaffPool(state);
-  const entry = (state.staffPool ?? []).find((e) => e.name === input.name);
-  if (entry === undefined) {
-    return { ok: false, message: `${input.name} — 자리를 찾는 스태프 명단에 없습니다` };
-  }
-  const salary = Math.max(0, Math.round(input.salary));
-  if (salary < entry.ask) {
-    return {
-      ok: false,
-      message: `${josa(entry.name, "은/는")} 연봉 ${josa(formatMoney(entry.ask), "을/를")} 부릅니다 — 제안은 ${formatMoney(salary)}였습니다`,
-    };
-  }
-  const limit = STAFF_LIMIT[entry.role];
-  if (seatedCount(state, entry.role) >= limit) {
-    return {
-      ok: false,
-      message: `${PERSONA_ROLE_LABEL[entry.role]} 자리가 ${josa(`${limit}`, "으로/로")} 다 찼습니다 — 한 사람을 내보내야 합니다`,
-    };
-  }
-  const room = userWageRoom(state);
-  const weekly = salary / WEEKS_PER_YEAR;
-  if (weekly > room) {
-    return {
-      ok: false,
-      message: `주급 여력을 넘습니다 — 연봉 ${josa(formatMoney(salary), "은/는")} 주당 ${formatMoney(Math.round(weekly))}이고, 남은 여력은 ${formatMoney(Math.round(Math.max(0, room)))}입니다`,
-    };
-  }
-
-  const persona = staffPersonaOf(state, entry, {
-    salary,
-    since: state.date,
-    until: contractUntil(state.date, STAFF_CONTRACT_SEASONS),
-  });
-  if (persona === null) {
-    return { ok: false, message: `${entry.name}의 원형을 찾을 수 없습니다` };
-  }
-  state.personas = [...state.personas, persona];
-  state.staffPool = (state.staffPool ?? []).filter((e) => e.name !== entry.name);
-  const until = persona.employment!.contract.until;
+/** The GM supplies agreed terms; the core validates identity, authority and payroll. */
+export function hireStaff(state: GameState, input: HireStaffInput): CommandResult {
+  const parsed = HireStaffInputSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, message: "이름·양수 연봉·계약 만료일을 확인해야 합니다" };
+  input = parsed.data;
+  if (
+    managedTeamId(state) === null ||
+    !state.manager.contract ||
+    state.manager.contract.until < state.date
+  )
+    return { ok: false, message: "스태프를 고용할 구단의 감독이 아닙니다" };
+  if (input.until <= state.date)
+    return { ok: false, message: "계약 만료일은 오늘 이후여야 합니다" };
+  const existing = state.personas.find(
+    (p) => p.name === input.name || p.characterId === input.name,
+  );
+  if (state.players.some((p) => p.name === input.name))
+    return { ok: false, message: "현역 선수의 고용 상태를 먼저 정리해야 합니다" };
+  if (state.teams.some((t) => t.managerName === input.name) || state.manager.name === input.name)
+    return { ok: false, message: "재직 감독은 스태프로 고용할 수 없습니다" };
+  if (existing?.employment && existing.employment.teamId !== state.userTeamId)
+    return { ok: false, message: "다른 구단의 계약 중인 인물입니다" };
+  if (existing && existing.role === "owner")
+    return { ok: false, message: "현재 인물의 직무를 스태프 계약으로 바꿀 수 없습니다" };
+  const pool = staffPoolOf(state);
+  const entry = pool.find((e) => e.name === input.name);
+  const role =
+    input.role ??
+    entry?.role ??
+    (existing && (isStaffRole(existing.role) || existing.role === "head_coach")
+      ? existing.role
+      : undefined);
+  const title =
+    input.title ??
+    existing?.employment?.title ??
+    entry?.title ??
+    existing?.employmentHistory?.at(-1)?.title;
+  const characterBook: CharacterBookContent | undefined =
+    (existing
+      ? personaBookOf(state, existing)
+      : state.characterBook.find((b) => b.kind === "person" && b.name === input.name)) ??
+    entry?.characterBook ??
+    input.characterBook;
+  if (!role || !title || !characterBook)
+    return { ok: false, message: "새 스태프의 역할·직책·캐릭터북이 필요합니다" };
+  if (characterBook.name !== (existing?.name ?? input.name))
+    return { ok: false, message: "캐릭터북의 이름과 계약 당사자가 다릅니다" };
+  const limit = role === "head_coach" ? HEAD_COACH_LIMIT : STAFF_LIMIT[role];
+  const occupied = state.personas.filter(
+    (p) =>
+      p !== existing &&
+      p.role === role &&
+      p.employment?.teamId === state.userTeamId &&
+      p.employment.contract.until >= state.date,
+  ).length;
+  if (occupied >= limit)
+    return { ok: false, message: `${PERSONA_ROLE_LABEL[role]} 자리가 다 찼습니다` };
+  const staffAnnual = state.personas
+    .filter(
+      (p) =>
+        p !== existing &&
+        p.employment?.teamId === state.userTeamId &&
+        p.employment.contract.until >= state.date,
+    )
+    .reduce((sum, p) => sum + p.employment!.contract.salary, 0);
+  if ((staffAnnual + input.salary) / WEEKS_PER_YEAR > userWageRoom(state))
+    return { ok: false, message: "기존 선수·스태프 계약을 포함한 주급 여력을 넘습니다" };
+  const persona =
+    existing ??
+    staffPersonaOf(
+      state,
+      { name: input.name, role, title, characterBook, ask: input.salary, listedOn: state.season },
+      { salary: input.salary, since: state.date, until: input.until },
+    );
+  const renewing = existing?.employment !== undefined;
+  const since = existing?.employment?.since ?? state.date;
+  if (existing?.employment) archiveEmployment(existing, state.date, "renewed");
+  persona.role = role;
+  persona.employment = {
+    teamId: state.userTeamId,
+    title,
+    since,
+    contract: { salary: input.salary, until: input.until },
+  };
+  if (!existing) state.personas.push(persona);
+  state.staffPool = pool.filter((e) => e.name !== persona.name);
   return {
     ok: true,
-    message: `${entry.name} (${entry.title}) 고용 — 연봉 ${formatMoney(salary)}, ${until}까지`,
     brief: {
-      head: "스태프 고용",
+      head: renewing ? "스태프 재계약" : "스태프 고용",
       items: [
-        item({
-          label: entry.name,
-          text: entry.title,
-          note: `${formatMoney(salary)}/년 · ${until}`,
-        }),
+        item({ label: persona.name, text: title }),
+        item({ label: "연봉", text: `${formatMoney(input.salary)}/년` }),
+        item({ label: "계약 만료일", text: input.until }),
       ],
     },
-    tone: "good",
+    message: `${persona.name} (${title}) 계약 — 연봉 ${formatMoney(input.salary)}, ${input.until}까지`,
   };
+}
+
+export function archiveEmployment(
+  persona: Persona,
+  endedOn: string,
+  reason: "renewed" | "expired" | "released",
+): void {
+  if (!persona.employment) return;
+  persona.employmentHistory = [
+    ...(persona.employmentHistory ?? []),
+    { ...persona.employment, endedOn, reason },
+  ];
+  delete persona.employment;
 }
 
 /** 주급을 연봉으로 펴는 눈금 — `world/wages.ts`와 같은 자다 */
 const WEEKS_PER_YEAR = 52;
+const HEAD_COACH_LIMIT = 1;
 
 /**
  * **해고** — 잔여 계약의 위약금을 구단이 문다 (people.md §2-2).
  *
  * 금액은 감독 경질과 **같은 식**(`managerSeveranceOf`)이고 연봉 1년치에서 멈춘다.
  * 자른 사람은 그해의 풀에 앉아, 같은 시즌 안에는 감독이 마음을 되돌릴 수 있다.
- *
- * ⚠️ **수석코치는 여기 오지 않는다** — 그 자리가 비면 감독 옆에 아무도 없고, 경기
- * 레퍼런스가 상주시키는 카드도 사라진다 (agents.md §5).
  */
 export function releaseStaff(state: GameState, input: { name: string }): CommandResult {
-  const persona = state.personas.find((p) => isStaffRole(p.role) && p.name === input.name);
-  if (persona === undefined || persona.employment === undefined) {
+  if (
+    managedTeamId(state) === null ||
+    !state.manager.contract ||
+    state.manager.contract.until < state.date
+  )
+    return { ok: false, message: "현재 감독의 권한이 없습니다" };
+  const persona = state.personas.find(
+    (p) => (isStaffRole(p.role) || p.role === "head_coach") && p.name === input.name,
+  );
+  if (
+    persona === undefined ||
+    persona.employment?.teamId !== state.userTeamId ||
+    !(isStaffRole(persona.role) || persona.role === "head_coach")
+  ) {
     return { ok: false, message: `${input.name} — 우리 구단의 스태프가 아닙니다` };
   }
   const { employment } = persona;
   const severance = managerSeveranceOf(employment.contract, state.date);
+  if (severance > financeOf(state, state.userTeamId).balance)
+    return { ok: false, message: "계약 해지 위약금을 지급할 현금이 부족합니다" };
   if (severance > 0) {
     recordFinance(state, state.userTeamId, {
       kind: "expense",
@@ -254,14 +289,14 @@ export function releaseStaff(state: GameState, input: { name: string }): Command
       amount: severance,
     });
   }
-  state.personas = state.personas.filter((p) => p.characterId !== persona.characterId);
+  archiveEmployment(persona, state.date, "released");
   ensureStaffPool(state);
   state.staffPool = [
     {
       name: persona.name,
-      role: persona.role as StaffRole,
+      role: persona.role,
       title: employment.title,
-      archetype: persona.archetype,
+      characterBook: persona.characterBook,
       ask: employment.contract.salary,
       listedOn: state.season,
       from: state.userTeamId,
@@ -285,28 +320,34 @@ export function releaseStaff(state: GameState, input: { name: string }): Command
   };
 }
 
-/**
- * 만료된 스태프 계약은 **같은 조건으로 갱신된다** (people.md §2-2).
- *
- * 스태프는 흥정 테이블을 두지 않으므로 만료가 협상거리가 되지 않고, 자동으로 비우면
- * 감독이 모르는 사이 의무실에 아무도 없는 세이브가 생긴다. 사람을 바꾸려면 감독이
- * 자른다. 수석코치도 같은 문을 지난다 — 그의 계약도 구단의 것이다.
- *
- * @param season 새로 시작하는 시즌의 기준 날짜 — 시즌 전환이 넘긴다
- */
-export function renewStaffContracts(state: GameState, on: string): string[] {
-  const renewed: string[] = [];
+/** Contracts end on their agreed date; vacancies are not automatically filled. */
+export function expireStaffContracts(state: GameState, on: string): string[] {
+  const expired: string[] = [];
   for (const persona of state.personas) {
-    const employment = persona.employment;
-    if (employment === undefined) continue;
-    if (employment.contract.until > on) continue;
-    employment.contract = {
-      salary: employment.contract.salary,
-      until: contractUntil(on, STAFF_CONTRACT_SEASONS),
-    };
-    renewed.push(persona.name);
+    const job = persona.employment;
+    if (
+      !job ||
+      job.contract.until >= on ||
+      !(isStaffRole(persona.role) || persona.role === "head_coach")
+    )
+      continue;
+    archiveEmployment(persona, addDays(job.contract.until, 1), "expired");
+    ensureStaffPool(state);
+    state.staffPool = [
+      {
+        name: persona.name,
+        role: persona.role,
+        title: job.title,
+        characterBook: persona.characterBook,
+        ask: job.contract.salary,
+        listedOn: state.season,
+        from: job.teamId,
+      },
+      ...state.staffPool!.filter((e) => e.name !== persona.name),
+    ];
+    expired.push(persona.name);
   }
-  return renewed;
+  return expired;
 }
 
 /**
@@ -316,7 +357,7 @@ export function renewStaffContracts(state: GameState, on: string): string[] {
 export function describeStaffPool(state: GameState): string[] {
   return staffPoolOf(state).map(
     (e) =>
-      `${e.name} · ${e.title} · ${e.archetype} · 요구 연봉 ${formatMoney(e.ask)}${
+      `${e.name} · ${e.title} · ${state.characterBook.find((b) => b.kind === "person" && b.name === e.name)?.description ?? e.characterBook.description} · 요구 연봉 ${formatMoney(e.ask)}${
         e.from === undefined ? "" : ` · ${teamNameIn(state, e.from)} 출신`
       }`,
   );

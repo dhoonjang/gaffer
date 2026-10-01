@@ -57,10 +57,15 @@ agents:
     timeout_ms: 90000
     thinking_level: low
 
-  # 접히는 평시 대화를 한 벌 요약으로 옮긴다 (docs/common/llm/agents.md §5-1). 결산과 같은
-  # 계약이라 실패는 삼키지만 읽는 양이 다르다 — 한 번에 접히는 구간 전부를 읽고 거기
-  # 새로 선 인물까지 판정한다. 압축은 이력이 상한을
-  # 넘을 때만이라 드물게 돈다.
+  # GM이 접수한 추가 정보를 기존 캐릭터 항목에 합친다.
+  character-book-editor:
+    provider: google
+    model: gemini-3.5-flash-lite
+    max_tokens: 12000
+    timeout_ms: 60000
+    thinking_level: low
+
+  # 이전 요약과 접히는 대화에서 요약과 인물 후보만 작성한다.
   history-compactor:
     provider: google
     model: gemini-3.8-flash

@@ -122,21 +122,14 @@ const PRESSING_INTENSITY_STEP = 0.07;
 const TEMPO_INTENSITY_STEP = 0.04;
 /** 태클 강도 갈래가 강도에 얹는 몫 */
 export const TACKLING_INTENSITY_STEP = 0.08;
-/** 더비 열기 한 단계가 곱하는 몫 (team.md §7) */
-export const DERBY_INTENSITY_STEP = 0.06;
 const INTENSITY_MIN = 0.7;
 const INTENSITY_MAX = 1.3;
 
-/** 더비가 양 팀에 곱하는 배수 — heat 0이면 1 */
-export function derbyIntensityFactor(heat: number): number {
-  return 1 + DERBY_INTENSITY_STEP * Math.max(0, heat);
-}
-
 /**
- * 경기 강도 0.70~1.30 × 더비 — 파울·카드·부상의 총량에 곱해진다 (match.md §4.1).
+ * 경기 강도 0.70~1.30 — 파울·카드·부상의 총량에 곱해진다 (match.md §4.1).
  * 압박·템포·태클 강도가 축이고 셋을 합친 폭이 clamp와 같아 잘리는 구간이 없다.
  */
-export function matchIntensity(spec: TacticsSpec, derbyHeat = 0): number {
+export function matchIntensity(spec: TacticsSpec): number {
   const tackling = tacticToggleValue(spec, "tackling");
   const bite = tackling === "hard" ? 1 : tackling === "soft" ? -1 : 0;
   const tactical = Math.max(
@@ -149,7 +142,7 @@ export function matchIntensity(spec: TacticsSpec, derbyHeat = 0): number {
         bite * TACKLING_INTENSITY_STEP,
     ),
   );
-  return round2(tactical * derbyIntensityFactor(derbyHeat));
+  return round2(tactical);
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;

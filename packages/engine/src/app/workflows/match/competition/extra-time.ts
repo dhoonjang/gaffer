@@ -4,8 +4,6 @@ import {
   isInjured,
   tacticsOf,
   assignmentsOf,
-  pushNarrative,
-  teamShortName,
 } from "../../../../common/core/state";
 import {
   type MatchRecord,
@@ -187,12 +185,5 @@ export function resolveExtraTime(state: GameState, decider: MatchRecord, channel
     }
   }
 
-  if (decider.homeTeamId === state.userTeamId || decider.awayTeamId === state.userTeamId) {
-    pushNarrative(
-      state,
-      `${teamShortName(decider.homeTeamId)} vs ${teamShortName(decider.awayTeamId)} 연장 승부 (${result.homeGoals}-${result.awayGoals})`,
-      4,
-    );
-  }
   return true;
 }

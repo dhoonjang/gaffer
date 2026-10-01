@@ -26,8 +26,6 @@ export const GrowthOriginSchema = z.enum([
   "position-conversion",
   /** 코어의 월간 성장·쇠퇴 (development.ts) */
   "monthly",
-  /** 멘토 항이 곱해진 월간 성장 — 정신 6축의 멘티만 (people.md §5-3) */
-  "mentoring",
   /** 경기에서 그 자리를 뛴 몫 (포지션 적응도) */
   "match-minutes",
   /** 경기 평점 결산 (ratings.ts) */

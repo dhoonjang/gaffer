@@ -17,7 +17,7 @@ export function buildMatchTools(
   const finalize = MATCH_TOOL_DEFINITIONS.find((tool) => tool.name === "finalize_match")!;
   const tools: GameToolSpec[] = options.operator
     ? []
-    : buildToolSpecs(state, ctx.calls).filter((tool) => tool.name === "team_talk");
+    : buildToolSpecs(state, ctx.calls).filter((tool) => tool.name === "update_character");
   if (!options.operator)
     tools.push(
       createInstructionTool(state, ctx.calls, {
@@ -35,7 +35,7 @@ export function buildMatchTools(
     handle: async (args: unknown) => {
       const parsed = MatchClosingSchema.safeParse(args);
       if (!parsed.success)
-        return { ok: false, message: "경기 마감에는 출전 선수의 평점 설명과 심경만 제출하세요" };
+        return { ok: false, message: "경기 마감에는 출전 선수의 평점 설명만 제출하세요" };
       const pending = state.pendingMatch;
       if (!pending) return { ok: false, message: "마감할 경기가 없습니다" };
       if (pending.live.ledger.phase !== "finished" || awaitingShootout(state)) {

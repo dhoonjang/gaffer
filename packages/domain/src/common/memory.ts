@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CharacterCandidateSchema, CHARACTER_CANDIDATES_MAX } from "./character-book";
 import { DateString } from "./date-string";
 
 // ── 이력 압축 ─────────────────────────────────────────
@@ -19,6 +20,7 @@ export const HistoryDigestSchema = z.object({
    * `state.chat`의 인덱스가 아니라 `inMatch !== true`인 턴만 센 수다. 채팅은 덧붙기만
    * 하고 경기 표식은 뒤늦게 바뀌지 않으므로 이 수는 한 번 정해지면 같은 곳을 가리킨다.
    */
+  candidates: z.array(CharacterCandidateSchema).max(CHARACTER_CANDIDATES_MAX).optional(),
   foldedTurns: z.number().int().min(0),
   /** 접힌 구간의 요약 — **지난 일**. 길이는 `HISTORY_DIGEST_CHARS`가 정한다 */
   text: z.string().min(1),
@@ -38,23 +40,3 @@ export const HistoryDigestSchema = z.object({
 });
 
 export type HistoryDigest = z.infer<typeof HistoryDigestSchema>;
-
-/**
- * **인물이 소유하는 기억** — 그 사람에게 이번 구간에 벌어진 일 한 줄 (people.md §9).
- *
- * `NarrativeNote`와 같은 결이되 주인이 다르다. 서사 메모리는 세계의 사건을 시간순으로
- * 쌓고, 이쪽은 **한 인물의 것**이라 그 인물이 무대에 설 때 함께 실린다.
- *
- * ⚠️ **성격·동기·말투는 여기 오지 않는다.** 페르소나는 시드로 결정적으로 생성되고
- * (`world/persona.ts`), 그걸 덮어쓰면 "같은 세이브는 같은 사람을 만난다"가 깨진다
- * (AGENTS.md §6.4). 기억은 **그 인물에게 일어난 일**이지 그 인물이 어떤 사람인가가 아니다.
- */
-export const CharacterMemorySchema = z.object({
-  /** 페르소나의 `characterId` — 전역 유일이다 (people.md §1) */
-  characterId: z.string().min(1),
-  date: DateString,
-  text: z.string().min(1).max(120),
-  salience: z.number().int().min(1).max(5),
-});
-
-export type CharacterMemory = z.infer<typeof CharacterMemorySchema>;

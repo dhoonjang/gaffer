@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  boardExpectationOfTier,
-  catalogTierOf,
   createGame,
   leagueTones,
   listGameSummaries,
@@ -12,17 +10,10 @@ import {
   topLeagues,
   turnDigestOf,
 } from "@story-fm/engine";
-import { boardExpectationText } from "@story-fm/domain";
 import { runOnboarding } from "@story-fm/agents";
 import { withGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@story-fm/llm";
 import { toPayload } from "@/application/lib/store";
 import { errorDetail, turnErrorMessage } from "@/application/lib/turn-runner";
-
-/** 보드 기대의 이름 — 코드와 목표 순위에서 만든다 (career.md §6) */
-const expectationLabel = (e: {
-  code: Parameters<typeof boardExpectationText>[0];
-  target: number;
-}) => boardExpectationText(e.code, e.target);
 
 const CreateSchema = z.object({
   teamId: z.string().min(1),
@@ -31,48 +22,20 @@ const CreateSchema = z.object({
   seed: z.number().int().optional(),
 });
 
-/**
- * 두 물음에 답한다 — **묻는 쪽이 무엇을 읽는지 고른다.**
- *
- * | 요청 | 응답 | 부르는 곳 |
- * | --- | --- | --- |
- * | `GET /api/games` | 저장된 게임 목록 | 랜딩 (`app/page.tsx`) |
- * | `GET /api/games?catalog=1` | 리그·팀 카탈로그 | 새 게임 (`app/new/page.tsx`) |
- *
- * 목록에는 **열지 못한 세이브도 실린다** (`readable: false`). 걸러 내면 디스크에
- * 남은 파일이 화면에서 사라져 지울 길까지 없어진다 — 정렬은 코어가 이미 마쳤으니
- * `listGameSummaries()`가 준 배열을 그대로 넘긴다.
- *
- * ⚠️ 둘을 한 응답에 싣지 않는다. 랜딩은 `games`만 쓰는데, 함께 실으면 목록 한
- * 줄을 읽으려고 1부 전체의 보드 기대치까지 짓게 된다.
- *
- * 2부는 국내 컵 참가 전용이라 부임 대상이 아니다 — 1부만 내려보낸다. 보드 기대는
- * 화면이 tier로 따로 만들지 않고 시즌 평가가 쓰는 그 표(`boardExpectationOfTier`)를
- * 그대로 쓴다 — 부임 전에 읽는 기대치와 시즌 끝에 평가받는 기대치가 같은 말이어야
- * 한다. 다만 **여긴 부임 전이라 세이브가 없다**: 체급은 카탈로그가 답한다
- * (진행 중인 세이브는 `boardExpectation(state, teamId)`가 세이브의 체급을 읽는다).
- */
+/** Saved games and the factual league/team catalog are separate responses. */
 export function GET(request: Request) {
   if (new URL(request.url).searchParams.get("catalog") !== "1") {
     return NextResponse.json({ games: listGameSummaries() });
   }
   const leagues = topLeagues();
   const ids = new Set(leagues.map((l) => l.id));
-  // 기대 순위는 리그 인원에서 나온다 (career.md §5) — 세이브가 없으니 카탈로그가 센다
   const sizeOf = new Map(leagues.map((l) => [l.id, teamsOfLeague(l.id).length]));
   // 리그 색은 다섯을 함께 봐야 나온다 (ui/design-system.md §2-1) — 한 번 세어 행마다 싣는다
   const tones = leagueTones();
   return NextResponse.json({
     // 리그 행이 「20팀」을 세우는 그 수 — 화면이 팀 배열을 따로 세지 않는다
     leagues: leagues.map((l) => ({ ...l, size: sizeOf.get(l.id) ?? 0, tone: tones.get(l.id) })),
-    teams: teamCatalog()
-      .filter((t) => ids.has(t.leagueId))
-      .map((t) => ({
-        ...t,
-        expectation: expectationLabel(
-          boardExpectationOfTier(catalogTierOf(t.id), sizeOf.get(t.leagueId) ?? 0),
-        ),
-      })),
+    teams: teamCatalog().filter((team) => ids.has(team.leagueId)),
   });
 }
 

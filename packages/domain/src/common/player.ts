@@ -1,3 +1,4 @@
+import { CharacterBookContentSchema } from "./character-book";
 import { z } from "zod";
 import { DateString } from "./date-string";
 import { SQUAD_STATUSES, type SquadStatus } from "./squad-rules";
@@ -107,13 +108,7 @@ const MIRROR_VARIANTS: Record<string, readonly [left: string, right: string]> = 
   ST: ["LST", "RST"],
 };
 
-/**
- * 코드 → 중앙 표기 조회표. 모듈 로드 때 한 번만 만든다.
- *
- * ⚠️ 이 함수는 **매우 뜨겁다** — `positionProficiency` → `fillSlots`를 타고 새 게임
- * 한 판에 수백만 번 불린다. 호출마다 `Object.entries`로 배열을 새로 만들며 선형
- * 탐색하던 때는 게임 생성 0.65초의 30%를 여기서 썼다.
- */
+/** 포지션 코드 → 중앙 표기 조회표. 반복 조회에서 배열 할당과 선형 탐색을 피하도록 모듈 로드 때 만든다. */
 const MIRROR_BASE = new Map<string, string>([
   // DM·AM은 CDM·CAM의 다른 표기라 같은 자리로 접는다
   ["DM", "CDM"],
@@ -1760,59 +1755,29 @@ export function bestOverall(axes: AxisValues, positions: readonly { position: st
 
 /**
  * 심경 한 줄의 글자 상한 — 스키마가 문이고, 이 문을 넘긴 문장은 다음 로드에서
- * 세이브 전체를 스키마 실패로 만든다. 제출을 자르는 쪽(`engine/squad/mood.ts`)이
+ * 세이브 전체를 스키마 실패로 만든다. 제출을 자르는 쪽(`engine/match/commands/lineup.ts`)이
  * 같은 값을 다시 적으면 한쪽만 손봤을 때 세이브가 깨진다.
  */
 export const MOOD_NOTE_MAX = 120;
 
 // ── 은퇴 (season.md §6) ─────────────────────────────
 
-/**
- * 서른셋을 넘겨 이 아래면 은퇴한다 — **종합의 눈금을 탄다** (season.md §6).
- *
- * 옛 72와 같은 인원 비율(상위 37%)에 서는 값이다 (player.md §4). 72를 그대로 두면
- * 새 눈금에서 그 선이 전체의 63%를 덮어 서른서넛이 한 시즌에 통째로 은퇴한다.
- */
-export const RETIRE_OVERALL = 68;
-/** 종합과 무관하게 은퇴하는 나이 */
-export const RETIRE_AGE = 35;
-/** 이 나이부터는 `RETIRE_OVERALL` 아래면 은퇴한다 */
-export const RETIRE_AGE_MARGINAL = 33;
-/**
- * 이만큼도 못 뛴 시즌이면 계약 만료가 곧 은퇴다 — **`RETIRE_AGE_MARGINAL` 위에서만**
- * (season.md §6).
- *
- * 나가는 문이 자유이적 하나뿐이면 서른넷의 백업이 매년 무소속 명단에 쌓인다. 눈금이
- * 다섯인 것은 컵 한 라운드와 리그 몇 경기를 합친 수라 "명단에 있었다"와 "뛰지 않았다"를
- * 가르기 때문이다 — 1군 공식전 누계 하나로 센다(`SeasonStat.apps`).
- */
-export const RETIRE_IDLE_APPS = 5;
-
-/**
- * 왜 그만두는가 — **코드다** (season.md §6). 판정한 사유는 은퇴 뒤에 되돌릴 수 없어
- * (종합도 계약도 그 사람과 함께 사라진다) 명부가 이 값을 그대로 든다.
- */
-export const RETIREMENT_REASONS = [
-  /** 판정일에 `RETIRE_AGE` 이상 — 종합도 계약도 출전도 보지 않는다 */
-  "age",
-  /** `RETIRE_AGE_MARGINAL` 이상이고 종합이 `RETIRE_OVERALL` 아래 */
-  "decline",
-  /** `RETIRE_AGE_MARGINAL` 이상 · 계약이 시즌 끝에 만료 · 출전이 `RETIRE_IDLE_APPS` 미만 */
-  "idle",
-] as const;
+/** GM이 선언할 때 기록한 사유. 자동 판정 조건이 아니다. */
+export const RETIREMENT_REASONS = ["age", "decline", "idle", "personal", "injury"] as const;
 export const RetirementReasonSchema = z.enum(RETIREMENT_REASONS);
 export type RetirementReason = z.infer<typeof RetirementReasonSchema>;
 
-/**
- * 이 나이·종합이면 시즌이 끝날 때 은퇴한다 — 세계를 보지 않는 순수 규칙.
- *
- * 시즌 전환(`transitionSeason`)만의 자가 아니다: 베테랑 황혼 아크의 절정도 같은 자를
- * 읽는다(people.md §9). 두 벌로 두면 한쪽만 튜닝한 날 이야기와 판정이 갈린다
- * (AGENTS.md §5 "한 규칙, 한 정의").
- */
-export function retiresAtSeasonEnd(age: number, overall: number): boolean {
-  return age >= RETIRE_AGE || (age >= RETIRE_AGE_MARGINAL && overall < RETIRE_OVERALL);
-}
+export const RetirementDecisionSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      playerId: z.string().min(1),
+      action: z.literal("declare"),
+      reason: RetirementReasonSchema,
+    })
+    .strict(),
+  z.object({ playerId: z.string().min(1), action: z.literal("withdraw") }).strict(),
+]);
+export type RetirementDecision = z.infer<typeof RetirementDecisionSchema>;
 
 /** 빠르게 변하는 컨디션 — 부상은 별도 INJURY 테이블 (player.md §5) */
 export const PlayerStateSchema = z.object({
@@ -1824,10 +1789,7 @@ export const PlayerStateSchema = z.object({
   /**
    * **체력 0~100** — 지금 이 선수가 낼 수 있는 상태. 높을수록 좋다.
    *
-   * 몸의 준비 상태만 나타낸다. 심리적 사기 효과는 `form`으로 환산하므로
-   * "잘 쉬었지만 폼이 꺾인 선수"와 "지쳤지만 기세가 오른 선수"가 함께 성립한다.
-   *
-   * 경기·훈련이 깎고 휴식·회복이 채운다. 왜 낮은지는 `moodOf`가 말한다.
+   * 경기·훈련이 깎고 휴식·회복이 채운다. 폼과 별도로 관리하는 몸의 준비 상태다.
    */
   condition: z.number().int().min(0).max(CONDITION_MAX),
   /**
@@ -1842,91 +1804,7 @@ export const PlayerStateSchema = z.object({
    * 그러면 값이 1 아래로 못 내려가 리그 평균이 시즌마다 위로 밀린다.
    */
   injuryProneness: z.number().min(INJURY_PRONENESS_MIN).max(INJURY_PRONENESS_MAX),
-  /**
-   * **맥락을 읽고 다시 쓴 심경 한 줄** — 코어 앵커(`moodAnchor`) 위에 얹힌다.
-   *
-   * 파생하지 않고 저장하는 이유는 `SETTLING_EVENT`와 같다: 이 문장의 원본은
-   * 그 구간의 대화·사건이고 그건 어디에도 표로 남지 않는다. 결산이 지나가면
-   * 다시 만들어낼 수 없다.
-   *
-   * `on`은 쓰인 날이다 — 며칠이 지나면 코어 앵커로 돌아간다. 지난주의 결이
-   * 오늘의 심경인 척하지 않게 하려는 것이고, 부상·정지처럼 **사실이 바뀌면**
-   * 날짜와 무관하게 코어가 이긴다 (mood.ts). 없으면 앵커가 곧 심경이다.
-   */
-  moodNote: z.object({ text: z.string().min(1).max(MOOD_NOTE_MAX), on: DateString }).optional(),
-  /**
-   * **최근 이레의 날짜별 대화 사기 합계** — 하루 ±8 · 이레 ±20을 세우는 장부
-   * (career.md §2).
-   *
-   * 파생하지 않고 저장하는 이유는 `moodNote`·`SETTLING_EVENT`와 같다: 원본이 그
-   * 구간의 대화인데 그건 어디에도 표로 남지 않는다. 대화를 **막지 않고** 그 대화가
-   * 판에 남기는 몫만 자른다.
-   *
-   * 이레를 지난 줄은 쓸 때마다 걷히므로 장부가 자라지 않는다.
-   */
-  talkMorale: z.array(z.object({ on: DateString, sum: z.number() })),
-  /**
-   * **처음 완장을 찬 날** — 주장 지명의 체력 보너스를 선수당 한 번으로 자르는 문
-   * (career.md §2). 완장은 몇 번이고 오가지만 처음 채워지는 순간의 무게는 한 번뿐이라,
-   * 두 선수를 번갈아 지명하는 것만으로 둘 다 체력이 차던 자리다.
-   *
-   * 지금 누가 주장인지는 `isCaptain`이 답한다 — 이 값은 지난 사실이라 완장을 넘겨도
-   * 지워지지 않는다. 없으면 아직 완장을 찬 적 없다.
-   */
-  captainedOn: DateString.optional(),
-  /**
-   * **2군으로 내린 날** — "며칠째 2군인가"를 답하는 유일한 자리.
-   *
-   * 1·2군 이동은 원장에 남지 않는다(`squadLevel`은 지금의 상태일 뿐 언제 바뀌었는지를
-   * 모른다). 그래서 방치의 기간을 파생할 표가 없다 — 강등의 대가가 시간의 결과이려면
-   * 시작점이 저장돼야 한다 (people.md §5).
-   *
-   * 1군으로 올리면 지워진다 — 다시 내리면 그날부터 새로 센다. 시드가 2군에 세워 둔
-   * 선수에겐 없다: 감독이 내린 적 없는 선수는 방치의 대상도 아니다.
-   */
-  demotedOn: DateString.optional(),
-  /**
-   * **주 포지션 묶음 밖 선발이 이어진 경기 수** — 자리 밖 기용 불만의 유일한 원본
-   * (people.md §5).
-   *
-   * 원장은 누가 뛰었는지(`homeLineup`)만 알고 **어느 자리에 섰는지**는 모른다. 경기가
-   * 끝나면 그 배치는 사라지므로 연속을 파생할 표가 없다 — 강등의 `demotedOn`과 같은
-   * 이유로 저장한다.
-   *
-   * 제자리에 서거나 선발에서 빠지면 0으로 돌아간다. 날이 아니라 경기로 세는 이유는
-   * 그것이 선수가 실제로 겪는 단위여서다.
-   */
-  outOfPositionRun: z.number().int().min(0),
-  /**
-   * **지금 번호를 받은 날** — 등번호가 움직인 사실의 유일한 원본 (player.md §1.1).
-   *
-   * 번호 자체(`squadNumber`)는 지금의 상태일 뿐 언제 바뀌었는지를 모른다. 물려받음도
-   * 뺏김도 **며칠째인가**가 있어야 심경 카드가 서므로, 강등의 `demotedOn`과 같은
-   * 이유로 시작점을 저장한다.
-   *
-   * 감독이 옮긴 번호에만 선다 — 세계가 배정한 번호(입단·이적의 자리 관례)는 사건이
-   * 아니라 기본값이다.
-   */
-  squadNumberOn: DateString.optional(),
-  /**
-   * **감독이 옮기기 전에 달던 번호** — 뺏김의 사실이다 (people.md §5).
-   *
-   * `squadNumberOn`과 짝이다: 언제 바뀌었는지만으로는 무엇을 잃었는지가 서지 않는다.
-   * 새 번호를 받을 때마다 덮어쓴다. 없으면 잃은 번호가 없다.
-   */
-  formerSquadNumber: z.number().int().min(1).max(SQUAD_NUMBER_MAX).optional(),
-  /**
-   * **이번 시즌 뒤 은퇴한다는 예고** — 있다는 것 자체가 그 사실이다 (season.md §6).
-   *
-   * 1월 1일 tick이 나이·종합·출전·계약으로 결정적으로 판정해 적고(`declareRetirements`),
-   * 시즌 전환이 이 표식을 보고 집행한다. 파생하지 않고 저장하는 이유는 **예고와 실행
-   * 사이에 반년이 있기 때문**이다 — 그 사이 종합이 한 칸 내려가거나 출전이 늘면
-   * 7월에 다시 판정한 명단이 1월에 감독이 들은 명단과 달라진다. 사유도 함께 드는 것은
-   * 같은 이유다: 판정한 순간의 사실이라 나중에 다시 세울 수 없다.
-   *
-   * 감독의 재계약 성사가 거둘 수 있다 — 나이 상한 안에서만(`withdrawRetirement`).
-   * `on`이 예고한 날이다 — 회견·근황·심경이 "예고한 지 며칠째"를 여기서 센다.
-   */
+  /** GM이 결정한 시즌 말 은퇴 선언. 실행 전에는 나이와 무관하게 철회할 수 있다. */
   retiringAfterSeason: z.object({ on: DateString, reason: RetirementReasonSchema }).optional(),
   /**
    * **누적 피로 0~100** — 시즌이 이 몸에 쌓아 둔 부하의 잔고 (player.md §5.5).
@@ -1944,17 +1822,6 @@ export const PlayerStateSchema = z.object({
    * 통째로 멈춘다.
    */
   fatigue: z.number().min(0).max(FATIGUE_MAX),
-  /**
-   * **누적 피로가 「과부하」를 넘어선 날** — "며칠째 과부하인가"를 답하는 유일한 자리
-   * (people.md §5).
-   *
-   * 잔고(`fatigue`)는 지금의 상태일 뿐 언제부터 그 위였는지를 모른다. 강등의
-   * `demotedOn`과 같은 이유로 시작점을 저장한다 — 과부하의 대가도 시간의 결과라
-   * 시작점 없이는 기간을 파생할 표가 어디에도 없다.
-   *
-   * 문턱 아래로 내려가면 지워진다 — 다시 넘으면 그날부터 새로 센다.
-   */
-  overloadedOn: DateString.optional(),
   /**
    * **통산 A매치 출전·골** (→ docs/match/competition.md §5-1).
    *
@@ -2008,8 +1875,6 @@ export function freshPlayerState(input: { form: number; condition: number }): Pl
     form: input.form,
     condition: input.condition,
     injuryProneness: PRONENESS_BASE,
-    talkMorale: [],
-    outOfPositionRun: 0,
     fatigue: FATIGUE_BASE,
     caps: 0,
     internationalGoals: 0,
@@ -2167,12 +2032,8 @@ export const GamePlayerSchema = z.object({
   /** 주장 — 팀당 최대 1명 (검증 레이어 보장) */
   isCaptain: z.boolean(),
   /**
-   * 부주장 — 팀당 최대 1명. **완장은 둘이고 주장은 그중 하나다**
-   * (→ docs/story/people.md §5-1): 주장이 명단에 없는 경기의 완장을 잇고, 주장이
-   * 비면 승계 1순위이며, 리더 배수도 주장 다음으로 무겁다.
-   *
-   * 서열(리더 그룹)은 저장하지 않고 파생하는데 이 값만 저장하는 것은 **감독의
-   * 결정**이라서다 — 장부 어디에서도 파생되지 않는 유일한 라커룸 사실이다.
+   * 부주장 — 팀당 최대 1명인 감독의 지정이다 (docs/story/people.md §5-1).
+   * 주장이 없는 경기 명단에서 완장을 잇고, 주장 자리가 비면 우선 승계한다.
    */
   isViceCaptain: z.boolean(),
   /**
@@ -2207,6 +2068,7 @@ export type Player = GamePlayer;
  * 16축을 평면 필드로 갖는다 (overall은 파생이라 저장하지 않는다).
  */
 export interface PlayerCatalogMeta {
+  characterBook?: import("./character-book").CharacterBookContent;
   id: string;
   /** 시드 시점 소속 팀 (TEAM_CATALOG) */
   teamId: string;
@@ -2277,6 +2139,7 @@ export type PlayerCatalogEntry = PlayerCatalogMeta & AxisValues;
  * `overall`은 파생이라 담기지 않는다 (`PlayerCatalogMeta`와 같은 목록).
  */
 export const PlayerCatalogEntrySchema = z.object({
+  characterBook: CharacterBookContentSchema.optional(),
   id: z.string().min(1),
   teamId: z.string().min(1),
   nameKo: z.string().min(1),
@@ -2351,98 +2214,28 @@ export function ageOf(birthdate: string, onDate: string): number {
   return age;
 }
 
-// ── 라커룸 서열 점수 (people.md §5-1) ───────────────
-
-/**
- * 서열 점수의 네 항이 나눠 갖는 지분 — **합이 1**이라 점수가 축과 같은 눈금(0~99)에
- * 선다. 리더십이 절반을 넘게 가지고, 나머지 셋은 "라커룸이 그를 얼마나 오래 봤는가"라
- * 같은 리더십이면 오래 있은 쪽이 앞선다.
- */
-const STANDING_LEADERSHIP_SHARE = 0.55;
-const STANDING_AGE_SHARE = 0.15;
-const STANDING_APPS_SHARE = 0.2;
-const STANDING_TENURE_SHARE = 0.1;
-
-/** 나이가 라커룸의 무게가 되기 시작하는 나이와, 더는 늘지 않는 나이 */
-const STANDING_AGE_FLOOR = 21;
-const STANDING_AGE_CEIL = 30;
-
-/** 그 셔츠로 이만큼 뛰면 출전 항이 만점 — 100경기면 어느 라커룸에서도 고참이다 */
-const STANDING_APPS_CEIL = 100;
-
-/** 재적 항이 만점에 닿는 시즌 수 */
-const STANDING_TENURE_CEIL = 4;
-
-/** 0~1로 자른 뒤 축의 눈금으로 — 네 항이 같은 자를 쓴다 */
-function standingTerm(value: number, ceil: number): number {
-  return Math.max(0, Math.min(1, value / ceil)) * RATING_MAX;
-}
-
-/**
- * 라커룸 서열 점수 (0~99) — **세계를 보지 않는 순수 규칙이라 도메인이 갖는다.**
- * 새 게임의 첫 주장(`createGame`)과 매 순간의 리더 그룹(`engine/squad/hierarchy.ts`)이
- * 같은 자를 써야 개막 전과 개막 후의 서열이 다른 뜻이 되지 않는다.
- */
-export function standingScore(input: {
-  leadership: number;
-  age: number;
-  /** 그 셔츠의 통산 1군 출전 */
-  apps: number;
-  /** 그 셔츠로 기록이 남은 시즌 수 */
-  seasons: number;
-}): number {
+/** 완장이 비었을 때의 축구 배정 순서. 사회적 서열을 만들지 않는다. */
+export function compareCaptainCandidates<
+  P extends { id: string; birthdate: string; attributes: { leadership: number } },
+>(a: P, b: P): number {
   return (
-    STANDING_LEADERSHIP_SHARE * input.leadership +
-    STANDING_AGE_SHARE *
-      standingTerm(input.age - STANDING_AGE_FLOOR, STANDING_AGE_CEIL - STANDING_AGE_FLOOR) +
-    STANDING_APPS_SHARE * standingTerm(input.apps, STANDING_APPS_CEIL) +
-    STANDING_TENURE_SHARE * standingTerm(input.seasons, STANDING_TENURE_CEIL)
+    b.attributes.leadership - a.attributes.leadership ||
+    a.birthdate.localeCompare(b.birthdate) ||
+    a.id.localeCompare(b.id)
   );
 }
 
-/** 첫 주장을 고를 때 서열에 넣는 출전·재적 — **개막 전이라 둘 다 0이다** */
-const PRESEASON_APPS = 0;
-const PRESEASON_SEASONS = 0;
-
-/**
- * 새 게임의 첫 주장 — **서열 최상위, 다만 후보는 경기에 나설 사람뿐이다**
- * (people.md §5-1).
- *
- * 개막 전에는 출전도 재적도 0이라 서열이 리더십과 나이로 정해진다. 그 둘만 보면
- * 한 경기도 나서지 않는 서른다섯의 백업 골키퍼가 완장을 차고, 경기마다
- * `matchCaptainOf`가 완장을 다른 사람에게 넘긴다 — 라커룸의 축이 그라운드에 서지
- * 않는 자리다. 개막 전의 출전 수를 대신할 수 있는 사실은 **개막전에 나설 열한 명**
- * 하나뿐이라, 그 배치가 후보를 정한다.
- *
- * 후보가 비면 1군으로, 1군도 비면 선수단 전체로 물러난다 — 완장을 비우지는 않는다.
- *
- * ⚠️ **포지션은 거르지 않는다** — 주전 골키퍼가 라커룸을 이끄는 것은 흔한 일이고,
- * 거르는 것은 자리가 아니라 나서지 않음이다.
- */
+/** 카탈로그 지정이 없으면 실제 선발, 1군, 선수단 순서로 후보를 찾는다. */
 export function initialCaptainOf<
   P extends Pick<GamePlayer, "id" | "birthdate" | "squadLevel"> & {
     attributes: Pick<GamePlayer["attributes"], "leadership">;
   },
->(squad: readonly P[], startingXi: readonly string[], asOf: string): P | null {
+>(squad: readonly P[], startingXi: readonly string[]): P | null {
   const xi = new Set(startingXi);
   const starters = squad.filter((p) => xi.has(p.id));
   const firstTeam = squad.filter((p) => p.squadLevel === "first");
-  const from = starters.length > 0 ? starters : firstTeam.length > 0 ? firstTeam : squad;
-  // 동점은 id 순 — 같은 시드는 언제나 같은 주장을 세운다 (서열과 같은 규칙)
-  return (
-    [...from]
-      .map((player) => ({
-        player,
-        standing: standingScore({
-          leadership: player.attributes.leadership,
-          age: ageOf(player.birthdate, asOf),
-          apps: PRESEASON_APPS,
-          seasons: PRESEASON_SEASONS,
-        }),
-      }))
-      .sort((a, b) => b.standing - a.standing || (a.player.id < b.player.id ? -1 : 1))[0]?.player ??
-    null
-  );
+  const candidates = starters.length > 0 ? starters : firstTeam.length > 0 ? firstTeam : squad;
+  return [...candidates].sort(compareCaptainCandidates)[0] ?? null;
 }
 
 // ── 스카우팅 보고서 — 채팅이 카드로 그리는 구조체 ──────

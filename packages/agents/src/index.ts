@@ -21,6 +21,7 @@ export * from "./negotiation/table-situation";
 export * from "./app/workflows/negotiation/table-situation";
 export * from "./negotiation/ruling-schema";
 export * from "./story/history-compactor";
+export * from "./story/character-book-editor";
 export * from "./story/training-rater";
 export * from "./app/workflows/story/training-rater";
 export * from "./common/gm-types";

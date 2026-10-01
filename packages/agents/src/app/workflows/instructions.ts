@@ -211,14 +211,11 @@ export function instructionCandidates(
     to: dates,
     until: dates,
     teamId: teamChoices,
-    "hire_staff.name": (state.staffPool ?? []).map((person) => ({
-      label: `${person.name} (${person.title})`,
-      value: person.name,
-    })),
     "release_staff.name": state.personas
       .filter(
         (person) =>
-          ["coach", "medic", "scout"].includes(person.role) && person.employment !== undefined,
+          ["head_coach", "coach", "medic", "scout"].includes(person.role) &&
+          person.employment !== undefined,
       )
       .map((person) => ({ label: person.name, value: person.name })),
     offer: (state.managerOffers ?? [])

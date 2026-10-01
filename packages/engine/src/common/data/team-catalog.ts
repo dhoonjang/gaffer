@@ -1,21 +1,8 @@
-import type { CatalogTacticalStyle, ClubHonour } from "@story-fm/domain";
+import type { CatalogTacticalStyle, CharacterBookContent, ClubHonour } from "@story-fm/domain";
 /**
- * 팀 카탈로그 — 클럽의 불변 정체성. 게임 세이브에는 들어가지 않는다.
- *
- * **2026-27 시즌 구성** (5대 리그 96팀). 승격·강등은 웹 교차검증으로 확인했다
- * `leagueId`로 리그 카탈로그
- * (league-catalog.ts)에 속하고, 리그마다 자체 일정과 순위표를 갖는다.
- *
- * 선수는 실선수 시드(epl-players.ts)가 있으면 그것이 우선이고, 없으면 tier를
- * 기준선으로 절차 생성한다 (catalog.ts fallbackEntries). 그래서 여기에 팀을
- * 추가하면 스쿼드가 자동으로 채워진다.
- *
- * ⚠️ 2부(챔피언십 등) 클럽은 실선수 시드가 있어도 읽지 않는다 — `buildFromSeed`가
- * 2부를 절차 생성 경로로 보내기 때문이다. 2부를 리그전에 넣으려면 그 분기부터 연다.
- *
- * shortName은 표시용이라 리그를 넘나드는 충돌만 피했다 (브레스트는 브렌트포드와
- * 겹쳐 BRS로 바꿨고, 모나코는 공식 약어 ASM이라 몬차 MON과 구분된다).
- * 분데스리가 공식 약어에는 숫자가 들어간다 (B04·M05·S04).
+ * 구단 카탈로그는 새 게임의 리그·체급·표시 정보를 소유한다.
+ * 실선수 시드 적용과 절차 생성 분기는 catalog.ts의 buildFromSeed가 결정한다.
+ * shortName은 리그 간 표시 충돌을 피하는 약어다. 숫자를 포함하는 약어도 허용한다.
  */
 import type { ClubColours, Formation } from "@story-fm/domain";
 import { DEFAULT_FORMATION, leagueTonesOf, separatedBandsOf } from "@story-fm/domain";
@@ -29,8 +16,10 @@ import {
 } from "./league-catalog";
 import { catalogSource } from "./catalog-source";
 import { readTeamOverride } from "./team-override";
+import { namedCatalogBook } from "./catalog-character-book";
 
 export interface TeamCatalogEntry {
+  characterBook?: CharacterBookContent;
   id: string;
   name: string;
   shortName: string;
@@ -1345,9 +1334,24 @@ const TEAM_SEED_BASE: readonly TeamCatalogEntry[] = [
 export const TEAM_CATALOG_SEED: readonly TeamCatalogEntry[] = withBands(
   TEAM_SEED_BASE.map((team) => {
     const honours = CLUB_HONOURS_SEED[team.id];
-    return withColours(honours ? { ...team, honours } : team);
+    return withTeamBook(withColours(honours ? { ...team, honours } : team));
   }),
 );
+
+/** Missing books are materialized once by the catalog cache, then saved with edits. */
+export function withTeamBook(team: TeamCatalogEntry): TeamCatalogEntry {
+  const book = team.characterBook ?? {
+    name: team.name,
+    keywords: [team.name, team.shortName],
+    description: `${team.name} · ${team.shortName}`,
+    information: [
+      `${team.name} (${team.shortName}). ${team.leagueId} 소속. 구단 체급 ${team.tier}.`,
+      ...(team.formation ? [`기본 포메이션 ${team.formation}.`] : []),
+      ...(team.honours ?? []).map((honour) => `${honour.competitionId}: ${honour.count}회 우승.`),
+    ].join("\n"),
+  };
+  return { ...team, characterBook: namedCatalogBook(team.name, book) };
+}
 
 /** 공식 색을 붙인다 — 표에 없는 클럽은 그대로 (문장이 해시로 답한다) */
 function withColours(team: TeamCatalogEntry): TeamCatalogEntry {
@@ -1407,7 +1411,9 @@ export const SECOND_DIVISION_PENALTY = 9;
 // 색이 없던 시절의 오버라이드 파일도 같은 색을 얻는다 — 색은 편집 대상이 아니다
 const teams = catalogSource<readonly TeamCatalogEntry[]>(() => {
   const override = readTeamOverride();
-  return override ? withBands(override.teams.map(withColours)) : TEAM_CATALOG_SEED;
+  return override
+    ? withBands(override.teams.map((team) => withTeamBook(withColours(team))))
+    : TEAM_CATALOG_SEED;
 });
 
 /** 지금 유효한 팀 카탈로그 — 오버라이드가 있으면 그것, 없으면 시드 */

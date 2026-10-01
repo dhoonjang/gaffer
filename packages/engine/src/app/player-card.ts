@@ -3,7 +3,6 @@ import {
   type AttributeAxis,
   type FatigueBand,
   type SquadStatus,
-  type PromiseKind,
   type Foot,
   type InjuryHistory,
   ATTRIBUTE_AXES,
@@ -41,8 +40,6 @@ import {
   potentialBand,
 } from "../common/players/observation";
 import { observedFit, observedOverall } from "../negotiation/players/scouting";
-import { type MoodRead } from "../story/players/mood";
-import { moodOf } from "./workflows/story/players/mood";
 import { type ProposalView, proposalViewOf } from "../negotiation/market/proposal";
 import { type CareerSeasonView, type CareerTotalsView, careerTotalsView } from "./views/career";
 import {
@@ -68,9 +65,7 @@ import { loanReportOf } from "../negotiation/market/departures";
 import { formLabel, formAngle, formTone } from "../common/players/form";
 import { conditionShown } from "../common/views/observation";
 import { squadStatusOf } from "../common/players/contract-status";
-import { openPromises } from "../negotiation/players/promises";
 import { contractTermLines } from "../negotiation/market/terms";
-import { leaderGroupOf } from "../common/players/hierarchy";
 import { isHomegrownFor } from "../common/players/registration";
 import { settlingPercent } from "../common/players/settling";
 import { matchFatigueOf } from "@story-fm/sim";
@@ -113,7 +108,6 @@ export interface PlayerCardOursView {
   condition: ConditionRead;
   fatigueLabel: string;
   fatigueBand: FatigueBand;
-  mood: MoodRead;
   /**
    * 계약에 적힌 지위 — **계약 정보의 한 칸**이다 (people.md §5-2). 카드는 주급·만료
    * 옆에 세우고 명단에는 세우지 않는다: 명단은 지금 뛰는 자리와 전력을 읽는 표다.
@@ -126,12 +120,8 @@ export interface PlayerCardOursView {
    * 읽지 못하므로 문장이 여기 실려 간다. 없으면 빈 배열이다.
    */
   contractTerms: string[];
-  /** 아직 기한 전인 감독의 약속 — 갈래와 기한뿐이다 (people.md §5-2) */
-  promises: Array<{ kind: PromiseKind; dueOn: string }>;
   isCaptain: boolean;
   isViceCaptain: boolean;
-  /** 라커룸 서열 — 리더 그룹 밖이면 null (people.md §5-1) */
-  leaderRank: number | null;
   homegrown: boolean;
   /** 정착 진행도 — 끝났거나 원소속이면 null. 이 값이 있는 동안 축은 참값이 아니다 */
   settling: number | null;
@@ -384,15 +374,11 @@ export function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView 
     condition: conditionShown(state, p.id, p.state.condition, liveWearOf(state, p.id)),
     fatigueLabel: fatigueLabel(fatigueOf(p.state)),
     fatigueBand: fatigueBand(fatigueOf(p.state)),
-    mood: moodOf(state, p),
     squadStatus: squadStatusOf(state, p),
     buyoutClause: contract?.buyoutClause ?? null,
     contractTerms: contract ? contractTermLines(contract) : [],
-    promises: openPromises(state, p.id).map((x) => ({ kind: x.kind, dueOn: x.dueOn })),
     isCaptain: p.isCaptain,
     isViceCaptain: p.isViceCaptain === true,
-    leaderRank:
-      leaderGroupOf(state, state.userTeamId).findIndex((row) => row.playerId === p.id) + 1 || null,
     homegrown: isHomegrownFor(p, state.userTeamId),
     settling: settlingPercent(state, p.id),
     assignment: assignment

@@ -9,8 +9,7 @@ import {
   resumeLiveInterval,
   acceptDeal,
   acceptManagerOffer,
-  reviewBoard,
-  RENEWAL_NOTICE_DAYS,
+  offerManagerJob,
   advanceTime,
   assignmentsOf,
   createGame,
@@ -136,23 +135,24 @@ export function playFullSeason(state: GameState, limit = 400): boolean {
  * 제품의 자동 판단이 아니라 재임을 유지하기 위한 측정 조건이다.
  */
 export function keepSeat(state: GameState): void {
-  state.manager.reputation.board = 60;
-  delete state.boardAgenda.warningOn;
   const contract = state.manager.contract;
+  // Harness policy keeps a job across a season rollover; production has no renewal window.
   if (
     !state.dismissal &&
     contract &&
-    !contract.renewalDecidedOn &&
     diffDays(state.date, contract.until) >= 0 &&
-    diffDays(state.date, contract.until) <= RENEWAL_NOTICE_DAYS
+    diffDays(state.date, contract.until) <= 90 &&
+    !state.managerOffers.some((offer) => offer.via === "renewal" && offer.status === "open")
   ) {
-    const reviewed = reviewBoard(state, {
-      assessment: "재임을 유지하는 측정 조건으로 다음 계약을 승인한다",
-      confidence: 0,
-      decision: "continue",
-      renewal: true,
+    const result = offerManagerJob(state, {
+      team: state.userTeamId,
+      salary: contract.salary,
+      years: 3,
+      budgetPledge: 0,
+      expiresOn: contract.until,
+      reason: "재임을 유지하는 측정 조건",
     });
-    if (!reviewed.ok) throw new Error(reviewed.message);
+    if (!result.ok) throw new Error(result.message);
   }
 
   const renewal = (state.managerOffers ?? []).find(

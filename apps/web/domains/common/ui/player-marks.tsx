@@ -10,12 +10,7 @@ import {
   positionProficiency,
   type SetPieceRole,
 } from "@story-fm/domain";
-import {
-  IconCaptain,
-  IconLeader,
-  IconViceCaptain,
-  type IconComponent,
-} from "@/domains/common/ui/icons";
+import { IconCaptain, IconViceCaptain, type IconComponent } from "@/domains/common/ui/icons";
 import { humanDate } from "@/domains/common/lib/dateline";
 
 import type { SetPieceTakersView, SquadRow } from "../../match/ui/squad/types";
@@ -83,32 +78,17 @@ export function ovrTitle(p: SquadRow): string | undefined {
   );
 }
 
-/**
- * 완장과 서열 — **같은 완장 셋, 안쪽 글자만 다르다** (docs/story/people.md §5-1).
- *
- * 주장만 표식을 달던 자리다. 서열이 팀토크의 폭과 불만의 속도를 정하는데 화면에
- * 완장 하나만 서면, 감독은 그 판정이 어디서 나왔는지를 볼 자리가 없다.
- * 셋을 같은 도형(`IconCaptain` 계열)으로 두어 **한 계열로 읽히게** 한다 — 서로 다른
- * 모양을 주면 세 표식이 각자 다른 뜻의 배지로 보인다. 원문자 글리프(Ⓒ)는 쓰지
- * 않는다 — 폰트마다 크기가 달라 이름 줄에서 홀로 튄다 (design-system.md §3).
- */
+/** 감독이 지정한 주장·부주장의 완장. */
 export function Armband({ row }: { row: SquadRow }) {
   const seat: { Icon: IconComponent; label: string } | null = row.isCaptain
     ? { Icon: IconCaptain, label: "주장" }
     : row.isViceCaptain
       ? { Icon: IconViceCaptain, label: "부주장" }
-      : row.leaderRank !== null
-        ? { Icon: IconLeader, label: "라커룸 리더" }
-        : null;
+      : null;
   if (!seat) return null;
   const { Icon } = seat;
   return (
-    <i
-      className="armband"
-      role="img"
-      aria-label={seat.label}
-      title={`${seat.label} · 라커룸 서열 ${row.leaderRank ?? "-"}위`}
-    >
+    <i className="armband" role="img" aria-label={seat.label} title={seat.label}>
       <Icon size={13} />
     </i>
   );
@@ -296,7 +276,7 @@ export function RatingTrend({ ratings }: { ratings: SquadRow["recentRatings"] })
  * 크기·모양이 다른 표식이 한 칸 안에 나란히 서면 같은 줄의 표식들이 서로 다른
  * 물건처럼 보인다. 크기·모양은
  * `.tag` 하나로 맞추고 **갈리는 것은 톤뿐**이다: 자격은 각주처럼 가라앉히고,
- * 감독이 지금 손을 써야 하는 상태(부상·정지·불만)는 색을 살려 눈에 남긴다.
+ * 감독이 지금 손을 써야 하는 상태(부상·정지)는 색을 살려 눈에 남긴다.
  */
 export function StatusBadges({ p }: { p: SquadRow }) {
   return (
@@ -310,7 +290,6 @@ export function StatusBadges({ p }: { p: SquadRow }) {
         </span>
       )}
       {p.suspended > 0 && <span className="tag st alert">정지 {p.suspended}</span>}
-      {p.hasIssue && <span className="tag st alert">불만</span>}
       {p.transferListed !== null && (
         <span className="tag st note" title={`호가 ${formatMoney(p.transferListed)}`}>
           이적 리스트

@@ -6,16 +6,7 @@ import type {
   SquadStatus,
 } from "@story-fm/domain";
 
-import {
-  MAX_PAYMENT_YEARS,
-  PRECONTRACT_DAYS,
-  SYMBOLIC_NUMBERS,
-  ageOf,
-  josa,
-  naturalPositionOf,
-  numberWishOf,
-  type NumberWish,
-} from "@story-fm/domain";
+import { MAX_PAYMENT_YEARS, PRECONTRACT_DAYS, ageOf, josa } from "@story-fm/domain";
 
 import { buildSeasonCalendar, windowOpenOn } from "../../common/core/calendar";
 
@@ -42,10 +33,6 @@ import { isMarketOnlyLeague, leagueCatalogById } from "../../common/data/league-
 import { leagueEconomyLevel } from "../../common/data/league-economy";
 
 import { isClubTeam, teamCatalogById } from "../../common/data/team-catalog";
-
-import { playerArchetypeOf } from "../../common/people/player-persona";
-
-import { numberLineageOf } from "../../common/players/numbers";
 
 import { squadDepthOf, squadRatingsOf, type SquadDepth } from "../../common/players/squad-depth";
 
@@ -339,20 +326,6 @@ export function biggerSuitorsOf(
   scale: StageScale = stageScaleOf(state),
 ): string[] {
   return suitors.filter((id) => scale.gapTo(id) > 0);
-}
-
-export function numberWishHere(state: GameState, player: GamePlayer): NumberWish | null {
-  const lineage = SYMBOLIC_NUMBERS.flatMap(
-    (number) => numberLineageOf(state, state.userTeamId, number).past,
-  );
-  return numberWishOf(
-    playerArchetypeOf(state.seed, player),
-    {
-      position: naturalPositionOf(player).position,
-      squadNumber: player.squadNumber,
-    },
-    lineage,
-  );
 }
 
 export { teamCatalogById, teamName };

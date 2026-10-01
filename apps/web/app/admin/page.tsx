@@ -7,6 +7,7 @@ import { CupsPanel } from "./cups-panel";
 import { LeaguesPanel } from "./leagues-panel";
 import { PalettePanel } from "./palette-panel";
 import { PlayersPanel } from "./players-panel";
+import { PeoplePanel } from "./people-panel";
 import { TeamsPanel } from "./teams-panel";
 import { UsagePanel } from "./usage-panel";
 
@@ -14,7 +15,7 @@ import { UsagePanel } from "./usage-panel";
  * Database — 게임과 무관한 **초기치 DB(카탈로그)**를 편집하고, LLM 계측을 읽는다.
  * 카탈로그 편집은 이후 새로 시작하는 게임에 반영되고, 진행 중인 게임은 그대로다.
  *
- * 이 파일은 껍데기다: 탭과 공용 배너, 그리고 **네 층의 카탈로그**를 갖고, 층별
+ * 이 파일은 껍데기다: 탭과 공용 배너, 그리고 층별 카탈로그를 갖고, 층별
  * 편집은 각 패널이 맡는다. 탭을 옮기면 패널은 언마운트되지만 카탈로그는 여기
  * 남아 있어 다시 받지 않는다 (`catalog-store.ts`).
  *
@@ -27,6 +28,7 @@ import { UsagePanel } from "./usage-panel";
 
 const TABS = [
   { key: "players", label: "선수" },
+  { key: "people", label: "인물" },
   { key: "teams", label: "팀" },
   { key: "leagues", label: "리그" },
   { key: "cups", label: "컵" },
@@ -89,6 +91,7 @@ export default function AdminPage() {
       )}
 
       <div role="tabpanel" id={`admin-panel-${tab}`} aria-labelledby={`admin-tab-${tab}`}>
+        {tab === "people" && <PeoplePanel onError={setErr} onMessage={setMsg} />}
         {tab === "players" && (
           <PlayersPanel
             catalog={catalog.players}

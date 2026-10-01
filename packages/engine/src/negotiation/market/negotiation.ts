@@ -11,7 +11,6 @@ import {
   type Negotiation,
   type NegotiationVerdict,
   PRECONTRACT_DAYS,
-  type PlayerIssueReason,
   SQUAD_STATUS_KO,
   type SquadStatus,
   type TickSink,
@@ -29,21 +28,17 @@ import { item } from "../../common/commands/brief";
 import { type CommandResult, type MarketCommandResult } from "../../common/commands/result";
 import { windowOpenOn } from "../../common/core/calendar";
 import { addDays, contractUntil, diffDays, seasonYear } from "../../common/core/dates";
-import { pickAnyPlayer, pickOurPlayer, pickSignedPlayer } from "../../common/core/player-ref";
+import { pickAnyPlayer, pickSignedPlayer } from "../../common/core/player-ref";
 import { pickWeighted } from "../../common/core/rng";
 import {
   type GameState,
   activeContract,
-  answerTransferRequest,
-  competingBidsOn,
   contractYearsLeft,
   pendingContractOf,
   playerById,
   playersOf,
-  pushNarrative,
   squadShortfall,
   teamName,
-  transferRequestOf,
 } from "../../common/core/state";
 import { pickTeam } from "../../common/core/team-ref";
 import { isClubTeam } from "../../common/data/team-catalog";
@@ -86,7 +81,6 @@ import {
   describeTermSheet,
   offeredTermsOf,
   refusedTermsOf,
-  settleLoanTerms,
   settleTermsOnSigning,
   tableTerms,
   termKindsOf,
@@ -578,11 +572,6 @@ export function respondOffer(
       offer.terms = offeredTermsOf(negotiation);
       negotiation.status = "agreed";
     }
-    pushNarrative(
-      state,
-      `${player.name} 이적료 합의 (${formatMoney(offer.fee)}) — 개인 조건 남음`,
-      3,
-    );
     return {
       ok: true,
       payload: verdictCard({}),
@@ -594,7 +583,6 @@ export function respondOffer(
   if (input.verdict === "accept") {
     negotiation.status = "agreed";
     if (releasing) {
-      pushNarrative(state, `${player.name} 상호 계약 해지 합의 (${formatMoney(offer.fee)})`, 4);
       return {
         ok: true,
         payload: verdictCard({}),
@@ -604,7 +592,6 @@ export function respondOffer(
       };
     }
     if (renewing) {
-      pushNarrative(state, `${player.name} 재계약 합의 (주급 ${formatMoney(offer.weeklyWage)})`, 4);
       return {
         ok: true,
         payload: verdictCard({}),
@@ -613,7 +600,6 @@ export function respondOffer(
           "계약서 서명이 남았습니다",
       };
     }
-    pushNarrative(state, `${player.name} 이적 합의 (${formatMoney(offer.fee)})`, 4);
     return {
       ok: true,
       payload: verdictCard({}),
@@ -727,16 +713,6 @@ export function respondOffer(
   };
 }
 
-export function clearIssueReason(
-  state: GameState,
-  playerId: string,
-  reason: PlayerIssueReason,
-): boolean {
-  const before = state.issues.length;
-  state.issues = state.issues.filter((i) => !(i.gamePlayerId === playerId && i.reason === reason));
-  return state.issues.length !== before;
-}
-
 export function listingOf(state: GameState, playerId: string) {
   return state.transferList.find((l) => l.gamePlayerId === playerId) ?? null;
 }
@@ -757,12 +733,9 @@ export function setTransferList(
     if (index < 0)
       return { ok: false, message: `${josa(player.name, "은/는")} 이적 리스트에 없습니다` };
     state.transferList.splice(index, 1);
-    const freed = clearIssueReason(state, player.id, "listed");
     return {
       ok: true,
-      message:
-        `${josa(player.name, "을/를")} 이적 리스트에서 뺐습니다` +
-        (freed ? " · 등재 불만이 풀렸습니다" : ""),
+      message: `${josa(player.name, "을/를")} 이적 리스트에서 뺐습니다`,
       brief: { head: "이적 리스트", items: [item({ label: "해제", text: player.name })] },
     };
   }
@@ -779,7 +752,6 @@ export function setTransferList(
   else state.transferList.push(listing);
 
   const price = askingPrice === undefined ? "호가 미정" : `호가 ${formatMoney(askingPrice)}`;
-  pushNarrative(state, `${player.name} 이적 리스트 등재 · ${price}`, 3);
   return {
     ok: true,
     message: `${player.name} 이적 리스트 등재 · ${price}`,
@@ -793,52 +765,6 @@ export function setTransferList(
         }),
       ],
     },
-  };
-}
-
-const REQUEST_ANSWER_KO: Record<"accept" | "refuse", string> = {
-  accept: "수락",
-  refuse: "거부",
-};
-
-export function respondTransferRequest(
-  state: GameState,
-  input: {
-    playerId: string;
-    answer: "accept" | "refuse";
-    askingPrice?: number;
-    note?: string;
-  },
-): CommandResult {
-  const pick = pickOurPlayer(state, input.playerId);
-  if (!pick.ok) return { ok: false, message: pick.message };
-  const player = pick.player;
-  const found = transferRequestOf(state, player.id);
-  if (!found) {
-    return { ok: false, message: `${josa(player.name, "은/는")} 이적을 요청하지 않았습니다` };
-  }
-  if (found.answer !== undefined) {
-    return {
-      ok: false,
-      message: `${player.name}의 이적 요청에는 이미 답했습니다 (${found.answeredOn} · ${REQUEST_ANSWER_KO[found.answer]})`,
-    };
-  }
-
-  if (input.answer === "accept") {
-    const listed = setTransferList(state, {
-      playerId: player.id,
-      listed: true,
-      askingPrice: input.askingPrice,
-      note: input.note,
-    });
-    if (!listed.ok) return listed;
-  }
-  answerTransferRequest(state, player.id, input.answer);
-  const label = REQUEST_ANSWER_KO[input.answer];
-  pushNarrative(state, `${player.name} 이적 요청 ${label}`, 4);
-  return {
-    ok: true,
-    message: `${player.name} 이적 요청 ${label}${input.answer === "accept" ? " — 이적 리스트에 올렸습니다" : " — 거절 사실을 기록했습니다"}`,
   };
 }
 
@@ -1074,11 +1000,6 @@ export function answerIncomingOffer(
     });
     offer.verdict = "reject";
     negotiation.status = "rejected";
-    pushNarrative(
-      state,
-      `${player.name} 이적 제안 거절 — ${counterpart} ${formatMoney(offer.fee)}`,
-      3,
-    );
     return {
       ok: true,
       payload: card,
@@ -1445,21 +1366,16 @@ export function executeLoanIn(
   const squadNumber = assignSquadNumber(state.players, player);
   const numberAfter = numberLineageOf(state, state.userTeamId, squadNumber).past[0];
   player.loan = { fromTeamId: from, until, wageShare };
-  // 임대의 조건은 출전 보장 하나다 — 빌려 온 선수에게 열 수 있는 약속이 그것뿐이다 (§12-3)
-  const termNotes = settleLoanTerms(state, player, agreedTermsOf(negotiation, agreed));
   const slot = canRegisterFor(state, player, state.userTeamId);
   player.squadLevel = slot.ok ? "first" : "reserve";
   negotiation.status = "completed";
-
-  pushNarrative(state, `${player.name} 임대 영입 (${teamName(from)} · ${until}까지)`, 4);
   return {
     ok: true,
     message:
       `${josa(player.name, "을/를")} ${teamName(from)}에서 임대로 데려왔습니다 — ${until}까지 · ` +
       `임대료 ${formatMoney(agreed.fee)} · 주급 ${Math.round(wageShare * 100)}% 부담` +
       ` · 등번호 ${squadNumber}번` +
-      (slot.ok ? "" : ` ${registrationBlockText(slot.block)} — 2군으로 들어왔습니다`) +
-      (termNotes.length > 0 ? ` · ${termNotes.join(" · ")}` : ""),
+      (slot.ok ? "" : ` ${registrationBlockText(slot.block)} — 2군으로 들어왔습니다`),
     brief: {
       head: "임대 영입",
       items: [
@@ -1592,7 +1508,6 @@ export function medicalFlagResult(
   concern: MedicalConcern,
 ): CommandResult {
   const note = medicalConcernText(concern);
-  pushNarrative(state, `${player.name} 메디컬 소견 — ${note}`, 4);
   return {
     ok: true,
     message: `${player.name} 메디컬 소견 — ${note}. 조건을 재평가하고 감독의 결정을 기다립니다`,
@@ -1684,8 +1599,6 @@ export function executePrecontract(
     pending: true,
   });
   negotiation.status = "completed";
-
-  pushNarrative(state, `${player.name} 사전 계약 — ${teamName(fromTeamId)}에서 ${since} 합류`, 4);
   return {
     ok: true,
     message:
@@ -1791,11 +1704,6 @@ export function expireNegotiations(state: GameState, digest: TickSink): void {
         `${player?.name ?? negotiation.gamePlayerId} 건은 메디컬 소견을 안은 채 이적창이 ` +
           `닫혔습니다 — 이 건은 무산됐습니다`,
       );
-      pushNarrative(
-        state,
-        `${player?.name ?? negotiation.gamePlayerId} 메디컬 소견을 안은 채 창이 닫혀 무산`,
-        4,
-      );
       continue;
     }
     const deadline = standingDeadlineOf(negotiation);
@@ -1823,14 +1731,10 @@ export function expireNegotiations(state: GameState, digest: TickSink): void {
     if (deadline) {
       negotiation.status = "rejected";
       digest.push(`${name} — 상대가 건 기한이 지났습니다. 협상은 이번 창에서 끝났습니다`);
-      // 이번 창에 다시 못 여는 문이라 기한 초과(3)보다 무겁다 (people.md §9)
-      pushNarrative(state, `${name} 협상 결렬 — 상대가 건 기한 경과`, 4);
       continue;
     }
     negotiation.status = "expired";
     digest.push(`${name} 협상이 기한을 넘겨 무효가 됐습니다`);
-    // 기한은 다시 열 수 있는 문이라 3 — 창이 닫힌 위의 건(4)보다 한 눈금 가볍다
-    pushNarrative(state, `${name} 협상 기한 초과로 무효`, 3);
   }
 }
 
@@ -1928,10 +1832,8 @@ export function describeNegotiations(state: GameState): string {
       const moneyKo = n.kind === "release" ? "정산금" : "오퍼";
       const direction = negotiationKindKo(n);
       const deadline = standingDeadlineOf(n);
-      const bids = competingBidsOn(state, n.gamePlayerId).length;
       const marks =
         (deadline === null ? "" : ` · 상대가 건 기한 ${deadline}`) +
-        (bids === 0 ? "" : ` · 경쟁 입찰 ${bids}건`) +
         (n.feeAgreed ? ` · 이적료 합의 ${formatMoney(n.feeAgreed.fee)}` : "") +
         // 맡긴 협상은 감독이 답할 자리가 아니다 — 그 사실이 줄에 서야 GM이 다시 묻지 않는다 (§12-4)
         (isMandated(n) ? ` · 단장에게 맡김 (${mandateLimitText(n.mandate!, n.kind)})` : "");
@@ -2004,7 +1906,7 @@ export function describeNegotiation(state: GameState, negotiationId: string): st
   ];
   const medical = describeMedical(state, negotiation);
   if (medical) lines.push(`메디컬: ${medical}`);
-  lines.push(...describeTermSheet(state, negotiation));
+  lines.push(...describeTermSheet(negotiation));
   lines.push(...describePersonal(negotiation, state.date));
   if (negotiation.pitched.length > 0)
     lines.push(`감독이 한 설득: ${negotiation.pitched.join(" · ")}`);
@@ -2137,7 +2039,6 @@ export function openTalks(
     rounds: [],
   };
   state.negotiations.push(negotiation);
-  pushNarrative(state, `${player.name} ${KIND_KO[kind]} — 마주 앉았다`, 2);
   return { ok: true, negotiation, opened: true };
 }
 
@@ -2351,11 +2252,6 @@ export function answerPersonal(
         accepted.terms = offeredTermsOf(negotiation);
       }
       negotiation.status = "agreed";
-      pushNarrative(
-        state,
-        `${player.name} 이적 합의 (${formatMoney(negotiation.feeAgreed.fee)})`,
-        4,
-      );
       return {
         ok: true,
         payload: card("accept"),
@@ -2373,7 +2269,6 @@ export function answerPersonal(
   if (input.verdict === "reject") {
     if (input.hopeless) {
       negotiation.status = "rejected";
-      pushNarrative(state, `${player.name} 개인 조건 결렬`, 3);
       return {
         ok: true,
         payload: card("reject"),

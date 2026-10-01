@@ -19,7 +19,7 @@ import {
   formatMoney,
   isReserveMatch,
   josa,
-  reinvestShareOf,
+  REINVEST_SHARE_DEFAULT,
 } from "@story-fm/domain";
 import { buildSeasonCalendar, FIRST_SEASON } from "../../common/core/calendar";
 import { addDays, dayOfWeek, DEFAULT_KICKOFF, SATURDAY } from "../../common/core/dates";
@@ -44,13 +44,11 @@ import {
   leagueSizeIn,
 } from "../../common/core/league-membership";
 import { computeStandings } from "../../common/views/standings";
-import { diffDays } from "../../common/core/dates";
 import {
   catalogLeagueIn,
   clubProfileIn,
   financeOf,
   managedTeamId,
-  pushNarrative,
   teamShortNameIn,
   weeklyWageLinesOf,
   weeklyWagesOf,
@@ -60,7 +58,6 @@ import {
 import { item } from "../../common/commands/brief";
 import { makeRng } from "../../common/core/rng";
 import { catalogTierOf, tierOfTeamIn } from "../../common/core/club-tier";
-import { ownerArchetypeOf, ownerOf } from "../../common/people/persona";
 
 /**
  * 구단 재정 — 실제 구단의 매출·비용 구조 (docs/negotiation/finance.md).
@@ -199,11 +196,6 @@ const TICKET_RATIO_MAX = 1.5;
  * "언제나 최대로 올린다"가 되고, 그러면 결정이 아니라 공짜 수입이 된다.
  */
 const TICKET_ELASTICITY = 0.9;
-
-/**
- * 값을 다시 매기기까지 — 시즌권과 예매가 이미 팔린 표를 하루아침에 다시 매기지 않는다.
- */
-const TICKET_PRICE_COOLDOWN_DAYS = 30;
 
 // 점유율을 움직이는 것들 — 기본 점유율(`OCCUPANCY_BASE`) 위에 더해지고, 전부 더한
 // 뒤 `OCCUPANCY_FLOOR`~1로 잘린다 (finance.md §5.2).
@@ -361,13 +353,8 @@ const PSR_SEASONS = 3;
 export const DEBT_INTEREST_ANNUAL = 0.08;
 
 /**
- * 예산 동결선 — **주급 총액 × 20.** 새 자를 만들지 않고 `market.ts`가 매각 압박에
- * 쓰는 그 자를 반대 방향으로 쓴다. 사다리가 이렇게 선다:
- *   잔고가 주급 20주치 **아래로** 내려가면 → 매각 압박(상대가 싸게 부른다)
- *   빚이 주급 20주치를 **넘으면**   → 보드가 지갑을 닫는다(이적 예산 동결)
- *
- * §10.3 불변식 4번("부채가 연 매출을 넘는 구단이 리그의 1/4 이하")보다 훨씬 이른
- * 선이다(아스날 기준 매출의 0.22배) — 불변식에 닿기 전에 제동이 걸려야 한다.
+ * 부채가 주급 총액의 20주치를 넘으면 이적 예산을 동결한다.
+ * 협상 가격과 별개인 재정 집행 기준이다.
  */
 const DEBT_FREEZE_WAGE_WEEKS = 20;
 
@@ -711,19 +698,6 @@ export function setTicketPrice(
   const asked = Math.round(input.price);
   if (asked <= 0) return { ok: false, message: "티켓 가격이 0입니다" };
 
-  const last = finance.ticketPrice;
-  if (last) {
-    const left = TICKET_PRICE_COOLDOWN_DAYS - diffDays(last.setOn, state.date);
-    if (left > 0) {
-      return {
-        ok: false,
-        message:
-          `티켓 값은 ${last.setOn}에 ${josa(ticketText(base * before), "으로/로")} 매겼습니다 — ` +
-          `시즌권과 예매가 이미 나가 ${left}일 뒤에 다시 매길 수 있습니다`,
-      };
-    }
-  }
-
   const ratio = Math.min(TICKET_RATIO_MAX, Math.max(TICKET_RATIO_MIN, asked / base));
   finance.ticketPrice = { ratio, setOn: state.date };
 
@@ -734,7 +708,6 @@ export function setTicketPrice(
   const line =
     `티켓 값 ${ticketText(base * before)} → ${ticketText(price)} ` +
     `(기준가 ${ticketText(base)} 대비 ${swing >= 0 ? "+" : ""}${swing}%)`;
-  pushNarrative(state, line, 3);
   return {
     ok: true,
     message:
@@ -762,12 +735,9 @@ export function ticketPriceLine(state: GameState): string {
   const teamId = state.userTeamId;
   const { base, ratio, price, min, max } = ticketPriceOf(state, teamId);
   const swing = Math.round((ratio - 1) * 100);
-  const set = financeOf(state, teamId).ticketPrice;
-  const left = set ? TICKET_PRICE_COOLDOWN_DAYS - diffDays(set.setOn, state.date) : 0;
   return (
     `티켓 단가 ${ticketText(price)} (기준가 ${ticketText(base)}${swing === 0 ? "" : ` · ${swing > 0 ? "+" : ""}${swing}%`}) · ` +
-    `부를 수 있는 폭 ${ticketText(min)}~${ticketText(max)}` +
-    (left > 0 ? ` · 다시 매기기까지 ${left}일` : "")
+    `부를 수 있는 폭 ${ticketText(min)}~${ticketText(max)}`
   );
 }
 
@@ -1753,7 +1723,7 @@ interface NamedStaffWage {
 function namedStaffWagesOf(state: GameState, teamId: string): NamedStaffWage[] {
   return state.personas.flatMap((persona) => {
     const job = persona.employment;
-    if (!job || job.teamId !== teamId) return [];
+    if (!job || job.teamId !== teamId || job.contract.until < state.date) return [];
     return [
       { label: `${persona.name} (${job.title})`, monthly: Math.round(job.contract.salary / 12) },
     ];
@@ -2266,11 +2236,6 @@ function closeMonths(state: GameState, digest: TickSink, through: string): void 
       `${month.replace("-", "년 ")}월 재정 보고서 — 수입 ${money(report.incomeTotal)} / 지출 ${money(report.expenseTotal)} / 순 ${report.cashNet >= 0 ? "+" : "−"}${money(Math.abs(report.cashNet))}`,
       ...financeNoteTexts(report).map((n) => `   ${n}`),
     );
-    pushNarrative(
-      state,
-      `${month} 재정: 순 ${report.cashNet >= 0 ? "+" : "−"}${money(Math.abs(report.cashNet))}, 급여 비중 ${Math.round(report.wageRatio * 100)}%`,
-      2,
-    );
   }
 }
 
@@ -2480,7 +2445,6 @@ function refreshBudgetFreeze(state: GameState, teamId: string, digest: TickSink)
     const reason =
       cause === "psr" ? "PSR 한도를 넘겨" : `부채가 ${money(debtOf(state, teamId))}에 이르러`;
     digest.push(`보드가 ${reason} 이적 예산을 동결했다 — 매각 없이는 영입할 수 없다`);
-    pushNarrative(state, `이적 예산 동결 — ${reason}`, 4);
   } else {
     digest.push(`보드가 이적 예산 동결을 풀었다`);
   }
@@ -2601,21 +2565,15 @@ export function seasonBudgetBaseOf(state: GameState, teamId: string): number {
 }
 
 /**
- * 이월 상한 — **한 시즌치를 넘겨 쌓을 수 없다.**
- *
- * `+=`로 얹기만 하던 시절 안 쓴 예산이 그대로 남고 그 위에 base와 성과가 얹혀
- * 아스날이 £90M → 180 → 270 → 360 → 450으로 갔다(정확히 +£90M/시즌). 이적의
- * 긴장("판매로 이적 자금을 만든다" — transfer.md §3)이 사라지는 자리다.
- *
- * 새 금액이 아니라 그 구단의 base에서 파생한다. 예산은 현금이 아니라 보드 허가
- * 한도이므로(§9.1) 잘린 이월분은 어디로도 가지 않는다 — 잔고는 그대로다.
+ * 이월 예산 상한은 구단의 한 시즌 기본 예산에서 파생한다.
+ * 예산은 보드의 사용 허가 한도이므로 이월분을 제한해도 현금 잔고는 바뀌지 않는다.
  */
 const BUDGET_CARRY_SEASONS = 1;
 
 /**
  * 적자가 예산을 깎는 폭의 바닥 — **base의 절반까지.**
  *
- * 잉여에는 상한이 없지만(그 벽이 곧 현금이 쌓이던 이유다 — §9.1) 적자에는 바닥이
+ * 잉여에는 상한이 없지만 적자에는 바닥이
  * 있다. 한 시즌의 손실이 그대로 곱해 내려오면 다음 시즌이 통째로 지워지고, 그러면
  * 판 돈으로 다시 세우는 길(transfer.md §3)까지 함께 막힌다.
  */
@@ -2629,7 +2587,7 @@ const BUDGET_DEFICIT_FLOOR = 0.5;
  * 그 잉여를 영영 돌려주지 않는다. ② 원장을 남기지 않는 AI 구단도(§4.5) 같은 자로
  * 재려면 기준이 보고서가 아니라 통장이어야 한다.
  */
-function seasonCashSurplusOf(finance: TeamFinance): number {
+export function seasonCashSurplusOf(finance: TeamFinance): number {
   return finance.balance - finance.seasonOpeningBalance;
 }
 
@@ -2667,14 +2625,9 @@ export function topUpTransferBudget(
     return;
   }
 
-  /**
-   * 재투자분 — 지난 시즌 현금 잉여 × **구단주가 정한 몫** (§9.1 · people.md §2).
-   *
-   * 구단주 카드는 감독의 구단에만 서므로 나머지 구단은 중앙값으로 떨어진다
-   * (`reinvestShareOf`) — 세계가 잉여를 쓰지 않으면 이적 시장이 그만큼 마른다.
-   */
-  const share = reinvestShareOf(isUser ? ownerArchetypeOf(ownerOf(state)).label : undefined);
-  const performance = Math.round(Math.max(-base * BUDGET_DEFICIT_FLOOR, surplus * share));
+  const performance = Math.round(
+    Math.max(-base * BUDGET_DEFICIT_FLOOR, surplus * REINVEST_SHARE_DEFAULT),
+  );
 
   // 이월은 한 시즌치까지 — 그 위는 보드가 회수한다
   const carried = Math.min(finance.transferBudget, base * BUDGET_CARRY_SEASONS);
@@ -2712,82 +2665,6 @@ export const NARRATIVE_EXPENSE_CATEGORIES = [
   "matchday_opex",
 ] as const;
 
-/**
- * 서사 이벤트의 하루 상한 — **주급 총액의 배수**.
- *
- * 절대 금액으로 잡으면 같은 £10M이 승격팀에겐 재정을 뒤집고 빅클럽에겐 푼돈이
- * 된다. 주급 총액은 구단 규모를 가장 잘 대신하는 값이라(맨시티 £4M/주 vs
- * 승격팀 £1M/주) 이벤트의 무게가 어느 구단에서나 비슷해진다.
- *
- * 카테고리별 건당 상한(`narrativeEventCap`)과 **역할이 다르다.** 건당 상한은 한 사건의
- * 금액이 그 축에 맞는지를 보고, 이 한도는 같은 장면을 여러 번 나눠 불러 하루를 통째로
- * 흔드는 것을 막는다. 둘 다 필요하다 — 하나만으론 다른 쪽이 열린다.
- */
-export const NARRATIVE_FINANCE_WAGE_LIMIT = 2;
-/** 장부에 남길 서사 재정 이벤트의 최소 단위 — 일상 비용은 게임 재정에서 무시한다. */
-export const NARRATIVE_FINANCE_MIN_AMOUNT = 10_000;
-/** 어떤 카테고리에서도 넘을 수 없는 절대 상한 — 도구 스키마의 바깥 울타리 */
-export const NARRATIVE_FINANCE_MAX_AMOUNT = 10_000_000;
-/** 이적 예산 지원·삭감의 하루 상한 (같은 주급 배수 자) — 예산은 매출보다 큰 단위로 움직인다 */
-const BUDGET_ADJUST_WAGE_LIMIT = 10;
-
-// 건당 상한의 배수 — 새 금액이 아니라 같은 축의 기존 상수에서 파생한다
-/** 포상·회식 — 주급 총액 대비. `WIN_BONUS_RATE`(승리 수당)의 2.5배 = 큰 경기 하나의 무게 */
-const NARRATIVE_BONUS_WAGE_RATE = WIN_BONUS_RATE * 2.5;
-/** 원정·의료 — 최중상 치료비 두 명분. 코어의 원정·의료비가 그렇듯 구단 규모를 타지 않는다 */
-const NARRATIVE_MEDICAL_FACTOR = 2;
-/** 시설 — 월 시설비의 절반 */
-const NARRATIVE_FACILITY_FACTOR = 0.5;
-/** 매치데이 — 전형적 홈경기 수입의 3할 */
-const NARRATIVE_MATCHDAY_FACTOR = 0.3;
-/** 상업·머천다이징 — 각자의 월 정액 절반 */
-const NARRATIVE_COMMERCIAL_FACTOR = 0.5;
-
-/**
- * 서사 이벤트 **한 건**의 상한 — 그 축이 이 구단에서 실제로 움직이는 폭.
- *
- * 하루 누적 한도만 있을 때 모델의 유일한 앵커는 "£10k 미만은 적지 마라"였고, 그 위는
- * 아스날에서 하루 £5.5M까지 열려 있었다. 그래서 회식 장면에 £100k처럼 그럴듯하게
- * 반올림한 수가 나왔다. 눈금을 가르치는 것은 프롬프트의 설명이 아니라 **거절당한 값**이라
- * 한도를 코드에 두고 거부 메시지에 실어 보낸다 (AGENTS §6.5·§6.7).
- *
- * 어느 표에도 없는 카테고리는 **포상 한도로 떨어진다** — 두 체급 모두에서 가장 좁은
- * 자라, 카테고리가 늘어도 한도 없이 통과하는 일이 없다.
- */
-export function narrativeEventCap(state: GameState, category: FinanceCategory): number {
-  const teamId = state.userTeamId;
-  const bonusCap = weeklyWagesOf(state, teamId) * NARRATIVE_BONUS_WAGE_RATE;
-  switch (category) {
-    case "travel_medical":
-      return MEDICAL_COST.major * NARRATIVE_MEDICAL_FACTOR;
-    case "facility":
-      return facilityCostOf(state, teamId) * NARRATIVE_FACILITY_FACTOR;
-    case "matchday":
-    case "matchday_opex":
-      return (
-        typicalHomeGate(teamId, leagueOfTeamIn(state, teamId), state) * NARRATIVE_MATCHDAY_FACTOR
-      );
-    case "commercial":
-      return (
-        COMMERCIAL_MONTHLY[profileOf(state, teamId).commercialTier] * NARRATIVE_COMMERCIAL_FACTOR
-      );
-    case "merchandising":
-      return (
-        MERCHANDISING_MONTHLY[profileOf(state, teamId).commercialTier] * NARRATIVE_COMMERCIAL_FACTOR
-      );
-    case "bonus":
-    default:
-      return bonusCap;
-  }
-}
-
-/** 오늘 서사가 이미 움직인 금액 */
-function narrativeSpentToday(state: GameState): number {
-  return financeOf(state, state.userTeamId)
-    .ledger.filter((e) => e.date === state.date && e.source === "narrative")
-    .reduce((sum, e) => sum + e.amount, 0);
-}
-
 export interface FinanceEventInput {
   kind: "income" | "expense";
   category: FinanceCategory;
@@ -2814,32 +2691,15 @@ export function applyFinanceEvent(
     };
   }
 
-  const amount = Math.max(0, Math.round(input.amount));
-  if (amount < NARRATIVE_FINANCE_MIN_AMOUNT) {
-    return {
-      ok: false,
-      message: `£10k 미만의 일상 비용은 재정 장부에서 무시합니다`,
-    };
+  if (managedTeamId(state) === null) return { ok: false, message: "현재 맡은 구단이 없습니다" };
+  const amount = input.amount;
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    return { ok: false, message: "금액은 양의 안전한 정수여야 합니다" };
   }
-
-  // 건당 상한 — 거절당한 값이 눈금을 가르치므로 허용 상한을 메시지에 실어 보낸다
-  const eventCap = narrativeEventCap(state, input.category);
-  if (amount > eventCap) {
-    return {
-      ok: false,
-      message:
-        `${FINANCE_CATEGORY_KO[input.category]} 이벤트 한 건은 ${money(eventCap)}까지입니다 — ` +
-        `${josa(money(amount), "은/는")} 이 구단에서 그 축이 움직이는 폭을 넘습니다`,
-    };
-  }
-
-  const cap = weeklyWagesOf(state, state.userTeamId) * NARRATIVE_FINANCE_WAGE_LIMIT;
-  const spent = narrativeSpentToday(state);
-  if (spent + amount > cap) {
-    return {
-      ok: false,
-      message: `하루 한도를 넘습니다 — 오늘 ${money(spent)} 기록됨, 한도 ${money(cap)}`,
-    };
+  const finance = financeOf(state, state.userTeamId);
+  const nextBalance = finance.balance + (input.kind === "income" ? amount : -amount);
+  if (!Number.isFinite(nextBalance) || Math.abs(nextBalance) > Number.MAX_SAFE_INTEGER) {
+    return { ok: false, message: "잔고가 표현 가능한 금액 범위를 넘습니다" };
   }
 
   recordFinance(state, state.userTeamId, {
@@ -2849,7 +2709,6 @@ export function applyFinanceEvent(
     amount,
     source: "narrative",
   });
-  pushNarrative(state, `${input.note} (${input.kind === "income" ? "+" : "-"}${money(amount)})`, 3);
   const moved = input.kind === "income" ? amount : -amount;
   return {
     ok: true,
@@ -2879,36 +2738,23 @@ export function adjustTransferBudget(
   state: GameState,
   input: { delta: number; note: string },
 ): { ok: boolean; message: string; brief?: CommandBrief } {
+  if (managedTeamId(state) === null) return { ok: false, message: "현재 맡은 구단이 없습니다" };
   const finance = financeOf(state, state.userTeamId);
-  const delta = Math.round(input.delta);
-  if (delta === 0) return { ok: false, message: "금액이 0입니다" };
+  const delta = input.delta;
+  if (
+    !Number.isSafeInteger(delta) ||
+    delta === 0 ||
+    Math.abs(finance.transferBudget + delta) > Number.MAX_SAFE_INTEGER
+  ) {
+    return { ok: false, message: "예산 조정 금액이 유효하지 않습니다" };
+  }
   if (delta > 0 && finance.budgetFrozen) {
     return { ok: false, message: "PSR 위반으로 이적 예산이 동결돼 있습니다 — 매각이 먼저입니다" };
-  }
-
-  /**
-   * **하루 누적**이다. 건당으로 막으면 같은 장면을 여러 번 나눠 불러 얼마든지
-   * 넘길 수 있다 — 주석은 "하루 상한"이라 적혀 있었는데 코드는 건당이었다.
-   * 이 도구로 **이적료를 흉내 내는 길**을 막는 것이 이 한도의 실제 일이다:
-   * 매각 대금은 `accept_deal`이 원장을 거쳐 넣는다.
-   */
-  const cap = weeklyWagesOf(state, state.userTeamId) * BUDGET_ADJUST_WAGE_LIMIT;
-  const movedToday =
-    finance.budgetAdjusted?.date === state.date ? finance.budgetAdjusted.amount : 0;
-  if (movedToday + Math.abs(delta) > cap) {
-    return {
-      ok: false,
-      message:
-        `하루 한도를 넘습니다 — 오늘 ${money(movedToday)} 움직였고 한도는 ${money(cap)}입니다. ` +
-        `선수를 팔아 만든 돈은 이 도구가 아니라 매각(accept_deal)이 넣습니다`,
-    };
   }
 
   const before = finance.transferBudget;
   finance.transferBudget = Math.max(0, before + delta);
   const moved = finance.transferBudget - before;
-  finance.budgetAdjusted = { date: state.date, amount: movedToday + Math.abs(moved) };
-  pushNarrative(state, `${input.note} (이적 예산 ${moved > 0 ? "+" : ""}${money(moved)})`, 3);
   return {
     ok: true,
     message: `이적 예산 ${moved > 0 ? "+" : "-"}${money(Math.abs(moved))} → ${money(finance.transferBudget)} — ${input.note}`,

@@ -7,7 +7,6 @@ import {
   type InjuryHistory,
   type BoardPoint,
   type SquadStatus,
-  type PromiseKind,
   type AssignmentRole,
   type GamePlayer,
   type SetPieceTakers,
@@ -40,8 +39,6 @@ import {
   observedPlayerFacts,
 } from "../../common/players/observation";
 import { observedFit } from "../../negotiation/players/scouting";
-import { type MoodRead } from "../../story/players/mood";
-import { moodOf } from "../workflows/story/players/mood";
 import {
   type CareerSeasonView,
   type CareerTotalsView,
@@ -74,7 +71,6 @@ import { internationalBreaksOf } from "../../common/players/international";
 import { type TacticsView } from "../../match/views/live";
 import { loanReports } from "../../negotiation/market/departures";
 import { lineupSlotsOf } from "../../match/flow/match-flow";
-import { leaderGroupOf } from "../../common/players/hierarchy";
 import { careerSeasonRowsOf, foldCareer } from "../../story/players/career";
 import { nextMatchFor } from "../../common/core/calendar";
 import { competitionShortName } from "../../common/data/cup-catalog";
@@ -89,7 +85,6 @@ import { formLabel, formAngle, formTone } from "../../common/players/form";
 import { conditionShown } from "../../common/views/observation";
 import { injuryHistoryOf, INJURY_SEVERITY_KO } from "../../common/players/injury";
 import { squadStatusOf } from "../../common/players/contract-status";
-import { openPromises } from "../../negotiation/players/promises";
 
 /**
  * 죽은 공 키커 한 자리 — **감독의 지정과 지금 실제로 설 사람이 나란히 선다**
@@ -304,8 +299,7 @@ export interface SquadViewRowMeta {
    */
   recentRatings: RecentRatingView[];
   /**
-   * **체력** — 지금 이 선수의 상태 0~100 (몸과 마음이 한 축이다).
-   * 왜 이 값인지는 `mood` 한 문장이 설명한다.
+   * **체력** — 지금 이 선수의 몸 상태 0~100.
    *
    * 경기 밖에서는 아침에 잰 값 그대로라 폭이 0이고, **경기 중 출전 명단의 선수는
    * 판세 탭과 같은 읽은 값**이다(`readCondition` · player.md §9.2). 한쪽만 참값을
@@ -330,11 +324,6 @@ export interface SquadViewRowMeta {
    * 성향 배수도 싣지 않는다 — 감독이 읽을 눈금이 없는 수다 (§10).
    */
   injuryHistory: InjuryHistory;
-  /**
-   * 지금 심경 — **코어가 고른 사실 카드**와, 결산(LLM)이 다시 쓴 한 줄(`moodOf`).
-   * 문장은 화면이 쓴다 (`apps/web/domains/common/lib/mood.ts` · overview.md §1 철칙 4).
-   */
-  mood: MoodRead;
   /** 배치 역할 — 없으면 예비(스쿼드) */
   role: "선발" | "벤치" | "스쿼드";
   /** 이 전술에서 맡는 포지션 (배치가 있을 때) */
@@ -395,12 +384,6 @@ export interface SquadViewRowMeta {
   adaptation: number;
   isCaptain: boolean;
   isViceCaptain: boolean;
-  /**
-   * 라커룸 서열 — 리더 그룹 안의 순위(1부터), 그룹 밖이면 `null`
-   * (→ docs/story/people.md §5-1). 화면과 조회 도구가 **같은 값**을 읽어야 해서
-   * 여기 하나에서만 파생한다.
-   */
-  leaderRank: number | null;
   seasonGoals: number;
   seasonApps: number;
   seasonAssists: number;
@@ -451,21 +434,14 @@ export interface SquadViewRowMeta {
    * 오래된 것부터 적는다 — 표의 시즌 행과 같은 방향이다.
    */
   milestones: MilestoneView[];
-  hasIssue: boolean;
   /** 주급 (£/주) */
   weeklyWage: number;
   contractUntil: string | null;
   /**
-   * **어떤 자리로 왔는가** — 계약에 적힌 지위, 없으면 지금 서열에서 파생
-   * (`squadStatusOf` → docs/story/people.md §5-2). 그 지위가 부르는 선발 비율이
-   * 출전 불만과 약속 이행을 함께 재므로, 화면과 GM이 **같은 값**을 읽어야 한다.
+   * 계약에 합의한 역할, 없으면 현재 선수단에서 파생한 참고 역할.
+   * 화면과 GM이 `squadStatusOf`의 같은 값을 읽는다 (docs/story/people.md §5-2).
    */
   squadStatus: SquadStatus;
-  /**
-   * 아직 기한 전인 **감독의 약속** — 갈래와 기한뿐이다 (people.md §5-2).
-   * 무슨 말로 약속했는지는 장면의 것이라 여기 오지 않는다.
-   */
-  promises: Array<{ kind: PromiseKind; dueOn: string }>;
   /** 현재 부상 (없으면 null) */
   injury: { bodyPart: string; severity: string; expectedReturn: string } | null;
   /** 출장 정지 잔여 경기 (0이면 정지 아님) */
@@ -570,7 +546,6 @@ export type SquadView = {
   manager: {
     name: string;
     background: string;
-    reputation: Record<string, number>;
   };
   players: SquadViewRow[];
   formation: string;
@@ -685,7 +660,6 @@ export function buildSquadView(state: GameState): SquadView {
    */
   const worn = liveMatch && liveSide ? matchFatigueOf(liveMatch) : {};
   const liveMatchId = liveMatch && liveSide ? (state.pendingMatch?.matchId ?? null) : null;
-  const issues = new Set(state.issues.map((i) => i.gamePlayerId));
 
   /**
    * 역할 기억 — 선수마다 (자리 → 역할). 화면이 코어 `inherit`의 되찾기를 같은
@@ -711,15 +685,6 @@ export function buildSquadView(state: GameState): SquadView {
    * 스쿼드 선수로 좁혀 담는다 — 원장에는 리그 전체의 행이 있고 여기서 쓰는 것은
    * 우리 명단뿐이다.
    */
-  /**
-   * 라커룸 서열 — **한 번만 파생한다** (people.md §5-1). 행마다 부르면 마흔 몇 명이
-   * 각자 원장을 훑는다.
-   */
-  const leaderRank = new Map<string, number>();
-  leaderGroupOf(state, state.userTeamId).forEach((row, index) => {
-    leaderRank.set(row.playerId, index + 1);
-  });
-
   const squadIds = new Set(squad.map((p) => p.id));
   const statsOfPlayer = new Map<string, SeasonStat[]>();
   for (const stat of state.seasonStats) {
@@ -817,15 +782,8 @@ export function buildSquadView(state: GameState): SquadView {
         observedFit(observed, observation, position, role);
       const assignedSlot = liveSlot?.position ?? assignment?.position ?? null;
       /**
-       * **자리가 있는가** — 역할이 성립하는 조건이다 (player.md §3.1).
-       *
-       * 벤치·예비 배치에는 좌표가 없어 `position`이 주 포지션으로 채워지는데, 그걸
-       * 자리로 치면 화면은 그 자리의 역할 목록을 켜고 코어는 그 역할을 받지 않는다 —
-       * 화면은 CF라 말하고 오류는 ST라 답하던 지점이다.
-       *
-       * 역할 기억(§3.2)은 여기서 보지 않는다 — 되찾기는 코어가 배치에 적어 넣는
-       * 일이고(`setLineup`의 승계), 화면이 따로 기억을 읽으면 배치에 없는 역할을
-       * 화면만 말하게 된다. 기억은 다시 선발이 될 때 `roleId`로 서서 온다.
+       * 선발 배치가 있을 때만 배치의 역할을 표시한다. 벤치·예비의 주 포지션은 역할 배치가 아니다.
+       * 역할 기억의 복원은 setLineup이 맡으며 화면은 확정된 배치를 읽는다.
        */
       const slotted = (liveSlot?.role ?? assignment?.role) === "starting";
       const assignedRoleId = slotted ? (liveSlot?.roleId ?? assignment?.roleId) : undefined;
@@ -895,7 +853,7 @@ export function buildSquadView(state: GameState): SquadView {
         fatigueLabel: fatigueLabel(fatigueOf(p.state)),
         fatigueBand: fatigueBand(fatigueOf(p.state)),
         injuryHistory: injuryHistoryOf(state, p.id),
-        mood: moodOf(state, p),
+
         role: (liveMatchId
           ? liveSlot
             ? ROLE_KO[liveSlot.role]
@@ -941,7 +899,6 @@ export function buildSquadView(state: GameState): SquadView {
         ),
         isCaptain: p.isCaptain,
         isViceCaptain: p.isViceCaptain === true,
-        leaderRank: leaderRank.get(p.id) ?? null,
         seasonGoals: stat?.goals ?? 0,
         seasonApps: stat?.apps ?? 0,
         seasonByCompetition: byCompetition.length < 2 ? [] : byCompetition,
@@ -956,11 +913,10 @@ export function buildSquadView(state: GameState): SquadView {
         seasonReds: stat?.reds ?? 0,
         career: careerViewOf(p.id),
         milestones: (milestonesOfPlayer.get(p.id) ?? []).slice(-SQUAD_MILESTONES_SHOWN),
-        hasIssue: issues.has(p.id),
+
         weeklyWage: contract?.weeklyWage ?? 0,
         contractUntil: contract?.until ?? null,
         squadStatus: squadStatusOf(state, p),
-        promises: openPromises(state, p.id).map((pr) => ({ kind: pr.kind, dueOn: pr.dueOn })),
         injury: injury
           ? {
               bodyPart: injury.bodyPart,
@@ -985,7 +941,6 @@ export function buildSquadView(state: GameState): SquadView {
     manager: {
       name: state.manager.name,
       background: state.manager.background,
-      reputation: { ...state.manager.reputation },
     },
     players,
     formation: tactics.spec.formation,

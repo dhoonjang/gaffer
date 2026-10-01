@@ -12,8 +12,10 @@ import {
   POSITION_CODES,
   josa,
   type AttributeAxis,
+  type CharacterBookContent,
 } from "@story-fm/domain";
 import { Modal } from "./modal";
+import { CharacterBookFields, characterBookInput } from "./character-book-fields";
 import {
   ATTRS,
   clampAttr,
@@ -72,6 +74,9 @@ export function PlayerModal({
   const [teamId, setTeamId] = useState(player?.teamId ?? defaultTeamId);
   const [nameKo, setNameKo] = useState(player?.nameKo ?? "");
   const [nameEn, setNameEn] = useState(player?.nameEn ?? "");
+  const [characterBook, setCharacterBook] = useState<CharacterBookContent | undefined>(
+    player?.characterBook,
+  );
   const [birthdate, setBirthdate] = useState(player?.birthdate ?? NEW_BIRTHDATE);
   const [mainPosition, setMainPosition] = useState(player?.position ?? "CM");
   const [positions, setPositions] = useState<CatalogPosition[]>(
@@ -127,6 +132,7 @@ export function PlayerModal({
     const weeklyWage = wage === "" ? null : Math.min(MAX_WAGE, Math.max(0, Math.round(wage) || 0));
     const wagePatch = weeklyWage === null && player?.weeklyWage === undefined ? {} : { weeklyWage };
     const raw = {
+      characterBook: characterBookInput(nameKo, characterBook),
       teamId,
       nameKo,
       nameEn: nameEn.trim() || undefined,
@@ -231,6 +237,7 @@ export function PlayerModal({
         </div>
       )}
 
+      <CharacterBookFields name={nameKo} book={characterBook} onChange={setCharacterBook} />
       <div className="admin-fields">
         <label className="admin-field grow">
           이름 (한글)

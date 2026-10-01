@@ -100,7 +100,7 @@ export interface OpsOrders {
   unresolved?: string;
 }
 
-/** Normalization for scripted instruction fixtures and legacy recorded reports. */
+/** Normalizes instruction fixtures and recorded report values. */
 export function parseOrdersReport(
   report: { ops?: unknown; unresolved?: string },
   names: readonly string[],

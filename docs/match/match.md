@@ -9,16 +9,16 @@
 [football-reference.md](football-reference.md)의 실제 축구 통계. 그리고 아래의 것을
 **한 벌씩만** 갖는다 — 규칙이 두 벌이면 리그의 95%와 감독의 38경기가 다른 축구를 한다.
 
-| 공유하는 것                     | 어디                                              |
-| ------------------------------- | ------------------------------------------------- |
-| 선수의 경기 능력 (§2)           | `sim/match-ability.ts`                            |
-| 부하 → 체력 (§6)                | `sim/load.ts`                                     |
-| 경기 장부와 검증 (§5)           | `sim/match-ledger.ts`                             |
-| 벤치 정책 — 교체·전술 전환 (§3) | `sim/bench.ts`                                    |
-| 카드·부상의 총량과 수신자 (§4)  | `sim/discipline-model.ts` · `sim/injury-model.ts` |
-| 페널티 성공률 (§3 승부차기)     | `sim/shot-model.ts` `penaltyRate`                 |
-| 세트피스 키커 선택              | `sim/set-piece-taker.ts`                          |
-| 경기 후 반영 전부 (§7)          | `engine/match/`                                   |
+| 공유하는 것                     | 어디                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| 선수의 경기 능력 (§2)           | `packages/sim/src/match-ability.ts`                                         |
+| 부하 → 체력 (§6)                | `packages/sim/src/load.ts`                                                  |
+| 경기 장부와 검증 (§5)           | `packages/sim/src/match-ledger.ts`                                          |
+| 벤치 정책 — 교체·전술 전환 (§3) | `packages/sim/src/bench.ts`                                                 |
+| 카드·부상의 총량과 수신자 (§4)  | `packages/sim/src/discipline-model.ts` · `packages/sim/src/injury-model.ts` |
+| 페널티 성공률 (§3 승부차기)     | `packages/sim/src/shot-model.ts` `penaltyRate`                              |
+| 세트피스 키커 선택              | `packages/sim/src/set-piece-taker.ts`                                       |
+| 경기 후 반영 전부 (§7)          | `engine/match/`                                                             |
 
 **LLM은 결과를 정하지 않는다.** 감독의 지시는 판독기가 명령과 시트로 옮기고, 그 명령과
 시트가 말의 규칙에 닿는다([live-match.md](live-match.md) §6). 매치 GM은 확정된 사건을
@@ -44,7 +44,7 @@ flowchart LR
   E --> F["경기 후 반영 §7<br/>기록 · 폼 · 체력 · 부상 · 징계 · 재정 · 순위"]
 ```
 
-## 2. 선수의 경기 능력 (`sim/match-ability.ts`)
+## 2. 선수의 경기 능력 (`packages/sim/src/match-ability.ts`)
 
 저장된 능력치가 아니라 **오늘 이 자리에서의 능력치**다. 두 시뮬이 같은 함수를 쓴다.
 
@@ -87,7 +87,7 @@ flowchart LR
 지나는 중인가**로 ①과 ②를 가른다. 뒤엣것은 그 턴이 도는 동안만 산다 — 턴이 실패하면
 화면은 게이트로 돌아가고, 다시 눌러도 `entered`가 서 있으면 보통의 턴이다.
 
-②의 첫 마디를 여는 근거는 경기 전 대화(팀토크·브리핑)다 — 그 한 턴만 평시 이력을
+②의 첫 마디를 여는 근거는 경기 전 대화와 브리핑이다 — 그 한 턴만 평시 이력을
 그대로 넘긴다(`relevantTurns`). GM은 감독이 들어가자고 하거나 경기 전 점검이 끝나 그날
 남은 일이 경기뿐일 때 되묻지 않고 `start_match`를 부른다. 문을 여는 판단은 GM이 하고,
 걸어 들어가는 것은 감독이다.
@@ -118,12 +118,12 @@ flowchart TB
   G --> F["확정 사건 중계 · 대화"]
 ```
 
-- **시계를 미는 도구는 없다.** 매치 GM은 `tactic_orders`(지시), `team_talk`(반응),
+- **시계를 미는 도구는 없다.** 매치 GM은 `tactic_orders`(지시), `update_character`(인물 기록),
   `finalize_match`(마감)를 부른다. 시계는 실행기가 진행하며 대화만 오간 턴은 멈춰 있다.
-- **판을 움직이는 자연어는 타입으로 간다.** 자리·역할·교체·6축·키커는 기존 명령,
+- **판을 움직이는 자연어는 타입으로 간다.** 자리·역할·교체·6축·키커는 코어 명령,
   「붙어서 지워」·「그 뒤를 덮어」·「왼쪽으로 몰아」는 복합 효과의 대상·동작·방향과
   연속 강도로 옮긴다. `Point`에는 감독 원문 출처만 붙이고 분석 산문을 생성하지 않는다.
-  시트의 `behavior`·`edge`·`focus`·`temper`·`legs`·`cohesion`과 기존 코어 한도는
+  시트의 `behavior`·`edge`·`focus`·`temper`·`legs`·`cohesion`과 코어 한도는
   [live-match.md](live-match.md) §6.2를 따른다.
 - **역할은 이름으로 부른다** — 「안쪽으로 파고들어」는 인사이드 포워드다. 코어는 이름·id·
   약어를 같은 것으로 받는다(→ [player.md](../common/player.md) §3.1).
@@ -148,15 +148,15 @@ flowchart TB
   기억(`drilled`)에도 역할 기억에도 적히지 않는다.
 - mock과 실모드가 같은 시뮬레이터를 쓴다 — 차이는 서술 주체뿐.
 
-**경기 중 대화 규칙.** 킥오프 전·하프타임(라커룸)은 선수 전체와, 진행 중 정지점은
-수석코치·벤치 선수와만. 그라운드 위 선수에게 닿는 것은 외침뿐이다 — 한 사람에게 무엇을
-하라는 말은 판독기가 시트로 옮기고, 팀 전체를 향한 한마디는 `occasion: "shout"`인
-팀토크다. 외침은 경기당 `SHOUT_PER_MATCH`(3), 폭은 팀토크의 1/3에 ±`SHOUT_MORALE_BOUND`(2)
-(→ [career.md](../story/career.md) §2). **정지점은 감독의 차례다** — 매치 GM은 감독의 대사·판단을
-대신 쓰지 않고, `team_talk`은 감독이 그 말을 한 턴에만 불린다. 부름은 판정이 아니다.
-같은 선수를 몇 번 불러도 사기 합계는 하루 ±8을 넘지 않는다.
+**경기 중 대화 규칙.** 킥오프 전·하프타임에는 라커룸 선수들과, 진행 중 정지점에는
+수석코치·벤치 선수들과 장면을 이어 간다. 그라운드의 플레이를 바꾸는 지시는 판독기가
+검증된 전술 명령·시트 효과로 옮긴다. 정지점은 감독의 차례이며 매치 GM은 감독의
+대사·판단을 대신 쓰지 않는다. 벤치 대화에는 자동 감정·폼 효과가 없다.
 
-### 3.3 벤치 — 두 시뮬이 같은 정책을 부른다 (`sim/bench.ts`)
+캐릭터북의 키워드 주입과 `update_character`는 경기에서도 제공한다. 실제 경기·대화와
+마무리 결과는 메인 GM이 다음 이야기에 사용할 수 있도록 전달한다.
+
+### 3.3 벤치 — 두 시뮬이 같은 정책을 부른다 (`packages/sim/src/bench.ts`)
 
 **교체**(`planBenchSubs`)의 갈래는 셋이고 순서가 우선순위다.
 
@@ -193,7 +193,7 @@ flowchart TB
 옮긴 뒤의 값)를 싣는다. 상태만 바꾸면 중계가 「상대가 던졌다」를 말할 수 없다. 종료 휘슬에는
 적지 않는다.
 
-### 3.4 승부차기 — 코어가 굴리고 매치 GM이 한 발씩 옮긴다 (`match/competition/shootout.ts`)
+### 3.4 승부차기 — 코어가 굴리고 매치 GM이 한 발씩 옮긴다 (`packages/engine/src/match/competition/shootout.ts`)
 
 연장까지 치르고도 같으면 승부차기다. **킥 하나가 사건 하나로 장부에 남는다** —
 누가 찼고 누가 막아섰고 들어갔는지, 그 킥의 성공 확률까지(`ShootoutKick`).
@@ -236,7 +236,7 @@ flowchart TB
 수비에 더 남은 우리 팀은 공격 출구가 줄어 오픈플레이 기회 질이 인원 차당 2% 움직인다.
 인원 표의 범위 안에서만 적용되며 선수 능력·키커·공중볼 계산은 별도로 유지된다.
 
-### 3.6 경기 전 — 상대 리포트 (`engine/match/preview.ts`)
+### 3.6 경기 전 — 상대 리포트 (`packages/engine/src/match/flow/preview.ts`)
 
 킥오프 전에 감독이 읽는 상대의 사실이다(`buildOpponentReport`). GM의 `<opponent>` 블록,
 조회 도구 `get_opponent_report`, 대회 탭의 다음 경기 카드가 같은 함수를 읽는다.
@@ -288,7 +288,7 @@ EventCause { code, playerIds, values?, pointId? }
 감독의 경기에만 남고(간이 시뮬에는 장부가 없다), 점유는 모든 경기에 남는다. 시즌 합계에는
 양쪽이 같은 눈금으로 접힌다(§6).
 
-### 4.1 카드·부상의 총량 (`sim/discipline-model.ts` · `sim/injury-model.ts`)
+### 4.1 카드·부상의 총량 (`packages/sim/src/discipline-model.ts` · `packages/sim/src/injury-model.ts`)
 
 두 시뮬이 같은 총량 상수와 같은 수신자 규칙을 쓴다.
 
@@ -307,7 +307,7 @@ EventCause { code, playerIds, values?, pointId? }
   바꾸지 않고(§5) 뛴 선수 전원의 성향이 움직인다(`easeProneness` — 뛰고 안 다쳤으면 하강).
   난수 채널은 `injury:<경기 id>` 한 모양이다.
 
-## 5. 장부의 무결성 (`sim/match-ledger.ts`)
+## 5. 장부의 무결성 (`packages/sim/src/match-ledger.ts`)
 
 | 규칙      | 내용                                                                                                                                                 |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -339,10 +339,10 @@ EventCause { code, playerIds, values?, pointId? }
   `red_card` 줄이 없으면 정지도 평점의 감점도 생기지 않는다. 두 시뮬이 같은 모양이라 중계는
   그 쌍을 경고 누적 퇴장(`second_yellow`)으로 읽는다.
 
-## 6. 부하와 체력 (`sim/load.ts` · `sim/stamina.ts`)
+## 6. 부하와 체력 (`packages/sim/src/load.ts` · `packages/sim/src/stamina.ts`)
 
 체력은 **뛴 것**으로 줄어든다. 실시간 경기는 말이 실제로 쌓은 속도 구간별 거리·스프린트
-횟수를 읽고, 간이 시뮬은 자리·역할·전술별 **기대 부하표**(`EXPECTED_LOAD` — `sim/load.ts`)를 읽는다.
+횟수를 읽고, 간이 시뮬은 자리·역할·전술별 **기대 부하표**(`EXPECTED_LOAD` — `packages/sim/src/load.ts`)를 읽는다.
 함수는 하나다.
 
 ```
@@ -394,21 +394,19 @@ EventCause { code, playerIds, values?, pointId? }
 
 ### 7.1 마감은 양 팀에 적는다
 
-| 무엇                                                    | 우리 | 상대   |
-| ------------------------------------------------------- | ---- | ------ |
-| 시즌 기록 (`SEASON_STAT`)                               | ○    | ○      |
-| 폼 Δ (`common/players/form.ts` `formDeltaFromMatch`)    | ○    | ○      |
-| 체력 소모 (`matchFatigueOf(pendingMatch.live)` 그대로)  | ○    | ○      |
-| 부상 확정 · 부상 성향 하강 (`common/players/injury.ts`) | ○    | ○      |
-| 카드 → BOOKING·SUSPENSION (`match/flow/discipline.ts`)  | ○    | ○      |
-| 출장 정지 소화 (`serveSuspensions`)                     | ○    | ○      |
-| 연패·연승의 라커룸 (`story/players/slump.ts`)           | ○    | ○      |
-| 더비 결과의 라커룸                                      | ○    | ○      |
-| 포지션 적응도                                           | ○    | ○      |
-| 사건·선수별 기록·점유 (`MATCH.result`)                  | ○    | ○      |
-| 경기별 평점 (`MATCH.result.ratings`) · 결산 판정(LLM)   | ○    | 결승만 |
-| 말풍선 한 줄 (카드·정지·부상 일수·무드)                 | ○    | ✗      |
-| 마일스톤 (`MILESTONE`)                                  | ○    | ✗      |
+| 무엇                                                                        | 우리 | 상대   |
+| --------------------------------------------------------------------------- | ---- | ------ |
+| 시즌 기록 (`SEASON_STAT`)                                                   | ○    | ○      |
+| 폼 Δ (`packages/engine/src/common/players/form.ts` `formDeltaFromMatch`)    | ○    | ○      |
+| 체력 소모 (`matchFatigueOf(pendingMatch.live)` 그대로)                      | ○    | ○      |
+| 부상 확정 · 부상 성향 하강 (`packages/engine/src/common/players/injury.ts`) | ○    | ○      |
+| 카드 → BOOKING·SUSPENSION (`packages/engine/src/match/flow/discipline.ts`)  | ○    | ○      |
+| 출장 정지 소화 (`serveSuspensions`)                                         | ○    | ○      |
+| 포지션 적응도                                                               | ○    | ○      |
+| 사건·선수별 기록·점유 (`MATCH.result`)                                      | ○    | ○      |
+| 경기별 평점 (`MATCH.result.ratings`) · 결산 판정(LLM)                       | ○    | 결승만 |
+| 말풍선 한 줄 (카드·정지·부상 일수)                                          | ○    | ✗      |
+| 마일스톤 (`MILESTONE`)                                                      | ○    | ✗      |
 
 ### 7.2 시즌 기록 — 두 시뮬이 같은 눈금으로 적는다
 
@@ -431,24 +429,21 @@ EventCause { code, playerIds, values?, pointId? }
 연장은 같은 경기에 덧붙는 몫이다 — `apps`는 0으로 얹고 분·슛·xG·선방·골·도움만 더하며,
 연장에서 실점하면 90분의 클린시트는 물린다. 0인 칸은 적지 않는다.
 
-### 7.3 더비 · 마일스톤 · 포지션 적응도 · 평점
+### 7.3 마일스톤 · 포지션 적응도 · 평점
 
-- **더비의 결과는 승점 3보다 무겁다** — `applyResultMood`에서 승리면 스쿼드 전원의 폼이
-  `+DERBY_MOOD_STEP(0.02) × heat`, 패배면 같은 폭으로 내려간다. 한 경기 안에서 두 라커룸이
-  정확히 반대로 갈리므로 폭이 대칭이다.
 - **마일스톤은 스탯을 적은 그 자리가 센다**(`milestonesReached`): `debut` · `first-goal` ·
   `apps` 50·100·200·300·400·500 · `goals` 25·50·100·150·200 · `hat-trick`. 클럽 단위고
   감독 팀 선수 것뿐이며 2군·친선은 문턱을 밀지 않는다. 무직 구간에는 서지 않는다.
 - **포지션 적응도는 실제로 밟은 자리가 올린다** — `pendingMatch.live.positionsPlayed`의 자리가
   `MATCH_PROFICIENCY_GAIN`(1)만큼(상한 99, 양 팀 공통).
-- **평점**(`engine/match/ratings.ts`)은 기준선 6.0에서 장부 사실만으로 조정한다(난수 없음):
+- **평점**(`packages/engine/src/match/flow/ratings.ts`)은 기준선 6.0에서 장부 사실만으로 조정한다(난수 없음):
   승 +0.4/패 −0.3 · 골 GK +2.0 · DF +1.4 · MF +1.1 · FW +0.9 · 도움 +0.6 · 무실점 GK +0.8/
   DF +0.5 · 실점(첫 골 면제) GK −0.3/DF −0.2 · 경고 −0.3 · 퇴장 −1.5, 범위 3.0\~10.0. 출전
   시간은 그라운드를 떠난 시각까지다(교체·퇴장). 경기 후 결산 에이전트가 중계 전부와 결산
   표를 읽어 앵커 ±`RATING_BAND`(1.2) 안에서 재채점한다(→ [pipeline.md](../common/llm/pipeline.md) §5).
   실패하면 앵커가 남는다.
 
-### 7.4 징계 — 카드가 정지가 되는 길 (`engine/match/flow/discipline.ts`)
+### 7.4 징계 — 카드가 정지가 되는 길 (`packages/engine/src/match/flow/discipline.ts`)
 
 카드 한 장은 `BOOKING` 한 줄로 남고 두 시뮬이 같은 문(`recordCard`)을 지난다.
 
@@ -457,7 +452,7 @@ EventCause { code, playerIds, values?, pointId? }
 왔는지(`competitionId`)와 어디까지 미치는지(`scope` — `competition` 그 대회뿐 · `jurisdiction`
 그 대회가 속한 관할 전체)를 든다. 관할은 다섯 나라와 `uefa`다.
 
-**규정 표는 대회가 아니라 협회가 갖는다**(`engine/data/discipline-catalog.ts`) — 더비 표와
+**규정 표는 대회가 아니라 협회가 갖는다**(`packages/engine/src/common/data/discipline-catalog.ts`) — 더비 표와
 같은 결의 별도 표다.
 
 | 대회                                                     | 누적 눈금                                                                           | 그 뒤 주기 | 사면     | 퇴장 범위 |
@@ -481,7 +476,7 @@ EventCause { code, playerIds, values?, pointId? }
 선수는 그 대회 명단에서 자동으로 빠지고(`isAvailableFor`), 정지가 걸리면 어느 대회 몇
 경기인지 한 줄로 감독에게 간다. 남의 팀 정지는 브리핑하지 않는다.
 
-## 8. 간이 시뮬 (`engine/match/quick-sim.ts`)
+## 8. 간이 시뮬 (`packages/engine/src/match/flow/quick-sim.ts`)
 
 시즌 2,100여 경기 중 감독의 경기만 실시간으로 굴고 나머지는 여기서 한 번에 처리한다.
 **팀의 평점에서 경기의 xG를 내고, 그 xG에서 슈팅과 골을 뽑는** 통계 모델이다 — 실측 득점
@@ -576,7 +571,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 
 ### 8.6 라인업 · 연장 · 옆 구장
 
-**AI 로테이션**(`engine/match/squad/simulation.ts`의 `simSquadOf`)은 스쿼드 운영의 기본이다. 자리를 내주는
+**AI 로테이션**(`packages/engine/src/match/squad/simulation.ts`의 `simSquadOf`)은 스쿼드 운영의 기본이다. 자리를 내주는
 이유는 둘 — 오늘의 몸(피로 `ROTATION_FATIGUE` 20 이상)과 시즌의 몸(누적 피로 「지침」 위).
 같은 포지션군에서 `ROTATION_OVR_DROP` 안의 더 신선한 선수(`ROTATION_FRESHER`)가 대신 선다.
 정지·부상은 `isAvailableFor`로 같은 문에서 빠진다. 벤치도 같은 함수가 짠다.
@@ -593,11 +588,10 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 킥오프 이전 경기까지만 굴리고 나머지는 `finalizeMatch`가 잇는다.
 
 **리그 전체가 같은 축 위에서 움직인다.** 폼이 리그 전체에서 오르내리고(간이 시뮬의 평점이
-폼에 실린다), AI 팀도 전술을 익히고(`FAMILIARITY_DRIFT_CAP` 80), 연패·연승이 라커룸에
-남고(`story/players/slump.ts`), 부상 성향이 벤치에서도 움직인다. 폼·적응도·성향이 감독 팀에만 쌓이면
+폼에 실린다), AI 팀도 전술을 익히고(`FAMILIARITY_DRIFT_CAP` 80), 부상 성향이 벤치에서도 움직인다. 폼·적응도·성향이 감독 팀에만 쌓이면
 나머지 95%가 상태 없는 세계가 된다.
 
-## 9. 경기 화면 (`apps/web/domains/match/ui/match-view.tsx` · `app/views.ts`)
+## 9. 경기 화면 (`apps/web/domains/match/ui/match-view.tsx` · `packages/engine/src/app/views.ts`)
 
 경기장 칸에는 실시간 판만 서고, 터치라인 칸의 탭 넷이 번갈아 선다: **대화** · **팀**(전술판 +
 명단, 우리/상대) · **경기 기록**(쌓인 xG 계단선 + 팀 통계 + 전술 포인트 + 경기 사건) ·
@@ -703,12 +697,11 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 |                 | 전술 축 → 파라미터 (`teamParamsOf` · `*_PER_*_STEP`)                                                                           | 하네스 `live-tactics` · §7 팀 간 총 거리 sd 2km      |
 |                 | `SHEET_TARGET_CAP` 3.5% · `SHEET_TEAM_BUDGET` 8% · `SHEET_NET_CAP` +2.4% · `SHEET_*_STEP`                                      | 하네스                                               |
 
-## 11. 미해결
+## 11. 구현 범위와 한계
 
 - **홈 이점이 원정 체력 감점 하나다.** 실측 홈 이점(득점 1.55 대 1.27 · 홈승 43%)에 얼마나
   닿는지는 `live-match-stats`가 재고, 간이 시뮬은 실측 홈 계수를 그대로 쓴다 — 두 시뮬의 홈
-  이점이 다를 수 있고 `sim-parity`가 그 차이를 `reference`로 찍는다. 관중·응원·라커룸의 사기가
-  게임 시스템으로 서면 그 자리에서 홈 이점이 나오고 감점은 물러난다.
+  이점이 다를 수 있고 `sim-parity`가 그 차이를 `reference`로 찍는다.
 - **간이 시뮬에는 시트가 없다** — 판독기는 감독의 경기에서만 돈다. 부호가 양쪽으로 열려 있어
   평균은 중립이지만 분산은 다르다.
 - **간이 시뮬의 연장에는 교체가 없다** — 명단은 90분 종료 온필드 그대로 30분을 뛴다.
@@ -723,7 +716,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 
 | 무엇                                        | 어디                                                                                                                                                  |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 시드 난수 (`makeRng`·`shuffled`)            | `packages/sim/src/rng.ts` — 엔진(`common/core/rng.ts`)과 match-cli가 같이 부른다                                                                      |
+| 시드 난수 (`makeRng`·`shuffled`)            | `packages/sim/src/rng.ts` — 엔진(`packages/engine/src/common/core/rng.ts`)과 match-cli가 같이 부른다                                                  |
 | 선수의 경기 능력                            | `packages/sim/src/match-ability.ts`                                                                                                                   |
 | 실시간 경기 (말의 규칙 전부)                | `packages/sim/src/live/` (→ [live-match.md](live-match.md) §8.5)                                                                                      |
 | 부하 → 체력 · 회복 · 기대 부하표            | `packages/sim/src/load.ts` · `stamina.ts`                                                                                                             |
@@ -738,7 +731,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 | 간이 시뮬 · 평점 · 징계                     | `packages/engine/src/match/flow/quick-sim.ts` · `ratings.ts` · `discipline.ts`                                                                        |
 | 연장 · 승부차기                             | `packages/engine/src/match/competition/extra-time.ts` · `packages/engine/src/app/workflows/match/competition/extra-time.ts` · `shootout.ts`           |
 | 경기 리포트 뷰 · MOTM · xG 계단선           | `packages/engine/src/app/views.ts` (`buildMatchReport` · `motmOf` · `xgTimelineOf`)                                                                   |
-| 더비 표                                     | `packages/engine/src/common/data/derbies.ts` · `story/world/derby.ts`                                                                                 |
+| 더비 표                                     | `packages/engine/src/common/data/derbies.ts` · `packages/engine/src/common/world/derby.ts`                                                            |
 | 경기 화면 · 실행기                          | `apps/web/domains/match/ui/match-view.tsx` · `apps/web/domains/match/lib/use-live-match.ts`                                                           |
 | 화면 없는 실행기                            | `apps/match-cli/src/main.ts`                                                                                                                          |
 

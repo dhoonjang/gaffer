@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DateString } from "./date-string";
 
 /**
- * 기록 테이블 (v6) — 선수·팀·일정에 딸린 이력.
+ * 기록 테이블 — 선수·팀·일정에 딸린 이력.
  * 공통 패턴: "현재 상태 = 아직 닫히지 않은 row, 지난 일 = 그대로 이력".
  * 부상은 returnedOn=null, 정지·계약은 status=active가 현재를 뜻한다.
  */

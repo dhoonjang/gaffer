@@ -1,4 +1,4 @@
-import { type ManagerOffer, formatMoney, boardExpectationText } from "@story-fm/domain";
+import { type ManagerOffer, formatMoney } from "@story-fm/domain";
 import { teamName } from "@story-fm/engine";
 
 /**
@@ -8,7 +8,6 @@ import { teamName } from "@story-fm/engine";
 export function offerSeat(offer: ManagerOffer): string {
   return [
     `${teamName(offer.teamId)} (${offer.tier}티어)`,
-    `기대 ${offerExpectation(offer)}`,
     offer.position ? `현재 ${offer.position}위` : null,
   ]
     .filter((x): x is string => x !== null)
@@ -23,7 +22,6 @@ export function offerTerms(offer: ManagerOffer): string {
       : null,
     // 보상금은 새 구단이 지금 구단에 지급하는 계약 정산이다
     offer.compensation ? `지금 구단에 보상금 ${formatMoney(offer.compensation)}` : null,
-    offer.counteredOn ? `흥정은 끝났다 — 수락 여부만 남았다` : null,
     `${offer.expiresOn}까지`,
   ]
     .filter((x): x is string => x !== null)
@@ -37,8 +35,3 @@ export const OFFER_VIA_KO: Record<NonNullable<ManagerOffer["via"]>, string> = {
   knock: "두드린 자리의 제안",
   vacancy: "감독직 제안",
 };
-
-/** 제안에 걸린 기대 한 줄 — 갈래 코드가 원본이다 (career.md §5.1) */
-function offerExpectation(offer: ManagerOffer): string {
-  return boardExpectationText(offer.expectationCode, offer.target);
-}

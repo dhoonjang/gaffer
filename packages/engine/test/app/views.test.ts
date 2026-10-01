@@ -16,7 +16,6 @@ import {
   motmOf,
   type MatchReportPlayerView,
   openNegotiationFor,
-  openPromise,
   pendingVerdicts,
   playersOf,
   sendOffer,
@@ -28,7 +27,6 @@ import {
   addDays,
   diffDays,
   playerById,
-  pushNarrative,
   seasonLabelOf,
   type GameState,
 } from "@story-fm/engine";
@@ -275,33 +273,6 @@ describe("오피스 뷰 — 달력 (일정 축)", () => {
         e.label,
       ).toBe(false);
     }
-  });
-
-  /**
-   * 소식 — 시간을 넘긴 턴의 사건은 다이제스트로만 흘러가고 화면에 서지 않는다.
-   * 원본은 서사 표 하나이므로 일지가 그 표를 날짜에 세운다 (people.md §9).
-   */
-  it("서사 표가 날짜별 소식 줄로 파생된다 — 무게순·갈래·중복·상한", () => {
-    const state = createTestGame(13);
-    const day = state.date;
-    state.narrative.push(
-      { date: day, text: "리버풀에서 오퍼 답 도착", salience: 3, kind: "transfer" },
-      // 같은 날 같은 문장은 한 번만 선다
-      { date: day, text: "리버풀에서 오퍼 답 도착", salience: 2, kind: "transfer" },
-      { date: day, text: "구단주 요청 — 8강 진출", salience: 5, kind: "other" },
-      // 경기 줄은 일정 축이 이미 세운다 — 소식으로 두 번 서지 않는다
-      { date: day, text: "프리미어리그 R1 vs 리버풀 2:1 승리", salience: 4, kind: "match" },
-    );
-
-    const news = (buildOfficeViews(state).calendar.events[day] ?? []).filter(
-      (l) => l.kind === "news",
-    );
-    expect(news.map((l) => l.text)).toEqual(["구단주 요청 — 8강 진출", "리버풀에서 오퍼 답 도착"]);
-
-    // 일지가 되찾는 창은 서사 표의 상한(200)까지다 — 밀려난 줄은 일지에도 없다
-    for (let i = 0; i < 210; i++) pushNarrative(state, `채움 ${i}`, 1);
-    const after = buildOfficeViews(state).calendar.events[day] ?? [];
-    expect(after.some((l) => l.text === "구단주 요청 — 8강 진출")).toBe(false);
   });
 });
 
@@ -902,7 +873,6 @@ describe("대회 뷰 — 역대", () => {
       goalsAgainst: 30,
       leagueId,
       tier: 2,
-      board: structuredClone(state.boardAgenda),
     },
   ];
   const view = () => buildOfficeViews(state).competitions.list[0]!;
@@ -1056,28 +1026,6 @@ describe("선수 카드 — 남의 구단 선수의 안개 (player.md §9.5)", (
  * 멀쩡해 보인다.
  */
 describe("안건 띠 — views.attention", () => {
-  it("없는 갈래는 서지 않고, 하나면 이름 · 여럿이면 수로 접힌다", () => {
-    const state = createTestGame();
-    // 새 게임에 열려 있는 것은 부임 회견 하나다 — 나머지 넷은 설 것이 없으면 안 선다
-    expect(buildOfficeViews(state).attention.map((i) => i.kind)).toEqual(["press"]);
-
-    const [one, two] = userPlayers(state).filter((p) => !p.isCaptain);
-    // 기한을 창(`PROMISE_ALERT_DAYS`) 안으로 좁혀 연다 — 90일짜리 완장 약속은 아직 안건이 아니다
-    expect(openPromise(state, one!.id, "captain", 7).ok).toBe(true);
-    expect(buildOfficeViews(state).attention.find((i) => i.kind === "promises")).toMatchObject({
-      count: 1,
-      name: one!.name,
-      daysLeft: 7,
-    });
-
-    expect(openPromise(state, two!.id, "minutes", 7).ok).toBe(true);
-    expect(buildOfficeViews(state).attention.find((i) => i.kind === "promises")).toMatchObject({
-      count: 2,
-      name: null,
-      daysLeft: 7,
-    });
-  });
-
   /**
    * **협상은 갈래 하나로만 접힌다** (overview.md §5). 답할 날이 된 라운드는 그날의 tick이
    * 앵커로 굳히므로(transfer.md §12-1) 띠가 드는 것은 감독의 차례로 남은 자리뿐이고,

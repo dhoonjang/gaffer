@@ -1,7 +1,6 @@
 import {
   type GameState,
   squadLevelOf,
-  pushNarrative,
   playerName,
   type CommandBriefItem,
   userPlayers,
@@ -21,21 +20,12 @@ import {
   slotOfTime,
   attributeAxisOf,
   positionGroupOf,
-  ageOf,
   ATTRIBUTE_AXES,
 } from "@story-fm/domain";
 import { pickOurPlayer } from "../../common/core/player-ref";
 import { DEVELOPMENT_FOCUS_LIMIT, pruneDevelopmentFocus } from "../players/development";
 import { briefNames, item } from "../../common/commands/brief";
-import {
-  pruneMentoring,
-  mentorBlock,
-  menteeBlock,
-  MENTEES_PER_MENTOR,
-  menteePairsOf,
-  mentorBoost,
-  mentorStrength,
-} from "../players/mentoring";
+import { pruneMentoring, mentorBlock, menteeBlock, menteePairsOf } from "../players/mentoring";
 import { mentorPairOf, closeMentorings } from "../../common/players/mentoring";
 import { reserveTrainingAxes } from "../players/training-plan";
 import { squadReturnOf, sortEntries } from "../../common/core/calendar";
@@ -93,7 +83,6 @@ export function setDevelopmentFocus(
       brief: { head: "집중 육성", items: [item({ text: "해제" })] },
     };
   }
-  pushNarrative(state, `집중 육성 지정 — ${players.map((p) => p.name).join(", ")}`, 1);
   return {
     ok: true,
     message: `집중 육성: ${players.map((p) => p.name).join(", ")} — 2군 경기 출전이 성장을 끌어올립니다`,
@@ -118,11 +107,6 @@ export function setMentor(
   state: GameState,
   input: { mentorId: string; menteeIds?: string[] },
 ): CommandResult {
-  /**
-   * **장부를 먼저 추린다** — 명령과 월간 성장이 같은 문을 지나야 어느 쪽이 먼저 와도
-   * 명단이 같다 (`pruneDevelopmentFocus`가 그런 것과 같은 이유). 나이를 넘긴 멘티가
-   * 남아 있으면 감독이 상한에 걸리지 않을 자리에서 걸린다.
-   */
   pruneMentoring(state);
 
   const picked = pickOurPlayer(state, input.mentorId);
@@ -156,13 +140,6 @@ export function setMentor(
     }
     if (!mentees.some((p) => p.id === mentee.id)) mentees.push(mentee);
   }
-  if (mentees.length > MENTEES_PER_MENTOR) {
-    return {
-      ok: false,
-      message: `한 멘토는 ${MENTEES_PER_MENTOR}명까지입니다 — 고참 하나의 눈은 거기까지 닿습니다`,
-    };
-  }
-
   const before = menteePairsOf(state, mentor.id).map((pair) => pair.menteeId);
   const after = mentees.map((p) => p.id);
   if (before.length === after.length && before.every((id) => after.includes(id))) {
@@ -177,9 +154,8 @@ export function setMentor(
   }
 
   /**
-   * **그 멘토의 빠진 짝만 닫는다** — `closeMentoringsFor`는 그가 멘티로 든 사이까지
-   * 함께 닫는다. 그리고 닫는 것이지 지우는 것이 아니다: 놓인 아이의 심경이 며칠
-   * 그 줄을 읽는다 (people.md §5-3).
+   * 이 멘토의 목록에서 빠진 배정만 종료한다. 그가 멘티로 참여하는 배정은 유지하며,
+   * 종료된 배정도 조회 기간 동안 보존한다 (people.md §5-3).
    */
   const released = closeMentorings(
     state,
@@ -193,14 +169,13 @@ export function setMentor(
 
   const releasedNames = released.map((pair) => playerName(state, pair.menteeId));
   if (mentees.length === 0) {
-    pushNarrative(state, `멘토링 해제 — ${mentor.name}`, 1);
     return {
       ok: true,
       message: `${josa(mentor.name, "이/가")} 맡고 있던 유망주를 모두 풀었습니다 — ${releasedNames.join(", ")}`,
       brief: {
         head: "멘토링",
         items: [
-          item({ label: "멘토", text: mentor.name, note: mentorNote(state, mentor) }),
+          item({ label: "멘토", text: mentor.name }),
           item({ label: "해제", text: briefNames(releasedNames) }),
         ],
       },
@@ -208,20 +183,17 @@ export function setMentor(
   }
 
   const items: CommandBriefItem[] = [
-    item({ label: "멘토", text: mentor.name, note: mentorNote(state, mentor) }),
-    ...mentees.map((mentee) =>
-      item({ label: "멘티", text: mentee.name, note: menteeNote(state, mentor, mentee) }),
-    ),
+    item({ label: "멘토", text: mentor.name }),
+    ...mentees.map((mentee) => item({ label: "멘티", text: mentee.name })),
   ];
   if (releasedNames.length > 0) {
     items.push(item({ label: "해제", text: briefNames(releasedNames) }));
   }
   const names = mentees.map((p) => p.name).join(", ");
-  pushNarrative(state, `멘토링 — ${mentor.name}에게 ${names}`, 1);
   return {
     ok: true,
     message:
-      `${mentor.name}에게 ${josa(names, "을/를")} 맡겼습니다 — 멘티의 정신 6축 성장이 빨라집니다` +
+      `${mentor.name}에게 ${josa(names, "을/를")} 맡겼습니다` +
       (releasedNames.length > 0 ? ` · ${josa(releasedNames.join(", "), "은/는")} 풀렸습니다` : ""),
     brief: { head: "멘토링", items },
   };
@@ -255,7 +227,6 @@ export function setReserveTraining(
 
   state.reserveTraining = policy;
   if (policy === "balanced") {
-    pushNarrative(state, "2군 훈련 방침 해제 — 겨냥하는 축 없음", 1);
     return {
       ok: true,
       message: "2군 훈련 방침을 해제했습니다 — 유망주는 다시 고르게 자랍니다",
@@ -266,7 +237,6 @@ export function setReserveTraining(
   const aimed = reserveTrainingAxes(policy)
     .map((axis) => AXIS_KO[axis])
     .join("·");
-  pushNarrative(state, `2군 훈련 방침 — ${title}`, 1);
   return {
     ok: true,
     message: `2군 훈련 방침을 ${josa(title, "으로/로")} 잡았습니다 — ${josa(aimed, "이/가")} 빨리 자라는 대신 나머지 필드 축은 그만큼 느려집니다`,
@@ -333,34 +303,7 @@ function recallSquadEarly(state: GameState, date: string): string {
   for (const p of players) {
     p.state.condition = clampCondition(p.state.condition - drain);
   }
-
-  /**
-   * 반발하는 선수 — 당긴 날수에 비례하되 스쿼드의 절반을 넘지 않는다.
-   * 대상은 시드가 아니라 **가장 지친 선수부터**다. 쉬어야 할 사람이 먼저 화낸다.
-   */
-  const upset = Math.min(
-    Math.floor(players.length * RECALL_UPSET_CAP_SHARE),
-    Math.max(0, Math.round(early / RECALL_DAYS_PER_UPSET)),
-  );
-  const already = new Set(state.issues.map((i) => i.gamePlayerId));
-  const angry = [...players]
-    .sort((a, b) => a.state.condition - b.state.condition)
-    .filter((p) => !already.has(p.id))
-    .slice(0, upset);
-  for (const p of angry) {
-    state.issues.push({
-      gamePlayerId: p.id,
-      kind: "unhappy",
-      reason: "early-return",
-      since: state.date,
-    });
-  }
-
-  pushNarrative(state, `휴가 반납 소집 ${was}→${date} · 불만 ${angry.length}명`, 4);
-  return (
-    `소집을 ${early}일 앞당겼습니다 (${was} → ${date}) — 선수단 체력 −${drain}` +
-    (angry.length > 0 ? `, ${angry.length}명이 불만을 품었습니다` : ", 큰 반발은 없었습니다")
-  );
+  return `소집을 ${early}일 앞당겼습니다 (${was} → ${date}) — 선수단 체력 −${drain}`;
 }
 
 export function setTraining(state: GameState, input: TrainingPlanInput): CommandResult {
@@ -408,18 +351,7 @@ export function setTraining(state: GameState, input: TrainingPlanInput): Command
     if (err) return { ok: false, message: err };
   }
 
-  /**
-   * **여름 휴가엔 훈련이 없다 — 감독이 소집을 앞당기지 않는 한.**
-   *
-   * 소집일 전까지 선수단은 구단에 없다. 실수로 그 자리에 세션이 깔리는 것은
-   * 막아야 하지만(부임 첫날 "월·수·금 훈련"이 그대로 통과하던 문제), **막는 것과
-   * 못 하게 하는 것은 다르다.** 휴가를 깨고 부르는 것은 실제 감독이 할 수 있는
-   * 일이고, 대가는 선수단의 반발이다 — 코어는 가능하게 하고 값을 물린다
-   * (이적 설득과 같은 태도: 확률이 낮다고 길을 막지 않는다).
-   *
-   * 그래서 `recallSquad` 없이는 거부하고, 있으면 소집일 자체를 앞당긴다. 여기서는
-   * **앞당겼다고 치면 언제인가**만 구한다 — 옮기는 것은 아래 적용 단계다.
-   */
+  // 휴가 중 훈련은 실제 소집일을 앞당긴 뒤에만 편성한다.
   const squadReturn = squadReturnOf(state.calendar);
   const wanted = [...sessions.map((x) => x.date), ...(repeats.length > 0 ? [state.date] : [])];
   const earliest = [...wanted].sort()[0];
@@ -434,7 +366,7 @@ export function setTraining(state: GameState, input: TrainingPlanInput): Command
         ok: false,
         message:
           `${josa(s.date, "은/는")} 선수단 여름 휴가 기간입니다 — 훈련은 소집일(${effectiveReturn})부터 잡을 수 있습니다. ` +
-          `감독이 휴가를 접고 조기 소집하겠다고 했다면 recallSquad를 함께 보내세요 (선수단이 반발합니다).`,
+          `감독이 휴가를 접고 조기 소집하겠다고 했다면 recallSquad를 함께 보내세요.`,
       };
     }
   }
@@ -726,16 +658,6 @@ export function setPlayerTraining(
   };
 }
 
-/** 멘토를 고른 근거 한 줄 — 나이와 리더십이 결과 항목에 그대로 선다 (`armbandNote`와 같은 결) */
-export function mentorNote(state: GameState, mentor: GamePlayer): string {
-  return `${ageOf(mentor.birthdate, state.date)}세 · 리더십 ${mentor.attributes.leadership}`;
-}
-
-/** 이 짝의 멘토 항 한 조각 — 저장하지 않고 그때그때 다시 매긴다 (people.md §5-3) */
-export function menteeNote(state: GameState, mentor: GamePlayer, mentee: GamePlayer): string {
-  return `정신 6축 ×${mentorBoost(mentorStrength(mentor, mentee, state.date)).toFixed(2)}`;
-}
-
 // ---- 훈련: 명령이 일정 엔트리를 직접 생성한다 (규칙 테이블 없음) ----
 
 const TRAIN_ATTRS: TrainAttr[] = [...ATTRIBUTE_AXES, "tactical", "recovery"];
@@ -809,26 +731,10 @@ export function briefFocus(focus: Iterable<TrainAttr>): string {
 /**
  * 훈련 지정 — 자연어 label + focus(효과 대상). 특정 날짜(sessions) 또는
  * 요일 반복(repeatWeekly)으로 받고, 명령이 그 즉시 SCHEDULE_ENTRY를 생성한다.
- * 반복은 규칙으로 남지 않고 실제 일정으로 펼쳐진다 (v6 — 일정이 단일 원본).
+ * 반복은 규칙으로 남지 않고 실제 일정으로 펼쳐진다 — 일정이 단일 원본이다.
  */
-/**
- * **휴가를 접고 선수단을 조기 소집한다** — 감독이 치를 값이 있는 선택.
- *
- * 코어는 길을 막지 않고 **대가를 물린다**. 무엇이 대가인가:
- *   ① 쉬지 못한 몸 — 당긴 날수만큼 체력이 깎인 채로 프리시즌을 시작한다
- *   ② 라커룸의 반발 — 일부 선수에게 불만이 남는다 (방치하면 매일 갉힌다)
- * 둘 다 감독이 **되돌릴 수 있는** 것이다 — 회복 훈련으로 몸을, 면담·팀토크로
- * 마음을 되찾는다. 그게 이 게임에서 강행이 "금지"가 아니라 "선택"인 이유다.
- *
- */
-/** 하루를 당길 때마다 깎이는 체력 */
+/** 조기 소집으로 하루를 당길 때마다 깎이는 체력 */
 export const RECALL_DRAIN_PER_DAY = 1.2;
-
-/** 며칠을 당겨야 한 명이 등을 돌리는가 */
-export const RECALL_DAYS_PER_UPSET = 3;
-
-/** 반발이 번질 수 있는 1군의 최대 비율 — 라커룸 전체가 등을 돌리지는 않는다 */
-export const RECALL_UPSET_CAP_SHARE = 0.5;
 
 /**
  * "훈련 다 지워"가 미치는 앞날 — 끝 날짜를 주지 않은 비우기의 지평이다.

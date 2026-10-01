@@ -20,7 +20,6 @@ import {
 import {
   activeContract,
   playerById,
-  pushNarrative,
   squadShortfall,
   teamName,
   type GameState,
@@ -139,7 +138,6 @@ export function settleSellOn(
         ? `${name} 셀온 ${rate}% 정산 — ${teamName(input.sellerTeamId)}에서 ${formatMoney(amount)} 수령`
         : `${name} 셀온 ${rate}% 정산 — ${teamName(payeeTeamId)}에 ${formatMoney(amount)} 지급`;
     input.digest?.push(`${line}`);
-    pushNarrative(state, line, 3);
   }
   return amount;
 }
@@ -304,7 +302,6 @@ export function exerciseBuyBack(state: GameState, input: { playerId: string }): 
   if (!done) return { ok: false, message: "되사기를 실행하지 못했습니다" };
 
   const line = `${right.player.name} 되사기 행사 — ${teamName(done.fromTeamId)}에서 ${formatMoney(done.fee)}`;
-  pushNarrative(state, line, 4);
   return {
     ok: true,
     message: `${line}. 남은 이적 예산 ${formatMoney(finance.transferBudget)}`,
@@ -345,6 +342,5 @@ export function runBuyBacks(
     if (done.fromTeamId !== state.userTeamId) continue;
     const line = `${josa(right.player.name, "이/가")} 되사기 조항으로 ${teamName(right.holderTeamId)}에 돌아갔습니다 — ${formatMoney(done.fee)}`;
     digest.push(`${line}`);
-    pushNarrative(state, line, 4);
   }
 }

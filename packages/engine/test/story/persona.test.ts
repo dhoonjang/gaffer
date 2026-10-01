@@ -1,20 +1,17 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { writePersonaBooks } from "../../src/common/data/persona-override";
 import { describe, expect, it, vi } from "vitest";
 import {
   PersonaSchema,
+  CharacterBookContentSchema,
   HEAD_COACH_ROLE_LABEL,
   STAFF_ROLES,
   normalizeSpeaker,
-  PLAYER_ARCHETYPE_KEYS,
-  PLAYER_ARCHETYPE_LABEL,
-  PLAYER_ARCHETYPE_TRAITS,
-  RELATION_TIERS,
-  stanceOfTier,
   type GamePlayer,
 } from "@story-fm/domain";
 import {
-  HEAD_COACH_ARCHETYPES,
   HEAD_COACH_NAMES,
   generateHeadCoach,
   headCoachOf,
@@ -22,46 +19,31 @@ import {
   speakerRoles,
   ownerOf,
   generateOwner,
-  OWNER_ARCHETYPE_LABELS,
   reportersOf,
   generateReporters,
   teamCatalog,
-  toFreeAgency,
+  personaBookOf,
+  selectCharacterBook,
+  requestCharacterUpdate,
+  completeCharacterUpdate,
+  syncCharacterBook,
+  staffViews,
+  worldFigures,
 } from "@story-fm/engine";
 import {
-  applyCharacterMemories,
-  CHARACTER_MEMORY_KEEP,
   factSpeakerOf,
   generateStaff,
   generateVirtualManager,
   headCoachSalaryOf,
-  MANAGER_ARCHETYPE_LABELS,
   personaKeywords,
-  registerCharacters,
   reseatClubPersonas,
   staffOf,
   staffSalaryOf,
   STAFF_OPENINGS,
-  type CharacterDraft,
 } from "../../src/common/people/persona";
 import { ensureSeededManagers } from "../../src/app/create-game";
 import { worldFigureManagerOf } from "../../src/common/data/world-figures";
-import {
-  archetypeTraitsOf,
-  generatePlayerPersona,
-  playerArchetypeOf,
-  PLAYER_ARCHETYPE_LABELS,
-} from "../../src/common/people/player-persona";
-import {
-  applyRelationTiers,
-  relationTierBrief,
-  relationTierOf,
-  setRelationTier,
-} from "../../src/story/people/relations";
-import { MANAGER_SUBJECT } from "../../src/story/people/relations";
-import { playersOf } from "../../src/common/core/state";
-import { selectCharacters } from "../../src/story/people/people-directory";
-import type { GameState } from "../../src/common/core/state";
+import { generatePlayerPersona } from "../../src/common/people/player-persona";
 import { createTestGame } from "../helpers";
 
 /**
@@ -79,9 +61,8 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
     // 화자 태그는 직책이 아니라 그 사람의 이름이다
     expect(coach.characterId).toBe(coach.name);
     expect(coach.characterId).not.toBe(HEAD_COACH_ROLE_LABEL);
-    expect(HEAD_COACH_ARCHETYPES).toContain(coach.archetype);
     // 말투는 지문만으로 붙지 않는다 — 예시 대사가 함께 있어야 한다 (§6)
-    expect(coach.speechStyle.samples.length).toBeGreaterThan(0);
+    expect(coach.characterBook.information.length).toBeGreaterThan(0);
   });
 
   it("세이브가 담은 사람은 시드가 만든 그 사람이다 (결정적)", () => {
@@ -105,7 +86,9 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
       }
       // 성격은 여전히 시드로 갈린다 (같은 이름이라도 세이브마다 다른 사람됨)
       const archetypes = new Set(
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => generateHeadCoach(s, teamId).archetype),
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(
+          (s) => generateHeadCoach(s, teamId).characterBook.information,
+        ),
       );
       expect(archetypes.size, teamId).toBeGreaterThan(1);
     }
@@ -133,19 +116,6 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
     expect(names.size).toBeGreaterThan(1);
     // 부임한 곳이 다르면 만나는 사람도 다르다 (같은 시드라도)
     expect(generateHeadCoach(42, "arsenal")).not.toEqual(generateHeadCoach(42, "chelsea"));
-  });
-
-  it("원형마다 먼저 보는 것이 다르다 — 성격·동기·말투가 함께 움직인다", () => {
-    const seen = new Map<string, string>();
-    for (let seed = 1; seed <= 60; seed++) {
-      const coach = generateHeadCoach(seed, "arsenal");
-      const previous = seen.get(coach.archetype);
-      // 같은 원형이면 성격·동기·말투가 항상 같은 묶음이다
-      if (previous) expect(previous).toBe(coach.traits.join("/") + coach.motivation);
-      else seen.set(coach.archetype, coach.traits.join("/") + coach.motivation);
-    }
-    // 60개 시드면 원형이 골고루 나온다
-    expect(seen.size).toBe(HEAD_COACH_ARCHETYPES.length);
   });
 
   it("화면이 붙일 직책 맵을 준다 — 모델 출력에 기대지 않는다", () => {
@@ -309,8 +279,7 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
     // 같은 세이브는 언제 열어도 같은 사람
     expect(generateOwner(7, "manutd")).toEqual(owner);
     // 코치와 원형이 같은 통에서 나오면 두 사람이 겹친다 — 시드 채널이 다르다
-    expect(owner.archetype).not.toBe(headCoachOf(state).archetype);
-    expect(OWNER_ARCHETYPE_LABELS).toContain(owner.archetype);
+    expect(owner.characterBook.information).not.toBe(headCoachOf(state).characterBook.information);
   });
 
   it("구단주를 모르는 구단은 실명을 쓰지 않는다", () => {
@@ -400,6 +369,7 @@ describe("스태프 — 고용 정보를 든 인물 (people.md §2-2)", () => {
   it("스태프는 구단의 사람이라 부임하면 갈린다 — 옛 구단의 사람은 따라오지 않는다", () => {
     const state = createTestGame(42);
     const before = staffOf(state).map((p) => p.name);
+    state.userTeamId = "chelsea";
     reseatClubPersonas(state, "chelsea", { crossedLeague: false });
     const after = staffOf(state);
     expect(after.map((p) => p.name)).not.toEqual(before);
@@ -435,7 +405,7 @@ describe("기자 페르소나", () => {
     expect(new Set(reporters.map((r) => r.outlet)).size).toBe(3);
     for (const r of reporters) {
       expect(r.characterId).toBe(r.name); // 태그는 직책이 아니라 이름이다
-      expect(r.speechStyle.samples.length).toBeGreaterThan(0);
+      expect(r.characterBook.information.length).toBeGreaterThan(0);
     }
   });
 
@@ -535,71 +505,50 @@ describe("선수 페르소나 — 파생되는 카드", () => {
     expect(generatePlayerPersona(7, youngStriker)).toEqual(generatePlayerPersona(7, youngStriker));
     // 화자 태그는 직책이 아니라 이름이다 (코치와 같은 규약)
     expect(generatePlayerPersona(7, youngStriker).characterId).toBe(youngStriker.name);
+    const persona = generatePlayerPersona(7, youngStriker);
+    expect(PersonaSchema.parse(persona)).toEqual(persona);
+    expect(Object.keys(persona.characterBook).sort()).toEqual([
+      "description",
+      "information",
+      "keywords",
+      "name",
+    ]);
+    for (const field of ["archetype", "traits", "motivation", "speechStyle", "keywords"])
+      expect(persona).not.toHaveProperty(field);
     // 세이브가 다르면 다른 사람을 만난다
     const archetypes = new Set(
-      [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => generatePlayerPersona(seed, youngStriker).archetype),
+      [1, 2, 3, 4, 5, 6, 7, 8].map(
+        (seed) => generatePlayerPersona(seed, youngStriker).characterBook.information,
+      ),
     );
     expect(archetypes.size).toBeGreaterThan(1);
     // 시드 채널은 이름이 아니라 **id**다 — 동명이인도, 이적한 선수도 같은 사람이다
     expect(
-      generatePlayerPersona(7, { ...youngStriker, name: "다른 이름", teamId: "chelsea" }).archetype,
-    ).toBe(generatePlayerPersona(7, youngStriker).archetype);
+      generatePlayerPersona(7, { ...youngStriker, name: "다른 이름", teamId: "chelsea" })
+        .characterBook.information,
+    ).toBe(generatePlayerPersona(7, youngStriker).characterBook.information);
     // 선수가 다르면 각자의 추첨을 탄다
     const byPlayer = new Set(
       Array.from(
         { length: 12 },
-        (_, i) => generatePlayerPersona(7, { ...youngStriker, id: `p-${i}` }).archetype,
+        (_, i) =>
+          generatePlayerPersona(7, { ...youngStriker, id: `p-${i}` }).characterBook.information,
       ),
     );
     expect(byPlayer.size).toBeGreaterThan(1);
   });
 
   it("나이가 흘러도 같은 사람이다 — 기준일이 고정이라 시즌이 바뀌어도 흔들리지 않는다", () => {
-    const before = samples.map((p) => generatePlayerPersona(7, p).archetype);
+    const before = samples.map((p) => generatePlayerPersona(7, p).characterBook.information);
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2032-03-01T00:00:00Z"));
-      expect(samples.map((p) => generatePlayerPersona(7, p).archetype)).toEqual(before);
+      expect(samples.map((p) => generatePlayerPersona(7, p).characterBook.information)).toEqual(
+        before,
+      );
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("원형 전수가 스키마를 통과한다 — 성격·동기·말투가 한 묶음으로 온다", () => {
-    const seen = new Map<string, string>();
-    for (const player of samples) {
-      for (let seed = 1; seed <= 120; seed++) {
-        const persona = generatePlayerPersona(seed, player);
-        expect(() => PersonaSchema.parse(persona)).not.toThrow();
-        expect(persona.role).toBe("player");
-        // 말투는 지문만으로 붙지 않는다 — 예시 대사가 함께 있어야 한다
-        expect(persona.speechStyle.samples.length).toBeGreaterThan(0);
-        const bundle = persona.traits.join("/") + persona.motivation;
-        const previous = seen.get(persona.archetype);
-        if (previous) expect(previous).toBe(bundle);
-        else seen.set(persona.archetype, bundle);
-      }
-    }
-    expect([...seen.keys()].sort()).toEqual([...PLAYER_ARCHETYPE_LABELS].sort());
-  });
-
-  /**
-   * 카드를 짓는 쪽과 계수를 읽는 쪽이 **한 뽑기**를 지난다 — 갈리면 GM이 연기하는
-   * 사람과 장부가 그에게 붙이는 사실이 어긋난다 (people.md §6).
-   */
-  it("코드와 라벨과 계수가 한 행이다 — 카드를 짓지 않고 뽑기만 해도 같은 사람이다", () => {
-    for (const player of samples) {
-      for (let seed = 1; seed <= 40; seed++) {
-        const key = playerArchetypeOf(seed, player);
-        expect(PLAYER_ARCHETYPE_LABEL[key]).toBe(generatePlayerPersona(seed, player).archetype);
-        expect(archetypeTraitsOf(seed, player)).toBe(PLAYER_ARCHETYPE_TRAITS[key]);
-      }
-    }
-    // 표에 빠진 행이 있으면 그 원형만 계수 없이 산다
-    expect(Object.keys(PLAYER_ARCHETYPE_TRAITS).sort()).toEqual([...PLAYER_ARCHETYPE_KEYS].sort());
-    expect(Object.values(PLAYER_ARCHETYPE_LABEL).sort()).toEqual(
-      [...PLAYER_ARCHETYPE_LABELS].sort(),
-    );
   });
 
   /**
@@ -634,16 +583,17 @@ describe("가상 감독 — 명부 밖 벤치의 사람 (people.md §2)", () => 
     expect(() => PersonaSchema.parse(manager)).not.toThrow();
     expect(manager.role).toBe("manager");
     expect(manager.characterId).toBe("옌스 바그너");
-    expect(MANAGER_ARCHETYPE_LABELS).toContain(manager.archetype);
     // 지어낸 이름이라 실존 표식이 없다 — 실명 부채 장부가 셀 것도 없다
     expect(manager.real).toBeUndefined();
     // 키워드는 명부 규칙 그대로 — 전체 이름과 성, 이름 조각은 담지 않는다
-    expect(manager.keywords).toEqual(["옌스 바그너", "바그너"]);
+    expect(manager.characterBook.keywords).toEqual(["옌스 바그너", "바그너"]);
   });
 
   it("이름이 시드 채널의 전부다 — 경질로 이름이 갈리면 새 추첨이다", () => {
     const names = ["가브리엘 로시", "마르코 벨리", "루카 페라리", "엔조 콘티", "다비드 리치"];
-    const labels = new Set(names.map((n) => generateVirtualManager(42, n).archetype));
+    const labels = new Set(
+      names.map((n) => generateVirtualManager(42, n).characterBook.information),
+    );
     // 이름이 다르면 독립 추첨 — 후임이 전임의 사람됨을 물려받지 않는다
     expect(labels.size).toBeGreaterThan(1);
   });
@@ -684,10 +634,8 @@ describe("가상 감독 — 명부 밖 벤치의 사람 (people.md §2)", () => 
     expect(state.teams.map((t) => t.managerName)).toEqual(before);
   });
 
-  it("화자 사전과 인물 사전이 상대 벤치를 안다 — 감독 라벨, 이름으로 걸리는 카드", () => {
+  it("화자 사전이 상대 벤치를 감독으로 표시한다", () => {
     const state = createTestGame();
-    // 새 게임이 열어 둔 부임 회견의 기자가 한 턴 상한을 함께 다툰다 (people.md §4·§6)
-    state.pressConferences = [];
     const bench = state.teams.find(
       (t) =>
         t.id !== state.userTeamId &&
@@ -697,14 +645,6 @@ describe("가상 감독 — 명부 밖 벤치의 사람 (people.md §2)", () => 
     const name = bench.managerName!;
     // 화면이 붙일 직책 — 명부 감독과 같은 자리다
     expect(speakerRoles(state)[normalizeSpeaker(name)]).toEqual({ kind: "manager", label: "감독" });
-    // 이름이 불리면 카드가 선다 — 파생이라 세이브에 없어도 같은 사람이 복원된다.
-    // 성이 같은 단장·감독이 여럿이어도 이름 전체가 불린 사람이 먼저다 (people.md §6)
-    const cards = selectCharacters(state, { message: name });
-    expect(cards[0]?.characterId).toBe(name);
-    const card = cards.find((c) => c.characterId === name)!;
-    expect(card.role).toBe("manager");
-    expect(card.depth).toBe("full");
-    expect(MANAGER_ARCHETYPE_LABELS).toContain(card.archetype);
   });
 });
 
@@ -729,311 +669,107 @@ describe("페르소나 키워드", () => {
     expect(personaKeywords({ name: "박 지", role: "player" })).toEqual(["박 지"]);
   });
 
-  it("자리를 부르는 말이 함께 걸린다 — 매 턴 나오는 말은 넣지 않는다", () => {
-    const coach = generateHeadCoach(42, "manutd");
-    expect(coach.keywords).toEqual(expect.arrayContaining(["수석코치", "코치", coach.name]));
-    const owner = generateOwner(42, "manutd");
-    expect(owner.keywords).toEqual(expect.arrayContaining(["구단주", "회장", "보드"]));
-    const reporter = generateReporters(42, "arsenal")[0]!;
-    expect(reporter.keywords).toEqual(
-      expect.arrayContaining(["기자", "회견", "인터뷰", reporter.outlet!]),
-    );
-    // "이적"처럼 매 턴 나오는 말이 한 턴 상한 3장을 다 채우면 불린 사람이 밀린다
-    for (const persona of [coach, owner, reporter]) expect(persona.keywords).not.toContain("이적");
+  it("시드 키워드는 인물을 식별하고 직책과 매체로 다른 사람까지 부르지 않는다", () => {
+    const people = [
+      generateHeadCoach(42, "manutd"),
+      generateOwner(42, "manutd"),
+      ...generateReporters(42, "arsenal"),
+    ];
+    for (const person of people) {
+      expect(person.characterBook.keywords).toContain(person.name);
+      for (const generic of [
+        "수석코치",
+        "코치",
+        "구단주",
+        "회장",
+        "보드",
+        "기자",
+        "회견",
+        "인터뷰",
+        "이적",
+        person.outlet,
+      ]) {
+        if (generic) expect(person.characterBook.keywords).not.toContain(generic);
+      }
+    }
   });
 });
 
-/**
- * 인물 사전 갱신 — 이력이 접힐 때 LLM에 맡기는 둘 (people.md §9-1).
- * 성격·동기·말투는 시드의 것이고, 코어가 검사해 통과한 것만 세이브에 남는다.
- */
-describe("인물 사전 갱신", () => {
-  const draftOf = (over: Partial<CharacterDraft> = {}): CharacterDraft => ({
-    characterId: "미란다 코스타",
-    name: "미란다 코스타",
-    role: "friend",
-    archetype: "옛 동료",
-    traits: ["직설적", "오래 봤다"],
-    motivation: "감독이 무너지지 않게 옆에 있고 싶다.",
-    speechStyle: { note: "반말. 짧게 자른다.", samples: ["그만 좀 해. 얼굴이 말이 아니야."] },
-    ...over,
-  });
-
-  it("이름이 이미 선 화자와 겹치면 등록하지 않는다", () => {
-    const state = createTestGame();
-    const before = state.personas!.length;
-    const squadName = state.players.find((p) => p.teamId === state.userTeamId)!.name;
-
-    // 우리 선수와 같은 이름의 에이전트 — 화면이 두 사람을 한 사람으로 읽는다
-    expect(registerCharacters(state, [draftOf({ characterId: squadName, name: squadName })])).toBe(
-      0,
-    );
-    // 공백만 다른 이름도 같은 사람이다 (normalizeSpeaker)
-    const spaced = squadName.replace(/\s+/gu, "");
-    expect(registerCharacters(state, [draftOf({ characterId: spaced, name: spaced })])).toBe(0);
-    expect(state.personas).toHaveLength(before);
-
-    // 겹치지 않는 이름은 선다 — 시드와 키워드는 코어가 채운다
-    expect(registerCharacters(state, [draftOf()])).toBe(1);
-    const added = state.personas!.find((p) => p.characterId === "미란다 코스타")!;
-    expect(() => PersonaSchema.parse(added)).not.toThrow();
-    expect(added.keywords).toEqual(expect.arrayContaining(["미란다 코스타", "코스타"]));
-    // 같은 세이브는 같은 사람을 만난다
-    const twin = createTestGame();
-    registerCharacters(twin, [draftOf()]);
-    expect(twin.personas!.at(-1)!.seed).toBe(added.seed);
-    // 두 번째 등록은 이름이 이미 서 있어 걸린다
-    expect(registerCharacters(state, [draftOf()])).toBe(0);
-  });
-
-  it("이미 있는 characterId는 자리를 지킨다 — 성격도 말투도 덮이지 않는다", () => {
-    const state = createTestGame();
-    const coach = headCoachOf(state);
-    const before = structuredClone(coach);
-
-    expect(
-      registerCharacters(state, [
-        draftOf({
-          characterId: coach.characterId,
-          name: coach.name,
-          role: "friend",
-          archetype: "지어낸 원형",
-          traits: ["LLM이 적은 성격"],
-          speechStyle: { note: "지어낸 말투.", samples: ["지어낸 대사."] },
-        }),
-      ]),
-    ).toBe(0);
-    expect(state.personas!.find((p) => p.role === "head_coach")).toEqual(before);
-  });
-
-  it("자리가 하나뿐인 역할과 선수는 등록할 수 없다", () => {
-    const state = createTestGame();
-    const before = state.personas!.length;
-    for (const role of ["head_coach", "owner", "player"] as const) {
-      expect(
-        registerCharacters(state, [
-          draftOf({ characterId: `새 ${role}`, name: `새 ${role}`, role }),
-        ]),
-        role,
-      ).toBe(0);
-    }
-    expect(state.personas).toHaveLength(before);
-  });
-
-  it("명부와 리그의 이름 위에는 등록할 수 없고, 그 앞으로 적힌 기억은 반영된다", () => {
-    const state = createTestGame();
-    const before = state.personas!.length;
-
-    // 명부 이름으로 friend를 세우면 인물 사전이 등록본을 먼저 찾아 표의 인격이 가려진다
-    expect(
-      registerCharacters(state, [draftOf({ characterId: "조제 무리뉴", name: "조제 무리뉴" })]),
-    ).toBe(0);
-    // 사전 밖 리그 선수의 이름도 이 세계가 이미 아는 이름이다 — 파생 선수가 가려진다
-    const outsider = state.players.find((p) => p.teamId !== state.userTeamId)!;
-    expect(
-      registerCharacters(state, [draftOf({ characterId: outsider.name, name: outsider.name })]),
-    ).toBe(0);
-    expect(state.personas).toHaveLength(before);
-
-    // 압축이 적은 명부 인물·파생 선수의 기억은 조용히 버려지지 않는다
-    expect(
-      applyCharacterMemories(state, [
-        { characterId: "조르제 멘데스", text: "재계약 조건을 두고 한 차례 부딪혔다" },
-        { characterId: outsider.name, text: "경기 뒤 터널에서 짧게 인사를 나눴다" },
-      ]),
-    ).toBe(2);
-  });
-
-  it("화자가 아닌 이름의 기억은 버려지고, 인물당 상한을 넘으면 오래된 것부터 밀린다", () => {
-    const state = createTestGame();
-    const coach = headCoachOf(state);
-
-    // GM이 지어낸 이름에 붙인 기억은 아무에게도 닿지 않는다
-    expect(
-      applyCharacterMemories(state, [{ characterId: "없는 사람", text: "무언가 있었다" }]),
-    ).toBe(0);
-    expect(state.characterMemories ?? []).toHaveLength(0);
-
-    // 스키마 밖 — 120자 상한과 무게 1~5는 CharacterMemorySchema가 정한다
-    expect(
-      applyCharacterMemories(state, [
-        { characterId: coach.characterId, text: "긴".repeat(121) },
-        { characterId: coach.characterId, text: "무게가 범위 밖이다", salience: 9 },
-      ]),
-    ).toBe(0);
-
-    // 날짜는 모델이 아니라 세이브가 적는다. 같은 문장은 두 번 쌓이지 않는다
-    expect(
-      applyCharacterMemories(state, [
-        { characterId: coach.characterId, text: "기억 1" },
-        { characterId: coach.characterId, text: "기억 1" },
-      ]),
-    ).toBe(1);
-    expect(state.characterMemories![0]).toEqual({
-      characterId: coach.characterId,
-      date: state.date,
-      text: "기억 1",
-      salience: 2,
-    });
-
-    const owner = ownerOf(state);
-    applyCharacterMemories(state, [{ characterId: owner.characterId, text: "구단주의 기억" }]);
-    applyCharacterMemories(
-      state,
-      Array.from({ length: CHARACTER_MEMORY_KEEP + 1 }, (_, i) => ({
-        characterId: coach.characterId,
-        text: `기억 ${i + 2}`,
-      })),
-    );
-
-    const mine = state.characterMemories!.filter((m) => m.characterId === coach.characterId);
-    expect(mine).toHaveLength(CHARACTER_MEMORY_KEEP);
-    expect(mine.map((m) => m.text)).toEqual(
-      Array.from({ length: CHARACTER_MEMORY_KEEP }, (_, i) => `기억 ${i + 3}`),
-    );
-    // 다른 인물의 기억은 밀리지 않는다
-    expect(state.characterMemories!.some((m) => m.characterId === owner.characterId)).toBe(true);
-  });
-});
-
-describe("관계 등급 — 이야기가 사이를 바꾼다 (people.md §6)", () => {
-  const base = createTestGame(42);
-  /** 장부를 건드리는 시험이라 매번 새 판을 뜬다 — 관계 줄은 세이브의 값이다 */
-  const fresh = (): GameState => ({ ...base, relations: [] });
-  /** 압축이 부르는 이름 — 열쇠가 아니라 사람 이름이라야 문을 지난다 */
-  const managerName = base.manager.name;
-
-  it("쌍은 무순서다 — 어느 쪽으로 물어도 같은 값이고 줄은 하나다", () => {
-    const state = fresh();
-    const [a, b] = playersOf(state, state.userTeamId) as [GamePlayer, GamePlayer];
-    setRelationTier(state, a.name, b.name, "close");
-    setRelationTier(state, b.name, a.name, "trusted");
-    expect(state.relations).toHaveLength(1);
-    expect(relationTierOf(state, a.id, b.id)).toBe(relationTierOf(state, b.id, a.id));
-  });
-
-  it("스태프와 등록한 친구도 기억에서 관계가 쌓인다", () => {
-    const state = fresh();
-    const staff = state.personas.find((p) => p.role === "medic")!;
-    expect(
-      registerCharacters(state, [
-        {
-          ...headCoachOf(state),
-          characterId: "오랜 친구",
-          name: "오랜 친구",
-          role: "friend",
-        },
-      ]),
-    ).toBe(1);
-    for (const characterId of [staff.characterId, "오랜 친구"]) {
-      expect(setRelationTier(state, managerName, characterId, "close")).toBe(true);
-      expect(relationTierOf(state, MANAGER_SUBJECT, characterId)).toBe("close");
+describe("캐릭터북이 인물 서사의 유일한 원본이다", () => {
+  it("카탈로그 편집은 시드 서술 전체를 대체하고 고용 사실을 보존한다", () => {
+    const previous = process.env.STORY_FM_DATA_DIR;
+    const directory = mkdtempSync(join(tmpdir(), "story-persona-override-"));
+    process.env.STORY_FM_DATA_DIR = directory;
+    try {
+      const original = generateHeadCoach(42, "arsenal", "2026-07-01");
+      const book = {
+        name: "바꿀 수 없는 신원",
+        keywords: ["별칭"],
+        description: "직접 쓴 설명",
+        information: "직접 쓴 정보",
+      };
+      writePersonaBooks({ [original.characterId]: book });
+      const edited = generateHeadCoach(42, "arsenal", "2026-07-01");
+      expect(edited.characterBook).toEqual({ ...book, name: original.name });
+      expect(edited.employment).toEqual(original.employment);
+      expect(edited.real).toBe(original.real);
+      for (const field of ["archetype", "traits", "motivation", "speechStyle", "keywords"])
+        expect(edited).not.toHaveProperty(field);
+      edited.characterBook.keywords.push("세이브 안에서만 변경");
+      expect(generateHeadCoach(42, "arsenal", "2026-07-01").characterBook.keywords).toEqual([
+        "별칭",
+      ]);
+    } finally {
+      if (previous === undefined) delete process.env.STORY_FM_DATA_DIR;
+      else process.env.STORY_FM_DATA_DIR = previous;
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 
-  it("한 번에 한 칸까지 — 두 칸을 부른 제안은 한 칸으로 잘린다", () => {
-    const state = fresh();
-    const player = playersOf(state, state.userTeamId)[0]!;
-    expect(relationTierOf(state, MANAGER_SUBJECT, player.id)).toBe("cordial");
-
-    setRelationTier(state, managerName, player.name, "hostile");
-    expect(relationTierOf(state, MANAGER_SUBJECT, player.id)).toBe("distant");
-    setRelationTier(state, managerName, player.name, "hostile");
-    expect(relationTierOf(state, MANAGER_SUBJECT, player.id)).toBe("strained");
-    // 제자리를 부르면 장부가 움직이지 않는다 — 안 움직인 쌍으로 세이브를 채우지 않는다
-    expect(setRelationTier(state, managerName, player.name, "strained")).toBe(false);
+  it("생성된 인물에는 초기 책과 신원·고용 사실만 남는다", () => {
+    const people = [
+      generateHeadCoach(42, "arsenal", "2026-07-01"),
+      generateOwner(42, "arsenal"),
+      ...generateReporters(42, "arsenal"),
+      ...generateStaff(42, "arsenal", "2026-07-01"),
+      generateVirtualManager(42, "검증 감독"),
+      ...worldFigures({ userTeamId: "arsenal" }),
+    ];
+    for (const person of people) {
+      expect(PersonaSchema.parse(person)).toEqual(person);
+      expect(CharacterBookContentSchema.parse(person.characterBook)).toEqual(person.characterBook);
+      expect(person.characterBook.name).toBe(person.name);
+      for (const field of ["archetype", "traits", "motivation", "speechStyle", "keywords"])
+        expect(person).not.toHaveProperty(field);
+    }
+    expect(people[0]!.employment?.teamId).toBe("arsenal");
+    expect(people[0]!.real).toBe(true);
   });
 
-  it("모르는 화자는 반려한다 — 줄이 생기지 않는다", () => {
-    const state = fresh();
-    const player = playersOf(state, state.userTeamId)[0]!;
-    expect(setRelationTier(state, "이름 없는 누군가", player.name, "close")).toBe(false);
-    // 남의 팀 선수도 관계 장부의 열쇠가 없다
-    const theirs = state.players.find((p) => p.teamId !== state.userTeamId)!;
-    expect(setRelationTier(state, managerName, theirs.name, "close")).toBe(false);
-    expect(state.relations).toHaveLength(0);
-  });
-
-  it("한 압축이 한 쌍을 두 번 옮기지 못한다 — 같은 쌍의 둘째 줄은 버린다", () => {
-    const state = fresh();
-    const player = playersOf(state, state.userTeamId)[0]!;
-    const moved = applyRelationTiers(state, [
-      { a: managerName, b: player.name, tier: "distant" },
-      { a: player.name, b: managerName, tier: "strained" },
-    ]);
-    expect(moved).toBe(1);
-    expect(relationTierOf(state, MANAGER_SUBJECT, player.id)).toBe("distant");
-  });
-
-  it("같은 감독을 이름과 내부 id로 제출해도 한 쌍은 한 번만 움직인다", () => {
-    const state = fresh();
-    const player = playersOf(state, state.userTeamId)[0]!;
-    expect(relationTierOf(state, MANAGER_SUBJECT, player.id)).toBe("cordial");
+  it("편집된 설명과 키워드는 시드 동기화 뒤에도 조회와 검색의 원본이다", () => {
+    const state = createTestGame();
+    const coach = headCoachOf(state);
+    const original = structuredClone(coach);
+    const entry = state.characterBook.find((row) => row.id === `person:${coach.characterId}`)!;
     expect(
-      applyRelationTiers(state, [
-        { a: state.manager.name, b: player.name, tier: "hostile" },
-        { a: player.name, b: MANAGER_SUBJECT, tier: "hostile" },
-      ]),
-    ).toBe(1);
-    expect(relationTierOf(state, MANAGER_SUBJECT, player.id)).toBe("distant");
-    expect(state.relations).toHaveLength(1);
-  });
-
-  it("가운데 둘은 결이 없다 — 그래서 카드에 서지 않는다", () => {
-    expect(stanceOfTier("distant")).toBeNull();
-    expect(stanceOfTier("cordial")).toBeNull();
-    expect(stanceOfTier("strained")).toBe("tense");
-    expect(stanceOfTier("close")).toBe("aligned");
-    // 여섯 칸에 가운데가 없다 — 어느 쪽으로도 기울지 않은 답을 낼 자리를 두지 않는다
-    expect(RELATION_TIERS).toHaveLength(6);
-    expect(RELATION_TIERS.filter((t) => stanceOfTier(t) === null)).toEqual(["distant", "cordial"]);
-  });
-
-  it("이적과 방출은 실제로 쌓인 관계를 지우지 않는다", () => {
-    const state = structuredClone(base);
-    const mates = playersOf(state, state.userTeamId);
-    const [a, b] = [mates[0]!, mates[1]!];
-    setRelationTier(state, managerName, a.name, "close");
-    setRelationTier(state, a.name, b.name, "strained");
-    expect(state.relations!.length).toBe(2);
-
-    const before = structuredClone(state.relations);
-    toFreeAgency(state, a, "release-agreed");
-    expect(a.teamId).not.toBe(state.userTeamId);
-    expect(state.relations).toEqual(before);
-    expect(relationTierOf(state, MANAGER_SUBJECT, a.id)).toBe("close");
-    expect(relationTierOf(state, a.id, b.id)).toBe("distant");
-  });
-
-  it("우리 선수의 카드가 감독과의 사이를 맨 앞에 싣는다 — 가운데 둘은 서지 않는다", () => {
-    const state = fresh();
-    const player = playersOf(state, state.userTeamId)[0]!;
-    const cardOf = (s: GameState) =>
-      selectCharacters(s, { pointed: [player.name] }).find((e) => e.characterId === player.name)!;
-
-    // 부임 첫날의 `cordial`은 결이 없어 감독 줄이 서지 않는다
-    expect(cardOf(state).relations?.some((r) => r.name === state.manager.name) ?? false).toBe(
-      false,
+      requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "새로운 경험" })
+        .ok,
+    ).toBe(true);
+    const job = state.characterBookJobs.at(-1)!;
+    expect(
+      completeCharacterUpdate(state, job.id, entry.version, {
+        keywords: ["바뀐별칭"],
+        description: "이제 선수를 먼저 듣는 코치",
+        information: "새로운 경험으로 예전 생각을 바꿨다.",
+      }),
+    ).toBe(true);
+    syncCharacterBook(state);
+    expect(personaBookOf(state, coach)).toBe(entry);
+    expect(staffViews(state).find((row) => row.name === coach.name)?.description).toBe(
+      entry.description,
     );
-
-    const cold = fresh();
-    setRelationTier(cold, managerName, player.name, "distant");
-    setRelationTier(cold, managerName, player.name, "strained");
-    const line = cardOf(cold).relations![0]!;
-    expect(line.name).toBe(cold.manager.name);
-    expect(line.stance).toBe("tense");
-    expect(line.tier).toBe("strained");
-  });
-
-  it("압축 브리프는 감독 ↔ 사람들의 지금 등급을 이름으로 낸다", () => {
-    const state = fresh();
-    const player = playersOf(state, state.userTeamId)[0]!;
-    setRelationTier(state, managerName, player.name, "close");
-
-    const rows = relationTierBrief(state);
-    expect(rows.every((r) => r.a === managerName)).toBe(true);
-    expect(rows.find((r) => r.b === player.name)?.tier).toBe("close");
-    // 수석코치도 표에 선다 — 코어가 판정할 사건이 하나도 없는 쌍이라 표가 유일한 앵커다
-    expect(rows.some((r) => r.b === headCoachOf(state).name)).toBe(true);
+    expect(selectCharacterBook([entry], "바뀐별칭", [])).toHaveLength(1);
+    expect(selectCharacterBook([entry], coach.characterBook.keywords.at(-1)!, [])).toHaveLength(0);
+    expect(coach).toEqual(original);
   });
 });

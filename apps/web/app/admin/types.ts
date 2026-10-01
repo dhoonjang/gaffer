@@ -3,6 +3,7 @@ import {
   ATTRIBUTE_AXES,
   mirrorBaseOf,
   type AttributeAxis,
+  type CharacterBookContent,
   type MatchStage,
 } from "@story-fm/domain";
 import type {
@@ -31,6 +32,7 @@ export interface CatalogPosition {
 }
 
 export interface CatalogPlayer extends Record<AttributeAxis, number> {
+  characterBook?: CharacterBookContent;
   id: string;
   teamId: string;
   nameKo: string;

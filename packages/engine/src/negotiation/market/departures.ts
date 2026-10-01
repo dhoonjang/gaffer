@@ -18,7 +18,6 @@ import { makeRng } from "../../common/core/rng";
 import {
   activeContract,
   benchRunOf,
-  clearInterests,
   type GameState,
   groupOf,
   onLoanFromUs,
@@ -26,52 +25,20 @@ import {
   pendingContractOf,
   playerById,
   playersOf,
-  pushNarrative,
   releaseFromTactics,
   seasonStatOf,
   squadShortfall,
   teamName,
   weeklyWagesOf,
-  withdrawTransferRequest,
 } from "../../common/core/state";
 import { isMarketOnlyLeague } from "../../common/data/league-catalog";
 import { isClubTeam, leagueOfTeam } from "../../common/data/team-catalog";
-import { leaderWeightOf } from "../../common/players/hierarchy";
 import { closeMentoringsFor } from "../../common/players/mentoring";
 import { assignSquadNumber } from "../../common/players/numbers";
 import { admitOnLoan, arrivingSquadLevel } from "../../common/players/registration";
 import { forgetRoles } from "../../common/players/role-memory";
 import { clubWageBudget, estimateWeeklyWage, WAGE_HEADROOM, wageSubjectOf } from "../economy/wages";
 import { squadShortfallText, transferWindowLabel, windowOpenForTeam } from "./market";
-
-/**
- * 팀을 떠나는 **다른 길들** — 방출과 임대.
- *
- * 매각만 있으면 나가는 문이 하나뿐이라 감독이 할 수 있는 게 "누가 사 주면"으로
- * 끝난다. 실제 구단은 안 팔리는 계약을 위약금을 물고 끊고, 못 쓰는 유망주를
- * 내보내 뛰게 한다. 둘 다 **대가가 분명한 선택**이라 밸런스가 흔들리지 않는다:
- * 해지는 돈을 잃고, 임대는 전력을 잃는다.
- *
- * 해지의 **값을 흥정하는 길**은 협상 테이블에 있다(`negotiation.ts`의 `openRelease`).
- * 여기 남은 것은 그 흥정의 종착지와, 흥정 없이 전액을 물고 끊는 바깥값이다.
- */
-
-/**
- * 핵심 자원이 떠났을 때 남은 1군이 잃는 사기 — 폼으로는 닷새치 회귀에 해당한다.
- * 흔적이지 처벌이 아니다 (transfer.md §2). **리더 배수가 곱해진 값이 실제 폭이다.**
- */
-export const DEPARTURE_SQUAD_MORALE = -3;
-
-/**
- * 그 사람이 나갔을 때 라커룸이 잃는 사기 — 주장 −6 · 부주장 −5 · 리더 그룹 −4 ·
- * 나머지 −3 (people.md §5-1). 라커룸을 이끌던 사람이 나가는 것과 백업이 나가는
- * 것이 같은 값이면, 누구를 정리할지가 장부에서 갈리지 않는다.
- *
- * ⚠️ **선수가 무소속이 되기 전에 읽어야 한다** — 완장은 떠나는 문에서 벗겨진다.
- */
-export function departureSquadMorale(state: GameState, player: GamePlayer): number {
-  return -Math.round(-DEPARTURE_SQUAD_MORALE * leaderWeightOf(state, player));
-}
 
 /** 무소속 — 클럽이 아니라 클럽이 없는 상태 (team-catalog `freeagents`) */
 export const FREE_AGENT_TEAM = "freeagents";
@@ -251,13 +218,6 @@ export function clearDepartedState(state: GameState, player: GamePlayer, from: s
   releaseFromTactics(state, from, player.id);
   state.transferList = state.transferList.filter((l) => l.gamePlayerId !== player.id);
   state.playerTraining = state.playerTraining.filter((t) => t.gamePlayerId !== player.id);
-  state.issues = state.issues.filter((i) => i.gamePlayerId !== player.id);
-  // 떠난 사람에게 한 약속은 지킬 자리가 없다 (people.md §5-2 — 불만과 같은 결)
-  state.promises = state.promises.filter((pr) => pr.gamePlayerId !== player.id);
-  // 요청 장부도 같은 문을 지난다 — 떠난 선수의 요청에 감독이 답할 자리가 없다
-  withdrawTransferRequest(state, player.id);
-  // 관심도 같다 — 우리 라커룸에 없는 사람을 두고 나는 소문은 물을 자리가 없다 (§1-2)
-  clearInterests(state, (i) => i.gamePlayerId === player.id);
   forgetRoles(state, player.id);
   player.isCaptain = false;
   player.isViceCaptain = false;
@@ -379,8 +339,6 @@ export function loanPlayer(
     type: "loan",
     fee: 0,
   });
-
-  pushNarrative(state, `${player.name} ${teamName(destination.id)} 임대 (복귀 ${until})`, 3);
   return {
     ok: true,
     message:
@@ -469,7 +427,6 @@ export function returnDueLoans(state: GameState, digest: TickSink): void {
       digest.push(
         `${josa(player.name, "이/가")} ${teamName(from)} 임대를 마치고 돌아왔습니다 (2군 · ${ageOf(player.birthdate, state.date)}세)`,
       );
-      pushNarrative(state, `${player.name} 임대 복귀`, 3);
     }
   }
 }
@@ -702,7 +659,6 @@ export function signFreeAgents(state: GameState, digest: TickSink): void {
     digest.push(
       `무소속 ${josa(player.name, "이/가")} ${josa(teamName(suitor), "과/와")} 계약했습니다`,
     );
-    pushNarrative(state, `${player.name} ${teamName(suitor)} 자유계약`, 2);
   }
 }
 

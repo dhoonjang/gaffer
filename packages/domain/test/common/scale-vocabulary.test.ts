@@ -3,14 +3,9 @@ import {
   FAMILIARITY_BASELINE,
   FAMILIARITY_MAX,
   FAMILIARITY_TIERS,
-  REPUTATION_MAX,
-  REPUTATION_MIN,
-  REPUTATION_TIERS,
-  describeReputation,
   POSITION_CODES,
   familiarityLabel,
   findRole,
-  reputationLabel,
   roleChoiceText,
   roleVocabularyText,
   rolesFor,
@@ -31,43 +26,6 @@ const laddersCover = (tiers: readonly { min: number }[]) => {
   expect(mins[mins.length - 1]).toBe(0);
   expect(new Set(mins).size).toBe(mins.length);
 };
-
-describe("평판 구간 → 어휘", () => {
-  it("구간이 0~100을 빈틈없이 덮는다", () => {
-    laddersCover(REPUTATION_TIERS);
-  });
-
-  it("경계에서 넘어간다 — min은 그 구간, min-1은 아래 구간", () => {
-    REPUTATION_TIERS.forEach((tier, i) => {
-      const below = REPUTATION_TIERS[i + 1];
-      expect(reputationLabel("board", tier.min)).toBe(tier.ko.board);
-      if (below) expect(reputationLabel("board", tier.min - 1)).toBe(below.ko.board);
-    });
-  });
-
-  it("눈금의 양 끝에도 말이 붙는다", () => {
-    expect(reputationLabel("media", REPUTATION_MIN)).toBe("뭇매");
-    expect(reputationLabel("media", REPUTATION_MAX)).toBe("극찬");
-  });
-
-  /**
-   * 코어가 이미 쓰는 문턱이 구간의 경계다 (career.md §4 · §5.3) — 설득 논거
-   * `manager_reputation`은 60에서 통하고, 보드 신뢰 계수는 30에서 바닥나 80에서 1.0이다.
-   * 이 셋이 구간 안쪽으로 밀리면 "어휘가 판정과 같은 자리에서 바뀐다"가 깨진다.
-   */
-  it("코어의 문턱 30·60·80이 그대로 구간 경계다", () => {
-    expect(REPUTATION_TIERS.map((t) => t.min)).toEqual([80, 60, 45, 30, 0]);
-    expect(reputationLabel("board", 59)).not.toBe(reputationLabel("board", 60));
-    expect(reputationLabel("board", 29)).not.toBe(reputationLabel("board", 30));
-    expect(reputationLabel("board", 79)).not.toBe(reputationLabel("board", 80));
-  });
-
-  it("세 축을 한 줄로 잇는다 — 축 이름과 어휘가 짝을 이룬다", () => {
-    expect(describeReputation({ board: 72, media: 50, squad: 31 })).toBe(
-      "보드 두터움 · 미디어 관망 · 선수단 동요",
-    );
-  });
-});
 
 describe("팀 전술 적응 구간 → 어휘", () => {
   it("구간이 0~100을 빈틈없이 덮는다", () => {

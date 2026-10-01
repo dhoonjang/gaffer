@@ -11,7 +11,6 @@ import {
   type MatchSettlementEntry,
   type GameState,
   settleMatchRating,
-  applyMoodNotes,
   matchRated,
 } from "@story-fm/engine";
 import { ATTRIBUTE_AXES, AXIS_KO } from "@story-fm/domain";
@@ -207,7 +206,6 @@ export async function runFinalizeMatch(
       );
       if (result.already) return;
       if (result.applied === 0) throw new ModelOutputError("반영된 경기 평점이 없습니다");
-      applyMoodNotes(state, parsed.data.moods ?? [], allowed);
       settled = result.applied;
     },
     () => matchRated(state, brief.matchId),

@@ -14,10 +14,7 @@ import {
   squadRegistration,
   u21CutoffDate,
   SQUAD_STATUSES,
-  SQUAD_STATUS_STARTS,
-  promiseKept,
   squadStatusRank,
-  startShortfall,
   type PositionGroup,
   type RegistrablePlayer,
 } from "@story-fm/domain";
@@ -178,38 +175,7 @@ describe("국적 — 협회 표와 EU 자격", () => {
   });
 });
 
-/** 계약 지위 — 약속 이행과 출전 불만이 함께 쓰는 자 (people.md §5-2) */
-describe("지위가 부르는 선발", () => {
-  const WINDOW = 8;
-
-  it("여덟 경기 창의 경계는 핵심 6 · 주전 4 · 로테이션 2다", () => {
-    const boundary = { key: 6, starter: 4, rotation: 2 } as const;
-    for (const [status, need] of Object.entries(boundary)) {
-      const s = status as keyof typeof boundary;
-      expect(promiseKept((need - 1) / WINDOW, s)).toBe(false);
-      expect(promiseKept(need / WINDOW, s)).toBe(true);
-    }
-  });
-
-  it("백업·유망주는 한 번도 서지 않아도 약속이 지켜진다 — 벤치가 곧 이행이다", () => {
-    for (const status of ["backup", "prospect"] as const) {
-      expect(SQUAD_STATUS_STARTS[status]).toBe(0);
-      expect(promiseKept(0, status)).toBe(true);
-      expect(startShortfall(0, WINDOW, status)).toBe(0);
-    }
-  });
-
-  it("모자란 선발 수는 이행 판정과 어긋나지 않는다 — 자가 하나여서다", () => {
-    for (const status of SQUAD_STATUSES) {
-      for (let played = 1; played <= 12; played += 1) {
-        for (let starts = 0; starts <= played; starts += 1) {
-          const kept = promiseKept(starts / played, status);
-          expect(startShortfall(starts, played, status) === 0).toBe(kept);
-        }
-      }
-    }
-  });
-
+describe("계약 지위", () => {
   it("서열은 배열 순서 그대로다 — 흥정의 한 칸이 이 간격이다", () => {
     expect(squadStatusRank("prospect")).toBe(0);
     expect(squadStatusRank("key")).toBe(SQUAD_STATUSES.length - 1);
@@ -217,8 +183,6 @@ describe("지위가 부르는 선발", () => {
       const lower = SQUAD_STATUSES[i - 1]!;
       const upper = SQUAD_STATUSES[i]!;
       expect(squadStatusRank(upper) - squadStatusRank(lower)).toBe(1);
-      // 위 지위일수록 더 많은 선발을 부른다 — 단조롭지 않으면 흥정의 한 칸이 뜻을 잃는다
-      expect(SQUAD_STATUS_STARTS[upper]).toBeGreaterThanOrEqual(SQUAD_STATUS_STARTS[lower]);
     }
   });
 });

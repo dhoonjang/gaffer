@@ -68,7 +68,6 @@ export interface LiveSideSetup {
   kickoffTactics: TacticsSpec;
   setPieceTakers?: SetPieceTakers;
   setPieceRoutine?: SetPieceRoutine;
-  derbyHeat: number;
 }
 
 /** 킥오프에 정해지고 경기 내내 바뀌지 않는 것 */
@@ -144,7 +143,7 @@ function sideInputOf(match: LiveMatch, side: MatchSide): LiveSideInput {
     slots,
     tactics,
     uptake: instructionUptake(setup.managerTactics, squadFamiliarityOf(slots)),
-    intensity: matchIntensity(tactics, setup.derbyHeat),
+    intensity: matchIntensity(tactics),
     ...(match.setPieceTakers[side] ? { setPieceTakers: match.setPieceTakers[side] } : {}),
     ...(match.setPieceRoutine[side] ? { setPieceRoutine: match.setPieceRoutine[side] } : {}),
   };

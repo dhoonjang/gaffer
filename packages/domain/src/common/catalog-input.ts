@@ -3,6 +3,7 @@ import { DateString } from "./date-string";
 import { isAssociation } from "./nationality";
 import { ATTRIBUTE_AXES, positionGroupOf, type AttributeAxis } from "./player";
 import { ClubHonourSchema } from "./team";
+import { CharacterBookContentSchema } from "./character-book";
 import { FormationSchema } from "./team-tactics";
 
 export const CATALOG_MAX_WAGE = 2_000_000;
@@ -40,6 +41,7 @@ const positions = z
 
 /** Catalog field validation is shared by forms, HTTP and deterministic commands. */
 export const CatalogPlayerInputSchema = z.object({
+  characterBook: CharacterBookContentSchema.optional(),
   nameKo: name(40),
   nameEn: name(60).optional(),
   birthdate: DateString,
@@ -64,6 +66,7 @@ export const CatalogPlayerCreateSchema = CatalogPlayerInputSchema.extend({
 });
 const grade = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 export const CatalogTeamInputSchema = z.object({
+  characterBook: CharacterBookContentSchema.optional(),
   id: z
     .string()
     .trim()

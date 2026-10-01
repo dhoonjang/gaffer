@@ -43,14 +43,8 @@ import { GET as usageGet } from "../../app/api/admin/usage/route";
 import { beginGameUsage, meterLlm, resetLlmUsage, type TurnResult } from "@story-fm/llm";
 import type { UsageResponse } from "../../app/admin/types";
 import { PATCH as cupPatch } from "../../app/api/admin/catalog/cup/[cupId]/route";
-import {
-  boardExpectationOfTier,
-  catalogTierOf,
-  cupCatalogById,
-  FRIENDLY_ROUNDS,
-  teamsOfLeague,
-} from "@story-fm/engine";
-import { FORMATION_LAYOUTS, boardExpectationText } from "@story-fm/domain";
+import { catalogTierOf, cupCatalogById, FRIENDLY_ROUNDS, teamsOfLeague } from "@story-fm/engine";
+import { FORMATION_LAYOUTS } from "@story-fm/domain";
 import type { ChatTurn } from "@story-fm/engine";
 import { visibleChat } from "../../application/lib/store";
 import { buildPlayerNameIndex, playerIdsIn } from "../../domains/common/lib/player-names";
@@ -118,17 +112,8 @@ beforeAll(() => {
 describe("API — 온보딩부터 경기까지", () => {
   it("팀 카탈로그는 물었을 때만 온다 — 랜딩은 게임 목록만 받는다", async () => {
     const data = await getCatalog(new Request("http://test.local/api/games?catalog=1")).json();
-    // 보드 기대는 시즌 평가가 쓰는 문구 그대로 — 화면이 tier로 따로 만들지 않는다
-    const teams = data.teams as Array<{ id: string; expectation: string }>;
-    expect(teams.find((t) => t.id === "arsenal")?.expectation).toBe(
-      (() => {
-        const e = boardExpectationOfTier(catalogTierOf("arsenal"), teamsOfLeague("epl").length);
-        return boardExpectationText(e.code, e.target);
-      })(),
-    );
-
-    // 리그 행이 세우는 「20팀」과 보드 기대가 쓰는 인원은 **같은 수**다 — 응답이
-    // 한 번 세어 내려보내므로 화면이 팀 배열을 따로 세다가 갈릴 자리가 없다
+    const teams = data.teams as Array<{ id: string; tier: number }>;
+    expect(teams.find((team) => team.id === "arsenal")?.tier).toBe(catalogTierOf("arsenal"));
     const leagues = data.leagues as Array<{ id: string; size: number }>;
     expect(leagues.find((l) => l.id === "epl")?.size).toBe(teamsOfLeague("epl").length);
 
@@ -686,8 +671,6 @@ describe("API — 온보딩부터 경기까지", () => {
       season: state.season,
       teamId: state.userTeamId,
       tier: 3,
-      target: 14,
-      expectationCode: "mid",
     };
     saveGame(state);
 

@@ -436,8 +436,8 @@ function pickAssister(
 
 // ── 카드 · 부상 ──────────────────────────────────────────────────────────────
 
-function intensityOf(squad: SimSquad, derbyHeat = 0): number {
-  return matchIntensity(squad.tactics ?? DEFAULT_TACTICS, derbyHeat);
+function intensityOf(squad: SimSquad): number {
+  return matchIntensity(squad.tactics ?? DEFAULT_TACTICS);
 }
 
 /**
@@ -449,9 +449,8 @@ function sampleCardMinutes(
   squad: SimSquad,
   share: number,
   minuteOf: () => number,
-  derbyHeat = 0,
 ): number[] {
-  const count = samplePoisson(rng, teamCardRate(intensityOf(squad, derbyHeat)) * share);
+  const count = samplePoisson(rng, teamCardRate(intensityOf(squad)) * share);
   return Array.from({ length: count }, minuteOf).sort((a, b) => a - b);
 }
 
@@ -488,12 +487,11 @@ function rollInjury(
   label: MatchSide,
   into: string[],
   share = 1,
-  derbyHeat = 0,
 ): void {
   if (played.length === 0) return;
   const proneOf = (p: GamePlayer) => squad.proneness?.[p.id] ?? 1;
   const avgProneness = played.reduce((s, p) => s + proneOf(p), 0) / played.length;
-  if (rng() >= teamInjuryRate(intensityOf(squad, derbyHeat), avgProneness) * share) return;
+  if (rng() >= teamInjuryRate(intensityOf(squad), avgProneness) * share) return;
   const weights = played.map((p) => injuryWeight(p, 0, proneOf(p)));
   const total = weights.reduce((s, w) => s + w, 0);
   if (total <= 0) return;
@@ -696,7 +694,6 @@ function runTimeline(input: TimelineInput): TimelineResult {
   const score = { home: 0, away: 0 };
   const weighted = { home: 0, away: 0 };
   let totalMinutes = 0;
-  const derbyHeat = input.derby?.heat ?? 0;
 
   /** 벤치가 옮긴 전술 — 킥오프 값에서 `AI_SHIFT_BOUND` 안 */
   const kickoff: Record<MatchSide, TacticsSpec> = {
@@ -965,7 +962,7 @@ function runTimeline(input: TimelineInput): TimelineResult {
         const attackShare = current.xg[side] / QUICK_XG_BASE;
         const penalties = samplePoisson(
           rng,
-          PENALTY_PER_MATCH * window * attackShare * intensityOf(squads[other(side)], derbyHeat),
+          PENALTY_PER_MATCH * window * attackShare * intensityOf(squads[other(side)]),
         );
         for (let kick = 0; kick < penalties; kick++) {
           const taker = takerOnPitch(squads[side].setPieceTakers?.penalty, "penalty", active);
@@ -1125,10 +1122,9 @@ export function simulateExtraTime(
   const etMinute = () =>
     EXTRA_TIME_FIRST_MINUTE +
     Math.min(EXTRA_TIME_MINUTES - 1, Math.floor(rng() * EXTRA_TIME_MINUTES));
-  const derbyHeat = options.derby?.heat ?? 0;
   const cardMinutes = {
-    home: sampleCardMinutes(rng, home, share, etMinute, derbyHeat),
-    away: sampleCardMinutes(rng, away, share, etMinute, derbyHeat),
+    home: sampleCardMinutes(rng, home, share, etMinute),
+    away: sampleCardMinutes(rng, away, share, etMinute),
   };
   const sampled = runTimeline({
     squads,
@@ -1166,7 +1162,6 @@ export function simulateExtraTime(
       side,
       injuries,
       share,
-      derbyHeat,
     );
   }
   const sum = (side: MatchSide, read: (shot: QuickShot) => number) =>
@@ -1220,7 +1215,7 @@ export function quickSimOptionsOf(match: MatchRecord): {
  * 타 팀 간 경기 결과 (match.md §8)
  *
  * @param options.neutral 중립 경기장(결승) — 홈 계수가 1이다
- * @param options.derby 더비 표의 줄 — 카드·부상의 강도에 실린다
+ * @param options.derby 더비 표의 줄 — 경기 맥락
  */
 export function quickSimulate(
   home: SimSquad,
@@ -1231,11 +1226,10 @@ export function quickSimulate(
 ): QuickResult {
   const rng = makeRng(seed, `quick:${channel}`);
   const squads = { home, away };
-  const derbyHeat = options.derby?.heat ?? 0;
 
   const cardMinutes = {
-    home: sampleCardMinutes(rng, home, 1, () => quickMinuteOf(rng()), derbyHeat),
-    away: sampleCardMinutes(rng, away, 1, () => quickMinuteOf(rng()), derbyHeat),
+    home: sampleCardMinutes(rng, home, 1, () => quickMinuteOf(rng())),
+    away: sampleCardMinutes(rng, away, 1, () => quickMinuteOf(rng())),
   };
   const sampled = runTimeline({
     squads,
@@ -1276,7 +1270,6 @@ export function quickSimulate(
       side,
       injuries,
       1,
-      derbyHeat,
     );
   }
   const sum = (side: MatchSide, read: (shot: QuickShot) => number) =>

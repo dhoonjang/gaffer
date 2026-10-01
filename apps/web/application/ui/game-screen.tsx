@@ -166,15 +166,8 @@ function groupChatTurns(chat: readonly ChatTurn[]): ChatBlock[] {
 const TRACE_ENABLED = process.env.NODE_ENV !== "production";
 
 /**
- * **오늘의 안건** — 답을 미루면 기한이 지나가는 일이 띠에 선다 (overview.md §5).
- *
- * 회견은 다음 회견이 밀어내고, 찾아온 사람은 사흘이면 돌아가고, 약속의 판정은 기한
- * 하루뿐이다. 그것이 전부 GM의 스냅샷 안에만 있으면 감독은 모른 채 지나간다 — 장부가
- * 바뀐 것을 레일 말풍선이 가리키는 것과 같은 결로, **읽는 값**을 화면이 든다.
- *
- * 코어가 낸 사실(`views.attention`)을 그대로 세운다: 갈래 이름 · 여럿이면 수 ·
- * 하나면 이름 · 약속이면 남은 날. 문장도 안내도 붙이지 않는다 — 무엇을 할지는 감독이
- * 말로 정한다.
+ * 코어의 현재 안건(`views.attention`)을 갈래·건수·이름으로 표시한다.
+ * 감독의 답이 필요한 협상이며, 무엇을 할지는 감독이 말로 정한다.
  */
 function Agenda({ items }: { items: readonly AttentionItemView[] }) {
   if (items.length === 0) return null;
@@ -305,12 +298,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const ordersRef = useRef<MatchBoardOrder[]>([]);
   /**
-   * 전술판의 자동 저장 대기열 — **판이 아니라 화면이 쥔다.**
-   *
-   * 전술을 바꾸고 곧바로 말을 걸면, 예약된 저장이 아직 서버에 닿지 않은 채 턴이
-   * 나가 GM은 옛 전술로 답했다(화면엔 바꾼 판이 그대로 보이므로 코치만 딴소리를
-   * 하는 것처럼 보인다). 그래서 턴을 보내기 전에 여기서 대기열을 비운다 —
-   * 판이 접혀 사라져도 예약은 이 자리에 남는다.
+   * 화면이 자동 저장 대기열을 소유하고 턴 전송 전에 저장을 완료한다.
+   * 전술판이 접혀도 대기열은 유지되어 GM이 저장된 최신 전술을 읽는다.
    */
   const saverRef = useRef<LineupSaver | null>(null);
   saverRef.current ??= createLineupSaver();

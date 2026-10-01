@@ -2,16 +2,11 @@ import {
   type GameState,
   seasonStatOf,
   openInjury,
-  moodOf,
-  openPromises,
   contractTermsOf,
   lastSeasonAwardsOf,
   seasonMilestonesOf,
   formLabel,
   squadStatusOf,
-  hasIssue,
-  relationTierOf,
-  MANAGER_SUBJECT,
   awardLine,
   playerById,
   formatMoney,
@@ -24,11 +19,7 @@ import {
   type GamePlayer,
   seasonRating,
   SQUAD_STATUS_KO,
-  PROMISE_KIND_KO,
-  isPlayerDeal,
-  RELATION_TIER_KO,
   milestonePhrase,
-  describeReputation,
   mediaFactText,
 } from "@story-fm/domain";
 import {
@@ -54,8 +45,6 @@ function playerBlock(state: GameState, negotiation: Negotiation, player: GamePla
   const stat = seasonStatOf(state, player.id);
   const rating = seasonRating(stat);
   const injury = openInjury(state, player.id);
-  const mood = moodOf(state, player).note;
-  const promises = ours ? openPromises(state, player.id) : [];
   // 계약에 적힌 조건 — 재계약 테이블의 선수 쪽이 지난 약속을 읽는 자리다 (transfer.md §12-3)
   const contractTerms = ours ? contractTermsOf(state, player.id) : [];
   const awards = lastSeasonAwardsOf(state, player.id).slice(0, SITUATION_AWARDS);
@@ -71,18 +60,8 @@ function playerBlock(state: GameState, negotiation: Negotiation, player: GamePla
       : `이번 시즌: 출전 없음`,
     `폼 ${formLabel(player.state.form)}` +
       (injury ? ` · 부상 중` : "") +
-      ` · 지위 ${SQUAD_STATUS_KO[squadStatusOf(state, player)]}` +
-      (hasIssue(state, player.id) ? " · 라커룸에 불만이 서 있다" : ""),
-    ...(mood ? [`심경: ${mood}`] : []),
-    ...(promises.length > 0
-      ? [
-          `감독의 약속: ${promises.map((p) => `${PROMISE_KIND_KO[p.kind]} (${p.dueOn}까지)`).join(" · ")}`,
-        ]
-      : []),
+      ` · 지위 ${SQUAD_STATUS_KO[squadStatusOf(state, player)]}`,
     ...(contractTerms.length > 0 ? [`계약 조건: ${contractTerms.join(" · ")}`] : []),
-    ...(ours || isPlayerDeal(negotiation.kind)
-      ? [`감독과의 관계: ${RELATION_TIER_KO[relationTierOf(state, MANAGER_SUBJECT, player.id)]}`]
-      : []),
     ...(awards.length > 0
       ? [`지난 시즌 시상: ${awards.map((a) => awardLine(a)).join(" · ")}`]
       : []),
@@ -125,7 +104,6 @@ function ourClubBlock(state: GameState, otherTeamId: string | null): string[] {
   return [
     `<our_club name="${teamNameIn(state, us)}">`,
     ...[standingLine(state, us), euroLine(state, us)].filter((l): l is string => l !== null),
-    `감독 평판: ${describeReputation(state.manager.reputation)}`,
     ...(otherTeamId === null ? [] : [pastDealsLine(state, otherTeamId)].filter((l) => l !== null)),
     `</our_club>`,
   ];

@@ -249,7 +249,7 @@ export function busyResponse(error: unknown): Response {
 }
 
 export type TurnOutcome =
-  | { ok: true; payload: GamePayload }
+  | { ok: true; payload: GamePayload; characterUpdatesPending: boolean }
   /**
    * `retry`는 **이 턴을 그대로 다시 보내면 통할 수 있는가**다 — 화면의 배너가 이 값
    * 하나로 「다시 시도」를 세울지 정한다. 서버가 사실을 적어 보내므로 화면이 문구나
@@ -258,18 +258,8 @@ export type TurnOutcome =
   | { ok: false; status: number; error: string; retry: boolean; detail?: string; saved?: boolean };
 
 /**
- * LLM 실패를 감독에게 보일 한 줄과, 그 배너에 「다시 시도」를 세울지 — **게임 밖의
- * 사건**이므로 픽션 밖 말투로. 새 게임 첫 장면(`/api/games`)도 같은 문구를 쓴다 —
- * 폴백 장면은 없다.
- *
- * **고르는 근거는 `kind` 하나다** (models.md §1-1). 오류 문자열에서 낱말을 찾던
- * 예전 분류는 제공자가 메시지 문안을 손보는 날 조용히 무너졌고, 그 낱말을 지키느라
- * 오류 문구까지 코드의 제약이 됐다.
- *
- * ⚠️ **문구와 버튼은 한 줄에 함께 적는다.** 종류를 세우는 기준이 "화면이 다른 말을
- * 해야 하는가"라, 표가 둘로 갈리면 새 종류가 한쪽에만 들어가 문구는 바뀌었는데
- * 버튼은 그대로인 배너가 선다. `invalid_request`가 그 자리다 — 몇 번을 불러도 같은
- * 400이 오므로 다시 걸어 보라고 이르는 것은 사실과 다르다.
+ * LLM 실패의 문구와 재시도 가능 여부를 오류 kind별로 함께 정의한다.
+ * 새 게임 첫 장면과 일반 턴이 같은 표를 읽으며, 오류 문자열을 분류 근거로 사용하지 않는다.
  */
 const TURN_ERROR: Record<LlmErrorKind, { message: string; retry: boolean }> = {
   overloaded: { message: "모델 서버가 혼잡합니다", retry: true },
@@ -393,7 +383,7 @@ export function runTurnLocked(
               "pendingNegotiation",
               "phase",
             ] as const;
-            const allowed = new Set<string>([...fields, "narrative", "chat"]);
+            const allowed = new Set<string>([...fields, "chat"]);
             // Only negotiation references may change on existing chat messages at this checkpoint.
             // Every other saved field is a source or ledger boundary. Future fields default to protected.
             const sourceFacts = (value: GameState) =>
@@ -758,7 +748,11 @@ export function runTurnLocked(
           const after = turnDigestOf(state);
           saveGame(state);
           noteTurn({ outcome: { ok: true, saved: true }, after });
-          return { ok: true as const, payload };
+          return {
+            ok: true as const,
+            payload,
+            characterUpdatesPending: state.characterBookJobs.length > 0,
+          };
         } catch (error) {
           const saved = durableCheckpoint !== null;
           if (durableCheckpoint !== null) saveGame(durableCheckpoint);

@@ -4,20 +4,8 @@ import { SQUAD_CORE_SIZE } from "./squad-depth";
 import { betterAtPosition } from "./squad-depth";
 import { isFriendly } from "../core/match-kinds";
 
-/**
- * **감독의 약속 — 갈래·기한·상태뿐인 장부** (→ docs/story/people.md §5-2).
- *
- * 이 게임의 인터페이스는 말이고 잘한 말은 잘 먹혀야 한다. 그런데 말이 공짜면 가장
- * 잘 먹히는 말이 가장 값싼 말이 된다 — 불만 선수를 면담 한 번의 "다음 경기 선발이다"로
- * 잠재우고 잊는 것이 최적 전략이 되고, "방치의 대가는 시간의 결과"라는 규약이
- * 약속 앞에서만 빈다.
- *
- * ⚠️ **여기 어디에도 문장이 없다.** 무슨 말로 약속했는지는 장면의 것이고, 이행
- * 판정은 전부 다른 장부에서 나온다 — 출전 명단 · 이적 리스트 · 열린 협상 · 완장.
- */
-
-/** 지위·약속을 재는 창 — 여덟 경기는 한 시즌의 다섯 번째쯤이고 두 달 남짓이다 */
-export const PROMISE_WINDOW_MATCHES = 8;
+/** 최근 출전 현황을 읽는 경기 수. */
+export const RECENT_APPEARANCE_MATCHES = 8;
 
 /** `key`로 서려면 스쿼드 안에서 이 순위 안에 들어야 한다 */
 export const KEY_SQUAD_RANK = 5;
@@ -26,11 +14,8 @@ export const KEY_SQUAD_RANK = 5;
 export const PROSPECT_AGE = 21;
 
 /**
- * 계약에 지위가 없을 때 **지금 서열에서 파생하는 지위** (people.md §5-2).
- *
- * 파생은 **지금 실제로 서는 순서**라, 지위를 적지 않은 계약(시드·AI 구단)이 없던
- * 불만을 만들어 내지 않는다 — 자기 자리에 맞는 지위를 받으므로 기대와 실제가
- * 처음부터 맞는다.
+ * 계약에 역할이 없을 때 현재 선수단의 능력·자리 깊이·나이로 파생하는 참고 역할.
+ * 계약에 명시적으로 합의한 역할은 `squadStatusOf`가 우선한다 (people.md §5-2).
  */
 export function derivedSquadStatus(
   state: GameState,
@@ -47,15 +32,8 @@ export function derivedSquadStatus(
   ).length;
   const young = ageOf(player.birthdate, state.date) <= PROSPECT_AGE;
   /**
-   * **스쿼드의 핵심 밖이면 자리 깊이를 보지 않는다** — 등재·계약 불만이 쓰는 것과
-   * 같은 자다(`SQUAD_CORE_SIZE` — people.md §5).
-   *
-   * 자리 깊이만 보면 서른 명짜리 1군이 열두어 자리로 나뉘어 **자리마다 둘째까지**
-   * 로테이션이 되고, 여덟 경기에 여든여덟 자리뿐인 판에 감당할 수 없는 기대가
-   * 스물여섯 개 선다. 백업 정리가 조용한 이유와 같은 이유로 여기서 끊는다.
-   *
-   * ⚠️ **계약에 적힌 지위에는 걸리지 않는다** — 서열 밖의 선수에게 감독이 자리를
-   * 약속했다면 그것은 약속이지 파생이 아니다 (people.md §5-2).
+   * 선수단 핵심 범위 밖에서는 자리 깊이 대신 나이로 백업·유망주를 구분한다.
+   * 이 파생값은 계약에 합의한 역할을 덮어쓰지 않는다.
    */
   if (better >= SQUAD_CORE_SIZE) return young ? "prospect" : "backup";
   const blocked = betterAtPosition(state, teamId, player);
@@ -118,7 +96,7 @@ export function appearedIn(
  * 우리 공식 경기를 **최근 순으로** — 창을 여러 번 재는 호출이 원장을 한 번만 훑게
  * 하는 색인이다.
  *
- * `minutesShortfalls`는 월요일마다 1군 전원에게 창을 묻는다. 호출마다 원장을
+ * 여러 선수의 출전 현황을 읽을 때 호출마다 원장을
  * 훑으면 멀티시즌 세이브의 한 주가 「선수 수 × 전체 경기 수」가 된다 — 스쿼드 깊이
  * 색인(`squadDepthOf`)이 있는 이유와 같은 자리다. **읽기 전용 파생**이라 원장이
  * 그대로인 동안만 유효하다: 한 번의 순회 안에서 세우고 버린다.
@@ -137,8 +115,7 @@ export interface StartRead {
    * **그라운드를 밟은 경기 수** — 선발 + 교체 투입이라 `starts` 이상이다
    * (people.md §5-2).
    *
-   * ⚠️ **판정은 이 값을 보지 않는다.** 출전 약속의 뜻은 "주전으로 세우겠다"이므로
-   * 기한 날 재는 것은 `starts`뿐이다. 이 칸은 **사실 카드의 것**이다 — 카드가
+   * 이 칸은 **사실 카드의 것**이다 — 카드가
    * 선발 수만 실으면 「한 번도 못 뛰었다」와 「뛰었지만 선발은 아니었다」가 읽는
    * 쪽에 같은 사실로 가고, GM이 후반 45분을 뛴 선수에게 투입되지 못했다고 쓴다.
    */
@@ -149,10 +126,10 @@ export interface StartRead {
 
 /**
  * 창 안의 **선발 비율** — `from`이 있으면 그날 이후, 없으면 최근
- * `PROMISE_WINDOW_MATCHES`경기다.
+ * `RECENT_APPEARANCE_MATCHES`경기다.
  *
  * ⚠️ **분모는 그가 설 수 있었던 경기다** (people.md §5). 부상으로 빠져 있던 경기까지
- * 세면 복귀 첫 주에 불만이 선다 — 못 나온 것이 감독의 결정이 아닌 경기다.
+ * 세면 부상 결장을 감독이 선택한 결장과 같은 값으로 읽게 된다.
  */
 export function startsInWindow(
   state: GameState,
@@ -164,7 +141,7 @@ export function startsInWindow(
     pool?: readonly (typeof state.matches)[number][];
   } = {},
 ): StartRead {
-  const limit = window.matches ?? PROMISE_WINDOW_MATCHES;
+  const limit = window.matches ?? RECENT_APPEARANCE_MATCHES;
   const ours = (window.pool ?? matchWindowOf(state))
     .filter((m) => window.from === undefined || m.date >= window.from)
     .slice(0, limit);

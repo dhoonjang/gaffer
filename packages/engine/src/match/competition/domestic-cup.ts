@@ -22,13 +22,7 @@ import {
   isWeekend,
   DEFAULT_KICKOFF,
 } from "../../common/core/dates";
-import {
-  type GameState,
-  clampReputation,
-  pushNarrative,
-  teamName,
-  teamShortName,
-} from "../../common/core/state";
+import { type GameState, teamName, teamShortName } from "../../common/core/state";
 import { stageMatchesOf, tieLegsOf, reportOurTie } from "./knockout";
 import { pairOf, settledTieWinner } from "./extra-time";
 import { isTopFlightIn } from "../../common/core/league-membership";
@@ -182,17 +176,7 @@ export function stageTarget(season: number, cup: DomesticCupEntry, stage: MatchS
   return floor !== null && target < floor ? floor : target;
 }
 
-/**
- * 이 대진이 자리를 찾기 시작하는 날 — 라운드를 이틀에 흩은 결과다.
- *
- * 달력이 비운 주말에 앉은 라운드는 **그 주말 안에서** 흩는다(토 → 일) — 이틀 다
- * 리그가 비켜선 자리다.
- *
- * 그 밖의 라운드는 목표일의 **하루 앞의 컵 요일**부터 찾는다. 하루 뒤로 미루면 그
- * 자리가 막혔을 때 계속 뒤로 밀려 라운드가 열흘 넘게 늘어졌다. 그냥 하루만 당기면
- * 그 날이 컵 요일이 아닐 때(수요일 목표 → 화요일은 되지만, 화요일 목표 → 월요일은
- * 안 된다) 앞으로 훑다가 결국 같은 날에 앉아 라운드가 하루에 몰린다.
- */
+/** 주말 컵 라운드는 해당 주말 안에 분산한다. 그 밖의 라운드는 목표일 앞의 컵 요일부터 자리를 찾는다. */
 export function stageTieTarget(
   season: number,
   cup: DomesticCupEntry,
@@ -822,17 +806,7 @@ export function syncCupRounds(state: GameState): void {
 }
 
 /**
- * 국내 컵 우승·준우승이 감독 평판에 남기는 몫.
- *
- * ⚠️ **대항전(`season.ts`)과 값이 다르다** — 국내 컵은 유럽보다 가볍게 읽힌다.
- * 한 값으로 합치지 말 것.
- */
-export const CUP_TITLE_MEDIA = 8;
-
-export const CUP_RUNNER_UP_MEDIA = 3;
-
-/**
- * 시즌 리뷰의 국내 컵 결산 — **감독의 평판**과 다이제스트. 상금도 트로피도 여기 없다
+ * 시즌 리뷰의 국내 컵 결산 — 다이제스트와 서사. 상금도 트로피도 여기 없다
  * (`payDomesticCupPrizes` · `recordChampions` — 우승은 전 구단의 것이다).
  * 결승이 리그 최종전보다 앞설 수 있지만, 우승 확정은 시즌 리뷰 한 곳에서만 한다
  * (매일 tick에서 중복 보고하지 않기 위해서다).
@@ -846,17 +820,9 @@ export function reviewDomesticCups(state: GameState): string[] {
     const ours = champion === state.userTeamId || runnerUp === state.userTeamId;
 
     if (champion === state.userTeamId) {
-      state.manager.reputation.media = clampReputation(
-        state.manager.reputation.media + CUP_TITLE_MEDIA,
-      );
       digest.push(`${cup.name} 우승`);
-      pushNarrative(state, `${cup.name} 우승`, 5);
     } else if (ours) {
-      state.manager.reputation.media = clampReputation(
-        state.manager.reputation.media + CUP_RUNNER_UP_MEDIA,
-      );
       digest.push(`${cup.short} 준우승 — 결승 상대 ${teamName(champion)}`);
-      pushNarrative(state, `${cup.short} 준우승`, 4);
     } else if (cup.country === countryOf(state.userTeamId)) {
       digest.push(`${cup.short} 우승: ${teamShortName(champion)}`);
     }

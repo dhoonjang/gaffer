@@ -37,7 +37,8 @@ import {
   minutesOfClock,
   pendingVerdicts,
   roomNegotiationOf,
-  selectCharacters,
+  selectCharacterBook,
+  syncCharacterBook,
   takeMedia,
   takeNews,
   toolCallFactLine,
@@ -50,14 +51,7 @@ import {
   type GoalMark,
   type TrainingBrief,
 } from "@story-fm/engine";
-import type {
-  BoardMove,
-  CharacterEntry,
-  MatchEvent,
-  MediaFact,
-  TickEvent,
-  ScoutingReport,
-} from "@story-fm/domain";
+import type { BoardMove, MatchEvent, MediaFact, TickEvent, ScoutingReport } from "@story-fm/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
 import { MAX_REPORT_CARDS, NO_CARDS, takeArrivedReports, type ArrivedCards } from "./report-cards";
 import { reportTraining } from "./workflows/story/training-rater";
@@ -451,7 +445,7 @@ async function openTurn(
 interface GmCall {
   result: TurnResult;
   /** 이번 턴에 세운 인물 카드 — 턴 뒤가 기록으로 남긴다 */
-  characters: CharacterEntry[];
+  characters: import("@story-fm/domain").CharacterBookInjection[];
   /**
    * 이 호출의 스냅샷이 비운 소식·기사 — 넘김으로 장면 없이 끝난 턴은 아무도 전하지
    * 않았으므로 다음 평시 턴에 되돌린다 (agents.md §2).
@@ -555,17 +549,14 @@ async function callGm(
         );
   if (peace && ledger.events.length > 0)
     stateNote += `\n<date_events>${JSON.stringify(ledger.events)}</date_events>`;
-  /**
-   * 이번 장면에 설 인물 — **평시만이다.** 경기 중에는 벤치의 코치 한 사람이
-   * 레퍼런스에 상주하고(`buildMatchReference`), 중계가 읽을 것은 판이지 인물지가 아니다.
-   *
-   * 카드는 감독 발화와 같은 층으로 들어가고, 기록이 남아 다음 턴부터 **이력**에서
-   * 같은 자리에 다시 선다 — 그래서 레퍼런스(캐시 프리픽스)가 흔들리지 않는다
-   * (people.md §6 · agents.md §5).
-   */
-  const characters = peace
-    ? selectCharacters(state, { message, injected: injectedCharacters(state) })
-    : [];
+  // 주입 본문은 턴에 저장해 다음 호출에서도 같은 이력을 조립한다.
+  syncCharacterBook(state);
+  const lastModel = [...state.chat].reverse().find((turn) => turn.role === "model");
+  const characters = selectCharacterBook(
+    state.characterBook,
+    `${message}\n${lastModel?.text ?? ""}`,
+    injectedCharacters(state),
+  );
   /**
    * 이번 턴의 유저 메시지 — **평시는 채팅 꼬리에서 그린다.** 다음 턴 이력이 같은 꼬리를
    * 같은 함수로 다시 그리므로 둘이 글자까지 같고, 캐시 프리픽스가 이 발화를 지나
@@ -588,16 +579,16 @@ async function callGm(
     const fromChat =
       shape.negotiationId === null
         ? ""
-        : buildGmTurnMessage(state, [], {
+        : buildGmTurnMessage(state, characters, {
             negotiationId: shape.negotiationId,
             ...(shape.negotiationContactId
               ? { negotiationContactId: shape.negotiationContactId }
               : {}),
           });
-    return fromChat.length > 0 ? fromChat : renderTurnGroup(state, turnLines, []);
+    return fromChat.length > 0 ? fromChat : renderTurnGroup(state, turnLines, characters);
   };
   const turnMessage = inMatch
-    ? renderTurnGroup(state, turnLines, [])
+    ? renderTurnGroup(state, turnLines, characters)
     : inNegotiation
       ? roomMessage()
       : buildGmTurnMessage(state, characters);

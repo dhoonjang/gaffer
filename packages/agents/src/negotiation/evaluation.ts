@@ -3,8 +3,6 @@ import {
   MAX_PAYMENT_YEARS,
   DEAL_TERM_KINDS,
   ESCALATOR_TRIGGERS,
-  ESCALATOR_PCT_MIN,
-  ESCALATOR_PCT_MAX,
   POSITION_CODES,
   type DealTerm,
   type NegotiationAssessment,
@@ -279,7 +277,7 @@ async function counterTerms(
             evaluateNumber(
               context,
               "사건 발생 시 계약 주급 인상률(%)",
-              { min: ESCALATOR_PCT_MIN, max: ESCALATOR_PCT_MAX },
+              { min: 1, max: Number.MAX_SAFE_INTEGER },
               evaluator,
             ),
             evaluateChoices(

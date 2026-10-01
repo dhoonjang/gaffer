@@ -19,7 +19,7 @@
 2-레이어의 원칙과 엔티티 전체 지도는 [game-state.md](game-state.md), 선수 값의
 의미는 [player.md](player.md), 데이터 출처는 [sources.md](sources.md).
 
-## 1. 팀 카탈로그 (`common/data/team-catalog.ts`)
+## 1. 팀 카탈로그 (`packages/engine/src/common/data/team-catalog.ts`)
 
 ```ts
 TeamCatalogEntry {
@@ -48,12 +48,9 @@ TeamCatalogEntry {
 그날 이후의 우승만 쌓인다. 시즌 3의 감독이 "이 구단이 리그를 몇 번 들었나"를 물으면
 그 표가 없는 한 GM은 지어낸다. 그래서 **시작 전의 우승 횟수**를 카탈로그가 시드로
 든다 — 대회 id별 횟수와(알면) 마지막 연도다. 역대 기록은 이 시드와 게임 안의
-`TROPHY`를 더한 것이고(`clubRecordsOf` — [../simulation/career.md](../story/career.md) §6),
+`TROPHY`를 더한 것이고(`clubRecordsOf` — [career.md](../story/career.md) §6),
 이 시드는 새 게임의 `GAME_TEAM.honours`로 복사되어 이후 카탈로그 편집과 분리된다.
 
-- **우승 횟수는 사실이지 남의 저작이 아니다** — 라이선스 부채가 아니다
-  ([sources.md](sources.md) §7). 다만 **가명화(§7.3)가 끝나면 이 표의 클럽도 다른
-  이름이 되므로**, 그때 함께 정리되는 딸림 값이다.
 - **검증 범위** — 전수가 아니다. 다섯 리그의 잘 알려진 클럽만 시드를 갖고, 나머지는
   값이 없다. **없는 것은 0회가 아니라 "모른다"이므로**, 조회와 화면은 시드가 없는
   구단의 역대 줄을 세우지 않는다. 대회 id별로 확인된 것만 적는다 — 표에 있는 클럽의
@@ -108,15 +105,13 @@ TeamCatalogEntry {
   세울 때마다 169팀을 다시 훑지 않는다.
 - **조회는 막지 않는다.** 어드민 화면은 깨진 카탈로그도 읽어야 고칠 수 있다 —
   문이 걸리는 자리는 새 게임 하나뿐이다.
-- 어드민 저장이 보는 목록과 같은 목록이다(`app/catalog-invariants.ts`). 저장이
+- 어드민 저장이 보는 목록과 같은 목록이다(`packages/engine/src/app/catalog-invariants.ts`). 저장이
   거절하는 편집은 새 게임도 거절한다.
 
 ### 카탈로그에 없는 팀을 물으면 `null`
 
-`leagueOfTeam` · `countryOfTeam`은 모르는 id에 **`null`**을 돌려준다. 예전에는
-`"epl"`과 `"잉글랜드"`를 돌려줬는데, 그러면 잘못된 id가 EPL 소속으로 상금·경제
-수준·컵 참가를 받고 그 선수들이 잉글랜드 홈그로운이 된다 — 틀린 답이 정상적인
-값의 얼굴을 하고 흘러간다.
+`leagueOfTeam` · `countryOfTeam`은 모르는 id에 **`null`**을 돌려준다.
+모르는 팀에 리그·국가를 부여해 상금·경제 수준·컵 참가·홈그로운을 판정하지 않는다.
 
 - `isClubTeam`은 모르는 팀에 `false`다 — 클럽이 아니라 **클럽인지 알 수 없는 id**고,
   스쿼드·배치·전력을 논하는 순회에서는 어느 쪽이든 빠져야 한다.
@@ -154,8 +149,8 @@ TeamCatalogEntry {
 `tierOfTeamIn(state, teamId)` 하나를 지난다.
 
 ⚠️ **카탈로그를 직접 읽으면 안 된다.** 어드민이 체급을 고칠 수 있으므로
-(`app/admin/admin-team.ts`), 카탈로그를 읽는 자리가 남아 있으면 진행 중인 세이브의 보드
-기대치와 경질 위험선이 감독이 한 일 없이 그 자리에서 달라진다. 세이브가 없는 문맥
+(`packages/engine/src/app/admin/admin-team.ts`), 카탈로그를 읽는 자리가 남아 있으면 진행 중인 세이브의 구단
+재정과 선수 생성 기준선이 그 자리에서 달라진다. 세이브가 없는 문맥
 — 새 게임 생성, 절차 생성, 어드민 미리보기, 부임 전 팀 목록 — 만 카탈로그를 읽는다.
 
 **성적이 아니라 클럽의 크기가 주다.** 강등권에서 한 해를 보낸 클럽도 6만 석 구장과
@@ -169,7 +164,7 @@ TeamCatalogEntry {
 | 3    | 중견 1부                              | 그 밖의 안정적 1부 클럽      |
 | 4    | 소형·승격팀                           | 구장·상업 모두 작다          |
 
-체급 하나가 여섯 곳을 정한다.
+체급은 다음 구단 사실과 초기 조건에 쓰인다.
 
 | 어디                                       | tier 1 / 2 / 3 / 4                                       |
 | ------------------------------------------ | -------------------------------------------------------- |
@@ -177,18 +172,17 @@ TeamCatalogEntry {
 | 시작 잔고 · 이적 예산 (`TIER_FINANCE`)     | £120M·90M / 70M·45M / 40M·22M / 25M·12M — **EPL 기준**   |
 | 시즌 예산 보충 (`SEASON_BUDGET_TOPUP`)     | £45M / 30M / 18M / 12M — **EPL 기준**                    |
 | 주급 예산 (`clubWageBudget`)               | **체급을 보지 않는다** — (매출 − 고정비)에서 파생        |
-| 보드 기대 순위 (`boardExpectation`)        | 2위 / 6위 / 12위 / 17위 — **20팀 리그의 값** (아래)      |
 | 첫 시즌 대항전 티켓 순서 · 컵 시드·홈 배정 | 체급 순 (`rankedTeams` · `rankOf`)                       |
 
 - ⚠️ **실선수 시드가 있는 클럽의 합성 보충은 이 기준선을 쓰지 않는다.** tier 기준선은
   그 리그 **상위권**의 눈금이라, 시드가 얇은 클럽일수록 보충이 스쿼드 최고 선수를
   넘어섰다. 보충 기준선은 그 클럽 실선수의 분포에서 나온다 (§4).
 - ⚠️ **돈 두 줄은 EPL 기준값이고 `clubEconomyLevel`이 곱해진다** — 시작 잔고·이적
-  예산은 `initialFinanceOf`(`app/create-game.ts`), 시즌 보충은 `seasonBudgetBaseOf`
-  (`app/season.ts`)가 곱한다. 곱하지 않으면 리그 1 구단이 6분의 1 중계
+  예산은 `initialFinanceOf`(`packages/engine/src/app/create-game.ts`), 시즌 보충은 `seasonBudgetBaseOf`
+  (`packages/engine/src/app/season.ts`)가 곱한다. 곱하지 않으면 리그 1 구단이 6분의 1 중계
   수입으로 EPL과 같은 살림을 산다.
 - **구단 경제 수준** = 리그 경제 수준 + (1 − 리그 경제 수준) × 브랜드 리프트
-  (1등급 0.55 · 2 0.30 · 3 0.12 · 4 0.05) — `common/data/league-economy.ts`. 진행 중인
+  (1등급 0.55 · 2 0.30 · 3 0.12 · 4 0.05) — `packages/engine/src/common/data/league-economy.ts`. 진행 중인
   세이브는 `clubEconomyLevelIn(state, teamId)`으로 읽어 리그도 체급도 지금 값을
   본다([game-state.md](game-state.md) §1). 리그 경제 수준은
   EPL 1.00 · 라리가 0.62 · 세리에 A·분데스리가 0.58 · 리그 1 0.42 · 사우디 0.45 ·
@@ -207,15 +201,11 @@ TeamCatalogEntry {
   보는 천장은 다섯 시즌 내내 상수**라 번 돈이 나갈 축이 없다. 체급이 주급에 닿는
   길은 체급 → 구장·브랜드 → 매출 → 천장이다.
 - 매치데이·상업 수입은 체급이 아니라 **구단 프로필**이 정한다 (§3,
-  [../simulation/finance.md](../negotiation/finance.md)).
-- 난이도는 별도 옵션이 아니라 보드 기대치가 만든다 — 빅클럽은 우승권, 승격팀은 잔류
-  ([../simulation/season.md](season.md) §1).
-- ⚠️ **기대 순위는 리그 크기에서 파생한다** — 표의 네 값은 20팀 리그에 그 식을 넣은
-  결과다. 18팀인 분데스리가·리그 1은 2 / 5 / 11 / **15**위가 되고, tier 4의 값은 언제나
-  잔류선(팀 수 − 강등 칸 수)이다. 경질 위험선·업적도 같은 식을 쓴다
-  ([../simulation/career.md](../story/career.md) §5).
+  [finance.md](../negotiation/finance.md)).
+  구단주의 기대와 평가는 대화와 캐릭터북이 소유한다. 체급과 리그 크기는 구단주의
+  목표를 만들지 않는다. 리그 순위·강등권·대회 진출 기준은 실제 대회 규칙으로 조회한다.
 
-### 2.1 시즌마다 다시 매긴다 (`match/competition/club-tier-recompute.ts`)
+### 2.1 시즌마다 다시 매긴다 (`packages/engine/src/match/competition/club-tier-recompute.ts`)
 
 시즌 롤오버에서 **승강을 적용한 뒤** 리그마다 전 클럽을 다시 줄 세운다. 승격·강등한
 팀은 리그가 바뀌면서 다른 풀에 들어가므로 자동으로 완전히 재산정된다 — 승격팀이
@@ -249,14 +239,14 @@ TeamCatalogEntry {
 | 2부  | —        | —     | 상위 30% | 나머지 |
 
 2부에 tier 1·2가 없는 것은 카탈로그의 분포가 그렇기 때문이다 — 컵 인원인 2부 클럽이
-1부 빅클럽과 같은 이적 예산·보드 기대를 받을 자리가 없다.
+1부 빅클럽과 같은 이적 예산를 받을 자리가 없다.
 
 - ⚠️ **성적만으로는 체급이 오르지 않는다.** 가중치가 0.20이라 한 시즌 순위로는
-  경계를 넘지 못한다. 체급은 능력치 기준선부터 이적 예산·주급·보드 기대까지 한꺼번에
+  경계를 넘지 못한다. 체급은 능력치 기준선부터 이적 예산·주급까지 한꺼번에
   움직이는 값이라, 한 시즌으로 흔들면 세계의 눈금이 매년 다시 그려진다.
-- 유저 팀의 체급이 바뀌면 **시즌 롤오버 다이제스트에 한 줄 남는다** — 보드 기대치와
-  경질 위험선이 감독 모르게 움직이지 않도록
-  ([../simulation/season.md](season.md) §6).
+- 유저 팀의 체급이 바뀌면 **시즌 롤오버 다이제스트에 한 줄 남는다** — 실제 구단 체급의 변화를
+  감독이 확인할 수 있다
+  ([season.md](season.md) §6).
 
 같은 체급도 리그가 다르면 살림이 다르다.
 
@@ -269,12 +259,12 @@ TeamCatalogEntry {
 | 앙제 (리그 1)       | 4 · 4       | 0.449     | £11.2M · £5.4M   | £5.4M     |
 | 챔피언십 구단 (2부) | 3 · 3       | 0.252     | £10.1M · £5.5M   | £4.5M     |
 
-### 2.2 팀 전력 한 숫자 (`squadRating` — `match/squad/depth.ts`)
+### 2.2 팀 전력 한 숫자 (`squadRating` — `packages/engine/src/common/players/squad-depth.ts`)
 
 **스쿼드 상위 열한 명의 평균 OVR.** 팀 하나를 한 숫자로 줄이는 자는 이것 하나뿐이다 —
 체급 재산정의 전력 축(§2.1) · 승격 클럽 줄 세우기와 보강 기준선(§5) · 협상에서 읽는 팀 전력
 참고 정보([선수 거래](../negotiation/transfer.md) §5) · 개막 전 예상
-순위([../simulation/season.md](season.md) §2), 그리고 **일정과 달력의 상대
+순위([season.md](season.md) §2), 그리고 **일정과 달력의 상대
 전력 칸**이 같은 자를 읽는다. 전 팀을 한 번에 세우는 진입점(`squadRatingsOf`)은
 `state.players`를 한 번만 훑는다 — 팀마다 부르면 그 자리 하나가 「팀 수 × 선수 수」가
 된다.
@@ -294,7 +284,7 @@ TeamCatalogEntry {
 - **가용(부상·정지·소집)을 보지 않는다.** 3주 뒤 경기의 결장자는 아무도 모르고, 오늘의
   결장으로 먼 경기의 숫자를 흔들면 감독이 손댈 수 없는 이유로 난이도가 오르내린다.
   이 값은 **스쿼드의 전력**이지 그 경기에 설 열한 명의 전력이 아니다 — 후자는 경기 전
-  상대 분석이 답한다 ([../simulation/match.md](../match/match.md) §3.6).
+  상대 분석이 답한다 ([match.md](../match/match.md) §3.6).
 - ⚠️ **안개를 지나지 않는다** — 참값이다. 스카우팅의 안개는 「이 선수가 얼마나
   좋은가」를 가리는 것이고([player.md](player.md) §9), 팀의 체급은 순위표·몸값·언론이
   이미 말하는 공개 사실이다. 열한 개의 오차를 평균하면 참값에서 ±0.3 안쪽이라 흐려도
@@ -303,7 +293,7 @@ TeamCatalogEntry {
   숫자 하나에 수십 ms가 든다. 안개가 한 겹인 것도 그대로다: 스쿼드 평균에서 개인의
   능력치를 되돌릴 수는 없다.
 
-## 3. 구단 프로필 (`common/data/club-profile.ts`)
+## 3. 구단 프로필 (`packages/engine/src/common/data/club-profile.ts`)
 
 ```ts
 ClubProfile { stadium, capacity, commercialTier: 1|2|3|4 }
@@ -328,18 +318,14 @@ ClubProfile { stadium, capacity, commercialTier: 1|2|3|4 }
   세이브가 없는 문맥(새 게임의 초기 잔고, 주급 기준선)만 `clubProfile(teamId, tier)`
   를 쓴다.
 
-수입 공식은 [../simulation/finance.md](../negotiation/finance.md).
+수입 공식은 [finance.md](../negotiation/finance.md).
 
 ### 3.1 시각 정체성 — 문장은 생성하고, 색은 실제 구단의 것이다
 
-**엠블럼·킷·리그 로고·구장 사진은 어떤 형태로도 저장소에 들어오지 않는다.** 실물을
-보고 다시 그린 것도 포함이다 — 미술저작물과 상표가 겹쳐 걸리는 자리라 이 프로젝트의
-라이선스 부채 중 가장 위험하고, 동시에 **담지 않는 것만으로 청산되는** 자리다
-([sources.md](sources.md) §7.1). **색은 다르다.** 구단의 대표색은 카탈로그가 공식
-값으로 갖고(`colours`), 문장과 화면이 그 색을 입는다 — 이름이 실명인 세계에서 색이
-식별성을 더하지는 않고, 색 값 자체는 미술저작물이 아니다.
+구단 표시는 생성 문장과 카탈로그의 `colours`를 사용한다. 엠블럼·킷·리그 로고·
+구장 사진을 표시 자산으로 사용하지 않는다. 색 값의 출처는 [sources.md](sources.md) §7에 있다.
 
-화면이 클럽을 그려야 하면 **문장(紋章)**을 쓴다(`domain/src/crest.ts`). 도형은 클럽
+화면이 클럽을 그려야 하면 **문장(紋章)**을 쓴다(`packages/domain/src/common/crest.ts`). 도형은 클럽
 id에서 결정적으로 뽑고, 색은 카탈로그에서 읽는다.
 
 | 무엇      | 어디서                                  | 왜                                                                                    |
@@ -363,7 +349,7 @@ id에서 결정적으로 뽑고, 색은 카탈로그에서 읽는다.
   엔진에 두면 화면이 값으로 가져올 수 없다 (AGENTS.md §5).
 - **결정적이다.** 같은 클럽 id + 같은 카탈로그 색은 언제나 같은 문장이라, 세이브에
   저장할 것이 없고 어드민이 클럽 이름을 바꿔도 문장은 그대로다.
-- **색의 출처는 원장에 적는다.** 96팀의 값과 출처는 [sources.md](sources.md) §7.5,
+- **색의 출처는 원장에 적는다.** 96팀의 값과 출처는 [sources.md](sources.md) §7,
   화면이 그 색을 어디에 어떻게 세우는지는 [common/ui/design-system.md](ui/design-system.md)
   §2. 색을 "보기 좋게" 손보지 않는다 — 어두운 바닥에서 안 보이는 남색·검정은 화면이
   `clubTonesOf`로 명도만 올려 쓰고, 카탈로그 값은 공식 값 그대로 둔다. 조율을 전체
@@ -372,7 +358,7 @@ id에서 결정적으로 뽑고, 색은 카탈로그에서 읽는다.
 - 도형(`shape` · `division`)은 실물 엠블럼과 닮게 조율하지 않는다. 그 자리는 여전히
   미탑재다.
 
-### 3.2 더비 표 (`common/data/derbies.ts`) — 어느 대진이 라이벌인가
+### 3.2 더비 표 (`packages/engine/src/common/data/derbies.ts`) — 어느 대진이 라이벌인가
 
 ```ts
 Derby { name, teams: [teamId, teamId], heat: 1 | 2 | 3 }
@@ -394,13 +380,12 @@ Derby { name, teams: [teamId, teamId], heat: 1 | 2 | 3 }
 | 2      | 도시는 달라도 서로를 최대 라이벌로 본다 | 노스웨스트 · 엘 클라시코 · 데르비 디탈리아 · 데어 클라시커 · 르 클라시크    |
 | 1      | 이웃 사이의 자존심                      | 바스크 더비 — 두 팬이 함께 입장하는, 가장 우호적인 더비다                   |
 
-`heat`가 닿는 자리는 다섯이고, 전부 **그 값에 비례**한다:
+`heat`는 경기의 맥락과 다음 수치에 쓰인다:
 
 | 어디                           | 무엇                                                           | 문서                                      |
 | ------------------------------ | -------------------------------------------------------------- | ----------------------------------------- |
 | 경기 전 리포트 · 킥오프 게이트 | 더비 여부와 `heat` — 사실로 선다, 중계·화면이 읽는다           | [match §3.6](../match/match.md)           |
 | 경기 강도                      | `1 + DERBY_INTENSITY_STEP(0.06) × heat` — 양 팀 카드·부상·파울 | [match §4.1](../match/match.md)           |
-| 결과의 라커룸                  | 승리 `+DERBY_MOOD_STEP(0.02) × heat` · 패배 그만큼 −           | [match §6](../match/match.md)             |
 | 홈 관중                        | `OCCUPANCY_DERBY_BONUS(0.03) × heat`                           | [finance §5.2](../negotiation/finance.md) |
 | 머천다이징 창                  | 더비 한 경기가 `1 + MERCH_DERBY_WEIGHT(0.5) × heat`경기로 센다 | [finance §5.3](../negotiation/finance.md) |
 
@@ -409,9 +394,8 @@ Derby { name, teams: [teamId, teamId], heat: 1 | 2 | 3 }
 출전과 성장에만 닿는 경기다 ([season.md §2](season.md)). 위 다섯
 자리가 전부 **한 문**(`derbyForMatch`)을 지나므로 이 규칙이 한 곳에만 적힌다.
 
-더비 전야·경기 뒤 회견과 시즌 리뷰의 더비 전적은
-[people §4](../story/people.md#4-기자회견) ·
-[career §5.1](../story/career.md).
+더비 전야·경기 뒤 장면은 [GM의 언론과 대화](../story/people.md#4-언론과-대화-장면)가
+이어 간다. 시즌 리뷰의 실제 더비 전적은 [커리어 기록](../story/career.md#6-커리어-기록)에 남는다.
 
 ## 4. 팀의 종류
 
@@ -463,7 +447,7 @@ Derby { name, teams: [teamId, teamId], heat: 1 | 2 | 3 }
 ### 보충 선수의 능력치 기준선
 
 실선수 시드가 하한(40명)에 못 미치는 클럽은 나머지를 합성 선수로 채운다
-(`common/world/catalog.ts` `topUpBase`). **그 기준선은 tier가 아니라 그 클럽 실선수 종합의
+(`packages/engine/src/common/world/catalog.ts` `topUpBase`). **그 기준선은 tier가 아니라 그 클럽 실선수 종합의
 분포에서 나온다** — 두 항의 작은 쪽이다.
 
 | 항                           | 무엇을 정하는가                                                      |
@@ -520,9 +504,9 @@ U21을 붙이는 만큼 1군은 얼마든지 불어난다 — 등록 25 + U21 7�
   결정이지만, 그 결과 골문에 설 사람이 없다는 사실은 등록 단계에서 서야 하는
   경고다. **코어는 자동으로 승격시키지 않는다** — 2군의 누구를 올릴지는 감독의
   결정이고, 경고를 무시한 채 킥오프에 이르면 그때 자동 대체가 2군을 부른다
-  (→ [../simulation/match.md](../match/match.md) §3.1). AI 구단에는 그 경고를
+  (→ [match.md](../match/match.md) §3.1). AI 구단에는 그 경고를
   읽을 감독이 없으므로 **시즌 전환이 골키퍼를 올린다**
-  (→ [../simulation/season.md](season.md) §6).
+  (→ [season.md](season.md) §6).
 - **명단이 찬 채로 영입하면 그 선수는 2군으로 들어온다.** 계약은 성립하고 등록만
   안 되는 상태다 — 실제로도 그렇고, 여기서 딜을 되돌리면 이미 오간 돈을 토해내야
   한다. 2군으로 내리는 것은 1군이 20명을 넘을 때만 되고, 내려간 선수는 전술 배치와
@@ -530,7 +514,7 @@ U21을 붙이는 만큼 1군은 얼마든지 불어난다 — 등록 25 + U21 7�
   (→ [people.md](../story/people.md) §5-1).
 - **감독 팀의 2군은 경기를 한다** — 격주 월요일의 2군 리그가 간이 시뮬로 돌고,
   결과는 출전·성장에만 닿는다
-  ([../simulation/season.md](season.md) §2 2군 리그). 1군 라인업에
+  ([season.md](season.md) §2 2군 리그). 1군 라인업에
   서는 것은 여전히 승격 후다.
 - **전술판의 1·2군 이동은 배치와 한 요청으로 간다** — 판의 다른 조작과 같은 자동
   저장에 실려 `squadLevels` 차이로 나간다(`POST /api/games/:id/lineup`). 이 조작만
@@ -571,7 +555,7 @@ U21을 붙이는 만큼 1군은 얼마든지 불어난다 — 등록 25 + U21 7�
 비홈그로운 17명 상한에 먼저 걸려 정작 지정 선발이 2군에 남는다. 코어는 11\~13명이라
 먼저 등록해도 상한에 닿지 않는다.
 
-### 승격 클럽 보강 (`match/competition/promotion.ts`)
+### 승격 클럽 보강 (`packages/engine/src/match/competition/promotion.ts`)
 
 2부 클럽은 국내 컵에만 나오므로 스무 명으로 시작한다(§4). 그 팀이 승격하면 스무
 명으로 1부 38라운드를 도는데 매치데이 명단이 딱 20명(§6)이라, 부상 하나에 벤치가
@@ -715,7 +699,7 @@ EPL 20팀만 갖는 11인 명단이다. **순서가 아니라 구성**을 뜻한
   프리셋으로 승격시켜야 할 이유는 "카탈로그가 그 클럽을 그렇게 리서치했다"뿐이고,
   지금 그런 클럽은 없다.
 - **경기 중 상대 벤치가 갈아 까는 후보는 그대로 둔다** — `CHASE_SHAPES`·`HOLD_SHAPES`
-  (`match/flow/match-flow.ts`)는 프리셋 전체가 아니라 **의도별로 고른 짧은 목록**이다.
+  (`packages/engine/src/match/flow/match-flow.ts`)는 프리셋 전체가 아니라 **의도별로 고른 짧은 목록**이다.
   거기에 얹는 것은 경기 결과를 움직이는 별개의 판단이라 함께 하지 않았다.
 - ⚠️ **새 프리셋의 초기 6축은 리그 평균을 움직인다**(`initialTactics`). 리서치 성향이
   없는 구단은 모양이 6축을 정하므로, 열댓 구단이 서는 프리셋이 한 축을 한 칸 올리면
@@ -741,7 +725,7 @@ EPL 20팀만 갖는 11인 명단이다. **순서가 아니라 구성**을 뜻한
   미드필더가 골문에 섰다. 그래서 골키퍼 없는 풀에서는 GK 슬롯을 배정에서 빼고
   **골문을 비운 채 열 명**을 세운다. 빈 자리는 저장되지 않는 사실이라(배치는 선수
   단위다) 전술판이 열 칩으로 보이고, 등록 현황의 「골키퍼 부족」이 이유를 말한다.
-  킥오프까지 그대로면 자동 대체가 채운다(→ [../simulation/match.md](../match/match.md) §3.1).
+  킥오프까지 그대로면 자동 대체가 채운다(→ [match.md](../match/match.md) §3.1).
 - 새 게임의 전술 적응도는 전 팀이 `FAMILIARITY_BASELINE`(60)에서 출발한다.
 
 ### 빈 자리에 사람을 넣는다 (`openSeats`)
@@ -762,16 +746,16 @@ EPL 20팀만 갖는 11인 명단이다. **순서가 아니라 구성**을 뜻한
    배치에서도 엉뚱한 자리가 비는 것으로 읽힌다.
 
 누가 어느 자리에 서는지는 **그 자리의 포지션 적응도**가 정한다 — 킥오프의 자동 대체와 같은
-자다(→ [../simulation/match.md](../match/match.md) §3.1). 같으면 자리 순서, 그다음 id
-사전순이라 같은 지시가 언제나 같은 판을 만든다. 열한 자리가 이미 다 찼을 때만 예전처럼 주
+자다(→ [match.md](../match/match.md) §3.1). 같으면 자리 순서, 그다음 id
+사전순이라 같은 지시가 언제나 같은 판을 만든다. 열한 자리가 이미 다 찼을 때만 주
 포지션에 세운다.
 
-같은 규칙을 **시즌 전환의 배치 재구성**도 쓴다(→ [../simulation/season.md](season.md)
+같은 규칙을 **시즌 전환의 배치 재구성**도 쓴다(→ [season.md](season.md)
 §시즌 전환). 저장된 배치가 열한 칸에 못 미치면 모자라는 만큼을 포메이션의 빈 자리로 채우고,
 그 자리에 새 스쿼드를 `buildAssignments`가 앉힌다.
 
-**보정은 저장할 때 한 번뿐이다** — 빈 자리에 사람을 앉히는 것(`match/commands/lineup.ts` ·
-`app/season.ts`)이고, 이미 선 자리의 좌표는 건드리지 않는다. 그래서 **이미 저장된 판은
+**보정은 저장할 때 한 번뿐이다** — 빈 자리에 사람을 앉히는 것(`packages/engine/src/match/commands/lineup.ts` ·
+`packages/engine/src/app/season.ts`)이고, 이미 선 자리의 좌표는 건드리지 않는다. 그래서 **이미 저장된 판은
 코어가 펴서 다시 쓰지 않는다**: 한쪽으로 사람을 모으는 것은 이 게임이 지원하는 수이고, 감독이
 둔 판을 코어가 고쳐 저장하면 그가 만들지 않은 배치가 다음에 판을 열 때 서 있다.
 
@@ -862,15 +846,14 @@ EPL 20팀만 갖는 11인 명단이다. **순서가 아니라 구성**을 뜻한
 | 지정은 걸렸는데 선발에 없어 못 찬다 | **취소선**     |
 
 취소선은 「이름은 남았고 공은 못 찬다」를 그대로 그린 모양이다. 진하고 옅은 것이
-갈리는 것은 완장 Ⓒ와 리더 Ⓛ이 이미 쓰는 규약 — **감독이 채운 자리와 코어가 낸
-자리**다. 툴팁은 같은 사실을 자리마다 한 줄씩 적을 뿐이고, 조작을 안내하지 않는다.
+갈리는 기준은 **감독이 채운 자리와 코어가 낸 자리**다. 툴팁은 같은 사실을 자리마다 한 줄씩 적을 뿐이고, 조작을 안내하지 않는다.
 
 전술 6축·역할·적응도의 의미는 [player.md](player.md)와
-[../simulation/match.md](../match/match.md), 전술 엔티티 구조는
+[match.md](../match/match.md), 전술 엔티티 구조는
 [game-state.md](game-state.md). 키커 지정이 무엇을 하는지는
 [match.md](../match/match.md) §3.5.
 
-## 7. 축소 세계 (`common/world/scope.ts`)
+## 7. 축소 세계 (`packages/engine/src/common/world/scope.ts`)
 
 ```ts
 WorldScope { leagues, teamsPerLeague, cups, markets }
@@ -906,7 +889,7 @@ WorldScope { leagues, teamsPerLeague, cups, markets }
   (축소 세계도 `teamsPerLeague`를 짝수로 내린다). 리그전을 도는 리그는 2\~20팀이다 —
   달력이 38라운드 골격이라 20팀을 넘으면 배치할 매치위크가 모자란다.
 - **어드민 편집도 이 불변식을 지킨다.** 팀의 `leagueId` 변경·추가·삭제는 저장
-  시점에 막힌다(`app/catalog-invariants.ts`) — 어기면 실패가 편집한 순간이 아니라
+  시점에 막힌다(`packages/engine/src/app/catalog-invariants.ts`) — 어기면 실패가 편집한 순간이 아니라
   한참 뒤 새 게임을 시작할 때 터진다.
 - **새 게임도 같은 문을 지난다.** `createGame`이 세계를 세우기 전에 같은 목록을 다시
   묻고, 어기면 위반을 전부 담아 `throw`한다(§1) — 손으로 고친 오버라이드와 코드
@@ -948,9 +931,9 @@ WorldScope { leagues, teamsPerLeague, cups, markets }
 - **`TeamCatalogEntry.formation`을 고쳐도 화면이 곧바로 바뀌지는 않는다.**
   `pickFormation`이 스쿼드로 다시 채점하므로, 표만 보고 결과를 단정하면 안 된다.
 
-## 9. 미해결
+## 9. 구현 범위와 한계
 
-- **구장은 수용인원 하나로만 표현된다** — `common/data/club-profile.ts`의 `ClubProfile`은
+- **구장은 수용인원 하나로만 표현된다** — `packages/engine/src/common/data/club-profile.ts`의 `ClubProfile`은
   세이브 밖 시드 표이고, 세이브에서 움직이는 것은 `state.teams[].capacity` 하나다.
   감독이 그 값을 올리는 길은 보드에 거는 증설 요청뿐이고(finance.md §9.6), 늘어난
   좌석은 입장 수입에만 닿는다 — **시설비는 여전히 체급 상수**(`facilityCostOf`)라
@@ -958,25 +941,25 @@ WorldScope { leagues, teamsPerLeague, cups, markets }
 
 ## 코드 위치
 
-| 무엇                                       | 어디                                                                                                                                                   |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 팀 카탈로그 · 체급 · 지정 선발             | `packages/engine/src/common/data/team-catalog.ts`                                                                                                      |
-| 리그 카탈로그 (`kind` · 계수 · 중계권)     | `packages/engine/src/common/data/league-catalog.ts`                                                                                                    |
-| 구단 프로필 (구장 · 브랜드)                | `packages/engine/src/common/data/club-profile.ts`                                                                                                      |
-| 더비 표 (`heat` · `derbyOf`)               | `packages/engine/src/common/data/derbies.ts`                                                                                                           |
-| 더비의 문 · 더비 전적 (`derbyForMatch`)    | `packages/engine/src/common/world/derby.ts`                                                                                                            |
-| 카탈로그 오버라이드 (읽기·쓰기·캐시)       | `packages/engine/src/common/data/catalog-source.ts` · `team-override.ts`                                                                               |
-| 팀 어드민 (조회 · 편집 · 추가 · 삭제)      | `packages/engine/src/app/admin/admin-team.ts`                                                                                                          |
-| 카탈로그 불변식 (순수) · 로드 시 검사      | `packages/engine/src/app/catalog-invariants.ts`                                                                                                        |
-| 실선수 시드 합본 (팀 → 명단)               | `packages/engine/src/common/data/squad-seeds.ts`                                                                                                       |
-| 등록 명단 규칙 (순수)                      | `packages/domain/src/common/squad-rules.ts`                                                                                                            |
-| 등록 명단 — 상태에 붙이는 층               | `packages/engine/src/common/players/registration.ts`                                                                                                   |
-| 팀 엔티티 (Zod)                            | `packages/domain/src/common/team.ts`                                                                                                                   |
-| 절차 생성 문장 (§3.1)                      | `packages/domain/src/common/crest.ts`                                                                                                                  |
-| 가명화 파이프라인 (클럽·구장 이름)         | `packages/engine/src/common/data/pseudonym.ts` · `scripts/pseudonymize.ts`                                                                             |
-| 초기 스쿼드 분류 · 모양 고르기 · 슬롯 배치 | `packages/engine/src/app/create-game.ts` · `packages/engine/src/match/squad/selection.ts`                                                              |
-| 스쿼드 생성 (실선수 시드 · 절차 생성)      | `packages/engine/src/common/world/catalog.ts` · `generate.ts`                                                                                          |
-| 승격 클럽 보강 (승강 뒤 25명 하한)         | `packages/engine/src/match/competition/promotion.ts` · `packages/engine/src/app/workflows/match/competition/promotion.ts` · `common/world/generate.ts` |
-| 축소 세계                                  | `packages/engine/src/common/world/scope.ts`                                                                                                            |
-| 구단 주급 예산                             | `packages/engine/src/negotiation/economy/wages.ts`                                                                                                     |
-| 팀 전력 한 숫자 (`squadRating`, §2.2)      | `packages/engine/src/common/players/squad-depth.ts`                                                                                                    |
+| 무엇                                       | 어디                                                                                                                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 팀 카탈로그 · 체급 · 지정 선발             | `packages/engine/src/common/data/team-catalog.ts`                                                                                                                          |
+| 리그 카탈로그 (`kind` · 계수 · 중계권)     | `packages/engine/src/common/data/league-catalog.ts`                                                                                                                        |
+| 구단 프로필 (구장 · 브랜드)                | `packages/engine/src/common/data/club-profile.ts`                                                                                                                          |
+| 더비 표 (`heat` · `derbyOf`)               | `packages/engine/src/common/data/derbies.ts`                                                                                                                               |
+| 더비의 문 · 더비 전적 (`derbyForMatch`)    | `packages/engine/src/common/world/derby.ts`                                                                                                                                |
+| 카탈로그 오버라이드 (읽기·쓰기·캐시)       | `packages/engine/src/common/data/catalog-source.ts` · `team-override.ts`                                                                                                   |
+| 팀 어드민 (조회 · 편집 · 추가 · 삭제)      | `packages/engine/src/app/admin/admin-team.ts`                                                                                                                              |
+| 카탈로그 불변식 (순수) · 로드 시 검사      | `packages/engine/src/app/catalog-invariants.ts`                                                                                                                            |
+| 실선수 시드 합본 (팀 → 명단)               | `packages/engine/src/common/data/squad-seeds.ts`                                                                                                                           |
+| 등록 명단 규칙 (순수)                      | `packages/domain/src/common/squad-rules.ts`                                                                                                                                |
+| 등록 명단 — 상태에 붙이는 층               | `packages/engine/src/common/players/registration.ts`                                                                                                                       |
+| 팀 엔티티 (Zod)                            | `packages/domain/src/common/team.ts`                                                                                                                                       |
+| 절차 생성 문장 (§3.1)                      | `packages/domain/src/common/crest.ts`                                                                                                                                      |
+| 가명화 파이프라인 (클럽·구장 이름)         | `packages/engine/src/common/data/pseudonym.ts` · `scripts/pseudonymize.ts`                                                                                                 |
+| 초기 스쿼드 분류 · 모양 고르기 · 슬롯 배치 | `packages/engine/src/app/create-game.ts` · `packages/engine/src/match/squad/selection.ts`                                                                                  |
+| 스쿼드 생성 (실선수 시드 · 절차 생성)      | `packages/engine/src/common/world/catalog.ts` · `generate.ts`                                                                                                              |
+| 승격 클럽 보강 (승강 뒤 25명 하한)         | `packages/engine/src/match/competition/promotion.ts` · `packages/engine/src/app/workflows/match/competition/promotion.ts` · `packages/engine/src/common/world/generate.ts` |
+| 축소 세계                                  | `packages/engine/src/common/world/scope.ts`                                                                                                                                |
+| 구단 주급 예산                             | `packages/engine/src/negotiation/economy/wages.ts`                                                                                                                         |
+| 팀 전력 한 숫자 (`squadRating`, §2.2)      | `packages/engine/src/common/players/squad-depth.ts`                                                                                                                        |

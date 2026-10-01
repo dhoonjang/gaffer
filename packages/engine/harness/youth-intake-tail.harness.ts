@@ -2,7 +2,6 @@ import { TIER_BASE } from "../src/common/data/team-catalog";
 import { describe, expect, it } from "vitest";
 import { ageOf } from "@story-fm/domain";
 import {
-  declareRetirements,
   generateYouthPlayer,
   isClubTeam,
   transitionSeason,
@@ -47,11 +46,7 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 function intakeOfSummer(state: GameState): { overall: number; potential: number; age: number }[] {
   const beforeIds = new Set(state.players.map((p) => p.id));
   const beforeFree = new Set(youthFreeAgents(state).map((p) => p.id));
-  /**
-   * 예고를 함께 굴린다 — 전환은 집행일 뿐이고, 은퇴 수가 곧 그 구단이 채우는 수다
-   * (season.md §6). 빼면 인테이크가 최소 인원까지 마른다.
-   */
-  declareRetirements(state, []);
+  // GM의 은퇴 결정 없이 생리적 성장과 시즌 전환만 측정한다.
   transitionSeason(state);
   const born = [
     ...state.players.filter((p) => !beforeIds.has(p.id)),

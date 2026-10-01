@@ -134,7 +134,7 @@ export function lineupBody(
     ).map((key) => [key, setPieceRoutineLevel(b.setPieceRoutine, key)]),
   );
   return {
-    // v6: 선발은 {playerId, point}로 보낸다 — 서버가 좌표에서 포지션 코드를 다시 정한다
+    // 선발은 {playerId, point}로 보낸다 — 서버가 좌표에서 포지션 코드를 다시 정한다
     starting: b.occupants.map((id, i) => ({
       playerId: id,
       point: b.points[i]!,

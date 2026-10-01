@@ -26,17 +26,8 @@ import type { OpsInput } from "../common/orders-ops";
 import { SUGGEST_REPLY_TAG } from "../common/suggest-reply";
 
 /**
- * **mock 모드의 대본** — 감독의 말 하나가 어느 도구를 어느 인자로 부르는지의 표다
- * (docs/common/llm/agents.md §8).
- *
- * ⚠️ **자연어를 해석하지 않는다.** 표의 키와 감독의 말이 글자까지 같을 때만 걸리고,
- * 표에 없는 말은 아무 도구도 부르지 않는다. 정규식으로 뜻을 짐작하던 자리가 실모드에
- * 없는 두 번째 해석 경로였다 — 도구가 하나 늘 때마다 두 번 짓게 되고, 한쪽이 빠지면
- * e2e가 실모드에 없는 동작을 통과시킨다.
- *
- * **한 줄이 두 걸음을 함께 정한다** — GM이 부르는 도구(`gm`)와, 그 도구가 해석기라면
- * 해석기가 채우는 명령(`ops`). 실모드에서 두 걸음을 각각 LLM이 맡으므로 대본도 같은
- * 자리를 채우고, 두 걸음이 한 줄에 있어 갈릴 데가 없다.
+ * mock 모드는 감독 원문과 정확히 일치하는 대본 항목만 실행한다.
+ * 각 항목이 GM 도구 호출과 해석기의 ops를 함께 지정한다. 등록하지 않은 원문은 도구를 부르지 않는다.
  */
 
 /** 표의 한 줄이 인자를 채울 때 읽는 것 */
@@ -123,37 +114,9 @@ const SCRIPT: readonly ScriptLine[] = [
     say: `${NAME_SLOT} 주장 시키자`,
     ops: ({ named }) => ({ set_captain: [{ playerId: named }] }),
   },
-  {
-    say: "다들 모여봐",
-    gm: () => [
-      {
-        tool: "team_talk",
-        input: { occasion: "daily", reaction: { reason: "격려에 대한 반응", team: 0.5 } },
-      },
-    ],
-  },
-  {
-    say: `${NAME_SLOT} 면담 좀 하자`,
-    gm: ({ named }) => [
-      {
-        tool: "team_talk",
-        input: {
-          occasion: "daily",
-          players: [named],
-          reaction: { reason: "격려에 대한 반응", target: 0.5 },
-        },
-      },
-    ],
-  },
-  {
-    say: "회견장 가자",
-    gm: () => [
-      {
-        tool: "respond_to_media",
-        input: { reaction: { reason: "선수에 대한 지지를 받아들였다", squad: 0.5 } },
-      },
-    ],
-  },
+  { say: "다들 모여봐", gm: () => [] },
+  { say: `${NAME_SLOT} 면담 좀 하자`, gm: () => [] },
+  { say: "회견장 가자", gm: () => [] },
   { say: "경기 시작하자", gm: () => [{ tool: "start_match", input: {} }] },
   { say: "다음 경기로 가자", skip: "next_match" },
   { say: "하루 넘기자", skip: 1 },

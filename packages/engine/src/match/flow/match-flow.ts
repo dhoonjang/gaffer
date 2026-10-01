@@ -28,7 +28,6 @@ import {
   type TacticAssignment,
   type LiveSlot,
   naturalPositionOf,
-  positionGroupOf,
   type GamePlayer,
   josa,
   STARTING_XI,
@@ -72,7 +71,6 @@ import {
   readPoints,
   liveFinished,
 } from "@story-fm/sim";
-import { derbyForMatch } from "../../common/world/derby";
 import { managerTacticsOf } from "./manager-tactics";
 import { isFriendly } from "../../common/core/match-kinds";
 import { extraTimeRuleOf, needsShootout } from "../competition/extra-time";
@@ -426,7 +424,6 @@ export function buildLiveMatch(
     const player = playerById(state, id);
     if (player) players[id] = player;
   }
-  const derby = derbyForMatch(match);
   const sideSetup = (side: MatchSide): LiveSideSetup => {
     const teamId = teamIdOf[side];
     const tactics = tacticsOf(state, teamId);
@@ -437,7 +434,6 @@ export function buildLiveMatch(
       kickoffTactics: { ...tactics.spec },
       ...(tactics.setPieceTakers ? { setPieceTakers: tactics.setPieceTakers } : {}),
       ...(tactics.setPieceRoutine ? { setPieceRoutine: tactics.setPieceRoutine } : {}),
-      derbyHeat: derby?.heat ?? 0,
     };
   };
   const setup: LiveSetup = {
@@ -974,40 +970,6 @@ export function seatOf(state: GameState, player: GamePlayer): string {
   return assignment?.position ?? naturalPositionOf(player).position;
 }
 
-/** **주 포지션 묶음 밖 선발이 이만큼 이어지면 불만이 선다** (→ docs/story/people.md §5) */
-export const OUT_OF_POSITION_RUN = 4;
-
-/**
- * 자리 밖 기용을 한 경기 센다 — **묶음으로 잰다**(`positionGroupOf`). 이 눈금이 재는 것은
- * 그가 선발로 선 최근 경기들이다 — 벤치에 앉힌 경기가 사이에 끼어도 연속은 이어진다.
- * @returns 이 경기에서 불만이 **새로 걸렸으면** true
- */
-export function trackOutOfPosition(
-  state: GameState,
-  player: GamePlayer,
-  started: boolean,
-): boolean {
-  if (!started) return false;
-  const seatGroup = positionGroupOf(seatOf(state, player));
-  if (seatGroup === null || seatGroup === positionGroupOfPlayer(player)) {
-    player.state.outOfPositionRun = 0;
-    return false;
-  }
-  const run = player.state.outOfPositionRun + 1;
-  player.state.outOfPositionRun = run;
-  // **문턱에 닿는 그 경기에서만** — `>=`로 걸면 5·6경기째마다 새 줄이 선다
-  if (run !== OUT_OF_POSITION_RUN) return false;
-  if (state.issues.some((i) => i.gamePlayerId === player.id)) return false;
-  state.issues.push({
-    gamePlayerId: player.id,
-    kind: "unhappy",
-    reason: "out-of-position",
-    count: run,
-    since: state.date,
-  });
-  return true;
-}
-
 /** 실전 경험 — 그 자리의 적응도가 `MATCH_PROFICIENCY_GAIN`만큼 오른다 */
 export function gainMatchProficiency(
   state: GameState,
@@ -1055,26 +1017,6 @@ export interface MatchDigest {
 export function digestLines(digest: MatchDigest): string[] {
   return [...digest.ours, ...digest.finance, ...digest.others];
 }
-
-/** 한 경기가 감독 평판을 움직이는 폭 — **세 축 모두에 같은 값으로 걸린다** */
-export const MATCH_REPUTATION_SWING = 2;
-
-/** 경기 하나가 평판 3축에 남기는 값 (career.md §4) */
-export function matchReputationDelta(
-  outcome: "win" | "draw" | "loss",
-): Record<"board" | "media" | "squad", number> {
-  const swing =
-    outcome === "win" ? MATCH_REPUTATION_SWING : outcome === "loss" ? -MATCH_REPUTATION_SWING : 0;
-  return { board: 0, media: swing, squad: swing };
-}
-
-/** 경기 한 줄의 서사 무게 (1~5 눈금, `pushNarrative`) — 승리만 한 칸 위다 */
-export const MATCH_SALIENCE_WIN = 4;
-
-export const MATCH_SALIENCE_OTHER = 3;
-
-/** 그 경기가 세운 기록의 무게 — 결과 줄 아래다 */
-export const MATCH_SALIENCE_MILESTONE = 2;
 
 export interface MilestoneNote {
   name: string;

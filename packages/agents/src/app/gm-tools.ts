@@ -1,35 +1,28 @@
 import { evaluateNegotiation } from "./workflows/negotiation/evaluation";
 import { requestScouting } from "./workflows/negotiation/scouting";
-import { moodLineArg, moodNotesArg } from "../common/mood-input";
 import { z } from "zod";
 import {
+  CharacterUpdateSchema,
   POSITION_CODES,
-  PLAYER_ISSUE_REASONS,
   DateString,
   ScoutingInputSchema,
   SEARCH_MIN_AGE,
   SEARCH_MAX_AGE,
   type GamePlayer,
-  PROMISE_KINDS,
-  PROMISE_KIND_KO,
-  PROMISE_KIND_MEANING,
-  SQUAD_NUMBER_MAX,
   SQUAD_STATUSES,
   DealTermSchema,
-  MAX_TABLED_TERMS,
   ATTRIBUTE_AXES,
   RESERVE_TRAINING_POLICIES,
   TRANSITION_MODES,
   TACKLING_LEVELS,
   KEEPER_DISTRIBUTIONS,
   SET_PIECE_ROUTINE_LEVELS,
-  TEAM_TALK_OCCASIONS,
-  FIRST_TEAM_LIMIT,
   BoardReviewSchema,
-  ReactionSchema,
+  ManagerJobOfferSchema,
+  RetirementDecisionSchema,
   InterviewOutcomeSchema,
-  INCIDENT_KINDS,
-  BOARD_REQUEST_KINDS,
+  RequestBoardInputSchema,
+  HireStaffInputSchema,
   LEADERBOARD_KEYS,
   MAX_PAYMENT_YEARS,
   PitchClaimSchema,
@@ -39,14 +32,11 @@ import {
   type BoardMove,
 } from "@story-fm/domain";
 import {
-  EVENT_CREDIT,
-  EVENT_BAND,
+  requestCharacterUpdate,
   type GameState,
   formatMoney,
   KIND_KO,
   unilateralSeveranceOf,
-  PROMISE_DAYS_MIN,
-  PROMISE_DAYS_MAX,
   journal,
   startMatch,
   startNegotiation,
@@ -68,19 +58,13 @@ import {
   setSetPieceRoutine,
   setPlayerTraining,
   setTraining,
-  TEAM_TALK_MOODS,
-  applyTalk,
   reviewBoard,
-  declinePress,
-  respondToMedia,
-  respondToApproach,
+  offerManagerJob,
+  setRetirement,
+  respondToInterview,
   substitutePlayer,
-  MOOD_BATCH,
-  recordStoryIncident,
   NARRATIVE_INCOME_CATEGORIES,
   NARRATIVE_EXPENSE_CATEGORIES,
-  NARRATIVE_FINANCE_MIN_AMOUNT,
-  NARRATIVE_FINANCE_MAX_AMOUNT,
   applyFinanceEvent,
   adjustTransferBudget,
   requestBoard,
@@ -113,7 +97,6 @@ import {
   openRenewal,
   openRelease,
   setTransferList,
-  respondTransferRequest,
   releasePlayer,
   recallLoan,
   exerciseBuyBack,
@@ -159,7 +142,6 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "sign_youth",
   // 이적·재정·감독직 — market-orders의 ops
   "respond_offer",
-  "respond_transfer_request",
   "withdraw_offer",
   // 위임 — 협상·갈래를 단장에게 맡기고 도로 가져온다 (transfer.md §12-4)
   "delegate_negotiation",
@@ -176,9 +158,7 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "exercise_buyback",
   "recall_loan",
   "adjust_transfer_budget",
-  "request_board",
   "set_ticket_price",
-  "hire_staff",
   "release_staff",
   "accept_manager_offer",
   "counter_manager_offer",
@@ -202,7 +182,6 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   set_squad_number: "등번호",
   sign_youth: "유스 첫 계약",
   respond_offer: "들어온 오퍼에 감독이 답한다",
-  respond_transfer_request: "이적 요청 응답",
   withdraw_offer: "오퍼 철회",
   delegate_negotiation: "협상을 단장에게 맡긴다",
   revoke_mandate: "맡긴 일을 도로 가져온다",
@@ -217,12 +196,10 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   exercise_buyback: "되사기 행사",
   recall_loan: "임대 복귀",
   adjust_transfer_budget: "이적 예산 조정",
-  request_board: "보드에 요청",
   set_ticket_price: "티켓 가격",
-  hire_staff: "스태프 고용",
   release_staff: "스태프 계약 해지",
   accept_manager_offer: "감독직 수락",
-  counter_manager_offer: "감독직 흥정",
+  counter_manager_offer: "감독 계약 조건 수정",
   apply_manager_job: "감독직 지원",
 };
 
@@ -246,7 +223,7 @@ const positionArg = z
   .optional()
   .describe(`자리 코드 — ${POSITION_CODES.join("/")}`);
 
-/** 선수가 아닌 사람의 이름 자리 — 스태프처럼 id가 없고 이름이 곧 그 사람이다 */
+/** 선수가 아닌 인물을 지칭하는 이름 자리 */
 const personRef = z.string().min(1);
 
 const dateArg = DateString;
@@ -262,23 +239,6 @@ const LEDGER_NOTE = 120;
 
 /** 시즌 번호의 상한 — 한 세이브가 이보다 오래 가지 않는다. 오타를 막는 자리다 */
 const SEASON_MAX = 200;
-
-/**
- * 정착 무게 인자 — 코어가 앵커 ±EVENT_BAND로 자른다 (settling.ts).
- *
- * 폭은 **넓은 쪽(`talk`) 하나다.** 대화 도구가 하나가 되어 대상 수는 모델이 `players`로
- * 정하는데, 스키마에 좁은 쪽(`team_talk`)을 걸면 마주 앉은 면담의 무게가 코어에 닿기도
- * 전에 잘린다. 실제 앵커는 코어가 대상 수로 고르고 거기서 다시 자른다 (talk.ts).
- */
-const settlingArg = z
-  .number()
-  .min(-(EVENT_CREDIT.talk + EVENT_BAND.talk))
-  .max(EVENT_CREDIT.talk + EVENT_BAND.talk)
-  .optional()
-  .describe(
-    "새로 영입해 아직 적응 중인 선수에게 이 말이 남긴 무게. 생략하면 코어가 outcome·강도로 정한다. " +
-      "적응을 겨냥한 이야기(자리·역할 약속, 라커룸 소개, 사는 문제)면 크게, 지나가는 말이면 작게.",
-  );
 
 /** Explicit proposals need the manager's terms; inquiries can leave them open. */
 function missingFeeNote(
@@ -297,54 +257,6 @@ function missingSeveranceNote(state: GameState, player: GamePlayer): string {
   return `${player.name} 합의 해지 제안의 정산금이 없습니다. 일방 해지의 계약상 정산금은 ${formatMoney(unilateralSeveranceOf(state, player.id))}입니다`;
 }
 
-/**
- * 한 사건의 당사자 상한 — 선발 열한 명이 한꺼번에 걸리는 일(단체 벌금·회식)까지다.
- * 그보다 많으면 선수단 전체의 일이고, 그것은 팀토크의 자리다.
- */
-const INCIDENT_PLAYERS_MAX = 11;
-
-/** 사건 요약 한 줄의 상한 — 장부(`IncidentSchema.summary`)와 같은 폭 */
-const INCIDENT_SUMMARY_MAX = 200;
-
-/**
- * 감독이 그 자리에서 한 **약속** — 면담과 다가옴의 응대가 같은 인자를 쓴다
- * (→ docs/story/people.md §5-2). 갈래·기한과, **`number` 갈래만** 번호를 받는다:
- * 무슨 말로 약속했는지는 장면의 것이고 코어는 그것을 들지 않는다. 대상에 맞지 않는
- * 약속은 코어가 반려한다.
- */
-const promiseArg = z
-  .object({
-    kind: z
-      .enum(PROMISE_KINDS)
-      .describe(
-        PROMISE_KINDS.map((k) => `${k}(${PROMISE_KIND_KO[k]}): ${PROMISE_KIND_MEANING[k]}`).join(
-          " · ",
-        ),
-      ),
-    days: z
-      .number()
-      .int()
-      .min(PROMISE_DAYS_MIN)
-      .max(PROMISE_DAYS_MAX)
-      .optional()
-      .describe("감독이 못 박은 기한(일). 생략하면 갈래의 기본 기한"),
-    position: z
-      .enum(POSITION_CODES as [string, ...string[]])
-      .optional()
-      .describe("kind=signing일 때 영입을 약속한 포지션"),
-    number: z
-      .number()
-      .int()
-      .min(1)
-      .max(SQUAD_NUMBER_MAX)
-      .optional()
-      .describe("kind=number일 때 약속한 등번호 — 번호가 곧 약속이라 그 갈래에는 반드시 넣는다"),
-  })
-  .optional()
-  .describe(
-    "이번 턴에 감독이 못 박은 약속만. 지난 턴의 약속과 감독이 말하지 않은 약속은 싣지 않는다",
-  );
-
 /** 계약에 적히는 **스쿼드 지위** — 오퍼·재계약 제안이 함께 싣는다 (transfer.md §1) */
 const squadStatusArg = z
   .enum(SQUAD_STATUSES)
@@ -353,12 +265,10 @@ const squadStatusArg = z
 
 /**
  * 오퍼·재계약 제안에 실리는 **조건** — 조건서에 오른다 (transfer.md §12-3). 갈래의 뜻과
- * 값의 자리는 `DealTermSchema`의 `kind` 설명이 든다(코어의 표에서 온다). 상한은 조건서의
- * 상한에 `other` 둘을 더한 폭이다 — 넘긴 것은 코어가 반려 문장으로 돌려준다.
+ * 값의 자리는 `DealTermSchema`의 `kind` 설명이 든다(코어의 표에서 온다).
  */
 const termsArg = z
   .array(DealTermSchema)
-  .max(MAX_TABLED_TERMS + 2)
   .optional()
   .describe(
     "감독이 이 말에서 실제로 건 조건만 — 갈래별 값의 자리는 kind 설명에 있다. 말하지 않은 조건을 넣지 않는다. 주전 보장은 조건이 아니라 squadStatus다",
@@ -481,27 +391,19 @@ export function buildToolSpecs(
   ) =>
     recordCall(calls, name, result, {
       input,
+      ...(name === "update_character" ? { silent: true } : {}),
       ...(context ? { line: writtenLines(context.text) } : {}),
     });
-  /**
-   * **무직인 감독이 부를 수 있는 조작 도구는 넷뿐이다** (career.md §5.1).
-   *
-   * 경질돼도 `userTeamId`는 옛 구단을 가리키므로(그 구단의 장부는 계속 돌아야
-   * 한다) 막지 않으면 모델은 남의 구단의 라인업을 짜고 남의 선수를 팔 수 있다.
-   * 조회는 그대로 둔다 — 무직 감독도 세계를 읽을 수는 있다.
-   *
-   * 기자회견도 여기서 막힌다: 미디어 평판이 곧 다음 자리의 문턱이라
-   * (`OFFER_REPUTATION_GATE`) 무직 중에 회견을 반복하는 것이 승진 경로가 된다.
-   *
-   * ⚠️ **찾아온 사람에게 답하는 것은 열려 있다** — 무직에게 열릴 수 있는 다가옴은
-   * 감독직 면접 하나뿐이고(경질이 앞 구단의 자리를 그날 만료로 닫는다), 그 답이 곧
-   * 제안 조건이라 막으면 면접이 답할 수 없는 자리가 된다.
-   */
+  // 무직 감독은 채용과 자유 기록을 관리하고 실제 구단 원장은 변경하지 않는다.
   const OUT_OF_WORK_TOOLS = new Set([
     "accept_manager_offer",
     "counter_manager_offer",
     "apply_manager_job",
-    "respond_to_approach",
+    "respond_to_interview",
+    "offer_manager_job",
+    "review_board",
+    "set_retirement",
+    "update_character",
   ]);
   const wrap = <T>(
     name: string,
@@ -736,7 +638,7 @@ export function buildToolSpecs(
           .boolean()
           .optional()
           .describe(
-            "이미 그 번호를 단 동료가 있어도 넘겨받는다 — 뺏긴 선수는 새 번호를 받고 원형에 따라 불만이 선다",
+            "이미 그 번호를 단 동료가 있어도 넘겨받는다. 그 선수에게는 사용 가능한 새 번호를 배정한다",
           ),
       }),
       (input) => setSquadNumber(state, input),
@@ -769,12 +671,12 @@ export function buildToolSpecs(
       "set_mentor",
       CORE_COMMAND_LABELS.set_mentor!,
       z.object({
-        mentorId: playerRef.describe("유망주를 맡을 고참 — 1군 30세 이상 · 리더십 55 이상"),
+        mentorId: playerRef.describe("멘토로 합의한 소속 선수"),
         menteeIds: z
           .array(playerRef)
           .min(1)
           .optional()
-          .describe("그 멘토가 맡을 23세 이하 선수 — 지정 전체를 다시 적는다. 생략하면 다 푼다"),
+          .describe("그 멘토가 맡을 소속 선수 — 지정 전체를 다시 적는다. 생략하면 다 푼다"),
       }),
       (input) => setMentor(state, input),
     ),
@@ -921,84 +823,23 @@ export function buildToolSpecs(
         return notes.length > 0 ? { ok: r.ok, message: [...notes, r.message].join(" · ") } : r;
       },
     },
-
     wrap(
-      "team_talk",
-      descriptions.team_talk,
-      z.object({
-        occasion: z.enum(TEAM_TALK_OCCASIONS),
-        players: z
-          .array(playerRef)
-          /**
-           * 상한은 규칙이 아니라 **오타를 막는 자리다.** 이름을 다 부르는 자리는
-           * `players`를 비우는 것이고, 1군 정원(`FIRST_TEAM_LIMIT`)을 넘겨 한 사람씩
-           * 부르는 말은 감독의 말이 아니라 모델의 폭주다.
-           */
-          .max(FIRST_TEAM_LIMIT)
-          .optional()
-          .describe("감독이 이름을 부른 선수 — 비우면 선수단 전체"),
-        reaction: ReactionSchema,
-        settling: settlingArg,
-        settlingNote: z
-          .string()
-          .min(1)
-          .max(160)
-          .optional()
-          .describe("settling을 그렇게 매긴 근거 한 줄"),
-        promise: promiseArg,
-        resolveIssues: z
-          .array(z.object({ playerId: playerRef, reason: z.enum(PLAYER_ISSUE_REASONS) }))
-          .optional(),
-        moods: moodNotesArg(TEAM_TALK_MOODS),
-      }),
-      (input) => applyTalk(state, input),
+      "respond_to_interview",
+      descriptions.respond_to_interview,
+      InterviewOutcomeSchema,
+      (input) => respondToInterview(state, input),
+    ),
+    wrap("update_character", descriptions.update_character, CharacterUpdateSchema, (input) =>
+      requestCharacterUpdate(state, input),
+    ),
+    wrap("offer_manager_job", descriptions.offer_manager_job, ManagerJobOfferSchema, (input) =>
+      offerManagerJob(state, input),
+    ),
+    wrap("set_retirement", descriptions.set_retirement, RetirementDecisionSchema, (input) =>
+      setRetirement(state, input),
     ),
     wrap("review_board", descriptions.review_board, BoardReviewSchema, (input) =>
       reviewBoard(state, input),
-    ),
-    wrap(
-      "respond_to_media",
-      descriptions.respond_to_media,
-      z.object({
-        reaction: ReactionSchema.optional(),
-        targetPlayerId: playerRef.optional().describe("감독이 이름을 들어 말한 선수"),
-        targetManager: z
-          .string()
-          .optional()
-          .describe("감독이 이름을 들어 말한 상대 감독 — 사실 카드에 선 사람만"),
-        decline: z.boolean().optional().describe("회견을 거절했다면 true"),
-        mood: moodLineArg,
-      }),
-      (input) => {
-        /**
-         * **거절은 감독이 거절했을 때만이다.** 둘 다 비운 호출을 거절로 읽으면
-         * 감독이 하지 않은 결정(언론 −1×무게)이 장부에 남는다 — 모델이 다시
-         * 부르게 하는 편이 낫다 (people.md §4).
-         */
-        if (input.decline === true) return declinePress(state, input.reaction);
-        if (!input.reaction) return { ok: false, message: "답변에는 reaction이 필요합니다" };
-        return respondToMedia(state, {
-          reaction: input.reaction,
-          targetPlayerId: input.targetPlayerId,
-          targetManager: input.targetManager,
-          mood: input.mood,
-        });
-      },
-    ),
-    wrap(
-      "respond_to_approach",
-      descriptions.respond_to_approach,
-      z.object({
-        reaction: ReactionSchema.optional(),
-        decline: z.boolean().optional().describe("감독이 자리를 주지 않고 돌려보냈으면 true"),
-        promise: promiseArg,
-        resolveIssues: z
-          .array(z.object({ playerId: playerRef, reason: z.enum(PLAYER_ISSUE_REASONS) }))
-          .optional(),
-        interview: InterviewOutcomeSchema.optional(),
-        mood: moodLineArg,
-      }),
-      (input) => respondToApproach(state, input),
     ),
     wrap(
       "substitute",
@@ -1007,45 +848,12 @@ export function buildToolSpecs(
       (input) => substitutePlayer(state, input),
     ),
     wrap(
-      "record_incident",
-      descriptions.record_incident,
-      z.object({
-        kind: z.enum(INCIDENT_KINDS),
-        reaction: ReactionSchema,
-        resolveOpeningIds: z.array(z.string().min(1)).optional(),
-        approach: z
-          .object({
-            topic: z.enum([...PLAYER_ISSUE_REASONS, "interest", "morale"]),
-            playerId: playerRef.optional(),
-          })
-          .optional()
-          .describe("현재 사실에 근거해 시작하는 면담. 약속·불만·관심의 당사자를 지정한다"),
-        settling: z
-          .number()
-          .min(-1)
-          .max(1)
-          .optional()
-          .describe("적응에 남긴 방향과 강도, 생략하면 변화 없음"),
-        // 빈 목록은 아무에게도 닿지 않고 하루 한도만 쓴다 — 당사자 없는 사건은 사건이 아니다
-        playerIds: z.array(playerRef).min(1).max(INCIDENT_PLAYERS_MAX),
-        intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-        // 이 줄은 장부와 당사자의 기억에 그대로 남는다 — 장면을 여기 옮겨 적을 자리가 아니다
-        summary: z.string().min(1).max(INCIDENT_SUMMARY_MAX).describe("무슨 일이 있었나 — 한 줄"),
-        moods: moodNotesArg(MOOD_BATCH),
-      }),
-      (input) => recordStoryIncident(state, input),
-    ),
-    wrap(
       "apply_finance_event",
       descriptions.apply_finance_event,
       z.object({
         kind: z.enum(["income", "expense"]),
         category: z.enum([...NARRATIVE_INCOME_CATEGORIES, ...NARRATIVE_EXPENSE_CATEGORIES]),
-        amount: z
-          .number()
-          .int()
-          .min(NARRATIVE_FINANCE_MIN_AMOUNT)
-          .max(NARRATIVE_FINANCE_MAX_AMOUNT),
+        amount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
         // 원장 라벨로 영구히 남는다 — 장면을 여기 옮겨 적을 자리가 아니다
         note: z
           .string()
@@ -1068,26 +876,8 @@ export function buildToolSpecs(
       }),
       (input) => adjustTransferBudget(state, input),
     ),
-    wrap(
-      "request_board",
-      CORE_COMMAND_LABELS.request_board!,
-      z.object({
-        kind: z.enum(BOARD_REQUEST_KINDS),
-        /**
-         * 단위는 종류가 안다 — 예산·주급은 파운드, 구장은 좌석이다. 상한은 오타를
-         * 막는 자리이고 실제 판정은 코어의 한도가 한다 (finance.md §9.6).
-         */
-        amount: z
-          .number()
-          .int()
-          .min(1)
-          .max(MONEY_MAX)
-          .describe("이적 예산·주급 한도·영입 승인은 금액(£), 구장은 좌석 수"),
-        playerId: playerRef
-          .optional()
-          .describe("영입 승인(signing)일 때 그 선수 — 이름 그대로 실어도 된다"),
-      }),
-      (input) => requestBoard(state, input),
+    wrap("request_board", descriptions.request_board, RequestBoardInputSchema, (input) =>
+      requestBoard(state, input),
     ),
     wrap("resign", descriptions.resign, z.object({}), () => resignPost(state)),
     wrap(
@@ -1102,19 +892,8 @@ export function buildToolSpecs(
       }),
       (input) => setTicketPrice(state, input),
     ),
-    /**
-     * **스태프 고용·해지** (people.md §2-2). 흥정 테이블이 없는 자리라 문 넷(풀에 있는
-     * 이름·요구 연봉·주급 여력·자리)을 코어가 한 번에 지나고 그 자리에서 계약된다.
-     */
-    wrap(
-      "hire_staff",
-      CORE_COMMAND_LABELS.hire_staff!,
-      z.object({
-        name: personRef.describe("자리를 찾는 스태프의 이름 — 감독이 부른 이름 그대로"),
-        /** 상한은 오타를 막는 자리다 — 실제 문은 요구 연봉과 주급 여력이 건다 */
-        salary: money(MONEY_MAX).describe("감독이 부른 연봉 (£/년)"),
-      }),
-      (input) => hireStaff(state, input),
+    wrap("hire_staff", descriptions.hire_staff, HireStaffInputSchema, (input) =>
+      hireStaff(state, input),
     ),
     wrap(
       "release_staff",
@@ -1207,21 +986,25 @@ export function buildToolSpecs(
     ),
     wrap(
       "accept_manager_offer",
-      CORE_COMMAND_LABELS.accept_manager_offer!,
+      "감독이 이 제안의 현재 조건을 명시적으로 수락했을 때만 실행한다. 제안 생성·조건 흥정은 수락이 아니다.",
       z.object({ offer: z.string().min(1).describe("제안 id 또는 구단 이름·약칭") }),
       (input) => acceptManagerOffer(state, input.offer),
     ),
     wrap(
       "counter_manager_offer",
-      CORE_COMMAND_LABELS.counter_manager_offer!,
+      "대화에서 구단이 동의해 제시한 수정 조건을 기록한다. 감독의 요구만으로 상대 승인을 만들지 않는다. 수정은 유저 수락이 아니며 횟수·인상률 제한은 없다.",
       z.object({
         offer: z.string().min(1).describe("제안 id 또는 구단 이름·약칭"),
-        salary: money(MONEY_MAX).optional().describe("되부르는 연봉 (£/년)"),
-        transferBudget: money(MONEY_MAX).optional().describe("되부르는 이적 예산 약속 (£)"),
+        salary: money(MONEY_MAX).optional().describe("구단이 제시한 수정 연봉 (£/년)"),
+        years: z.number().int().min(1).max(100).optional(),
+        expiresOn: dateArg.optional().describe("구단이 제시한 응답 기한 YYYY-MM-DD"),
+        transferBudget: money(MONEY_MAX).optional().describe("구단이 제시한 수정 이적 예산 (£)"),
       }),
       (input) =>
         counterManagerOffer(state, input.offer, {
           ...(input.salary === undefined ? {} : { salary: input.salary }),
+          ...(input.years === undefined ? {} : { years: input.years }),
+          ...(input.expiresOn === undefined ? {} : { expiresOn: input.expiresOn }),
           ...(input.transferBudget === undefined ? {} : { transferBudget: input.transferBudget }),
         }),
     ),
@@ -1569,21 +1352,6 @@ export function buildToolSpecs(
       (input) => setTransferList(state, input),
     ),
     wrap(
-      "respond_transfer_request",
-      CORE_COMMAND_LABELS.respond_transfer_request!,
-      z.object({
-        playerId: playerRef,
-        answer: z
-          .enum(["accept", "refuse"])
-          .describe("accept=요청을 받아들여 이적 리스트에 올린다, refuse=붙잡는다"),
-        askingPrice: money(MONEY_MAX)
-          .optional()
-          .describe("수락할 때의 호가 — 생략하면 코어가 정한다. 요청 할인선 위로는 서지 못한다"),
-        note: z.string().min(1).max(160).optional().describe("감독이 밝힌 한 줄"),
-      }),
-      (input) => respondTransferRequest(state, input),
-    ),
-    wrap(
       "release_player",
       CORE_COMMAND_LABELS.release_player!,
       z.object({ playerId: playerRef }),
@@ -1657,7 +1425,7 @@ export function buildToolSpecs(
     ),
     /**
      * **조건서** — 감독이 조건을 걸거나 상대의 요구에 답한다 (transfer.md §12-3). 시장
-     * 해석과 테이블 해석이 채우고, 코어가 갈래·값·상한을 가린다.
+     * 해석과 테이블 해석이 채우고, 코어가 갈래·값을 가린다.
      */
     wrap(
       "offer_terms",
@@ -1667,7 +1435,7 @@ export function buildToolSpecs(
         terms: z
           .array(DealTermSchema)
           .min(1)
-          .max(MAX_TABLED_TERMS + 2)
+
           .describe("감독이 이 말에서 건 조건 — 상대가 부른 갈래를 올리면 그 요구를 들어준 것이다"),
       }),
       (input) => offerTerms(state, input),

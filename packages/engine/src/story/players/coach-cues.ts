@@ -36,7 +36,6 @@ import { leagueOfTeamIn } from "../../common/core/league-membership";
 import { computeStandings } from "../../common/views/standings";
 import { tierOfTeamIn } from "../../common/core/club-tier";
 import { diffDays } from "../../common/core/dates";
-import { isSettling } from "../../common/players/settling";
 import { formLabel } from "../../common/players/form";
 import { derbyNameOf } from "../../common/data/derbies";
 import { potentialBand } from "../../common/players/observation";
@@ -317,24 +316,6 @@ export const reserveRecord: CoachEye = (state) => {
   };
 };
 
-/** 라커룸에 지금 걸려 있는 것 — 불만과 아직 녹지 않은 새 얼굴 */
-export const dressingRoom: CoachEye = (state) => {
-  const unhappy = state.issues
-    .map((i) => playerById(state, i.gamePlayerId))
-    .filter((p): p is GamePlayer => p !== null);
-  const settling = playersOf(state, state.userTeamId).filter((p) => isSettling(state, p.id));
-  if (unhappy.length === 0 && settling.length === 0) return null;
-  const parts = [
-    unhappy.length > 0 ? `불만 ${counted(unhappy.map((p) => p.name))}` : null,
-    settling.length > 0 ? `정착 미완 ${counted(settling.map((p) => p.name))}` : null,
-  ].filter((x): x is string => x !== null);
-  return {
-    code: "dressing-room",
-    fact: parts.join(" · "),
-    playerIds: [...unhappy, ...settling].map((p) => p.id).slice(0, NAMES_SHOWN),
-  };
-};
-
 /** 라커룸을 대신 지고 있는 한 사람 */
 export const captain: CoachEye = (state) => {
   const who = playersOf(state, state.userTeamId).find((p) => p.isCaptain);
@@ -408,7 +389,7 @@ export const expectation: CoachEye = (state) => {
     code: "expectation",
     playerIds: [],
     fact:
-      `보드 기대: ${state.boardAgenda.expectations.join(" · ") || "협의 전"}` +
+      `리그 현황` +
       (row && row.played > 0
         ? ` · 현재 ${rank}위 (${row.played}경기 · 승점 ${row.points})`
         : " · 아직 리그 경기 없음"),

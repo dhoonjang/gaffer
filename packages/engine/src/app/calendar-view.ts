@@ -81,15 +81,7 @@ export interface CalendarEventView {
     | "transfer"
     | "window"
     /** 큰 비정기 수입·지출 — 정액 항목은 서지 않는다 (docs/negotiation/finance.md §8.2) */
-    | "money"
-    /**
-     * 소식 — **서사 표(`state.narrative`)가 그대로 선 줄** (people.md §9).
-     *
-     * 시간을 넘긴 턴에 코어가 굴린 일은 다이제스트로만 가고 화면에는 서지 않는다.
-     * 그 사건의 원본은 이미 서사 표에 있으니 여기서 날짜에 세운다 — 코어가 새 문장을
-     * 쓰는 것이 아니다.
-     */
-    | "news";
+    | "money";
   text: string;
   /**
    * 접어 둔 상세 — 있으면 UI가 눌러서 펼친다. 성장처럼 **한 날에 스무 줄이 나오는**
@@ -330,24 +322,6 @@ export function pushRecordJournal(
       if (h.date > state.date) continue;
       push(h.date, { kind: "money", text: moneyText(h) });
     }
-  }
-
-  /**
-   * 소식 — **서사 표가 원본이다** (people.md §9). 저장된 줄을 날짜에 세우는 것이라
-   * 코어가 새 문장을 쓰지 않는다.
-   *
-   * `match` 갈래는 빼놓는다 — 그날의 경기 줄은 일정 축이 이미 세운다.
-   * 한 날에 여럿이면 무게 내림차순, 같으면 적힌 순서다 — 전역 정렬이라 날짜 안의
-   * 순서도 그대로 따라온다.
-   */
-  const news = state.narrative
-    .map((note, index) => ({ note, index }))
-    .filter(({ note }) => note.kind !== "match")
-    .sort((a, b) => b.note.salience - a.note.salience || a.index - b.index);
-  for (const { note } of news) {
-    // 기록에서 이미 파생된 줄(이적창 개폐 같은)을 서사 표가 다시 세우지 않는다
-    if ((events[note.date] ?? []).some((e) => e.text === note.text)) continue;
-    push(note.date, { kind: "news", text: note.text });
   }
 }
 

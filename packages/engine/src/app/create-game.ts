@@ -1,3 +1,4 @@
+import { syncCharacterBook } from "./workflows/story/character-book";
 import type {
   AxisValues,
   Contract,
@@ -59,7 +60,6 @@ import {
 } from "../common/people/persona";
 import { makeRng, randInt } from "../common/core/rng";
 import { installDefaultTraining } from "../story/players/training-plan";
-import { openAppointmentPress } from "./workflows/story/world/press";
 import {
   recomputeOverall,
   type GameState,
@@ -704,15 +704,7 @@ export function createGame(input: CreateGameInput): GameState {
    * 완장 — **카탈로그가 먼저 들고, 없는 자리만 파생이 선다** (people.md §5-1).
    * 실제 그 구단의 주장·부주장이 시드에 있으면 그 사람이 찬다.
    *
-   * 시드에 주장이 없으면 **서열 최상위, 다만 후보는 개막전에 나설 열한 명이다**.
-   * 규칙은 도메인(`initialCaptainOf`)이 갖는다 — 세계를 보지 않는 순수 규칙이고,
-   * 개막 뒤의 서열(`squad/hierarchy.ts`)과 같은 자를 써야 두 서열이 갈리지 않는다.
-   *
-   * 후보를 위에서 세운 배치가 정하는 것은, 개막 전의 출전 수를 대신할 수 있는 사실이
-   * 그것 하나뿐이어서다: 리더십과 나이만 보면 한 경기도 나서지 않는 백업 골키퍼가
-   * 완장을 차고, 경기마다 `matchCaptainOf`가 그 완장을 다른 사람에게 넘긴다.
-   *
-   * ⚠️ **부주장은 시드에 있을 때만 선다** — 파생으로 만들지 않는다.
+   * 시드에 주장이 없으면 실제 선발을 우선 후보로 삼아 완장을 배정한다.
    */
   const catalogById = new Map(playerCatalog().map((entry) => [entry.id, entry] as const));
   const catalogOf = (p: GamePlayer) =>
@@ -723,7 +715,7 @@ export function createGame(input: CreateGameInput): GameState {
     .map((a) => a.playerId);
   const captain =
     userSquad.find((p) => catalogOf(p)?.isCaptain === true) ??
-    initialCaptainOf(userSquad, userStartingXi, calendar.preseasonStart);
+    initialCaptainOf(userSquad, userStartingXi);
   if (captain) captain.isCaptain = true;
   // 파생 주장이 시드의 부주장이면 부주장 자리는 빈다 — 한 사람이 완장 둘을 찰 수 없다
   const vice = userSquad.find((p) => catalogOf(p)?.isViceCaptain === true);
@@ -835,14 +827,12 @@ export function createGame(input: CreateGameInput): GameState {
     growthLog: [],
     trainingReports: [],
     seasonStats: [],
-    issues: [],
-    promises: [],
+    characterBook: [],
+    characterBookJobSequence: 0,
+    characterBookJobs: [],
     scoutReports: [],
     pendingReportCards: [],
-    settlingEvents: [],
     transferList: [],
-    transferRequests: [],
-    interests: [],
     playerTraining: [],
     roleMemory: [],
     aiDeals: [],
@@ -851,10 +841,7 @@ export function createGame(input: CreateGameInput): GameState {
     negotiationExchanges: [],
     negotiationEvaluations: [],
     negotiationFollowups: [],
-    pressConferences: [],
-    approaches: [],
-    pressLeaks: [],
-    pressSackings: [],
+    managerInterviews: [],
     // 새 게임의 풀은 비어 있다 — 아직 아무도 자리를 잃지 않았다
     managerPool: [],
     boardRequests: [],
@@ -862,7 +849,6 @@ export function createGame(input: CreateGameInput): GameState {
     media: [],
     delegations: [],
     scoutingRequests: [],
-    competingBids: [],
     dismissals: [],
     managerOffers: [],
     managerVacancies: [],
@@ -871,18 +857,11 @@ export function createGame(input: CreateGameInput): GameState {
     retired: [],
     youthCandidates: [],
     callUps: [],
-    relations: [],
-    characterMemories: [],
-    incidents: [],
-    openings: [],
     paymentSchedules: [],
 
-    boardAgenda: { teamId: input.userTeamId, expectations: [], assessment: "", reviewedOn: null },
     manager: {
       name: input.managerName,
       background: input.background,
-      reputation: { board: 50, media: 50, squad: 50 },
-      reactionSeason: { season, board: 0, media: 0, squad: 0 },
     },
     // 부임하면 사람이 먼저 기다린다 — 수석코치는 시드로 결정되므로
     // 같은 세이브는 언제 열어도 같은 사람이다 (persona.ts)
@@ -904,7 +883,6 @@ export function createGame(input: CreateGameInput): GameState {
     awards: [],
     milestones: [],
 
-    narrative: [],
     chat: [],
   };
 
@@ -939,6 +917,6 @@ export function createGame(input: CreateGameInput): GameState {
    * 전임의 사실은 없다 — 새 게임의 구단에는 앞서 잘린 감독이 세계에 없다.
    * 세계·계약·훈련이 다 선 **뒤**여야 카드가 그 사실들을 읽는다.
    */
-  openAppointmentPress(state);
+  syncCharacterBook(state);
   return state;
 }

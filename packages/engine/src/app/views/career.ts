@@ -1,14 +1,12 @@
+import { personaBookOf } from "../../common/people/character-book";
 import {
   type StaffRole,
-  type BoardExpectationCode,
-  boardExpectationText,
   type Persona,
   STAFF_ROLES,
   personaRoleLabel,
   ageOf,
   naturalPositionOf,
   type AchievementCode,
-  boardAgendaLines,
 } from "@story-fm/domain";
 import { type CareerTotals } from "../../story/players/career";
 import { type GameState, teamNameIn } from "../../common/core/state";
@@ -94,20 +92,12 @@ export interface StaffMemberView {
   role: "head_coach" | StaffRole;
   /** 이름 옆의 직책 — 「피지컬 코치」. 역할 라벨(「코치」)보다 좁다 */
   title: string;
-  /** 원형 한 낱말 — 같은 자리라도 어떤 결의 사람인가 */
-  archetype: string;
+  /** 세이브의 최신 캐릭터북 설명 */
+  description: string;
   /** 부임일 — 감독보다 앞설 수 있다 (people.md §2-2) */
   since: string | null;
   /** 계약 만료일 — 시즌 단위로 끝난다 */
   until: string | null;
-}
-
-/** 보드 기대의 이름 — 코드에서 만든다 (career.md §6) */
-export function expectationTextOf(card: {
-  expectationCode: BoardExpectationCode;
-  target?: number;
-}): string {
-  return boardExpectationText(card.expectationCode, card.target);
 }
 
 /**
@@ -143,7 +133,7 @@ export function staffViews(state: GameState): StaffMemberView[] {
     role,
     // 고용 정보가 없는 사람은 역할 라벨로 선다 — 화자 칩(`speakerRoles`)과 같은 폴백이다
     title: persona.employment?.title ?? personaRoleLabel(role) ?? role,
-    archetype: persona.archetype,
+    description: personaBookOf(state, persona).description,
     since: persona.employment?.since ?? null,
     until: persona.employment?.contract.until ?? null,
   }));
@@ -178,7 +168,7 @@ export function youthIntakeView(state: GameState): YouthIntakeView | null {
 export type CareerView = {
   /**
    * **경질 카드** — 서 있으면 감독은 무직이다 (career.md §5.1). 코어는 사실만
-   * 넘기고("어느 구단에서 몇 위, 기대는 무엇") 문장은 화면이 쓴다.
+   * 넘기고("어느 구단에서 몇 위") 문장은 화면이 쓴다.
    */
   dismissal: {
     on: string;
@@ -194,8 +184,6 @@ export type CareerView = {
     tier: number;
     /** 경질일의 리그 순위 — 아직 리그전을 치르지 않았으면 null */
     position: number | null;
-    target: number;
-    expectation: string;
   } | null;
   /**
    * **경질 이력** — 부임이 카드를 옮겨 남긴 지난 경질들 (career.md §6).
@@ -208,8 +196,6 @@ export type CareerView = {
     kind: "sacked" | "expired" | "resigned" | "moved";
     teamName: string;
     position: number | null;
-    target: number;
-    expectation: string;
   }>;
   /**
    * **지금 답할 수 있는 감독직 제안** — 만료가 가까운 것이 앞이다.
@@ -226,14 +212,11 @@ export type CareerView = {
     tier: number;
     expiresOn: string;
     position: number | null;
-    target: number;
-    expectation: string;
+
     /** 제시 조건 (career.md §5.1) */
     salary: number;
     years: number;
     budgetPledge: number;
-    /** 서 있으면 흥정은 끝났다 — 한 차례뿐이다 */
-    counteredOn: string | null;
     /**
      * 새 구단이 지금 구단에 물 **이적 보상금** — 재직 중에 온 제안에만 있다
      * (career.md §5.1)
@@ -246,14 +229,10 @@ export type CareerView = {
    * 지원은 채팅으로 한다(`apply_manager_job`) — 화면은 어느 문이 열려 있는지만 세운다.
    */
   vacancies: Array<{ teamName: string; tier: number; on: string; position: number | null }>;
-  /**
-   * 감독 계약 — 무직이면 null (career.md §5.1 · §5.4). `renewal`은 보드가 만료
-   * 90일 전에 내린 판정이다: 재계약 제안이 섰거나(`offered`), 비갱신 통보(`declined`).
-   */
+  /** 감독 계약 — 무직이면 null. */
   contract: {
     salary: number;
     until: string;
-    renewal: "offered" | "declined" | null;
   } | null;
   trophies: Array<{ competition: string; season: number; teamName: string }>;
   /**
@@ -299,12 +278,6 @@ export type CareerView = {
     position: number;
     /** 그 시즌의 전적 — `"20승 8무 10패"`는 화면이 잇는다 (career.md §6) */
     record: { wins: number; draws: number; losses: number };
-    /**
-     * 그 시즌에 대한 **보드 평가 카드** — 등급과 근거 수치 (career.md §6).
-     * 순위와 전적이 말하지 않는 것이 여기 있다: 같은 4위가 어느 구단에서는
-     * 성공이고 어느 구단에서는 실패인 이유가 `target`에 남는다. 문장은 화면이 쓴다.
-     */
-    board: string[];
   }>;
 };
 
@@ -321,8 +294,6 @@ export function buildCareerView(state: GameState): CareerView {
           teamName: teamNameIn(state, state.dismissal.teamId),
           tier: state.dismissal.tier,
           position: state.dismissal.position ?? null,
-          target: state.dismissal.target,
-          expectation: expectationTextOf(state.dismissal),
         }
       : null,
     dismissals: state.dismissals.map((d) => ({
@@ -331,8 +302,6 @@ export function buildCareerView(state: GameState): CareerView {
       kind: d.kind,
       teamName: teamNameIn(state, d.teamId),
       position: d.position ?? null,
-      target: d.target,
-      expectation: expectationTextOf(d),
     })),
     offers: openManagerOffers(state).map((o) => ({
       id: o.id,
@@ -341,15 +310,12 @@ export function buildCareerView(state: GameState): CareerView {
       tier: o.tier,
       expiresOn: o.expiresOn,
       position: o.position ?? null,
-      target: o.target,
-      expectation: expectationTextOf(o),
+
       salary: o.salary,
       years: o.years,
       budgetPledge: o.budgetPledge,
-      counteredOn: o.counteredOn ?? null,
       compensation: o.compensation ?? null,
     })),
-    // 재직 중에도 문이다 — 명부는 14일이 지나면 코어가 내린다 (career.md §5.1)
     vacancies: state.managerVacancies.map((v) => ({
       teamName: teamNameIn(state, v.teamId),
       tier: tierOfTeamIn(state, v.teamId),
@@ -358,18 +324,11 @@ export function buildCareerView(state: GameState): CareerView {
     })),
     /**
      * 계약 — **수치와 기간만** 내려간다 (career.md §5.4 · overview.md §1 철칙 4).
-     * `renewal`은 보드가 만료 90일 전에 내린 판정이고, 문장은 화면과 GM이 쓴다.
      */
     contract: state.manager.contract
       ? {
           salary: state.manager.contract.salary,
           until: state.manager.contract.until,
-          renewal:
-            state.manager.contract.renewalDecidedOn === undefined
-              ? null
-              : state.manager.contract.renewalOffered
-                ? ("offered" as const)
-                : ("declined" as const),
         }
       : null,
     /**
@@ -411,7 +370,6 @@ export function buildCareerView(state: GameState): CareerView {
       teamName: teamNameIn(state, s.teamId),
       position: s.position,
       record: { wins: s.wins, draws: s.draws, losses: s.losses },
-      board: boardAgendaLines(s.board),
     })),
   };
 }

@@ -48,21 +48,8 @@ function recordText({ wins, draws, losses }: SeasonRow["record"]): string {
 
 type CareerView = OfficeViews["career"];
 
-/**
- * **경질 한 줄을 쓰는 자리** — 코어는 등급·순위·기대만 넘긴다
- * (docs/overview.md §1 철칙 4 · career.md §5.1).
- *
- * 같은 17위도 우승을 노리라는 구단에서와 잔류가 기대인 구단에서 다른 사건이라,
- * 순위 혼자로는 왜 잘렸는지가 읽히지 않는다. 순위가 없으면(리그전 전) 지어내지 않는다.
- * 무직 카드와 시즌 표의 경질 이력 줄(career.md §6)이 같은 문장을 쓴다.
- */
-function dismissalLineOf(d: {
-  position: number | null;
-  target: number;
-  expectation: string;
-}): string {
-  if (d.position === null) return "";
-  return `${d.expectation} — 기대 ${d.target}위, 당시 ${d.position}위`;
+function dismissalLineOf(d: { position: number | null }): string {
+  return d.position === null ? "" : `당시 리그 ${d.position}위`;
 }
 
 type OfferRow = CareerView["offers"][number];
@@ -88,13 +75,9 @@ function OfferCard({ offer: o }: { offer: OfferRow }) {
         </span>
         <span className="until">{humanDate(o.expiresOn)}까지</span>
       </div>
-      <div className="offer-why">
-        기대 {o.expectation} ({o.target}위)
-        {o.position === null ? "" : ` · 현재 ${o.position}위`}
-      </div>
+      {o.position !== null && <div className="offer-why">제안 당시 리그 {o.position}위</div>}
       <div className="offer-why">
         연봉 {formatMoney(o.salary)} · {o.years}년 · 이적 예산 약속 {formatMoney(o.budgetPledge)}
-        {o.counteredOn === null ? "" : " · 흥정 완료"}
       </div>
       {/* 보상금은 감독의 돈이 아니다 — 구단이 구단에 무는 돈이다 (career.md §5.1) */}
       {o.compensation !== null && (
@@ -230,47 +213,11 @@ export function CareerView({
   ].sort((a, b) => a.season - b.season || a.at.localeCompare(b.at));
   return (
     <div data-testid="view-career">
-      {/**
-       * 감독 — **상자에 담지 않는다.**
-       *
-       * 카드로 두면 이 화면에서 유일하게 배경을 가진 덩어리가 되어 "여기가 제일
-       * 중요하다"고 말하는데, 커리어 화면의 주인은 트로피·업적·시즌 기록이다.
-       * 게다가 카드는 폭을 다 쓰든 좁히든 어느 쪽이든 어색했다 — 넓히면 가운데가
-       * 비고, 좁히면 아래 섹션과 왼쪽 끝이 어긋났다. 상자를 걷으면 그 문제가
-       * 아예 없다: 이름·배경·평판은 그냥 페이지의 머리글이다.
-       */}
       <div className="mgr-head">
         <div className="mgr-info">
           <h1 className="view-title">{squad.manager.name} 감독</h1>
           <div className="bg">{squad.manager.background}</div>
-          {/**
-           * 감독에게 딸린 값은 **두 갈래**고 생김새가 그것을 가른다 — 견주는 눈금
-           * (평판)은 상자에 담고, 읽는 사실(계약)은 상자 없이 라벨과 값으로
-           * 선다. 둘 다 이름·배경보다 아래 단이다.
-           */}
           <div className="mgr-meters">
-            <div className="mgr-gauges">
-              <div className="mgr-rep">
-                <div className="mgr-rep-title">평판</div>
-                <div className="mgr-rep-items">
-                  {(
-                    [
-                      ["보드", squad.manager.reputation.board],
-                      ["언론", squad.manager.reputation.media],
-                      ["선수단", squad.manager.reputation.squad],
-                    ] as const
-                  ).map(([label, value]) => (
-                    <span className="rep-item" key={label}>
-                      <span className="rep-label">{label}</span>
-                      <span className="rep-bar">
-                        <i style={{ width: `${value}%` }} />
-                      </span>
-                      <b>{value}</b>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
             {career.contract && (
               <dl className="mgr-facts">
                 <div className="mgr-fact">
@@ -278,9 +225,6 @@ export function CareerView({
                   <dd>
                     연봉 {formatMoney(career.contract.salary)} ·{" "}
                     {contractUntil(career.contract.until)}
-                    {career.contract.renewal === "declined" && (
-                      <b className="mgr-nonrenewal"> 재계약 없음</b>
-                    )}
                   </dd>
                 </div>
               </dl>
@@ -354,7 +298,7 @@ export function CareerView({
               <th>팀</th>
               <th>순위</th>
               <th>전적</th>
-              <th>보드</th>
+              <th>고용 이력</th>
             </tr>
           </thead>
           <tbody>
@@ -365,10 +309,7 @@ export function CareerView({
                   <td>{r.s.teamName}</td>
                   <td>{r.s.position}위</td>
                   <td>{recordText(r.s.record)}</td>
-                  {/* 순위와 전적이 말하지 않는 것 — 같은 4위가 어느 구단에서는 성공이고
-                      어느 구단에서는 실패다. 코어는 등급과 기대 순위만 넘기고 문장은
-                      여기서 쓴다 (docs/overview.md §1 철칙 4) */}
-                  <td className="career-verdict">{r.s.board.join(" · ") || "평가 없음"}</td>
+                  <td className="career-verdict">—</td>
                 </tr>
               ) : (
                 <tr key={`dismissal-${r.d.on}`} data-testid="career-dismissal">

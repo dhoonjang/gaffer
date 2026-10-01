@@ -57,28 +57,11 @@ function build(seed: number, manager: string, background: string): GameState {
   });
 }
 
-/**
- * 시스템 프롬프트를 **지도 · 지침 · 예시** 셋으로 가른다.
- *
- * 밴드가 누르려는 것은 **규칙의 수**인데(prompts.md §7), 프롬프트가 싣는 것 가운데 규칙이
- * 아닌 두 덩어리가 있다 — 입력 블록의 지도(`# 입력`)와 예시 한 장면(`<example>`). 둘은
- * 규칙이 아니라 규칙을 줄이는 장치이고(§5 원칙 2·5), 지도는 게임의 **입력 블록이 늘 때**
- * 함께 자란다. 통째로 한 숫자에 세면 스냅샷 덩어리 하나를 더한 PR이 「프롬프트를 줄여라」로
- * 읽히고, 실제로 그렇게 몇 주가 지났다.
- *
- * 표식이 사라지면 지침이 통째로 커져 밴드가 빨개진다 — 조용히 0이 되지 않도록 못 박는다.
- */
-function gmSystemParts(): { map: number; guide: number; example: number } {
+/** 입력 블록의 지도와 실행 지침을 분리해 크기를 측정한다. */
+function gmSystemParts(): { map: number; guide: number } {
   const map = /\n# 입력\n[\s\S]*?(?=\n# )/.exec(GM_SYSTEM)?.[0];
-  const example = /\n<example>\n[\s\S]*<\/example>/.exec(GM_SYSTEM)?.[0];
-  if (map === undefined || example === undefined) {
-    throw new Error("GM_SYSTEM에서 「# 입력」 또는 <example>을 찾지 못했다 — 섹션이 움직였다");
-  }
-  return {
-    map: map.length,
-    guide: GM_SYSTEM.length - map.length - example.length,
-    example: example.length,
-  };
+  if (map === undefined) throw new Error("GM_SYSTEM에서 「# 입력」을 찾지 못했습니다");
+  return { map: map.length, guide: GM_SYSTEM.length - map.length };
 }
 
 /** 경기 결산 Jev 요청의 공통 규칙. 선수별 질문과 사실은 변동층이다. */

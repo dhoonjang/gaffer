@@ -37,7 +37,7 @@ import { createTestGame, rebuildEveryFixture } from "../helpers";
 rebuildEveryFixture();
 
 /**
- * 카탈로그 어드민 — **게임과 무관한 초기치 DB**만 편집한다 (v6).
+ * 카탈로그 어드민 — **게임과 무관한 초기치 DB**만 편집한다.
  * 편집은 데이터 디렉터리의 카탈로그 파일에 저장되고, 새 게임에만 반영된다.
  */
 

@@ -83,6 +83,18 @@ function seasonOf(seed: number): GameState {
 }
 
 describe("골의 분", () => {
+  it("더비 열기가 같은 시드의 경기 물리를 바꾸지 않는다", () => {
+    const state = createTestGame(3);
+    const home = simSquadOf(state, "arsenal", leagueOfTeamIn(state, "arsenal"));
+    const away = simSquadOf(state, "tottenham", leagueOfTeamIn(state, "tottenham"));
+    const ordinary = quickSimulate(home, away, 42, "derby-physics");
+    for (const heat of [1, 2, 3]) {
+      expect(
+        quickSimulate(home, away, 42, "derby-physics", { derby: { name: "더비", heat } }),
+      ).toEqual(ordinary);
+    }
+  });
+
   it("정규화 로그 분포라 전반의 몫이 `QUICK_FIRST_HALF_SHARE`에 가깝다", () => {
     const samples = Array.from({ length: 10_000 }, (_, i) => quickMinuteOf((i + 0.5) / 10_000));
     const firstHalf = samples.filter((minute) => minute <= 45).length / samples.length;

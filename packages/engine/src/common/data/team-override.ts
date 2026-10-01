@@ -1,4 +1,4 @@
-import { FORMATIONS, TACTICAL_STYLES } from "@story-fm/domain";
+import { CharacterBookContentSchema, FORMATIONS, TACTICAL_STYLES } from "@story-fm/domain";
 import { teamCatalogPath } from "../core/paths";
 import {
   asRecord,
@@ -43,6 +43,11 @@ function isTeamEntry(value: unknown): value is TeamCatalogEntry {
   ) {
     return false;
   }
+  if (
+    o.characterBook !== undefined &&
+    !CharacterBookContentSchema.safeParse(o.characterBook).success
+  )
+    return false;
   return (
     o.formation === undefined ||
     (typeof o.formation === "string" && (FORMATIONS as readonly string[]).includes(o.formation))

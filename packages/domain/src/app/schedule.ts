@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DateString } from "../common/date-string";
 
 /**
- * 일정 축 (v6) — 경기·훈련·이적창·컵 추첨이 날짜+시간의 단일 축에 등록된다.
+ * 일정 축 — 경기·훈련·이적창·컵 추첨이 날짜+시간의 단일 축에 등록된다.
  * 언제(when)는 SCHEDULE_ENTRY, 무엇(what)은 type별 대상(MATCH / TRAINING_SESSION /
  * TRANSFER_WINDOW)이 갖는다. 훈련 반복 규칙 테이블은 없다 — 명령이 엔트리를 직접 생성한다.
  */

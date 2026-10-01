@@ -1,9 +1,4 @@
-import {
-  type GameState,
-  squadShortfall,
-  firstTeamPlayers,
-  pushNarrative,
-} from "../../../../common/core/state";
+import { type GameState, squadShortfall } from "../../../../common/core/state";
 import { type CommandResult } from "../../../../common/commands/result";
 import { pickSignedPlayer } from "../../../../common/core/player-ref";
 import {
@@ -19,11 +14,8 @@ import {
   settleDuePayments,
   recordFinance,
 } from "../../../../negotiation/finance/finance";
-import { departureSquadMorale, toFreeAgency } from "../../../../negotiation/market/departures";
-import { buildDeparturePress } from "../../../../story/world/press";
-import { openPress } from "../../story/world/press";
-import { clampForm, moraleToForm } from "../../../../common/players/form";
-import { item, signed } from "../../../../common/commands/brief";
+import { toFreeAgency } from "../../../../negotiation/market/departures";
+import { item } from "../../../../common/commands/brief";
 
 /**
  * 계약 해지 — **돈으로 자리를 비운다.** 두 길의 공통 종착지다.
@@ -73,7 +65,6 @@ export function releasePlayer(
 
   const wasCaptain = player.isCaptain;
   // 완장을 벗기기 전에 읽는다 — 떠나는 문이 곧 그 사람의 자리를 지운다
-  const squadMorale = departureSquadMorale(state, player);
   const transferId = toFreeAgency(state, player, agreed ? "release-agreed" : "release-unilateral");
   if (severance > 0) {
     if (paymentYears !== undefined) {
@@ -98,22 +89,6 @@ export function releasePlayer(
       });
     }
   }
-
-  /**
-   * **회견이 열릴 만한 자원이었는지가 사기의 문이기도 하다** — 회견을 여는 조건과
-   * 같은 자를 쓴다. 백업 정리에도 라커룸이 상하면 정리 자체가 벌이 된다
-   * (transfer.md §2). 회견 판정은 무소속이 된 **뒤에** 해야 남은 스쿼드와 견준다.
-   */
-  const press = buildDeparturePress(state, { playerId: player.id, severance, wasCaptain });
-  if (press) {
-    openPress(state, press);
-    // 남은 1군만 — 떠난 당사자는 이미 무소속이라 자연히 빠진다
-    for (const mate of firstTeamPlayers(state, state.userTeamId)) {
-      mate.state.form = clampForm(mate.state.form + moraleToForm(squadMorale));
-    }
-  }
-
-  pushNarrative(state, `${player.name} 계약 해지`, wasCaptain ? 5 : 4);
   return {
     ok: true,
     brief: {
@@ -128,15 +103,6 @@ export function releasePlayer(
             : { note: `${paymentYears}년 분할 · 첫 회분 ${formatMoney(dueNow)}` }),
         }),
         ...(wasCaptain ? [item({ text: "주장 공석" })] : []),
-        ...(press
-          ? [
-              item({
-                label: "1군 사기",
-                text: signed(squadMorale),
-                delta: squadMorale,
-              }),
-            ]
-          : []),
       ],
     },
     message:
@@ -145,7 +111,6 @@ export function releasePlayer(
         ? "."
         : ` (${paymentYears}년 분할 — 첫 회분 ${formatMoney(dueNow)}).`) +
       " 무소속이 됐습니다 — 다른 구단이 데려갈 수 있습니다." +
-      (wasCaptain ? " 주장이 떠났습니다 — 새 주장을 지명하세요." : "") +
-      (press ? ` 기자회견이 열렸습니다. 남은 1군 사기 ${squadMorale}.` : ""),
+      (wasCaptain ? " 주장이 떠났습니다 — 새 주장을 지명하세요." : ""),
   };
 }

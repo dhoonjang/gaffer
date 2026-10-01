@@ -67,6 +67,8 @@ function derive(schema: z.ZodTypeAny, preserveNulls = false): JsonSchemaNode {
   }
   if (schema instanceof z.ZodArray) return described(arrayNode(schema, preserveNulls), schema);
   if (schema instanceof z.ZodObject) return described(objectNode(schema, preserveNulls), schema);
+  if (schema instanceof z.ZodDiscriminatedUnion)
+    return described(objectUnionNode(schema.options, preserveNulls), schema);
   if (schema instanceof z.ZodUnion) return described(unionNode(schema, preserveNulls), schema);
   if (schema instanceof z.ZodLiteral) return described(literalNode(schema.value), schema);
   throw new Error(`도구 스키마로 옮길 수 없는 갈래입니다: ${schema.constructor.name}`);
@@ -127,12 +129,43 @@ function unionNode(
   preserveNulls: boolean,
 ): JsonSchemaNode {
   const options: readonly z.ZodTypeAny[] = schema.options;
+  if (options.every((option) => option instanceof z.ZodObject))
+    return objectUnionNode(options, preserveNulls);
   const literals = options.filter((o): o is z.ZodLiteral<unknown> => o instanceof z.ZodLiteral);
   if (literals.length !== options.length)
     return { anyOf: options.map((option) => derive(option, preserveNulls)) };
   const values = literals.map((l) => l.value);
   const first = literalNode(values[0]);
   return { type: first.type, enum: values };
+}
+
+function objectUnionNode(options: readonly z.ZodTypeAny[], preserveNulls: boolean): JsonSchemaNode {
+  const variants = options.map((option) => derive(option, preserveNulls));
+  const fields = new Map<string, unknown[]>();
+  const required = new Set<string>();
+  for (const [index, variant] of variants.entries()) {
+    const properties = variant.properties as Record<string, unknown>;
+    const branchRequired = (variant.required ?? []) as string[];
+    if (index === 0) branchRequired.forEach((key) => required.add(key));
+    else for (const key of required) if (!branchRequired.includes(key)) required.delete(key);
+    for (const [key, value] of Object.entries(properties)) {
+      const values = fields.get(key) ?? [];
+      if (!values.some((prior) => JSON.stringify(prior) === JSON.stringify(value)))
+        values.push(value);
+      fields.set(key, values);
+    }
+  }
+  return {
+    type: "object",
+    properties: Object.fromEntries(
+      [...fields].map(([key, values]) => [
+        key,
+        values.length === 1 ? values[0] : { anyOf: values },
+      ]),
+    ),
+    ...(required.size ? { required: [...required] } : {}),
+    anyOf: variants,
+  };
 }
 
 function literalNode(value: unknown): JsonSchemaNode {

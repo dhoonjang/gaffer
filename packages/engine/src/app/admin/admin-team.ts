@@ -1,5 +1,10 @@
 import { existsSync } from "node:fs";
-import { CatalogTeamEditSchema, CatalogTeamInputSchema, type Formation } from "@story-fm/domain";
+import {
+  CatalogTeamEditSchema,
+  CatalogTeamInputSchema,
+  type CharacterBookContent,
+  type Formation,
+} from "@story-fm/domain";
 import { catalogPath } from "../../common/core/paths";
 import {
   CLUB_PROFILES_SEED,
@@ -17,6 +22,7 @@ import {
   tacticalStyles,
   teamCatalog,
   teamCatalogById,
+  withTeamBook,
   type ClubHonour,
   type TacticalStyle,
   type TeamCatalogEntry,
@@ -40,7 +46,7 @@ import type { AdminResult } from "./admin";
  *
  * 선수 어드민(`admin.ts`)과 같은 규칙이다: 편집은 `.data/team-catalog.json`에
  * 저장되고 **이후 새로 시작하는 게임**의 초기치가 된다. 진행 중인 세이브는
- * 영향을 받지 않는다 (v6 2-레이어).
+ * 영향을 받지 않는다.
  *
  * 구조 필드(`leagueId`·팀 추가/삭제)는 세계의 성립 조건을 건드리므로 저장 전에
  * 불변식을 확인한다 (`catalog-invariants.ts`) — 홀수 팀 리그, 32팀을 못 채우는
@@ -60,6 +66,7 @@ export interface AdminTeamRow extends TeamCatalogEntry {
 }
 
 export interface AdminTeamInput {
+  characterBook?: CharacterBookContent;
   id: string;
   name: string;
   shortName: string;
@@ -154,6 +161,8 @@ export function adminUpdateTeam(teamId: string, patch: AdminTeamPatch): AdminRes
   const team = next.teams.find((t) => t.id === teamId);
   if (!team) return { ok: false, message: `카탈로그에 없는 팀입니다: ${teamId}` };
 
+  if (patch.characterBook !== undefined) team.characterBook = patch.characterBook;
+
   if (patch.name !== undefined) {
     team.name = patch.name.trim();
   }
@@ -192,6 +201,7 @@ export function adminUpdateTeam(teamId: string, patch: AdminTeamPatch): AdminRes
 
   const problems = violations(next.teams);
   if (problems.length > 0) return { ok: false, message: problems.join(" · ") };
+  next.teams = next.teams.map(withTeamBook);
   writeTeamOverride(next);
   return { ok: true, message: withWarnings(`${team.name} 갱신`, next.teams) };
 }
@@ -204,15 +214,16 @@ export function adminAddTeam(input: AdminTeamInput): AdminResult {
   const id = input.id.trim();
   if (teamCatalogById(id)) return { ok: false, message: `이미 있는 팀 id입니다: ${id}` };
   const next = snapshot();
-  const team: TeamCatalogEntry = {
+  const team: TeamCatalogEntry = withTeamBook({
     id,
     name: input.name.trim(),
+    ...(input.characterBook === undefined ? {} : { characterBook: input.characterBook }),
     shortName: input.shortName.trim(),
     leagueId: input.leagueId,
     tier: input.tier,
     ...(input.formation === undefined ? {} : { formation: input.formation }),
     ...(input.honours?.length ? { honours: input.honours.map((h) => ({ ...h })) } : {}),
-  };
+  });
   next.teams.push(team);
   if (input.tacticalStyle !== undefined) next.tacticalStyle[id] = input.tacticalStyle;
   if (

@@ -4,7 +4,7 @@
  * 1·2군 배치, 라인업과 팀 전술 6축, 선수의 자리·역할, 세트피스, 완장,
  * 등번호. 검증을 지나면 그대로 장부에 적히고 판정은 끼지 않는다.
  */
-import { numberGrievanceStands, registrationBlockText } from "@story-fm/domain";
+import { registrationBlockText } from "@story-fm/domain";
 import type {
   BoardPoint,
   GamePlayer,
@@ -20,7 +20,6 @@ import type {
   TeamTactics,
 } from "@story-fm/domain";
 import {
-  clampCondition,
   tacticalUptake as uptakeOf,
   MATCHDAY_SQUAD,
   POSITION_CODES,
@@ -67,33 +66,28 @@ import { settleRoleCost, shelveFamiliarity, unshelveFamiliarity } from "./famili
 import { recallRole, rememberRole } from "../../common/players/role-memory";
 import { diffLineup, type LineupSide, type LineupSlotRef } from "./lineup-diff";
 import { nextMatchFor } from "../../common/core/calendar";
-import { clampForm, moraleToForm } from "../../common/players/form";
 import { injuryHistoryOf } from "../../common/players/injury";
 
 /** 라인업 브리프가 「최근 복귀」로 세우는 창 — 심경 카드와 같은 자 (player.md §5.3) */
 const RECENT_RETURN_DAYS = 30;
-import { closeMentorings } from "../../common/players/mentoring";
 import {
   canRegisterAllFor,
   canRegisterFor,
   registrationLine,
   squadRegistrationOf,
 } from "../../common/players/registration";
-import { creditSettling, settlingOf } from "../../common/players/settling";
+import { settlingOf } from "../../common/players/settling";
 // 면담에서 한 약속은 장부에 선다 (people.md §5-2 · career.md §2)
 // 감독이 지목한 번호는 코어가 배정하고, 사실만 돌려준다 (player.md §1.1)
 import { assignRequestedNumber, numberBlockText } from "../../common/players/numbers";
-import { archetypeTraitsOf } from "../../common/people/player-persona";
 // 잔향 — 그 대화를 쥔 호출이 심경 한 문장을 남긴다 (people.md §5)
 
-import { leaderGroupOf } from "../../common/players/hierarchy";
 import {
   isInjured,
   isSuspendedFor,
   playerById,
   proficiencyAt,
   playerName,
-  pushNarrative,
   recomputeOverall,
   squadLevelOf,
   userPlayerById,
@@ -186,32 +180,14 @@ function dropPositionTraining(state: GameState, player: GamePlayer): string {
 function applySquadLevel(state: GameState, player: GamePlayer, level: "first" | "reserve"): string {
   if (level === "first") {
     player.squadLevel = "first";
-    /**
-     * **승격이 방치를 끝낸다** (→ docs/story/people.md §5). 내려간 날을 지우면 다시
-     * 내릴 때 그날부터 새로 세고, 그 방치가 낳은 불만도 함께 풀린다 — 다른 사유의
-     * 불만(`minutes` 등)은 남는다. 원인이 사라진 것은 강등뿐이다.
-     */
-    player.state.demotedOn = undefined;
     // 집중 육성은 2군의 것이다 — 올라온 선수는 결산 판정(LLM)이 움직인다 (season.md §2)
     if (state.developmentFocus.includes(player.id)) {
       state.developmentFocus = state.developmentFocus.filter((id) => id !== player.id);
     }
-    const freed = state.issues.some((i) => i.gamePlayerId === player.id && i.reason === "demotion");
-    if (freed) {
-      state.issues = state.issues.filter(
-        (i) => !(i.gamePlayerId === player.id && i.reason === "demotion"),
-      );
-    }
-    pushNarrative(state, `${player.name} 1군 승격`, 2);
     const reg = squadRegistrationOf(state, state.userTeamId);
-    return (
-      `${josa(player.name, "을/를")} 1군으로 승격했습니다 — ${registrationLine(reg)}` +
-      (freed ? " · 2군 불만이 풀렸습니다" : "")
-    );
+    return `${josa(player.name, "을/를")} 1군으로 승격했습니다 — ${registrationLine(reg)}`;
   }
   player.squadLevel = "reserve";
-  /** 방치의 시작점 — 기간을 파생할 표가 없어 저장한다 (→ docs/story/people.md §5) */
-  player.state.demotedOn = state.date;
   const tactics = userTactics(state);
   /**
    * **배치를 지우기 전에 적응도·기억을 선반으로** (→ docs/common/player.md §7.3).
@@ -221,16 +197,9 @@ function applySquadLevel(state: GameState, player: GamePlayer, level: "first" | 
   const dropped = tactics.assignments.find((a) => a.playerId === player.id);
   if (dropped) shelveFamiliarity(tactics, dropped, state.date);
   tactics.assignments = tactics.assignments.filter((a) => a.playerId !== player.id);
-  // 2군에는 완장이 없다 — 라커룸 서열의 후보도 1군뿐이다 (people.md §5-1)
+  // 완장은 1군의 축구 직책이다.
   if (player.isCaptain) player.isCaptain = false;
   if (player.isViceCaptain) player.isViceCaptain = false;
-  /**
-   * **완장이 빠지듯 멘토도 빠진다** (people.md §5-3) — 라커룸의 아침이 갈렸으므로
-   * 그가 맡던 아이들은 여기서 놓인다. ⚠️ 멘티로서 든 사이는 닫지 않는다: 멘티는 두
-   * 층 어디에도 설 수 있다.
-   */
-  const released = closeMentorings(state, (pair) => pair.mentorId === player.id, "squad");
-  pushNarrative(state, `${player.name} 2군 이동`, 2);
   /**
    * **배치에서 빠지는 것까지 결과로 말한다** (→ docs/common/team.md §6). 2군은 배치를
    * 갖지 않으므로 내리면 판에서도 빠지는데, 조용히 빼면 주전을 내린 감독이 열 명짜리
@@ -243,12 +212,7 @@ function applySquadLevel(state: GameState, player: GamePlayer, level: "first" | 
       : dropped?.role === "bench"
         ? " — 매치데이 벤치에서 함께 빠집니다"
         : "";
-  /** 조용히 빼면 감독이 모른다 — 놓인 아이의 이름까지 결과가 말한다 */
-  const releasedNote =
-    released.length > 0
-      ? ` · 멘토링이 풀렸습니다 (${released.map((pair) => playerName(state, pair.menteeId)).join(", ")})`
-      : "";
-  return `${josa(player.name, "을/를")} 2군으로 이동했습니다${note}${releasedNote}${dropPositionTraining(state, player)}`;
+  return `${josa(player.name, "을/를")} 2군으로 이동했습니다${note}${dropPositionTraining(state, player)}`;
 }
 
 /**
@@ -415,19 +379,8 @@ function candidatePoint(
 }
 
 /**
- * 자리를 말하지 않은 선발을 **빈 자리에 앉힌다 — 자리가 먼저고 사람이 나중이다.**
- *
- * 예전에는 그 선수의 **주 포지션**을 그대로 자리로 썼다. 그러면 왼쪽 윙어가 계약
- * 만료로 떠난 여름에 남은 오른쪽 자원 둘이 나란히 `RW`의 기본 좌표에 서고 왼쪽 측면은
- * 아무도 없이 남는다 — 이름 붙일 수 있는 모양이 아니고, 감독이 판에서 하지 않은 일이다.
- *
- * 자리는 두 곳에서 온다. 먼저 **이번에 선발에서 빠진 사람이 비운 자리**다(교체는 자리를
- * 잇는다 — 감독이 만들어 둔 판의 모양이 그대로 남는다). 그것으로 모자라면 **포메이션의
- * 빈 자리**(`openSeats`)가 이어 선다.
- *
- * 누가 어느 자리에 서는지는 **그 자리의 포지션 적응도**가 정한다 — 킥오프의 자동 대체와
- * 같은 자다(match.md §2). 가장 잘 맞는 쌍부터 전역으로 짝짓고, 같으면 자리 순서·id
- * 사전순이라 같은 지시가 언제나 같은 판을 만든다.
+ * 자리를 생략한 선발은 빠진 선수가 비운 자리, 포메이션의 빈 자리 순으로 배정한다.
+ * 포지션 적응도가 높은 선수·자리 쌍부터 고르며 동률은 자리 순서와 선수 id로 정한다.
  */
 function seatStarting(
   state: GameState,
@@ -471,7 +424,7 @@ function seatStarting(
     (point, index) =>
       point ??
       seated.get(index) ??
-      // 열한 자리가 이미 다 찼다 — 그때만 예전처럼 주 포지션에 세운다
+      // 열한 자리가 이미 다 찼다 — 주 포지션에 세운다
       anchorOf(naturalPositionOf(userPlayerById(state, starting[index]!.playerId)!).position),
   );
 }
@@ -524,7 +477,7 @@ function completeStarting(
       !demotingIds.has(a.playerId) &&
       userPlayerById(state, a.playerId) !== null,
   );
-  // 열한 명을 다 부른 지시는 채울 것이 없다 — 밀려나는 사람도 없다(예전 그대로다)
+  // 열한 명을 다 부른 지시는 채울 것이 없다 — 밀려나는 사람도 없다
   if (named.length >= STARTING_XI) return { ok: true, starting: [...named], benched: [] };
   const room = STARTING_XI - named.length;
   if (holding.length < room) {
@@ -645,12 +598,8 @@ function lineupChanges(
 }
 
 /**
- * 라인업 확정 — v6에서는 TACTIC_ASSIGNMENT를 갱신한다 (팀 엔티티에 배열이 없다).
- * 선발 11명·GK 1명·부상/정지 제외를 강제하고, 기존 적응도는 이어받는다.
- *
- * ⚠️ **검증이 전부 끝난 뒤에 적용한다** (→ docs/common/team.md §6). 승격을 먼저
- * 적용하고 배치를 나중에 검증하던 때는 반려된 요청이 승격만 남겼다 — GM 경로는 턴이
- * 끝날 때 저장하므로, "반려했습니다"를 읽은 감독의 스쿼드가 이미 달라져 있었다.
+ * 라인업은 TACTIC_ASSIGNMENT에 저장하며 기존 적응도를 이어받는다.
+ * 선발 11명·GK 1명·부상/정지와 배치를 모두 검증한 뒤 승격을 포함한 변경을 적용한다.
  */
 export function setLineup(
   state: GameState,
@@ -695,12 +644,8 @@ export function setLineup(
   };
 
   /**
-   * **자리 표기를 먼저 코드로 옮긴다 — 읽지 못한 표기는 그 자리 하나만 버린다.**
-   *
-   * 감독과 GM은 `AML`·`DC`·`STC`처럼 자기 표기로 자리를 부르고(`POSITION_ALIASES`가
-   * 옮긴다), 그래도 표에 없는 말이 온다. 통째로 반려하던 때는 열한 명을 이름과 자리까지
-   * 정확히 부른 지시가 표기 하나 때문에 사라졌다 — 그 선수는 원래 자리에 세우고 읽지
-   * 못한 표기만 결과에 적는다 (→ docs/common/team.md §6).
+   * POSITION_ALIASES로 자리 표기를 정규화한다. 알 수 없는 표기는 결과에 알리고,
+   * 해당 선수의 기존 자리 또는 주 포지션을 사용한다.
    */
   const unreadable: string[] = [];
   const readCodes = (slots: readonly LineupSlotInput[]): LineupSlotInput[] =>
@@ -1532,21 +1477,10 @@ export function setSetPieceRoutine(
   };
 }
 
-/** 완장을 **처음** 채운 날의 체력 — 라커룸 한가운데 서는 일이다 (career.md §2) */
-const CAPTAIN_FIRST_LIFT = 4;
-
-/** 완장을 채운 사람의 근거 한 줄 — 리더십과 재적이 결과 항목에 그대로 선다 */
-function armbandNote(state: GameState, player: GamePlayer): string {
-  const row = leaderGroupOf(state, player.teamId).find((r) => r.playerId === player.id);
-  const tenure = row && row.seasons > 0 ? ` · ${row.seasons}시즌 ${row.apps}경기` : "";
-  return `리더십 ${player.attributes.leadership}${tenure}`;
-}
-
 /**
  * **완장은 둘이다** — 주장과 부주장 (→ docs/story/people.md §5-1).
  *
- * 서열은 저장하지 않고 파생하지만 이 둘만은 저장한다: 장부 어디에서도 파생되지 않는
- * **감독의 결정**이기 때문이다. 한 요청이 둘 다 옮길 수 있고, 말한 자리만 바뀐다 —
+ * 완장은 장부에서 파생하지 않는 감독의 결정이다. 한 요청이 둘 다 옮길 수 있고, 말한 자리만 바뀐다 —
  * `vice: null`은 부주장 지정을 푼다.
  */
 export function setCaptain(
@@ -1575,25 +1509,10 @@ export function setCaptain(
     for (const p of userPlayers(state)) p.isCaptain = false;
     player.isCaptain = true;
     if (player.isViceCaptain) player.isViceCaptain = false;
-    /**
-     * **체력 보너스는 선수당 첫 지명에만** (career.md §2). 완장은 몇 번이고 오가지만
-     * 처음 채워지는 순간의 무게는 한 번뿐이다 — 문이 없으면 두 선수를 번갈아 지명하는
-     * 것만으로 둘 다 체력이 100이 된다.
-     */
-    if (player.state.captainedOn === undefined) {
-      player.state.captainedOn = state.date;
-      player.state.condition = clampCondition(player.state.condition + CAPTAIN_FIRST_LIFT);
-    }
-    // 새 영입에게 완장을 채우는 건 라커룸 한가운데 세우는 일이다 (settling.ts)
-    const settled = creditSettling(state, player.id, "captain") > 0;
-    const settling = settled ? settlingOf(state, player.id) : null;
     notes.push(`${josa(player.name, "을/를")} 주장으로 지명했습니다`);
-    items.push(item({ label: "주장", text: player.name, note: armbandNote(state, player) }));
-    if (settling) {
-      const percent = Math.round(settling.progress * 100);
-      notes.push(`적응 ${percent}%`);
-      items.push(item({ label: "적응", text: `${percent}%` }));
-    }
+    items.push(
+      item({ label: "주장", text: player.name, note: `리더십 ${player.attributes.leadership}` }),
+    );
   }
 
   if (input.vice !== undefined) {
@@ -1608,12 +1527,10 @@ export function setCaptain(
       const vice = viceCandidate!;
       for (const p of userPlayers(state)) p.isViceCaptain = false;
       vice.isViceCaptain = true;
-      /**
-       * **부주장에는 체력도 정착 크레딧도 붙지 않는다** (career.md §2) — 완장 둘에
-       * 같은 값을 매기면 감독이 두 번 받으려고 두 자리를 채운다.
-       */
       notes.push(`${josa(vice.name, "을/를")} 부주장으로 지명했습니다`);
-      items.push(item({ label: "부주장", text: vice.name, note: armbandNote(state, vice) }));
+      items.push(
+        item({ label: "부주장", text: vice.name, note: `리더십 ${vice.attributes.leadership}` }),
+      );
     }
   }
 
@@ -1625,31 +1542,11 @@ export function setCaptain(
   };
 }
 
-// ── 등번호 — 감독이 주고, 선수가 뜻을 둔다 (docs/common/player.md §1.1) ──
-
-/**
- * 번호를 잃은 선수의 사기 — **곁들임이라 폭이 작다** (people.md §5).
- *
- * 그 일이 라커룸에 남는가는 불만이 정하고(`numberGrievanceStands`), 이 값은 불만이
- * 서든 안 서든 얹힌다 — 셔츠가 바뀐 날은 애착 없는 사람에게도 있다. 어긴 약속(−8)과
- * 같은 폭을 주면 번호 하나를 옮기는 것이 감독이 한 말을 뒤집는 것과 같은 무게가 된다.
- */
-const NUMBER_LOST_MORALE = -3;
-
-/**
- * 번호를 물려받은 선수의 사기 — **앞사람이 있을 때만 선다** (player.md §1.1).
- * 빈 번호를 받는 것은 사건이 아니라 배정이고, 계보에는 실제로 그 셔츠를 입고 뛴
- * 사람만 서기 때문이다.
- */
-const NUMBER_INHERIT_MORALE = 4;
-
 /**
  * **감독이 지목한 등번호** (`set_squad_number` — player.md §1.1).
  *
- * 배정과 반려는 코어가 하고(`assignRequestedNumber`), 여기서 하는 일은 그 사실을
- * 라커룸에 옮기는 것뿐이다: 번호를 잃은 선수의 불만과 사기, 계보를 물려받은
- * 선수의 사기. 중복은 기본이 반려라 `take` 없이 동료의 번호를 조용히 가져가지
- * 않는다 — 감독이 모르는 사이에 라커룸이 움직이지 않게.
+ * `assignRequestedNumber`가 배정을 검증하고, 번호 변경과 계보를 결과에 담는다.
+ * 다른 선수가 쓰는 번호는 `take`를 명시해야 가져올 수 있으며 그 선수의 새 번호도 알린다.
  */
 export function setSquadNumber(
   state: GameState,
@@ -1688,7 +1585,6 @@ export function setSquadNumber(
      * 물려받음은 **계보가 있을 때만 사건이다.** 지난 시즌 그 셔츠를 입고 뛴 사람이
      * 있다는 것이 이 번호에 무게가 실려 있다는 뜻이고, 그것을 감독이 지목했다.
      */
-    player.state.form = clampForm(player.state.form + moraleToForm(NUMBER_INHERIT_MORALE));
     const gap = state.season - after.lastSeason;
     notes.push(`${after.name}의 번호를 잇는다`);
     items.push(
@@ -1702,38 +1598,12 @@ export function setSquadNumber(
 
   if (displaced) {
     const other = displaced.player;
-    /**
-     * **불만이 서는가는 원형이 정한다** (people.md §5) — 애착 없는 사람에게 10번은
-     * 그냥 옷이고, 애착 있는 사람에게도 어제 받은 34번은 아무것도 아니다. 굴림은
-     * 없다: 감독이 무엇을 건드렸는지 셀 수 있어야 손잡이가 된다.
-     */
-    const stands = numberGrievanceStands(
-      archetypeTraitsOf(state.seed, other).number,
-      displaced.lost,
-      displaced.seasons,
-    );
-    // 한 선수의 불만 줄은 하나다 — 약속 판정이 세울 때와 같은 문 (squad/promises.ts)
-    if (stands && !state.issues.some((i) => i.gamePlayerId === other.id)) {
-      state.issues.push({
-        gamePlayerId: other.id,
-        kind: "unhappy",
-        reason: "number",
-        count: displaced.lost,
-        since: state.date,
-      });
-    }
-    other.state.form = clampForm(other.state.form + moraleToForm(NUMBER_LOST_MORALE));
     notes.push(`${other.name} ${displaced.lost}번 → ${displaced.gained}번`);
     items.push(
       item({
         label: "내준 선수",
         text: `${other.name} ${displaced.lost}번 → ${displaced.gained}번`,
       }),
-    );
-    pushNarrative(
-      state,
-      `${other.name}의 ${displaced.lost}번을 ${player.name}에게 — ${josa(other.name, "은/는")} ${displaced.gained}번`,
-      3,
     );
   }
 
@@ -1745,7 +1615,6 @@ export function setSquadNumber(
 //   ① 시간 — 같은 전술을 유지하면 매일 조금씩 몸에 붙는다 (훈련·경기는 더 크게)
 //   ② 기억 — 드릴해 둔 전술로 되돌아가면 그때의 숙련도를 되찾는다
 //   ③ 전이 — 처음 쓰는 전술도 비슷한 전술을 익혔다면 그만큼 덜 낯설다
-// 예전 모델은 ②③이 없어 바꿀 때마다 일방적으로 깎였고, 되돌려도 또 깎였다.
 
 /** 기억해 두는 전술 수 — 최근 것 위주로 (세이브 비대화 방지) */
 const DRILLED_LIMIT = 8;

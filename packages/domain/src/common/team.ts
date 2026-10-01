@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ManagerSpellSchema } from "./team-coach";
 
 /**
- * 게임 팀 (GAME_TEAM) — 정규화 v6. 라인업은 TACTIC_ASSIGNMENT에, 재정은 FINANCE에
+ * 게임 팀 (GAME_TEAM) — 정규화된 테이블. 라인업은 TACTIC_ASSIGNMENT에, 재정은 FINANCE에
  * 있고, id는 카탈로그 팀 id를 재사용한다.
  *
  * **카탈로그가 초기치를 주는 값은 게임 시작에 여기로 복사된다** — 이름·약칭·소속

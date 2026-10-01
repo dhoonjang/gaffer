@@ -22,7 +22,6 @@ import {
   tacticsOf,
   tierOfTeamIn,
   turnFactLines,
-  userPlayers,
   type GameState,
 } from "@story-fm/engine";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -121,18 +120,6 @@ describe("mock 대본 — 표의 한 줄이 코어 명령까지 닿는다", () =
     expect(namesOf(turn)).toContain("set_tactics");
     expect(tacticsOf(state, state.userTeamId).spec.formation).toBe(before);
     expect(tacticsOf(state, state.userTeamId).spec.mentality).toBe(4);
-  });
-
-  it("이름 자리를 둔 줄은 감독이 부른 이름을 받아 team_talk로 간다", async () => {
-    const state = newGame();
-    const player = userPlayers(state)[3];
-    if (!player) throw new Error("no player");
-    const before = player.state.form;
-    // 성(姓)으로 부른다 — 이름이 한 글자인 선수가 있어 긴 조각이 안전하다
-    const called = player.name.split(" ").reduce((a, b) => (b.length > a.length ? b : a));
-    const turn = await runGmTurn(state, `${called} 면담 좀 하자`);
-    expect(namesOf(turn)).toContain("team_talk");
-    expect(player.state.form).toBeGreaterThan(before);
   });
 
   it("표에 없는 말은 아무 도구도 부르지 않고 장면만 낸다", async () => {
@@ -424,8 +411,6 @@ describe("지시 묶음의 상태 경계", () => {
       season: state.season,
       kind: "sacked",
       tier: 1,
-      target: 10,
-      expectationCode: "mid",
     };
     delete state.manager.contract;
     state.managerOffers = [
@@ -435,8 +420,6 @@ describe("지시 묶음의 상태 경계", () => {
         madeOn: state.date,
         expiresOn: addDays(state.date, 10),
         tier: tierOfTeamIn(state, "everton"),
-        target: 10,
-        expectationCode: "mid",
         salary: MANAGER_TERMS_BY_TIER[3].salary,
         years: 2,
         budgetPledge: MANAGER_TERMS_BY_TIER[3].budgetPledge,

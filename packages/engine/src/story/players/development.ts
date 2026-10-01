@@ -19,12 +19,10 @@ import {
 } from "@story-fm/domain";
 import { leagueOfTeamIn } from "../../common/core/league-membership";
 import { leagueCatalogById, isTopLeague } from "../../common/data/league-catalog";
-import { pruneMentoring, mentorFactorFor } from "./mentoring";
+import { pruneMentoring } from "./mentoring";
 import { personalTrainingAxis, monthlyGrowthMultiplier } from "./training-plan";
-import { archetypeTraitsOf } from "../../common/people/player-persona";
 import { ageGrowthFactor, agingDelta, axisClockFactor } from "../../common/world/attributes";
 import { makeRng } from "../../common/core/rng";
-import { isMentoredAxis } from "./mentoring";
 
 /**
  * 집중 육성 명단 — **우리 2군만 남긴다.** 승격·이적으로 떠난 선수는 여기서
@@ -132,8 +130,7 @@ export function applyMonthlyDevelopment(state: GameState): string[] {
     .sort((a, b) => a.id.localeCompare(b.id));
   // 감독의 육성 손잡이 — 우리 2군에만 붙는다. 타 팀은 배율 없이 지금 그대로다
   const focus = new Set(pruneDevelopmentFocus(state));
-  // 사건이 없는 정리가 한 자리에 모인다 — 나이를 넘긴 멘티와 조용히 어긋난 쌍
-  // (people.md §5-3). 굴리기 전에 걷어야 자격을 잃은 사이가 이번 달을 한 번 더 받지 않는다
+  // 떠난 선수의 배정을 정리한다.
   pruneMentoring(state);
   const reserveApps = reserveAppsByPlayer(state);
   const loanApps = loanAppsByPlayer(state);
@@ -148,9 +145,6 @@ export function applyMonthlyDevelopment(state: GameState): string[] {
         : 1;
     // 개인 훈련은 우리 2군에만 걸린다 — 임대처 훈련장은 그쪽 코치진의 것이다
     const personal = ours ? personalTrainingAxis(state, player.id) : null;
-    // 멘토 항도 우리 2군만이다 — 임대는 사이가 닫혀 애초에 null이지만, 손잡이가
-    // 닿는 갈래는 코드에서도 갈라 둔다 (season.md §2 임대 표)
-    const mentor = ours ? mentorFactorFor(state, player.id)?.boost : undefined;
     const steps = rollMonthlyAxes({
       seed: state.seed,
       date: state.date,
@@ -159,31 +153,18 @@ export function applyMonthlyDevelopment(state: GameState): string[] {
       values: player.attributes,
       potential: player.attributes.potential,
       boost,
-      // 사람됨은 소속을 가리지 않는다 — 타 팀 선수도 임대 나간 선수도 같은 표를 읽는다
-      professionalism: archetypeTraitsOf(state.seed, player).professionalism,
-      ...(mentor !== undefined ? { mentor } : {}),
       ...(ours && state.reserveTraining ? { policy: state.reserveTraining } : {}),
       ...(personal ? { personal } : {}),
     });
     if (steps.length === 0) continue;
 
-    for (const { axis, step, mentored } of steps) {
+    for (const { axis, step } of steps) {
       player.attributes[axis] = Math.max(
         ATTRIBUTE_FLOOR,
         Math.min(RATING_MAX, player.attributes[axis] + step),
       );
       if (ours || loaned) {
-        // 격차의 근거는 줄마다 갈린다 — 멘토 항이 곱해진 축만 `mentoring`이고
-        // 같은 달 같은 선수의 신체·기술 축은 `monthly` 그대로다 (season.md §2)
-        recordGrowth(
-          state,
-          player.id,
-          null,
-          "development",
-          axis,
-          step,
-          mentored ? "mentoring" : "monthly",
-        );
+        recordGrowth(state, player.id, null, "development", axis, step, "monthly");
       }
     }
     recomputeOverall(player);
@@ -253,16 +234,7 @@ export const ATTRIBUTE_FLOOR = 1;
 export const AXIS_GROWTH_PER_SEASON = 2.6;
 
 // ── 감독의 육성 손잡이 (season.md §2 2군 리그) ──────────────────────
-// 배율은 **성장 쪽에만** 붙는다 — 노화 하락은 출전과 무관하다. 감독이 다 걸어도
-// 1.3 × 1.25 ≈ 1.6이고, 그 위에 사람됨(원형 `professionalism` 0.85~1.25 —
-// people.md §6)이 한 항으로 더 붙어 꼭대기가 2.0이 된다. 그 자리에 서려면 셋이 다
-// 맞아야 한다: 격주 2군 일정을 만근하고, 집중 육성 셋 안에 들고, 표 꼭대기의
-// 직업의식을 타고났을 것 — 열여덟이면 시즌 기대가 축당 여섯 칸으로, 실제 원더키드가
-// 한 해에 자라는 폭이다. 축을 겨냥하는 손잡이(방침 · 개인 훈련)는 얼마나 빨리가
-// 아니라 어느 쪽으로를 정하므로 총량 이동이고, 원본은 `training-plan.ts`다.
-// 멘토 항(`mentoring.ts`)만 **정신 6축에서 그 위에 얹혀** 꼭대기를 2.5로 연다 —
-// 나머지 열 축의 꼭대기는 그대로 2.0이다 (season.md §2 멘토링 배율).
-
+// 육성 배율은 성장에만 붙는다. 노화 하락은 출전과 무관하다.
 /** 지난달 2군 출전 한 경기가 성장 확률에 얹는 배율 증분 */
 export const RESERVE_APP_BOOST = 0.15;
 
@@ -371,27 +343,13 @@ export function rollMonthlyAxes(
     potential: number;
     /** 감독의 육성 손잡이 — 2군 출전 × 집중 육성. 성장 쪽에만 곱한다 (기본 1) */
     boost?: number;
-    /**
-     * 사람됨 — 원형의 `professionalism` (기본 1). 감독의 손잡이와 같은 자리에서
-     * 곱하되 **항은 따로 둔다**: 하나는 감독이 고른 것이고 하나는 타고난 것이라,
-     * 한 값으로 접으면 육성 배율을 조율할 때 사람됨까지 함께 움직인다 (people.md §6).
-     */
-    professionalism?: number;
-    /**
-     * 멘토 항 — 감독이 고참에게 맡긴 아이의 몫 (기본 1 · people.md §5-3).
-     *
-     * **축마다 갈리므로 `boost`에 접지 않는다** — 저 항은 열여섯 축에 고르게 곱해지고
-     * 이 항은 **정신 6축에만** 붙는다(`isMentoredAxis`). 한 값으로 접으면 어느 축이
-     * 무엇을 받았는지가 사라져 성장 로그의 `origin`도 가를 수 없다.
-     */
-    mentor?: number;
     /** 2군 훈련 방침 — 축마다 다른 배율을 얹는다. 없으면 어느 축도 흔들리지 않는다 */
     policy?: ReserveTrainingPolicy;
     /** 이 선수에게 걸린 개인 훈련의 축 — 방침 위에 한 축을 더 겨냥한다 (season.md §2) */
     personal?: AttributeAxis;
   },
   axes: readonly AttributeAxis[] = ATTRIBUTE_AXES,
-): { axis: AttributeAxis; step: number; mentored: boolean }[] {
+): { axis: AttributeAxis; step: number }[] {
   return axes
     .map((axis) => {
       const rng = makeRng(input.seed, `development:${input.date}:${input.playerId}:${axis}`);
@@ -403,25 +361,13 @@ export function rollMonthlyAxes(
           ? monthlyGrowthMultiplier(axis, { policy: input.policy, personal: input.personal })
           : 1;
       const boost = aim === 1 ? input.boost : (input.boost ?? 1) * aim;
-      // 멘토 항은 정신 6축에서만 선다 — 노장이 물려주는 것은 머리지 다리가 아니다
-      const mentor = isMentoredAxis(axis) ? (input.mentor ?? 1) : 1;
-      const step = rollAxis(
-        axis,
-        input.age,
-        input.values[axis],
-        input.potential,
-        rng,
-        boost,
-        input.professionalism,
-        mentor,
-      );
-      // 실제로 곱해진 줄만 표식을 든다 — 노화 하락에는 어떤 배율도 붙지 않는다
-      return { axis, step, priority, mentored: mentor !== 1 && step > 0 };
+      const step = rollAxis(axis, input.age, input.values[axis], input.potential, rng, boost);
+      return { axis, step, priority };
     })
     .filter((rolled) => rolled.step !== 0)
     .sort((a, b) => a.priority - b.priority || a.axis.localeCompare(b.axis))
     .slice(0, MAX_AXES_PER_MONTH)
-    .map(({ axis, step, mentored }) => ({ axis, step, mentored }));
+    .map(({ axis, step }) => ({ axis, step }));
 }
 
 /** 이 축이 이번 달에 움직이는가 — +1 / −1 / 0 */
@@ -433,13 +379,6 @@ export function rollAxis(
   rng: () => number,
   /** 육성 배율 — 성장 확률에만 곱한다. 노화 하락은 출전과 무관하다 */
   boost = 1,
-  /** 직업의식 — 감독의 배율과 같은 자리. 노화 하락에는 붙지 않는다 (people.md §6) */
-  professionalism = 1,
-  /**
-   * 멘토 항 — **축은 부르는 쪽이 이미 갈랐다**(`isMentoredAxis`). 여기서 다시 가르면
-   * 정신 축이라는 사실이 두 곳에 적히고, 한쪽만 조여진다 (people.md §5-3).
-   */
-  mentor = 1,
 ): number {
   const bias = agingDelta(axis, age);
 
@@ -452,7 +391,6 @@ export function rollAxis(
   // 자라는 축 — 잠재력이 천장이다. 늦게까지 크는 축은 결산과 같은 시계로 조금 더 자란다
   const room = potential - value;
   if (room <= 0) return 0;
-  const rate =
-    growChance(room, age) * axisClockFactor(axis, age) * boost * professionalism * mentor;
+  const rate = growChance(room, age) * axisClockFactor(axis, age) * boost;
   return rng() < monthlyChance(rate) ? 1 : 0;
 }

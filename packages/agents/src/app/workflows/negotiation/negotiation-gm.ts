@@ -24,6 +24,7 @@ import { inputError } from "../../../common/tool-schema";
 import { createInstructionTool } from "../instructions";
 import { recordCall } from "../../../common/gm-types";
 import { evaluateNegotiation } from "./evaluation";
+import { buildToolSpecs } from "../../gm-tools";
 import { buildGmReference } from "../common/context";
 
 export function buildNegotiationReference(state: GameState, negotiationId: string): string {
@@ -59,6 +60,7 @@ export function buildNegotiationTools(
 ): GameToolSpec[] {
   const definition = (name: string) => NEGOTIATION_TOOL_DEFINITIONS.find((t) => t.name === name)!;
   return [
+    ...buildToolSpecs(state, ctx.calls).filter((tool) => tool.name === "update_character"),
     createInstructionTool(state, ctx.calls, {
       name: "negotiation_orders",
       agent: "table-orders",

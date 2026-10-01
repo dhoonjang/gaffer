@@ -1,5 +1,7 @@
+import { pendingManagerInterviews } from "../common/core/state";
+import { interviewFactText } from "@story-fm/domain";
+import { personaBookOf } from "../common/people/character-book";
 import { scoutingReportLine } from "../negotiation/views/scouting";
-import { boardAgendaLines } from "@story-fm/domain";
 import type {
   CallUp,
   Contract,
@@ -14,7 +16,6 @@ import type {
   ScheduleEntry,
   SeasonHistory,
   SeasonMatchRow,
-  SeasonRecord,
   SeasonStat,
   SeasonStatTotal,
   SeasonTableRow,
@@ -33,7 +34,6 @@ import {
   isReserveMatch,
   MatchStageSchema,
   personaRoleLabel,
-  PROMISE_KIND_KO,
   SQUAD_STATUS_KO,
   tacticsBrief,
 } from "@story-fm/domain";
@@ -43,14 +43,11 @@ import {
   associationName,
   capsOf,
   internationalGoalsOf,
-  boardExpectationText,
   competitionRowsOf,
   conditionLabel,
-  describeReputation,
   familiarityLabel,
   footLabel,
   growthLabel,
-  LEADER_ROLE_LABEL,
   milestoneTitle,
   physiqueLabel,
   naturalPositionOf,
@@ -87,7 +84,6 @@ import {
 import { openCallUp } from "../match/competition/international";
 import { careerOf, careerTotalsOf } from "../story/players/career";
 import { type CareerTotals } from "../story/players/career";
-import { leaderGroupOf } from "../common/players/hierarchy";
 import { formLabel } from "../common/players/form";
 import { INJURY_SEVERITY_KO, injuryHistoryOf } from "../common/players/injury";
 import {
@@ -97,10 +93,7 @@ import {
   opponentFactFavours,
   opponentFactText,
 } from "../match/flow/preview";
-import { issueReasonText, moodAnchor } from "../story/players/mood";
-import { moodOf } from "./workflows/story/players/mood";
 import { numberLineageOf } from "../common/players/numbers";
-import { openPromises } from "../negotiation/players/promises";
 import { squadStatusOf } from "../common/players/contract-status";
 import { contractTermsOf } from "../negotiation/market/terms";
 import {
@@ -161,7 +154,6 @@ import {
 } from "../match/competition/records";
 import { openManagerOffers } from "../negotiation/market/manager-market";
 import { observedMarketValue } from "../negotiation/market/market";
-import { interestLine } from "../negotiation/market/interest";
 import {
   arrivedScoutReport,
   attributeLine,
@@ -257,7 +249,7 @@ function resolveTeam(state: GameState, team?: string): Resolved {
   return pickTeam(state, said);
 }
 
-/** 이름 뒤의 완장 — 서열은 조회가 아니라 `get_squad`의 리더 줄이 말한다 */
+/** 이름 뒤에 실제 주장·부주장 지정을 표시한다. */
 function armband(p: GamePlayer): string {
   return p.isCaptain ? " (주장)" : p.isViceCaptain === true ? " (부주장)" : "";
 }
@@ -355,9 +347,6 @@ function ourRow(state: GameState, p: GamePlayer): string {
       ? ` 정지(${suspensionScopeName(suspension)} ${suspension.lengthMatches - suspension.served}경기)`
       : "";
   // 무엇에 대한 불만인지까지 낸다 — 사유가 여덟이라 "불만" 한 마디로는 할 일이 안 보인다
-  const grievance = state.issues.find((i) => i.gamePlayerId === p.id);
-  const reason = grievance ? issueReasonText(grievance) : null;
-  const issue = grievance ? (reason ? ` ⚠불만(${reason})` : " ⚠불만") : "";
   /**
    * **등번호는 이 줄에 선다** — 화면의 명단 행은 이미 번호를 세우는데 GM 조회 줄에만
    * 없어서, 모델이 번호를 물으면 있지도 않은 번호를 지어냈다 (player.md §1.1).
@@ -369,7 +358,7 @@ function ourRow(state: GameState, p: GamePlayer): string {
     `OVR${p.attributes.overall} 폼 ${formLabel(p.state.form)} ` +
     `체력${p.state.condition} ${adaptation}` +
     `${formatMoney(contract?.weeklyWage ?? 0)}${contractLabel(contract)} ` +
-    `${role} ${statLine(stat)}${benched}${status}${issue}${armband(p)}` +
+    `${role} ${statLine(stat)}${benched}${status}${armband(p)}` +
     // 홈그로운은 **우리 협회** 기준이다 — 임대 나간 선수를 빌린 구단 기준으로 재면
     // 같은 선수의 자격이 나가 있는 동안만 뒤집힌다 (searchPlayers의 필터와 같은 자)
     `${isHomegrownFor(p, state.userTeamId) ? " [홈그로운]" : ""}${occupiesSquadList(state, p) ? "" : " [U21·명단 밖]"}`
@@ -1006,21 +995,6 @@ function historyLines(state: GameState, p: GamePlayer): string[] {
   return lines;
 }
 
-/**
- * GM이 읽는 심경 한 줄 — 결산이 다시 쓴 문장이 있으면 그것, 없으면 **사실 줄**.
- * 코어가 GM에게 넘기는 것은 사실뿐이다 (overview.md §1 철칙 4).
- */
-function moodLine(state: GameState, player: GamePlayer): string {
-  const mood = moodOf(state, player);
-  return mood.note ?? moodAnchor(mood.facts);
-}
-
-/** 그 시즌의 보드 평가 — 등급과 근거 수치 (career.md §6) */
-function boardLine(record: SeasonRecord): string {
-  const lines = boardAgendaLines(record.board);
-  return lines.length ? ` — ${lines.join(" · ")}` : "";
-}
-
 /** 그 자리에서 맡고 있는 세부 역할의 한글 이름 (미지정이면 기본 역할) */
 function roleLabel(position: string, roleId?: string): string {
   const defs = rolesFor(position);
@@ -1163,7 +1137,6 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
     lines.push(
       `컨디션: 폼 ${formLabel(p.state.form)} · 체력 ${p.state.condition} (${conditionLabel(p.state.condition)})`,
       ...(history === null ? [] : [`부상 이력: ${history}`]),
-      `심경: ${moodLine(state, p)}`,
       `소화 포지션: ${p.positions
         .map((x) => `${x.position}${x.isNatural ? "*" : ""}${x.proficiency}`)
         .join(" / ")}`,
@@ -1221,23 +1194,17 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
   }
 
   /**
-   * 계약 줄이 **장부를 함께 든다** — 지위·조항·조건과 열린 약속 (people.md §5-2 ·
+   * 계약 줄이 **장부를 함께 든다** — 지위·조항·조건 (people.md §5-2 ·
    * transfer.md §12-3).
    *
    * 지위와 조건은 우리 계약의 칸이라 남의 선수에게는 적지 않는다 — 안개 밖에서 지어낸
-   * 사실이 된다. 약속도 마찬가지로 우리가 한 말만 장부에 선다.
+   * 사실이 된다.
    * ⚠️ 문장이 아니라 사실이다: 갈래와 기한·금액, 그뿐이다. 표 밖의 조건(`other`)만은
    * 감독이 한 말 그대로가 사실이라 그 줄이 그대로 선다.
    */
   const contractFacts =
     knowledge === "own"
       ? [`${SQUAD_STATUS_KO[squadStatusOf(state, p)]} 지위`, ...contractTermsOf(state, p.id)]
-      : [];
-  const ledger =
-    knowledge === "own"
-      ? openPromises(state, p.id).map(
-          (promise) => `${PROMISE_KIND_KO[promise.kind]} 약속 ${promise.dueOn}까지`,
-        )
       : [];
   /**
    * 등번호와 그 번호의 **계보** — 지위·약속과 같은 결의 장부 줄이다 (player.md §1.1).
@@ -1296,19 +1263,8 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
               youthOrigin.teamId === null ? "아카데미" : teamShortNameIn(state, youthOrigin.teamId)
             } 아카데미가 ${youthOrigin.on} 계약을 주지 않았다 · 프로 계약 이력 없음`
           : "계약: 정보 없음",
-      ...ledger,
     ].join(" · "),
   );
-  /**
-   * 오퍼 앞에 서 있는 관심 — 구단과 사다리의 칸뿐이다 (transfer.md §1-2).
-   *
-   * ⚠️ **안개를 견주지 않고 그대로 싣는다.** 장부에 관심 줄이 서는 선수는 둘뿐이라
-   * (우리 선수와 우리가 협상을 열어 둔 남의 선수 — `tickInterests`) 어느 쪽이든
-   * 감독이 알 자격이 있는 사실이다. 관심이 그 밖으로 번지는 날 가장 먼저 새는
-   * 자리가 여기다 — 그때는 `knowledge`로 걸러야 한다.
-   */
-  const interest = interestLine(state, p.id);
-  if (interest !== null) lines.push(`관심: ${interest}`);
   if (injury) {
     lines.push(
       `부상: ${injury.bodyPart} (${INJURY_SEVERITY_KO[injury.severity]}) — 복귀 예상 ${injury.expectedReturn}`,
@@ -1375,8 +1331,6 @@ function assignedRow(
   const suspension = activeSuspension(state, p.id);
   const stat = seasonStatOf(state, p.id);
   const contract = activeContract(state, p.id);
-  const grievance = state.issues.find((i) => i.gamePlayerId === p.id);
-  const reason = grievance ? issueReasonText(grievance) : null;
   const flags = [
     injury ? `부상(${injury.bodyPart}, ~${injury.expectedReturn})` : null,
     suspension
@@ -1385,7 +1339,6 @@ function assignedRow(
     banNext && next !== null
       ? `${competitionShortName(next.competitionId)} 경고 ${yellows}장(정지 임박)`
       : null,
-    grievance ? (reason ? `불만(${reason})` : "불만") : null,
     /**
      * **다치기 전에 서는 유일한 줄이다** (player.md §5.3) — 부상 플래그는 이미
      * 쓰러진 뒤의 사실이라, 이 줄이 없으면 라인업을 세우는 자리에서 감독이 몸의
@@ -1499,19 +1452,10 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
       }`,
     // 등록 명단 — 영입·승격 판단의 전제라 스쿼드를 볼 때 항상 함께 읽힌다
     registrationLine(squadRegistrationOf(state, teamId)),
-    /**
-     * 라커룸 서열 — **화면과 같은 파생을 읽는다** (people.md §5-1). 완장이 어디
-     * 있는지와 누가 그 옆에 서는지가 팀토크의 폭과 불만의 속도를 정하므로,
-     * 스쿼드를 볼 때 함께 읽혀야 하는 줄이다.
-     */
-    `라커룸 서열: ${
-      leaderGroupOf(state, teamId)
-        .map(
-          (row) =>
-            `${playerName(state, row.playerId)}${
-              row.role === "group" ? "" : `(${LEADER_ROLE_LABEL[row.role]})`
-            } 리더십${row.leadership}`,
-        )
+    `완장: ${
+      squad
+        .filter((p) => p.isCaptain || p.isViceCaptain)
+        .map((p) => `${p.name}(${p.isCaptain ? "주장" : "부주장"})`)
         .join(" · ") || "없음"
     }`,
   ];
@@ -1573,7 +1517,7 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
   if (teamId === state.userTeamId && input.role === undefined && input.level === undefined) {
     // 수석코치는 자리가 비지 않는다 (`headCoachOf`) — 이 절은 언제나 한 줄 이상이다
     const ours = [headCoachOf(state), ...staffOf(state)];
-    lines.push(`── 스태프 ${ours.length}명 ──`, ...ours.map(staffRow));
+    lines.push(`── 스태프 ${ours.length}명 ──`, ...ours.map((persona) => staffRow(state, persona)));
     const pool = describeStaffPool(state);
     if (pool.length > 0) {
       // 유스 절이 `sign_youth`를 대는 것과 같은 규약 — 이 목록으로 무엇을 할 수 있는가
@@ -1584,19 +1528,21 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
 }
 
 /**
- * 스태프 한 줄 — 이름 · 직책 · 원형 · 부임일 · 계약 만료일.
+ * 스태프 한 줄 — 이름 · 직책 · 현재 설명 · 부임일 · 계약 만료일.
  *
  * 직책이 역할 라벨보다 앞서는 것은 화자 칩과 같은 규약이다 (people.md §3): 「코치」는
  * 이미 알고 있고, 감독이 알아야 할 것은 훈련장의 어느 자리냐다. 고용 정보가 없는 옛
  * 세이브는 역할 라벨로 서고 날짜 칸이 빠진다 — 없는 계약을 지어내지 않는다.
  */
-function staffRow(persona: Persona): string {
+function staffRow(state: GameState, persona: Persona): string {
   const employment = persona.employment;
   const facts = [
     employment?.title ?? personaRoleLabel(persona.role) ?? persona.role,
-    persona.archetype,
+    personaBookOf(state, persona).description,
     employment === undefined ? null : `부임 ${employment.since}`,
-    employment === undefined ? null : `계약 ~${employment.contract.until}`,
+    employment === undefined
+      ? null
+      : `계약 ~${employment.contract.until} · 연봉 ${formatMoney(employment.contract.salary)}`,
   ].filter((x): x is string => x !== null);
   // ⚠️ 두 칸 들여쓰기는 **배치 줄의 것이다** — 유스 후보 줄과 같이 스태프도 들여쓰지
   // 않는다. 층·역할의 칸에 서지 않는 사람은 명단의 자를 빌리지 않는다
@@ -2524,7 +2470,6 @@ const JOURNAL_KIND_KO: Record<CalendarEventView["kind"], string> = {
   transfer: "이적",
   window: "이적창",
   money: "돈",
-  news: "소식",
 };
 
 /**
@@ -2576,7 +2521,7 @@ function pastJournalLines(state: GameState, from: string, to: string): string[] 
 
 /**
  * 감독의 달력 — 경기만 보는 `get_league`와 달리 **훈련·이적창까지** 한 축에 놓는다.
- * 일정 축이 `SCHEDULE_ENTRY` 하나로 정규화돼 있으니(v6) 조회도 한 곳에서 한다.
+ * 일정 축이 `SCHEDULE_ENTRY` 하나로 정규화돼 있으니 조회도 한 곳에서 한다.
  *
  * 우리 팀 일정만 담는다 — 같은 리그 타 팀 경기도 엔트리로는 존재하지만(순위표
  * 계산용) 그건 감독의 달력이 아니다. 리그 전체 편성은 `get_league`가 답한다.
@@ -2697,8 +2642,6 @@ export function careerView(state: GameState): LookupResult {
   const rank = table.findIndex((r) => r.teamId === state.userTeamId) + 1;
   const m = state.manager;
 
-  // 경고는 세이브가 끝나는 길의 카운터다 — 평판 바로 아래에 세워 압박이 읽히게 한다
-
   /**
    * **무직이면 머리글부터 다르다** (career.md §5.1) — 옛 구단의 순위·경고를 재임
    * 중인 것처럼 세우면 모델이 그 구단의 감독으로 장면을 쓴다. 잘린 사실과 지금
@@ -2710,8 +2653,7 @@ export function careerView(state: GameState): LookupResult {
         `[커리어] ${m.name} — 무직 (${card.on} ${teamNameIn(state, card.teamId)}에서 ${
           card.kind === "expired" ? "계약 만료" : "경질"
         }) · ${seasonLabel(state.season)}`,
-        `평판: ${describeReputation(m.reputation)}`,
-        `자리를 잃은 자리: 구단 경쟁 기준 ${boardExpectationText(card.expectationCode)}(${card.target}위)` +
+        `당시 구단 체급: ${card.tier}티어` +
           (card.position === undefined ? "" : ` · 당시 ${card.position}위`),
         ...(card.severance ? [`위약금 ${formatMoney(card.severance)}`] : []),
         ...(openManagerOffers(state).length > 0
@@ -2719,10 +2661,9 @@ export function careerView(state: GameState): LookupResult {
               `받은 감독직 제안:`,
               ...openManagerOffers(state).map(
                 (o) =>
-                  `  ${o.id} · ${teamNameIn(state, o.teamId)} (${o.tier}티어) · 구단 경쟁 기준 ${boardExpectationText(o.expectationCode, o.target)}` +
+                  `  ${o.id} · ${teamNameIn(state, o.teamId)} (${o.tier}티어)` +
                   (o.position ? ` · 현재 ${o.position}위` : "") +
                   ` · 연봉 ${formatMoney(o.salary)}·${o.years}년·이적 예산 약속 ${formatMoney(o.budgetPledge)}` +
-                  (o.counteredOn ? ` · 흥정 완료` : "") +
                   ` · ${o.expiresOn}까지`,
               ),
             ]
@@ -2741,30 +2682,51 @@ export function careerView(state: GameState): LookupResult {
       ]
     : [
         `[커리어] ${m.name} — ${teamNameIn(state, state.userTeamId)} 재임 · ${seasonLabel(state.season)}`,
-        ...boardAgendaLines(state.boardAgenda),
         ...(m.contract
           ? [
               `계약: 연봉 ${formatMoney(m.contract.salary)} · ${m.contract.until}까지` +
-                ` (${diffDays(state.date, m.contract.until)}일)` +
-                // 비갱신 통보는 만료일이 곧 끝이라는 사실이다 (career.md §5.4)
-                (m.contract.renewalOffered === false ? ` · 보드는 재계약하지 않기로 했다` : ""),
+                ` (${diffDays(state.date, m.contract.until)}일)`,
             ]
           : []),
-        // 재직 중에 서는 제안은 재계약 하나다 — 답할 자리라 여기 선다 (career.md §5.4)
-        ...openManagerOffers(state)
-          .filter((o) => o.via === "renewal")
-          .map(
-            (o) =>
-              `보드의 재계약 제안: ${o.id} · 연봉 ${formatMoney(o.salary)}·${o.years}년` +
-              `·이적 예산 약속 ${formatMoney(o.budgetPledge)}` +
-              (o.counteredOn ? ` · 흥정 완료` : "") +
-              ` · ${o.expiresOn}까지`,
-          ),
-        `평판: ${describeReputation(m.reputation)}`,
+        ...openManagerOffers(state).map(
+          (o) =>
+            `${o.via === "renewal" ? "재계약" : "감독직"} 제안: ${o.id} · ${teamNameIn(state, o.teamId)} · 연봉 ${formatMoney(o.salary)}·${o.years}년` +
+            `·이적 예산 약속 ${formatMoney(o.budgetPledge)}` +
+            ` · ${o.expiresOn}까지`,
+        ),
         row && row.played > 0
           ? `이번 시즌 진행: ${competitionName(league)} ${rank}위 · ${row.played}경기 ${row.wins}승 ${row.draws}무 ${row.losses}패 · 승점 ${row.points} (득실 ${row.goalDiff >= 0 ? "+" : ""}${row.goalDiff})`
           : `이번 시즌 진행: 아직 리그 경기 없음`,
       ];
+
+  if (!state.dismissal && state.managerVacancies.length) {
+    lines.push(
+      "공석:",
+      ...state.managerVacancies.map(
+        (vacancy) =>
+          `  ${teamNameIn(state, vacancy.teamId)} (${vacancy.teamId}) · ${vacancy.on}부터`,
+      ),
+    );
+  }
+  const interviews = pendingManagerInterviews(state);
+  if (interviews.length) {
+    lines.push(
+      "열린 감독직 면접:",
+      ...interviews.map(
+        (interview) =>
+          `  ${interview.id} · ${teamNameIn(state, interview.teamId)} (${interview.teamId}) · ${interview.date} · ${interview.facts.map((fact) => interviewFactText(fact)).join(" · ")}`,
+      ),
+    );
+  }
+  if (state.managerPool.length) {
+    lines.push(
+      "무직 AI 감독:",
+      ...state.managerPool.map(
+        (candidate) =>
+          `  ${candidate.name} · 전술 역량 ${candidate.rating} · 전 ${teamNameIn(state, candidate.lastTeamId)} · ${candidate.sackedOn}부터 무직 · 재임 ${candidate.spells.map((spell) => `${spell.teamId} ${spell.from}~${spell.to}`).join(", ")}`,
+      ),
+    );
+  }
 
   /**
    * 시즌 기록과 경질 이력을 한 표로 잇는다 (career.md §6) — 잘린 시즌은
@@ -2779,8 +2741,7 @@ export function careerView(state: GameState): LookupResult {
       on: "",
       text:
         `  시즌 ${r.season} (${seasonLabelOf(r.season)}) ${teamNameIn(state, r.teamId)} ` +
-        `${r.position}위 · ${r.wins}승 ${r.draws}무 ${r.losses}패 · 득 ${r.goalsFor} 실 ${r.goalsAgainst}` +
-        boardLine(r),
+        `${r.position}위 · ${r.wins}승 ${r.draws}무 ${r.losses}패 · 득 ${r.goalsFor} 실 ${r.goalsAgainst}`,
     })),
     ...sackings.map((d) => ({
       season: d.season,
@@ -2789,7 +2750,7 @@ export function careerView(state: GameState): LookupResult {
       text:
         `  시즌 ${d.season} (${seasonLabelOf(d.season)}) ${teamNameIn(state, d.teamId)} — ${d.on} ` +
         `${d.kind === "expired" ? "계약 만료" : "경질"}` +
-        ` (구단 경쟁 기준 ${boardExpectationText(d.expectationCode)} ${d.target}위` +
+        ` (${d.tier}티어` +
         (d.position === undefined ? ")" : ` · 당시 ${d.position}위)`),
     })),
   ].sort((a, b) => b.season - a.season || b.atEnd - a.atEnd || b.on.localeCompare(a.on));

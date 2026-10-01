@@ -1,5 +1,5 @@
 import type { DealTermKind, ProposalInput, SquadStatus, TableSpeaker } from "@story-fm/domain";
-import { dealTermKindsFor, naturalPositionOf, pointsBonusEligible } from "@story-fm/domain";
+import { dealTermKindsFor } from "@story-fm/domain";
 import type { CommandResult } from "../../common/commands/result";
 import { userWageRoom } from "../finance/board-request";
 import {
@@ -97,8 +97,7 @@ export function applyProposal(state: GameState, input: ProposalInput): CommandRe
 export { proposalCommandName } from "@story-fm/domain";
 
 /**
- * **제안 폼이 미리 채우는 값** — 코어가 아는 자다 (transfer.md §12-3). 화면은 이 값을
- * 그대로 칸에 앉히고 감독이 고친다; 자를 화면이 다시 재면 폼과 확률이 다른 값을 본다.
+ * 제안 폼이 읽는 계약·제안의 현재 값. 화면은 이 값을 표시하고 감독이 수정한다.
  */
 export interface ProposalView {
   /** 이 선수에게 열 수 있는 갈래 — 우리 선수면 재계약, 남의 선수면 영입·임대, 무소속은 영입 하나 */
@@ -147,20 +146,12 @@ export interface ProposalView {
   marketValue: number | null;
 }
 
-/**
- * 폼이 세울 조건 칩 — 갈래가 정한 것에서 이 선수에게 서지 않는 것을 뺀다. 공격 포인트
- * 보너스는 미드필더·공격수에게만이고(`pointsBonusEligible`), 표 밖의 조건(`other`)은 폼이
- * 아니라 말의 것이다 (transfer.md §12-3).
- */
+/** 폼이 세울 조건 칩. 자유 문장 조건은 대화에서 제안한다. */
 function termKindsFor(
-  player: Parameters<typeof naturalPositionOf>[0],
   kind: "buy" | "loan" | "renew",
   precontract = false,
 ): readonly DealTermKind[] {
-  const eligible = pointsBonusEligible(naturalPositionOf(player).position);
-  return dealTermKindsFor(kind, precontract).filter(
-    (k) => k !== "other" && (k !== "points" || eligible),
-  );
+  return dealTermKindsFor(kind, precontract).filter((k) => k !== "other");
 }
 
 /**
@@ -232,10 +223,10 @@ export function proposalViewOf(state: GameState, playerId: string): ProposalView
         }
       : null,
     termKinds: {
-      buy: termKindsFor(player, "buy"),
-      precontract: termKindsFor(player, "buy", true),
-      loan: termKindsFor(player, "loan"),
-      renew: termKindsFor(player, "renew"),
+      buy: termKindsFor("buy"),
+      precontract: termKindsFor("buy", true),
+      loan: termKindsFor("loan"),
+      renew: termKindsFor("renew"),
     },
     transferBudget: finance.transferBudget,
     wageRoom: userWageRoom(state),

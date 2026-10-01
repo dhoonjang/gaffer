@@ -1,4 +1,10 @@
-import type { HistoryDigest } from "@story-fm/domain";
+import {
+  characterBookText,
+  CharacterCandidateSchema,
+  CHARACTER_CANDIDATES_MAX,
+  type CharacterCandidate,
+  type HistoryDigest,
+} from "@story-fm/domain";
 import type { ChatTurn } from "./state";
 import { turnFactLines } from "./turn-facts";
 
@@ -59,7 +65,7 @@ export interface HistoryFoldBrief {
   rounds: number;
   /**
    * 접히는 구간의 원문 — 요약 에이전트가 읽는다. `facts`는 그 턴의 **장부 골격**
-   * (`turnFactLines` — 호출 요약과 코어 기록)이다: 이적 확정·약속·회견 답·시간
+   * (`turnFactLines` — 호출 요약과 코어 기록)이다: 이적 확정·약속·시간
    * 경과가 대사에서만 읽히던 자리라, 요약이 장부가 아는 일을 다시 짓지 않는다 (§5-1).
    */
   turns: ReadonlyArray<{ role: ChatTurn["role"]; text: string; at: string; facts: string[] }>;
@@ -69,6 +75,7 @@ export interface HistoryFoldBrief {
 export interface HistoryDigestDraft {
   past: string;
   open?: string;
+  candidates?: CharacterCandidate[];
 }
 
 /**
@@ -98,17 +105,11 @@ export function historyEnd(turns: readonly ChatTurn[]): number {
   return 0;
 }
 
-/**
- * 구간의 글자 수 — `turn.text.length`만 센다.
- *
- * ⚠️ **근사다.** 프롬프트에 실제로 실리는 형태는 `@감독이름: ` 봉투와 그 턴에 주입된
- * 인물지가 더 붙어 조금 더 크다 — 카드는 세이브에 없고 렌더 시점에 붙기 때문이다
- * (→ [docs/story/people.md](../../../../docs/story/people.md) §6). 상한과 잔량의 간격이
- * 그 차이를 흡수한다.
- */
+/** 원문과 해당 턴에 저장된 캐릭터북 본문을 함께 센다. */
 function chars(turns: readonly ChatTurn[], from: number, upto: number): number {
   let total = 0;
-  for (let i = Math.max(0, from); i < upto; i += 1) total += turns[i]?.text.length ?? 0;
+  for (let i = Math.max(0, from); i < upto; i += 1)
+    total += (turns[i]?.text.length ?? 0) + characterBookText(turns[i]?.characterBook ?? []).length;
   return total;
 }
 
@@ -150,8 +151,7 @@ function boundaryWithin(
 
 /** 창의 시작 — 접은 지점 이후에서 상한에 드는 가장 앞의 `HISTORY_STEP` 경계 */
 export function historyStart(state: HistorySource): number {
-  const turns = peaceTurns(state.chat);
-  return boundaryWithin(turns, foldedOf(state), historyEnd(turns), HISTORY_CHAR_LIMIT);
+  return foldedOf(state);
 }
 
 /**
@@ -198,9 +198,21 @@ export function applyHistoryDigest(
   const open = draft.open?.trim() ?? "";
   if (open.length > HISTORY_OPEN_CHARS) return false;
   if (brief.through <= foldedOf(state)) return false;
+  if (
+    draft.candidates &&
+    (draft.candidates.length > CHARACTER_CANDIDATES_MAX ||
+      draft.candidates.some(
+        (candidate) => !CharacterCandidateSchema.safeParse(candidate).success,
+      ) ||
+      new Set(draft.candidates.map((candidate) => candidate.name)).size !== draft.candidates.length)
+  )
+    return false;
   state.historyDigest = {
     foldedTurns: brief.through,
     text: past,
+    ...(draft.candidates
+      ? { candidates: draft.candidates.map((candidate) => ({ ...candidate })) }
+      : {}),
     ...(open.length > 0 ? { open } : {}),
     at: state.date,
     rounds: brief.rounds,

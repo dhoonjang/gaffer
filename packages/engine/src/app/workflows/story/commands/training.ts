@@ -1,4 +1,4 @@
-import { type GameState, pushNarrative } from "../../../../common/core/state";
+import { type GameState } from "../../../../common/core/state";
 import { type CommandResult } from "../../../../common/commands/result";
 import { ourYouthCandidates, youthIntakeDeadline, signYouthCandidates } from "../../../season";
 import { type GamePlayer, josa } from "@story-fm/domain";
@@ -51,7 +51,6 @@ export function signYouth(state: GameState, input: { playerIds?: string[] }): Co
     turnedAway > 0 ? `무소속 ${released.length}명 · 하부 리그 ${turnedAway}명` : "무소속 명부";
 
   if (joined.length === 0 && filled.length === 0) {
-    pushNarrative(state, `유스 인테이크 — 후보 ${rows.length}명 전원 계약 없이 방출`, 2);
     return {
       ok: true,
       message:
@@ -76,11 +75,6 @@ export function signYouth(state: GameState, input: { playerIds?: string[] }): Co
   }
   const letGo = released.length + turnedAway;
   if (letGo > 0) items.push(item({ label: "방출", text: `${letGo}명`, note: freeAgentNote }));
-  pushNarrative(
-    state,
-    `유스 인테이크 — ${[...joined, ...filled].map((p) => p.name).join(", ")} 첫 프로 계약`,
-    3,
-  );
   return {
     ok: true,
     message:

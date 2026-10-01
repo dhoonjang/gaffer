@@ -27,6 +27,7 @@ export const PANEL_OF: Record<string, PanelKey> = {
   // ── 스쿼드 — 선수단과 판이 바뀐 것 ──
   set_lineup: "스쿼드",
   set_squad_level: "스쿼드",
+  set_retirement: "스쿼드",
   set_tactics: "스쿼드",
   // 손잡이 넷은 기록되지 않는다 — 뒤의 명령들이 칩·말풍선·카드를 세운다
   tactic_orders: "스쿼드",
@@ -51,14 +52,10 @@ export const PANEL_OF: Record<string, PanelKey> = {
   sign_youth: "스쿼드",
   substitute: "스쿼드",
   set_transfer_list: "스쿼드",
-  respond_transfer_request: "스쿼드",
   release_player: "스쿼드",
   recall_loan: "스쿼드",
   exercise_buyback: "스쿼드",
   accept_deal: "스쿼드",
-  record_incident: "스쿼드",
-  // 대화형 — 바뀌는 것은 사기·심경이고 그건 명단이 보여준다
-  team_talk: "스쿼드",
   // ── 달력 — 일정과 훈련 ──
   set_training: "달력",
   start_match: "달력",
@@ -67,22 +64,21 @@ export const PANEL_OF: Record<string, PanelKey> = {
   // ── 재정 ──
   apply_finance_event: "재정",
   adjust_transfer_budget: "재정",
-  // 접수한 날엔 장부가 아직 그대로다 — 그래도 감독이 답을 확인하러 갈 화면은 여기다
+  // 요청과 승인·거절, 집행된 지원을 재정 화면에서 확인한다
   request_board: "재정",
   set_ticket_price: "재정",
   // 달라지는 것은 **누가 서 있는가**다 — 스쿼드 화면의 스태프 줄이 그 답을 든다.
   hire_staff: "스쿼드",
   release_staff: "스쿼드",
   // ── 커리어 — 세계가 감독을 보는 눈 ──
-  review_board: "재정",
-  respond_to_media: "커리어",
-  // 다가옴도 옮기는 것이 평판 3축이다 — 사기 변화는 스쿼드에도 서지만 자리는 하나다
-  respond_to_approach: "커리어",
+  review_board: "커리어",
+  offer_manager_job: "커리어",
   // 부임은 커리어의 사건이다 — 경질 카드가 지워지고 남은 제안이 사라지는 곳이 거기다
   accept_manager_offer: "커리어",
-  // 흥정·지원도 같은 자리다 — 제안 카드의 조건과 공석 명부가 커리어 화면에 선다
+  // 합의한 조건 수정·지원도 같은 자리다 — 제안 조건과 공석 명부가 커리어 화면에 선다
   counter_manager_offer: "커리어",
   apply_manager_job: "커리어",
+  respond_to_interview: "커리어",
   // 사임도 자리를 잃는 사건이다 — 카드와 계약 정산 기록이 서는 곳이 커리어 화면이다
   resign: "커리어",
 };
@@ -125,13 +121,7 @@ export interface HintLine {
   text: string;
   /** 그 값의 갈래·부연 — 값 뒤에 한 톤 낮춰 선다 (`패스·시야`) */
   note?: string;
-  /**
-   * 이 줄이 말하는 **증감** — 화면은 이 부호로만 색을 준다 (`+2`는 이득, `−1`은 손해).
-   *
-   * 값에서 `+`·`−`를 찾아 칠하던 자리다. 포메이션(`4-2-3-1`)이 같은 자를 지나고,
-   * 코어가 문구를 바꾸는 날 색이 조용히 꺼졌다 — 부호는 코어가 숫자로 낸다.
-   * `0`은 "안 움직였다"는 사실이라 색이 없을 뿐 없는 것과 다르다.
-   */
+  /** 코어가 제공한 수치 증감. 0은 변화가 없음을 뜻하며, 생략은 증감 정보가 없음을 뜻한다. */
   delta?: number;
   /** 같은 호출의 이어지는 항목 — 아이콘을 다시 세우지 않는다 */
   cont?: boolean;

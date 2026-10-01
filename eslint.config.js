@@ -30,6 +30,8 @@ const browserImports = {
         "./turn-runner",
         "**/live-match-server",
         "./live-match-server",
+        "**/character-book-jobs",
+        "./character-book-jobs",
       ],
       allowTypeImports: true,
       message:
@@ -163,6 +165,7 @@ export default tseslint.config(
       "apps/web/app/api/**/*.ts",
       "apps/web/application/lib/store.ts",
       "apps/web/application/lib/turn-runner.ts",
+      "apps/web/application/lib/character-book-jobs.ts",
       "apps/web/application/lib/live-match-server.ts",
       "apps/web/test/**/*.ts",
       "apps/web/next.config.ts",

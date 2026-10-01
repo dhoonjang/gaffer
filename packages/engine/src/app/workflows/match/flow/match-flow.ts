@@ -4,19 +4,15 @@ import {
   userPlayers,
   isSuspendedFor,
   playerById,
-  pushNarrative,
   ensureSeasonStat,
   firstTeamPlayers,
   isInjured,
-  clampReputation,
-  teamNameIn,
 } from "../../../../common/core/state";
 import {
   type MatchRecord,
   isReserveMatch,
   parseScorerEntry,
   type MatchSide,
-  josa,
   shootoutSettled,
   shootoutTally,
   type MatchEvent,
@@ -51,14 +47,8 @@ import {
   wentToExtraTime,
   gainMatchProficiency,
   seatOf,
-  trackOutOfPosition,
-  OUT_OF_POSITION_RUN,
   makeInjuryRng,
-  matchReputationDelta,
-  MATCH_SALIENCE_WIN,
-  MATCH_SALIENCE_OTHER,
   milestoneNote,
-  MATCH_SALIENCE_MILESTONE,
   restoreTactics,
 } from "../../../../match/flow/match-flow";
 import { DEFAULT_KICKOFF } from "../../../../common/core/dates";
@@ -77,12 +67,9 @@ import { recordCard } from "../../../../match/flow/discipline";
 import { openInjuryFor } from "../health/injury";
 import { easeProneness } from "../../../../common/players/injury";
 import { applyMatchFinance } from "../../../../negotiation/finance/finance";
-import { competitionLabel } from "../../../../common/data/cup-catalog";
-import { applyResultMood } from "../../../../story/players/slump";
 import { advanceEuroKnockouts } from "../competition/euro-knockout";
 import { advanceDomesticCups } from "../competition/domestic-cup";
 import { advanceSuperCups } from "../competition/super-cup";
-import { buildMatchPress, openPress } from "../../story/world/press";
 
 /** 두 AI 팀의 경기 — 명단은 간이 시뮬이 짜는 그대로다 (match.md §3.1) */
 export function buildAiLiveMatch(state: GameState, match: MatchRecord): LiveMatch {
@@ -186,7 +173,6 @@ export function startMatch(state: GameState): FlowResult {
     live,
     startingXI: { home: [...sides.home.onPitch], away: [...sides.away.onPitch] },
     entered: false,
-    shouts: 0,
     eventsSeen: 0,
     casterHistory: [],
     servingSuspension: serving,
@@ -221,15 +207,14 @@ export function startMatch(state: GameState): FlowResult {
   }
   const note = lineup.replaced.length > 0 ? ` (자동 대체: ${lineup.replaced.join(", ")})` : "";
   /**
-   * **그 경기의 완장** (people.md §5-1) — 주장이 명단에 없으면 부주장이, 둘 다 없으면
-   * 명단 안 서열 최상위가 찬다. 승계가 일어났을 때만 알린다.
+   * 경기 명단의 주장·부주장을 우선하고, 둘 다 없으면 명단 전체에서
+   * 리더십·생일·id 순으로 완장을 배정한다. 지정 주장과 다를 때만 결과에 알린다.
    */
   const squadIds = new Set([...lineup.onPitch, ...lineup.bench]);
   const wornBy = matchCaptainOf(state, state.userTeamId, squadIds);
   const captain = userPlayers(state).find((p) => p.isCaptain);
   const inherited =
     wornBy !== null && wornBy !== captain?.id ? (playerById(state, wornBy)?.name ?? null) : null;
-  if (inherited) pushNarrative(state, `${josa(inherited, "이/가")} 완장을 찼다`, 2);
   return {
     ok: true,
     message: `킥오프 준비 완료${note}`,
@@ -330,10 +315,6 @@ export function finalizeMatch(state: GameState): MatchDigest {
   if (entry) entry.status = "done";
 
   const anchorOfPlayer = new Map((brief?.players ?? []).map((p) => [p.playerId, p.anchor]));
-  const ourStarters = new Set(
-    (brief?.players ?? []).filter((p) => p.started).map((p) => p.playerId),
-  );
-  const misplaced: string[] = [];
 
   /** **친선은 장부에 남지 않는다** — 몸에 남는 것만 정산한다 (season.md §2) */
   const friendly = isFriendly(match);
@@ -412,12 +393,6 @@ export function finalizeMatch(state: GameState): MatchDigest {
       player.state.condition = clampCondition(player.state.condition - (drained[id] ?? 0));
       player.state.form = clampForm(player.state.form + formDeltaFromMatch(player, rating, result));
       gainMatchProficiency(state, player, seatOf(state, player), entry?.id ?? null);
-      if (
-        player.teamId === state.userTeamId &&
-        trackOutOfPosition(state, player, ourStarters.has(player.id))
-      ) {
-        misplaced.push(player.name);
-      }
     }
 
     /** 정지 소화 — **새 카드보다 먼저** 처리한다 */
@@ -453,14 +428,6 @@ export function finalizeMatch(state: GameState): MatchDigest {
   settleSide("home");
   settleSide("away");
 
-  if (misplaced.length > 0) {
-    const line =
-      (misplaced.length === 1 ? misplaced[0]! : `${misplaced.length}명`) +
-      ` 자리 밖 기용 불만 — 주 포지션 밖 선발 ${OUT_OF_POSITION_RUN}경기째`;
-    digest.push(line);
-    pushNarrative(state, line, 3);
-  }
-
   // 경기 평점 — 기준선은 여기서 결정적으로 박고, 경기 후 LLM이 이 위에서 다듬는다.
   // 경기별 평점은 **우리 팀만** 남는다 — 상대의 평점은 시즌 합계에만 들어간다
   const ratings: Record<string, number> = {};
@@ -489,45 +456,18 @@ export function finalizeMatch(state: GameState): MatchDigest {
   // 재정 — 매치데이(관중)·생중계 수당·승리 수당·원정 비용 (finance.ts)
   applyMatchFinance(state, match, outcome, financeLines);
 
-  /** 친선 경기는 시즌 평판을 움직이지 않는다. */
-  if (!friendly) {
-    const repDelta = matchReputationDelta(outcome);
-    const rep = state.manager.reputation;
-    rep.media = clampReputation(rep.media + repDelta.media);
-    rep.squad = clampReputation(rep.squad + repDelta.squad);
-  }
-
-  const opponentId = side === "home" ? match.awayTeamId : match.homeTeamId;
   const pens = match.result?.penalties;
   const scoreline =
     `${ledger.score.home}:${ledger.score.away}` +
     (wentToExtraTime(ledger) ? " (연장)" : "") +
     (pens ? ` (승부차기 ${pens.home}:${pens.away})` : "");
   const outcomeKo = outcome === "win" ? "승리" : outcome === "draw" ? "무승부" : "패배";
-  pushNarrative(
-    state,
-    `${competitionLabel(match.competitionId, match.stage, match.round)} vs ${teamNameIn(state, opponentId)} ${scoreline} ${outcomeKo}`,
-    outcome === "win" ? MATCH_SALIENCE_WIN : MATCH_SALIENCE_OTHER,
-    "match",
-  );
   digest.push(`최종 스코어 ${scoreline} — ${outcomeKo}`);
   /** 이 경기가 세운 기록 — **말풍선도 서사 메모도 한 줄이다** */
   if (milestoneNotes.length > 0) {
     const line = `기록: ${[...milestoneNotes].sort(compareMilestones).map(milestoneNote).join(" · ")}`;
-    pushNarrative(state, line, MATCH_SALIENCE_MILESTONE, "match");
     digest.push(line);
   }
-  /** 연패·대패·연승이 라커룸에 남기는 것 (slump.ts) — **양 팀 모두** */
-  const derbyHeat = derbyForMatch(match)?.heat ?? 0;
-  for (const which of ["home", "away"] as const) {
-    const diff =
-      which === "home"
-        ? ledger.score.home - ledger.score.away
-        : ledger.score.away - ledger.score.home;
-    const runNote = applyResultMood(state, teamIdOf[which], diff, lineupOf[which], derbyHeat);
-    if (runNote && which === side) digest.push(runNote);
-  }
-
   // 경기 중 조정을 킥오프 상태로 — pendingMatch가 지워지기 전에 (스냅샷이 거기 있다)
   const restored = restoreTactics(state);
   if (restored) digest.push(restored);
@@ -540,8 +480,7 @@ export function finalizeMatch(state: GameState): MatchDigest {
   advanceDomesticCups(state, otherLines);
   advanceSuperCups(state, otherLines);
   /** 회견은 **대회 경기마다** 열린다 (press.ts) — 친선은 자리 자체가 없다 */
-  const press = buildMatchPress(state, match.id);
-  if (press) openPress(state, press, otherLines);
+
   {
     const result = match.result;
     journal({
