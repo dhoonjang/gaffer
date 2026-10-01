@@ -428,7 +428,7 @@ export const SQUAD_LONGEVITY = defineHarness({
  */
 export const YOUTH_DEVELOPMENT = defineHarness({
   id: "youth-development",
-  what: "2군 경기 수 · 출전·집중 육성·멘토링이 가르는 성장 격차",
+  what: "2군 경기 수 · 출전·집중 육성이 가르는 성장 격차",
   doc: "docs/common/season.md §2",
   cost: "세계 하나 · 한 시즌 완주 · 수 분",
   // prettier-ignore
@@ -436,7 +436,6 @@ export const YOUTH_DEVELOPMENT = defineHarness({
     { metric: "동일 곡선 축 빈도 최대비", role: "reference", max: 1.3, why: "8000시드에서 같은 노화 곡선 축의 선택 빈도" },
     { metric: "개인 결정력 훈련 선택비", role: "reference", min: 1.5, why: "3000시드 겨냥/기본 선택 횟수" },
     { metric: "개인 훈련 나머지 필드 선택비", role: "reference", max: 1, why: "겨냥한 만큼 나머지 축에서 걷는다" },
-    { metric: "멘토 정신축 선택비", role: "reference", min: 1, why: "1500시드 멘토/기본 정신축 선택 횟수" },
     { metric: "19세 축당 시즌 기대", role: "reference", min: 2, max: 3, why: "여유가 찬 유망주의 기본 성장 눈금" },
     { metric: "18세 집중육성 시즌 기대", role: "reference", min: 3.5, max: 5, why: "출전과 집중육성 최대 배율" },
     { metric: "기본 훈련 축 빈도비", role: "reference", max: 3, why: "시즌 달력의 훈련 축 최대/최소 빈도" },
@@ -448,12 +447,6 @@ export const YOUTH_DEVELOPMENT = defineHarness({
     { metric: "무지정 우리 2군 U21 성장", role: "measure", unit: "score", why: "출전 배율만 받은 유망주 — 손잡이 하나의 몫을 가른다" },
     { metric: "타 팀 2군 U21 성장", role: "reference", min: 1.2, max: 3.5, unit: "score", why: "배율이 없는 기준선 — 코어 월간 성장 그대로. 실제 U21의 해마다 +2 안팎, 여유가 작은 선수가 섞여 평균은 그 아래다" },
     { metric: "집중 육성 격차", role: "reference", min: 0.5, unit: "score", why: "집중 육성 − 타 팀 기준선. 0이면 손잡이가 아무것도 가르지 않은 것이다" },
-    { metric: "멘토 자격자", role: "guard", min: 1, unit: "count", why: "우리 1군에서 `mentorBlock`을 통과하는 사람 수 — 서른 넘고 리더십 `MENTOR_LEADERSHIP_MIN` 이상. **0이면 손잡이가 세계에 존재하지 않는다**: 리더십 축은 꼭대기가 70대 중반이라(people.md §5-3) 하한을 몇 칸만 올려도 자격자가 사라진다. 이 줄이 그 선을 지킨다" },
-    { metric: "멘토링 표본", role: "guard", min: 2, unit: "count", why: "시즌 끝까지 사이가 서 있던 우리 2군 U21 — 자격자 하나가 `MENTEES_PER_MENTOR`(3)까지 데리므로 상한이 셋이다. 둘 아래면 아래 두 줄이 격차가 아니라 한 사람의 잡음이다" },
-    { metric: "멘토링 성장 로그", role: "guard", min: 1, unit: "count", why: "`origin === \"mentoring\"`인 성장 줄 수 — **배율이 실제로 곱해졌다는 결정적 증거다.** 격차가 잡음에 묻히는 표본에서도 이 줄은 0이거나 0이 아니다: 정리(`pruneMentoring`)가 사이를 조용히 닫아 버렸거나 축 가르기가 어긋나면 여기가 먼저 0이 된다" },
-    { metric: "멘토링 정신축 성장", role: "measure", unit: "score", why: "멘토가 붙은 우리 2군 U21의 **정신 6축 합** 상승. 종합이 아니라 축 합인 것은 멘토 항이 닿는 자리가 그 여섯뿐이어서다(season.md §2 멘토링) — 종합으로 읽으면 자리별 가중치가 그 몫을 반으로 접는다" },
-    { metric: "무지정 정신축 성장", role: "measure", unit: "score", why: "같은 층·같은 나이의 배율 없는 우리 2군 U21의 같은 값 — 위 줄의 짝이다" },
-    { metric: "멘토링 격차", role: "measure", unit: "score", why: "멘토링 − 무지정(정신축 합). ⚠️ **밴드를 두지 않는다 — 눈금 아래의 값이다.** 항이 1.05~1.25고 한 시즌 정신 6축 합의 상승이 열 몇 칸이라 참값은 두 칸 안쪽인데, 축마다 정수라 표본 셋의 표준오차가 그만큼이다(부호가 동전이다). 항이 사는지는 `growth-curve` 단위 테스트가 같은 시드·같은 난수열에서 지키고, **세계가 그 항을 실제로 곱하는가**는 위의 `멘토링 성장 로그`가 지킨다 — `임대 격차`와 같은 규약이다" },
     { metric: "성실한 U21 표본", role: "guard", min: 20, unit: "count", why: "아래 줄의 분모 — 배율 없는 타 팀 2군 U21 중 `professionalism` ≥ 1.1. 표본이 줄면 격차가 아니라 잡음이다" },
     { metric: "게으른 U21 표본", role: "guard", min: 20, unit: "count", why: "같은 줄의 반대쪽 — `professionalism` ≤ 0.95" },
     { metric: "직업의식 격차", role: "reference", min: 0, unit: "score", why: "성실 − 게으름. 배율이 없는 표본이라 남는 차이는 원형뿐이다 — 0 이하면 계수가 세계에 닿지 않았다 (people.md §6)" },

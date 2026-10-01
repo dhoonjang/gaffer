@@ -33,7 +33,6 @@ import {
   demotionDaysOf,
   grievanceOf,
   lastMatchOf,
-  mentoringFactOf,
   MOOD_FACT_LIMIT,
   MOOD_NOTE_DAYS,
   numberEchoOf,
@@ -112,15 +111,6 @@ export function moodFactsOf(
   if (condition >= CONDITION_LIGHT) facts.push({ cause: "condition", level: "light" });
 
   // ── 곁들임: 지금 조치하지 않으면 놓칠 사정 ──
-  const mentoring = mentoringFactOf(state, player);
-  /**
-   * **끝난 멘토링이 곁들임의 맨 앞이다** (people.md §5) — 데리고 다니던 고참이
-   * 사라진 것은 옆자리 동료가 떠난 것보다 그 아이에게 큰 일이다. 서 있는 사이는
-   * 며칠씩 그대로라 아래(번호의 여운 다음)에 선다.
-   */
-  if (mentoring !== null && mentoring.ended !== undefined) {
-    facts.push(mentoring);
-  }
   /**
    * ⚠️ **`contract` 불만이 걸린 선수에겐 서지 않는다** (people.md §5) — 같은 사실을
    * 불만 카드가 이미 말하고 있어, 두 장 한도 안에서 폼이나 몸을 밀어낼 뿐이다.
@@ -134,10 +124,6 @@ export function moodFactsOf(
   {
     const number = numberEchoOf(state, player);
     if (number) facts.push(number);
-  }
-  // 서 있는 사이 — 번호의 여운 다음이고 라커룸 자리 앞이다 (people.md §5)
-  if (mentoring !== null && mentoring.ended === undefined) {
-    facts.push(mentoring);
   }
   {
     const seat = leaderRoleOf(state, player);

@@ -1,6 +1,5 @@
 import type { Contract, GamePlayer } from "@story-fm/domain";
 import { activeContract, type GameState, releaseFromTactics } from "../core/state";
-import { closeMentoringsFor } from "./mentoring";
 import { forgetRoles } from "./role-memory";
 
 /**
@@ -34,7 +33,7 @@ export function contractExpiresBy(contract: Contract, on: string): boolean {
 /**
  * **떠나는 선수가 남기고 가는 것을 지운다** — 팀을 떠나는 문은 이것 하나다.
  *
- * 전술 배치·개인 훈련·불만·약속·역할 기억·완장·멘토링은 선수가 이 팀에 있을 때만
+ * 전술 배치·개인 훈련·불만·약속·역할 기억·완장은 선수가 이 팀에 있을 때만
  * 뜻이 있는 값이다. 팀을 떠나면 불만도 끝나고(people.md §5), 떠난 사람에게 한 약속은
  * 지킬 자리가 없다 (people.md §5-2).
  */
@@ -46,11 +45,6 @@ export function clearDepartedState(state: GameState, player: GamePlayer, from: s
   forgetRoles(state, player.id);
   player.isCaptain = false;
   player.isViceCaptain = false;
-  /**
-   * **떠나면 사이도 끝난다** (people.md §5-3) — 멘토로 든 것도 멘티로 든 것도 함께.
-   * 지우지 않고 닫으므로 놓인 쪽의 심경이 며칠 그 줄을 읽는다.
-   */
-  closeMentoringsFor(state, player.id, "departure");
 }
 
 /** 계약이 끝난 선수를 무소속으로 보낸다 — 계약은 여기서 끊기고 이동 원장에 한 줄이 선다 */

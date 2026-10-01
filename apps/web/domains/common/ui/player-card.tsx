@@ -1,6 +1,7 @@
 "use client";
 
 import { GrowthOutlook } from "@/domains/common/ui/growth-outlook";
+import { ConditionBar } from "@/domains/common/ui/condition-bar";
 import {
   createContext,
   useCallback,
@@ -319,7 +320,7 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
 
       <div className="pc-facts">
         <Fact label="성장 가능성">
-          <GrowthOutlook overall={card.overall} potential={card.potential} />
+          <GrowthOutlook growth={card.growth} />
         </Fact>
         {card.weeklyWage !== null && <Fact label="현 주급">{formatMoney(card.weeklyWage)}/주</Fact>}
         {card.contractUntil !== null && (
@@ -333,18 +334,11 @@ function PlayerCardBody({ card, inMatch }: { card: PlayerCardView; inMatch: bool
         {ours && (
           <>
             <Fact label="폼">{ours.formLabel}</Fact>
+            {/* 막대의 색이 누적 피로다 — 따로 칸을 두지 않는다 (player.md §5.5) */}
             <Fact label="체력">
-              {ours.condition.value}
+              <ConditionBar c={ours.condition} fatigue={ours.fatigue} /> {ours.condition.value}
               {ours.condition.margin > 0 && <i className="est">±{ours.condition.margin}</i>}
             </Fact>
-            {ours.fatigueBand !== "clear" && (
-              <Fact
-                label="누적"
-                title="누적 피로 — 시즌이 쌓아 둔 잔고다. 회복을 늦추고 부상 위험을 올린다"
-              >
-                <span className={`load ${ours.fatigueBand}`}>{ours.fatigueLabel}</span>
-              </Fact>
-            )}
           </>
         )}
         {card.caps > 0 && (

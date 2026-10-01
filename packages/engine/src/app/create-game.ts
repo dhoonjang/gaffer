@@ -818,7 +818,6 @@ export function createGame(input: CreateGameInput): GameState {
     predictions: [],
     media: [],
     developmentFocus: [],
-    mentoring: [],
     retired: [],
     youthCandidates: [],
     callUps: [],

@@ -72,7 +72,6 @@ import { injuryHistoryOf } from "../../common/players/injury";
 
 /** 라인업 브리프가 「최근 복귀」로 세우는 창 — 심경 카드와 같은 자 (player.md §5.3) */
 const RECENT_RETURN_DAYS = 30;
-import { closeMentorings } from "../../common/players/mentoring";
 import {
   canRegisterAllFor,
   canRegisterFor,
@@ -223,12 +222,6 @@ function applySquadLevel(state: GameState, player: GamePlayer, level: "first" | 
   // 2군에는 완장이 없다 — 라커룸 서열의 후보도 1군뿐이다 (people.md §5-1)
   if (player.isCaptain) player.isCaptain = false;
   if (player.isViceCaptain) player.isViceCaptain = false;
-  /**
-   * **완장이 빠지듯 멘토도 빠진다** (people.md §5-3) — 라커룸의 아침이 갈렸으므로
-   * 그가 맡던 아이들은 여기서 놓인다. ⚠️ 멘티로서 든 사이는 닫지 않는다: 멘티는 두
-   * 층 어디에도 설 수 있다.
-   */
-  const released = closeMentorings(state, (pair) => pair.mentorId === player.id, "squad");
   pushNarrative(state, `${player.name} 2군 이동`, 2);
   /**
    * **배치에서 빠지는 것까지 결과로 말한다** (→ docs/common/team.md §6). 2군은 배치를
@@ -242,12 +235,7 @@ function applySquadLevel(state: GameState, player: GamePlayer, level: "first" | 
       : dropped?.role === "bench"
         ? " — 매치데이 벤치에서 함께 빠집니다"
         : "";
-  /** 조용히 빼면 감독이 모른다 — 놓인 아이의 이름까지 결과가 말한다 */
-  const releasedNote =
-    released.length > 0
-      ? ` · 멘토링이 풀렸습니다 (${released.map((pair) => playerName(state, pair.menteeId)).join(", ")})`
-      : "";
-  return `${josa(player.name, "을/를")} 2군으로 이동했습니다${note}${releasedNote}${dropPositionTraining(state, player)}`;
+  return `${josa(player.name, "을/를")} 2군으로 이동했습니다${note}${dropPositionTraining(state, player)}`;
 }
 
 /**

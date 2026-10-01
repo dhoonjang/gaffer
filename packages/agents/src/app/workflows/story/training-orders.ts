@@ -5,22 +5,12 @@ import { buildRecentTurnsBlock } from "../../../common/context";
 /** `<squad_ops>` — 목록 교체 명령이 지금 목록을 알아야 한다 */
 export function buildSquadOpsBlock(state: GameState): string[] {
   const name = (id: string): string => playerName(state, id);
-  const mentoring = state.mentoring.filter((m) => m.until === undefined);
-  const byMentor = new Map<string, string[]>();
-  for (const m of mentoring)
-    byMentor.set(m.mentorId, [...(byMentor.get(m.mentorId) ?? []), m.menteeId]);
   const focus = state.developmentFocus;
   const youth = state.youthCandidates.filter((c) => c.teamId === state.userTeamId);
   return tagged(
     "squad_ops",
     [
-      `멘토링: ${
-        byMentor.size > 0
-          ? [...byMentor].map(([m, ids]) => `${name(m)} → ${ids.map(name).join("·")}`).join(" / ")
-          : "없음"
-      }`,
       `집중 육성: ${focus.length > 0 ? focus.map(name).join("·") : "없음"}`,
-      `2군 훈련 방침: ${state.reserveTraining ?? "balanced"}`,
       ...(youth.length > 0
         ? [
             `유스 후보 (${youth[0]!.deadline}까지): ${youth

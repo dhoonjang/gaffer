@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ATTRIBUTE_AXES, AXIS_KO } from "../common/player";
+import { ATTRIBUTE_AXES, AXIS_GROUPS, AXIS_KO, type AttributeAxis } from "../common/player";
 
 /**
  * 훈련 효과 대상 — 능력치 16축 + 전술 적응도(tactical) + 회복(recovery).
@@ -19,6 +19,39 @@ export const TRAIN_ATTR_KO: Record<TrainAttr, string> = {
   tactical: "전술",
   recovery: "회복",
 };
+
+/**
+ * 세션 종류의 **부하** — 누적 피로와 훈련 부상이 같은 값을 읽는다 (player.md §5.5).
+ * 갈래는 능력치 카탈로그의 것이고, 능력치 밖의 둘(전술·회복)은 따로 선다.
+ */
+export const SESSION_LOAD = {
+  physical: 1.4,
+  technical: 1,
+  goalkeeping: 1,
+  mental: 0.7,
+  tactical: 0.7,
+  recovery: 0.2,
+} as const;
+
+/** focus가 없는 세션의 부하 — 무엇을 했는지 모르는 세션은 보통의 본훈련으로 친다 */
+export const SESSION_LOAD_DEFAULT = 1;
+
+const AXIS_LOAD = Object.fromEntries(
+  (Object.keys(AXIS_GROUPS) as (keyof typeof AXIS_GROUPS)[]).flatMap((group) =>
+    AXIS_GROUPS[group].map((axis) => [axis, SESSION_LOAD[group]] as const),
+  ),
+) as Record<AttributeAxis, number>;
+
+/** 세션 하나의 부하 — focus 항목마다 갈래의 부하를 읽은 **평균**이다 */
+export function sessionLoad(focus: readonly TrainAttr[]): number {
+  if (focus.length === 0) return SESSION_LOAD_DEFAULT;
+  const sum = focus.reduce(
+    (n, f) =>
+      n + (f === "tactical" || f === "recovery" ? SESSION_LOAD[f] : AXIS_LOAD[f as AttributeAxis]),
+    0,
+  );
+  return sum / focus.length;
+}
 
 /** 훈련 세션 (TRAINING_SESSION) — 자유서술 label + 코어가 쓰는 focus */
 export const TrainingSessionSchema = z.object({

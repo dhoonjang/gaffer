@@ -276,7 +276,7 @@ UCL 우승팀과 UEL 우승팀이) 중립 구장에서 한 번 붙는다
 (§7.4). 장기 부상에서 돌아온 선수를 되찾는 길도 2군 경기가 아니라 팀 훈련이다.
 
 **2군 출전이 성장에 닿는 경로** (`story/players/development.ts`) — 감독 팀 2군의 월간
-성장 확률에 세 배율이 곱해진다:
+성장 확률에 두 배율이 곱해진다:
 
 - **출전 배율**(`reserveAppsBoost`) — 지난달 2군 경기 출전 수에 비례하고 상한이
   있다. 출전은 지난달 장부의 라인업에서 세므로 별도 저장이 없다.
@@ -284,60 +284,32 @@ UCL 우승팀과 UEL 우승팀이) 중립 구장에서 한 번 붙는다
   `DEVELOPMENT_FOCUS_LIMIT`명, 우리 2군만)에게 곱해진다. **승격하면 지정이
   풀린다** — 1군은 결산 판정(LLM)의 몫이라 코어 배율이 닿을 자리가 없다.
   팀을 떠나거나 승격한 선수는 월간 성장이 지정 목록에서 걷어낸다.
-- **멘토 항** — 감독이 고참에게 맡긴 유망주에게, **정신 6축에만** 곱해진다
-  (아래 「멘토링 배율」).
 
-배율은 성장 쪽에만 붙는다 — 노화 하락은 출전과 무관하다. 앞의 둘을 상한까지 다 곱해도
+배율은 성장 쪽에만 붙는다 — 노화 하락은 출전과 무관하다. 둘을 상한까지 다 곱해도
 (`RESERVE_APP_BOOST_MAX` 1.3 × `FOCUS_BOOST` 1.25 → 열여덟의 시즌 기대 축당 +4.8칸)
 1군 결산 경로(경기·훈련마다 판정 — 부지런히 받으면 시즌 +3~4)와 같은 자릿수다 —
 **2군은 자라는 곳이고, 뛰는 곳은 1군이다.** 그 위면 승격이 손해가 되고, 그 아래면 2군이
-배경 시뮬로 돌아간다. 방치한 유망주·집중 육성한 유망주·멘토가 붙은 유망주의 격차는
+배경 시뮬로 돌아간다. 방치한 유망주와 집중 육성한 유망주의 격차는
 `youth-development` 하네스가 잰다 ([balance-harness.md](balance-harness.md)).
 
-#### 2군 훈련 방침 (`set_reserve_training`)
+#### 개인 훈련의 축 (`set_training(player)` — §4)
 
 **배율은 얼마나 빨리 자라는지만 정하고, 어느 쪽으로 자라는지는 정하지 않는다.**
 결산 없는 2군에서 축을 겨냥할 자리는 월간 성장의 **축 선택**뿐이라
 (`rollMonthlyAxes` — 16축이 저마다 제 난수를 굴리고 그중 상한까지 반영된다),
-방침은 거기에 얹힌다.
+개인 훈련이 거기에 얹힌다(`monthlyGrowthMultiplier`):
 
-방침은 넷이고, 축 묶음은 능력치 카탈로그의 갈래를 그대로 쓴다
-([../data/player.md](player.md) §2):
-
-| 코드        | 겨냥하는 축                                                                        |
-| ----------- | ---------------------------------------------------------------------------------- |
-| `balanced`  | 없음 — 기본값이자 방침 해제. 지금까지의 성장 그대로다                              |
-| `physical`  | 신체 4 — `pace` `stamina` `strength` `aerial`                                      |
-| `technical` | 기술 5 — `finishing` `dribbling` `passing` `kicking` `tackling`                    |
-| `mental`    | 정신 6 — `vision` `positioning` `offTheBall` `composure` `aggression` `leadership` |
-
-- **총량을 옮길 뿐 늘리지 않는다.** 겨냥한 축의 성장 확률에
-  `RESERVE_TRAINING_AIM`(1.6)이 곱해지고, 나머지 **필드 15축**에는 합이 방침 없음과
-  같아지는 배율 `(15 − n × 1.6) / (15 − n)`이 곱해진다(n = 겨냥한 축 수). 방침이
-  공짜 상향이면 고르는 일이 아니라 켜는 일이 된다 — 감독이 무엇을 포기했는지가
-  손잡이의 값이다.
-- **`goalkeeping`은 어느 방침에도 들지 않고 눌리지도 않는다.** 한 축뿐인 갈래라
-  겨냥 대상으로 두면 그 방침만 배율이 극단으로 튀고, 눌리게 두면 골키퍼 유망주가
-  감독이 고른 방침 때문에 굳는다. 방침이 닿는 자리는 필드 15축이다.
-- **닿는 대상은 집중 육성과 같은 문이다** — 우리 2군만. 1군은 결산 판정(LLM)의
-  몫이고 타 팀 2군은 우리 코치진의 것이 아니다.
-- 성장 쪽에만 곱해진다 — **노화 하락은 방침과 무관하다**(출전 배율과 같은 규약).
-- 상태에 남는 것은 **코드 하나**다(`GAME_STATE.reserveTraining`). 없으면
-  감독이 고르지 않은 것이고 `balanced`로 읽는다.
-
-**개인 훈련은 같은 축 위에 얹힌다** (`set_training(player)` — §4). 방침은 팀 하나에
-하나라 선수마다 다른 축을 겨냥할 수 없고, 개인 훈련은 한 선수의 한 축을 겨냥한다 —
-둘이 겹치는 자리가 여기다(`monthlyGrowthMultiplier`):
-
-- **개인 훈련의 축도 총량을 옮길 뿐 늘리지 않는다** — 방침과 같은 규약이다.
-  겨냥한 축의 배율에 `PERSONAL_TRAINING_AIM`(2.0)이 곱해지고, 그만큼을 나머지 필드
-  축에서 **비례로** 걷는다(방침이 이미 얹은 배율에 비례해서). 방침이 4\~6축을
-  겨냥하는 자리에서 개인 훈련은 한 축만 겨냥하므로 배율이 더 날카롭고, 걷는 몫도
-  그만큼 크다 — 방침 없이 한 축을 겨냥하면 나머지 필드 14축은 ×13/14다.
-- **합성해도 필드 15축의 배율 합은 15다.** 개인 축이 `goalkeeping`이면 걷을 자리가
+- **총량을 옮길 뿐 늘리지 않는다.** 겨냥한 축의 배율에 `PERSONAL_TRAINING_AIM`(2.0)이
+  곱해지고, 그만큼을 나머지 필드 축에서 **고르게** 걷는다 — 필드 축 하나를 겨냥하면
+  나머지 필드 14축은 ×13/14다. 공짜 상향이면 고르는 일이 아니라 켜는 일이 된다 —
+  감독이 무엇을 포기했는지가 손잡이의 값이다.
+- **필드 15축의 배율 합은 15다.** 개인 축이 `goalkeeping`이면 걷을 자리가
   제 갈래에 없어 필드 15축에서 걷는다 — 그때는 필드 합이 `16 − 2.0`으로 내려가고
   **16축 합이 16**으로 남는다(§8 불변식). 골키퍼 유망주가 겨냥할 축을 잃지 않으면서
   규약도 지키는 쪽이다.
+- **닿는 대상은 집중 육성과 같은 문이다** — 우리 2군만. 1군은 결산 판정(LLM)의
+  몫이고 타 팀 2군은 우리 코치진의 것이 아니다.
+- 성장 쪽에만 곱해진다 — **노화 하락은 개인 훈련과 무관하다**(출전 배율과 같은 규약).
 - **자리(`position`)는 2군에 닿지 않는다.** 자리를 올리는 문은 훈련 결산 하나뿐인데
   ([../data/player.md](player.md) §6.4) 2군은 결산을 받지 않는다. 그래서
   `set_training(player, position)`은 **2군 선수에게 반려된다** — 걸어 두고 기다리게
@@ -346,36 +318,9 @@ UCL 우승팀과 UEL 우승팀이) 중립 구장에서 한 번 붙는다
   거둬지고(감독에게 그렇게 답한다) 축만 남아 월간 성장으로 넘어간다. 승격하면 축은
   그대로 훈련 결산의 허용 축이 된다 — 걸어 둔 축은 어느 층에서도 한 경로에 닿는다.
 
-#### 멘토링 배율 — 고참이 붙어 있는 아이는 정신 축에서 먼저 자란다 (`story/players/mentoring.ts`)
-
-감독이 노장에게 유망주를 맡기면(`set_mentor`) 그 멘티의 **정신 6축** 월간 성장 확률에
-멘토 항(1.05\~1.25)이 곱해진다. 자격·눈금·정리·카드는
-[../data/people.md](../story/people.md) §5-3이 원본이고, 여기 있는 것은 **다른 손잡이와
-어떻게 합성되는가**다.
-
-**곱이다 — 대신 겹치는 축이 여섯뿐이다.**
-
 ```
-정신 6축    = 출전 배율 × 집중 육성 × 방침·개인 훈련의 축 배율 × 직업의식 × 멘토 항
-나머지 10축 = 출전 배율 × 집중 육성 × 방침·개인 훈련의 축 배율 × 직업의식
+16축 = 출전 배율 × 집중 육성 × 개인 훈련의 축 배율 × 직업의식
 ```
-
-- **총량을 옮기지 않는다** — 방침·개인 훈련과 다른 결이다. 그 둘은 훈련 메뉴라 겨냥한
-  만큼을 나머지 축에서 걷지만, 멘토링은 메뉴를 바꾼 것이 아니라 **감독이 사람을 붙여
-  준 것**이다. 얼마나 빨리의 손잡이이므로 출전·집중 육성과 같은 자리에 선다.
-- **꼭대기가 축마다 갈린다.** 열 축은 그대로 **2.0**이고(출전 1.3 × 집중 육성 1.25 ×
-  직업의식 1.25), 정신 6축만 **2.5**까지 열린다. 그 자리에 서려면 넷이 다 맞아야
-  한다 — 격주 2군 일정 만근 · 집중 육성 셋 안 · 표 꼭대기의 직업의식 · 리더십 99의
-  같은 자리 노장. 열여덟이면 그 여섯 축의 시즌 기대가 축당 예닐곱 칸인데, 종합은 16축
-  가중합이라 실제로 오르는 몫은 **그 자리에서 정신 축이 갖는 지분**만큼이다
-  ([../data/player.md](player.md) §2). 축을 가리지 않고 곱했다면 같은 항이
-  종합을 통째로 25% 밀어 올려 「집중 육성 한 칸 더」가 됐을 자리다.
-- **1군 멘티는 결산 흡수 쪽에서 같은 항을 받는다** — 층이 갈려도 배율은 하나다
-  ([../data/player.md](player.md) §6.2).
-- **격차의 근거는 성장 로그에 남는다** — 멘토 항이 실제로 곱해진 줄만 `origin`이
-  `mentoring`이고, 같은 달 같은 선수의 신체·기술 축은 `monthly` 그대로다.
-- 재는 자리는 `youth-development` 하네스의 **멘토링 격차**다
-  ([balance-harness.md](balance-harness.md)).
 
 ## 3. 컵과 대항전이 달력을 차지한다
 
@@ -576,8 +521,9 @@ TrainingReport { from, to, sessions, moved[], marks[] }
 - **`moved`는 판정이 낸 값이 아니라 코어가 남긴 것이다** — 천장에 막혀 한 칸도 안
   오른 `+2`는 카드에도 없다. 성장 로그(`growthLog`)에 적힌 그 줄이 곧 카드의 줄이다.
 - **카드의 `sessions`가 그 결산의 폭이다** — 판정의 눈금(적응도 −1\~3 · 자리 0\~2 ·
-  능력치 한 축 ±1)은 **한 주치**이고, 코어가 반영할 때 `sessions ÷ SESSIONS_PER_WEEK`
-  를 곱한다([../data/player.md](player.md) §6.1). 결산은 턴이 넘긴 구간마다
+  능력치 한 축 ±1)은 **한 주치**이고, 코어가 반영할 때 훈련 날짜마다
+  `그날 세션 수 ÷ SESSIONS_PER_WEEK`를 곱한다([../data/player.md](player.md) §6.1).
+  `moved`의 줄은 날짜마다 따로 쌓인다 — 한 선수가 한 구간에 여러 축·여러 날짜로 선다. 결산은 턴이 넘긴 구간마다
   도므로, 폭이 결산당 고정이면 하루씩 진행하는 감독이 같은 훈련으로 다섯 배를
   가져갔다 — 성장 속도를 정하는 것은 감독의 턴 페이스가 아니라 소화한 세션 수다.
 - **`marks.code`는 갈래 코드 셋**이다 — 문장이 아니라 코드다
@@ -1111,14 +1057,14 @@ id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. 통산
 
 #### 사실 카드 — 코어는 사실만 낸다
 
-후보 줄은 **이름 · 나이 · 주 포지션 · 관측 종합 · 잠재력 구간 · 제안 주급**이다. 물음표도
+후보 줄은 **이름 · 나이 · 주 포지션 · 관측 종합 · 성장 가능성 · 제안 주급**이다. 물음표도
 평가어도 없는 장부 줄이고([../data/people.md](../story/people.md) §4), 인테이크 데이를
 어떤 자리로 열지, 누구를 아깝다고 말할지는 GM이 정한다.
 
 ⚠️ **후보에게는 안개가 낀다** ([player.md](player.md) §9). 계약서에 사인하기 전이라
-훈련장에서 본 것이 전부이고, 그래서 종합은 ±`YOUTH_CANDIDATE_OVERALL_MARGIN`(3)으로,
-잠재력은 ±`YOUTH_CANDIDATE_POTENTIAL_MARGIN`(9) 구간으로만 선다. 참값은 언제나 그 구간 안에 있다 — 안개는 흐릴 뿐 거짓말하지 않는다.
-데려와 뛰게 해야 좁아지는 것도 우리 선수와 같다.
+훈련장에서 본 것이 전부이고, 그래서 종합은 ±`YOUTH_CANDIDATE_OVERALL_MARGIN`(3)으로
+흐리고, 성장 가능성은 참 잠재력에 ±`YOUTH_CANDIDATE_POTENTIAL_FUZZ`(4)의 결정적 오프셋을
+얹은 추정 천장으로 매긴다(player.md §9.1). 계약하면 우리 선수가 되어 참값으로 매긴다.
 
 후보 줄이 서는 곳은 셋이다 — GM 스냅샷의 오프시즌 블록(아래) · 스쿼드 화면 · `get_squad`.
 셋 다 소집일이 지나면 사라진다.
@@ -1227,8 +1173,8 @@ id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. 통산
   수상자여야 한다.
 - **시상도 승강을 적용하기 전에 매긴다** (§6). `recordSeasonHistory`와 같은 창이다 —
   뒤로 밀면 방금 올라온 팀의 선수가 옛 리그의 상을 받는다.
-- **겨냥은 성장의 총량을 옮길 뿐 늘리지 않는다** (§2). 2군 훈련 방침이든 개인
-  훈련이든, 겨냥한 축의 배율이 올라간 만큼 나머지 필드 축이 내려간다 — **16축 배율
+- **겨냥은 성장의 총량을 옮길 뿐 늘리지 않는다** (§2). 개인 훈련이 겨냥한 축의
+  배율이 올라간 만큼 나머지 필드 축이 내려간다 — **16축 배율
   합은 언제나 16**이고, 겨냥한 축이 필드 축이면 **필드 15축 합도 15**로 남는다.
   공짜 상향이면 고르는 일이 아니라 켜는 일이 된다.
 - **훈련장에 선 선수와 결산 대상은 같은 집합이다** (§4). 두 문이 갈리면 훈련 부상만
@@ -1261,22 +1207,21 @@ id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. 통산
 
 ## 코드 위치
 
-| 무엇                                | 어디                                                                                                                                                |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 시즌 달력·리그 편성                 | `packages/engine/src/match/competition/calendar.ts` · `fixtures.ts`                                                                                 |
-| 2군 리그 편성·간이 시뮬             | `packages/engine/src/match/competition/reserve.ts`                                                                                                  |
-| 국내 컵 · 연장·승부차기 · 리그 연기 | `match/competition/domestic-cup.ts` · `extra-time.ts` · `shootout.ts` · `reschedule.ts`                                                             |
-| 유럽 대항전                         | `match/competition/europe.ts` · `euro-knockout.ts` · `euro-prize.ts`                                                                                |
-| 추첨 일정                           | `match/competition/draw-schedule.ts`                                                                                                                |
-| 시즌 리뷰·전환·승강                 | `app/season.ts` · `match/competition/promotion.ts`                                                                                                  |
-| 계약 만료 → 자유계약                | `packages/engine/src/common/players/free-agency.ts` (`FREE_AGENT_TEAM` · `isFreeAgent`) · 이동 원장 `packages/domain/src/common/player-moves.ts`    |
-| 시상 선정·동점 처리                 | `app/season.ts` (`seasonAwards`) · 집계·사슬은 `match/competition/leaderboard.ts`                                                                   |
-| 은퇴 판정·예고·명부                 | `app/season.ts` (`retirementVerdict`·`declareRetirements`)                                                                                          |
-| 유스 인테이크 — 후보·결정·기본값    | `app/season.ts` (`youthIntakeOf`·`ourYouthCandidates`·`signYouthCandidates`·`settleYouthIntake`) · `story/commands/training.ts` (`signYouth`)       |
-| 마지막 홈경기 회견                  | `packages/engine/src/story/world/press.ts` · `packages/engine/src/app/workflows/story/world/press.ts` (`farewell`)                                  |
-| 오프시즌 사실 블록(은퇴·시상·유스)  | `packages/agents/src/app/gm-input.ts`                                                                                                               |
-| 2군 훈련 방침                       | `packages/domain/src/common/player-development.ts` (코드) · `story/players/training-plan.ts` (축 묶음·배율) · `story/players/development.ts` (적용) |
-| tick·시간 진행                      | `packages/engine/src/app/tick.ts` · `common/core/dates.ts`                                                                                          |
-| 훈련 계획·결산                      | `packages/engine/src/story/players/training-plan.ts` · `training-report.ts`                                                                         |
-| 온보딩                              | `packages/engine/src/story/people/onboarding.ts`                                                                                                    |
-| 온보딩 화면(리그→팀→감독 단계)      | `apps/web/app/new/page.tsx`                                                                                                                         |
+| 무엇                                | 어디                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 시즌 달력·리그 편성                 | `packages/engine/src/match/competition/calendar.ts` · `fixtures.ts`                                                                              |
+| 2군 리그 편성·간이 시뮬             | `packages/engine/src/match/competition/reserve.ts`                                                                                               |
+| 국내 컵 · 연장·승부차기 · 리그 연기 | `match/competition/domestic-cup.ts` · `extra-time.ts` · `shootout.ts` · `reschedule.ts`                                                          |
+| 유럽 대항전                         | `match/competition/europe.ts` · `euro-knockout.ts` · `euro-prize.ts`                                                                             |
+| 추첨 일정                           | `match/competition/draw-schedule.ts`                                                                                                             |
+| 시즌 리뷰·전환·승강                 | `app/season.ts` · `match/competition/promotion.ts`                                                                                               |
+| 계약 만료 → 자유계약                | `packages/engine/src/common/players/free-agency.ts` (`FREE_AGENT_TEAM` · `isFreeAgent`) · 이동 원장 `packages/domain/src/common/player-moves.ts` |
+| 시상 선정·동점 처리                 | `app/season.ts` (`seasonAwards`) · 집계·사슬은 `match/competition/leaderboard.ts`                                                                |
+| 은퇴 판정·예고·명부                 | `app/season.ts` (`retirementVerdict`·`declareRetirements`)                                                                                       |
+| 유스 인테이크 — 후보·결정·기본값    | `app/season.ts` (`youthIntakeOf`·`ourYouthCandidates`·`signYouthCandidates`·`settleYouthIntake`) · `story/commands/training.ts` (`signYouth`)    |
+| 마지막 홈경기 회견                  | `packages/engine/src/story/world/press.ts` · `packages/engine/src/app/workflows/story/world/press.ts` (`farewell`)                               |
+| 오프시즌 사실 블록(은퇴·시상·유스)  | `packages/agents/src/app/gm-input.ts`                                                                                                            |
+| tick·시간 진행                      | `packages/engine/src/app/tick.ts` · `common/core/dates.ts`                                                                                       |
+| 훈련 계획·결산                      | `packages/engine/src/story/players/training-plan.ts` · `training-report.ts`                                                                      |
+| 온보딩                              | `packages/engine/src/story/people/onboarding.ts`                                                                                                 |
+| 온보딩 화면(리그→팀→감독 단계)      | `apps/web/app/new/page.tsx`                                                                                                                      |

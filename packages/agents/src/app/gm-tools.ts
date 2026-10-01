@@ -9,7 +9,8 @@ import {
   PROMISE_KIND_MEANING,
   SQUAD_NUMBER_MAX,
   ATTRIBUTE_AXES,
-  RESERVE_TRAINING_POLICIES,
+  GROWTH_OUTLOOKS,
+  GROWTH_OUTLOOK_KO,
   TRANSITION_MODES,
   TACKLING_LEVELS,
   KEEPER_DISTRIBUTIONS,
@@ -36,8 +37,6 @@ import {
   setSquadNumber,
   setDevelopmentFocus,
   signYouth,
-  setMentor,
-  setReserveTraining,
   setTactics,
   setPlayerTactic,
   setShootoutOrder,
@@ -101,9 +100,6 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   // 선수단 운영 — training-orders의 ops (평시)
   "set_training",
   "set_development_focus",
-  "set_mentor",
-  "set_reserve_training",
-  "set_squad_number",
   "sign_youth",
   // 재정 — finance-orders의 ops
   "request_board",
@@ -122,9 +118,6 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   set_shootout_order: "승부차기 키커 순서",
   set_training: "훈련 지정",
   set_development_focus: "집중 육성",
-  set_mentor: "멘토링",
-  set_reserve_training: "2군 훈련 방침",
-  set_squad_number: "등번호",
   sign_youth: "유스 첫 계약",
   request_board: "보드에 요청 — 구장 증설",
   set_ticket_price: "티켓 가격",
@@ -463,7 +456,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
     ),
     wrap(
       "set_squad_number",
-      CORE_COMMAND_LABELS.set_squad_number!,
+      descriptions.set_squad_number,
       z.object({
         playerId: playerRef.describe("번호를 줄 선수"),
         number: z.number().int().min(1).max(99).describe("등번호 — 1~99"),
@@ -499,29 +492,6 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .describe("첫 프로 계약을 줄 유스 후보 — 생략하면 전원 방출. 한 번의 확정이다"),
       }),
       (input) => signYouth(state, input),
-    ),
-    wrap(
-      "set_mentor",
-      CORE_COMMAND_LABELS.set_mentor!,
-      z.object({
-        mentorId: playerRef.describe("유망주를 맡을 고참 — 1군 30세 이상 · 리더십 55 이상"),
-        menteeIds: z
-          .array(playerRef)
-          .min(1)
-          .optional()
-          .describe("그 멘토가 맡을 23세 이하 선수 — 지정 전체를 다시 적는다. 생략하면 다 푼다"),
-      }),
-      (input) => setMentor(state, input),
-    ),
-    wrap(
-      "set_reserve_training",
-      CORE_COMMAND_LABELS.set_reserve_training!,
-      z.object({
-        policy: z
-          .enum(RESERVE_TRAINING_POLICIES)
-          .describe("겨냥할 갈래 — physical 신체 · technical 기술 · mental 정신 · balanced 해제"),
-      }),
-      (input) => setReserveTraining(state, input),
     ),
     wrap(
       "set_tactics",
@@ -821,7 +791,11 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           homegrown: z
             .boolean()
             .describe("우리 협회 기준 홈그로운인가 — 등록 명단 8명 규칙의 자격"),
-          minPotential: z.number().int().min(1).max(99).describe("잠재력 추정 구간의 하한"),
+          minGrowth: z
+            .enum(GROWTH_OUTLOOKS)
+            .describe(
+              `성장 가능성 하한 — ${GROWTH_OUTLOOKS.map((k) => `${k}(${GROWTH_OUTLOOK_KO[k]})`).join(" · ")}`,
+            ),
           knowledge: z
             .enum(["own", "seen", "rumoured"])
             .describe("최소 지식 수준 — seen이면 직접 상대해 봤거나 그보다 잘 아는 선수만"),
@@ -836,7 +810,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
             "contract",
             "assists",
             "seasonRating",
-            "potential",
+            "growth",
           ]),
           limit: z.number().int().min(1).max(15),
           playerId: playerRef.describe(

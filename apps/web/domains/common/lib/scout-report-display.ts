@@ -22,25 +22,3 @@ const TONE_OF_TIER: Record<RatingTier, "top" | "strong" | "solid" | "low"> = {
 export function ratingTone(value: number): "top" | "strong" | "solid" | "low" {
   return TONE_OF_TIER[ratingTier(value)];
 }
-
-export const GROWTH_LABELS = ["매우 낮음", "낮음", "보통", "높음", "매우 높음", "탁월함"] as const;
-
-/** 관측된 성장 여지의 단계. 배치 전력이나 참 잠재력은 입력으로 받지 않는다. */
-export function growthTier(
-  overall: number | null,
-  potential: { low: number; high: number } | null,
-): number | null {
-  if (overall === null || potential === null) return null;
-  const ceiling = (potential.low + potential.high) / 2;
-  const headroom = Math.max(0, ceiling - overall);
-  const tier = [3, 6, 10, 15, 20].findIndex((ceiling) => headroom < ceiling);
-  if (tier !== -1) return tier;
-  const ceilingTier = ratingTier(ceiling);
-  return ceilingTier === "elite" || ceilingTier === "world" ? 5 : 4;
-}
-
-/** Stored observation intervals remain intervals; missing evidence stays unknown. */
-export function observationRange(range: { low: number; high: number } | null): string {
-  if (range === null) return "판단 보류";
-  return range.low === range.high ? String(range.low) : `${range.low}–${range.high}`;
-}

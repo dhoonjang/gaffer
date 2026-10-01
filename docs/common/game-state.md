@@ -233,21 +233,20 @@
 전부 `gamePlayerId`로 선수를 참조한다. 공통 패턴: **현재 상태 = 아직 닫히지 않은
 row, 지난 일 = 그대로 이력.**
 
-| 엔티티                             | 무엇 · "현재"의 표현                                                                                                      | 정의                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `injuries` `Injury`                | 부위·심각도·원인 — `returnedOn === null`이 현재 부상                                                                      | `packages/domain/src/common/health.ts`             |
-| `bookings` `Booking`               | 경고·퇴장 (경기·대회·분) — 누적은 대회 안에서만 쌓인다                                                                    | `packages/domain/src/common/discipline.ts`         |
-| `suspensions` `Suspension`         | 정지 — `status === "active"`, 잔여는 `length − served`. `competitionId`·`scope`가 걸리는 경기를 정한다                    | `packages/domain/src/common/discipline.ts`         |
-| `moves` `PlayerMove`               | **팀 변경 원장** — 계약 만료·유스 첫 계약·보강·은퇴                                                                       | `packages/domain/src/common/player-moves.ts`       |
-| `growthLog` `GrowthEntry`          | 성장 한 칸 — 대상은 축·`pos:CODE`·`tactical`, 출처는 `origin` 코드. **감독 팀 선수만** (아래 ⚠️)                          | `packages/domain/src/common/player-development.ts` |
-| `trainingReports` `TrainingReport` | 훈련 결산 카드 — 한 구간(`from`~`to`)이 남긴 것: 세션 수 · `moved` · `marks`(갈래 코드와 근거 한 줄). 40장 링             | `packages/domain/src/common/player-development.ts` |
-| `seasonStats` `SeasonStat`         | 시즌 × 팀 × **대회** — 출전·출전 분·득점·도움·`ratingSum`·슛·xG·선방·클린시트·카드 (2군은 `reserve*`로 갈린다)            | `packages/domain/src/common/player-statistics.ts`  |
-| `issues` `PlayerIssue`             | 라커룸 불만 (`unhappy`)                                                                                                   | `packages/domain/src/common/player-issues.ts`      |
-| `mentoring` `Mentoring`            | **멘토링 쌍** — 감독이 붙여 준 고참과 유망주. `until === undefined`가 서 있는 사이 ([people.md](../story/people.md) §5-3) | `packages/domain/src/story/mentoring.ts`           |
-| `playerTraining` `PlayerTraining`  | 개인 훈련 — 겨냥한 축(1·2군) · 배우는 자리(1군만)                                                                         | `packages/domain/src/common/player-promises.ts`    |
-| `roleMemory` `RoleMemory`          | 역할 기억 — 선수 × 자리 → 마지막에 맡긴 역할                                                                              | `domain/tactics.ts`                                |
-| `milestones` `Milestone`           | 마일스톤 — 데뷔·첫 골·구단 통산 문턱·해트트릭. **감독 팀 선수만** (아래 ⚠️)                                               | `packages/domain/src/common/player-statistics.ts`  |
-| `retired` `RetiredPlayer`          | **은퇴 명부** — 그만둔 사람의 id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. **감독 팀에서 은퇴한 선수만**              | `packages/domain/src/story/career-records.ts`      |
+| 엔티티                             | 무엇 · "현재"의 표현                                                                                           | 정의                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `injuries` `Injury`                | 부위·심각도·원인 — `returnedOn === null`이 현재 부상                                                           | `packages/domain/src/common/health.ts`             |
+| `bookings` `Booking`               | 경고·퇴장 (경기·대회·분) — 누적은 대회 안에서만 쌓인다                                                         | `packages/domain/src/common/discipline.ts`         |
+| `suspensions` `Suspension`         | 정지 — `status === "active"`, 잔여는 `length − served`. `competitionId`·`scope`가 걸리는 경기를 정한다         | `packages/domain/src/common/discipline.ts`         |
+| `moves` `PlayerMove`               | **팀 변경 원장** — 계약 만료·유스 첫 계약·보강·은퇴                                                            | `packages/domain/src/common/player-moves.ts`       |
+| `growthLog` `GrowthEntry`          | 성장 한 칸 — 대상은 축·`pos:CODE`·`tactical`, 출처는 `origin` 코드. **감독 팀 선수만** (아래 ⚠️)               | `packages/domain/src/common/player-development.ts` |
+| `trainingReports` `TrainingReport` | 훈련 결산 카드 — 한 구간(`from`~`to`)이 남긴 것: 세션 수 · `moved` · `marks`(갈래 코드와 근거 한 줄). 40장 링  | `packages/domain/src/common/player-development.ts` |
+| `seasonStats` `SeasonStat`         | 시즌 × 팀 × **대회** — 출전·출전 분·득점·도움·`ratingSum`·슛·xG·선방·클린시트·카드 (2군은 `reserve*`로 갈린다) | `packages/domain/src/common/player-statistics.ts`  |
+| `issues` `PlayerIssue`             | 라커룸 불만 (`unhappy`)                                                                                        | `packages/domain/src/common/player-issues.ts`      |
+| `playerTraining` `PlayerTraining`  | 개인 훈련 — 겨냥한 축(1·2군) · 배우는 자리(1군만)                                                              | `packages/domain/src/common/player-promises.ts`    |
+| `roleMemory` `RoleMemory`          | 역할 기억 — 선수 × 자리 → 마지막에 맡긴 역할                                                                   | `domain/tactics.ts`                                |
+| `milestones` `Milestone`           | 마일스톤 — 데뷔·첫 골·구단 통산 문턱·해트트릭. **감독 팀 선수만** (아래 ⚠️)                                    | `packages/domain/src/common/player-statistics.ts`  |
+| `retired` `RetiredPlayer`          | **은퇴 명부** — 그만둔 사람의 id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. **감독 팀에서 은퇴한 선수만**   | `packages/domain/src/story/career-records.ts`      |
 
 ⚠️ **`growthLog`는 감독 팀 선수 것만 담는다.** 4,000행에서 오래된 쪽부터 잘리는
 로그인데, 코어 월간 성장(`developsByCore` — 우리 2군 + 모든 타 팀)을 전부 남기면
@@ -416,7 +415,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 17`** (`app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다.
+**`SAVE_VERSION = 18`** (`app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 
 **마이그레이션은 없다.** 옛 모양의 세이브를 지금 모양으로 옮기는 코드를 두지 않는다 —

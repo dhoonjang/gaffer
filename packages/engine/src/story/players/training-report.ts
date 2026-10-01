@@ -19,7 +19,6 @@ import {
   type TrainingMark,
   TRAINING_MARKS,
 } from "@story-fm/domain";
-import { mentorFactorFor } from "./mentoring";
 import { turnFactLines } from "../../common/core/turn-facts";
 import { SESSIONS_PER_WEEK } from "./training-plan";
 
@@ -81,12 +80,7 @@ export function buildTrainingBrief(
     // 개인 훈련 축은 팀 세션에 없어도 그 선수의 허용 축이다 — 판정자에게도 알린다
     const personal = attributeAxisOf(program?.axis);
     if (personal) axes.add(personal);
-    const mentor = mentorFactorFor(state, player.id);
     subjects.push({
-      // 배율은 소수 둘째 자리까지 — 사실이되 판정자가 읽을 눈금이다
-      mentor: mentor
-        ? { name: mentor.mentor.name, boost: Math.round(mentor.boost * 100) / 100 }
-        : null,
       program: program
         ? {
             ...(program.axis ? { axis: program.axis } : {}),
@@ -216,13 +210,60 @@ export const POSITION_TRAIN_MAX = 2;
  * 때문이다 — 지친 선수를 굴리면 오히려 흐트러진다.
  *
  * 판정자는 구간의 길이와 상관없이 이 사다리를 그대로 내고, 실제 폭은 코어가
- * `settlementWeeks()`로 접는다.
+ * 훈련 날짜마다 `settlementWeeks()`로 접어 나눠 반영한다.
  */
 export const TACTIC_GAIN_MIN = -1;
 
 export const TACTIC_GAIN_MAX = 3;
 
+/** 능력치를 움직일 수 있는 인원 — **훈련 날짜(칸)마다** 선다 (player.md §6.1) */
 export const TRAINING_ATTR_CAP = 6;
+
+/** 한 결산 판정이 실을 수 있는 질문 수 — 평가기 한 요청의 한도다 (agents.md §4) */
+export const TRAINING_QUESTION_LIMIT = 512;
+
+/** 날짜와 무관하게 선수마다 서는 질문 — 전술 적응도 · 태도 (전향 중이면 자리가 하나 더) */
+const SUBJECT_QUESTIONS = 2;
+
+/**
+ * 능력치 판정의 칸 하나 — 이어진 훈련 날짜 하나 이상. 판정은 칸의 마지막 날짜에 남고,
+ * 폭은 칸에 든 세션 수가 정한다.
+ */
+export interface TrainingSlot {
+  /** 칸의 마지막 훈련 날짜 — 판정이 장부에 서는 날 */
+  date: string;
+  dates: string[];
+  sessions: number;
+}
+
+/**
+ * 훈련 날짜 → 능력치 판정 칸. **날짜마다 한 칸이 기본이다** — 질문이
+ * `TRAINING_QUESTION_LIMIT`을 넘을 때만 이어진 날짜를 고르게 합친다. 판정자와 코어가
+ * 이 함수 하나를 읽으므로 칸이 두 벌로 갈리지 않는다.
+ */
+export function trainingSlots(brief: TrainingBrief): TrainingSlot[] {
+  const byDate = new Map<string, number>();
+  for (const s of brief.sessions) byDate.set(s.date, (byDate.get(s.date) ?? 0) + 1);
+  const dates = [...byDate.keys()];
+  if (dates.length === 0) return [];
+  const fixed = brief.subjects.reduce(
+    (n, subject) => n + SUBJECT_QUESTIONS + (subject.program?.position ? 1 : 0),
+    0,
+  );
+  const room = Math.floor((TRAINING_QUESTION_LIMIT - fixed) / Math.max(1, brief.subjects.length));
+  const count = Math.max(1, Math.min(dates.length, room));
+  return Array.from({ length: count }, (_, k) => {
+    const group = dates.slice(
+      Math.floor((k * dates.length) / count),
+      Math.floor(((k + 1) * dates.length) / count),
+    );
+    return {
+      date: group[group.length - 1]!,
+      dates: group,
+      sessions: group.reduce((n, d) => n + byDate.get(d)!, 0),
+    };
+  });
+}
 
 /**
  * 이 결산이 덮는 **주 수** — 판정의 눈금을 실제 폭으로 접는 배율이다.
@@ -277,13 +318,6 @@ export interface TrainingSubject {
    * 가져갈 수 있다 (`allowedAxesFor`).
    */
   program: { axis?: string; position?: string } | null;
-  /**
-   * 감독이 이 선수에게 붙여 준 **멘토** (없으면 null · people.md §5-3).
-   *
-   * `boost`는 그 선수의 **정신 6축 상승에만** 곱해지는 배율이다 — 어느 축이
-   * 그 문을 지나는지는 코어가 가르므로(`mentorAxisBoost`) 판정자는 사실만 읽는다.
-   */
-  mentor: { name: string; boost: number } | null;
 }
 
 /** 한 구간의 훈련 결산 브리프 — LLM 입력의 원본 */
@@ -310,14 +344,23 @@ export interface TrainingBrief {
 }
 
 /** LLM이 돌려주는 선수 한 명의 결과 */
+/** 한 훈련 날짜(칸)의 능력치 판정 — `date`는 그 칸의 마지막 날짜다 (`trainingSlots`) */
+export interface TrainingAttributeChange {
+  date: string;
+  axis: AttributeAxis | null;
+  /** 방향 — −1 또는 +1 */
+  step?: number | null;
+}
+
 export interface TrainingOutcome {
   playerId: string;
-  /** 이 구간의 전술 적응도 변화 — −1~3. 밖은 코어가 잘라 낸다 */
+  /** 이 구간의 전술 적응도 변화 (한 주치 눈금) — −1~3. 밖은 코어가 잘라 낸다 */
   tacticGain: number;
-  /** 이 구간에 움직일 축 하나. 없으면 null */
-  attribute: AttributeAxis | null;
-  /** 그 축의 방향 — −1 또는 +1 */
-  attributeStep?: number | null;
+  /**
+   * 훈련 날짜마다의 능력치 판정 — **칸 하나에 한 줄까지.** 한 선수가 한 구간에 여러
+   * 날짜·여러 축을 움직일 수 있다. 판정이 없는 날짜는 적지 않는다.
+   */
+  attributes?: readonly TrainingAttributeChange[];
   /**
    * 배우는 자리의 적응도 변화 — **개인 훈련에 `position`이 걸린 선수만.**
    * 0~2로 가둔다. 자리는 커리어가 만드는 것이라 경기 한 번(+1)보다 크게 오르지
@@ -334,13 +377,6 @@ export interface TrainingOutcome {
    * 없던 구간을 구분할 수 없다.
    */
   mark?: TrainingMark | null;
-  /**
-   * 이 변화가 나온 **훈련 날짜** — 목록의 세션 중 하나.
-   *
-   * 없거나 그 구간 밖이면 마지막 세션 날짜로 떨어진다. 이게 없으면 일주일치 훈련
-   * 결과가 **판정을 돌린 하루에** 통째로 찍혀, 달력에서 "언제 뭐가 붙었나"를 볼 수 없다.
-   */
-  date?: string;
 }
 
 export const CHAT_KEEP = 12;

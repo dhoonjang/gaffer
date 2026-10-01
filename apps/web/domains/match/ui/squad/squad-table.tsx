@@ -353,7 +353,8 @@ export function SquadTable({
               {/* 사기·피로를 하나로 합친 값 — 왜 이 값인지는 행을 펼치면 한 문장으로 나온다.
                   경기 중에는 판세 탭과 같은 읽은 값이라 막대에 모르는 폭이 붙는다 */}
               <td title={inMatch ? undefined : moodSentence(p.mood)}>
-                <ConditionBar c={p.condition} />
+                {/* 경기 밖에서는 색이 누적 피로다 — 경기 중에는 판세 탭처럼 오늘 남은 다리로 칠한다 */}
+                <ConditionBar c={p.condition} fatigue={inMatch ? undefined : p.fatigue} />
               </td>
               {/* 골 대신 평점 — 골 수는 행을 펼치면 시즌 기록에 그대로 있다 */}
               <td

@@ -14,6 +14,7 @@ import {
   TACTIC_GAIN_MAX,
   TACTIC_GAIN_MIN,
   POSITION_TRAIN_MAX,
+  TRAINING_QUESTION_LIMIT,
   applyTrainingOutcomes,
   trainingSettled,
   userPlayers,
@@ -354,7 +355,6 @@ function trainingBrief(): TrainingBrief {
     overall: 70,
     apps: 0,
     rating: null,
-    mentor: { name: "선배", boost: 1.2 },
   };
   return {
     teamName: "훈련팀",
@@ -408,7 +408,7 @@ function trainingAnswers(request: EvaluationRequest): EvaluationResult {
           ];
         }
         if (question.type !== "choice") throw new Error("unexpected noul");
-        const choice = Object.hasOwn(question.criteria, "none") ? "none" : "d0";
+        const choice = "none";
         return [
           key,
           {
@@ -450,11 +450,14 @@ describe("typed training evaluation", () => {
   it("batches every subject, restricts personal axes, preserves facts and maps continuous levels", async () => {
     const brief = trainingBrief();
     const evaluate = vi.fn<GameEvaluator["evaluate"]>(async (request) => {
-      expect(JSON.parse(request.state).brief.subjects[0].mentor).toEqual(brief.subjects[0]!.mentor);
-      expect(request.questions.p0_attribute?.criteria).toHaveProperty("pace_up");
-      expect(request.questions.p1_attribute?.criteria).not.toHaveProperty("pace_up");
-      expect(request.questions.p1_attribute?.criteria).toHaveProperty("passing_down");
+      // 능력치 질문은 훈련 날짜마다 선다 — 두 날짜면 두 칸이다
+      expect(request.questions.p0_d0?.criteria).toHaveProperty("pace_up");
+      expect(request.questions.p0_d1?.criteria).toHaveProperty("pace_up");
+      expect(request.questions).not.toHaveProperty("p0_d2");
+      expect(request.questions.p1_d0?.criteria).not.toHaveProperty("pace_up");
+      expect(request.questions.p1_d0?.criteria).toHaveProperty("passing_down");
       expect(request.questions).not.toHaveProperty("p1_position");
+      expect(request.questions).not.toHaveProperty("p0_date");
       for (const [key, question] of Object.entries(request.questions))
         expect(question.instructions).toContain(key.startsWith("p0_") ? "p1" : "p2");
       const result = trainingAnswers(request);
@@ -481,9 +484,9 @@ describe("typed training evaluation", () => {
           position.criteria.map((_, i) => [String(i), i === POSITION_TRAIN_MAX ? 1 : 0]),
         ),
       };
-      selectTraining(request, result, "p0_attribute", "pace_down");
+      selectTraining(request, result, "p0_d0", "passing_up");
+      selectTraining(request, result, "p0_d1", "pace_down");
       selectTraining(request, result, "p0_mark", "tired");
-      selectTraining(request, result, "p0_date", "d1");
       return result;
     });
     const result = await evaluateTraining(brief, { evaluate });
@@ -493,29 +496,29 @@ describe("typed training evaluation", () => {
       playerId: "p1",
       tacticGain: 1.5 + TACTIC_GAIN_MIN,
       positionGain: POSITION_TRAIN_MAX,
-      attribute: "pace",
-      attributeStep: -1,
+      attributes: [
+        { date: "2026-07-02", axis: "passing", step: 1 },
+        { date: "2026-07-03", axis: "pace", step: -1 },
+      ],
       mark: "tired",
-      date: "2026-07-03",
       note: "",
     });
     expect(result[1]).toMatchObject({
       playerId: "p2",
       positionGain: null,
-      attribute: null,
+      attributes: [],
       mark: null,
       note: "",
     });
   });
 
-  it("abstains on tied discrete fields and delegates date fallback to the core", async () => {
+  it("abstains on tied discrete fields", async () => {
     const evaluator: GameEvaluator = {
       evaluate: async (request) => {
         const result = trainingAnswers(request);
         for (const [key, alternative] of [
-          ["p0_attribute", "pace_up"],
+          ["p0_d0", "pace_up"],
           ["p0_mark", "standout"],
-          ["p0_date", "d1"],
         ]) {
           const original = result.answers[key!];
           if (original?.type !== "choice") throw new Error("expected choice");
@@ -533,8 +536,7 @@ describe("typed training evaluation", () => {
       },
     };
     const [outcome] = await evaluateTraining(trainingBrief(), evaluator);
-    expect(outcome).toMatchObject({ attribute: null, attributeStep: null, mark: null });
-    expect(outcome).not.toHaveProperty("date");
+    expect(outcome).toMatchObject({ attributes: [], mark: null });
   });
 
   it.each(["missing", "extra", "wrong key", "invalid mass", "inconsistent score", "forged choice"])(
@@ -554,8 +556,7 @@ describe("typed training evaluation", () => {
             if (failure === "invalid mass") answer.probabilities["0"] = 0.1;
             if (failure === "inconsistent score") answer.score += 0.1;
           }
-          if (failure === "forged choice")
-            selectTraining(request, result, "p1_attribute", "pace_up");
+          if (failure === "forged choice") selectTraining(request, result, "p1_d0", "pace_up");
           return result;
         },
       };
@@ -563,20 +564,19 @@ describe("typed training evaluation", () => {
     },
   );
 
-  it("rejects duplicate subjects or overflowing date candidates without truncating", () => {
+  it("rejects duplicate subjects and keeps a long interval inside the question limit", () => {
     const brief = trainingBrief();
     expect(() =>
       buildTrainingRequest({ ...brief, subjects: [brief.subjects[0]!, brief.subjects[0]!] }),
     ).toThrow("중복");
-    expect(() =>
-      buildTrainingRequest({
-        ...brief,
-        sessions: Array.from({ length: 256 }, (_, i) => ({
-          ...brief.sessions[0]!,
-          date: `date-${i}`,
-        })),
-      }),
-    ).toThrow("한도");
+    const long = buildTrainingRequest({
+      ...brief,
+      sessions: Array.from({ length: 400 }, (_, i) => ({
+        ...brief.sessions[0]!,
+        date: `date-${String(i).padStart(3, "0")}`,
+      })),
+    });
+    expect(Object.keys(long.questions).length).toBeLessThanOrEqual(TRAINING_QUESTION_LIMIT);
   });
 });
 
