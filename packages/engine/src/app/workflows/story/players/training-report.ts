@@ -11,6 +11,7 @@ import {
   type TrainedSession,
   teamAxesOf,
   settlementWeeks,
+  trainingSlots,
   TRAINING_ATTR_CAP,
   clampGain,
   POSITION_TRAIN_MAX,
@@ -49,13 +50,21 @@ export function applyTrainingOutcomes(
    */
   if (trainingSettled(state, brief)) return null;
   /**
-   * 판정이 가리킨 훈련 날짜 → 그 세션 (없으면 마지막 세션).
-   * 하루에 두 세션이면 **먼저 있던 쪽**(오전)에 붙인다 — 판정은 날짜까지만 답한다.
+   * 훈련 날짜 → 그 날의 첫 세션(오전)과 세션 수. **반영의 단위는 날짜다** (player.md §6.1) —
+   * 날짜마다 그날의 몫(`세션 수 ÷ SESSIONS_PER_WEEK`)만 접어 그 날짜로 장부에 남기므로,
+   * 구간을 한 번에 넘기든 나눠 넘기든 같은 날짜가 같은 몫을 받는다.
    */
-  const sessionsByDate = new Map<string, TrainedSession>();
-  for (const s of brief.sessions) if (!sessionsByDate.has(s.date)) sessionsByDate.set(s.date, s);
-  const fallback = brief.sessions[brief.sessions.length - 1]!;
-  const sessionFor = (date?: string) => (date && sessionsByDate.get(date)) || fallback;
+  const days = new Map<string, { session: TrainedSession; weeks: number }>();
+  for (const s of brief.sessions) {
+    const day = days.get(s.date);
+    if (day) day.weeks += settlementWeeks(1);
+    else days.set(s.date, { session: s, weeks: settlementWeeks(1) });
+  }
+  /** 능력치 판정의 칸 — 판정자가 질문을 세운 그 함수다 */
+  const slots = trainingSlots(brief);
+  const slotIndex = new Map(slots.map((slot, k) => [slot.date, k] as const));
+  /** 칸마다 인원 상한을 센다 */
+  const attrSpent = slots.map(() => 0);
   const assignments = new Map(
     assignmentsOf(state, state.userTeamId).map((a) => [a.playerId, a] as const),
   );
@@ -65,17 +74,10 @@ export function applyTrainingOutcomes(
   /**
    * 카드에 실릴 것 — **장부가 실제로 움직인 것만.** 판정이 낸 값이 아니라
    * `recordGrowth`가 남긴 줄과 같은 눈금이라, 천장에 막혀 한 칸도 안 오른 `+2`는
-   * 여기에도 없다.
+   * 여기에도 없다. 날짜마다 따로 쌓인다.
    */
   const moved: TrainingReport["moved"] = [];
   const marks: TrainingReport["marks"] = [];
-  let attrSpent = 0;
-  /**
-   * 이 결산의 폭 — 판정의 눈금은 한 주치이고, 소화된 세션 수만큼만 접어 반영한다.
-   * 표식(`marks`)에는 곱하지 않는다 — 눈에 띈 것은 사실이지 양이 아니다.
-   */
-  const weeks = settlementWeeks(brief.sessions.length);
-  const attrCap = TRAINING_ATTR_CAP;
 
   // 같은 판정에 같은 선수가 두 줄로 오면 **첫 줄만** 받는다 — 두 줄째까지 받으면
   // 한 결산이 그 선수에게 밴드의 두 배를 남긴다 (docs/common/llm/agents.md §4)
@@ -94,13 +96,11 @@ export function applyTrainingOutcomes(
     if (player.teamId !== state.userTeamId) continue;
 
     // ① 전술 적응도 — **여기가 유일한 변화 경로다.** 코어는 훈련 중에 아무것도
-    //    올리지 않았다. 얼마나 스몄는지는 이 판정이 정하고, 코어는 −1~3으로 가둔다.
+    //    올리지 않았다. 구간 판정 하나를 날짜마다 그날의 몫으로 나눠 얹는다.
     const assignment = assignments.get(outcome.playerId);
-    // 이 변화가 나온 훈련 날짜 — 판정이 가리킨 세션 (없으면 마지막)
-    const session = sessionFor(outcome.date);
-    if (assignment) {
-      const gain = clampGain(outcome.tacticGain);
-      if (gain !== 0) {
+    const gain = clampGain(outcome.tacticGain);
+    if (assignment && gain !== 0) {
+      for (const { session, weeks } of days.values()) {
         const before = assignment.familiarity;
         // 상승은 **위로 갈수록 깎이고, 잘 읽는 선수가 더 가져간다** — 소수로 쌓인다.
         assignment.familiarity = applyFamiliarityGain(
@@ -109,8 +109,7 @@ export function applyTrainingOutcomes(
           "training",
           tacticalUptake(player.attributes),
         );
-        // 장부·요약은 **눈금이 실제로 넘어갔을 때만** 남긴다 (성장 로그는 정수다).
-        // 87.4 → 87.7은 감독의 화면에서 아무 일도 아니므로 일지에도 없다
+        // 장부·요약은 **눈금이 실제로 넘어갔을 때만** 남긴다 (성장 로그는 정수다)
         const notches = Math.round(assignment.familiarity) - Math.round(before);
         if (notches !== 0) {
           recordGrowth(
@@ -128,41 +127,35 @@ export function applyTrainingOutcomes(
       }
     }
 
-    // ② 자리 — **개인 훈련으로 배우는 중일 때만.** 코어가 날짜를 세어 올리던
-    //    자리를 결산에 넘겼다: 전술 적응도·능력치와 같은 눈으로 판정한다.
+    // ② 자리 — **개인 훈련으로 배우는 중일 때만.** 구간 판정 하나를 날짜마다 나눠 얹는다.
     const program = state.playerTraining.find((t) => t.gamePlayerId === player.id);
-    if (program?.position && outcome.positionGain) {
-      const rated = Math.max(0, Math.min(POSITION_TRAIN_MAX, Math.round(outcome.positionGain)));
-      const slot = player.positions.find((x) => x.position === program.position);
-      // 처음 배우는 자리는 **주발을 벗긴 원값**에서 출발한다 — 저장에 보정을
-      // 남기면 조회가 다시 얹는다 (player.md §8)
-      const before = slot?.proficiency ?? storedProficiencyFor(player.positions, program.position);
-      if (rated > 0 && before < PROFICIENCY_MAX) {
+    const rated =
+      program?.position && outcome.positionGain
+        ? Math.max(0, Math.min(POSITION_TRAIN_MAX, Math.round(outcome.positionGain)))
+        : 0;
+    if (program?.position && rated > 0) {
+      const position = program.position;
+      const carryKey = positionGrowthTarget(position);
+      for (const { session, weeks } of days.values()) {
+        const slot = player.positions.find((x) => x.position === position);
+        // 처음 배우는 자리는 **주발을 벗긴 원값**에서 출발한다 — 저장에 보정을
+        // 남기면 조회가 다시 얹는다 (player.md §8)
+        const before = slot?.proficiency ?? storedProficiencyFor(player.positions, position);
+        if (before >= PROFICIENCY_MAX) break;
         /**
-         * 자리 적응도는 **정수**라 하루치 결산의 0.2를 담을 곳이 없다 — 능력치와 같은
+         * 자리 적응도는 **정수**라 하루치의 0.2를 담을 곳이 없다 — 능력치와 같은
          * 그릇(`growthCarry`)의 `pos:<자리>` 칸에 쌓았다가 한 칸이 될 때 올린다.
-         * 위끝에 닿은 자리에는 쌓지 않는다: 나갈 곳 없는 몫이 그릇에 남는다.
          */
-        const carryKey = positionGrowthTarget(program.position);
         const carried = (player.growthCarry[carryKey] ?? 0) + rated * weeks;
-        // 한 결산이 넘기는 눈금은 여전히 `POSITION_TRAIN_MAX`까지 — 나머지는 다음으로
-        const gain = Math.min(POSITION_TRAIN_MAX, Math.trunc(carried));
-        player.growthCarry = { ...player.growthCarry, [carryKey]: carried - gain };
-        const after = Math.min(PROFICIENCY_MAX, before + gain);
-        /**
-         * **실제로 넘어간 만큼만 장부에 적는다.** 위끝에 걸린 자리는 판정이 +2를
-         * 내도 한 칸밖에 안 오르는데, 그 구간마다 "적응 +2"가 성장 로그와
-         * 요약에 남으면 감독은 두 칸이 올랐다고 읽는다.
-         */
+        // 한 날짜가 넘기는 눈금은 `POSITION_TRAIN_MAX`까지 — 나머지는 다음으로
+        const step = Math.min(POSITION_TRAIN_MAX, Math.trunc(carried));
+        player.growthCarry = { ...player.growthCarry, [carryKey]: carried - step };
+        const after = Math.min(PROFICIENCY_MAX, before + step);
+        // **실제로 넘어간 만큼만 장부에 적는다** — 위끝에 걸린 자리는 판정보다 덜 오른다
         const gained = after - before;
         if (gained > 0) {
           if (slot) slot.proficiency = after;
-          else
-            player.positions.push({
-              position: program.position,
-              proficiency: after,
-              isNatural: false,
-            });
+          else player.positions.push({ position, proficiency: after, isNatural: false });
           recordGrowth(
             state,
             player.id,
@@ -177,7 +170,7 @@ export function applyTrainingOutcomes(
         }
         // 새 자리가 본업을 넘어서면 전향이 끝난 것이다 (장부 정리는 코어 몫)
         const natural = naturalPositionOf(player);
-        const learned = player.positions.find((x) => x.position === program.position);
+        const learned = player.positions.find((x) => x.position === position);
         if (
           learned &&
           learned.proficiency > natural.proficiency &&
@@ -185,26 +178,37 @@ export function applyTrainingOutcomes(
         ) {
           setPlayerPosition(state, { playerId: player.id, position: learned.position });
           state.playerTraining = state.playerTraining.filter((t) => t.gamePlayerId !== player.id);
+          break;
         }
       }
     }
 
-    // ③ 능력치 — 그 구간에 훈련한 축 + 이 선수에게 걸린 개인 훈련 축 (공용 규칙)
-    const stepped = applyAttributeStep(state, player, outcome.attribute, outcome.attributeStep, {
-      allowed: allowedAxesFor(teamAxes, attributeAxisOf(program?.axis)),
-      spent: attrSpent,
-      cap: attrCap,
-      weeks,
-      source: "training",
-      origin: "training-settlement",
-      entryId: session.entryId,
-      on: session.date,
-    });
-    // 인원 상한은 **건드린 인원**을 센다 — 캐리에만 쌓인 선수도 한 자리를 쓴다
-    if (stepped) {
-      attrSpent += 1;
-      if (stepped.step !== 0) {
-        moved.push({ gamePlayerId: player.id, target: stepped.axis, delta: stepped.step });
+    // ③ 능력치 — 칸마다 따로. 그 구간에 훈련한 축 + 이 선수에게 걸린 개인 훈련 축 (공용 규칙)
+    const allowed = allowedAxesFor(teamAxes, attributeAxisOf(program?.axis));
+    const judged = new Set<number>();
+    for (const change of outcome.attributes ?? []) {
+      const k = slotIndex.get(change.date);
+      // 칸에 없는 날짜 · 같은 칸의 두 번째 줄은 받지 않는다
+      if (k === undefined || judged.has(k)) continue;
+      judged.add(k);
+      const slot = slots[k]!;
+      const session = days.get(slot.date)!.session;
+      const stepped = applyAttributeStep(state, player, change.axis, change.step, {
+        allowed,
+        spent: attrSpent[k]!,
+        cap: TRAINING_ATTR_CAP,
+        weeks: settlementWeeks(slot.sessions),
+        source: "training",
+        origin: "training-settlement",
+        entryId: session.entryId,
+        on: slot.date,
+      });
+      // 인원 상한은 **건드린 인원**을 센다 — 캐리에만 쌓인 선수도 한 자리를 쓴다
+      if (stepped) {
+        attrSpent[k]! += 1;
+        if (stepped.step !== 0) {
+          moved.push({ gamePlayerId: player.id, target: stepped.axis, delta: stepped.step });
+        }
       }
     }
 

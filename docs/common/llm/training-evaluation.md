@@ -1,8 +1,11 @@
 # 훈련 평가 하네스
 
-`packages/agents/harness/training-eval.ts`는 고정 시드의 메모리 게임에서 훈련 명령과
-하루 시간 진행으로 브리프를 만든다. 소규모 선수군과 전체 선수단을 대상으로
-Jev 출력부터 훈련 결산 반영까지 확인한다.
+`packages/agents/harness/training-eval.ts`는 고정 시드 42로 메모리 게임을 만들고 실제
+훈련 명령과 사흘 시간 진행으로 만든 브리프를 Jev에 보낸다. 사흘의 세션이 한 판정에 실려
+선수마다 날짜별 능력치 질문이 세 칸씩 선다([agents.md](agents.md) §4). 반영된 능력치
+판정이 모두 그 구간의 훈련 날짜에 섰는지도 검사한다. 저장된 사용자 훈련 기록이나
+기존 모델과의 비교가 아니다. 사용자 `.log`·`.data`를 읽거나 쓰지 않으며, 저장·trace·
+disk journal을 열지 않는다. 결과는 새 `/tmp` 디렉터리에만 쓴다.
 
 ```bash
 pnpm exec tsx packages/agents/harness/training-eval.ts --out /tmp/training-eval-example

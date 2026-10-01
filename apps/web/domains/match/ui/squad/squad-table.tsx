@@ -43,6 +43,7 @@ export function SquadTable({
   tierKey,
   setPieces,
   onSwapIn,
+  inMatch,
 }: {
   players: SquadRow[];
   sort: { key: SortKey; desc: boolean };
@@ -58,7 +59,7 @@ export function SquadTable({
   swapPair?: { id: string; name: string; tier: Tier; slotCode: string | null } | null;
   /** 세트피스 키커 셋 — 이름 옆의 표식이 여기서 나온다 (완장과 같은 자리) */
   setPieces: SetPieceTakersView;
-  /** 경기 중인가 — 심경 한 줄은 지난 경기까지의 것이라 그동안 서지 않는다 */
+  /** 경기 중에는 남은 체력으로, 경기 밖에서는 누적 피로로 막대 색을 정한다 */
   inMatch?: boolean;
   /** 이 선수가 지금 속한 칸 (로컬 편집 반영 — role·squadLevel은 저장 전까지 옛 값이다) */
   tierOf?: (id: string) => Tier;
@@ -332,10 +333,9 @@ export function SquadTable({
               <td>
                 <FormArrow p={p} />
               </td>
-              {/* 사기·피로를 하나로 합친 값 — 왜 이 값인지는 행을 펼치면 한 문장으로 나온다.
-                  경기 중에는 판세 탭과 같은 읽은 값이라 막대에 모르는 폭이 붙는다 */}
+              {/* 길이는 남은 체력, 경기 밖의 색은 누적 피로다. */}
               <td>
-                <ConditionBar c={p.condition} />
+                <ConditionBar c={p.condition} fatigue={inMatch ? undefined : p.fatigue} />
               </td>
               {/* 골 대신 평점 — 골 수는 행을 펼치면 시즌 기록에 그대로 있다 */}
               <td

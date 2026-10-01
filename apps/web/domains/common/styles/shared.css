@@ -816,6 +816,10 @@ button:disabled,
 .cond-bar.spent span {
   background: var(--loss);
 }
+/* 누적 피로를 아는 막대 — 색은 피로 수치를 따라 섞인다(`condition-bar.tsx`) (player.md §5.5) */
+.cond-bar.by-fatigue span {
+  background: var(--cond-tone);
+}
 
 /* 성장 가능성 — 올라가는 막대 다섯 개 (design-system.md). 읽는 값이라 키 컬러를 쓰지 않는다 */
 .growth-bars {

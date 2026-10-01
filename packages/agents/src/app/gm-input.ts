@@ -493,19 +493,19 @@ function retirementFacts(state: GameState): string[] {
  * 물음표도 평가어도 없는 장부 줄이다. 인테이크 데이를 어떤 자리로 열지, 누구를 아깝다고
  * 말할지는 GM이 정한다.
  *
- * ⚠️ **후보에게는 안개가 낀다 — `adapting` 눈금이다** (player.md §9). 계약서에 사인하기
- * 전이라 훈련장에서 본 것이 전부이고, 그래서 종합도 잠재력도 참값이 아니라 관측값으로
+ * ⚠️ **후보에게는 안개가 낀다** (player.md §9). 계약서에 사인하기
+ * 전이라 훈련장에서 본 것이 전부이고, 그래서 종합도 성장 가능성도 참값이 아니라 관측값으로
  * 선다. 코어는 참값으로 계산하고 여기 서는 것은 감독이 그렇게 알고 있는 값이다.
  */
 function youthCandidateFacts(state: GameState): string[] {
   const rows = ourYouthCandidates(state);
   if (rows.length === 0) return [];
   const lines = rows.map((row) => {
-    const { overall, potential } = youthCandidateFog(state.seed, row.player);
+    const { overall, growth } = youthCandidateFog(state.seed, row.player);
     const age = ageOf(row.player.birthdate, state.date);
     return (
       `유스 후보: ${row.player.name} ${age}세 · ${naturalPositionOf(row.player).position} · ` +
-      `종합 ~${overall} · 잠재력 ${potential.low}~${potential.high}(${potential.confidence}) · ` +
+      `종합 ~${overall} · 성장 가능성 ${growth.label} · ` +
       `주급 ${formatMoney(row.weeklyWage)}/주 · ${row.years}년` +
       (row.autoSign ? " · 답이 없으면 구단이 계약한다" : "")
     );

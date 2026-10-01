@@ -8,7 +8,6 @@ import {
   type TrainAttr,
   type Slot,
   type TrainingSession,
-  type ReserveTrainingPolicy,
   ATTRIBUTE_AXES,
 } from "@story-fm/domain";
 import { addDays, diffDays, dayOfWeek } from "../../common/core/dates";
@@ -433,67 +432,21 @@ export function makeSession(
   };
 }
 
-// ── 2군 훈련 방침 (season.md §2 "2군 훈련 방침") ─────────────────────
+// ── 개인 훈련의 축 (season.md §2 "개인 훈련의 축") ─────────────────────
 
-/**
- * 방침이 겨냥하는 축 — **능력치 카탈로그의 갈래를 그대로 쓴다**(player.md §2).
- * `goalkeeping`은 어디에도 들지 않는다: 한 축뿐인 갈래라 겨냥 대상으로 두면 그
- * 방침만 배율이 극단으로 튀고, 눌리게 두면 골키퍼 유망주가 감독이 고른 방침
- * 때문에 굳는다. 방침이 닿는 자리는 필드 15축이다.
- */
-const RESERVE_TRAINING_AXES: Record<ReserveTrainingPolicy, readonly AttributeAxis[]> = {
-  balanced: [],
-  physical: ["pace", "stamina", "strength", "aerial"],
-  technical: ["finishing", "dribbling", "passing", "kicking", "tackling"],
-  mental: ["vision", "positioning", "offTheBall", "composure", "aggression", "leadership"],
-};
-
-/** 방침이 닿지 않는 축 — 겨냥 대상도, 눌리는 대상도 아니다 */
+/** 개인 훈련이 걷을 몫에서 빠지는 축 — 필드 축을 겨냥하면 `goalkeeping`은 그대로다 */
 const UNTOUCHED_AXIS: AttributeAxis = "goalkeeping";
 
-/** 방침이 나누는 몫의 분모 — 축 목록에서 파생한다(축이 늘면 여기가 따라온다) */
+/** 걷을 몫의 분모 — 축 목록에서 파생한다(축이 늘면 여기가 따라온다) */
 const FIELD_AXIS_COUNT = ATTRIBUTE_AXES.filter((axis) => axis !== UNTOUCHED_AXIS).length;
 
-/** 겨냥한 축의 성장 확률 배율 */
-export const RESERVE_TRAINING_AIM = 1.6;
-
-/** 이 방침이 겨냥하는 축 — 축 묶음을 읽는 유일한 문 */
-export function reserveTrainingAxes(policy: ReserveTrainingPolicy): readonly AttributeAxis[] {
-  return RESERVE_TRAINING_AXES[policy];
-}
-
-/**
- * 방침이 이 축의 성장 확률에 곱하는 배율 — **총량을 옮길 뿐 늘리지 않는다.**
- *
- * 겨냥한 n축이 `RESERVE_TRAINING_AIM`만큼 오르면 나머지 필드 축이 그만큼 내려가
- * 필드 15축의 배율 합은 어느 방침에서나 15다(season.md §8 불변식). 공짜 상향이면
- * 고르는 일이 아니라 켜는 일이 된다.
- */
-export function reserveTrainingMultiplier(
-  policy: ReserveTrainingPolicy,
-  axis: AttributeAxis,
-): number {
-  const aimed = reserveTrainingAxes(policy);
-  if (aimed.length === 0 || axis === UNTOUCHED_AXIS) return 1;
-  if (aimed.includes(axis)) return RESERVE_TRAINING_AIM;
-  const rest = FIELD_AXIS_COUNT - aimed.length;
-  return (FIELD_AXIS_COUNT - aimed.length * RESERVE_TRAINING_AIM) / rest;
-}
-
-/**
- * 개인 훈련이 겨냥한 축의 배율 — 방침보다 날카롭다. 방침은 갈래 하나(4~6축)를
- * 겨냥하지만 개인 훈련은 **한 축**을 겨냥하므로, 같은 폭으로 얹으면 손잡이 둘의
- * 값이 같아진다. 걷는 몫도 그만큼 크다(방침 없이 겨냥하면 나머지 14축 ×13/14).
- */
+/** 개인 훈련이 겨냥한 한 축의 성장 확률 배율 */
 export const PERSONAL_TRAINING_AIM = 2;
 
 /**
- * 월간 성장이 이 축에 곱하는 배율 — **2군 훈련 방침과 개인 훈련을 합성한다**
- * (season.md §2). 둘이 같은 축을 두고 겹치는 자리가 여기 하나다.
- *
- * 규약은 방침의 것을 그대로 쓴다: **총량을 옮길 뿐 늘리지 않는다.** 개인 훈련이
- * 겨냥한 축이 오른 만큼을 나머지 필드 축에서 **비례로**(방침이 이미 얹은 배율에
- * 비례해) 걷으므로, 합성해도 필드 15축의 배율 합은 15로 남는다.
+ * 월간 성장이 이 축에 곱하는 배율 — **총량을 옮길 뿐 늘리지 않는다** (season.md §2).
+ * 개인 훈련이 겨냥한 축이 오른 만큼을 나머지 필드 축에서 고르게 걷으므로 필드
+ * 15축의 배율 합은 15로 남는다.
  *
  * 개인 축이 `goalkeeping`이면 제 갈래에 걷을 자리가 없어 필드 15축에서 걷는다 —
  * 그때는 필드 합이 `16 − PERSONAL_TRAINING_AIM`으로 내려가고 **16축 합이 16**이다.
@@ -501,19 +454,11 @@ export const PERSONAL_TRAINING_AIM = 2;
  */
 export function monthlyGrowthMultiplier(
   axis: AttributeAxis,
-  aim: { policy?: ReserveTrainingPolicy | undefined; personal?: AttributeAxis | null },
+  personal: AttributeAxis | null | undefined,
 ): number {
-  const byPolicy = (a: AttributeAxis): number =>
-    aim.policy ? reserveTrainingMultiplier(aim.policy, a) : 1;
-  const base = byPolicy(axis);
-  const personal = aim.personal;
-  if (!personal) return base;
-  if (axis === personal) return base * PERSONAL_TRAINING_AIM;
-  // 걷는 자리는 필드 축뿐이다 — 개인 축이 필드 축이면 `goalkeeping`은 그대로 둔다
-  if (axis === UNTOUCHED_AXIS) return base;
-  const aimed = byPolicy(personal);
-  // 방침이 필드 15축 합을 15로 지키므로 걷을 몫의 분모가 여기서 파생된다
-  const pool = FIELD_AXIS_COUNT - (personal === UNTOUCHED_AXIS ? 0 : aimed);
-  const moved = aimed * (PERSONAL_TRAINING_AIM - 1);
-  return (base * (pool - moved)) / pool;
+  if (!personal) return 1;
+  if (axis === personal) return PERSONAL_TRAINING_AIM;
+  if (axis === UNTOUCHED_AXIS) return 1;
+  const pool = FIELD_AXIS_COUNT - (personal === UNTOUCHED_AXIS ? 0 : 1);
+  return (pool - (PERSONAL_TRAINING_AIM - 1)) / pool;
 }

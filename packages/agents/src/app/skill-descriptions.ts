@@ -67,9 +67,19 @@ export const SKILL_CATALOG = [
     group: "전술·훈련",
     readOnly: false,
     description:
-      "감독이 훈련이나 육성을 지시했을 때 — 훈련 일정 등록·비우기·개인 훈련·집중 육성·멘토링·2군 훈련 방침·등번호·유스 첫 계약. " +
+      "감독이 훈련이나 육성을 지시했을 때 — 훈련 일정 등록·비우기·개인 훈련·집중 육성·유스 첫 계약. " +
       "한 턴에 한 번 부른다. 결과로 무엇이 걸렸고 무엇이 반려됐는지가 온다. " +
       "라인업·전술은 tactic_orders다.",
+  },
+
+  {
+    name: "set_squad_number",
+    label: CALL_LABELS.set_squad_number,
+    group: "전술·훈련",
+    readOnly: false,
+    description:
+      "감독이 우리 선수에게 등번호를 정해 줬을 때 부른다. playerId는 감독이 부른 선수, number는 감독이 말한 번호다. " +
+      "그 번호를 동료가 달고 있으면 반려되고 답에 그 동료가 온다 — 감독에게 알리고, 감독이 넘겨주라고 하면 take: true로 다시 부른다.",
   },
 
   {
@@ -173,7 +183,7 @@ export const SKILL_CATALOG = [
     group: "조회",
     readOnly: true,
     description:
-      '포지션·이름·나이·가용 상태에 계약 잔여·주급·홈그로운·잠재력·주발까지 걸어 찾는다. team="mine"은 우리 팀, 팀 id·이름은 특정 팀. ' +
+      '포지션·이름·나이·가용 상태에 계약 잔여·주급·홈그로운·성장 가능성·주발까지 걸어 찾는다. team="mine"은 우리 팀, 팀 id·이름은 특정 팀. ' +
       "team을 생략하면 풀이 5대 리그 1·2부 전체이므로, 우리 리그 안에서 비교할 때는 competition(epl 등)으로 좁힌다. " +
       'squadLevel="reserve"는 2군 유망주. 조건은 도구가 걸어라 — limit만큼 훑어 고르지 마라. ' +
       "sortBy는 age·fatigue·contract만 낮은 쪽이 앞이다. " +

@@ -921,14 +921,8 @@ describe("선수 카드 — 남의 구단 선수의 안개 (player.md §9.5)", (
     }
   });
 
-  it("잠재력은 숫자가 아니라 구간이고 참값을 품는다", () => {
-    for (const [i, card] of cards.entries()) {
-      if (card.potential === null) continue;
-      const truth = theirs[i]!.attributes.potential;
-      expect(card.potential.margin, card.name).toBeGreaterThan(0);
-      expect(card.potential.low, card.name).toBeLessThanOrEqual(truth);
-      expect(card.potential.high, card.name).toBeGreaterThanOrEqual(truth);
-    }
+  it("남의 선수의 성장 가능성은 판단 보류다", () => {
+    for (const card of cards) expect(card.growth, card.name).toBeNull();
   });
 
   /** 기록·계약은 신문에 실리는 사실이다 — 흐리는 것은 능력치이지 장부가 아니다 (§10) */

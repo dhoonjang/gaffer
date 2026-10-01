@@ -104,8 +104,6 @@ export * from "./match/flow/ratings";
 // squad — 선수단 상태(폼·심경·부상)와 성장·훈련
 export * from "./common/players/squad-depth";
 export * from "./common/players/hierarchy";
-export * from "./story/players/mentoring";
-export * from "./common/players/mentoring";
 export * from "./common/players/form";
 export * from "./story/players/slump";
 export * from "./match/squad/other-clubs";

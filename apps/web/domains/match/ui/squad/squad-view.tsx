@@ -960,7 +960,7 @@ export function SquadView({
                   {c.overall}
                 </span>
                 <span className="yc-pot">
-                  성장 가능성 <GrowthOutlook overall={c.overall} potential={c.potential} />
+                  성장 가능성 <GrowthOutlook growth={c.growth} />
                 </span>
                 <span className="muted">
                   {formatMoney(c.weeklyWage)}/주 · {c.years}년

@@ -815,7 +815,6 @@ export function createGame(input: CreateGameInput): GameState {
     managerOffers: [],
     managerVacancies: [],
     developmentFocus: [],
-    mentoring: [],
     retired: [],
     youthCandidates: [],
     callUps: [],

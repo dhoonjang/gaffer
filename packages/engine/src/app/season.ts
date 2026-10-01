@@ -1,4 +1,3 @@
-import { pruneMentoring } from "../story/players/mentoring";
 import {
   shelveFamiliarity,
   unshelveFamiliarity,
@@ -1428,7 +1427,6 @@ export function applyTransition(state: GameState): string[] {
   state.calendar = nextCalendar;
   // 새 시즌은 7월 1일(프리시즌)에서 시작한다
   state.date = nextCalendar.preseasonStart;
-  pruneMentoring(state);
   /**
    * **승격 팀 명단 채우기** — 승강·체급 재산정 뒤이고 새 일정을 짜기 전이다
    * ([../data/team.md](../data/team.md) §5). 시즌·날짜를 넘긴 뒤에 서는 이유는

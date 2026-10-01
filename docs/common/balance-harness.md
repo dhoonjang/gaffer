@@ -62,7 +62,7 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 | `ai-fitness`           | 한 시즌 뒤 AI 스쿼드 체력 · 출전 분산 · 전술 적응도 · 누적 피로                                      | [match](../match/match.md) §8.6                                                                   |
 | `ai-bench`             | 감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래                                                   | [match](../match/match.md) §3.3                                                                   |
 | `squad-longevity`      | 15시즌 뒤의 선발 XI·계약 · 리그 체급과 그 천장의 드리프트(가드)                                      | [season](season.md) §6·§9                                                                         |
-| `youth-development`    | 2군 경기 수 · 출전·집중 육성·임대가 가르는 성장 격차 · 다음 여름의 인테이크                          | [season](season.md) §2·§6                                                                         |
+| `youth-development`    | 2군 경기 수 · 출전·집중 육성이 가르는 성장 격차 · 다음 여름의 인테이크                               | [season](season.md) §2·§6                                                                         |
 | `youth-intake-tail`    | 한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히                              | [season](season.md) §6                                                                            |
 | `attribute-model`      | 자체 산정 모델이 낸 분포와 지금 시드 분포의 간격                                                     | [player](player.md) §13                                                                           |
 | `overall-scale`        | 종합을 읽는 눈금 — 리그별·연령별 분포                                                                | [player](player.md) §4                                                                            |

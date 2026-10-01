@@ -846,11 +846,6 @@ describe("은퇴 — GM 선언·철회·시즌 실행", () => {
         setRetirement(game, { playerId: player.id, action: "declare", reason: "personal" }).ok,
       ).toBe(true);
     }
-    game.mentoring.push({
-      mentorId: ours.id,
-      menteeId: userPlayers(game)[1]!.id,
-      since: game.date,
-    });
     transitionSeason(game);
     for (const player of [ours, theirs]) {
       expect(game.players.some((p) => p.id === player.id)).toBe(false);
@@ -865,10 +860,6 @@ describe("은퇴 — GM 선언·철회·시즌 실행", () => {
       season: 1,
     });
     expect(game.retired.some((r) => r.gamePlayerId === theirs.id)).toBe(false);
-    expect(game.mentoring.find((pair) => pair.mentorId === ours.id)).toMatchObject({
-      until: game.date,
-      endedBy: "departure",
-    });
     expect(setRetirement(game, { playerId: ours.id, action: "withdraw" }).ok).toBe(false);
   });
 
@@ -1544,17 +1535,10 @@ describe("유스 인테이크 (season.md §6)", () => {
     expect(flags.filter(Boolean).length).toBeGreaterThan(0);
   });
 
-  /**
-   * **안개는 흐릴 뿐 거짓말하지 않는다** (player.md §9.1 불변식 1). 후보는 아직 우리
-   * 선수가 아니라 `state`가 그를 못 찾는데, 그때 폭이 0이 되면 계약 전에 참값이
-   * 노출된다 — 그 자리를 지키는 케이스다.
-   */
-  it("후보의 잠재력 구간 안에 참값이 있고, 몇 번을 물어도 같다", () => {
+  /** 후보의 안개는 `(seed, 선수 id)` 해시라 몇 번을 물어도 같은 값이다 (player.md §9.1) */
+  it("후보의 종합과 성장 가능성은 몇 번을 물어도 같다", () => {
     for (const row of READ.youthCandidates ?? []) {
       const fog = youthCandidateFog(READ.seed, row.player);
-      expect(fog.potential.margin).toBeGreaterThan(0);
-      expect(fog.potential.low).toBeLessThanOrEqual(row.player.attributes.potential);
-      expect(fog.potential.high).toBeGreaterThanOrEqual(row.player.attributes.potential);
       expect(youthCandidateFog(READ.seed, row.player)).toEqual(fog);
     }
   });

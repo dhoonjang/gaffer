@@ -10,6 +10,8 @@ import {
   observedOverall,
   clampCondition,
   conditionLabel,
+  growthOutlookOf,
+  type GrowthOutlook,
 } from "@story-fm/domain";
 import { type GameState, playerById, isOurPlayer } from "../core/state";
 import { hashChannel } from "../core/rng";
@@ -181,126 +183,47 @@ export function observationAt(
   };
 }
 
-/**
- * 잠재력 — **아무도 단정하지 못한다.** 구간 + 확신의 정도로 말한다.
- * 우리 선수는 데리고 뛸수록 좁아지고, 타 팀 선수는 짐작하지 못한다(`POTENTIAL_MARGIN`).
- */
-/** 추정 폭이 이 안이면 그 말로 부른다 — 넘으면 "대강 짐작"이다 */
-export const CONFIDENCE_MARGIN = { 거의확실: 3, 대체로신뢰: 6 } as const;
-
-/** 추정 폭을 부르는 말 — 구간을 내는 자리는 모두 이 함수를 지난다 */
-export function potentialConfidence(margin: number): string {
-  if (margin <= CONFIDENCE_MARGIN.거의확실) return "거의 확실";
-  if (margin <= CONFIDENCE_MARGIN.대체로신뢰) return "대체로 신뢰";
-  return "대강 짐작";
-}
-
 /** 유스 후보의 종합 오차 (±) — 훈련장에서 본 것이 전부라 우리 선수보다 넓다 */
 export const YOUTH_CANDIDATE_OVERALL_MARGIN = 3;
 
-/** 유스 후보의 잠재력 추정 폭 — 계약 뒤 출전이 쌓이면 우리 선수와 같아진다 */
-export const YOUTH_CANDIDATE_POTENTIAL_MARGIN = 9;
+/** 유스 후보의 천장 오차 (±) — 아직 계약 전이라 잠재력을 정확히 모른다 */
+export const YOUTH_CANDIDATE_POTENTIAL_FUZZ = 4;
 
 /**
- * **유스 후보의 안개** — 아직 우리 선수가 아니다 (season.md §6 · player.md §9).
+ * **유스 후보의 안개** — 아직 우리 선수가 아니다 (season.md §6 · player.md §9.1).
  *
  * `state`가 아니라 시드만 받는 것은 후보가 `state.players`에 없기 때문이다 —
  * `knowledgeOf`가 그를 찾지 못한다. 오차는 `(seed, 선수 id)` 해시라 같은 후보를 몇
- * 번을 물어도 같은 구간이 나온다.
+ * 번을 물어도 같은 값이 나온다.
  */
 export function youthCandidateFog(
   seed: number,
   player: GamePlayer,
-): { overall: number; potential: PotentialBand } {
+): { overall: number; growth: GrowthOutlook } {
   const overall = observedOverall(player.attributes.overall, {
     overallOffset: offsetFor(seed, player.id, "overall", YOUTH_CANDIDATE_OVERALL_MARGIN),
   });
-  const margin = YOUTH_CANDIDATE_POTENTIAL_MARGIN;
-  const truth = player.attributes.potential;
-  const center = truth + offsetFor(seed, player.id, "potential", Math.floor(margin / 2));
-  return {
-    overall,
-    potential: {
-      // 하한은 관측 종합 아래로 내려가지 않는다 — 이미 가진 것을 못 가질 수는 없다
-      low: Math.max(Math.min(truth, overall), center - margin),
-      high: Math.min(99, Math.max(truth, center + margin)),
-      margin,
-      confidence: potentialConfidence(margin),
-    },
-  };
+  const ceiling =
+    player.attributes.potential +
+    offsetFor(seed, player.id, "potential", YOUTH_CANDIDATE_POTENTIAL_FUZZ);
+  return { overall, growth: growthOutlookOf(overall, ceiling) };
 }
-
-// ── 잠재력 (폭으로만 안다) ──────────────────────────────
-/**
- * 잠재력 추정 폭 — 지식 수준별 **출발점**. 여기서부터 표본이 쌓이면 좁아진다.
- * `null`은 짐작조차 못 한다는 뜻이다.
- */
-export const POTENTIAL_MARGIN: Record<Knowledge, number | null> = {
-  own: 6,
-  seen: null,
-  rumoured: null,
-};
-
-/** 아무리 봐도 이 아래로는 못 좁힌다 — 성장 여력은 끝까지 단정할 수 없다 */
-export const POTENTIAL_FLOOR = 2;
-
-/** 우리 셔츠로 뛴 경기가 이만큼 쌓일 때마다 잠재력 폭이 한 칸 좁아진다 */
-export const POTENTIAL_APPS_PER_STEP = 10;
 
 /**
- * **우리 셔츠로** 뛴 총 경기 수 — 잠재력을 좁히는 표본 (시즌을 넘어 누적).
+ * 성장 가능성 — **우리 선수만 안다** (player.md §9.1). 16축이 정확한 것과 같이 우리
+ * 훈련장은 잠재력도 안다. 남의 선수는 판단 보류(null)다.
  */
-export function appsForUs(state: GameState, playerId: string): number {
-  return state.seasonStats
-    .filter((s) => s.gamePlayerId === playerId && s.teamId === state.userTeamId)
-    .reduce((sum, s) => sum + s.apps, 0);
-}
-
-/** 지금 이 선수의 잠재력을 얼마나 좁혀 아는가 (null = 미지) */
-export function potentialMargin(
-  state: GameState,
-  playerId: string,
-  knowledge = knowledgeOf(state, playerId),
-): number | null {
-  const base = POTENTIAL_MARGIN[knowledge];
-  if (base === null) return null;
-  const narrowed = base - Math.floor(appsForUs(state, playerId) / POTENTIAL_APPS_PER_STEP);
-  return Math.max(POTENTIAL_FLOOR, narrowed);
-}
-
-export interface PotentialBand {
-  low: number;
-  high: number;
-  /** 추정 반폭 — 좁을수록 확신이 크다 */
-  margin: number;
-  /**
-   * 그 폭을 부르는 말 — `거의 확실` · `대체로 신뢰` · `대강 짐작` (player.md §9.1).
-   * 구간과 **함께** 낸다: 경계는 코어의 것이고, 읽는 쪽이 폭을 다시 재면 표를 고치는
-   * 날 한쪽만 따라간다.
-   */
-  confidence: string;
-}
-
-/** 잠재력 구간 — 우리 선수만 폭으로 안다. 남의 선수는 짐작조차 못 한다 */
-export function potentialBand(
+export function growthOutlook(
   state: GameState,
   player: GamePlayer,
   knowledge = knowledgeOf(state, player.id),
-): PotentialBand | null {
-  const margin = potentialMargin(state, player.id, knowledge);
-  if (margin === null) return null;
-  const truth = player.attributes.potential;
-  const center = truth + offsetFor(state.seed, player.id, "potential", Math.floor(margin / 2));
-  const floor = Math.min(
-    truth,
-    observedOverall(player.attributes.overall, observationAt(state, player.id, knowledge)),
+): GrowthOutlook | null {
+  if (knowledge !== "own") return null;
+  const overall = observedOverall(
+    player.attributes.overall,
+    observationAt(state, player.id, knowledge),
   );
-  return {
-    low: Math.max(floor, center - margin),
-    high: Math.min(99, Math.max(truth, center + margin)),
-    margin,
-    confidence: potentialConfidence(margin),
-  };
+  return growthOutlookOf(overall, player.attributes.potential);
 }
 
 // ── 체력 (리포트가 아니라 눈으로 읽는다) ─────────────────
@@ -333,8 +256,7 @@ export interface ConditionRead {
 }
 
 /**
- * 체력을 읽는다 — 잠재력 구간과 같은 모양이다(중심을 결정적으로 흔들고 폭을 펼치되
- * 참값을 항상 품는다). 편향은 `matchKey`(보통 경기 id)마다 한 번 정해져 **경기 내내
+ * 체력을 읽는다 — 중심을 결정적으로 흔들고 폭을 펼치되 참값을 항상 품는다. 편향은 `matchKey`(보통 경기 id)마다 한 번 정해져 **경기 내내
  * 흔들리지 않는다** — 매 정지점마다 값이 튀면 감독은 상대가 지치는 중인지
  * 자기 눈이 흔들리는지 구분할 수 없다.
  *
@@ -376,7 +298,7 @@ export function observedPlayerFacts(state: GameState, player: GamePlayer) {
     age: ageOf(player.birthdate, state.date),
     position: naturalPositionOf(player).position,
     overall: observedOverall(player.attributes.overall, observation),
-    potential: potentialBand(state, player, knowledge),
+    growth: growthOutlook(state, player, knowledge),
     attributes: Object.fromEntries(
       ATTRIBUTE_AXES.map((axis) => [
         axis,

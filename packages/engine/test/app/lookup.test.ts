@@ -246,16 +246,16 @@ describe("playerCard — 선수 상세", () => {
     const res = playerCard(state, mine.id);
     expect(res.ok).toBe(true);
     expect(res.message).toContain(`${mine.attributes.pace}`);
-    // 잠재력은 숫자 하나가 아니라 구간이다 (우리 선수도 단정 못 한다)
-    expect(res.message).toMatch(/잠재력: \d+~\d+/);
+    // 잠재력은 숫자로 내지 않는다 — 성장 가능성 단계뿐이다
+    expect(res.message).toMatch(/성장 가능성: (매우 낮음|낮음|보통|높음|매우 높음|탁월함)/);
   });
 
-  it("타 팀 선수는 라벨·인상만 주고 참값·잠재력을 감춘다", () => {
+  it("타 팀 선수는 라벨·인상만 주고 참값을 감추며 성장 가능성은 판단 보류다", () => {
     const state = createTestGame(21);
     const other = playersOf(state, "chelsea")[0]!;
     const res = playerCard(state, other.id);
     expect(res.ok).toBe(true);
-    expect(res.message).toContain("잠재력: 미지");
+    expect(res.message).toContain("성장 가능성: 판단 보류");
     expect(leaksTrueRatings(res.message, other.id, other.attributes)).toBe(false);
   });
 

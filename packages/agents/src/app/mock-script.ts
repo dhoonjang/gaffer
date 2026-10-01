@@ -107,6 +107,10 @@ const SCRIPT: readonly ScriptLine[] = [
     say: `${NAME_SLOT} 주장 시키자`,
     ops: ({ named }) => ({ set_captain: [{ playerId: named }] }),
   },
+  {
+    say: `${NAME_SLOT}에게 등번호 9번 줘`,
+    gm: ({ named }) => [{ tool: "set_squad_number", input: { playerId: named, number: 9 } }],
+  },
   { say: "다들 모여봐", gm: () => [] },
   { say: `${NAME_SLOT} 면담 좀 하자`, gm: () => [] },
   { say: "회견장 가자", gm: () => [] },

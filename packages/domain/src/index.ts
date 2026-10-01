@@ -24,7 +24,6 @@ export * from "./common/player-management";
 export * from "./match/prediction";
 export * from "./common/manager-career";
 export * from "./common/player-awards";
-export * from "./story/mentoring";
 export * from "./common/memory";
 export * from "./match/international";
 export * from "./app/schedule";

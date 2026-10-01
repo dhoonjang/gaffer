@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateString } from "./date-string";
-import { AXIS_KO, type AttributeAxis } from "./player";
+import { AXIS_KO, type AttributeAxis, ratingTier, type RatingTier } from "./player";
 
 // ── 성장 로그 ─────────────────────────────────────────
 /**
@@ -128,30 +128,58 @@ export const TrainingReportSchema = z.object({
 
 export type TrainingReport = z.infer<typeof TrainingReportSchema>;
 
-// ── 2군 훈련 방침 ─────────────────────────────────────
+// ── 성장 가능성 (player.md §9.1) ─────────────────────
 /**
- * 2군 훈련 방침 — **어느 축으로 자라는지**를 정하는 코드 (season.md §2).
- *
- * 결산 없는 2군에서 축을 겨냥할 자리는 월간 성장의 축 선택뿐이라, 방침은 거기에
- * 얹힌다. 코드만 상태에 남고(`GAME_STATE.reserveTraining`), 어느 축이 그 갈래에
- * 드는지와 배율은 `engine/squad/training-plan.ts`가 한 자리에서 갖는다.
- *
- * `balanced`가 기본값이자 해제다 — 방침을 세운 적 없으면 그것으로 읽힌다.
+ * 성장 가능성 여섯 단계 — 낮은 쪽부터. 화면은 단계(`tier`)를 막대로 그리고, GM과
+ * 조회 도구는 낱말(`GROWTH_OUTLOOK_KO`)을 읽는다. 문턱은 이 파일에만 있다.
  */
-export const RESERVE_TRAINING_POLICIES = ["balanced", "physical", "technical", "mental"] as const;
+export const GROWTH_OUTLOOKS = [
+  "very_low",
+  "low",
+  "medium",
+  "high",
+  "very_high",
+  "exceptional",
+] as const;
 
-export const ReserveTrainingPolicySchema = z.enum(RESERVE_TRAINING_POLICIES);
+export type GrowthOutlookKey = (typeof GROWTH_OUTLOOKS)[number];
 
-export type ReserveTrainingPolicy = z.infer<typeof ReserveTrainingPolicySchema>;
-
-/** 코드 → 방침의 이름 — 화면과 프롬프트가 코드를 읽는 유일한 표 */
-export const RESERVE_TRAINING_TITLES: Record<ReserveTrainingPolicy, string> = {
-  balanced: "균형",
-  physical: "신체",
-  technical: "기술",
-  mental: "정신",
+export const GROWTH_OUTLOOK_KO: Record<GrowthOutlookKey, string> = {
+  very_low: "매우 낮음",
+  low: "낮음",
+  medium: "보통",
+  high: "높음",
+  very_high: "매우 높음",
+  exceptional: "탁월함",
 };
 
-export function reserveTrainingTitle(policy: ReserveTrainingPolicy): string {
-  return RESERVE_TRAINING_TITLES[policy];
+/** 성장 여지(천장 − 관측 종합)가 이 값 미만이면 그 단계다 — 매우 낮음 · 낮음 · 보통 · 높음 */
+export const GROWTH_HEADROOM_STEPS = [3, 6, 10, 15] as const;
+
+/** 이 여지 이상이고 천장이 리그 최정상 이상이면 ‘탁월함’이다 */
+export const GROWTH_EXCEPTIONAL_HEADROOM = 20;
+
+/** 탁월함이 요구하는 천장의 능력치 등급 */
+const EXCEPTIONAL_CEILING_TIERS: ReadonlySet<RatingTier> = new Set(["elite", "world"]);
+
+export interface GrowthOutlook {
+  /** 0(매우 낮음) ~ 5(탁월함) */
+  tier: number;
+  key: GrowthOutlookKey;
+  label: string;
+}
+
+/** 관측 종합과 천장 → 성장 가능성. 음수 여지는 최저 단계다 */
+export function growthOutlookOf(overall: number, ceiling: number): GrowthOutlook {
+  const headroom = Math.max(0, ceiling - overall);
+  const stepped = GROWTH_HEADROOM_STEPS.findIndex((limit) => headroom < limit);
+  const tier =
+    stepped !== -1
+      ? stepped
+      : headroom >= GROWTH_EXCEPTIONAL_HEADROOM &&
+          EXCEPTIONAL_CEILING_TIERS.has(ratingTier(ceiling))
+        ? 5
+        : 4;
+  const key = GROWTH_OUTLOOKS[tier]!;
+  return { tier, key, label: GROWTH_OUTLOOK_KO[key] };
 }

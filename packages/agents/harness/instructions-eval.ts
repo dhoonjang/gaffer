@@ -292,43 +292,21 @@ async function main() {
       criterion: "Discussion only; no commands.",
     },
     {
-      name: "club-stadium-request",
+      name: "ticket-price",
       role: "finance-orders" as const,
-      said: "관중석이 모자라. 구단주에게 구장을 5천 석 늘려 달라고 요청해 줘.",
-      criterion:
-        "Request the board for a 5,000-seat stadium expansion; no direct ledger adjustment or unrelated commands.",
-    },
-    {
-      name: "squad-number",
-      role: "training-orders" as const,
-      said: `${player.name}에게 등번호 9번을 줘`,
-      criterion: "Assign the named player shirt number 9; no unrelated commands.",
+      said: "홈 경기 티켓 가격을 50파운드로 정해 줘.",
+      criterion: "Set ticket price to 50 pounds; no unrelated commands.",
     },
   ];
   function semanticOps(name: string, ops: Record<string, unknown[]>): boolean {
     const keys = Object.keys(ops).filter((key) => ops[key]!.length > 0);
     if (name === "discuss-pressing") return keys.length === 0;
-    const command =
-      name === "club-stadium-request"
-        ? "request_board"
-        : name === "squad-number"
-          ? "set_squad_number"
-          : "set_tactics";
+    const command = name === "ticket-price" ? "set_ticket_price" : "set_tactics";
     if (keys.length !== 1 || keys[0] !== command || ops[command]?.length !== 1) return false;
     const row = object(ops[command][0]);
     if (!row) return false;
-    if (name === "club-stadium-request")
-      return (
-        Object.keys(row).every((key) => ["kind", "amount"].includes(key)) &&
-        row.kind === "stadium" &&
-        row.amount === 5_000
-      );
-    if (name === "squad-number")
-      return (
-        Object.keys(row).every((key) => ["playerId", "number"].includes(key)) &&
-        row.playerId === playerId &&
-        row.number === 9
-      );
+    if (name === "ticket-price")
+      return Object.keys(row).every((key) => key === "price") && row.price === 50;
     return directionalTactics(
       name,
       row,
@@ -435,6 +413,7 @@ async function main() {
                 cases[0]!,
                 cases[2]!,
                 { name: "dialogue", said: "선수들 표정이 좋아 보이네. 오늘 분위기는 어때?" },
+                { name: "squad-number", said: `${player.name}에게 등번호 9번을 줘` },
               ]
             : []),
           ...(values["match-turn"]
@@ -486,6 +465,8 @@ async function main() {
           const beforeSpec = structuredClone(tacticsOf(game, game.userTeamId).spec);
           const pressureInstruction =
             testcase.name === "high-press" || testcase.name === "match-high-press";
+          // 등번호는 GM이 직접 부르는 스킬이다 — 해석기 없이 지정 선수에게 9번이 서야 한다
+          const numberInstruction = testcase.name === "squad-number";
           await withGameUsage(`instruction-eval-${Date.now()}-${testcase.name}`, async () => {
             const began = performance.now();
             let calls: string[] = [];
@@ -576,13 +557,16 @@ async function main() {
             const focusMatched = strengths.some(
               (strength) => Number.isFinite(strength) && strength > 0,
             );
+            const numbered = game.players.find((item) => item.id === playerId)?.squadNumber === 9;
             const commandCorrect = focusSide
               ? focusMatched && calls.includes("tactic_orders")
               : mark
                 ? matched === true && calls.includes("tactic_orders")
                 : pressureInstruction || inMatch
                   ? calls.includes("set_tactics")
-                  : !calls.includes("set_tactics");
+                  : numberInstruction
+                    ? calls.includes("set_squad_number") && !calls.includes("set_tactics")
+                    : !calls.includes("set_tactics");
             const evaluatorCalls = Object.fromEntries(
               Object.keys(LLM_CONFIG.evaluators).map((role) => [
                 role,
@@ -629,7 +613,13 @@ async function main() {
                   beforeSpec.defensiveLine,
                 )
               : stableJson(beforeSpec) === stableJson(afterSpec) &&
-                (focusSide ? focusMatched : mark ? matched === true : true);
+                (focusSide
+                  ? focusMatched
+                  : mark
+                    ? matched === true
+                    : numberInstruction
+                      ? numbered
+                      : true);
             turns.push({
               name: testcase.name,
               said,
@@ -639,7 +629,9 @@ async function main() {
                   ? "Positive own-team left attacking focus, unchanged base tactics."
                   : mark
                     ? "Named player marks the named opponent, unchanged base tactics."
-                    : "Conversation only; no tactical change or evaluator call.",
+                    : numberInstruction
+                      ? "GM calls set_squad_number directly; the named player wears 9; no evaluator call."
+                      : "Conversation only; no tactical change or evaluator call.",
               semanticCheck,
               noUnrelatedOps,
               beforePressing,

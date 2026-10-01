@@ -13,12 +13,16 @@ import {
   FATIGUE_BASE,
   FATIGUE_BAND_FLOOR,
   FATIGUE_MAX,
+  SESSION_LOAD,
+  SESSION_LOAD_DEFAULT,
+  sessionLoad,
+  type TrainAttr,
 } from "@story-fm/domain";
 import {
   fatigueAfterDay,
   fatigueDayOf,
   fatigueFromMinutes,
-  fatigueFromSessions,
+  fatigueFromTraining,
   recoveryFactor,
   stateModifier,
   famFactor,
@@ -474,9 +478,24 @@ describe("누적 피로 (player.md §5.5)", () => {
     expect(fatigueFromMinutes(90, 20)).toBeGreaterThan(fatigueFromMinutes(90, 60));
     // 체력이 0이어도 배수는 유한하다 — 한 경기가 통을 채우지는 않는다
     expect(fatigueFromMinutes(90, 0)).toBeLessThan(FATIGUE_BAND_FLOOR.building);
-    // 세션은 수에 비례한다 — 프리시즌 이중 세션이 그대로 두 배다
-    expect(fatigueFromSessions(2)).toBeCloseTo(fatigueFromSessions(1) * 2, 10);
-    expect(fatigueFromSessions(0)).toBe(0);
+    // 훈련은 부하에 비례한다 — 프리시즌 이중 세션이 그대로 두 배다
+    expect(fatigueFromTraining(2)).toBeCloseTo(fatigueFromTraining(1) * 2, 10);
+    expect(fatigueFromTraining(0)).toBe(0);
+  });
+
+  it("세션의 부하는 종류가 정한다 — 몸을 쓰는 세션이 무겁고 회복 세션이 가볍다", () => {
+    const load = (focus: TrainAttr[]) => sessionLoad(focus);
+    expect(load(["stamina", "strength"])).toBe(SESSION_LOAD.physical);
+    expect(load(["stamina"])).toBeGreaterThan(load(["passing"]));
+    expect(load(["passing"])).toBeGreaterThan(load(["tactical"]));
+    expect(load(["tactical"])).toBeGreaterThan(load(["recovery"]));
+    expect(load(["recovery"])).toBeGreaterThan(0);
+    // 섞인 세션은 평균이다 — 항목을 늘려 부하를 부풀릴 수 없다
+    expect(load(["pace", "dribbling"])).toBeCloseTo(
+      (SESSION_LOAD.physical + SESSION_LOAD.technical) / 2,
+      10,
+    );
+    expect(load([])).toBe(SESSION_LOAD_DEFAULT);
   });
 
   it("해소는 남은 양에 비례하고, 훈련장을 떠난 날이 가장 빠르다", () => {

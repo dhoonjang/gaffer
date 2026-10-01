@@ -2,6 +2,7 @@ import { openManagerOffers } from "../../story/world/manager-employment";
 import { tierOfTeamIn } from "../../common/core/club-tier";
 import { personaBookOf } from "../../common/people/character-book";
 import {
+  type GrowthOutlook,
   type StaffRole,
   type Persona,
   STAFF_ROLES,
@@ -62,8 +63,8 @@ export interface YouthCandidateView {
   position: string;
   /** **관측** 종합 — 참값이 아니다 (player.md §9) */
   overall: number;
-  /** 잠재력 추정 구간 — 후보는 언제나 구간이 선다 (`adapting` 눈금) */
-  potential: { low: number; high: number; confidence: string };
+  /** 성장 가능성 — 후보는 언제나 단계가 선다 (`youthCandidateFog`) */
+  growth: GrowthOutlook;
   weeklyWage: number;
   years: number;
   /** 답이 없으면 구단이 데려가는 자리인가 */
@@ -149,14 +150,14 @@ export function youthIntakeView(state: GameState): YouthIntakeView | null {
   return {
     deadline: youthIntakeDeadline(state),
     candidates: rows.map((row) => {
-      const { overall, potential } = youthCandidateFog(state.seed, row.player);
+      const { overall, growth } = youthCandidateFog(state.seed, row.player);
       return {
         id: row.player.id,
         name: row.player.name,
         age: ageOf(row.player.birthdate, state.date),
         position: naturalPositionOf(row.player).position,
         overall,
-        potential: { low: potential.low, high: potential.high, confidence: potential.confidence },
+        growth,
         weeklyWage: row.weeklyWage,
         years: row.years,
         autoSign: row.autoSign,

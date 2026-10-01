@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  GROWTH_OUTLOOKS,
+  growthOutlookOf,
   FAMILIARITY_BASELINE,
   FAMILIARITY_MAX,
   FAMILIARITY_TIERS,
@@ -97,6 +99,48 @@ describe("자리별 역할 → 어휘", () => {
       for (const def of rolesFor(position)) {
         expect(table, `${position}: ${def.id}`).toContain(roleChoiceText(def));
       }
+    }
+  });
+});
+
+/** 성장 가능성 — 문턱은 코어에만 있고 화면은 단계를 그리기만 한다 (player.md §9.1) */
+describe("성장 가능성 단계", () => {
+  it.each([
+    [-5, 0],
+    [0, 0],
+    [2, 0],
+    [3, 1],
+    [5, 1],
+    [6, 2],
+    [9, 2],
+    [10, 3],
+    [14, 3],
+    [15, 4],
+    [19, 4],
+    [20, 4],
+    [24, 4],
+    [25, 5],
+  ])("종합 60에 여지 %s면 단계 %s다", (gap, tier) => {
+    expect(growthOutlookOf(60, 60 + gap).tier).toBe(tier);
+  });
+  it.each([
+    [40, 60, 4],
+    [64, 84, 4],
+    [65, 85, 5],
+    [66, 85, 4],
+    [70, 90, 5],
+    [71, 90, 4],
+    [90, 95, 1],
+  ])(
+    "탁월함은 여지 20과 리그 최정상 천장을 함께 요구한다 — 종합 %s · 천장 %s",
+    (overall, ceiling, tier) => {
+      expect(growthOutlookOf(overall, ceiling).tier).toBe(tier);
+    },
+  );
+  it("단계와 키와 낱말이 한 줄로 맞는다", () => {
+    for (let gap = 0; gap <= 30; gap++) {
+      const outlook = growthOutlookOf(65, 65 + gap);
+      expect(outlook.key).toBe(GROWTH_OUTLOOKS[outlook.tier]);
     }
   });
 });

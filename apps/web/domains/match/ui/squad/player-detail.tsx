@@ -118,7 +118,7 @@ export function PlayerDetail({
         <span>
           성장 가능성{" "}
           <b>
-            <GrowthOutlook overall={p.overall} potential={p.potential} />
+            <GrowthOutlook growth={p.growth} />
           </b>
         </span>
         {/* 체력은 여기 두지 않는다 — 바로 위 명단 행에 바가 있고, 왜 그런지는
@@ -137,14 +137,6 @@ export function PlayerDetail({
               <FitGauge value={p.adaptation} />
               {p.adaptation}
             </b>
-          </span>
-        )}
-        {/* **표에서 내려온 둘** — 스물몇 줄 위에 늘 서 있을 값이 아니라 한 사람을
-            들여다볼 때 읽는 값이다. 「가뿐」은 세우지 않는다: 기본값이 스물몇 줄을
-            채우면 정작 무거운 사람이 묻힌다 (명단의 옛 열과 같은 규칙) */}
-        {p.fatigueBand !== "clear" && (
-          <span title="누적 피로 — 시즌이 쌓아 둔 잔고다. 회복을 늦추고 부상 위험을 올린다">
-            누적 <b className={`load ${p.fatigueBand}`}>{p.fatigueLabel}</b>
           </span>
         )}
         {/* **등급이 아니라 이력이다** (player.md §5.3) — 얼마나 위태로운지는 코어가

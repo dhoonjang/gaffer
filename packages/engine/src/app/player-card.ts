@@ -1,6 +1,5 @@
 import {
   type AttributeAxis,
-  type FatigueBand,
   type SquadStatus,
   type Foot,
   type InjuryHistory,
@@ -15,11 +14,10 @@ import {
   type GamePlayer,
   rolesFor,
   defaultRoleOf,
-  fatigueLabel,
   fatigueOf,
-  fatigueBand,
   observedFit,
   observedOverall,
+  type GrowthOutlook,
 } from "@story-fm/domain";
 import {
   type RecentRatingView,
@@ -38,7 +36,7 @@ import {
   observedRating,
   KNOWLEDGE_KO,
   observationMargin,
-  potentialBand,
+  growthOutlook,
 } from "../common/players/observation";
 import { type CareerSeasonView, type CareerTotalsView, careerTotalsView } from "./views/career";
 import {
@@ -99,8 +97,7 @@ export interface PlayerCardOursView {
    * 견주는 것만으로 안개가 걷힌다.
    */
   condition: ConditionRead;
-  fatigueLabel: string;
-  fatigueBand: FatigueBand;
+  fatigue: number;
   /**
    * 계약에 적힌 지위 — **계약 정보의 한 칸**이다 (people.md §5-2). 카드는 주급·만료
    * 옆에 세우고 명단에는 세우지 않는다: 명단은 지금 뛰는 자리와 전력을 읽는 표다.
@@ -181,8 +178,8 @@ export interface PlayerCardView {
   overall: number;
   /** 16축 — 축마다의 관측값과 오차폭 */
   attributes: PlayerCardAxisView[];
-  /** 잠재력 **추정 구간** — 짐작할 근거가 없으면 null (player.md §9.1) */
-  potential: { low: number; high: number; margin: number; confidence: string } | null;
+  /** 성장 가능성 — 판단 보류면 null (player.md §9.1) */
+  growth: GrowthOutlook | null;
 
   /** 주급·계약 만료일은 흐리지 않는다 — 공개 기록 계열이다 (player.md §10) */
   weeklyWage: number | null;
@@ -261,7 +258,7 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
       value: observed[key],
       margin: observationMargin(state, p.id, key),
     })),
-    potential: potentialBand(state, p),
+    growth: growthOutlook(state, p),
     weeklyWage: contract?.weeklyWage ?? null,
     contractUntil: contract?.until ?? null,
     injury: injury
@@ -335,8 +332,7 @@ export function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView 
     formTone: formTone(p.state.form),
     recentRatings: recentRatingsOf(state, p.id),
     condition: conditionShown(state, p.id, p.state.condition, liveWearOf(state, p.id)),
-    fatigueLabel: fatigueLabel(fatigueOf(p.state)),
-    fatigueBand: fatigueBand(fatigueOf(p.state)),
+    fatigue: Math.round(fatigueOf(p.state)),
     squadStatus: squadStatusOf(state, p),
     isCaptain: p.isCaptain,
     isViceCaptain: p.isViceCaptain === true,

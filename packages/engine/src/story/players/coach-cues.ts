@@ -38,7 +38,7 @@ import { tierOfTeamIn } from "../../common/core/club-tier";
 import { diffDays } from "../../common/core/dates";
 import { formLabel } from "../../common/players/form";
 import { derbyNameOf } from "../../common/data/derbies";
-import { potentialBand } from "../../common/players/observation";
+import { growthOutlook } from "../../common/players/observation";
 
 // ── 장부에서 줄을 뽑는 잔손 ────────────────────────────
 
@@ -246,14 +246,15 @@ export const matchupAxis: CoachEye = (state, sight) => {
   };
 };
 
-/** 2군에서 위를 보고 있는 아이들 — 잠재력 순 둘 */
+/** 2군에서 위를 보고 있는 아이들 — 성장 가능성 순 둘 (같으면 종합이 낮은 쪽) */
 function prospectsOf(state: GameState): GamePlayer[] {
   return playersOf(state, state.userTeamId)
     .filter((p) => squadLevelOf(p) === "reserve")
     .sort(
       (a, b) =>
-        (potentialBand(state, b)?.low ?? b.attributes.overall) -
-          (potentialBand(state, a)?.low ?? a.attributes.overall) || (a.id < b.id ? -1 : 1),
+        (growthOutlook(state, b)?.tier ?? -1) - (growthOutlook(state, a)?.tier ?? -1) ||
+        a.attributes.overall - b.attributes.overall ||
+        (a.id < b.id ? -1 : 1),
     )
     .slice(0, PROSPECTS_SHOWN);
 }
@@ -274,7 +275,7 @@ function monthlyGrowth(state: GameState, playerId: string): string {
   return `이달 ${risen.map(([target, delta]) => `${growthLabel(target)} +${delta}`).join(" · ")}`;
 }
 
-/** 2군의 잠재력 상위 둘이 어디까지 왔는가 */
+/** 2군의 성장 가능성 상위 둘이 어디까지 왔는가 */
 export const prospects: CoachEye = (state) => {
   const young = prospectsOf(state);
   if (young.length === 0) return null;
@@ -282,12 +283,12 @@ export const prospects: CoachEye = (state) => {
     code: "prospects",
     by: "coach",
     fact:
-      "2군 잠재력 상위: " +
+      "2군 성장 가능성 상위: " +
       young
         .map(
           (p) =>
             `${p.name} ${ageOf(p.birthdate, state.date)}세 종합 ${p.attributes.overall} ` +
-            `잠재력 ${potentialBand(state, p)?.low ?? "?"}~${potentialBand(state, p)?.high ?? "?"} · ${monthlyGrowth(state, p.id)}`,
+            `성장 가능성 ${growthOutlook(state, p)?.label ?? "판단 보류"} · ${monthlyGrowth(state, p.id)}`,
         )
         .join(" / "),
     playerIds: young.map((p) => p.id),

@@ -240,21 +240,6 @@ GM이 기사를 쓴다. 소식 큐는 전달 기록이며 감독의 답을 기�
 인물 간의 약속과 해석·이행 여부는 캐릭터북의 자유 기록에 남는다.
 코어의 고용·계약·재정 원장은 실제 체결과 지급만 기록한다.
 
-## 5-3. 멘토링 — 함께 훈련할 선수 배정 (`packages/engine/src/story/players/mentoring.ts`)
-
-`set_mentor`는 우리 1·2군 선수에게 함께 훈련할 선수를 배정한다. 나이·리더십
-문턱과 인원 상한은 없다. 멘티도 우리 1·2군 선수이며 자기 자신이나 이미 다른
-멘토에게 배정된 선수는 중복 배정하지 않는다. 빈 목록은 해당 멘토의 배정을 해제한다.
-
-`state.mentoring`은 멘토·멘티 id, 시작일, 종료일과 종료 사유를 기록한다.
-감독의 해제·선수 이탈이 배정을 종료한다. 나이나 1·2군 이동으로 자동 종료하지 않는다.
-종료한 배정은 7일간 조회할 수 있다.
-
-배정은 관계의 친밀도나 성장 배수가 아니다. 나이 차·리더십·포지션으로 전용
-성장 또는 정착 보너스를 계산하지 않는다. 실제 훈련의 효과는 훈련 결산 판단과
-검증된 성장 규칙을 따르고, 개인별 생리적 성장·회복은 그대로 적용한다.
-두 사람의 관계와 반응은 GM이 대화와 캐릭터북에 남긴다.
-
 ## 6. 캐릭터 페르소나와 필요한 순간의 주입
 
 초기 캐릭터북은 새 항목을 만들 때만 복사한다. 그 뒤 성격·의도·말투와 검색 키워드는
@@ -278,7 +263,7 @@ GM이 이름을 발화하거나 유저가 키워드를 입력하면 다음 유�
 
 ## 7. 선수 근황과 코치의 사실
 
-선수의 출전·부상·징계·성장·적응·멘토링·번호·은퇴는 현재 원장과 조회에서 읽는다.
+선수의 출전·부상·징계·성장·적응·번호·은퇴는 현재 원장과 조회에서 읽는다.
 코치의 참고 정보(`coachCues`)는 전술과 훈련의 사실을 고른다.
 명령이나 감정 상태가 아니며, 누가 어떤 말을 꺼낼지는 GM이 판단한다.
 
@@ -305,16 +290,16 @@ GM이 이름을 발화하거나 유저가 키워드를 입력하면 다음 유�
 
 ## 코드 위치
 
-| 무엇                                | 어디                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 캐릭터북 항목·후보·주입·요청 스키마 | `packages/domain/src/common/character-book.ts`                                                       |
-| 초기 항목·검색·색인                 | `packages/engine/src/common/people/character-book.ts`                                                |
-| 편집 접수와 반영                    | `packages/engine/src/app/workflows/story/character-book.ts`                                          |
-| 비동기 편집 에이전트                | `packages/agents/src/story/character-book-editor.ts`                                                 |
-| 웹 편집 실행                        | `apps/web/application/lib/character-book-jobs.ts`                                                    |
-| 대화 요약                           | `packages/agents/src/story/history-compactor.ts`                                                     |
-| 이력 예산과 접는 지점               | `packages/engine/src/common/core/history-window.ts`                                                  |
-| 스태프 계약                         | `packages/engine/src/story/people/staff-employment.ts`                                               |
-| 완장·멘토링                         | `packages/engine/src/common/players/hierarchy.ts` · `packages/engine/src/story/players/mentoring.ts` |
-| 언론의 축구 사실                    | `packages/engine/src/story/world/media.ts`                                                           |
-| 감독직 면접 응답                    | `packages/engine/src/app/workflows/story/world/interview.ts`                                         |
+| 무엇                                | 어디                                                         |
+| ----------------------------------- | ------------------------------------------------------------ |
+| 캐릭터북 항목·후보·주입·요청 스키마 | `packages/domain/src/common/character-book.ts`               |
+| 초기 항목·검색·색인                 | `packages/engine/src/common/people/character-book.ts`        |
+| 편집 접수와 반영                    | `packages/engine/src/app/workflows/story/character-book.ts`  |
+| 비동기 편집 에이전트                | `packages/agents/src/story/character-book-editor.ts`         |
+| 웹 편집 실행                        | `apps/web/application/lib/character-book-jobs.ts`            |
+| 대화 요약                           | `packages/agents/src/story/history-compactor.ts`             |
+| 이력 예산과 접는 지점               | `packages/engine/src/common/core/history-window.ts`          |
+| 스태프 계약                         | `packages/engine/src/story/people/staff-employment.ts`       |
+| 완장                                | `packages/engine/src/common/players/hierarchy.ts`            |
+| 언론의 축구 사실                    | `packages/engine/src/story/world/media.ts`                   |
+| 감독직 면접 응답                    | `packages/engine/src/app/workflows/story/world/interview.ts` |

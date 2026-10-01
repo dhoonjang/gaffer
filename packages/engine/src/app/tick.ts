@@ -24,6 +24,7 @@ import {
   naturalPositionOf,
   tickEvents,
   type TurnOperation,
+  sessionLoad,
 } from "@story-fm/domain";
 import { type TrainedSession } from "../story/players/training-report";
 import { restingOn, trainsWithFirstTeam } from "../story/players/training-report";
@@ -58,7 +59,7 @@ import {
   type RecoveryKind,
   dailyRecovery,
   fatigueAfterDay,
-  fatigueFromSessions,
+  fatigueFromTraining,
   fatigueDayOf,
   injuryWeight,
   fatigueFromMinutes,
@@ -164,7 +165,7 @@ function sessionById(state: GameState, id: string): TrainingSession | null {
 }
 
 /**
- * **몸을 쓰는 훈련인가** — 회복 전용 세션이 아니면 true (부상 판정 대상).
+ * **오늘 세션들이 몸에 지운 부하** — 세션마다 그 종류의 부하(`sessionLoad`)를 더한다.
  *
  * ⚠️ **코어는 능력치도 전술 적응도도 올리지 않는다.**
  *
@@ -177,8 +178,8 @@ function sessionById(state: GameState, id: string): TrainingSession | null {
  * `dailyTick`이 그날의 성격(`RecoveryKind`)을 정해 한 번만 얹는다. 세션마다
  * 더하면 회복 세션이 있는 날은 일일 회복까지 이중으로 받는다.
  */
-function isHardSession(session: TrainingSession): boolean {
-  return !(session.focus.length > 0 && session.focus.every((f) => f === "recovery"));
+function trainingLoadOf(sessions: readonly (TrainingSession | null)[]): number {
+  return sessions.reduce((n, session) => n + (session ? sessionLoad(session.focus) : 0), 0);
 }
 
 /**
@@ -258,17 +259,14 @@ function dailyTick(
   // 오늘 재활 중인 선수 — 적응도가 끌리는 자리(재활 30 · 떠나 있음 55)를 가르는 사실
   const injuredPlayers = openInjuryIds(state);
   /**
-   * **오늘 몸을 쓰는 세션 수** — 누적 피로와 훈련 부상이 같은 이 수를 읽는다.
+   * **오늘 세션들의 부하 합** — 누적 피로와 훈련 부상이 같은 이 값을 읽는다.
    *
    * 여기서 한 번만 세는 것은 순서 때문이다: 잔고를 적립하는 루프가 세션 루프보다
    * 앞에 서야 하고(회복·폼·적응도와 한 하루에 얹힌다), 세션 루프는 엔트리에 `done`을
    * 찍으므로 뒤로 옮길 수 없다. 두 곳에서 따로 세면 프리시즌 이중 세션이 한쪽에만
    * 잡히는 날이 온다.
    */
-  const hardSessions = workEntries.filter((e) => {
-    const session = sessionById(state, e.refId);
-    return session !== null && isHardSession(session);
-  }).length;
+  const trainingLoad = trainingLoadOf(workEntries.map((e) => sessionById(state, e.refId)));
 
   for (const player of players) {
     /**
@@ -307,7 +305,7 @@ function dailyTick(
      */
     player.state.fatigue = clampFatigue(
       fatigueAfterDay(
-        fatigueOf(player.state) + (away ? 0 : fatigueFromSessions(hardSessions)),
+        fatigueOf(player.state) + (away ? 0 : fatigueFromTraining(trainingLoad)),
         fatigueDayOf(recoveryKind, away),
       ),
     );
@@ -388,7 +386,7 @@ function dailyTick(
   }
 
   /**
-   * 훈련 부상 — 실제 훈련 세션 수에 비례 (결정적 시드).
+   * 훈련 부상 — 그날 세션들의 부하 합에 비례 (결정적 시드).
    *
    * 빈도도 대상도 **개인 성향**을 탄다: 유리몸이 많은 선수단은 실제로 더 자주
    * 쓰러지고, 그중 누가 걸리는지도 경기와 같은 저울(`injuryWeight`)로 정한다.
@@ -397,12 +395,12 @@ function dailyTick(
    * 불변식). 갈라 두면 훈련장에 서지도 않은 2군이 훈련 중에 다치고, 다치지 않고
    * 소화한 몫(`easeProneness`)도 함께 받는다.
    */
-  if (hardSessions > 0) {
+  if (trainingLoad > 0) {
     const candidates = players.filter((p) => trainsWithFirstTeam(state, p));
     if (candidates.length > 0) {
       const avgProneness =
         candidates.reduce((s, p) => s + pronenessValue(p), 0) / candidates.length;
-      if (rng() < TRAINING_INJURY_PER_SESSION * hardSessions * avgProneness) {
+      if (rng() < TRAINING_INJURY_PER_SESSION * trainingLoad * avgProneness) {
         const weights = candidates.map((p) => injuryWeight(p, 0, pronenessValue(p)));
         const total = weights.reduce((s, w) => s + w, 0);
         let roll = rng() * total;
@@ -422,7 +420,7 @@ function dailyTick(
         );
       }
       // 훈련도 노출이다 — 다치지 않고 소화한 만큼 성향이 내려간다
-      const exposure = trainingExposure(hardSessions, candidates.length);
+      const exposure = trainingExposure(trainingLoad, candidates.length);
       for (const p of candidates) easeProneness(p, exposure);
     }
   }

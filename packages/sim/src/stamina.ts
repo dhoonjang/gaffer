@@ -111,7 +111,7 @@ const FATIGUE_PER_FULL_MATCH = 10;
  */
 const FATIGUE_CONGESTION = 1.0;
 
-/** 본훈련 세션 하나가 남기는 몫 — 프리시즌의 이중 세션은 그대로 두 배다 */
+/** 부하 1인 훈련 세션 하나가 남기는 몫 — 세션의 부하는 그 종류가 정한다 (`sessionLoad`) */
 const FATIGUE_PER_SESSION = 0.5;
 
 /**
@@ -153,9 +153,9 @@ export function fatigueFromMinutes(minutes: number, condition: number): number {
   return ((FATIGUE_PER_FULL_MATCH * minutes) / 90) * congestion;
 }
 
-/** 오늘 소화한 본훈련 세션이 잔고에 얹히는 몫 */
-export function fatigueFromSessions(sessions: number): number {
-  return Math.max(0, sessions) * FATIGUE_PER_SESSION;
+/** 오늘 소화한 세션들의 부하 합이 잔고에 얹히는 몫 — 이중 세션은 두 번 얹힌다 */
+export function fatigueFromTraining(load: number): number {
+  return Math.max(0, load) * FATIGUE_PER_SESSION;
 }
 
 /** 그런 하루를 보낸 뒤의 잔고 — 0 쪽으로 하루치만큼 빠진다 */
