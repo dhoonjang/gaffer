@@ -354,16 +354,20 @@ export async function runInstructions(
           ? buildFinanceContext(state)
           : buildPeaceContext(state);
   const rules =
-    "전술판에서 이미 바꾼 값은 반복 적용하지 않는다. 서로 자리 교환은 양쪽을 지정하고 한 선수의 position과 move를 함께 지정하지 않는다.";
+    agent === "tactic-orders" || agent === "match-reader"
+      ? "전술판에서 이미 바꾼 값은 반복 적용하지 않는다. 서로 자리 교환은 양쪽을 지정하고 한 선수의 position과 move를 함께 지정하지 않는다."
+      : null;
   let orders: OpsOrders & { reading?: Reading };
   if (!options.evaluator && resolveLlmMode() === "mock") {
     orders = parseOrdersReport(ordersScript(state, said).output ?? {}, names, TACTIC_CAPS);
   } else {
     const request = {
       said,
-      context: [rules, ...context, ...buildBoardMovesBlock(state, options.boardMoves ?? [])].join(
-        "\n",
-      ),
+      context: [
+        ...(rules ? [rules] : []),
+        ...context,
+        ...buildBoardMovesBlock(state, options.boardMoves ?? []),
+      ].join("\n"),
       commands: instructionCommands(specs, names),
       candidates: instructionCandidates(state, said),
       evaluator: options.evaluator ?? createGameEvaluator(agent),

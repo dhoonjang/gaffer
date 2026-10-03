@@ -88,6 +88,7 @@ import {
   familiarityLabel,
   type CharacterBookInjection,
   characterBookText,
+  interviewFactText,
 } from "@story-fm/domain";
 
 /** 경기 다이제스트가 "방금 있었던 일"로 치는 기간 (일) */
@@ -321,6 +322,20 @@ function block(tag: string, body: string | null, attrs = ""): string | null {
 }
 
 /** 여러 줄을 한 덩어리로 — null과 빈 줄은 걷는다 */
+/** 열린 감독직 면접 — 조회와 같은 사실 문장으로 (prompts.md §5-1) */
+function interviewBlocks(state: GameState): (string | null)[] {
+  return pendingManagerInterviews(state).map((interview) =>
+    block(
+      "interview",
+      lines(
+        `${interview.date} ${teamName(interview.teamId)} 감독직 면접`,
+        ...interview.facts.map((fact) => `- ${interviewFactText(fact)}`),
+      ),
+      ` id="${interview.id}"`,
+    ),
+  );
+}
+
 function lines(...items: (string | null)[]): string {
   return items.filter((x): x is string => x !== null && x !== "").join("\n");
 }
@@ -453,6 +468,7 @@ function buildUnemployedNote(state: GameState, passed?: TimePassed | null): stri
       ),
     ),
 
+    ...interviewBlocks(state),
     // 제안이 없는 것도 무직에겐 사실이다 — 기다리는 중인지 고를 자리가 있는지가 갈린다
     block(
       "job_offers",
@@ -571,9 +587,7 @@ function offseasonFacts(state: GameState): string | null {
     ...youthCandidateFacts(state),
   ];
   if (facts.length === 0) return null;
-  return `지난 시즌이 닫히며 남은 것 — 자리를 어떻게 열지, 누가 무슨 말을 하는지는 네가 정한다:\n${facts
-    .map((f) => `- ${f}`)
-    .join("\n")}`;
+  return `지난 시즌이 닫히며 남은 것:\n${facts.map((f) => `- ${f}`).join("\n")}`;
 }
 
 function mediaBlock(state: GameState): string | null {
@@ -896,12 +910,7 @@ export function buildGmStateNote(state: GameState, passed?: TimePassed | null): 
     block("time_passed", timePassedLine(state, passed)),
     block("offseason", offseason),
     block("international", international),
-    block(
-      "interview",
-      pendingManagerInterviews(state).length > 0
-        ? JSON.stringify(pendingManagerInterviews(state))
-        : null,
-    ),
+    ...interviewBlocks(state),
     // 파견 중인 스카우트 — 도착한 보고서(<scout_reports>)와 같은 사람의 덩어리다
     // 선수 근황 — 선수단 중 **사실이 붙는** 셋이다.
     // 코어는 경기와 훈련의 사실만 낸다 — 누가 말할지, 무슨 말을 할지는 GM의 몫

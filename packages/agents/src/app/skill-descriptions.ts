@@ -23,7 +23,8 @@ export const SKILL_CATALOG = [
     label: CALL_LABELS.release_staff,
     group: "대화·서사",
     readOnly: false,
-    description: "감독이 명시적으로 해고한 스태프의 재직을 종료한다",
+    description:
+      "감독이 우리 구단 스태프를 명시적으로 해고했을 때 그 사람의 재직을 종료한다. name은 감독이 부른 이름 그대로다. 잔여 계약 위약금(연봉 1년치 상한)이 구단 원장에 지출로 남고, 현금이 모자라면 반려된다. 불만·경고·해고 고민은 해고가 아니다. 해고된 사람은 스태프 풀로 돌아가 같은 시즌 안에 다시 고용할 수 있다.",
   },
   {
     name: "accept_manager_offer",
@@ -46,7 +47,8 @@ export const SKILL_CATALOG = [
     label: CALL_LABELS.apply_manager_job,
     group: "대화·서사",
     readOnly: false,
-    description: "감독이 지원한 구단과 감독직 면접을 연다",
+    description:
+      "감독이 공석인 구단에 지원하겠다고 명시했을 때 그 구단과 감독직 면접을 연다. team은 구단 id·이름·약칭이다. 최근 공석이 아닌 구단이면 반려되고 지금 지원할 수 있는 공석 목록이 온다. 같은 구단의 면접이 이미 열려 있거나 경기 중이면 반려된다. 면접의 결과는 respond_to_interview가 기록한다.",
   },
   {
     name: "tactic_orders",
@@ -54,11 +56,11 @@ export const SKILL_CATALOG = [
     group: "전술·훈련",
     readOnly: false,
     description:
-      "감독이 판을 세우는 지시를 했을 때 — 라인업·1·2군 이동·팀 전술 6축과 갈래·선수의 자리·역할·개인 지시·세트피스 키커와 인원·지역 플랜·약점 공략·완장. " +
-      "한 턴에 한 번 호출하고 적용·반려 결과를 따른다. " +
+      "감독이 판을 세우는 지시를 했을 때 — 라인업·1·2군 이동·팀 전술 6축과 갈래·선수의 자리·역할·세트피스 키커와 인원·승부차기 순서·완장. " +
+      "인자 없이 한 턴에 한 번 부른다 — 이번 턴 감독 발화 원문을 코어가 해석하고 적용·반려 결과를 돌려준다. " +
       "미반영 지시와 필요한 결정을 이번 장면에서 감독에게 알린다. " +
       '감독이 정하지 않고 맡긴 말("알아서 짜세요")에는 부르지 않는다 — 코치의 안을 장면으로 내놓고 감독이 못 박은 턴에 부른다. ' +
-      "훈련·육성은 training_orders, 재정은 finance_orders다. 인물 기록은 update_character로 갱신한다.",
+      "맨마킹·공간 공략 같은 실행 지시는 경기 중에만 걸린다. 훈련·육성은 training_orders, 재정은 finance_orders다.",
   },
 
   {
@@ -68,7 +70,7 @@ export const SKILL_CATALOG = [
     readOnly: false,
     description:
       "감독이 훈련이나 육성을 지시했을 때 — 훈련 일정 등록·비우기·개인 훈련·집중 육성·유스 첫 계약. " +
-      "한 턴에 한 번 부른다. 결과로 무엇이 걸렸고 무엇이 반려됐는지가 온다. " +
+      "인자 없이 한 턴에 한 번 부른다 — 이번 턴 감독 발화 원문을 코어가 해석한다. 결과로 무엇이 걸렸고 무엇이 반려됐는지가 온다. " +
       "라인업·전술은 tactic_orders다.",
   },
 
@@ -88,7 +90,7 @@ export const SKILL_CATALOG = [
     group: "재정",
     readOnly: false,
     description:
-      "표값 변경을 실행한다. 한 턴에 한 번 부른다. 구장 증설 요청과 결정은 request_board로 기록한다.",
+      "감독이 티켓 가격을 바꾸라고 지시했을 때 부른다. 인자 없이 한 턴에 한 번 부른다 — 이번 턴 감독 발화 원문을 코어가 해석해 표값을 바꾸고 적용·반려 결과를 돌려준다. 실제 폭은 코어가 기준가 대비로 자른다. 구장 증설 요청과 결정은 request_board다.",
   },
 
   {
@@ -97,7 +99,7 @@ export const SKILL_CATALOG = [
     group: "재정",
     readOnly: false,
     description:
-      "보드 재정 요청을 접수하거나 requestId로 열린 안건의 결정을 기록한다. GM이 맥락을 읽고 decision(approved·rejected·conditional)·authorizedBy(현재 구단주 ID)·granted·respondOn과 조건·deliversOn을 정한다. pending은 자동 판정되지 않는다. 요청량과 승인량은 좌석 수다. 판단 근거와 맥락 조건 내용은 캐릭터북에 기록한다. 원장이 반려한 금액을 승인된 것으로 말하지 않는다.",
+      "보드 재정 요청을 접수하거나 requestId로 열린 안건의 결정을 기록한다. GM이 맥락을 읽고 decision(approved·rejected·conditional)·authorizedBy(현재 구단주 ID)·granted·respondOn과 조건·deliversOn을 정한다. pending은 자동 판정되지 않는다. 요청량과 승인량은 좌석 수다. 원장이 반려한 금액을 승인된 것으로 말하지 않는다.",
   },
   {
     name: "hire_staff",
@@ -105,7 +107,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "감독과 당사자가 합의한 스태프 고용·재계약을 기록한다. name·salary(연봉 £)·until(만료일)을 명시한다. 풀 밖 사람은 role·title·characterBook을 함께 제공한다. 기존 재직자는 같은 이름으로 갱신하며 급여·기한을 자동 결정하지 않는다. 제안만으로 체결하지 않는다. 합의 과정과 인물의 반응은 캐릭터북에 기록한다.",
+      "감독과 당사자가 합의한 스태프 고용·재계약을 기록한다. name·salary(연봉 £)·until(만료일)을 명시한다. 풀 밖 사람은 role·title·characterBook을 함께 제공한다. 기존 재직자는 같은 이름으로 갱신하며 급여·기한을 자동 결정하지 않는다. 제안만으로 체결하지 않는다.",
   },
   {
     name: "start_match",
@@ -123,7 +125,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "구단의 실제 감독 경질·선임을 실행한다. action=dismiss는 재직을 종료하고, appoint는 공석에 AI 감독을 선임한다. team·reason을 적고 선임은 managerName과 새 인물의 rating을 지정한다. 풀의 감독은 기존 역량과 이력을 유지한다. 유저 감독의 부임은 제안과 명시적 수락을 거친다. 기대·평가·경고는 캐릭터북에 기록한다.",
+      "구단의 실제 감독 경질·선임을 실행한다. action=dismiss는 재직을 종료하고, appoint는 공석에 AI 감독을 선임한다. team·reason을 적고 선임은 managerName과 새 인물의 rating을 지정한다. 풀의 감독은 기존 역량과 이력을 유지한다. 유저 감독의 부임은 제안과 명시적 수락을 거친다.",
   },
   {
     name: "offer_manager_job",
@@ -131,7 +133,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "구단이 실제로 제시한 감독 계약을 기록한다. team·salary·years·expiresOn·reason을 명시한다. 현재 구단은 재계약, 다른 공석은 부임·접근 제안이다. 시기·횟수·할인 표가 없다. 유저의 수락을 대신하지 않는다. 같은 구단의 열린 제안 수정은 counter_manager_offer를 사용한다.",
+      "구단이 실제로 제시한 감독 계약을 기록한다. team·salary·years·expiresOn·reason을 명시한다. 현재 구단은 재계약, 다른 공석은 부임·접근 제안이다. 유저의 수락을 대신하지 않는다. 같은 구단의 열린 제안 수정은 counter_manager_offer를 사용한다.",
   },
   {
     name: "set_retirement",
@@ -147,7 +149,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "열린 감독직 면접에서 채용 제안 여부와 계약 조건을 판정한다. 여러 구단과 면접 중이면 interviewId 또는 team(구단 id·이름·약칭)으로 대상을 지정한다. 면접이 하나면 생략할 수 있다. offer와 reason을 적고, 제안이면 terms에 salary·years·expiresOn을 명시한다. 제안은 감독의 수락이 아니다. 감독이 답한 내용과 구단 사정에 근거하며, 일반적인 인물 대화는 캐릭터북에 기록한다.",
+      "열린 감독직 면접에서 채용 제안 여부와 계약 조건을 판정한다. 여러 구단과 면접 중이면 interviewId 또는 team(구단 id·이름·약칭)으로 대상을 지정한다. 면접이 하나면 생략할 수 있다. offer와 reason을 적고, 제안이면 terms에 salary·years·expiresOn을 명시한다. 제안은 감독의 수락이 아니다. 감독이 답한 내용과 구단 사정에 근거하며.",
   },
   {
     name: "update_character",
@@ -164,8 +166,8 @@ export const SKILL_CATALOG = [
     readOnly: false,
     description:
       "서사에서 벌어진 매출·비용을 장부에 남긴다 — 스폰서가 보너스를 얹거나(commercial), 유니폼이 동나거나(merchandising), 관중이 몰리거나(matchday), 시설이 망가지거나(facility), 원정 의료비가 들거나(travel_medical), 선수단에 포상을 주는(bonus) 일. " +
-      "경기 운영비는 matchday_opex. 중계권·주급·이적료·상각·상금은 코어가 계산하므로 이 도구로 건드릴 수 없다. " +
-      "대화에서 확정된 지급 원인과 실제 금액을 기록한다. 원장에 들어가 월간 보고서와 PSR에 반영된다.",
+      "경기 운영비는 matchday_opex. 중계권·주급·상각·대회 상금은 코어가 계산하므로 이 도구로 건드릴 수 없다. " +
+      "대화에서 확정된 지급 원인과 실제 금액을 기록한다. 원장에 들어가 잔고·월간 보고서·급여 비중에 반영된다.",
   },
   {
     name: "resign",
@@ -240,7 +242,7 @@ export const SKILL_CATALOG = [
       '감독이 경기 전에 상대를 묻거나("쟤네 어떻게 나와") 누굴 노릴지·누굴 세울지 상의하면 순위와 최근 5경기만 들고 답하지 말고 이걸 부른다. ' +
       "지점 줄의 +는 우리에게 이로운 것, -는 상대에게 이로운 것이다. " +
       "경기는 opponent(상대 팀 이름·약칭)·competition(epl·ucl·facup 등)·date(YYYY-MM-DD)로 고르고, 아무것도 주지 않으면 다음 우리 경기다. " +
-      "⚠️ 예상 XI는 예상이다 — 상대가 로테이션을 돌리면 갈리므로 확정으로 말하지 않는다. 경기 중에는 부를 수 없다(판세 화면이 지금 판을 들고 있다).",
+      "예상 XI는 예상이다 — 상대가 로테이션을 돌리면 갈리므로 확정으로 말하지 않는다. 경기 중에는 부를 수 없다(판세 화면이 지금 판을 들고 있다).",
   },
   {
     name: "get_career",

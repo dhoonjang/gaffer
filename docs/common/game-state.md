@@ -433,7 +433,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 20`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 현재 모델 입력의 게임 버전은 18.0.0이며
+**`SAVE_VERSION = 20`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
 세이브 버전과 별도로 `config/game-version.yml`이 소유한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 

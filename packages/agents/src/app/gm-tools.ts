@@ -23,6 +23,10 @@ import {
   TACKLING_LEVELS,
   KEEPER_DISTRIBUTIONS,
   SET_PIECE_ROUTINE_LEVELS,
+  SET_PIECE_ROUTINE_AXES,
+  TACTIC_TOGGLES,
+  type SetPieceRoutineKey,
+  type TacticToggleKey,
   BoardReviewSchema,
   RetirementDecisionSchema,
   RequestBoardInputSchema,
@@ -101,9 +105,25 @@ export const CORE_COMMANDS: ReadonlySet<string> = new Set([
   "set_ticket_price",
 ]);
 
+/** 갈래 하나의 낱말 — 해석기가 열거 값의 뜻을 읽는 자리다 (prompts.md §5-2) */
+function toggleText(key: TacticToggleKey): string {
+  const toggle = TACTIC_TOGGLES.find((t) => t.key === key)!;
+  const words = Object.entries(toggle.words).map(([value, word]) => `${value}=${word}`);
+  return `${toggle.label} — ${[...words, `${toggle.neutralValue}=${toggle.neutralWord}`].join(" · ")}`;
+}
+
+/** 세트피스 축 하나의 낱말과 인원 */
+function routineText(key: SetPieceRoutineKey): string {
+  const axis = SET_PIECE_ROUTINE_AXES.find((a) => a.key === key)!;
+  const levels = SET_PIECE_ROUTINE_LEVELS.map(
+    (level) => `${level}=${axis.words[level]} ${axis.counts[level]}명`,
+  );
+  return `${axis.label}(${axis.hint}) — ${levels.join(" · ")}`;
+}
+
 const CORE_COMMAND_LABELS: Record<string, string> = {
-  set_lineup: "선발 11명과 벤치, 1·2군 이동",
-  set_squad_level: "1·2군 이동",
+  set_lineup: "선발 11명·벤치 지정 (선발에 넣을 2군 선수의 1군 승격 포함)",
+  set_squad_level: "선발·벤치를 바꾸지 않는 1·2군 이동",
   set_tactics: "팀 전술 6축과 갈래",
   set_player_tactic: "한 선수의 자리와 역할",
   set_set_piece_takers: "세트피스 키커",
@@ -111,7 +131,7 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
   substitute: "교체",
   set_captain: "완장 — 주장과 부주장",
   set_shootout_order: "승부차기 키커 순서",
-  set_training: "훈련 지정",
+  set_training: "팀 훈련 일정 등록·비우기와 한 선수의 개인 훈련(능력치 축·전향 자리·휴식)",
   set_development_focus: "집중 육성",
   sign_youth: "유스 첫 계약",
   request_board: "보드에 요청 — 구장 증설",
@@ -467,10 +487,13 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           // 낱말은 도구 설명이 `TACTIC_TOGGLES`에서 만들어 싣는다 (prompts.md §5-2).
           // 해제는 열거 안의 중립 토큰(`none`)이 받는다 — `.nullable()`은 없음을 `null`로
           // 적는 모델을 함께 받는 관용이고, 모델에게 보이지 않는다 (prompts.md §2)
-          transition: z.enum(TRANSITION_MODES).nullable(),
-          offsideTrap: z.boolean(),
-          tackling: z.enum(TACKLING_LEVELS),
-          keeperDistribution: z.enum(KEEPER_DISTRIBUTIONS).nullable(),
+          transition: z.enum(TRANSITION_MODES).nullable().describe(toggleText("transition")),
+          offsideTrap: z.boolean().describe(toggleText("offsideTrap")),
+          tackling: z.enum(TACKLING_LEVELS).describe(toggleText("tackling")),
+          keeperDistribution: z
+            .enum(KEEPER_DISTRIBUTIONS)
+            .nullable()
+            .describe(toggleText("keeperDistribution")),
         })
         .partial(),
       (input) => setTactics(state, input),
@@ -536,8 +559,8 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           // 낱말은 도구 설명이 `SET_PIECE_ROUTINE_AXES`에서 만들어 싣는다 (prompts.md §5-2).
           // 지시를 푸는 값은 열거 안의 `normal`이다 — `.nullable()`은 없음을 `null`로 적는
           // 모델을 함께 받는 관용이고, 모델에게 보이지 않는다 (prompts.md §2)
-          commit: z.enum(SET_PIECE_ROUTINE_LEVELS).nullable(),
-          guard: z.enum(SET_PIECE_ROUTINE_LEVELS).nullable(),
+          commit: z.enum(SET_PIECE_ROUTINE_LEVELS).nullable().describe(routineText("commit")),
+          guard: z.enum(SET_PIECE_ROUTINE_LEVELS).nullable().describe(routineText("guard")),
         })
         .partial(),
       (input) => setSetPieceRoutine(state, input),
