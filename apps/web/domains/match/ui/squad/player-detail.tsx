@@ -7,12 +7,19 @@ import {
   isNaturalAt,
   physiqueLabel,
   rolesFor,
+  injuryHistoryBrief,
   injuryHistoryText,
 } from "@story-fm/domain";
 import { contractUntil } from "@/domains/common/lib/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/domains/common/ui/player-facts";
-import { FitGauge, FormArrow, RatingTrend, StatusBadges } from "../../../common/ui/player-marks";
-import type { SquadRow } from "./types";
+import {
+  FitGauge,
+  FormArrow,
+  RatingTrend,
+  SetPieceDuties,
+  StatusBadges,
+} from "../../../common/ui/player-marks";
+import type { SetPieceTakersView, SquadRow } from "./types";
 
 /** 선택한 선수 상세 — 그 자리 적응도와 능력치 16축 */
 export function PlayerDetail({
@@ -21,8 +28,11 @@ export function PlayerDetail({
   action,
   onRole,
   roleId,
+  setPieces,
 }: {
   p: SquadRow;
+  /** 세트피스 키커 — 이 선수가 맡은 자리를 상태 줄에 세운다 */
+  setPieces?: SetPieceTakersView;
   slotCode: string | null;
   /** 이 선수에게 거는 조작 — 1·2군 이동. **선수 옆에 둔다** */
   action?: React.ReactNode;
@@ -92,12 +102,6 @@ export function PlayerDetail({
   const showCareer = careerRows.length > 1 || (careerRows.length === 1 && p.seasonApps === 0);
   return (
     <div className="player-detail" data-testid="player-detail">
-      {action && (
-        <div className="pd-head">
-          <div className="pd-action">{action}</div>
-        </div>
-      )}
-
       {/* 상태 요약 — 이름·나이·OVR은 바로 위 행과 겹치므로 표에 없는 것만, 박스로
           쪼개지 않고 한 줄로 훑는다 */}
       <div className="pd-summary">
@@ -139,12 +143,16 @@ export function PlayerDetail({
             </b>
           </span>
         )}
+        {setPieces && <SetPieceDuties id={p.id} takers={setPieces} />}
         {/* **등급이 아니라 이력이다** (player.md §5.3) — 얼마나 위태로운지는 코어가
             말하지 않는다. 이력이 없는 선수에게는 아무 줄도 서지 않으므로, 내력이 있는
             사람만 도드라진다 */}
         {p.injuryHistory.count > 0 && (
           <span>
-            부상 이력 <b>{injuryHistoryText(p.injuryHistory)}</b>
+            부상 이력{" "}
+            <b title={injuryHistoryText(p.injuryHistory) ?? undefined}>
+              {injuryHistoryBrief(p.injuryHistory)}
+            </b>
           </span>
         )}
         {/* **없는 기록은 적지 않는다.** 개막 전에는 스물일곱 명 전원이 "0경기 ·
@@ -194,6 +202,8 @@ export function PlayerDetail({
           </span>
         )}
         <StatusBadges p={p} />
+        {/* 이 선수에게 거는 조작 — 상태 줄의 오른쪽 끝에 붙여 따로 한 줄을 차지하지 않는다 */}
+        {action && <span className="pd-action">{action}</span>}
       </div>
 
       <div className="pd-body">

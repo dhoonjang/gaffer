@@ -39,7 +39,7 @@ import type { PositionGroup, SquadStatus } from "@story-fm/domain";
  * 구성이 아니라 이 게임의 1부 명단이다.
  */
 export interface RealPlayerSeed {
-  characterBook?: import("@story-fm/domain").CharacterBookContent;
+  lorebook?: import("@story-fm/domain").LorebookContent;
   /** 로마자 통용 표기 — id 슬러그·외부 데이터 매핑용 */
   nameEn: string;
   /** 한국 축구 언론 통용 한글 표기 — 게임 내 표시명 */

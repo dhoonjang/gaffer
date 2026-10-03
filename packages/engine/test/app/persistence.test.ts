@@ -131,31 +131,29 @@ describe("세이브 내구성 — 업데이트·크래시에도 게임이 살아
   it("인물 원본·편집 이력을 왕복 보존하고 끊어진 참조는 거부한다", () => {
     const state = createTestGame();
     const person = state.personas[0]!;
-    const before = structuredClone(
-      state.characterBook.find((row) => row.id === person.characterBookId)!,
-    );
+    const before = structuredClone(state.lorebook.find((row) => row.id === person.lorebookId)!);
     requestCharacterUpdate(state, {
       characterId: before.id,
       additionalInformation: "새로운 합의 원문",
     });
-    completeCharacterUpdate(state, state.characterBookJobs[0]!.id, before.version, {
+    completeCharacterUpdate(state, state.lorebookJobs[0]!.id, before.version, {
       keywords: before.keywords,
       description: before.description,
       information: "합의를 반영한 현재 기록",
     });
     saveGame(state);
     const loaded = loadGame(state.id)!;
-    expect(loaded.characterBookRevisions[0]).toMatchObject({
+    expect(loaded.lorebookRevisions[0]).toMatchObject({
       previous: before,
       additionalInformation: "새로운 합의 원문",
     });
     expect(loaded.personas).toEqual(state.personas);
     expect(loaded.staffPool).toEqual(state.staffPool);
     expect(loaded.players[0]!.attributes).not.toHaveProperty("overall");
-    loaded.personas[0]!.characterBookId = "person:missing";
+    loaded.personas[0]!.lorebookId = "person:missing";
     expect(SaveSchema.safeParse(loaded).success).toBe(false);
-    loaded.personas[0]!.characterBookId = state.personas[0]!.characterBookId;
-    loaded.characterBook.push(structuredClone(loaded.characterBook[0]!));
+    loaded.personas[0]!.lorebookId = state.personas[0]!.lorebookId;
+    loaded.lorebook.push(structuredClone(loaded.lorebook[0]!));
     expect(SaveSchema.safeParse(loaded).success).toBe(false);
   });
 

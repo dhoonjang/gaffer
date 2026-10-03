@@ -88,8 +88,8 @@ import {
   fatigueBand,
   fatigueOf,
   familiarityLabel,
-  type CharacterBookInjection,
-  characterBookText,
+  type LorebookInjection,
+  lorebookText,
   interviewFactText,
 } from "@story-fm/domain";
 
@@ -1148,17 +1148,17 @@ function relevantTurns(state: GameState): typeof state.chat {
  * 창 밖으로 밀려난 기록은 여기 오지 않으므로 그 인물은 그 순간 다시 주입 대상이
  * 된다 — 만료 규칙을 따로 두지 않는 이유다 (people.md §6).
  */
-export function injectedCharacters(state: GameState): CharacterBookInjection[] {
-  return windowOf(state).turns.flatMap((turn) => turn.characterBook ?? []);
+export function injectedCharacters(state: GameState): LorebookInjection[] {
+  return windowOf(state).turns.flatMap((turn) => turn.lorebook ?? []);
 }
 
 export function recordCharacterInjection(
   state: GameState,
-  entries: readonly CharacterBookInjection[],
+  entries: readonly LorebookInjection[],
 ): void {
   const turn = state.chat[state.chat.length - 1];
   if (!turn || turn.role === "model" || entries.length === 0) return;
-  turn.characterBook = entries.map((entry) => ({ ...entry, keywords: [...entry.keywords] }));
+  turn.lorebook = entries.map((entry) => ({ ...entry, keywords: [...entry.keywords] }));
 }
 
 /**
@@ -1192,7 +1192,7 @@ function windowOf(state: GameState): { turns: GameState["chat"] } {
 export function renderTurnGroup(
   state: GameState,
   turns: ReadonlyArray<Pick<ChatTurn, "role" | "text">>,
-  cards: readonly CharacterBookInjection[],
+  cards: readonly LorebookInjection[],
 ): string {
   return [
     // 오퍼레이터 지시도 같은 유저 메시지 안이다 — 갈리는 건 **내용의 형식**이다.
@@ -1203,7 +1203,7 @@ export function renderTurnGroup(
         : buildManagerMessage(state, turn.text),
     ),
   ]
-    .concat(characterBookText(cards) || [])
+    .concat(lorebookText(cards) || [])
     .filter((block): block is string => block !== null)
     .join("\n\n");
 }
@@ -1217,10 +1217,7 @@ export function renderTurnGroup(
  * 발화를 채팅에 먼저 밀어 넣는 것이 이 함수의 전제이고, `historyEnd`·
  * `recordCharacterInjection`도 같은 전제 위에 선다.
  */
-export function buildGmTurnMessage(
-  state: GameState,
-  cards: readonly CharacterBookInjection[],
-): string {
+export function buildGmTurnMessage(state: GameState, cards: readonly LorebookInjection[]): string {
   const chat = relevantTurns(state);
   return renderTurnGroup(state, chat.slice(historyEnd(chat)), cards);
 }
@@ -1238,7 +1235,7 @@ export function buildGmHistory(
           content: renderTurnGroup(
             state,
             group,
-            group.flatMap((turn) => turn.characterBook ?? []),
+            group.flatMap((turn) => turn.lorebook ?? []),
           ),
         },
   );

@@ -1,4 +1,4 @@
-import type { CatalogTacticalStyle, CharacterBookContent, ClubHonour } from "@story-fm/domain";
+import type { CatalogTacticalStyle, LorebookContent, ClubHonour } from "@story-fm/domain";
 /**
  * 구단 카탈로그는 새 게임의 리그·체급·표시 정보를 소유한다.
  * 실선수 시드 적용과 절차 생성 분기는 catalog.ts의 buildFromSeed가 결정한다.
@@ -16,10 +16,10 @@ import {
 } from "./league-catalog";
 import { catalogSource } from "./catalog-source";
 import { readTeamOverride } from "./team-override";
-import { namedCatalogBook } from "./catalog-character-book";
+import { namedCatalogBook } from "./catalog-lorebook";
 
 export interface TeamCatalogEntry {
-  characterBook?: CharacterBookContent;
+  lorebook?: LorebookContent;
   id: string;
   name: string;
   shortName: string;
@@ -1340,17 +1340,25 @@ export const TEAM_CATALOG_SEED: readonly TeamCatalogEntry[] = withBands(
 
 /** Missing books are materialized once by the catalog cache, then saved with edits. */
 export function withTeamBook(team: TeamCatalogEntry): TeamCatalogEntry {
-  const book = team.characterBook ?? {
+  return { ...team, lorebook: namedCatalogBook(team.name, team.lorebook ?? teamSeedBook(team)) };
+}
+
+/**
+ * 팀 항목의 기본값 — 한 줄 설명은 **바뀌지 않는 것만**: 어느 나라의 구단인가. 리그·체급·
+ * 구장·우승처럼 바뀌는 사실은 주입이 원장에서 붙인다 (`stampLorebook` · lorebook.md §항목).
+ */
+export function teamSeedBook(team: {
+  name: string;
+  shortName: string;
+  leagueId: string;
+}): LorebookContent {
+  const country = leagueCatalogById(team.leagueId)?.country;
+  return {
     name: team.name,
     keywords: [team.name, team.shortName],
-    description: `${team.name} · ${team.shortName}`,
-    information: [
-      `${team.name} (${team.shortName}). ${team.leagueId} 소속. 구단 체급 ${team.tier}.`,
-      ...(team.formation ? [`기본 포메이션 ${team.formation}.`] : []),
-      ...(team.honours ?? []).map((honour) => `${honour.competitionId}: ${honour.count}회 우승.`),
-    ].join("\n"),
+    description: country ? `${country} 축구 구단` : "축구 구단",
+    information: `${team.name} (${team.shortName})${country ? ` — ${country}의 축구 구단` : ""}.`,
   };
-  return { ...team, characterBook: namedCatalogBook(team.name, book) };
 }
 
 /** 공식 색을 붙인다 — 표에 없는 클럽은 그대로 (문장이 해시로 답한다) */

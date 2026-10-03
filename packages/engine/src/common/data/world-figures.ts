@@ -28,11 +28,11 @@
  * 그 시즌 문서들과 같은 출처다 — 두 표의 구단이 어긋나면 한쪽이 낡은 것이다.
  */
 
-import { type CharacterBookContent, type PersonaRole } from "@story-fm/domain";
+import { type LorebookContent, type PersonaRole } from "@story-fm/domain";
 
 /** 명부 한 줄 — 페르소나가 되기 전의 사실 */
 export interface WorldFigureSeed {
-  characterBook?: CharacterBookContent;
+  lorebook?: LorebookContent;
   /** 전역 유일 — `characterId`이자 화면에 서는 이름 */
   name: string;
   /** ⚠️ `head_coach`는 우리 수석코치의 자리다. 타 팀 감독은 `manager`다 */

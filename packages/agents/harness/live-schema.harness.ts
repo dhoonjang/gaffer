@@ -27,7 +27,7 @@ import { outOfBand, reportOf, skipOf, type Readings } from "../../engine/harness
  * 하나가 그 호출을 400으로 떨군다 (models.md §3-2) — 오프라인 불변식
  * (`skill-descriptions.test.ts`) 하나로는 그 문을 재지 못한다.
  *
- * 선언 열은 `outputAgents()`다 — 캐릭터북 편집 · 온보딩 · 이력 압축. 해석기와 결산은
+ * 선언 열은 `outputAgents()`다 — 로어북 편집 · 온보딩 · 이력 압축. 해석기와 결산은
  * Jev의 타입 평가로 나가므로 이 열에 없다.
  *
  * **`LIVE_SCHEMA_TARGET=<provider>:<model>`** — 선언 열 전부를 **그 제공자·그 모델**로

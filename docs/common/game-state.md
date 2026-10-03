@@ -264,7 +264,7 @@ row, 지난 일 = 그대로 이력.**
 못 채우는 것이 아니다.
 
 ⚠️ **은퇴 명부는 이름을 잃지 않기 위한 표다.** 은퇴한 선수는 `state.players`에서
-빠지므로 id로는 아무것도 되찾지 못한다 — 시상 기록·근황·캐릭터북이 그 이름을 부르려면
+빠지므로 id로는 아무것도 되찾지 못한다 — 시상 기록·근황·로어북이 그 이름을 부르려면
 그 사람이 어디엔가 남아 있어야 한다. **통산은 적지 않는다**: `seasonStats` 행은
 그대로 남아 `careerTotalsOf`가 같은 수를 낸다
 ([season.md](season.md) §6).
@@ -302,7 +302,7 @@ row, 지난 일 = 그대로 이력.**
 | `trophies` `Trophy` · `achievements` `Achievement` | 우승 · 업적                                                                                                                     | `packages/domain/src/common/manager-career.ts` |
 | `awards` `SeasonAward`                             | 시상 — 코드·**대회**·수상자·근거 수치. 리그도 컵·대항전도, **세계 전체**에 쌓인다 ([season.md](season.md) §6)                   | `packages/domain/src/common/player-awards.ts`  |
 | `personas` `StoredPersona`                         | 인물 — 수석코치·구단주·기자, 그리고 고용 정보를 든 코치·의료진·스카우트 (people.md §2-2)                                        | `packages/domain/src/common/persona.ts`        |
-| `staffPool` `StoredStaffPoolEntry`                 | 자리를 찾는 코치·의료진·스카우트 — 이름·자리·캐릭터북 참조·요구 연봉. 여름마다 다시 선다 (people.md §2-2). 새 게임에서 확정한다 | `packages/domain/src/common/persona.ts`        |
+| `staffPool` `StoredStaffPoolEntry`                 | 자리를 찾는 코치·의료진·스카우트 — 이름·자리·로어북 참조·요구 연봉. 여름마다 다시 선다 (people.md §2-2). 새 게임에서 확정한다   | `packages/domain/src/common/persona.ts`        |
 | `chat` `ChatTurn`                                  | 대화 이력 — `user`/`model`/`operator`                                                                                           | `packages/engine/src/common/core/state.ts`     |
 | ↳ `ToolCallRecord`                                 | 도구·명령 호출 — 요약·항목(`brief`)·카드 payload·톤·`silent`·장면 안 줄 위치                                                    | `packages/engine/src/common/core/state.ts`     |
 | ↳ `CommandBrief`                                   | 화면이 세우는 요약 — 머리줄 + 항목. 없는 기록은 말풍선에 서지 않는다                                                            | `packages/engine/src/common/core/state.ts`     |
@@ -312,23 +312,23 @@ row, 지난 일 = 그대로 이력.**
 | `pendingNews`                                      | 아직 GM이 읽지 않은 경기 밖 소식 — 결산이 함께 굴린 재정·다른 경기                                                              | `packages/engine/src/common/core/state.ts`     |
 | `historyDigest` `HistoryDigest`                    | 접힌 평시 이력의 요약 — 접은 지점 · **지난 일**(`text`) · **열린 일**(`open`) · 후보(`candidates`) · 겹 수 (llm/agents.md §5-1) | `packages/domain/src/common/memory.ts`         |
 
-캐릭터북 관련 저장은 다음 계약을 따른다.
+로어북 관련 저장은 다음 계약을 따른다.
 
 | 저장                       | 내용                                                          |
 | -------------------------- | ------------------------------------------------------------- |
-| `characterBook`            | 팀·선수·인물의 ID·종류·이름·키워드·설명·정보·항목 버전        |
-| `characterBookRevisions`   | 편집 전 본문·버전과 추가 정보·작업 ID를 보존하는 이력         |
-| `characterBookJobSequence` | 편집 요청 ID를 위한 단조 증가 순번                            |
-| `characterBookJobs`        | 대상·추가 정보·실행 상태·시도 횟수와 실패 정보를 든 편집 요청 |
-| `ChatTurn.characterBook`   | 해당 턴에 주입한 본문·버전의 사본; 과거 메시지 재현의 원본    |
+| `lorebook`                 | 팀·선수·인물의 ID·종류·이름·키워드·설명·정보·항목 버전        |
+| `lorebookRevisions`        | 편집 전 본문·버전과 추가 정보·작업 ID를 보존하는 이력         |
+| `lorebookJobSequence`      | 편집 요청 ID를 위한 단조 증가 순번                            |
+| `lorebookJobs`             | 대상·추가 정보·실행 상태·시도 횟수와 실패 정보를 든 편집 요청 |
+| `ChatTurn.lorebook`        | 해당 턴에 주입한 본문·버전의 사본; 과거 메시지 재현의 원본    |
 | `historyDigest.candidates` | 요약이 고른 최대 30명의 이름·한 줄 설명                       |
 | `managerInterviews`        | 감독 채용 면접의 구단·날짜·화자·사실·응답 상태                |
 
-캐릭터북 카탈로그는 `name`, `keywords`, `description`, `information`을 초기값으로
+로어북 카탈로그는 `name`, `keywords`, `description`, `information`을 초기값으로
 제공한다. 새 게임은 복사하고 편집은 세이브 항목에만 반영한다.
-감독 계약·제안·공석·재임 이력은 실제 고용 원장이다. 기대·평가·경고는 캐릭터북에 남긴다. 평판 점수·감정 누계,
+감독 계약·제안·공석·재임 이력은 실제 고용 원장이다. 기대·평가·경고는 로어북에 남긴다. 평판 점수·감정 누계,
 일반 불만·관계 등급·인물별 기억 표·일상 사건·시작 사건·회견·일반 면담 상태는 두지 않는다.
-이야기는 [캐릭터북과 요약](../story/character-book.md)이 보존한다.
+이야기는 [로어북과 요약](../story/lorebook.md)이 보존한다.
 
 ⚠️ **말풍선 항목의 증감은 숫자로 온다** — `delta`가 있으면 그 항목은 오르내린 값을
 말하는 것이고 화면은 **부호로 색을 준다**. 문자열의 `+`·`−`를 찾아 색을 칠하면 포메이션
@@ -381,8 +381,8 @@ erDiagram
     MANAGER ||--o{ TROPHY : "우승"
     MANAGER ||--o{ ACHIEVEMENT : "업적"
     MANAGER ||--o{ MANAGER_INTERVIEW : "채용 면접"
-    CHARACTER_BOOK ||--o{ CHARACTER_BOOK_JOB : "편집 요청"
-    CHAT_TURN ||--o{ CHARACTER_BOOK_INJECTION : "주입 본문·버전"
+    LOREBOOK ||--o{ LOREBOOK_JOB : "편집 요청"
+    CHAT_TURN ||--o{ LOREBOOK_INJECTION : "주입 본문·버전"
 
 ```
 
@@ -701,19 +701,19 @@ tmp 쓰기가 실패하면 그 tmp는 **그 자리에서 거둔다**. 이름이 
 
 ## 코드 위치
 
-| 무엇                              | 어디                                                                                                                              |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 엔티티 정의 (Zod)                 | `packages/domain/src/` — `player` `team` `tactics` `records` `schedule` `manager` `persona` `character-book` `persuasion` `match` |
-| `GameState` · 상태 조회           | `packages/engine/src/common/core/state.ts`                                                                                        |
-| 저장·로드 · 실패 사유             | `packages/engine/src/app/persistence.ts`                                                                                          |
-| 세이브 스키마 (로드의 검사)       | `packages/engine/src/app/save-schema.ts`                                                                                          |
-| 데이터 디렉터리 · 카탈로그 경로   | `packages/engine/src/common/core/paths.ts`                                                                                        |
-| 카탈로그 빌드·오버라이드          | `packages/engine/src/common/world/catalog.ts` · `attributes.ts`                                                                   |
-| 카탈로그 원본                     | `packages/engine/src/common/data/`                                                                                                |
-| 승강 (`leagueOf`)                 | `packages/engine/src/match/competition/promotion.ts` · `packages/engine/src/app/workflows/match/competition/promotion.ts`         |
-| 어드민 카탈로그 편집              | `packages/engine/src/app/admin/admin.ts`(선수) · `admin-team.ts` · `admin-competition.ts` · `apps/web/app/admin/`                 |
-| 어드민 쓰기 가드                  | `apps/web/app/api/admin/admin-guard.ts`                                                                                           |
-| 카탈로그 오버라이드 배관 · 불변식 | `packages/engine/src/common/data/catalog-source.ts` · `packages/engine/src/app/catalog-invariants.ts`                             |
+| 무엇                              | 어디                                                                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 엔티티 정의 (Zod)                 | `packages/domain/src/` — `player` `team` `tactics` `records` `schedule` `manager` `persona` `lorebook` `persuasion` `match` |
+| `GameState` · 상태 조회           | `packages/engine/src/common/core/state.ts`                                                                                  |
+| 저장·로드 · 실패 사유             | `packages/engine/src/app/persistence.ts`                                                                                    |
+| 세이브 스키마 (로드의 검사)       | `packages/engine/src/app/save-schema.ts`                                                                                    |
+| 데이터 디렉터리 · 카탈로그 경로   | `packages/engine/src/common/core/paths.ts`                                                                                  |
+| 카탈로그 빌드·오버라이드          | `packages/engine/src/common/world/catalog.ts` · `attributes.ts`                                                             |
+| 카탈로그 원본                     | `packages/engine/src/common/data/`                                                                                          |
+| 승강 (`leagueOf`)                 | `packages/engine/src/match/competition/promotion.ts` · `packages/engine/src/app/workflows/match/competition/promotion.ts`   |
+| 어드민 카탈로그 편집              | `packages/engine/src/app/admin/admin.ts`(선수) · `admin-team.ts` · `admin-competition.ts` · `apps/web/app/admin/`           |
+| 어드민 쓰기 가드                  | `apps/web/app/api/admin/admin-guard.ts`                                                                                     |
+| 카탈로그 오버라이드 배관 · 불변식 | `packages/engine/src/common/data/catalog-source.ts` · `packages/engine/src/app/catalog-invariants.ts`                       |
 
 새 게임의 세계 조립은 `packages/engine/src/app/create-game.ts`의 `createGame`이 맡는다.
 
@@ -738,9 +738,9 @@ tmp 쓰기가 실패하면 그 tmp는 **그 자리에서 거둔다**. 이름이 
 `reserve:` 대회만 2군 합계로 접고, 1군 순위·시상·평균에는 섞지 않는다.
 조회 결과의 `reserveApps` 등은 이 행에서 계산하며 저장하지 않는다.
 
-진행 중 인물의 캐릭터북 본문은 `characterBook`이 소유한다. 페르소나와 고용 후보는
+진행 중 인물의 로어북 본문은 `lorebook`이 소유한다. 페르소나와 고용 후보는
 같은 항목을 참조한다. 생성 템플릿의 본문은 최초 등록에만 사용한다.
-캐릭터북 갱신은 이전 항목과 추가 정보, 완료된 버전을 보존해 원문을 되찾을 수 있게 한다.
+로어북 갱신은 이전 항목과 추가 정보, 완료된 버전을 보존해 원문을 되찾을 수 있게 한다.
 
 ## 협상 상태
 

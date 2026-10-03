@@ -3,11 +3,11 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { IconArrowLeft } from "@/domains/common/ui/icons";
 import { LeagueListSkeleton } from "@/domains/common/ui/skeleton";
 import { Loading } from "@/domains/common/ui/loading";
 import { CLUB_TIER_KO, type ClubColours, type ClubTier } from "@story-fm/domain";
 import { Crest, clubStyle } from "@/domains/common/ui/crest";
-import { HelpPopover } from "@/domains/common/ui/help-popover";
 
 interface TeamEntry {
   id: string;
@@ -149,7 +149,8 @@ export default function NewGamePage() {
       <div className="onboarding-top">
         {step === "league" || prevStep === undefined ? (
           <Link href="/" className="back-link" data-testid="back-to-list">
-            ← 게임 목록
+            <IconArrowLeft />
+            게임 목록
           </Link>
         ) : (
           <button
@@ -158,7 +159,8 @@ export default function NewGamePage() {
             onClick={() => prevStep !== undefined && setStep(prevStep.key)}
             data-testid="step-back"
           >
-            ← {prevStep?.label}
+            <IconArrowLeft />
+            {prevStep?.label}
           </button>
         )}
         {/* 지나온 단계는 되돌아가는 길이다 — 눌리는 칸만 글자가 살아 있다 */}
@@ -270,27 +272,22 @@ export default function NewGamePage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="경기장과 기사에서 불릴 이름을 적어 주세요"
               data-testid="manager-name"
             />
           </label>
-          {/* 표식이 칸 안에 서므로 `label`로 감싸지 않는다 — 라벨을 누른 클릭이
-              버튼까지 겸하면 도움말을 열 때마다 입력칸으로 포커스가 튄다 */}
-          <div className="field">
-            <span className="field-head">
-              <label className="field-label" htmlFor="manager-background">
-                이력
-              </label>
-              <HelpPopover label="이력이 무엇을 정하는지">
-                이 이력을 바탕으로 부임 첫날의 사건과 인물들의 반응이 만들어집니다.
-              </HelpPopover>
-            </span>
+          <label className="field">
+            <span className="field-label">이력</span>
+            {/* 적기 전에 알아야 하는 것 — 이력이 첫날을 정한다 — 은 빈 칸일 때만 선다 */}
             <textarea
-              id="manager-background"
               value={background}
               onChange={(e) => setBackground(e.target.value)}
+              placeholder={
+                "어떤 길을 걸어온 감독인지 적어 주세요.\n이 이력을 바탕으로 부임 첫날의 사건과 인물들의 반응이 만들어집니다.\n\n예: 데이터 분석가 출신, 유소년 코치로 10년"
+              }
               data-testid="manager-background"
             />
-          </div>
+          </label>
           {/* 누르는 순간 화면이 로딩으로 넘어가므로 버튼에 기다리는 글자를 두지 않는다 */}
           <button
             className="primary-btn"

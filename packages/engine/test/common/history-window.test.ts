@@ -136,11 +136,11 @@ describe("이력 압축 판정", () => {
   });
 });
 
-describe("캐릭터북을 포함한 요약 경계", () => {
+describe("로어북을 포함한 요약 경계", () => {
   it("본문이 짧아도 주입 정보의 무게로 접는 시점을 계산한다", () => {
     const state = sourceOf(12, 1);
     for (const turn of state.chat.filter((turn) => turn.role === "user"))
-      turn.characterBook = [
+      turn.lorebook = [
         {
           id: "player:one",
           kind: "player",
@@ -148,6 +148,7 @@ describe("캐릭터북을 포함한 요약 경계", () => {
           name: "선수",
           keywords: [],
           description: "소개",
+          now: "",
           information: "기".repeat(7000),
         },
       ];

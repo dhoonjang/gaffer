@@ -3,15 +3,34 @@ import {
   currentProposal,
   playerOverall,
   type Negotiation,
+  type LorebookInjection,
 } from "@story-fm/domain";
 import { addDays, type GameState } from "@story-fm/engine";
 
-export function negotiationReference(
+type NegotiationCounterpart = { id: string; name: string; information: string };
+
+export function negotiationLorebookEntries(
   state: GameState,
   n: Negotiation,
-  counterparts: readonly { id: string; name: string; information: string }[] = [],
-): string {
+  counterparts: readonly NegotiationCounterpart[] = [],
+) {
   const ids = new Set([n.playerId, n.buyerId, n.sellerId, ...counterparts.map((p) => p.id)]);
+  return state.lorebook.filter(
+    (entry) =>
+      ids.has(entry.id) ||
+      ids.has(entry.id.replace(/^(?:player|team|person):/, "")) ||
+      [
+        state.players.find((p) => p.id === n.playerId)?.name,
+        ...state.teams.filter((t) => ids.has(t.id)).map((t) => t.managerName),
+      ].includes(entry.name),
+  );
+}
+
+export function negotiationReference(
+  n: Negotiation,
+  lorebook: readonly LorebookInjection[],
+  counterparts: readonly NegotiationCounterpart[] = [],
+): string {
   return JSON.stringify({
     case: {
       id: n.id,
@@ -22,15 +41,7 @@ export function negotiationReference(
       background: n.background,
     },
     counterparts,
-    characters: state.characterBook.filter(
-      (entry) =>
-        ids.has(entry.id) ||
-        ids.has(entry.id.replace(/^(?:player|team|person):/, "")) ||
-        [
-          state.players.find((p) => p.id === n.playerId)?.name,
-          ...state.teams.filter((t) => ids.has(t.id)).map((t) => t.managerName),
-        ].includes(entry.name),
-    ),
+    lorebook,
   });
 }
 export function negotiationSnapshot(state: GameState, n: Negotiation): string {

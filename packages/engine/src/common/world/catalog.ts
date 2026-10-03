@@ -31,7 +31,7 @@ import { claimSyntheticName, syntheticNamePoolOf } from "../data/names";
 import { makeRng, randInt } from "../core/rng";
 import { claimPlayerId, slugifyName } from "./player-id";
 import { catalogPlayerBook } from "../people/player-persona";
-import { namedCatalogBook } from "../data/catalog-character-book";
+import { namedCatalogBook } from "../data/catalog-lorebook";
 
 /**
  * 선수 카탈로그 (PLAYER_CATALOG) — 모든 게임이 공유하는 불변 초기치 DB.
@@ -331,7 +331,7 @@ function entryFromSeed(teamId: string, s: RealPlayerSeed): CatalogDraft {
     teamId,
     nameKo: s.nameKo,
     nameEn: s.nameEn,
-    ...(s.characterBook === undefined ? {} : { characterBook: s.characterBook }),
+    ...(s.lorebook === undefined ? {} : { lorebook: s.lorebook }),
     // 동명이인을 가르는 유일한 키 — 이름으로 잇는 표(부상 이력)가 이걸 쓴다
     ...(s.wikidataId === undefined ? {} : { wikidataId: s.wikidataId }),
     ...(s.squadNumber === undefined ? {} : { squadNumber: s.squadNumber }),
@@ -857,7 +857,7 @@ function backfillNationality(entries: PlayerCatalogEntry[]): PlayerCatalogEntry[
 export function withPlayerBook(entry: PlayerCatalogEntry): PlayerCatalogEntry {
   return {
     ...entry,
-    characterBook: namedCatalogBook(entry.nameKo, entry.characterBook ?? catalogPlayerBook(entry)),
+    lorebook: namedCatalogBook(entry.nameKo, entry.lorebook ?? catalogPlayerBook(entry)),
   };
 }
 

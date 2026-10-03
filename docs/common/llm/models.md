@@ -15,20 +15,20 @@
 `provider`·`model`·`max_tokens`·`timeout_ms`·`thinking_level`·`operator_channel`을
 `parseLlmConfig`가 검증한다.
 
-| 설정 자리                      | 계약과 책임                                |
-| ------------------------------ | ------------------------------------------ |
-| `agents.gm`                    | 평시 장면·관계·사건·판정 스킬              |
-| `agents.match-gm`              | 확정 사건 중계·벤치 대화·경기 마무리       |
-| `evaluators.finalize-match`    | 경기 평점·성장. 평점 근거는 매치 GM        |
-| `evaluators.training-rater`    | 훈련 구간 결산                             |
-| `agents.history-compactor`     | 지난 일·열린 이야기·인물 후보 요약         |
-| `agents.character-book-editor` | 저장된 요청의 캐릭터북 비동기 편집         |
-| `agents.onboarding-judge`      | 배경·구단의 부임 첫 장면                   |
-| `evaluators.tactic-orders`     | 전술 스킬이 요청한 지시 해석               |
-| `evaluators.training-orders`   | 훈련·육성 스킬이 요청한 지시 해석          |
-| `evaluators.finance-orders`    | 시장·재정 스킬이 요청한 지시 해석          |
-| `evaluators.table-orders`      | 현재 거래의 감독 지시·승인·위임 해석       |
-| `evaluators.match-reader`      | 경기 `tactic_orders`의 명령·복합 전술 효과 |
+| 설정 자리                    | 계약과 책임                                |
+| ---------------------------- | ------------------------------------------ |
+| `agents.gm`                  | 평시 장면·관계·사건·판정 스킬              |
+| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
+| `evaluators.finalize-match`  | 경기 평점·성장. 평점 근거는 매치 GM        |
+| `evaluators.training-rater`  | 훈련 구간 결산                             |
+| `agents.history-compactor`   | 지난 일·열린 이야기·인물 후보 요약         |
+| `agents.lorebook-editor`     | 저장된 요청의 로어북 비동기 편집           |
+| `agents.onboarding-judge`    | 배경·구단의 부임 첫 장면                   |
+| `evaluators.tactic-orders`   | 전술 스킬이 요청한 지시 해석               |
+| `evaluators.training-orders` | 훈련·육성 스킬이 요청한 지시 해석          |
+| `evaluators.finance-orders`  | 시장·재정 스킬이 요청한 지시 해석          |
+| `evaluators.table-orders`    | 현재 거래의 감독 지시·승인·위임 해석       |
+| `evaluators.match-reader`    | 경기 `tactic_orders`의 명령·복합 전술 효과 |
 
 생성형 에이전트는
 `GameLLM.runTurn`, TypeSafe 평가는 `GameEvaluator.evaluate`를 사용한다. 실제 등록과
@@ -446,7 +446,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 ## 3-2. `outputSchema` — 도구 없이 JSON 하나로 답을 받기
 
 산출이 JSON 하나인 생성형 호출 열 — 경기 마감 ·
-이력 압축 · 캐릭터북 편집 · 온보딩 (agents.md §1) — 은 **도구를 들지 않는다.** 답의 꼴은 "이 꼴로만
+이력 압축 · 로어북 편집 · 온보딩 (agents.md §1) — 은 **도구를 들지 않는다.** 답의 꼴은 "이 꼴로만
 답한다"는 **프롬프트 문장이 아니라 요청 파라미터로** 강제한다: 요청에 `outputSchema`
 (제공자 중립 JSON Schema — 최상위는 객체)를 싣고, 어댑터가 자기 제공자의 구조화 출력으로
 옮긴다. 문장에만 기대면 모델이 본문으로 답해도 호출은 정상으로 끝나고, 산출이 빈 채
@@ -536,7 +536,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
 | ---------------------------- | --------------------------------------------------------------------------------------- |
 | 예산이 세는 것               | `inputTokens + outputTokens` (게임 누적)                                                |
 | 상한                         | `LLM_TOKEN_BUDGET` — 없거나 0 이하면 무제한                                             |
-| 상한 초과 시 끊기는 에이전트 | 훈련 결산 + 경기 마감 + 압축 + 캐릭터북 편집 + 온보딩 판정 — GM·매치 GM은 계속 돈다     |
+| 상한 초과 시 끊기는 에이전트 | 훈련 결산 + 경기 마감 + 압축 + 로어북 편집 + 온보딩 판정 — GM·매치 GM은 계속 돈다       |
 | 캐시 히트율                  | `cacheReadTokens ÷ inputTokens`                                                         |
 | 히트율 경고 문턱             | 평균 입력이 **그 에이전트 제공자의 최소 캐시 프리픽스** 이상 × 3회 이상 호출 × 히트율 0 |
 | 장부의 키                    | **에이전트 이름** — 설정의 이름이 그대로 계측 키가 된다                                 |
@@ -662,7 +662,7 @@ turn
 
 위는 호출 관계의 예이며 모든 턴에 모든 호출이 실행된다는 뜻은 아니다.
 
-캐릭터북 편집은 원래 턴 저장 뒤 비동기로 실행된다. `traceBoard`는 편집 호출과
+로어북 편집은 원래 턴 저장 뒤 비동기로 실행된다. `traceBoard`는 편집 호출과
 완료 기록을 board shelf에 남기며, 원래 GM 호출의 동기 도구 실행과 구분한다.
 
 ⚠️ **항목의 자리(`seq`)는 시작 순서다.** 호출은 도구가 돌아오기를 기다려 늦게 앉지만

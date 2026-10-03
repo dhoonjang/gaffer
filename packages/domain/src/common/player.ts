@@ -1,4 +1,4 @@
-import { CharacterBookContentSchema } from "./character-book";
+import { LorebookContentSchema } from "./lorebook";
 import { z } from "zod";
 import { DateString } from "./date-string";
 import { SQUAD_STATUSES, type SquadStatus } from "./squad-rules";
@@ -2023,7 +2023,7 @@ export type Player = GamePlayer;
  * 16축을 평면 필드로 갖는다 (overall은 파생이라 저장하지 않는다).
  */
 export interface PlayerCatalogMeta {
-  characterBook?: import("./character-book").CharacterBookContent;
+  lorebook?: import("./lorebook").LorebookContent;
   id: string;
   /** 시드 시점 소속 팀 (TEAM_CATALOG) */
   teamId: string;
@@ -2094,7 +2094,7 @@ export type PlayerCatalogEntry = PlayerCatalogMeta & AxisValues;
  * `overall`은 파생이라 담기지 않는다 (`PlayerCatalogMeta`와 같은 목록).
  */
 export const PlayerCatalogEntrySchema = z.object({
-  characterBook: CharacterBookContentSchema.optional(),
+  lorebook: LorebookContentSchema.optional(),
   id: z.string().min(1),
   teamId: z.string().min(1),
   nameKo: z.string().min(1),

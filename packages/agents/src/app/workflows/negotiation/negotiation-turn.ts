@@ -2,6 +2,7 @@ import { compactNegotiationHistory } from "./negotiation-compactor";
 export { compactNegotiationHistory } from "./negotiation-compactor";
 import { CharacterUpdateSchema, type NegotiationChannel } from "@story-fm/domain";
 import {
+  stampLorebook,
   journal,
   type JournalEntry,
   repairNegotiationSquads,
@@ -27,7 +28,11 @@ import {
   ScheduleReplySchema,
   negotiationHistory,
 } from "../../../negotiation/negotiation-gm";
-import { negotiationReference, negotiationSnapshot } from "../../../negotiation/context";
+import {
+  negotiationLorebookEntries,
+  negotiationReference,
+  negotiationSnapshot,
+} from "../../../negotiation/context";
 import { mockNegotiationLlm } from "./mock-negotiation";
 
 /** A failed provider/tool loop commits neither partial consent nor character jobs. */
@@ -74,7 +79,7 @@ export async function runNegotiationTurn(
     },
     {
       name: "update_character",
-      description: "인물의 새 기억을 기존 비동기 캐릭터북 편집자에게 직접 요청한다.",
+      description: "인물의 새 기억을 기존 비동기 로어북 편집자에게 직접 요청한다.",
       inputSchema: NEGOTIATION_CHARACTER_INPUT,
       handle(raw) {
         const parsed = CharacterUpdateSchema.safeParse(raw);
@@ -107,7 +112,7 @@ export async function runNegotiationTurn(
   ]
     .filter((p) => p !== null)
     .map((p) => ({
-      id: "characterBookId" in p ? p.characterBookId : `person:${p.characterId}`,
+      id: "lorebookId" in p ? p.lorebookId : `person:${p.characterId}`,
       name: p.name,
       information: personaBookOf(draft, p).information,
     }));
@@ -135,7 +140,14 @@ export async function runNegotiationTurn(
     "negotiation-gm",
     async () => {
       const result = await client.runTurn({
-        system: [NEGOTIATION_GM_SYSTEM, negotiationReference(draft, n, counterparts)],
+        system: [
+          NEGOTIATION_GM_SYSTEM,
+          negotiationReference(
+            n,
+            stampLorebook(draft, negotiationLorebookEntries(draft, n, counterparts)),
+            counterparts,
+          ),
+        ],
         history: negotiationHistory(n),
         user: message ?? `[${channel}] 현재 협상 장부와 예정된 답변에 반응하세요.`,
         stateNote: negotiationSnapshot(draft, n),

@@ -84,6 +84,7 @@ export async function POST(request: Request) {
           text: intro.text,
           toolCalls: intro.toolCalls,
           at: state.date,
+          ...(intro.suggestion ? { suggestion: intro.suggestion } : {}),
         });
         bindTurnTrace(state.id, state.chat.length - 1);
         const payload = toPayload(state);

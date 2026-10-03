@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { IconArrowLeft } from "@/domains/common/ui/icons";
 import { useAdminCatalog } from "./catalog-store";
 import { CupsPanel } from "./cups-panel";
 import { LeaguesPanel } from "./leagues-panel";
@@ -56,7 +57,8 @@ export default function AdminPage() {
       <div className="admin-head">
         <div>
           <Link href="/" className="back-link">
-            ← 게임 목록
+            <IconArrowLeft />
+            게임 목록
           </Link>
           <h1>Database</h1>
         </div>

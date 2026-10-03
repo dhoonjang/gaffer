@@ -43,7 +43,7 @@ export type Manager = z.infer<typeof ManagerSchema>;
  *
  * 이 카드가 서 있는 동안 감독은 무직이다. 시계는 그대로 흐르고, 부임하면 지워진다.
  *
- * 구단·날짜·당시 체급과 순위·계약 정산을 기록한다. 구단주의 해석은 캐릭터북에 남는다.
+ * 구단·날짜·당시 체급과 순위·계약 정산을 기록한다. 구단주의 해석은 로어북에 남는다.
  */
 export const DismissalSchema = z.object({
   on: DateString,

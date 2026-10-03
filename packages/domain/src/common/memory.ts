@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CharacterCandidateSchema, CHARACTER_CANDIDATES_MAX } from "./character-book";
+import { CharacterCandidateSchema, CHARACTER_CANDIDATES_MAX } from "./lorebook";
 import { DateString } from "./date-string";
 
 // ── 이력 압축 ─────────────────────────────────────────

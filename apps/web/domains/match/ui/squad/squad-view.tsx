@@ -35,6 +35,7 @@ import {
   type BoardState,
 } from "@/domains/match/lib/board-roles";
 import { IconBoard, IconClose, IconPerson, SPEAKER_ICON } from "@/domains/common/ui/icons";
+import { usePlayerCardActions } from "@/domains/common/ui/player-card";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
 import { PitchChip, PitchGround } from "../pitch";
 import { createLineupSaver, type LineupSaveOutcome, type LineupSaver } from "../lineup-saver";
@@ -656,6 +657,32 @@ export function SquadView({
   );
 
   /**
+   * 1·2군 이동은 **선수 카드에서만** 선다 — 명단 상세에 늘 서 있기엔 눈에 너무 띄는
+   * 조작이다. 우리 선수의 카드가 열렸을 때만 카드 아래 조작 줄에 세운다.
+   */
+  const ourIds = useMemo(() => new Set(localRows.map((row) => row.id)), [localRows]);
+  const cardActions = useCallback(
+    (playerId: string) => {
+      // 지금 옮길 수 없으면(경기 중·커리어 종료·선발 배치 중) 버튼 자체를 세우지 않는다
+      if (!ourIds.has(playerId) || !live || onPitch.has(playerId)) return null;
+      const reserve = localReserve.has(playerId);
+      return (
+        <button
+          type="button"
+          data-testid={`squadmove-${playerId}`}
+          onClick={() => onMoveSquadRow(playerId, reserve ? "first" : "reserve")}
+        >
+          {reserve ? "1군 승격" : "2군 강등"}
+        </button>
+      );
+    },
+    // 집합은 문자열 열쇠로 싣는다 — 아래 명단 메모와 같은 이유다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ourIds, localReserveKey, onPitchKey, live, onMoveSquadRow],
+  );
+  usePlayerCardActions(cardActions);
+
+  /**
    * 1·2군 이동 — **다른 조작과 같은 문을 지난다.**
    *
    * 단독 왕복이던 때는 이 버튼만 스피너가 돌았고, 판을 짜는 동안 그 한 요청이
@@ -755,57 +782,36 @@ export function SquadView({
         swapPair={swapPair}
         tierOf={tierById}
         tierKey={`${onPitchKey}|${benchKey}|${localReserveKey}`}
-        setPieces={takers}
         onSwapIn={onSwapInRow}
         inMatch={matchOn}
         renderDetail={(p) => (
           <PlayerDetail
             p={p}
             inMatch={matchOn}
+            setPieces={takers}
             slotCode={p.id === selectedPlayer?.id ? selectedSlotCode : null}
             onRole={usable ? (role) => onRoleRow(p.id, role) : undefined}
             roleId={board.roles[p.id] ?? p.roleId}
             action={
-              <>
-                {/* 벤치 지정 — 명단의 배지 열을 없앤 뒤 이 조작이 여기로 왔다.
-                비선발 1군에게만 뜻이 있다 (선발은 이미 나가고, 2군은 승격이 먼저) */}
-                {live && !onPitch.has(p.id) && !localReserve.has(p.id) && (
-                  <button
-                    className="ghost-btn"
-                    /* 정원이 차면 넣는 길만 잠긴다 — **빼는 길은 늘 열려 있다** */
-                    disabled={saving || (benchFull && !benchSet.has(p.id))}
-                    /* 잠긴 이유는 **사실로만** — 옆의 1·2군 이동과 같은 결이다 */
-                    title={
-                      benchFull && !benchSet.has(p.id)
-                        ? `매치데이 벤치 ${MATCHDAY_BENCH}자리가 찼다`
-                        : undefined
-                    }
-                    data-testid={`benchtoggle-${p.id}`}
-                    onClick={() => onToggleBenchRow(p.id)}
-                  >
-                    {benchSet.has(p.id) ? "벤치에서 빼기" : "매치데이 벤치로"}
-                  </button>
-                )}
-                {/* 선발을 그대로 내리면 판이 열 명이 된다 — 코어가 배치에서 함께 빼기 때문이다.
-                옆의 벤치 지정이 선발 행에서 빠져 있는 것과 같은 이유다. */}
+              /* 벤치 지정 — 비선발 1군에게만 뜻이 있다 (선발은 이미 나가고, 2군은 승격이
+                 먼저). 그 밖의 선수에게는 조작 칸 자체가 서지 않는다 */
+              live && !onPitch.has(p.id) && !localReserve.has(p.id) ? (
                 <button
                   className="ghost-btn"
-                  disabled={!live || onPitch.has(p.id)}
-                  /* 잠긴 이유는 **사실로만** — 다음에 무엇을 하라는 말은 붙이지 않는다 */
+                  /* 정원이 차면 넣는 길만 잠긴다 — **빼는 길은 늘 열려 있다** */
+                  disabled={saving || (benchFull && !benchSet.has(p.id))}
+                  /* 잠긴 이유는 **사실로만** — 선수 카드의 1·2군 이동과 같은 결이다 */
                   title={
-                    !live
-                      ? dismissed
-                        ? "커리어 종료 — 전술판 잠금"
-                        : "경기 중 — 1·2군 이동 잠금"
-                      : onPitch.has(p.id)
-                        ? "선발 배치 중 — 1·2군 이동 잠금"
-                        : undefined
+                    benchFull && !benchSet.has(p.id)
+                      ? `매치데이 벤치 ${MATCHDAY_BENCH}자리가 찼다`
+                      : undefined
                   }
-                  onClick={() => onMoveSquadRow(p.id, localReserve.has(p.id) ? "first" : "reserve")}
+                  data-testid={`benchtoggle-${p.id}`}
+                  onClick={() => onToggleBenchRow(p.id)}
                 >
-                  {localReserve.has(p.id) ? "1군 승격" : "2군 강등"}
+                  {benchSet.has(p.id) ? "벤치에서 빼기" : "매치데이 벤치로"}
                 </button>
-              </>
+              ) : undefined
             }
           />
         )}

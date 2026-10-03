@@ -1,19 +1,19 @@
 "use client";
 
-import { CHARACTER_INFORMATION_MAX, type CharacterBookContent } from "@story-fm/domain";
+import { CHARACTER_INFORMATION_MAX, type LorebookContent } from "@story-fm/domain";
 
-export function CharacterBookFields({
+export function LorebookFields({
   name,
   book,
   onChange,
 }: {
   name: string;
-  book?: CharacterBookContent;
-  onChange: (book: CharacterBookContent) => void;
+  book?: LorebookContent;
+  onChange: (book: LorebookContent) => void;
 }) {
   return (
     <section>
-      <h3>캐릭터북</h3>
+      <h3>로어북</h3>
       {book ? (
         <>
           <p>{name}</p>
@@ -48,17 +48,17 @@ export function CharacterBookFields({
           className="ghost-btn"
           onClick={() => onChange({ name, keywords: [], description: "", information: "" })}
         >
-          캐릭터북 직접 작성
+          로어북 직접 작성
         </button>
       )}
     </section>
   );
 }
 
-export function characterBookInput(
+export function lorebookInput(
   name: string,
-  book: CharacterBookContent | undefined,
-): CharacterBookContent | undefined {
+  book: LorebookContent | undefined,
+): LorebookContent | undefined {
   return book
     ? {
         ...book,

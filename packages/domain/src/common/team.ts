@@ -31,7 +31,7 @@ export type ClubTier = z.infer<typeof ClubTierSchema>;
 
 /**
  * **체급의 이름** — 화면과 모델 입력이 체급을 말할 때 쓰는 말이다 (team.md §2).
- * 구단의 크기를 말할 뿐 보드의 목표 순위가 아니다 — 기대와 평가는 캐릭터북이 갖는다.
+ * 구단의 크기를 말할 뿐 보드의 목표 순위가 아니다 — 기대와 평가는 로어북이 갖는다.
  */
 export const CLUB_TIER_KO: Record<ClubTier, string> = {
   1: "우승권",

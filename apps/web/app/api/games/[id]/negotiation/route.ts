@@ -10,7 +10,7 @@ import {
 import { runNegotiationTurn } from "@story-fm/agents";
 import { traceBoard, withGameUsage } from "@story-fm/llm";
 import { toPayload } from "@/application/lib/store";
-import { processCharacterBookJobs } from "@/application/lib/character-book-jobs";
+import { processLorebookJobs } from "@/application/lib/lorebook-jobs";
 import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/application/lib/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
 
@@ -84,7 +84,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         }
         const payload = toPayload(state);
         saveGame(state);
-        if (state.characterBookJobs.length > 0) after(() => processCharacterBookJobs(id));
+        if (state.lorebookJobs.length > 0) after(() => processLorebookJobs(id));
         return NextResponse.json({
           game: payload,
           negotiationId:

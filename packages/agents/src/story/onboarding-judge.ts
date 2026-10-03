@@ -9,6 +9,7 @@ import {
   tierOfTeamIn,
 } from "@story-fm/engine";
 import { toToolSchema } from "../common/tool-schema";
+import { SUGGESTION_MAX_CHARS } from "../common/suggest-reply";
 
 /** 배경 해석과 첫 장면을 한 호출로 만들고 검증 후 함께 반영한다. */
 
@@ -19,16 +20,17 @@ export const ONBOARDING_JUDGE_SYSTEM = `당신은 새로 부임하는 축구 감
 # 입력
 <club> — 부임 구단: 이름·격·구단주·수석코치·주장·핵심 선수·유망주.
 <background> — 배경 문단.
-<character_book> — 첫 장면에 활용할 인물의 기록.
+<lorebook> — 첫 장면에 활용할 인물의 기록.
 <snapshot> — 오늘 날짜와 선수단·일정의 사실. 첫 장면이 짚을 것이 여기 있다.
 
 # 산출
-첫 장면을 JSON 하나로 낸다 — scene.
+JSON 하나로 낸다 — scene, suggestion.
 
 # 첫 장면 (scene)
 오늘은 감독의 부임 첫날이다. 배경과 구단의 맥락에서 장면을 연다.
-- <snapshot>의 사실을 짚는다 — 소집일, 다음 일정, 몸이 성치 않은 선수. 없는 사실을 지어내지 않는다.
-- 감독은 유저가 연기한다 — 감독의 말은 쓰지 않는다. 장면은 감독이 답할 자리에서 닫는다.
+- 짧게 — 여섯 줄 안팎. 한 사람이 감독을 맞는다.
+- <snapshot>의 사실 한두 개만 짚는다. 없는 사실을 지어내지 않는다.
+- 감독은 유저가 연기한다 — 감독의 말은 쓰지 않는다. 장면은 감독에게 묻는 한 문장으로 닫는다.
 - 내부 판정 수치나 확률은 장면에 적지 않는다.
 
 # 출력 문법 (scene)
@@ -37,6 +39,9 @@ export const ONBOARDING_JUDGE_SYSTEM = `당신은 새로 부임하는 축구 감
 - @: 화자 없는 내레이션. *별표 하나*로 감싼 것이 행동·연출이다.
 - 같은 화자가 이어 말하면 태그를 다시 적지 않는다.
 - 한국어.
+
+# 감독의 첫 말 (suggestion)
+장면 끝의 물음에 감독이 할 법한 답 한 문장 — 감독의 말투로, 그대로 보낼 수 있게. 선택지가 아니다.
 `;
 
 /** 첫 장면의 출력 크기 상한 */
@@ -49,6 +54,8 @@ export const ReportInputSchema = z.object({
     .min(1)
     .max(SCENE_MAX)
     .describe("부임 첫날의 첫 장면 — 출력 문법 그대로, 줄은 줄바꿈으로"),
+  /** 상한을 넘거나 비면 제안만 빠진다 — 장면을 반려할 이유는 아니다 (agents.md §2) */
+  suggestion: z.string().describe(`감독의 첫 말 한 문장 — ${SUGGESTION_MAX_CHARS}자 안쪽`),
 });
 
 /** 모델이 보는 출력 스키마 — 위 Zod 한 벌에서 파생한다 (prompts.md §2 · models.md §3-2) */

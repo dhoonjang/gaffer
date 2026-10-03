@@ -481,7 +481,7 @@ export function runTurnLocked(
           return {
             ok: true as const,
             payload,
-            characterUpdatesPending: state.characterBookJobs.length > 0,
+            characterUpdatesPending: state.lorebookJobs.length > 0,
           };
         } catch (error) {
           const kind = llmErrorKind(error);

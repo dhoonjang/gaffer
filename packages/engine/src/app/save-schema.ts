@@ -3,9 +3,9 @@ import {
   TransferListingSchema,
   TransferPaymentSchema,
   MarketReviewSchema,
-  CharacterBookEntrySchema,
-  CharacterBookRevisionSchema,
-  CharacterBookJobSchema,
+  LorebookEntrySchema,
+  LorebookRevisionSchema,
+  LorebookJobSchema,
   RecentFlowSchema,
 } from "@story-fm/domain";
 import { z } from "zod";
@@ -97,10 +97,10 @@ export const GameTablesSchema = z.object({
     if (!checked.success) for (const issue of checked.error.issues) ctx.addIssue(issue);
   }),
   // 필수 테이블 — 없으면 앞 걸음(형태 검사)이 이미 손상으로 답한다
-  characterBook: z.array(CharacterBookEntrySchema),
-  characterBookRevisions: z.array(CharacterBookRevisionSchema),
-  characterBookJobSequence: z.number().int().nonnegative(),
-  characterBookJobs: z.array(CharacterBookJobSchema),
+  lorebook: z.array(LorebookEntrySchema),
+  lorebookRevisions: z.array(LorebookRevisionSchema),
+  lorebookJobSequence: z.number().int().nonnegative(),
+  lorebookJobs: z.array(LorebookJobSchema),
   negotiations: z.array(NegotiationSchema),
   transferListings: z.array(TransferListingSchema),
   transferPayments: z.array(TransferPaymentSchema),
@@ -159,17 +159,17 @@ export const GameTablesSchema = z.object({
 
 export type GameTables = z.infer<typeof GameTablesSchema>;
 export const SaveSchema = GameTablesSchema.passthrough().superRefine((state, ctx) => {
-  const books = new Map(state.characterBook.map((entry) => [entry.id, entry]));
-  if (books.size !== state.characterBook.length)
-    ctx.addIssue({ code: "custom", path: ["characterBook"], message: "캐릭터북 id 중복" });
+  const books = new Map(state.lorebook.map((entry) => [entry.id, entry]));
+  if (books.size !== state.lorebook.length)
+    ctx.addIssue({ code: "custom", path: ["lorebook"], message: "로어북 id 중복" });
   for (const table of ["personas", "staffPool"] as const)
     state[table].forEach((person, index) => {
-      const book = books.get(person.characterBookId);
+      const book = books.get(person.lorebookId);
       if (!book || book.kind === "team" || book.name !== person.name)
         ctx.addIssue({
           code: "custom",
-          path: [table, index, "characterBookId"],
-          message: "인물 캐릭터북 참조 불일치",
+          path: [table, index, "lorebookId"],
+          message: "인물 로어북 참조 불일치",
         });
     });
 });

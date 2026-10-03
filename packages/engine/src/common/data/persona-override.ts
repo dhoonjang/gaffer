@@ -1,21 +1,17 @@
 import { z } from "zod";
-import {
-  CharacterBookContentSchema,
-  type CharacterBookContent,
-  type Persona,
-} from "@story-fm/domain";
+import { LorebookContentSchema, type LorebookContent, type Persona } from "@story-fm/domain";
 import { personaCatalogPath } from "../core/paths";
 import { catalogSource, clearOverride, readOverride, writeOverride } from "./catalog-source";
-import { namedCatalogBook, personaSeedBook, type PersonaSeed } from "./catalog-character-book";
+import { namedCatalogBook, personaSeedBook, type PersonaSeed } from "./catalog-lorebook";
 
-const PersonaBooksSchema = z.record(z.string().min(1), CharacterBookContentSchema);
+const PersonaBooksSchema = z.record(z.string().min(1), LorebookContentSchema);
 export type PersonaBooks = z.infer<typeof PersonaBooksSchema>;
 
 const load = catalogSource<PersonaBooks>(() => {
   const parsed = PersonaBooksSchema.safeParse(readOverride(personaCatalogPath()));
   return parsed.success ? parsed.data : {};
 });
-const defaults = catalogSource(() => new Map<string, CharacterBookContent>());
+const defaults = catalogSource(() => new Map<string, LorebookContent>());
 
 export function readPersonaBooks(): PersonaBooks {
   return load();
@@ -23,11 +19,11 @@ export function readPersonaBooks(): PersonaBooks {
 
 /** Materialize at persona construction, retaining a book across repeated reads. */
 export function withPersonaBook(seed: PersonaSeed): Persona {
-  const { archetype, traits, motivation, speechStyle, keywords, characterBook, ...persona } = seed;
+  const { archetype, traits, motivation, speechStyle, keywords, lorebook, ...persona } = seed;
   const override = readPersonaBooks()[persona.characterId];
-  if (override) return { ...persona, characterBook: namedCatalogBook(persona.name, override) };
-  if (characterBook) {
-    return { ...persona, characterBook: namedCatalogBook(persona.name, characterBook) };
+  if (override) return { ...persona, lorebook: namedCatalogBook(persona.name, override) };
+  if (lorebook) {
+    return { ...persona, lorebook: namedCatalogBook(persona.name, lorebook) };
   }
   const key = JSON.stringify([
     persona.characterId,
@@ -46,7 +42,7 @@ export function withPersonaBook(seed: PersonaSeed): Persona {
     book = personaSeedBook(seed);
     books.set(key, book);
   }
-  return { ...persona, characterBook: namedCatalogBook(persona.name, book) };
+  return { ...persona, lorebook: namedCatalogBook(persona.name, book) };
 }
 
 export function writePersonaBooks(books: PersonaBooks): void {

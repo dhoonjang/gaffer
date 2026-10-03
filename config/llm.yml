@@ -70,7 +70,7 @@ agents:
     thinking_level: low
 
   # GM이 접수한 추가 정보를 기존 캐릭터 항목에 합친다.
-  character-book-editor:
+  lorebook-editor:
     provider: google
     model: gemini-3.5-flash-lite
     max_tokens: 12000

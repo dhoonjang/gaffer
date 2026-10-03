@@ -1,6 +1,6 @@
 import type {
   AxisValues,
-  CharacterBookContent,
+  LorebookContent,
   PlayerCatalogEntry,
   PlayerPosition,
 } from "@story-fm/domain";
@@ -48,7 +48,7 @@ export interface AdminResult {
 }
 
 interface CatalogPlayerInputMeta {
-  characterBook?: CharacterBookContent;
+  lorebook?: LorebookContent;
   /** 표시 이름 (한글) */
   nameKo: string;
   /** 로마자 — id 슬러그·파생값의 기준 */
@@ -147,7 +147,7 @@ export function isCatalogEdited(): boolean {
 }
 
 function applyPatch(entry: PlayerCatalogEntry, patch: CatalogPlayerPatch): void {
-  if (patch.characterBook !== undefined) entry.characterBook = patch.characterBook;
+  if (patch.lorebook !== undefined) entry.lorebook = patch.lorebook;
   for (const key of NUMERIC_ATTRS) {
     const v = patch[key];
     if (v !== undefined) entry[key] = v;
@@ -237,7 +237,7 @@ export function adminAddCatalogPlayer(teamId: string, input: CatalogPlayerInput)
     teamId,
     nameKo: input.nameKo.trim(),
     nameEn,
-    ...(input.characterBook === undefined ? {} : { characterBook: input.characterBook }),
+    ...(input.lorebook === undefined ? {} : { lorebook: input.lorebook }),
     birthdate: input.birthdate,
     positions,
     ...attrs,

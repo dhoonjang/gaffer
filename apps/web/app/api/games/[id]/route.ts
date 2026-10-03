@@ -1,4 +1,4 @@
-import { processCharacterBookJobs } from "@/application/lib/character-book-jobs";
+import { processLorebookJobs } from "@/application/lib/lorebook-jobs";
 import { after, NextResponse } from "next/server";
 import { noteTurn, traceBoard } from "@story-fm/llm";
 import { deleteGame, loadGame } from "@story-fm/engine";
@@ -28,7 +28,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     : loadGame(id);
   if (state instanceof Response) return state;
   if (!state) return NextResponse.json({ error: "게임을 찾을 수 없습니다" }, { status: 404 });
-  if (state.characterBookJobs.length > 0) after(() => processCharacterBookJobs(id));
+  if (state.lorebookJobs.length > 0) after(() => processLorebookJobs(id));
   return NextResponse.json(toPayload(state));
 }
 

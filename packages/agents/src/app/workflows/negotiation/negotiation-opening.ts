@@ -1,7 +1,11 @@
-import type { GameState } from "@story-fm/engine";
+import { stampLorebook, type GameState } from "@story-fm/engine";
 import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@story-fm/llm";
 import { readOutput, retryOnce } from "../../../common/retry";
-import { negotiationReference, negotiationSnapshot } from "../../../negotiation/context";
+import {
+  negotiationLorebookEntries,
+  negotiationReference,
+  negotiationSnapshot,
+} from "../../../negotiation/context";
 import {
   NEGOTIATION_OPENING_SYSTEM,
   NEGOTIATION_OPENING_OUTPUT,
@@ -22,7 +26,10 @@ export async function suggestNegotiationOpening(
   }
   const output = await retryOnce("negotiation-opening", async () => {
     const result = await (llm ?? createGameLLM(agentConfig("negotiation-gm"))).runTurn({
-      system: [NEGOTIATION_OPENING_SYSTEM, negotiationReference(state, n)],
+      system: [
+        NEGOTIATION_OPENING_SYSTEM,
+        negotiationReference(n, stampLorebook(state, negotiationLorebookEntries(state, n))),
+      ],
       history: [],
       user: negotiationSnapshot(state, n),
       outputSchema: NEGOTIATION_OPENING_OUTPUT,

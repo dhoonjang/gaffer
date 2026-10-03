@@ -50,7 +50,7 @@ core's spatial simulator in the live web match and xG simulator elsewhere**; the
 LLM only commentates, stages and adjudicates.
 A season starts on July 1 and runs preseason → league/cup/European competition →
 season rollover → next season. Data has two layers: catalog (immutable seed) and
-save (mutable state); `SAVE_VERSION` owns its shape. Character books and conversation digests preserve
+save (mutable state); `SAVE_VERSION` owns its shape. Lorebooks and conversation digests preserve
 narrative; contracts, employment, finances and match records remain validated ledgers.
 
 ## 3. Stack

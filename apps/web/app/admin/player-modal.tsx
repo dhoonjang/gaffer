@@ -12,10 +12,10 @@ import {
   POSITION_CODES,
   josa,
   type AttributeAxis,
-  type CharacterBookContent,
+  type LorebookContent,
 } from "@story-fm/domain";
 import { Modal } from "./modal";
-import { CharacterBookFields, characterBookInput } from "./character-book-fields";
+import { LorebookFields, lorebookInput } from "./lorebook-fields";
 import {
   ATTRS,
   clampAttr,
@@ -74,9 +74,7 @@ export function PlayerModal({
   const [teamId, setTeamId] = useState(player?.teamId ?? defaultTeamId);
   const [nameKo, setNameKo] = useState(player?.nameKo ?? "");
   const [nameEn, setNameEn] = useState(player?.nameEn ?? "");
-  const [characterBook, setCharacterBook] = useState<CharacterBookContent | undefined>(
-    player?.characterBook,
-  );
+  const [lorebook, setLorebook] = useState<LorebookContent | undefined>(player?.lorebook);
   const [birthdate, setBirthdate] = useState(player?.birthdate ?? NEW_BIRTHDATE);
   const [mainPosition, setMainPosition] = useState(player?.position ?? "CM");
   const [positions, setPositions] = useState<CatalogPosition[]>(
@@ -132,7 +130,7 @@ export function PlayerModal({
     const weeklyWage = wage === "" ? null : Math.min(MAX_WAGE, Math.max(0, Math.round(wage) || 0));
     const wagePatch = weeklyWage === null && player?.weeklyWage === undefined ? {} : { weeklyWage };
     const raw = {
-      characterBook: characterBookInput(nameKo, characterBook),
+      lorebook: lorebookInput(nameKo, lorebook),
       teamId,
       nameKo,
       nameEn: nameEn.trim() || undefined,
@@ -237,7 +235,7 @@ export function PlayerModal({
         </div>
       )}
 
-      <CharacterBookFields name={nameKo} book={characterBook} onChange={setCharacterBook} />
+      <LorebookFields name={nameKo} book={lorebook} onChange={setLorebook} />
       <div className="admin-fields">
         <label className="admin-field grow">
           이름 (한글)

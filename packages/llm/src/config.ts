@@ -13,7 +13,7 @@ export const AGENT_NAMES = [
   "market-planner",
   "negotiation-compactor",
   "history-compactor",
-  "character-book-editor",
+  "lorebook-editor",
   "onboarding-judge",
 ] as const;
 
@@ -242,7 +242,7 @@ const LlmConfigFileSchema = z
         "market-planner": RawAgentConfigSchema,
         "negotiation-compactor": RawAgentConfigSchema,
         "history-compactor": RawAgentConfigSchema,
-        "character-book-editor": RawAgentConfigSchema,
+        "lorebook-editor": RawAgentConfigSchema,
         "onboarding-judge": RawAgentConfigSchema,
       })
       .strict(),

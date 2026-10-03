@@ -1,5 +1,5 @@
-import { storePersona, readPersona } from "./character-book";
-import type { StoredPersona, CharacterBookEntry } from "@story-fm/domain";
+import { storePersona, readPersona } from "./lorebook";
+import type { StoredPersona, LorebookEntry } from "@story-fm/domain";
 import {
   playerOverall,
   CAPTAIN_ROLE_LABEL,
@@ -9,7 +9,7 @@ import {
   normalizeSpeaker,
   personaRoleLabel,
   STAFF_ROLES,
-  type CharacterBookContent,
+  type LorebookContent,
   type Persona,
   type GamePlayer,
   type PersonaRole,
@@ -26,10 +26,10 @@ import { makeRng, pick, randInt, shuffled } from "../core/rng";
 import { catalogTierOf } from "../core/club-tier";
 import { contractUntil } from "../core/dates";
 import { clubEconomyLevel } from "../data/league-economy";
-import { namedCatalogBook } from "../data/catalog-character-book";
+import { namedCatalogBook } from "../data/catalog-lorebook";
 import { withPersonaBook } from "../data/persona-override";
 
-/** 결정적 시드 템플릿은 생성 경계에서 캐릭터북으로만 남는다. */
+/** 결정적 시드 템플릿은 생성 경계에서 로어북으로만 남는다. */
 
 /**
  * 인물 사전이 훑는 말 — **한 곳에서만 만든다** (people.md §6).
@@ -581,7 +581,7 @@ export function generateStaff(seed: number, teamId: string, today: string): Pers
           name,
           role,
           title: archetype.title,
-          characterBook: staffSeedBook(seed, name, role, archetype),
+          lorebook: staffSeedBook(seed, name, role, archetype),
           since: `${Number(today.slice(0, 4)) - tenure}-07-01`,
           until: contractUntil(today, left),
           salary: staffSalaryOf(teamId, role),
@@ -603,7 +603,7 @@ export function staffPersona(input: {
   teamId: string;
   name: string;
   role: StaffPoolEntry["role"];
-  characterBook: CharacterBookContent;
+  lorebook: LorebookContent;
   title: string;
   since: string;
   until: string;
@@ -614,7 +614,7 @@ export function staffPersona(input: {
     characterId: input.name,
     name: input.name,
     role: input.role,
-    characterBook: namedCatalogBook(input.name, input.characterBook),
+    lorebook: namedCatalogBook(input.name, input.lorebook),
     employment: {
       teamId: input.teamId,
       title: input.title,
@@ -632,7 +632,7 @@ export function staffSeedBook(
   name: string,
   role: StaffRole,
   archetype: StaffArchetype,
-): CharacterBookContent {
+): LorebookContent {
   return withPersonaBook({
     characterId: name,
     name,
@@ -643,7 +643,7 @@ export function staffSeedBook(
     motivation: archetype.motivation,
     speechStyle: archetype.speech,
     keywords: personaKeywords({ name, role }),
-  }).characterBook;
+  }).lorebook;
 }
 
 /** 그 역할의 원형 전수 — 풀이 사람을 뽑을 때와 테스트가 훑을 때가 같은 표를 본다 */
@@ -660,7 +660,7 @@ export type { StaffArchetype };
 export function staffOf(
   state: {
     personas: readonly StoredPersona[];
-    characterBook: CharacterBookEntry[];
+    lorebook: LorebookEntry[];
     userTeamId?: string;
     date?: string;
   },
@@ -1221,7 +1221,7 @@ function collectSpeakers(state: SpeakerSource): Map<string, SpeakerRole | null> 
 /** 공석이면 원장에 고용을 만들지 않는 임시 안내 정보를 반환한다. */
 export function headCoachOf(state: {
   personas: readonly StoredPersona[];
-  characterBook: CharacterBookEntry[];
+  lorebook: LorebookEntry[];
   userTeamId?: string;
   date?: string;
 }): Persona {
@@ -1238,7 +1238,7 @@ export function headCoachOf(state: {
         characterId: "수석코치 공석",
         name: "수석코치 공석",
         role: "head_coach",
-        characterBook: {
+        lorebook: {
           name: "수석코치 공석",
           keywords: [],
           description: "수석코치 공석",
@@ -1275,7 +1275,7 @@ const FACT_SPEAKER_ROLE: Record<FactChannel, StaffRole | null> = {
 };
 
 export function factSpeakerOf(
-  state: { personas: readonly StoredPersona[]; characterBook: CharacterBookEntry[] },
+  state: { personas: readonly StoredPersona[]; lorebook: LorebookEntry[] },
   channel: FactChannel,
 ): Persona {
   const role = FACT_SPEAKER_ROLE[channel];
@@ -1285,7 +1285,7 @@ export function factSpeakerOf(
 /** 이 세이브의 구단주 — 수석코치와 같은 불변식이다: `personas`에 언제나 하나 있다 */
 export function ownerOf(state: {
   personas: readonly StoredPersona[];
-  characterBook: CharacterBookEntry[];
+  lorebook: LorebookEntry[];
 }): Persona {
   const found = state.personas.find((p) => p.role === "owner");
   if (!found) throw new Error("구단주 없음: personas에 owner가 없다");
@@ -1295,7 +1295,7 @@ export function ownerOf(state: {
 /** 이 세이브의 기자단 — `personas`의 기자들 */
 export function reportersOf(state: {
   personas: readonly StoredPersona[];
-  characterBook: CharacterBookEntry[];
+  lorebook: LorebookEntry[];
 }): Persona[] {
   return state.personas
     .filter((p) => p.role === "reporter")
@@ -1421,7 +1421,7 @@ function worldFigureKeywords(seed: WorldFigureSeed): string[] {
 
 function worldFigurePersonaOf(seed: WorldFigureSeed): Persona {
   return withPersonaBook({
-    ...(seed.characterBook === undefined ? {} : { characterBook: seed.characterBook }),
+    ...(seed.lorebook === undefined ? {} : { lorebook: seed.lorebook }),
     characterId: seed.name,
     name: seed.name,
     role: seed.role,
@@ -1531,7 +1531,7 @@ export function worldFigureByName(state: WorldFigureScope, name: string): Person
  * 리그를 건널 때만 갈린다. 생성이 시드로 결정적이라 같은 세이브가 같은 이직을
  * 하면 같은 사람을 만나고, 실명 시드가 있는 구단이면 그 실명 코치·구단주가 선다.
  *
- * `characterBook`은 건드리지 않는다 — 기억은 `characterId`에 묶여 있어 옛
+ * `lorebook`은 건드리지 않는다 — 기억은 `characterId`에 묶여 있어 옛
  * 코치의 기억은 옛 이름에 남고, 새 코치는 빈 채로 시작한다. GM이 등록한 인물
  * (friend·supporter)도 그대로다 — 구단이 아니라 감독의 사람들이다.
  */
@@ -1540,7 +1540,7 @@ export function reseatClubPersonas(
     seed: number;
     date: string;
     personas?: StoredPersona[];
-    characterBook: CharacterBookEntry[];
+    lorebook: LorebookEntry[];
   },
   teamId: string,
   options: { crossedLeague: boolean },

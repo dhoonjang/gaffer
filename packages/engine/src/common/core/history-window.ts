@@ -1,5 +1,5 @@
 import {
-  characterBookText,
+  lorebookText,
   CharacterCandidateSchema,
   CHARACTER_CANDIDATES_MAX,
   type CharacterCandidate,
@@ -105,11 +105,11 @@ export function historyEnd(turns: readonly ChatTurn[]): number {
   return 0;
 }
 
-/** 원문과 해당 턴에 저장된 캐릭터북 본문을 함께 센다. */
+/** 원문과 해당 턴에 저장된 로어북 본문을 함께 센다. */
 function chars(turns: readonly ChatTurn[], from: number, upto: number): number {
   let total = 0;
   for (let i = Math.max(0, from); i < upto; i += 1)
-    total += (turns[i]?.text.length ?? 0) + characterBookText(turns[i]?.characterBook ?? []).length;
+    total += (turns[i]?.text.length ?? 0) + lorebookText(turns[i]?.lorebook ?? []).length;
   return total;
 }
 

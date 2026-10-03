@@ -16,6 +16,7 @@ import {
   SQUAD_STATUS_KO,
   formatMoney,
   formatRating,
+  injuryHistoryBrief,
   injuryHistoryText,
   physiqueLabel,
 } from "@story-fm/domain";
@@ -42,10 +43,15 @@ import {
  * 전체가 따라온다. 경기 리포트와 같은 길이다 (match.md §8).
  */
 
+/** 지금 화면이 이 선수에게 걸 수 있는 조작 — 없으면 `null` */
+export type PlayerCardActions = (playerId: string) => ReactNode;
+
 interface PlayerCardHandle {
   open: (playerId: string) => void;
   /** 산문의 이름을 손잡이로 가르는 사전 — 사전 밖 이름은 글자 그대로 남는다 */
   names: PlayerNameIndex;
+  /** 카드 아래 조작 줄에 세울 것을 화면이 맡긴다 (`usePlayerCardActions`) */
+  setActions: (actions: PlayerCardActions | null) => void;
 }
 
 const PlayerCardContext = createContext<PlayerCardHandle | null>(null);
@@ -91,9 +97,17 @@ export function PlayerCardProvider({
   children: ReactNode;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [actions, setActionsState] = useState<PlayerCardActions | null>(null);
   const names = useMemo(() => buildPlayerNameIndex(playerNames), [playerNames]);
   const open = useCallback((playerId: string) => setOpenId(playerId), []);
-  const handle = useMemo<PlayerCardHandle>(() => ({ open, names }), [open, names]);
+  const setActions = useCallback(
+    (next: PlayerCardActions | null) => setActionsState(() => next),
+    [],
+  );
+  const handle = useMemo<PlayerCardHandle>(
+    () => ({ open, names, setActions }),
+    [open, names, setActions],
+  );
   return (
     <PlayerCardContext.Provider value={handle}>
       {children}
@@ -103,6 +117,7 @@ export function PlayerCardProvider({
           playerId={openId}
           stamp={stamp}
           inMatch={inMatch}
+          actions={actions?.(openId) ?? null}
           onClose={() => setOpenId(null)}
         />
       )}
@@ -119,6 +134,19 @@ export function PlayerCardProvider({
  */
 export function usePlayerCard(): PlayerCardHandle | null {
   return useContext(PlayerCardContext);
+}
+
+/**
+ * 이 화면이 떠 있는 동안 카드 아래 조작 줄에 세울 것을 맡긴다 — 화면이 사라지면 함께 걷힌다.
+ * 선수단 화면이 1·2군 이동을 여기 세운다: 명단 상세에 늘 서 있기엔 눈에 너무 띄는 조작이다.
+ */
+export function usePlayerCardActions(actions: PlayerCardActions): void {
+  const card = usePlayerCard();
+  useEffect(() => {
+    if (!card) return;
+    card.setActions(actions);
+    return () => card.setActions(null);
+  }, [card, actions]);
 }
 
 /**
@@ -186,12 +214,15 @@ function PlayerCardOverlay({
   playerId,
   stamp,
   inMatch,
+  actions,
   onClose,
 }: {
   gameId: string;
   playerId: string;
   stamp: string;
   inMatch: boolean;
+  /** 지금 화면이 맡긴 이 선수의 조작 — 닫기 왼쪽에 선다 */
+  actions: ReactNode;
   onClose: () => void;
 }) {
   const [card, setCard] = useState<PlayerCardView | null>(() =>
@@ -251,6 +282,7 @@ function PlayerCardOverlay({
           <PlayerCardBody card={card} inMatch={inMatch} />
         )}
         <div className="pc-actions">
+          {actions && <span className="pc-side">{actions}</span>}
           <button
             className="pc-close"
             type="button"
@@ -347,7 +379,9 @@ function PlayerCardBody({ card }: { card: PlayerCardView; inMatch: boolean }) {
           <Fact label="체격">{physiqueLabel(card.height, card.weight)}</Fact>
         )}
         {card.injuryHistory.count > 0 && (
-          <Fact label="부상 이력">{injuryHistoryText(card.injuryHistory)}</Fact>
+          <Fact label="부상 이력" title={injuryHistoryText(card.injuryHistory) ?? undefined}>
+            {injuryHistoryBrief(card.injuryHistory)}
+          </Fact>
         )}
         <FootMarks foot={card.foot} />
       </div>
