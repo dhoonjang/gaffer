@@ -25,6 +25,21 @@ export const ClubHonourSchema = z.object({
 });
 export type ClubHonour = z.infer<typeof ClubHonourSchema>;
 
+/** 구단 체급 1~4 — 낮을수록 큰 구단이다 */
+export const ClubTierSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
+export type ClubTier = z.infer<typeof ClubTierSchema>;
+
+/**
+ * **체급의 이름** — 화면과 모델 입력이 체급을 말할 때 쓰는 말이다 (team.md §2).
+ * 구단의 크기를 말할 뿐 보드의 목표 순위가 아니다 — 기대와 평가는 캐릭터북이 갖는다.
+ */
+export const CLUB_TIER_KO: Record<ClubTier, string> = {
+  1: "우승권",
+  2: "유럽 대항전권",
+  3: "중위권",
+  4: "잔류권",
+};
+
 export const GameTeamSchema = z.object({
   id: z.string().min(1),
   /**
@@ -34,7 +49,7 @@ export const GameTeamSchema = z.object({
    * 카탈로그를 직접 읽으면 어드민의 체급 편집이 **진행 중인 세이브**의 보드
    * 기대치와 경질 위험선을 그 자리에서 바꾼다. 읽는 자리는 `tierOfTeamIn`뿐이다.
    */
-  tier: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  tier: ClubTierSchema,
   /**
    * **표시명 — 세이브가 갖는다.** 카탈로그 값은 게임 시작의 초기치일 뿐이다.
    * 읽는 자리는 `teamNameIn` · `teamShortNameIn`뿐이다 (game-state.md §1).

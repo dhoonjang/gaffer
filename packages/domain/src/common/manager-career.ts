@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ClubTierSchema } from "./team";
 
 export const SeasonRecordSchema = z.object({
   season: z.number().int(),
@@ -10,7 +11,7 @@ export const SeasonRecordSchema = z.object({
   losses: z.number().int().min(0),
   goalsFor: z.number().int().min(0),
   goalsAgainst: z.number().int().min(0),
-  tier: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  tier: ClubTierSchema,
   /**
    * 그 시즌에 뛴 리그 — 승강이 생기면서 필요해졌다. 순위만으로는 챔피언십 1위와
    * 프리미어리그 1위를 가를 수 없어 성적 수당이 잘못 붙는다.

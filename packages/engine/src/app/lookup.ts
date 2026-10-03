@@ -1,4 +1,4 @@
-import { GROWTH_OUTLOOKS, observedOverall } from "@story-fm/domain";
+import { CLUB_TIER_KO, GROWTH_OUTLOOKS, observedOverall } from "@story-fm/domain";
 import type { PlayerMoveKind } from "@story-fm/domain";
 import { describeStaffPool } from "../story/people/staff-employment";
 import { openManagerOffers } from "../story/world/manager-employment";
@@ -2461,7 +2461,7 @@ export function careerView(state: GameState): LookupResult {
         `[커리어] ${m.name} — 커리어 종료 (${card.on} ${teamNameIn(state, card.teamId)}에서 ${
           card.kind === "expired" ? "계약 만료" : "경질"
         }) · ${seasonLabel(state.season)}`,
-        `당시 구단 체급: ${card.tier}티어` +
+        `당시 구단 체급: ${CLUB_TIER_KO[card.tier]}` +
           (card.position === undefined ? "" : ` · 당시 ${card.position}위`),
         ...(card.severance ? [`위약금 ${formatMoney(card.severance)}`] : []),
         ...(openManagerOffers(state).length > 0
@@ -2469,7 +2469,7 @@ export function careerView(state: GameState): LookupResult {
               `받은 감독직 제안:`,
               ...openManagerOffers(state).map(
                 (o) =>
-                  `  ${o.id} · ${teamNameIn(state, o.teamId)} (${o.tier}티어)` +
+                  `  ${o.id} · ${teamNameIn(state, o.teamId)} (${CLUB_TIER_KO[o.tier]})` +
                   (o.position ? ` · 현재 ${o.position}위` : "") +
                   ` · 연봉 ${formatMoney(o.salary)}·${o.years}년` +
                   ` · ${o.expiresOn}까지`,
@@ -2481,7 +2481,7 @@ export function careerView(state: GameState): LookupResult {
               `최근 공석 (지원할 수 있는 자리):`,
               ...state.managerVacancies.map(
                 (v) =>
-                  `  ${teamNameIn(state, v.teamId)} (${tierOfTeamIn(state, v.teamId)}티어)` +
+                  `  ${teamNameIn(state, v.teamId)} (${CLUB_TIER_KO[tierOfTeamIn(state, v.teamId)]})` +
                   (v.position ? ` · 현재 ${v.position}위` : "") +
                   ` · ${v.on} 공석`,
               ),
@@ -2557,7 +2557,7 @@ export function careerView(state: GameState): LookupResult {
       text:
         `  시즌 ${d.season} (${seasonLabelOf(d.season)}) ${teamNameIn(state, d.teamId)} — ${d.on} ` +
         `${d.kind === "expired" ? "계약 만료" : "경질"}` +
-        ` (${d.tier}티어` +
+        ` (${CLUB_TIER_KO[d.tier]}` +
         (d.position === undefined ? ")" : ` · 당시 ${d.position}위)`),
     })),
   ].sort((a, b) => b.season - a.season || b.atEnd - a.atEnd || b.on.localeCompare(a.on));
