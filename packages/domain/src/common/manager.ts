@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { DateString } from "./date-string";
+import { ClubTierSchema } from "./team";
 
 /**
  * **감독 계약** — 연봉·체결일·만료일 (career.md §5.1 · §5.4).
@@ -58,7 +59,7 @@ export const DismissalSchema = z.object({
   /** 어느 구단에서 잘렸나 */
   teamId: z.string().min(1),
   /** 그 구단의 등급 — 당시 구단 체급 */
-  tier: z.number().int().min(1).max(4),
+  tier: ClubTierSchema,
   /** 경질일의 리그 순위 — 아직 리그전을 치르지 않았으면 없다 */
   position: z.number().int().min(1).optional(),
   /**
@@ -84,7 +85,7 @@ export const ManagerOfferSchema = z.object({
   madeOn: DateString,
   /** 이 날이 지나면 사라진다 */
   expiresOn: DateString,
-  tier: z.number().int().min(1).max(4),
+  tier: ClubTierSchema,
   /** 부를 때의 리그 순위 — 아직 리그전을 치르지 않았으면 없다 */
   position: z.number().int().min(1).optional(),
   /** 제시 조건 — 연봉·계약 연수 (career.md §5.1) */

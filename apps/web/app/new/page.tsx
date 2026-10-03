@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LeagueListSkeleton } from "@/domains/common/ui/skeleton";
 import { Loading } from "@/domains/common/ui/loading";
-import type { ClubColours } from "@story-fm/domain";
+import { CLUB_TIER_KO, type ClubColours, type ClubTier } from "@story-fm/domain";
 import { Crest, clubStyle } from "@/domains/common/ui/crest";
 import { HelpPopover } from "@/domains/common/ui/help-popover";
 
@@ -14,7 +14,7 @@ interface TeamEntry {
   name: string;
   shortName: string;
   leagueId: string;
-  tier: number;
+  tier: ClubTier;
   /** 공식 색 — 카탈로그 항목이 그대로 내려온다. 없으면 문장이 id 해시로 색을 낸다 */
   colours?: ClubColours;
 }
@@ -243,7 +243,7 @@ export default function NewGamePage() {
                 <Crest id={t.id} shortName={t.shortName} colours={t.colours} size={32} />
                 <span>
                   <div className="team-name">{t.name}</div>
-                  <div className="tier">{t.tier}티어</div>
+                  <div className="tier">{CLUB_TIER_KO[t.tier]}</div>
                 </span>
               </button>
             ))}
@@ -259,7 +259,7 @@ export default function NewGamePage() {
             <span>
               <div className="appointment-club">{team.name}</div>
               <div className="tier">
-                {league?.name ?? ""} · 구단 체급: {team.tier}티어
+                {league?.name ?? ""} · 구단 체급: {CLUB_TIER_KO[team.tier]}
               </div>
             </span>
           </div>

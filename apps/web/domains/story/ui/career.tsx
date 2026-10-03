@@ -1,7 +1,13 @@
 "use client";
 
 import type { OfficeViews } from "@story-fm/engine";
-import { achievementTitle, awardTitle, formatMoney, formatRating } from "@story-fm/domain";
+import {
+  achievementTitle,
+  awardTitle,
+  CLUB_TIER_KO,
+  formatMoney,
+  formatRating,
+} from "@story-fm/domain";
 import { IconTrophy } from "@/domains/common/ui/icons";
 import { contractUntil, humanDate } from "@/domains/common/lib/dateline";
 
@@ -70,8 +76,8 @@ function OfferCard({ offer: o }: { offer: OfferRow }) {
           {o.via === "renewal"
             ? "재계약"
             : o.via === "poach"
-              ? `접근 · ${o.tier}티어`
-              : `${o.tier}티어`}
+              ? `접근 · ${CLUB_TIER_KO[o.tier]}`
+              : CLUB_TIER_KO[o.tier]}
         </span>
         <span className="until">{humanDate(o.expiresOn)}까지</span>
       </div>
@@ -100,7 +106,7 @@ function Vacancies({ vacancies }: { vacancies: readonly VacancyRow[] }) {
         <div className="offer vacant" key={i}>
           <div className="offer-head">
             <b>{v.teamName}</b>
-            <span className="tier">{v.tier}티어</span>
+            <span className="tier">{CLUB_TIER_KO[v.tier]}</span>
             <span className="until">{humanDate(v.on)} 공석</span>
           </div>
           {v.position !== null && <div className="offer-why">현재 {v.position}위</div>}

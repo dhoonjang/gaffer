@@ -2,6 +2,7 @@ import { openManagerOffers } from "../../story/world/manager-employment";
 import { tierOfTeamIn } from "../../common/core/club-tier";
 import { personaBookOf } from "../../common/people/character-book";
 import {
+  type ClubTier,
   type GrowthOutlook,
   type StaffRole,
   type Persona,
@@ -178,7 +179,7 @@ export type CareerView = {
     kind: "sacked" | "expired" | "resigned" | "moved";
     teamName: string;
     severance: number | null;
-    tier: number;
+    tier: ClubTier;
     /** 경질일의 리그 순위 — 아직 리그전을 치르지 않았으면 null */
     position: number | null;
   } | null;
@@ -206,7 +207,7 @@ export type CareerView = {
      */
     via: "vacancy" | "knock" | "renewal" | "poach";
     teamName: string;
-    tier: number;
+    tier: ClubTier;
     expiresOn: string;
     position: number | null;
 
@@ -224,7 +225,7 @@ export type CareerView = {
    * 쌓인다 — 계약을 남기고 떠나는 길이 열려 있다.
    * 지원은 채팅으로 한다(`apply_manager_job`) — 화면은 어느 문이 열려 있는지만 세운다.
    */
-  vacancies: Array<{ teamName: string; tier: number; on: string; position: number | null }>;
+  vacancies: Array<{ teamName: string; tier: ClubTier; on: string; position: number | null }>;
   /** 감독 계약 — 무직이면 null. */
   contract: {
     salary: number;

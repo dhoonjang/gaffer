@@ -1,4 +1,4 @@
-import { type ManagerOffer, formatMoney } from "@story-fm/domain";
+import { type ManagerOffer, formatMoney, CLUB_TIER_KO } from "@story-fm/domain";
 import { teamName } from "@story-fm/engine";
 
 /**
@@ -7,7 +7,7 @@ import { teamName } from "@story-fm/engine";
  */
 export function offerSeat(offer: ManagerOffer): string {
   return [
-    `${teamName(offer.teamId)} (${offer.tier}티어)`,
+    `${teamName(offer.teamId)} (${CLUB_TIER_KO[offer.tier]})`,
     offer.position ? `현재 ${offer.position}위` : null,
   ]
     .filter((x): x is string => x !== null)
