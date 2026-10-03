@@ -1,4 +1,4 @@
-import { ageOf, naturalPositionOf } from "@story-fm/domain";
+import { CLUB_TIER_KO, ageOf, naturalPositionOf } from "@story-fm/domain";
 import { z } from "zod";
 import {
   type GameState,
@@ -28,7 +28,7 @@ export const ONBOARDING_JUDGE_SYSTEM = `당신은 새로 부임하는 축구 감
 # 첫 장면 (scene)
 오늘은 감독의 부임 첫날이다. 배경과 구단의 맥락에서 장면을 연다.
 - <snapshot>의 사실을 짚는다 — 소집일, 다음 일정, 몸이 성치 않은 선수. 없는 사실을 지어내지 않는다.
-- 감독은 유저가 연기한다 — **감독의 말을 대신 쓰지 마라.** 장면은 감독이 답할 자리에서 닫는다.
+- 감독은 유저가 연기한다 — 감독의 말은 쓰지 않는다. 장면은 감독이 답할 자리에서 닫는다.
 - 내부 판정 수치나 확률은 장면에 적지 않는다.
 
 # 출력 문법 (scene)
@@ -76,7 +76,7 @@ export function buildClubBlock(state: GameState): string {
   const coach = headCoachOf(state);
   return [
     `<club name="${teamNameIn(state, state.userTeamId)}">`,
-    `격: tier ${tierOfTeamIn(state, state.userTeamId)}`,
+    `격: ${CLUB_TIER_KO[tierOfTeamIn(state, state.userTeamId)]}`,
     `구단주: ${owner.characterId} ${owner.name}`,
     `수석코치: ${coach.characterId} ${coach.name}`,
     `주장: ${captain ? row(captain) : "없음"}`,
