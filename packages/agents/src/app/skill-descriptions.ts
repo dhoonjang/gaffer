@@ -36,7 +36,7 @@ export const SKILL_CATALOG = [
   },
   {
     name: "get_negotiations",
-    label: "협상 목록 조회",
+    label: CALL_LABELS.get_negotiations,
     group: "조회",
     readOnly: true,
     description:

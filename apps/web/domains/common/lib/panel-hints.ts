@@ -25,6 +25,7 @@ export type PanelKey = "스쿼드" | "달력" | "재정" | "대회" | "커리어
  */
 export const PANEL_OF: Record<string, PanelKey> = {
   set_transfer_list: "에이전트 센터",
+  start_negotiation: "에이전트 센터",
   // ── 스쿼드 — 선수단과 판이 바뀐 것 ──
   set_lineup: "스쿼드",
   set_squad_level: "스쿼드",
