@@ -4,12 +4,18 @@ import type { CSSProperties } from "react";
 import {
   SET_PIECE_ROLES,
   SET_PIECE_ROLE_KO,
-  SET_PIECE_ROLE_MARK,
   formatRating,
   positionProficiency,
   type SetPieceRole,
 } from "@story-fm/domain";
-import { IconCaptain, IconViceCaptain, type IconComponent } from "@/domains/common/ui/icons";
+import {
+  IconCaptain,
+  IconCorner,
+  IconFreeKick,
+  IconPenalty,
+  IconViceCaptain,
+  type IconComponent,
+} from "@/domains/common/ui/icons";
 import { humanDate } from "@/domains/common/lib/dateline";
 
 import type { SetPieceTakersView, SquadRow } from "../../match/ui/squad/types";
@@ -98,44 +104,43 @@ const TAKER_TONE_KO = {
 } as const;
 type TakerTone = keyof typeof TAKER_TONE_KO;
 
+/** 자리마다의 그림 — 글자 약자보다 먼저 읽힌다 */
+const SET_PIECE_ICON: Record<SetPieceRole, IconComponent> = {
+  corner: IconCorner,
+  freeKick: IconFreeKick,
+  penalty: IconPenalty,
+};
+
 /**
- * 세트피스 표식 — **이름 앞의 한 자리, 세 칸.**
+ * 세트피스 전담 — **선수 상세의 상태 줄에 서는 맡은 자리.**
  *
- * 자리마다 표식을 하나씩 세우면 셋을 다 차는 선수의 행에서 등번호·완장 뒤로
- * 표식 셋이 줄줄이 서고, 236px짜리 이름 칸의 4분의 1이 표식 몫이 된다. 그래서
- * **표식은 하나**이고 코너·프리킥·페널티가 그 안에 늘 같은 순서로 선다 — 맡지
- * 않은 자리는 글자를 감춰 칸만 남기므로, 하나를 차든 셋을 다 차든 이름이
- * 시작하는 자리가 움직이지 않는다.
- *
- * **세 갈래는 색이 아니라 글자의 모양이 가른다** (docs/common/team.md §6):
- * 감독이 지정하고 지금 차는 자리는 진하고, 지정이 없어 코어가 세운 자리는 옅고,
- * 지정은 걸렸는데 선발에 없어 못 차는 자리는 **취소선**이다 — 이름은 남았고 공은
- * 못 찬다는 뜻이 그 모양이다. 툴팁은 같은 사실을 자리마다 한 줄씩 적을 뿐이라,
- * 열지 않아도 뜻이 선다.
+ * 맡은 자리만 그림과 이름으로 늘 같은 순서(코너 · 프리킥 · 페널티)로 선다. 세 갈래는
+ * 모양이 가른다 (docs/common/team.md §6): 감독이 지정하고 지금 차는 자리는 금색,
+ * 지정이 없어 코어가 세운 자리는 옅고, 지정은 걸렸는데 선발에 없어 못 차는 자리는
+ * 취소선이다. 툴팁은 같은 사실을 한 줄씩 적을 뿐이다. 맡은 자리가 없으면 서지 않는다.
  */
-export function SetPieceMarks({ id, takers }: { id: string; takers: SetPieceTakersView }) {
-  const slots = SET_PIECE_ROLES.map((role) => {
+export function SetPieceDuties({ id, takers }: { id: string; takers: SetPieceTakersView }) {
+  const held = SET_PIECE_ROLES.flatMap((role) => {
     const { designated, taker } = takers[role];
     const mine = designated === id;
     const kicks = taker === id;
     const tone: TakerTone | null = mine ? (kicks ? "on" : "idle") : kicks ? "core" : null;
-    return { role, tone };
+    return tone === null ? [] : [{ role, tone }];
   });
-  const held = slots.filter((s): s is { role: SetPieceRole; tone: TakerTone } => s.tone !== null);
   if (held.length === 0) return null;
-  /** 자리마다 한 줄 — 사실만 적는다. 글자 셋은 소리로 읽으면 뜻이 없어 이 줄이 대신 선다 */
-  const facts = held
-    .map((s) => `${SET_PIECE_ROLE_KO[s.role]} 키커 — ${TAKER_TONE_KO[s.tone]}`)
-    .join("\n");
   return (
-    <i className="spmark" title={facts} role="img" aria-label={facts}>
-      {slots.map(({ role, tone }) => (
-        // 맡지 않은 자리도 글자를 그린다 — 감춰진 채로 폭을 지키는 것이 그 칸의 일이다
-        <b className={`spm ${tone ?? "off"}`} key={role} aria-hidden="true">
-          {SET_PIECE_ROLE_MARK[role]}
-        </b>
-      ))}
-    </i>
+    <span className="sp-duties" data-testid="set-piece-duties">
+      {held.map(({ role, tone }) => {
+        const Icon = SET_PIECE_ICON[role];
+        const fact = `${SET_PIECE_ROLE_KO[role]} 키커 — ${TAKER_TONE_KO[tone]}`;
+        return (
+          <span className={`sp-duty ${tone}`} key={role} title={fact} aria-label={fact}>
+            <Icon size={13} />
+            <span className="sp-duty-name">{SET_PIECE_ROLE_KO[role]}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

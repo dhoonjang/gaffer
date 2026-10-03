@@ -249,6 +249,23 @@
   cursor: pointer;
   transition: background var(--ease);
 }
+/* 화면이 맡긴 조작 — 닫기와 떨어져 왼쪽 끝에 서고, 닫기보다 가라앉아 있다 */
+.pc-side {
+  display: inline-flex;
+  gap: 8px;
+  margin-right: auto;
+}
+.pc-actions .pc-side button {
+  min-width: 0;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.pc-actions .pc-side button:hover:not(:disabled) {
+  background: var(--panel-2);
+  color: var(--text);
+}
 .pc-close {
   background: var(--panel-2);
   color: var(--text);

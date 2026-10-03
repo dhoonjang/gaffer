@@ -85,6 +85,18 @@ export function injuryHistoryText(history: InjuryHistory): string | null {
 }
 
 /**
+ * 화면의 짧은 한 줄 — 건수와 결장 일수, 지금 다친 곳만. 최근 부상과 복귀 날수는
+ * `injuryHistoryText`의 긴 줄이 툴팁으로 갖는다.
+ */
+export function injuryHistoryBrief(history: InjuryHistory): string | null {
+  if (history.count === 0) return null;
+  const parts = [`${history.count}회 · ${history.daysOut}일 결장`];
+  const last = history.last;
+  if (last?.open) parts.push(`현재 ${last.bodyPart} ${INJURY_SEVERITY_KO[last.severity]}`);
+  return parts.join(" · ");
+}
+
+/**
  * **부상 위험 등급과 그 원인** — 세이브에 남지 않는 파생의 낱말 (player.md §5.3).
  *
  * 값을 만드는 것은 시뮬의 저울 하나뿐이다(`injuryRiskOf` — `packages/sim`이 경기의

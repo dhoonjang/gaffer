@@ -11,11 +11,10 @@ import {
   FitGauge,
   FormArrow,
   Margin,
-  SetPieceMarks,
   StatusBadges,
   ovrTitle,
 } from "../../../common/ui/player-marks";
-import { TIER_SLUG, type SetPieceTakersView, type SquadRow, type Tier } from "./types";
+import { TIER_SLUG, type SquadRow, type Tier } from "./types";
 
 /** 기본 정렬은 칸 → 라인 → OVR 순서다. 선수 열 머리를 누르면 기본 정렬로 돌아간다. */
 export type SortKey =
@@ -41,7 +40,6 @@ export function SquadTable({
   swapPair,
   tierOf,
   tierKey,
-  setPieces,
   onSwapIn,
   inMatch,
 }: {
@@ -57,8 +55,6 @@ export function SquadTable({
    * 행 클릭은 상세 보기뿐이고, 라인업 변경은 이 버튼으로만 일어난다.
    */
   swapPair?: { id: string; name: string; tier: Tier; slotCode: string | null } | null;
-  /** 세트피스 키커 셋 — 이름 옆의 표식이 여기서 나온다 (완장과 같은 자리) */
-  setPieces: SetPieceTakersView;
   /** 경기 중에는 남은 체력으로, 경기 밖에서는 누적 피로로 막대 색을 정한다 */
   inMatch?: boolean;
   /** 이 선수가 지금 속한 칸 (로컬 편집 반영 — role·squadLevel은 저장 전까지 옛 값이다) */
@@ -245,9 +241,6 @@ export function SquadTable({
                     </i>
                   )}
                   <Armband row={p} />
-                  {/* 세트피스 표식 — 완장 바로 옆이다. 둘 다 "이 선수가 맡은 자리"라
-                      한 계열로 읽혀야 하고, 이름 뒤로 밀면 국적·자격 배지에 묻힌다 */}
-                  <SetPieceMarks id={p.id} takers={setPieces} />
                   <PlayerName id={p.id} name={p.name} />
                 </span>
                 {/* 국적 — **표식이 아니라 사실**이라 알약이 아니다. 등록 표식(HG·U21)과

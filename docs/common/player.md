@@ -501,6 +501,8 @@ LAM/RAM · LF/RF · LST/RST.
 
 - 낱말은 한 자리다 (`injuryHistoryText` — domain). 이력이 없으면 `null`이라 **스물다섯
   명의 명단이 「없음」으로 채워지지 않는다** — 내력이 있는 사람만 도드라진다.
+- 화면은 짧은 한 줄(`injuryHistoryBrief`)로 건수와 결장 일수, 지금 다친 곳만 세우고
+  최근 부상과 복귀 날수까지 담긴 위 한 줄은 툴팁에 둔다. 조회·스냅샷은 긴 줄을 쓴다.
 - 서는 자리는 선수 카드(행을 펼쳤을 때) · `get_squad`의 선수 줄 · 스냅샷 `<alerts>`의 「부상 이력」
   줄과 야전 조련사형 수석코치의 `injury-risk` 눈([people.md](../story/people.md) §7-1) ·
   라인업 확정 브리프의 「최근 복귀」.

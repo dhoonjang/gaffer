@@ -284,6 +284,38 @@ export function IconCaptain({ size = 15 }: IconProps) {
   );
 }
 
+/** 코너킥 — **코너 깃발.** 깃대와 깃발, 그 발치의 코너 호 */
+export function IconCorner({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M8 21V3.4" />
+      <path d="M8 3.4l9.6 3.2L8 9.8" />
+      <path d="M3.6 21A4.4 4.4 0 0 1 8 16.6" />
+    </svg>
+  );
+}
+
+/** 프리킥 — **감아 차는 공.** 공 하나와 휘어 나가는 궤적 */
+export function IconFreeKick({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="7" cy="16.6" r="3.4" />
+      <path d="M10.2 14C12.4 8.6 16 6.6 20.2 6.8" />
+      <path d="M17.8 4.6l2.4 2.2-2.2 2.4" />
+    </svg>
+  );
+}
+
+/** 페널티킥 — **골문과 페널티 점** */
+export function IconPenalty({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M3.4 13.4V5.4h17.2v8" />
+      <circle cx="12" cy="18.4" r="1.4" />
+    </svg>
+  );
+}
+
 /** 중계 — 마이크. 무대 밖에서 들어오는 목소리다 */
 export function IconBroadcast({ size = 15 }: IconProps) {
   return (
