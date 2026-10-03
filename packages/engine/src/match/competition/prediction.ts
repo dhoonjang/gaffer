@@ -1,3 +1,4 @@
+import { playerOverall } from "@story-fm/domain";
 import { type GameState } from "../../common/core/state";
 import { teamsOfLeagueIn } from "../../common/core/league-membership";
 import { squadRatingsOf } from "../../common/players/squad-depth";
@@ -101,7 +102,7 @@ export function lastSeasonPlaces(state: GameState, leagueId: string): Map<string
  */
 export function netTransferScore(state: GameState, teamId: string, rating: number): number {
   const from = state.calendar.preseasonStart;
-  const overallOf = new Map(state.players.map((p) => [p.id, p.attributes.overall]));
+  const overallOf = new Map(state.players.map((p) => [p.id, playerOverall(p)]));
   let net = 0;
   for (const move of state.moves) {
     if (move.date < from || move.date > state.date) continue;

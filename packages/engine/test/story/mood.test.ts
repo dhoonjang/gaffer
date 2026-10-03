@@ -54,7 +54,7 @@ function player(form: number, composure = 70): GamePlayer {
     name: "테스트",
     birthdate: "2000-01-01",
     positions: [{ position: "CM", proficiency: 90, isNatural: true }],
-    attributes: { ...axes, composure, overall: 70, potential: 75 } as GamePlayer["attributes"],
+    attributes: { ...axes, composure, potential: 75 } as GamePlayer["attributes"],
     state: freshPlayerState({ form, condition: 75 }),
     isCaptain: false,
     isViceCaptain: false,

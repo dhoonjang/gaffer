@@ -1,3 +1,4 @@
+import { playerOverall } from "@story-fm/domain";
 import { describe, expect, it } from "vitest";
 import {
   leagueOfTeamIn,
@@ -53,10 +54,10 @@ function rotate(state: GameState): void {
           !isInjured(state, p.id) &&
           !isSuspended(state, p.id) &&
           (!tired || groupOf(p) === groupOf(tired)) &&
-          (!tired || p.attributes.overall >= tired.attributes.overall - ROTATION_OVR_DROP) &&
+          (!tired || playerOverall(p) >= playerOverall(tired) - ROTATION_OVR_DROP) &&
           (!tired || p.state.condition >= tired.state.condition + ROTATION_FRESHER),
       )
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)[0];
+      .sort((a, b) => playerOverall(b) - playerOverall(a))[0];
     if (!pick) continue;
     const benchSlot = all.find((a) => a.playerId === pick.id);
     used.delete(slot.playerId);

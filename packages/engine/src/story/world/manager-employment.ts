@@ -1,4 +1,5 @@
 import {
+  playerOverall,
   type ManagerInterview,
   type ManagerInterviewContext,
   type GamePlayer,
@@ -337,7 +338,7 @@ export const INTERVIEW_FACT_KO: Partial<Record<InterviewFact["kind"], string>> =
  */
 function keyPlayerOf(state: GameState, teamId: string): InterviewFact | null {
   const best = firstTeamPlayers(state, teamId).reduce<GamePlayer | null>(
-    (top, p) => (top === null || p.attributes.overall > top.attributes.overall ? p : top),
+    (top, p) => (top === null || playerOverall(p) > playerOverall(top) ? p : top),
     null,
   );
   if (!best) return null;

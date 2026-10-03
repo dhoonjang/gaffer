@@ -10,7 +10,7 @@ import {
   transitionSeason,
   type GameState,
 } from "@story-fm/engine";
-import { positionGroupOfPlayer } from "@story-fm/domain";
+import { playerOverall, positionGroupOfPlayer } from "@story-fm/domain";
 import { createMiniGame, createTestGame, resultOf } from "../helpers";
 
 /**
@@ -170,10 +170,10 @@ describe("승격 클럽 보강 — 스무 명으로 1부를 돌지 않는다", (
       const ids = new Set(signings.map((s) => s.id));
       const starters = squad
         .filter((p) => !ids.has(p.id))
-        .map((p) => p.attributes.overall)
+        .map((p) => playerOverall(p))
         .sort((a, b) => b - a)
         .slice(0, 11);
-      expect(mean(signings.map((s) => s.attributes.overall)), teamId).toBeLessThan(mean(starters));
+      expect(mean(signings.map((s) => playerOverall(s))), teamId).toBeLessThan(mean(starters));
       // 계약 없이 명단에만 서는 선수는 없다 — 주급이 장부에 오르지 않는다
       for (const s of signings) {
         expect(state.contracts.some((c) => c.gamePlayerId === s.id && c.status === "active")).toBe(

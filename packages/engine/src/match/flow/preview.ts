@@ -1,5 +1,10 @@
 import type { GamePlayer, MatchRecord, MatchSide, TacticsSpec } from "@story-fm/domain";
-import { associationName, isReserveMatch, naturalPositionOf } from "@story-fm/domain";
+import {
+  playerOverall,
+  associationName,
+  isReserveMatch,
+  naturalPositionOf,
+} from "@story-fm/domain";
 import type { LineupSlot } from "@story-fm/sim";
 import { competitionLabel } from "../../common/data/cup-catalog";
 import { derbyForMatch } from "../../common/world/derby";
@@ -231,7 +236,7 @@ function projectXI(
   // ② 빈자리는 그 팀 전술판의 선발 배치에서
   for (const a of assignmentsOf(state, teamId, "starting")) seat(byId.get(a.playerId), "guess");
   // ③ 그래도 모자라면 가용 1군 종합 상위
-  for (const p of [...squad].sort((a, b) => b.attributes.overall - a.attributes.overall)) {
+  for (const p of [...squad].sort((a, b) => playerOverall(b) - playerOverall(a))) {
     seat(p, "guess");
   }
   return { xi, carried };
@@ -361,7 +366,7 @@ export function buildOpponentReport(
     { kind: "strength", ours: teamRatingsOf(us), theirs: teamRatingsOf(theirSlots) },
     { kind: "form", results: recentFormOf(state, opponentId, match) },
     ...[...theirSlots]
-      .sort((a, b) => b.player.attributes.overall - a.player.attributes.overall)
+      .sort((a, b) => playerOverall(b.player) - playerOverall(a.player))
       .slice(0, KEY_PLAYERS)
       .map(
         (slot) =>

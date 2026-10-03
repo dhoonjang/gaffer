@@ -1,3 +1,4 @@
+import { ATTRIBUTE_AXES } from "@story-fm/domain";
 import {
   setRetirement,
   toFreeAgency,
@@ -822,7 +823,7 @@ describe("은퇴 — GM 선언·철회·시즌 실행", () => {
     const game = fresh();
     const player = userPlayers(game)[0]!;
     player.birthdate = "1980-01-01";
-    player.attributes.overall = 40;
+    for (const axis of ATTRIBUTE_AXES) player.attributes[axis] = 40;
     activeContract(game, player.id)!.until = "2035-06-30";
     game.date = "2026-12-31";
     advanceTime(game, { days: 1 });

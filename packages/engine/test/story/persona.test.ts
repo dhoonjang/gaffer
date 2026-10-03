@@ -1,3 +1,4 @@
+import { hireStaff, releaseStaff, staffPoolOf } from "../../src/story/people/staff-employment";
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -5,6 +6,7 @@ import { writePersonaBooks } from "../../src/common/data/persona-override";
 import { describe, expect, it, vi } from "vitest";
 import {
   PersonaSchema,
+  ATTRIBUTE_AXES,
   CharacterBookContentSchema,
   HEAD_COACH_ROLE_LABEL,
   STAFF_ROLES,
@@ -179,11 +181,43 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
       players: [
         { name: "우리 주장", teamId: "manutd", isCaptain: true },
         // 주장과 동명의 남의 팀 스타 — 뒤 겹은 완장을 밀어내지 못한다
-        { name: "우리 주장", teamId: "chelsea", attributes: { overall: 90 } },
-        { name: "남의 팀 스타", teamId: "chelsea", attributes: { overall: 82 } },
-        { name: "무명 선수", teamId: "chelsea", attributes: { overall: 81 } },
+        {
+          name: "우리 주장",
+          teamId: "chelsea",
+          attributes: {
+            ...Object.fromEntries(ATTRIBUTE_AXES.map((axis) => [axis, 90])),
+            potential: 99,
+          } as GamePlayer["attributes"],
+          positions: [{ position: "ST", proficiency: 90, isNatural: true }],
+        },
+        {
+          name: "남의 팀 스타",
+          teamId: "chelsea",
+          attributes: {
+            ...Object.fromEntries(ATTRIBUTE_AXES.map((axis) => [axis, 82])),
+            potential: 99,
+          } as GamePlayer["attributes"],
+          positions: [{ position: "ST", proficiency: 90, isNatural: true }],
+        },
+        {
+          name: "무명 선수",
+          teamId: "chelsea",
+          attributes: {
+            ...Object.fromEntries(ATTRIBUTE_AXES.map((axis) => [axis, 81])),
+            potential: 99,
+          } as GamePlayer["attributes"],
+          positions: [{ position: "ST", proficiency: 90, isNatural: true }],
+        },
         // 능력치가 답하지 못하는 레전드 — 시장 리그 시드 명단이 답한다
-        { name: "리오넬 메시", teamId: "intermiami", attributes: { overall: 80 } },
+        {
+          name: "리오넬 메시",
+          teamId: "intermiami",
+          attributes: {
+            ...Object.fromEntries(ATTRIBUTE_AXES.map((axis) => [axis, 80])),
+            potential: 99,
+          } as GamePlayer["attributes"],
+          positions: [{ position: "ST", proficiency: 90, isNatural: true }],
+        },
       ],
     });
     expect(roles[normalizeSpeaker("남의 팀 스타")]).toEqual({ kind: "player" });
@@ -679,5 +713,36 @@ describe("캐릭터북이 인물 서사의 유일한 원본이다", () => {
     expect(selectCharacterBook([entry], "바뀐별칭", [])).toHaveLength(1);
     expect(selectCharacterBook([entry], coach.characterBook.keywords.at(-1)!, [])).toHaveLength(0);
     expect(coach).toEqual(original);
+  });
+});
+
+describe("고용과 캐릭터북 원본", () => {
+  it("해고·재고용은 갱신된 같은 책을 참조하고 계약 이력을 보존한다", () => {
+    const state = createTestGame();
+    const person = state.personas.find((row) => row.role === "coach" && row.employment)!;
+    const bookId = person.characterBookId;
+    const book = state.characterBook.find((row) => row.id === bookId)!;
+    requestCharacterUpdate(state, {
+      characterId: bookId,
+      additionalInformation: "감독과 육성 방침에 합의했다",
+    });
+    completeCharacterUpdate(state, state.characterBookJobs.at(-1)!.id, book.version, {
+      keywords: book.keywords,
+      description: book.description,
+      information: "육성 방침을 합의한 코치",
+    });
+    expect(releaseStaff(state, { name: person.name }).ok).toBe(true);
+    expect(state.staffPool.find((row) => row.name === person.name)?.characterBookId).toBe(bookId);
+    const beforeRead = JSON.stringify(state);
+    expect(
+      staffPoolOf(state).find((row) => row.name === person.name)?.characterBook.information,
+    ).toBe(book.information);
+    expect(JSON.stringify(state)).toBe(beforeRead);
+    expect(hireStaff(state, { name: person.name, salary: 1, until: "2030-06-30" }).ok).toBe(true);
+    expect(person.characterBookId).toBe(bookId);
+    expect(person).not.toHaveProperty("characterBook");
+    expect(person.employmentHistory).toHaveLength(1);
+    expect(personaBookOf(state, person).information).toBe("육성 방침을 합의한 코치");
+    expect(state.characterBook.filter((row) => row.id === bookId)).toHaveLength(1);
   });
 });

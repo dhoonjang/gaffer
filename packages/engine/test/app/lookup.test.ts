@@ -22,7 +22,7 @@ import {
   userPlayers,
   type GameState,
 } from "@story-fm/engine";
-import { isReserveMatch } from "@story-fm/domain";
+import { playerOverall, isReserveMatch } from "@story-fm/domain";
 import { createTestGame, resultOf } from "../helpers";
 
 /**
@@ -110,7 +110,7 @@ describe("search_players", () => {
     const shown = rowIds(res.message, pool);
     expect(shown).toHaveLength(15);
     const byTruth = [...pool]
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)
+      .sort((a, b) => playerOverall(b) - playerOverall(a))
       .slice(0, 15)
       .map((p) => p.id);
     expect(shown).not.toEqual(byTruth);
@@ -279,7 +279,7 @@ describe("get_team · get_league", () => {
       .map((a) => playerById(state, a.playerId))
       .filter((p) => p !== null);
     const byTruth = [...starting]
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)
+      .sort((a, b) => playerOverall(b) - playerOverall(a))
       .slice(0, 6)
       .map((p) => p.id);
     expect(rowIds(teamProfile(state, "chelsea").message, starting)).not.toEqual(byTruth);

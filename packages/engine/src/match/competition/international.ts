@@ -4,6 +4,8 @@ import {
   seasonOfKey,
 } from "../../common/players/international";
 import {
+  playerOverall,
+  isReserveStat,
   type PositionGroup,
   type GamePlayer,
   ageOf,
@@ -67,7 +69,7 @@ export const FORM_WEIGHT = 2;
 export function callUpScore(state: GameState, player: GamePlayer, apps: number): number {
   const age = ageOf(player.birthdate, state.date);
   return (
-    player.attributes.overall -
+    playerOverall(player) -
     AGE_WEIGHT * Math.abs(age - PEAK_AGE) +
     APPS_WEIGHT * Math.min(1, apps / APPS_FULL) +
     FORM_WEIGHT * player.state.form
@@ -84,7 +86,7 @@ export function callUpScore(state: GameState, player: GamePlayer, apps: number):
 export function appsIndexOf(state: GameState): Map<string, number> {
   const out = new Map<string, number>();
   for (const stat of state.seasonStats) {
-    if (stat.season !== state.season) continue;
+    if (stat.season !== state.season || isReserveStat(stat)) continue;
     out.set(stat.gamePlayerId, (out.get(stat.gamePlayerId) ?? 0) + stat.apps);
   }
   return out;
@@ -189,7 +191,7 @@ export const GOAL_RATE_REFERENCE = 80;
 export const BRACE_SHARE = 0.2;
 
 export function goalsFor(player: GamePlayer, apps: number, rng: () => number): number {
-  const lambda = (GOAL_RATE[groupOf(player)] * player.attributes.overall) / GOAL_RATE_REFERENCE;
+  const lambda = (GOAL_RATE[groupOf(player)] * playerOverall(player)) / GOAL_RATE_REFERENCE;
   let goals = 0;
   for (let i = 0; i < apps; i++) {
     if (rng() < lambda) goals++;
@@ -309,7 +311,7 @@ export const TOURNAMENT_DELAY_DAYS: ReadonlyArray<{ within: number; days: number
 /** 나라의 세기 — 상위 23인 종합 평균. 대회를 굴리지 않으므로 이것이 성적을 대신한다 */
 export function countryStrength(squad: readonly GamePlayer[]): number {
   if (squad.length === 0) return 0;
-  return squad.reduce((s, p) => s + p.attributes.overall, 0) / squad.length;
+  return squad.reduce((s, p) => s + playerOverall(p), 0) / squad.length;
 }
 
 /**

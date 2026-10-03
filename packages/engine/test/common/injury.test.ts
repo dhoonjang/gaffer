@@ -2,14 +2,12 @@ import { describe, expect, it } from "vitest";
 import { applyEvents } from "@story-fm/sim";
 import {
   leagueOfTeamIn,
-  AVG_PRONENESS_RISE,
-  FALL_PER_APPEARANCE,
-  INJURY_CHANCE_PER_APPEARANCE,
   PRONENESS_BASE,
+  pronenessFromDaysOut,
+  pronenessOf,
   markEntered,
   advanceTime,
   diffDays,
-  easeProneness,
   finalizeMatch,
   injuryProneness,
   injuryHistoryOf,
@@ -20,14 +18,9 @@ import {
   playerById,
   playerCatalog,
   playersOf,
-  pronenessValue,
   quickSimulate,
-  raiseProneness,
   simSquadOf,
-  simulateOtherMatches,
   startMatch,
-  TRAINING_INJURY_PER_SESSION,
-  trainingExposure,
   userSide,
 } from "@story-fm/engine";
 import { INJURY_HISTORY } from "../../src/common/data/injury-history";
@@ -40,113 +33,63 @@ import { advanceToMatchday, createTestGame, playToFullTime } from "../helpers";
  */
 const RESEARCHED = Object.keys(INJURY_HISTORY);
 
-describe("부상 성향 — 개인별 확률로 관리된다", () => {
-  it("조사된 이력이 없으면 1.0에서 출발한다 — 지어내지 않는다", () => {
+describe("부상 위험은 이력에서 파생된다", () => {
+  const injury = {
+    id: "i",
+    gamePlayerId: "p",
+    bodyPart: "무릎",
+    severity: "major" as const,
+    cause: "match" as const,
+    occurredOn: "2026-01-01",
+    expectedReturn: "2026-05-01",
+    returnedOn: "2026-05-01",
+  };
+  it("기록 없음은 기본값이고 결장 기간에 단조 증가하며 상한을 지킨다", () => {
+    expect(injuryProneness({ date: "2026-07-01", injuries: [] }, "p")).toBe(PRONENESS_BASE);
+    expect(pronenessFromDaysOut(-1)).toBe(1);
+    expect(pronenessFromDaysOut(40)).toBe(1.15);
+    expect(pronenessFromDaysOut(80)).toBeCloseTo(1.3);
+    expect(pronenessFromDaysOut(120)).toBe(1.45);
+    expect(pronenessFromDaysOut(400)).toBe(2.2);
+    expect(pronenessFromDaysOut(900)).toBe(2.2);
+    for (let days = 1; days <= 730; days++)
+      expect(pronenessFromDaysOut(days)).toBeGreaterThanOrEqual(pronenessFromDaysOut(days - 1));
+  });
+  it("겹친 부상은 한 번만 세고 오래된 기록은 영향만 줄인다", () => {
+    const state = { date: "2026-07-01", injuries: [injury, { ...injury, id: "duplicate" }] };
+    expect(injuryProneness(state, "p")).toBeCloseTo(1.45);
+    expect(injuryProneness({ ...state, date: addDays(injury.returnedOn, 730) }, "p")).toBe(1);
+    expect(state.injuries).toHaveLength(2);
+    expect(pronenessOf(state, ["p", "unknown"])).toEqual({
+      p: injuryProneness(state, "p"),
+      unknown: 1,
+    });
+  });
+  it("재활 중에는 실제 결장만 쌓이고 예상 복귀일을 바꿔도 위험 배수는 같다", () => {
+    const state = { date: "2026-02-01", injuries: [{ ...injury, returnedOn: null }] };
+    const before = injuryProneness(state, "p");
+    state.injuries[0]!.expectedReturn = "2027-01-01";
+    expect(injuryProneness(state, "p")).toBe(before);
+    state.date = "2026-03-01";
+    expect(injuryProneness(state, "p")).toBeGreaterThan(before);
+  });
+  it("위험 등급과 시뮬 입력도 같은 이력을 읽고 조회는 상태를 변경하지 않는다", () => {
     const state = createTestGame(11);
-    // 이력이 조사되지 않은 선수는 기준값을 든다 — 성향은 모든 선수가 갖는 칸이다
-    const unresearched = state.players.filter((p) => p.state.injuryProneness === PRONENESS_BASE);
-    // 조사분보다 훨씬 많다 — 표는 수백 명 중 몇십 명만 덮는다
-    expect(unresearched.length).toBeGreaterThan(RESEARCHED.length);
-    for (const p of unresearched) expect(pronenessValue(p)).toBe(PRONENESS_BASE);
-  });
-
-  it("다치면 오르고, 심각할수록 크게 오른다", () => {
-    const state = createTestGame(11);
-    const [a, b] = playersOf(state, state.userTeamId);
-    raiseProneness(a!, "minor");
-    raiseProneness(b!, "major");
-    expect(pronenessValue(a!)).toBeGreaterThan(PRONENESS_BASE);
-    expect(pronenessValue(b!)).toBeGreaterThan(pronenessValue(a!));
-  });
-
-  it("뛰면 내려간다 — 무사고로 오래 뛴 선수는 1.0 **아래**로 간다", () => {
-    const state = createTestGame(11);
-    const [p] = playersOf(state, state.userTeamId);
-    for (let i = 0; i < 38; i++) easeProneness(p!);
-    expect(pronenessValue(p!)).toBeLessThan(PRONENESS_BASE);
-  });
-
-  it("균형식이 성립한다 — 경기당 기대 상승 = 출전 한 번의 하강", () => {
-    /**
-     * 이 등식이 리그 평균을 1.0에 붙잡아 둔다. 하강 폭을 눈대중으로 고르면
-     * 평균이 위나 아래로 밀리고, 그러면 총 부상 건수가 시즌마다 달라진다.
-     */
-    expect(FALL_PER_APPEARANCE).toBeCloseTo(INJURY_CHANCE_PER_APPEARANCE * AVG_PRONENESS_RISE, 12);
-  });
-
-  it("부하가 평균인 선수는 제자리다 — 잔부상만 겪어도 마찬가지", () => {
-    const state = createTestGame(11);
-    const [p] = playersOf(state, state.userTeamId);
-    /**
-     * 균형은 **건수가 아니라 부하**로 잡힌다. 큰 부상을 한 번도 안 겪는 선수는
-     * 잔부상을 조금 더 자주 겪어도 같은 자리다 — `RISE.minor`만큼 오르는 데
-     * 그 몫을 되갚는 출전 수가 `RISE.minor / FALL_PER_APPEARANCE`(≈105경기)다.
-     */
-    const cadence = Math.round(0.25 / FALL_PER_APPEARANCE);
-    for (let i = 1; i <= 10_000; i++) {
-      easeProneness(p!);
-      if (i % cadence === 0) raiseProneness(p!, "minor");
-    }
-    /**
-     * 200시즌어치를 돌리고도 **잔부상 한 번의 폭(0.25) 안**에 머문다.
-     * 눈금이 조금이라도 기울어 있으면 이 길이에서는 상·하한에 처박힌다 —
-     * 남는 오차는 부상 횟수를 정수로 끊은 나머지뿐이다.
-     */
-    expect(Math.abs(pronenessValue(p!) - PRONENESS_BASE)).toBeLessThan(0.25);
-  });
-
-  it("자주 다치는 선수만 올라간다 — 뛰는 것으로 못 갚는다", () => {
-    const state = createTestGame(11);
-    const [p] = playersOf(state, state.userTeamId);
-    for (let i = 0; i < 38; i++) easeProneness(p!);
-    for (let i = 0; i < 3; i++) raiseProneness(p!, "moderate");
-    expect(pronenessValue(p!)).toBeGreaterThan(1.3);
-  });
-
-  it("상·하한이 있다 — 아무리 쌓여도 0.55~2.2 안이다", () => {
-    const state = createTestGame(11);
-    const [a, b] = playersOf(state, state.userTeamId);
-    for (let i = 0; i < 40; i++) raiseProneness(a!, "major");
-    for (let i = 0; i < 2000; i++) easeProneness(b!);
-    expect(pronenessValue(a!)).toBeLessThanOrEqual(2.2);
-    expect(pronenessValue(b!)).toBeGreaterThanOrEqual(0.55);
-  });
-
-  it("무사고로 계속 뛰면 몇 시즌에 걸쳐 하한에 닿는다", () => {
-    /**
-     * 시간 상수 — 튼튼함이 드러나는 데 걸리는 시간이다. 한 시즌 만에 하한에
-     * 닿으면 성향이 그냥 출전 수의 다른 이름이 되고, 열 시즌이 걸리면 아무도
-     * 그 차이를 보지 못한다. `INJURY_PER_MATCH`를 낮추면 이 시간도 함께 늘어난다
-     * (덜 다치는 세계에서는 안 다친 것이 덜 특별하다).
-     */
-    const seasonsToFloor = (1 - 0.55) / FALL_PER_APPEARANCE / 50;
-    expect(seasonsToFloor).toBeGreaterThan(3);
-    expect(seasonsToFloor).toBeLessThan(10);
-  });
-
-  /**
-   * **등급이 장부의 성향을 읽는가** — 저울과 경계는 시뮬의 몫이고
-   * (`packages/sim/test/match-engine.test.ts`) 여기서 재는 것은 그 사이의 배선이다.
-   * 이 한 줄이 없으면 성향이 아무리 쌓여도 화면·GM은 언제나 성향 1의 등급을 본다.
-   */
-  it("성향이 쌓이면 위험 등급도 따라 오른다 (injuryRiskFor)", () => {
-    const state = createTestGame(11);
-    const [p] = playersOf(state, state.userTeamId);
-    p!.state.condition = 100;
-    expect(injuryRiskFor(p!).grade).toBe("low");
-    for (let i = 0; i < 40; i++) raiseProneness(p!, "major");
-    expect(pronenessValue(p!)).toBe(2.2);
-    const risk = injuryRiskFor(p!);
-    expect(risk.grade).not.toBe("low");
-    expect(risk.causes).toContain("proneness");
-  });
-
-  it("부상 발생이 그 선수의 성향을 실제로 올린다 (openInjuryFor)", () => {
-    const state = createTestGame(11);
-    const [p] = playersOf(state, state.userTeamId);
-    const before = injuryProneness(state, p!.id);
-    openInjuryFor(state, p!, "match", () => 0.5);
-    expect(injuryProneness(state, p!.id)).toBeGreaterThan(before);
+    const player = playersOf(state, state.userTeamId)[0]!;
+    player.state.condition = 100;
+    state.injuries = [];
+    expect(injuryRiskFor(state, player).grade).toBe("low");
+    state.injuries.push({
+      ...injury,
+      gamePlayerId: player.id,
+      occurredOn: addDays(state.date, -401),
+      returnedOn: addDays(state.date, -1),
+    });
+    const before = JSON.stringify(state);
+    expect(injuryRiskFor(state, player).causes).toContain("proneness");
+    expect(pronenessOf(state, [player.id])[player.id]).toBe(2.2);
+    expect(JSON.stringify(state)).toBe(before);
+    expect(player.state).not.toHaveProperty("injuryProneness");
   });
 });
 
@@ -199,8 +142,13 @@ describe("부임 전 부상 이력 — 조사된 선수만", () => {
 
   it("표가 게임에 닿는다 — 값을 갖는 선수는 조사분 그들뿐이다", () => {
     expect(researched.length, "표의 이름이 한 명도 게임에 닿지 않았다").toBeGreaterThan(0);
-    const withValue = state.players.filter((p) => p.state.injuryProneness !== PRONENESS_BASE);
-    expect(withValue.map((p) => p.id).sort()).toEqual(researched.map((p) => p.id).sort());
+    const withValue = state.players.filter((p) => injuryProneness(state, p.id) !== PRONENESS_BASE);
+    expect(withValue.map((p) => p.id).sort()).toEqual(
+      researched
+        .filter((p) => injuryHistoryOf(state, p.id).daysOut > 0)
+        .map((p) => p.id)
+        .sort(),
+    );
     // 나머지 전부는 평균에서 출발한다 (지어내지 않는다)
     expect(state.players.length - withValue.length).toBeGreaterThan(RESEARCHED.length);
   });
@@ -228,18 +176,15 @@ describe("부임 전 부상 이력 — 조사된 선수만", () => {
 
   it("결장이 길수록 성향이 높다", () => {
     // 이름을 박지 않는다 — 씨앗 행의 결장 일수로 양 끝을 뽑는다
-    const daysOf = (playerId: string) =>
-      seededRows
-        .filter((i) => i.gamePlayerId === playerId)
-        .reduce((sum, i) => sum + diffDays(i.occurredOn, i.expectedReturn), 0);
+    const daysOf = (playerId: string) => injuryHistoryOf(state, playerId).daysOut;
     const ranked = [...researched].sort((a, b) => daysOf(a.id) - daysOf(b.id));
     const least = ranked[0]!;
     const most = ranked[ranked.length - 1]!;
     expect(daysOf(most.id), "표가 한 사람뿐이라 견줄 것이 없다").toBeGreaterThan(daysOf(least.id));
-    expect(pronenessValue(most), `${most.name} vs ${least.name}`).toBeGreaterThan(
-      pronenessValue(least),
+    expect(injuryProneness(state, most.id), `${most.name} vs ${least.name}`).toBeGreaterThan(
+      injuryProneness(state, least.id),
     );
-    expect(pronenessValue(most)).toBeGreaterThan(PRONENESS_BASE);
+    expect(injuryProneness(state, most.id)).toBeGreaterThan(PRONENESS_BASE);
   });
 
   it("복귀일이 안 지난 선수는 **다친 채로** 인계된다", () => {
@@ -310,42 +255,6 @@ describe("간이 시뮬 — 성향은 뛴 선수 전원에게 걸린다", () => 
     // 선발만 뽑던 시절엔 정확히 0이었다 (뛴 열넷 중 셋 남짓이 교체 자원이다)
     expect(onSubs).toBeGreaterThan(0);
   });
-
-  it("교체로 들어온 선수도 성향이 내려간다 — 벤치에 앉아만 있으면 그대로다", () => {
-    const squad = simSquadOf(state, "liverpool", leagueOfTeamIn(state, "liverpool"));
-    const starters = new Set(squad.starters.map((p) => p.id));
-    const before = new Map(
-      (squad.bench ?? []).map((p) => [p.id, p.state.injuryProneness] as const),
-    );
-    // 유저와 무관한 두 팀의 경기 하나 — 간이 시뮬이 소화하는 경로다
-    state.matches.push({
-      id: "quick-subs",
-      season: state.season,
-      competitionId: null,
-      stage: "league",
-      round: 1,
-      date: state.date,
-      time: "15:00",
-      homeTeamId: "liverpool",
-      awayTeamId: "chelsea",
-      result: null,
-    });
-    simulateOtherMatches(state, []);
-    const lineup = state.matches.find((m) => m.id === "quick-subs")!.result!.homeLineup!;
-
-    const cameOn = lineup.filter((id) => !starters.has(id));
-    expect(cameOn.length).toBeGreaterThan(0);
-    for (const id of cameOn) {
-      // 그 경기에서 다친 선수는 상승이 하강을 덮는다 — 균형식대로다
-      if (isInjured(state, id)) continue;
-      expect(pronenessValue(playerById(state, id)!)).toBeLessThan(PRONENESS_BASE);
-    }
-    // 안 뛴 벤치는 손대지 않는다 — 하강이 출전이 아니라 소집에 걸리면 안 된다
-    const idle = (squad.bench ?? []).filter((p) => !lineup.includes(p.id));
-    expect(idle.length).toBeGreaterThan(0);
-    for (const p of idle)
-      expect(playerById(state, p.id)!.state.injuryProneness).toBe(before.get(p.id));
-  });
 });
 
 describe("장부는 한 공식만 쓴다", () => {
@@ -378,7 +287,7 @@ describe("장부는 한 공식만 쓴다", () => {
 
     openInjuryFor(state, mine, "match", () => 0.5);
     const first = openOf()[0]!;
-    const proneness = pronenessValue(mine);
+    const proneness = injuryProneness(state, mine.id);
     const spent = ledger();
 
     // 두 번째 굴림은 심각도까지 다르다 — 새 행이 열렸다면 값으로 드러난다
@@ -391,45 +300,45 @@ describe("장부는 한 공식만 쓴다", () => {
       days: diffDays(state.date, first.expectedReturn),
     });
     // 성향도 치료비도 한 부상에 한 번뿐
-    expect(pronenessValue(mine)).toBe(proneness);
+    expect(injuryProneness(state, mine.id)).toBe(proneness);
     expect(ledger()).toBe(spent);
   });
 });
 
-/**
- * 훈련도 노출이다 (`trainingExposure`) — 순수 환산 하나라 세계가 필요 없다.
- *
- * 훈련장에서도 다치므로 훈련만 하는 기간에도 성향이 오른다. 내려가는 길을 출전
- * 하나로만 두면 유저 팀만 훈련 부상만큼 계속 위로 밀리고, 훈련이 없는 타 팀과
- * 눈금이 갈린다 — 그 어긋남은 화면 어디에도 적히지 않는다.
- */
-describe("훈련 하루는 경기 몇 번어치 노출인가", () => {
-  it("훈련이 올리는 몫을 그대로 되돌린다 — 훈련만 하는 팀도 제자리다", () => {
-    for (const [sessions, squad] of [
-      [1, 25],
-      [3, 18],
-      [7, 30],
-    ] as const) {
-      const rise = (TRAINING_INJURY_PER_SESSION * sessions) / squad; // 한 선수가 그 기간에 다칠 확률
-      // 기대 상승(확률 × 평균 상승) = 환산 노출 × 출전 한 번의 하강
-      expect(
-        trainingExposure(sessions, squad) * FALL_PER_APPEARANCE,
-        `${sessions}세션 / ${squad}명`,
-      ).toBeCloseTo(rise * AVG_PRONENESS_RISE, 12);
-    }
+describe("부상 이력 집계의 시간 경계", () => {
+  const closed = {
+    id: "closed",
+    gamePlayerId: "p",
+    cause: "match" as const,
+    bodyPart: "무릎",
+    severity: "minor" as const,
+    occurredOn: "2026-06-01",
+    expectedReturn: "2026-06-20",
+    returnedOn: "2026-06-20",
+  };
+  const current = {
+    ...closed,
+    id: "current",
+    occurredOn: "2026-06-15",
+    expectedReturn: "2026-08-01",
+    returnedOn: null,
+  };
+  const state = { date: "2026-07-01", injuries: [closed, current] };
+
+  it("전체 이력도 겹치는 결장과 미래의 예상 결장을 중복해서 세지 않는다", () => {
+    expect(injuryHistoryOf(state, "p", null)).toMatchObject({
+      count: 2,
+      daysOut: 30,
+      last: { open: true, daysAgo: 16 },
+    });
+    expect(injuryHistoryOf(state, "p", 10)).toMatchObject({ count: 1, daysOut: 10 });
   });
 
-  it("세션이 많을수록 크고, 나눠 지는 인원이 많을수록 작다", () => {
-    expect(trainingExposure(3, 25)).toBeGreaterThan(trainingExposure(1, 25));
-    expect(trainingExposure(3, 25)).toBeCloseTo(trainingExposure(1, 25) * 3, 12);
-    expect(trainingExposure(3, 50)).toBeCloseTo(trainingExposure(3, 25) / 2, 12);
-    // 한 주의 본훈련도 경기 한 번의 노출에는 못 미친다 — 손잡이는 출전이다
-    expect(trainingExposure(5, 25)).toBeLessThan(1);
-  });
-
-  it("스쿼드가 비면 0이다 — 나눌 사람이 없는 날에 노출이 발산하지 않는다", () => {
-    expect(trainingExposure(3, 0)).toBe(0);
-    expect(trainingExposure(3, -1)).toBe(0);
-    expect(trainingExposure(0, 25)).toBe(0);
+  it("창 시작에 이미 복귀한 행과 미래 발생 행은 제외한다", () => {
+    const input = {
+      date: "2026-06-30",
+      injuries: [closed, { ...current, occurredOn: "2026-07-01" }],
+    };
+    expect(injuryHistoryOf(input, "p", 10)).toEqual({ count: 0, daysOut: 0, last: null });
   });
 });

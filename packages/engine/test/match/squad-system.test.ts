@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  playerOverall,
   FIRST_TEAM_LIMIT,
   MATCHDAY_SQUAD,
   NON_HOMEGROWN_MAX,
@@ -315,7 +316,7 @@ describe("자동으로 채운 선발 — 자리가 먼저고 사람이 나중이
     // 왼쪽 자원을 통째로 뺀 풀 — 이슈의 여름(쿠냐·래시포드가 떠난 뒤)과 같은 모양이다
     const right = pool
       .filter((p) => p.id !== keeper.id && !naturalPositionOf(p).position.startsWith("L"))
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)
+      .sort((a, b) => playerOverall(b) - playerOverall(a))
       .slice(0, STARTING_XI - 1);
     expect(right).toHaveLength(STARTING_XI - 1);
 

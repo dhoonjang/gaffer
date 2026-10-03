@@ -1,6 +1,6 @@
 import { TIER_BASE } from "../src/common/data/team-catalog";
 import { describe, expect, it } from "vitest";
-import { ageOf } from "@story-fm/domain";
+import { playerOverall, ageOf } from "@story-fm/domain";
 import { generateYouthPlayer, isClubTeam, transitionSeason } from "@story-fm/engine";
 import type { GameState } from "@story-fm/engine";
 import { createTestGame } from "../test/helpers";
@@ -47,7 +47,7 @@ function intakeOfSummer(state: GameState): { overall: number; potential: number;
     ...state.youthCandidates.map((c) => c.player),
   ];
   return born.map((p) => ({
-    overall: p.attributes.overall,
+    overall: playerOverall(p),
     potential: p.attributes.potential,
     age: ageOf(p.birthdate, state.date),
   }));
@@ -67,7 +67,7 @@ describe("한 여름 인테이크의 꼬리", () => {
         seedPotential.push(player.attributes.potential);
         if (!isClubTeam(player.teamId)) continue;
         const age = ageOf(player.birthdate, state.date);
-        if (age >= 17 && age <= 18) seedTeenOverall.push(player.attributes.overall);
+        if (age >= 17 && age <= 18) seedTeenOverall.push(playerOverall(player));
       }
       for (let summer = 0; summer < SUMMERS; summer++) {
         for (const born of intakeOfSummer(state)) {
@@ -111,7 +111,7 @@ describe("한 여름 인테이크의 꼬리", () => {
       ),
       "체급 코호트 현재 실력 최대 편차": Math.max(
         ...cohorts.map(
-          ({ tier, players }) => mean(players.map((p) => p.attributes.overall)) - TIER_BASE[tier],
+          ({ tier, players }) => mean(players.map((p) => playerOverall(p))) - TIER_BASE[tier],
         ),
       ),
       "아카데미 활용 천장 평균 이동":

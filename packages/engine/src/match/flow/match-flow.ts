@@ -23,6 +23,7 @@ import {
   activeSuspension,
 } from "../../common/core/state";
 import {
+  playerOverall,
   type MatchRecord,
   type MatchSide,
   type TacticAssignment,
@@ -299,7 +300,7 @@ export function assembleUserLineup(
     pool
       .filter((p) => !taken.has(p.id) && !unavailable(p.id))
       .filter((p) => (groupOf(p) === "GK") === keeper)
-      .sort((x, y) => y.attributes.overall - x.attributes.overall)[0];
+      .sort((x, y) => playerOverall(y) - playerOverall(x))[0];
   while (onPitch.length < STARTING_XI) {
     const keeper = !keeperOnPitch();
     const candidate = fillVacancy(roster, keeper) ?? fillVacancy(reserves, keeper);
@@ -329,14 +330,14 @@ export function assembleUserLineup(
   }
   const rest = roster
     .filter((p) => !taken.has(p.id) && !unavailable(p.id))
-    .sort((a, b) => b.attributes.overall - a.attributes.overall);
+    .sort((a, b) => playerOverall(b) - playerOverall(a));
   /** **골키퍼 한 자리는 상한에서 잘리지 않는다** — 자리가 없으면 기량이 가장 낮은 필드 선수가 내준다 */
   if (!benchIds.some((id) => groupOf(byId.get(id)!) === "GK")) {
     const gk = rest.find((p) => groupOf(p) === "GK");
     if (gk) {
       if (benchIds.length >= MATCHDAY_BENCH) {
         const weakest = [...benchIds].sort(
-          (x, y) => byId.get(x)!.attributes.overall - byId.get(y)!.attributes.overall,
+          (x, y) => playerOverall(byId.get(x)!) - playerOverall(byId.get(y)!),
         )[0]!;
         benchIds.splice(benchIds.indexOf(weakest), 1);
         taken.delete(weakest);
@@ -916,7 +917,7 @@ export function buildRatingBrief(state: GameState): MatchRatingBrief | null {
         naturalPositionOf(player).position,
       started: starters.has(player.id),
       age: ageOf(player.birthdate, state.date),
-      room: Math.max(0, player.attributes.potential - player.attributes.overall),
+      room: Math.max(0, player.attributes.potential - playerOverall(player)),
       familiarity: assignments.get(player.id)?.familiarity ?? 0,
       minutes: minutesOf(player.id),
       goals: goalsFor,

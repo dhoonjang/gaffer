@@ -1,5 +1,6 @@
 import { type GameState } from "../../common/core/state";
 import {
+  isReserveStat,
   type SeasonStat,
   type Milestone,
   compareMilestones,
@@ -169,14 +170,17 @@ const EMPTY: CareerTotals = {
 export function foldCareer(stats: readonly SeasonStat[]): CareerTotals {
   const totals = { ...EMPTY };
   for (const s of stats) {
-    totals.apps += s.apps;
-    totals.goals += s.goals;
-    totals.assists += s.assists ?? 0;
-    totals.ratingSum += s.ratingSum ?? 0;
-    totals.reserveApps += s.reserveApps ?? 0;
-    totals.reserveGoals += s.reserveGoals ?? 0;
-    totals.reserveAssists += s.reserveAssists ?? 0;
-    totals.reserveRatingSum += s.reserveRatingSum ?? 0;
+    if (isReserveStat(s)) {
+      totals.reserveApps += s.apps;
+      totals.reserveGoals += s.goals;
+      totals.reserveAssists += s.assists ?? 0;
+      totals.reserveRatingSum += s.ratingSum ?? 0;
+    } else {
+      totals.apps += s.apps;
+      totals.goals += s.goals;
+      totals.assists += s.assists ?? 0;
+      totals.ratingSum += s.ratingSum ?? 0;
+    }
   }
   totals.rating = seasonRating({ apps: totals.apps, ratingSum: totals.ratingSum });
   totals.reserveRating = seasonRating({

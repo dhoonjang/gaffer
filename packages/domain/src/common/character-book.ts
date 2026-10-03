@@ -18,6 +18,14 @@ export const CharacterBookEntrySchema = CharacterBookContentSchema.extend({
   kind: z.enum(["team", "player", "person"]),
 });
 export type CharacterBookEntry = z.infer<typeof CharacterBookEntrySchema>;
+/** Previous versions and their source input remain recoverable after a rewrite. */
+export const CharacterBookRevisionSchema = z.object({
+  jobId: z.string().min(1),
+  previous: CharacterBookEntrySchema,
+  additionalInformation: z.string().min(1).max(CHARACTER_INFORMATION_MAX),
+});
+export type CharacterBookRevision = z.infer<typeof CharacterBookRevisionSchema>;
+
 export const CharacterBookInjectionSchema = CharacterBookEntrySchema;
 export type CharacterBookInjection = CharacterBookEntry;
 export const CharacterCandidateSchema = CharacterBookContentSchema.pick({

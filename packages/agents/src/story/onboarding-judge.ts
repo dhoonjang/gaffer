@@ -1,4 +1,4 @@
-import { CLUB_TIER_KO, ageOf, naturalPositionOf } from "@story-fm/domain";
+import { playerOverall, CLUB_TIER_KO, ageOf, naturalPositionOf } from "@story-fm/domain";
 import { z } from "zod";
 import {
   type GameState,
@@ -63,10 +63,10 @@ const CLUB_PROSPECTS = 2;
 export function buildClubBlock(state: GameState): string {
   const squad = playersOf(state, state.userTeamId);
   const row = (p: (typeof squad)[number]): string =>
-    `${p.id} ${p.name} · ${ageOf(p.birthdate, state.date)}세 ${naturalPositionOf(p).position} · 종합 ${p.attributes.overall}`;
+    `${p.id} ${p.name} · ${ageOf(p.birthdate, state.date)}세 ${naturalPositionOf(p).position} · 종합 ${playerOverall(p)}`;
   const captain = squad.find((p) => p.isCaptain);
   const key = [...squad]
-    .sort((a, b) => b.attributes.overall - a.attributes.overall)
+    .sort((a, b) => playerOverall(b) - playerOverall(a))
     .slice(0, CLUB_KEY_PLAYERS);
   const prospects = squad
     .filter((p) => ageOf(p.birthdate, state.date) <= 21)

@@ -1,5 +1,11 @@
 import { type GameState, playersOf, activeContract } from "../core/state";
-import { type GamePlayer, type SquadStatus, ageOf, isReserveMatch } from "@story-fm/domain";
+import {
+  playerOverall,
+  type GamePlayer,
+  type SquadStatus,
+  ageOf,
+  isReserveMatch,
+} from "@story-fm/domain";
 import { SQUAD_CORE_SIZE } from "./squad-depth";
 import { betterAtPosition } from "./squad-depth";
 import { isFriendly } from "../core/match-kinds";
@@ -38,7 +44,7 @@ export function derivedSquadStatus(
   teamId: string = player.teamId,
 ): SquadStatus {
   const better = playersOf(state, teamId).filter(
-    (p) => p.id !== player.id && p.attributes.overall > player.attributes.overall,
+    (p) => p.id !== player.id && playerOverall(p) > playerOverall(player),
   ).length;
   const young = ageOf(player.birthdate, state.date) <= PROSPECT_AGE;
   /**

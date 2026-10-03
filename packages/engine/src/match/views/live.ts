@@ -1,4 +1,5 @@
 import {
+  playerOverall,
   type TransitionMode,
   type TacklingLevel,
   type KeeperDistribution,
@@ -483,7 +484,7 @@ export function buildMatchView(state: GameState): MatchView | null {
      * 선수가 두 화면에서 다른 숫자로 보이지 않는다. 우리 선수는 오프셋 0이라 참값 그대로다.
      */
     const observation = observationOf(state, p.id);
-    const effective = Math.round(p.attributes.overall * matchFactor(slot, now));
+    const effective = Math.round(playerOverall(p) * matchFactor(slot, now));
     return {
       id: p.id,
       name: p.name,

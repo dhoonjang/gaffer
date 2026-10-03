@@ -304,7 +304,7 @@ EventCause { code, playerIds, values?, pointId? }
 - **부상은 `INJURY_PER_MATCH`**(팀당 0.05\~0.07)가 총량이다. 실시간 경기는 접촉과
   스프린트 부하에 위험을 걸고(`INJURY_CONTACT_RISK` · `INJURY_SPRINT_RISK`), 간이 시뮬은
   베르누이 한 번이다. 누가 다치는가는 `injuryWeight`(성향 · 체력 · 부하)다. 부상은 명단을
-  바꾸지 않고(§5) 뛴 선수 전원의 성향이 움직인다(`easeProneness` — 뛰고 안 다쳤으면 하강).
+  바꾸지 않는다(§5). 부상 위험 배수는 별도 증감 없이 실제 부상 이력에서 계산한다.
   난수 채널은 `injury:<경기 id>` 한 모양이다.
 
 ## 5. 장부의 무결성 (`packages/sim/src/match-ledger.ts`)
@@ -394,25 +394,25 @@ EventCause { code, playerIds, values?, pointId? }
 
 ### 7.1 마감은 양 팀에 적는다
 
-| 무엇                                                                        | 우리 | 상대   |
-| --------------------------------------------------------------------------- | ---- | ------ |
-| 시즌 기록 (`SEASON_STAT`)                                                   | ○    | ○      |
-| 폼 Δ (`packages/engine/src/common/players/form.ts` `formDeltaFromMatch`)    | ○    | ○      |
-| 체력 소모 (`matchFatigueOf(pendingMatch.live)` 그대로)                      | ○    | ○      |
-| 부상 확정 · 부상 성향 하강 (`packages/engine/src/common/players/injury.ts`) | ○    | ○      |
-| 카드 → BOOKING·SUSPENSION (`packages/engine/src/match/flow/discipline.ts`)  | ○    | ○      |
-| 출장 정지 소화 (`serveSuspensions`)                                         | ○    | ○      |
-| 포지션 적응도                                                               | ○    | ○      |
-| 사건·선수별 기록·점유 (`MATCH.result`)                                      | ○    | ○      |
-| 경기별 평점 (`MATCH.result.ratings`) · 결산 판정(LLM)                       | ○    | 결승만 |
-| 말풍선 한 줄 (카드·정지·부상 일수)                                          | ○    | ✗      |
-| 마일스톤 (`MILESTONE`)                                                      | ○    | ✗      |
+| 무엇                                                                             | 우리 | 상대   |
+| -------------------------------------------------------------------------------- | ---- | ------ |
+| 시즌 기록 (`SEASON_STAT`)                                                        | ○    | ○      |
+| 폼 Δ (`packages/engine/src/common/players/form.ts` `formDeltaFromMatch`)         | ○    | ○      |
+| 체력 소모 (`matchFatigueOf(pendingMatch.live)` 그대로)                           | ○    | ○      |
+| 부상 확정 · 이력 기반 위험 배수 (`packages/engine/src/common/players/injury.ts`) | ○    | ○      |
+| 카드 → BOOKING·SUSPENSION (`packages/engine/src/match/flow/discipline.ts`)       | ○    | ○      |
+| 출장 정지 소화 (`serveSuspensions`)                                              | ○    | ○      |
+| 포지션 적응도                                                                    | ○    | ○      |
+| 사건·선수별 기록·점유 (`MATCH.result`)                                           | ○    | ○      |
+| 경기별 평점 (`MATCH.result.ratings`) · 결산 판정(LLM)                            | ○    | 결승만 |
+| 말풍선 한 줄 (카드·정지·부상 일수)                                               | ○    | ✗      |
+| 마일스톤 (`MILESTONE`)                                                           | ○    | ✗      |
 
 ### 7.2 시즌 기록 — 두 시뮬이 같은 눈금으로 적는다
 
 한 경기가 시즌 행에 얹는 몫은 한 함수가 센다(`packages/domain/src/common/player-statistics.ts` `addToSeasonStat`). 행의
 열쇠는 (선수, 시즌, 팀, 대회)라 리그 경기는 리그 행에, 컵 경기는 컵 행에 쌓인다
-(`ensureSeasonStat`). 친선은 이 문을 지나지 않고 2군 경기는 `reserve*` 칸이 따로 받는다.
+(`ensureSeasonStat`). 친선은 이 문을 지나지 않고 2군 경기는 `reserve:<리그>` 대회 행에 같은 통계 칸으로 쌓인다.
 
 | 칸                | 무엇         | 실시간 경기의 원본                          | 간이 시뮬의 원본                    |
 | ----------------- | ------------ | ------------------------------------------- | ----------------------------------- |
@@ -588,7 +588,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 킥오프 이전 경기까지만 굴리고 나머지는 `finalizeMatch`가 잇는다.
 
 **리그 전체가 같은 축 위에서 움직인다.** 폼이 리그 전체에서 오르내리고(간이 시뮬의 평점이
-폼에 실린다), AI 팀도 전술을 익히고(`FAMILIARITY_DRIFT_CAP` 80), 부상 성향이 벤치에서도 움직인다. 폼·적응도·성향이 감독 팀에만 쌓이면
+폼에 실린다), AI 팀도 전술을 익히고(`FAMILIARITY_DRIFT_CAP` 80), 부상 이력이 양 팀에 남는다. 폼·적응도·부상 이력이 감독 팀에만 쌓이면
 나머지 95%가 상태 없는 세계가 된다.
 
 ## 9. 경기 화면 (`apps/web/domains/match/ui/match-view.tsx` · `packages/engine/src/app/views.ts`)

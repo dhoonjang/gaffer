@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  playerOverall,
   bestOverall,
   DEFAULT_TACTICS,
   defaultRoleOf,
@@ -518,8 +519,8 @@ describe("포지션 명령 (멀티 포지션)", () => {
      * 값으로 갈아치워지지 않는다 (player.md §4) — 어드민 표와 같은 함수다.
      * 실제로 최전방에 세웠을 때의 전력은 `roleFit`이 따로 낸다.
      */
-    expect(df.attributes.overall).toBe(bestOverall(df.attributes, df.positions));
-    expect(roleFit(df.attributes, "ST")).toBeLessThanOrEqual(df.attributes.overall);
+    expect(playerOverall(df)).toBe(bestOverall(df.attributes, df.positions));
+    expect(roleFit(df.attributes, "ST")).toBeLessThanOrEqual(playerOverall(df));
   });
 
   it("처음 맡는 포지션은 낮은 적응도로 추가된다", () => {
@@ -1553,7 +1554,7 @@ describe("개인 훈련 — 팀 훈련 위에 한 선수만", () => {
   const spare = (state: GameState) =>
     userPlayers(state)
       .filter((p) => squadLevelOf(p) === "first")
-      .sort((a, b) => a.attributes.overall - b.attributes.overall)[0]!;
+      .sort((a, b) => playerOverall(a) - playerOverall(b))[0]!;
 
   it("축과 자리를 걸고 거둘 수 있다", () => {
     const state = createTestGame();

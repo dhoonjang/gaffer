@@ -1,6 +1,7 @@
 import { recallRole } from "../../common/players/role-memory";
 import { pickVacancy } from "./vacancy";
 import {
+  playerOverall,
   FATIGUE_BAND_FLOOR,
   type GamePlayer,
   naturalPositionOf,
@@ -198,7 +199,7 @@ export function simSquadOf(
     .sort(
       (a, b) =>
         Number(groupOf(b) === "GK") - Number(groupOf(a) === "GK") ||
-        b.attributes.overall - a.attributes.overall ||
+        playerOverall(b) - playerOverall(a) ||
         a.id.localeCompare(b.id),
     )) {
     if (starters.length >= 11) break;
@@ -235,12 +236,12 @@ export function simSquadOf(
           // 대체 자원으로 그라운드에 선다** (실제로 그랬다: 정지 중인 선수가 선발)
           available(p) &&
           groupOf(p) === groupOf(tired) &&
-          p.attributes.overall >= tired.attributes.overall - ROTATION_OVR_DROP &&
+          playerOverall(p) >= playerOverall(tired) - ROTATION_OVR_DROP &&
           p.state.condition >= tired.state.condition + ROTATION_FRESHER &&
           // 시즌의 몸도 함께 본다 — 더 지친 사람으로 바꾸면 로테이션이 뒤로 간다
           fatigueOf(p.state) <= fatigueOf(tired.state),
       )
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)[0];
+      .sort((a, b) => playerOverall(b) - playerOverall(a))[0];
     /**
      * 조건에 맞는 자원이 없어도 **다리가 멎었으면 뺀다** — 같은 포지션군에서
      * 가장 신선한 사람으로. 이 갈래가 없으면 대체 불가한 스타는 0까지 간다.
@@ -282,7 +283,7 @@ export function simSquadOf(
   const picked = new Set(starters.map((p) => p.id));
   const bench = squad
     .filter((p) => !picked.has(p.id) && !rested.has(p.id) && available(p))
-    .sort((a, b) => b.attributes.overall - a.attributes.overall)
+    .sort((a, b) => playerOverall(b) - playerOverall(a))
     .slice(0, MATCHDAY_BENCH);
   return {
     teamId,

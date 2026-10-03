@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CONDITION_MAX, DEFAULT_TACTICS } from "@story-fm/domain";
-import { matchIntensity, teamCardRate, teamInjuryRate } from "@story-fm/sim";
-import {
-  leagueOfTeamIn,
-  injuryRiskFor,
-  playersOf,
-  quickSimulate,
-  simSquadOf,
-  type SimSquad,
-} from "@story-fm/engine";
+import { injuryRiskOf, matchIntensity, teamCardRate, teamInjuryRate } from "@story-fm/sim";
+import { leagueOfTeamIn, quickSimulate, simSquadOf, type SimSquad } from "@story-fm/engine";
 import type { InjuryRiskGrade } from "@story-fm/domain";
 import { createTestGame } from "../test/helpers";
 import { INJURY_RATE } from "./catalog";
@@ -148,17 +141,16 @@ interface GradeTally {
  */
 function gradeArm(runs: number): GradeTally {
   const state = createTestGame(11);
-  const probe = simSquadOf(state, HOME, leagueOfTeamIn(state, HOME));
-  probe.starters.forEach((p, i) => {
-    p.state.injuryProneness = riskSpread(i).proneness;
-  });
   const home = { ...simSquadOf(state, HOME, leagueOfTeamIn(state, HOME)), bench: [] };
+  home.proneness = Object.fromEntries(home.starters.map((p, i) => [p.id, riskSpread(i).proneness]));
   home.starters.forEach((p, i) => {
     p.state.condition = riskSpread(i).condition;
   });
   const away = { ...simSquadOf(state, AWAY, leagueOfTeamIn(state, AWAY)), bench: [] };
 
-  const gradeOf = new Map(home.starters.map((p) => [p.id, injuryRiskFor(p).grade]));
+  const gradeOf = new Map(
+    home.starters.map((p) => [p.id, injuryRiskOf(p, home.proneness?.[p.id]).grade]),
+  );
   const zero = (): Record<InjuryRiskGrade, number> => ({ low: 0, elevated: 0, high: 0 });
   const tally: GradeTally = { exposure: zero(), injuries: zero(), players: zero() };
   for (const grade of gradeOf.values()) {
@@ -198,20 +190,17 @@ describe("간이 시뮬은 기대한 눈금으로 카드와 부상을 낸다", (
 
     // 유리몸 두 지표는 성향을 살린 세계에서 잰다 — 기준선도 같은 세계여야 한다
     const healthy = quickArm(home, away, MATCHES, "healthy");
-    const fragileState = createTestGame(11);
-    for (const p of playersOf(fragileState, HOME)) p.state.injuryProneness = GLASS;
-    const fragile = quickArm(
-      simSquadOf(fragileState, HOME, leagueOfTeamIn(fragileState, HOME)),
-      simSquadOf(fragileState, AWAY, leagueOfTeamIn(fragileState, AWAY)),
-      MATCHES,
-      "healthy",
-    );
+    const fragileHome = {
+      ...home,
+      proneness: Object.fromEntries(
+        [...home.starters, ...(home.bench ?? [])].map((p) => [p.id, GLASS]),
+      ),
+    };
+    const fragile = quickArm(fragileHome, away, MATCHES, "healthy");
 
-    const shareState = createTestGame(11);
-    const glass = simSquadOf(shareState, HOME, leagueOfTeamIn(shareState, HOME)).starters[3]!;
-    glass.state.injuryProneness = GLASS;
-    const shareHome = simSquadOf(shareState, HOME, leagueOfTeamIn(shareState, HOME));
-    const shareAway = simSquadOf(shareState, AWAY, leagueOfTeamIn(shareState, AWAY));
+    const glass = home.starters[3]!;
+    const shareHome = { ...home, proneness: { ...home.proneness, [glass.id]: GLASS } };
+    const shareAway = away;
     let hisShare = 0;
     let homeInjuries = 0;
     for (let i = 0; i < MATCHES; i++) {

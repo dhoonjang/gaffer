@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  playerOverall,
   ATTRIBUTE_AXES,
   ageOf,
   naturalPositionOf,
@@ -28,21 +29,21 @@ function meanOf(values: number[]): number {
 
 function scaleReadings(state: GameState): Readings<typeof OVERALL_SCALE> {
   const all = state.players;
-  const overalls = all.map((p) => p.attributes.overall).sort((a, b) => a - b);
+  const overalls = all.map((p) => playerOverall(p)).sort((a, b) => a - b);
   const share = (n: number) => n / Math.max(1, all.length);
 
   // 축 범위 밖 — 종합이 어느 축보다 높거나(위) 어느 축보다 낮은(아래) 선수
   const above = all.filter(
-    (p) => p.attributes.overall > Math.max(...ATTRIBUTE_AXES.map((a) => p.attributes[a])),
+    (p) => playerOverall(p) > Math.max(...ATTRIBUTE_AXES.map((a) => p.attributes[a])),
   ).length;
   const below = all.filter(
-    (p) => p.attributes.overall < Math.min(...ATTRIBUTE_AXES.map((a) => p.attributes[a])),
+    (p) => playerOverall(p) < Math.min(...ATTRIBUTE_AXES.map((a) => p.attributes[a])),
   ).length;
 
   const bySlot = new Map<WeightSlot, number[]>();
   for (const p of all) {
     const slot = weightSlotOf(naturalPositionOf(p).position);
-    bySlot.set(slot, [...(bySlot.get(slot) ?? []), p.attributes.overall]);
+    bySlot.set(slot, [...(bySlot.get(slot) ?? []), playerOverall(p)]);
   }
   const slotMean = (slot: WeightSlot) => meanOf(bySlot.get(slot) ?? []);
 
@@ -54,7 +55,7 @@ function scaleReadings(state: GameState): Readings<typeof OVERALL_SCALE> {
   const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
   const gaps = all.map((p) => ({
-    gap: p.attributes.potential - p.attributes.overall,
+    gap: p.attributes.potential - playerOverall(p),
     limit: potentialGapBand(ageOf(p.birthdate, state.date)).max,
   }));
   const sortedGaps = gaps.map((g) => g.gap).sort((a, b) => a - b);

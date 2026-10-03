@@ -23,7 +23,7 @@ import {
   type GameState,
 } from "@story-fm/engine";
 import { competitionSeasonsOf } from "../../src/match/views/competition";
-import { FINANCE_CATEGORY_KO } from "@story-fm/domain";
+import { playerOverall, FINANCE_CATEGORY_KO } from "@story-fm/domain";
 import { matchFatigueOf } from "@story-fm/sim";
 import { observationOf } from "../../src/common/players/observation";
 import {
@@ -903,7 +903,7 @@ describe("선수 카드 — 남의 구단 선수의 안개 (player.md §9.5)", (
   });
 
   it("참 능력치가 그대로 실리지 않는다", () => {
-    const shifted = cards.filter((c, i) => c.overall !== theirs[i]!.attributes.overall);
+    const shifted = cards.filter((c, i) => c.overall !== playerOverall(theirs[i]!));
     expect(
       shifted.length,
       "종합이 참값 그대로면 안개가 표현 계층에 닿지 않은 것이다",

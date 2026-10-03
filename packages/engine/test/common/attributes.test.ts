@@ -536,7 +536,7 @@ describe("shirt numbers", () => {
       name: id,
       birthdate: "2000-01-01",
       positions: [{ position, proficiency: 90, isNatural: true }],
-      attributes: { ...axes, overall: 70, potential: 75 } as GamePlayer["attributes"],
+      attributes: { ...axes, potential: 75 } as GamePlayer["attributes"],
       state: freshPlayerState({ form: 0, condition: 75 }),
       isCaptain: false,
       isViceCaptain: false,

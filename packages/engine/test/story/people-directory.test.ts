@@ -17,6 +17,7 @@ const card = (id = "player:one", name = "김선수"): CharacterBookEntry => ({
 });
 const stateOf = () => ({
   characterBook: [card()],
+  characterBookRevisions: [] as import("@story-fm/domain").CharacterBookRevision[],
   characterBookJobs: [] as import("@story-fm/domain").CharacterBookJob[],
   characterBookJobSequence: 0,
 });
@@ -55,6 +56,11 @@ describe("캐릭터북 주입과 편집", () => {
       information: "감독과 화해했다",
     });
     expect(state.characterBookJobs).toEqual([]);
+    expect(state.characterBookRevisions).toEqual([
+      { jobId: id, previous: before, additionalInformation: "감독과 화해했다" },
+    ]);
+    state.characterBook[0]!.keywords.push("변경");
+    expect(state.characterBookRevisions[0]!.previous.keywords).toEqual(before.keywords);
     expect(before.information).toBe("주장 교체를 둘러싼 대화를 기억한다.");
   });
   it("지연 결과와 검증 실패는 현재 항목과 작업을 훼손하지 않는다", () => {
@@ -66,6 +72,7 @@ describe("캐릭터북 주입과 편집", () => {
     expect(completeCharacterUpdate(state, id, 1, { ...result, information: "" })).toBe(false);
     expect(state.characterBook[0]!.version).toBe(1);
     expect(state.characterBookJobs).toHaveLength(1);
+    expect(state.characterBookRevisions).toEqual([]);
     expect(completeCharacterUpdate(state, id, 1, result)).toBe(true);
     expect(completeCharacterUpdate(state, id, 2, result)).toBe(false);
   });

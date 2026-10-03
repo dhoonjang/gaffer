@@ -1,4 +1,5 @@
 import {
+  playerOverall,
   type AttributeAxis,
   type SquadStatus,
   type Foot,
@@ -252,7 +253,7 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
     knowledge,
     knowledgeLabel: KNOWLEDGE_KO[knowledge],
     overallMargin: observation.margin,
-    overall: observedOverall(p.attributes.overall, observation),
+    overall: observedOverall(playerOverall(p), observation),
     attributes: ATTRIBUTE_AXES.map((key) => ({
       key,
       value: observed[key],

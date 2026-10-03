@@ -12,7 +12,7 @@ export const SeasonStatSchema = z.object({
   /**
    * **어느 대회의 기록인가** — 행의 네 번째 열쇠다 (→ docs/common/game-state.md §3.4).
    * 리그·컵·대항전이 저마다 행을 갖고, 2군 리그는 그 대회 id(`reserve:<리그>`)의
-   * 행에 `reserve*` 칸으로 쌓인다. 축이 없으면 "리그 12경기 3골"을 말할 자리가 없다.
+   * 행에 같은 통계 칸으로 쌓인다. 축이 없으면 "리그 12경기 3골"을 말할 자리가 없다.
    * 시즌 합계는 저장하지 않고 행을 접어 낸다(`sumSeasonStats`).
    *
    * ⚠️ **`apps`·`goals` 뒤의 칸은 0이면 적지 않는다** — 얹는 자리(`addToSeasonStat`)가
@@ -29,18 +29,6 @@ export const SeasonStatSchema = z.object({
    * 평균을 저장하면 경기마다 재계산해야 하고 반올림 오차가 누적된다.
    */
   ratingSum: z.number().min(0).optional(),
-  /**
-   * 2군 리그 기록 — 1군 기록(`apps` 등)과 섞이지 않는다. 섞으면 화면의 "출전 N"이
-   * 1·2군 혼합값이 된다 (simulation/season.md §2 2군 리그).
-   */
-  reserveApps: z.number().int().min(0).optional(),
-  reserveGoals: z.number().int().min(0).optional(),
-  reserveAssists: z.number().int().min(0).optional(),
-  reserveRatingSum: z.number().min(0).optional(),
-  /**
-   * 출전 시간(분) 합계. 아래 여섯 칸과 함께 **1군 대회 경기만** 센다
-   * (→ docs/match/match.md §6) — 얹는 자리는 `addToSeasonStat` 하나다.
-   */
   minutes: z.number().int().min(0).optional(),
   shots: z.number().int().min(0).optional(),
   /** 그 선수가 만든 기회의 질 합 — 결정력 반영 전의 값이다 (match.md §1.4) */
@@ -76,7 +64,16 @@ export type SeasonStat = z.infer<typeof SeasonStatSchema>;
  * 대회 행을 접은 **시즌 합계** — 대회 축이 없다. 합계에서 대회를 묻지 말 것.
  * 저장하지 않는 파생값이다 (→ docs/common/game-state.md §5).
  */
-export type SeasonStatTotal = Omit<SeasonStat, "competitionId">;
+export type SeasonStatTotal = Omit<SeasonStat, "competitionId"> & {
+  reserveApps?: number;
+  reserveGoals?: number;
+  reserveAssists?: number;
+  reserveRatingSum?: number;
+};
+
+export function isReserveStat(stat: Pick<SeasonStat, "competitionId">): boolean {
+  return stat.competitionId.startsWith(RESERVE_COMPETITION_PREFIX);
+}
 
 /**
  * 클린시트로 세는 최소 출전 분 — 90분의 3분의 2.
@@ -147,8 +144,7 @@ export function addToSeasonStat(stat: SeasonStatTotal, delta: Partial<SeasonStat
  * 없음"은 다르다.
  *
  * ⚠️ **낸 행은 읽기 전용이다.** 쌓는 자리는 언제나 `ensureSeasonStat` 하나이므로
- * 여기서 낸 행에 값을 얹으면 다음 파생에서 사라지고, 행이 하나뿐이면 **그 행을 그대로
- * 낸다**(합계를 새로 짓지 않는다).
+ * 여기서 낸 행에 값을 얹으면 다음 파생에서 사라진다. 원본 행은 변경하지 않는다.
  *
  * 등번호·이름은 **마지막으로 적힌 행의 것**이다. 시즌 중에 바뀌면 마지막 값이 그
  * 시즌의 값이라는 `ensureSeasonStat`의 규약을 대회 행 여럿에서도 그대로 잇는다.
@@ -156,7 +152,6 @@ export function addToSeasonStat(stat: SeasonStatTotal, delta: Partial<SeasonStat
 export function sumSeasonStats(rows: readonly SeasonStat[]): SeasonStatTotal | null {
   const first = rows[0];
   if (first === undefined) return null;
-  if (rows.length === 1) return first;
   const total: SeasonStatTotal = {
     gamePlayerId: first.gamePlayerId,
     season: first.season,
@@ -165,24 +160,25 @@ export function sumSeasonStats(rows: readonly SeasonStat[]): SeasonStatTotal | n
     goals: 0,
   };
   for (const row of rows) {
-    addToSeasonStat(total, {
-      apps: row.apps,
-      goals: row.goals,
-      assists: row.assists,
-      ratingSum: row.ratingSum,
-      minutes: row.minutes,
-      shots: row.shots,
-      xg: row.xg,
-      saves: row.saves,
-      cleanSheets: row.cleanSheets,
-      yellows: row.yellows,
-      reds: row.reds,
-    });
-    if (row.reserveApps) total.reserveApps = (total.reserveApps ?? 0) + row.reserveApps;
-    if (row.reserveGoals) total.reserveGoals = (total.reserveGoals ?? 0) + row.reserveGoals;
-    if (row.reserveAssists) total.reserveAssists = (total.reserveAssists ?? 0) + row.reserveAssists;
-    if (row.reserveRatingSum)
-      total.reserveRatingSum = (total.reserveRatingSum ?? 0) + row.reserveRatingSum;
+    if (isReserveStat(row)) {
+      total.reserveApps = (total.reserveApps ?? 0) + row.apps;
+      total.reserveGoals = (total.reserveGoals ?? 0) + row.goals;
+      total.reserveAssists = (total.reserveAssists ?? 0) + (row.assists ?? 0);
+      total.reserveRatingSum = (total.reserveRatingSum ?? 0) + (row.ratingSum ?? 0);
+    } else
+      addToSeasonStat(total, {
+        apps: row.apps,
+        goals: row.goals,
+        assists: row.assists,
+        ratingSum: row.ratingSum,
+        minutes: row.minutes,
+        shots: row.shots,
+        xg: row.xg,
+        saves: row.saves,
+        cleanSheets: row.cleanSheets,
+        yellows: row.yellows,
+        reds: row.reds,
+      });
     if (row.squadNumber !== undefined) total.squadNumber = row.squadNumber;
     if (row.playerName !== undefined) total.playerName = row.playerName;
   }
@@ -201,7 +197,7 @@ export function sumSeasonStats(rows: readonly SeasonStat[]): SeasonStatTotal | n
  */
 export function competitionRowsOf(rows: readonly SeasonStat[]): SeasonStat[] {
   return rows
-    .filter((s) => s.apps > 0 && !s.competitionId.startsWith(RESERVE_COMPETITION_PREFIX))
+    .filter((s) => s.apps > 0 && !isReserveStat(s))
     .sort((a, b) => b.apps - a.apps || (a.competitionId < b.competitionId ? -1 : 1));
 }
 

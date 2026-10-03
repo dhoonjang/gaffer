@@ -135,6 +135,12 @@ export const PersonaSchema = z.object({
 });
 export type Persona = z.infer<typeof PersonaSchema>;
 
+/** Save records point to the single current book; seed/preview personas carry prose. */
+export const StoredPersonaSchema = PersonaSchema.omit({ characterBook: true }).extend({
+  characterBookId: z.string().min(1),
+});
+export type StoredPersona = z.infer<typeof StoredPersonaSchema>;
+
 /**
  * 역할 → **직책 이름**. 화자 태그가 아니다(태그는 사람 이름이다).
  *
@@ -189,6 +195,12 @@ export const StaffPoolEntrySchema = z.object({
   from: z.string().min(1).optional(),
 });
 export type StaffPoolEntry = z.infer<typeof StaffPoolEntrySchema>;
+export const StoredStaffPoolEntrySchema = StaffPoolEntrySchema.omit({ characterBook: true }).extend(
+  {
+    characterBookId: z.string().min(1),
+  },
+);
+export type StoredStaffPoolEntry = z.infer<typeof StoredStaffPoolEntrySchema>;
 
 /** 수석코치의 직책 라벨 — 고용 정보의 `title`이 이 값이다 (people.md §2-2) */
 export const HEAD_COACH_ROLE_LABEL = PERSONA_ROLE_LABEL.head_coach!;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  playerOverall,
   CLUB_HI_MIN_CONTRAST,
   CLUB_TONE_SURFACE,
   contrastRatio,
@@ -454,8 +455,8 @@ describe("게임 생성 (7월 1일 프리시즌 시작)", () => {
     const mismatched = state.players
       .filter((p) => p.catalogId !== null && shown.has(p.catalogId))
       .map((p) => ({ p, admin: shown.get(p.catalogId!)! }))
-      .filter(({ p, admin }) => admin !== p.attributes.overall)
-      .map(({ p, admin }) => `${p.name} 게임 ${p.attributes.overall} ≠ 어드민 ${admin}`);
+      .filter(({ p, admin }) => admin !== playerOverall(p))
+      .map(({ p, admin }) => `${p.name} 게임 ${playerOverall(p)} ≠ 어드민 ${admin}`);
     expect(mismatched.slice(0, 5)).toEqual([]);
     // 비교 대상이 실제로 있었는지 — 조인이 통째로 빗나가면 위가 조용히 통과한다
     expect(
@@ -689,7 +690,7 @@ describe("게임 생성 (7월 1일 프리시즌 시작)", () => {
   it("tier가 낮을수록(강할수록) 평균 overall이 높다", () => {
     const avg = (id: string) => {
       const roster = playersOf(state, id);
-      return roster.reduce((s, p) => s + p.attributes.overall, 0) / roster.length;
+      return roster.reduce((s, p) => s + playerOverall(p), 0) / roster.length;
     };
     expect(avg("arsenal")).toBeGreaterThan(avg("hull") + 3);
   });

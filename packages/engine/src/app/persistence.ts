@@ -22,7 +22,7 @@ import { SaveSchema } from "./save-schema";
 import type { GamePhase, GameState } from "../common/core/state";
 import type { ClubColours } from "@story-fm/domain";
 import { teamCatalogById } from "../common/data/team-catalog";
-import { recomputeOverall, teamNameIn, teamShortNameIn } from "../common/core/state";
+import { ensurePotentialFloor, teamNameIn, teamShortNameIn } from "../common/core/state";
 
 export { dataDir };
 
@@ -305,7 +305,7 @@ function attachShards(raw: unknown, id: string): unknown {
  * 버전이 다른 세이브는 로드를 거부한다 — 마이그레이션은 없다. 다만 감추지는 않는다:
  * 목록에는 실패 사유와 함께 선다.
  */
-export const SAVE_VERSION = 20;
+export const SAVE_VERSION = 21;
 
 /**
  * 세이브를 열지 못한 이유 — 문장은 화면이 쓴다, 코어는 사실만 싣는다.
@@ -383,15 +383,8 @@ function validate(raw: unknown): LoadResult {
     return { ok: false, reason: "schema", saveVersion, createdAt };
   }
   Object.assign(state, parsed.data);
-  /**
-   * **종합은 저장된 값이 아니라 16축의 파생 캐시다** — 로드할 때 다시 계산한다.
-   *
-   * 세이브에 든 `overall`은 저장된 그 순간의 공식으로 찍힌 값이라, 공식이
-   * 움직이면 옛 눈금을 그대로 들고 들어온다 (player.md §4). 그러면 한 세이브
-   * 안에서 옛 선수와 새 선수가 서로 다른 눈금으로 같은 표에 선다. 축에서
-   * 파생하는 값이므로 마이그레이션이 아니라 캐시 재계산이다 (game-state.md §6).
-   */
-  for (const player of state.players) recomputeOverall(player);
+  // 현재 기량보다 낮은 잠재력은 허용하지 않는다.
+  for (const player of state.players) ensurePotentialFloor(player);
   return { ok: true, state };
 }
 

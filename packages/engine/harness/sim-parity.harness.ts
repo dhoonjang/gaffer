@@ -1,3 +1,4 @@
+import { playerOverall } from "@story-fm/domain";
 import { describe, expect, it } from "vitest";
 import { quickSimulate, simSquadOf } from "@story-fm/engine";
 import { createTestGame } from "../test/helpers";
@@ -64,8 +65,7 @@ describe("두 시뮬의 눈금", () => {
       for (const fixture of leagueFixtures(state, MATCHES_PER_SEED)) {
         const home = simSquadOf(state, fixture.homeTeamId, fixture.competitionId);
         const away = simSquadOf(state, fixture.awayTeamId, fixture.competitionId);
-        const strength = (squad: typeof home) =>
-          mean(squad.starters.map((p) => p.attributes.overall));
+        const strength = (squad: typeof home) => mean(squad.starters.map((p) => playerOverall(p)));
         const live = liveMatchWith(state, fixture);
         playToEnd(live);
         const sample = sampleOf(live);

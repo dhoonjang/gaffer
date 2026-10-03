@@ -172,22 +172,6 @@ export const FootRatingSchema = z.number().int().min(1).max(5);
 export const HeightSchema = z.number().int().min(150).max(215);
 export const WeightSchema = z.number().int().min(50).max(120);
 
-/**
- * 부상 성향 배수의 바닥과 천장 — 1.0이 평균, 천장에 닿으면 동료의 2.2배로 다친다.
- *
- * ⚠️ **세이브 스키마의 범위와 엔진의 클램프가 같은 값을 읽는다** (`clampProneness`).
- * 코어가 절대 만들지 않는 값을 스키마가 받아들이면 천장이 두 개가 된다.
- */
-export const INJURY_PRONENESS_MIN = 0.55;
-export const INJURY_PRONENESS_MAX = 2.2;
-/**
- * 부상 성향의 기준값 — 평균 선수. 새 선수는 여기서 출발한다.
- *
- * 다치면 오르고 뛰면 내려가는 균형이 이 값에 고정된다(`squad/injury.ts`) — 하강 폭을
- * 상승의 기댓값에서 유도하므로 리그 평균이 여기 머문다.
- */
-export const PRONENESS_BASE = 1;
-
 /** 체격 한 줄 — "188cm · 82kg" */
 export function physiqueLabel(height?: number, weight?: number): string {
   if (height === undefined && weight === undefined) return "정보 없음";
@@ -331,13 +315,12 @@ export const AXIS_GROUP_KO: Record<keyof typeof AXIS_GROUPS, string> = {
   goalkeeping: "GK",
 };
 
-/** overall은 POSITION_WEIGHTS 가중합의 파생 캐시, potential은 성장 상한 */
+/** 16축과 성장 상한만 저장한다. 종합은 playerOverall에서 파생한다 */
 export const PlayerAttributesSchema = z.object({
   ...(Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, RatingSchema])) as Record<
     AttributeAxis,
     typeof RatingSchema
   >),
-  overall: RatingSchema,
   potential: RatingSchema,
 });
 export type PlayerAttributes = z.infer<typeof PlayerAttributesSchema>;
@@ -1667,16 +1650,9 @@ export function observedFit(
   return clampShown(roleFit(axes, position, role) + observation.overallOffset);
 }
 
-/**
- * 표시용 종합의 관측값 — **저장된 `attributes.overall`에 같은 오프셋만 얹는다.**
- *
- * 관측된 축에서 `bestOverall`을 다시 굴리지 않는 이유: 저장값은 카탈로그 생성
- * 시점의 포지션 목록으로 계산돼 있어(`bestOverall`) 지금 목록으로 재계산하면
- * 값이 달라지는 선수가 있다 — 화면과 시뮬의 눈금을 그런 부수효과로 옮길 수는 없다.
- * 어차피 **자리 전력과 같은 오프셋**을 쓰므로 둘 사이의 비교는 흔들리지 않는다.
- */
-export function observedOverall(storedOverall: number, observation: ObservationOffset): number {
-  return clampShown(storedOverall + observation.overallOffset);
+/** 실제 16축·보유 포지션에서 낸 종합에 관측 오차를 한 번만 얹는다. */
+export function observedOverall(overall: number, observation: ObservationOffset): number {
+  return clampShown(overall + observation.overallOffset);
 }
 
 /**
@@ -1792,18 +1768,6 @@ export const PlayerStateSchema = z.object({
    * 경기·훈련이 깎고 휴식·회복이 채운다. 폼과 별도로 관리하는 몸의 준비 상태다.
    */
   condition: z.number().int().min(0).max(CONDITION_MAX),
-  /**
-   * **부상 성향** — 이 선수가 지금 갖는 부상 확률 배수. 1.0이 평균.
-   *
-   * 폼처럼 시간 축을 갖는 상태다. 다치면 오르고, **뛰면 내려간다** — 내려가는
-   * 조건이 날짜가 아니라 **출전**인 게 핵심이다. 벤치에서 반 시즌을 보낸 선수가
-   * 유리몸 딱지를 저절로 떼면, 안 다친 게 아니라 안 뛴 것뿐인데 튼튼해진다.
-   *
-   * ⚠️ **이력 테이블에서 파생하지 않고 저장한다.** INJURY 표에는 다친 기록만
-   * 있고 "안 다치고 몇 경기를 뛰었나"가 없어서, 스캔으로는 오르는 쪽만 셀 수 있다.
-   * 그러면 값이 1 아래로 못 내려가 리그 평균이 시즌마다 위로 밀린다.
-   */
-  injuryProneness: z.number().min(INJURY_PRONENESS_MIN).max(INJURY_PRONENESS_MAX),
   /** GM이 결정한 시즌 말 은퇴 선언. 실행 전에는 나이와 무관하게 철회할 수 있다. */
   retiringAfterSeason: z.object({ on: DateString, reason: RetirementReasonSchema }).optional(),
   /**
@@ -1874,7 +1838,6 @@ export function freshPlayerState(input: { form: number; condition: number }): Pl
   return {
     form: input.form,
     condition: input.condition,
-    injuryProneness: PRONENESS_BASE,
     fatigue: FATIGUE_BASE,
     caps: 0,
     internationalGoals: 0,
@@ -2047,6 +2010,11 @@ export const GamePlayerSchema = z.object({
   growthCarry: z.record(z.string(), z.number()),
 });
 export type GamePlayer = z.infer<typeof GamePlayerSchema>;
+
+/** The profile rating is derived from current axes and positions, never stored. */
+export function playerOverall(player: Pick<GamePlayer, "attributes" | "positions">): number {
+  return bestOverall(player.attributes, player.positions);
+}
 /** 관례상 짧은 별칭 — 코드 전반에서 Player로 쓴다 */
 export type Player = GamePlayer;
 

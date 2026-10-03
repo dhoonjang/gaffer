@@ -37,6 +37,8 @@ import {
 import { euroChampion, euroStageMatches } from "../match/competition/euro-knockout";
 import { type StandingRow, computeStandings } from "../common/views/standings";
 import {
+  playerOverall,
+  isReserveStat,
   type AchievementCode,
   type Achievement,
   achievementTitle,
@@ -201,7 +203,7 @@ export function checkAchievements(state: GameState, position: number, row: Stand
    */
   const goalsByPlayer = new Map<string, number>();
   for (const s of state.seasonStats) {
-    if (s.season !== state.season || s.teamId !== state.userTeamId) continue;
+    if (s.season !== state.season || s.teamId !== state.userTeamId || isReserveStat(s)) continue;
     goalsByPlayer.set(s.gamePlayerId, (goalsByPlayer.get(s.gamePlayerId) ?? 0) + s.goals);
   }
   const topScorer = [...goalsByPlayer]
@@ -888,8 +890,8 @@ export const ACADEMY_USE_NEUTRAL = 0.5;
 export function academyUseOf(state: GameState, teamId: string, season: number): number {
   const apps = new Map<string, number>();
   for (const stat of state.seasonStats) {
-    if (stat.season !== season || stat.teamId !== teamId) continue;
-    apps.set(stat.gamePlayerId, (apps.get(stat.gamePlayerId) ?? 0) + (stat.reserveApps ?? 0));
+    if (stat.season !== season || stat.teamId !== teamId || !isReserveStat(stat)) continue;
+    apps.set(stat.gamePlayerId, (apps.get(stat.gamePlayerId) ?? 0) + stat.apps);
   }
   let total = 0;
   let young = 0;
@@ -989,7 +991,7 @@ export function admitYouth(
  */
 export function promoteToMatchdaySquad(squad: GamePlayer[], keeper: boolean): void {
   const first = () => squad.filter((p) => p.squadLevel !== "reserve");
-  const byOverall = (a: GamePlayer, b: GamePlayer) => b.attributes.overall - a.attributes.overall;
+  const byOverall = (a: GamePlayer, b: GamePlayer) => playerOverall(b) - playerOverall(a);
   for (const player of [...squad].filter((p) => p.squadLevel === "reserve").sort(byOverall)) {
     if (first().length >= MATCHDAY_SQUAD) break;
     player.squadLevel = "first";

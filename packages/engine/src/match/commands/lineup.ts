@@ -4,7 +4,7 @@
  * 1·2군 배치, 라인업과 팀 전술 6축, 선수의 자리·역할, 세트피스, 완장,
  * 등번호. 검증을 지나면 그대로 장부에 적히고 판정은 끼지 않는다.
  */
-import { registrationBlockText } from "@story-fm/domain";
+import { playerOverall, registrationBlockText } from "@story-fm/domain";
 import type {
   BoardPoint,
   GamePlayer,
@@ -87,7 +87,7 @@ import {
   playerById,
   proficiencyAt,
   playerName,
-  recomputeOverall,
+  ensurePotentialFloor,
   squadLevelOf,
   userPlayerById,
   userPlayers,
@@ -1375,10 +1375,10 @@ export function setPlayerPosition(
       isNatural: true,
     });
   }
-  recomputeOverall(player);
+  ensurePotentialFloor(player);
   return {
     ok: true,
-    message: `${player.name} 주 포지션 → ${code} (OVR ${player.attributes.overall})`,
+    message: `${player.name} 주 포지션 → ${code} (OVR ${playerOverall(player)})`,
   };
 }
 

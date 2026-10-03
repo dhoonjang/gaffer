@@ -2,9 +2,10 @@ import {
   type GameState,
   squadLevelOf,
   recordGrowth,
-  recomputeOverall,
+  ensurePotentialFloor,
 } from "../../common/core/state";
 import {
+  playerOverall,
   type MatchRecord,
   isReserveMatch,
   ageOf,
@@ -118,8 +119,8 @@ export function applyMonthlyDevelopment(state: GameState): string[] {
         recordGrowth(state, player.id, null, "development", axis, step, "monthly");
       }
     }
-    recomputeOverall(player);
-    if (ours) lines.push(`${player.name} (2군) ${player.attributes.overall}`);
+    ensurePotentialFloor(player);
+    if (ours) lines.push(`${player.name} (2군) ${playerOverall(player)}`);
   }
   return lines;
 }

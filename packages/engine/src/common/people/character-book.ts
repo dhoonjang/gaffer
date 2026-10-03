@@ -3,6 +3,9 @@ import {
   CharacterUpdateSchema,
   type CharacterBookContent,
   type Persona,
+  type StoredPersona,
+  type StaffPoolEntry,
+  type StoredStaffPoolEntry,
   type CharacterBookEntry,
   type CharacterBookInjection,
   type CharacterBookJob,
@@ -11,15 +14,82 @@ import {
 import type { GameState } from "../core/state";
 import type { CommandResult } from "../commands/result";
 
-/** Seed prose is only a fallback for a person not yet registered in the save. */
+/** Seed prose is used only before an identity has been registered in the save. */
 export function personaBookOf(
   state: Pick<GameState, "characterBook">,
-  persona: Persona,
+  persona: Persona | StoredPersona,
 ): CharacterBookContent {
-  return (
-    state.characterBook.find((entry) => entry.id === `person:${persona.characterId}`) ??
-    persona.characterBook
-  );
+  const id =
+    "characterBookId" in persona ? persona.characterBookId : `person:${persona.characterId}`;
+  const book = state.characterBook.find((entry) => entry.id === id);
+  if (book) return book;
+  if ("characterBook" in persona) return persona.characterBook;
+  throw new Error(`캐릭터북 누락: ${id}`);
+}
+
+export function registerPersonBook(
+  state: Pick<GameState, "characterBook">,
+  name: string,
+  book: CharacterBookContent,
+): string {
+  const id = `person:${name}`;
+  if (state.characterBook.some((entry) => entry.id === id)) return id;
+  state.characterBook.push({
+    ...book,
+    name,
+    keywords: [...book.keywords],
+    id,
+    kind: "person",
+    version: 1,
+  });
+  return id;
+}
+
+/** Read views carry prose, never a mutable reference to the canonical entry. */
+function bookContent(book: CharacterBookContent): CharacterBookContent {
+  return {
+    name: book.name,
+    keywords: [...book.keywords],
+    description: book.description,
+    information: book.information,
+  };
+}
+
+export function storePersona(
+  state: Pick<GameState, "characterBook">,
+  persona: Persona,
+): StoredPersona {
+  const { characterBook, ...identity } = persona;
+  return { ...identity, characterBookId: registerPersonBook(state, persona.name, characterBook) };
+}
+
+export function readPersona(
+  state: Pick<GameState, "characterBook">,
+  persona: StoredPersona,
+): Persona {
+  const { characterBookId, ...identity } = persona;
+  return {
+    ...identity,
+    characterBook: bookContent(personaBookOf(state, { ...identity, characterBookId })),
+  };
+}
+
+export function storeStaffCandidate(
+  state: Pick<GameState, "characterBook">,
+  entry: StaffPoolEntry,
+): StoredStaffPoolEntry {
+  const { characterBook, ...terms } = entry;
+  return { ...terms, characterBookId: registerPersonBook(state, entry.name, characterBook) };
+}
+
+export function readStaffCandidate(
+  state: Pick<GameState, "characterBook">,
+  entry: StoredStaffPoolEntry,
+): StaffPoolEntry {
+  const { characterBookId, ...terms } = entry;
+  const characterBook = state.characterBook.find((book) => book.id === characterBookId);
+  if (!characterBook) throw new Error(`캐릭터북 누락: ${characterBookId}`);
+  return { ...terms, characterBook: bookContent(characterBook) };
 }
 
 export function selectCharacterBook(
@@ -44,7 +114,7 @@ export function selectCharacterBook(
 
 type CharacterBookState = Pick<
   GameState,
-  "characterBook" | "characterBookJobs" | "characterBookJobSequence"
+  "characterBook" | "characterBookJobs" | "characterBookJobSequence" | "characterBookRevisions"
 >;
 
 export function requestCharacterUpdate(state: CharacterBookState, raw: unknown): CommandResult {
@@ -90,6 +160,11 @@ export function completeCharacterUpdate(
   const entry = state.characterBook.find((row) => row.id === job?.characterId);
   const parsed = CharacterBookEditSchema.safeParse(raw);
   if (!job || !entry || entry.version !== version || !parsed.success) return false;
+  state.characterBookRevisions.push({
+    jobId: job.id,
+    previous: { ...entry, keywords: [...entry.keywords] },
+    additionalInformation: job.additionalInformation,
+  });
   Object.assign(entry, parsed.data, { version: entry.version + 1 });
   state.characterBookJobs = state.characterBookJobs.filter((row) => row.id !== jobId);
   return true;
@@ -117,7 +192,7 @@ export function characterCandidates(
     for (const entry of turn.characterBook ?? []) add(byId.get(entry.id));
   for (const player of state.players)
     if (player.teamId === state.userTeamId) add(byId.get(`player:${player.id}`));
-  for (const persona of state.personas) add(byId.get(`person:${persona.characterId}`));
+  for (const persona of state.personas) add(byId.get(persona.characterBookId));
   const start =
     ((state.historyDigest?.rounds ?? 0) * CHARACTER_CANDIDATE_POOL_MAX) %
     Math.max(1, entries.length);

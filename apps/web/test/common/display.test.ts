@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultRoleOf, formatMoney } from "@story-fm/domain";
+import { playerOverall, defaultRoleOf, formatMoney } from "@story-fm/domain";
 import { buildOfficeViews, createGame, playersOf, type GameState } from "@story-fm/engine";
 import { slotOverallOf } from "../../domains/match/lib/slot-overall";
 import { ratingTone } from "../../domains/common/lib/scout-report-display";
@@ -64,18 +64,12 @@ describe("화면과 서버가 같은 값을 낸다", () => {
     }
   });
 
-  /**
-   * 종합은 **저장값에 오프셋만** 얹는다 — 관측된 축에서 다시 굴리지 않는다.
-   * 저장값(`attributes.overall`)은 생성 시점의 포지션 목록으로 계산돼 있어
-   * 지금 목록으로 다시 굴리면 값이 움직이는 선수가 있다 — 화면과 시뮬의 눈금을
-   * 그런 부수효과로 옮길 수는 없다.
-   */
-  it("종합은 저장값에 같은 오프셋을 얹은 값이다", () => {
+  it("종합은 실제 축·현재 포지션의 파생값에 관측 오프셋을 한 번 얹는다", () => {
     const { state, rows } = shared();
     for (const row of rows) {
       const stored = playersOf(state, state.userTeamId).find((x) => x.id === row.id)!;
       expect(row.overall, row.name).toBe(
-        Math.max(1, Math.min(99, stored.attributes.overall + row.observation.overallOffset)),
+        Math.max(1, Math.min(99, playerOverall(stored) + row.observation.overallOffset)),
       );
     }
   });

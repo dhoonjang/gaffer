@@ -18,7 +18,7 @@ import {
   trimCallUps,
 } from "../../../../match/competition/international";
 import { makeRng } from "../../../../common/core/rng";
-import { pronenessValue } from "../../../../common/players/injury";
+import { injuryProneness } from "../../../../common/players/injury";
 import { openInjuryFor } from "../health/injury";
 
 // ── 복귀 ──────────────────────────────────────────────
@@ -63,7 +63,7 @@ export function settleCallUps(
     let hurt = false;
     for (let i = 0; i < row.apps; i++) {
       if (isInjured(state, player.id)) break;
-      if (rng() >= INTERNATIONAL_INJURY_PER_APP * pronenessValue(player)) continue;
+      if (rng() >= INTERNATIONAL_INJURY_PER_APP * injuryProneness(state, player.id)) continue;
       const { days, part } = openInjuryFor(state, player, "match", rng);
       hurt = true;
       if (player.teamId === state.userTeamId) {

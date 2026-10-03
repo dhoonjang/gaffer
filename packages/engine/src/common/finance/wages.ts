@@ -1,5 +1,11 @@
 import type { GamePlayer } from "@story-fm/domain";
-import { ageOf, naturalPositionOf, weightSlotOf, type WeightSlot } from "@story-fm/domain";
+import {
+  playerOverall,
+  ageOf,
+  naturalPositionOf,
+  weightSlotOf,
+  type WeightSlot,
+} from "@story-fm/domain";
 import { affordableWageBill } from "./finance";
 // 타입만 가져온다 — 런타임에는 지워지므로 `core/state` → `world/wages` 순환이 아니다
 import type { GameState } from "../core/state";
@@ -174,7 +180,7 @@ export function estimateWeeklyWage(
 export function wageSubjectOf(player: GamePlayer, onDate: string): WageSubject {
   return {
     id: player.id,
-    overall: player.attributes.overall,
+    overall: playerOverall(player),
     age: ageOf(player.birthdate, onDate),
     position: naturalPositionOf(player).position,
     reserve: player.squadLevel === "reserve",

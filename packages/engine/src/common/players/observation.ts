@@ -1,4 +1,5 @@
 import {
+  playerOverall,
   type AttributeAxis,
   type AxisValues,
   ATTRIBUTE_AXES,
@@ -200,7 +201,7 @@ export function youthCandidateFog(
   seed: number,
   player: GamePlayer,
 ): { overall: number; growth: GrowthOutlook } {
-  const overall = observedOverall(player.attributes.overall, {
+  const overall = observedOverall(playerOverall(player), {
     overallOffset: offsetFor(seed, player.id, "overall", YOUTH_CANDIDATE_OVERALL_MARGIN),
   });
   const ceiling =
@@ -220,7 +221,7 @@ export function growthOutlook(
 ): GrowthOutlook | null {
   if (knowledge !== "own") return null;
   const overall = observedOverall(
-    player.attributes.overall,
+    playerOverall(player),
     observationAt(state, player.id, knowledge),
   );
   return growthOutlookOf(overall, player.attributes.potential);
@@ -297,7 +298,7 @@ export function observedPlayerFacts(state: GameState, player: GamePlayer) {
     observation,
     age: ageOf(player.birthdate, state.date),
     position: naturalPositionOf(player).position,
-    overall: observedOverall(player.attributes.overall, observation),
+    overall: observedOverall(playerOverall(player), observation),
     growth: growthOutlook(state, player, knowledge),
     attributes: Object.fromEntries(
       ATTRIBUTE_AXES.map((axis) => [

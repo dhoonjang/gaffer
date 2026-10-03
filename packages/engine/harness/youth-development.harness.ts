@@ -1,4 +1,4 @@
-import { ATTRIBUTE_AXES, type AxisValues } from "@story-fm/domain";
+import { playerOverall, ATTRIBUTE_AXES, type AxisValues } from "@story-fm/domain";
 import {
   AXIS_AGING,
   rollMonthlyAxes,
@@ -75,16 +75,14 @@ describe("한 시즌의 유스 육성", () => {
       .filter((p) => u21(state, p.birthdate))
       .sort(
         (a, b) =>
-          b.attributes.potential -
-          b.attributes.overall -
-          (a.attributes.potential - a.attributes.overall),
+          b.attributes.potential - playerOverall(b) - (a.attributes.potential - playerOverall(a)),
       )
       .slice(0, 3)
       .map((p) => p.id);
     const set = setDevelopmentFocus(state, { playerIds: focusIds });
     expect(set.ok).toBe(true);
 
-    const before = new Map(state.players.map((p) => [p.id, p.attributes.overall]));
+    const before = new Map(state.players.map((p) => [p.id, playerOverall(p)]));
     const ourReserveU21 = state.players
       .filter(
         (p) =>
@@ -115,7 +113,7 @@ describe("한 시즌의 유스 육성", () => {
         ids
           .map((id) => {
             const player = state.players.find((p) => p.id === id);
-            return player === undefined ? null : player.attributes.overall - before.get(id)!;
+            return player === undefined ? null : playerOverall(player) - before.get(id)!;
           })
           .filter((d): d is number => d !== null),
       );
@@ -134,7 +132,7 @@ describe("한 시즌의 유스 육성", () => {
     const academyUse = academyUseOf(state, state.userTeamId, state.season);
     transitionSeason(state);
     const intake = state.youthCandidates.map((row) => row.player);
-    const intakeUpside = intake.map((p) => p.attributes.potential - p.attributes.overall);
+    const intakeUpside = intake.map((p) => p.attributes.potential - playerOverall(p));
 
     const readings: Readings<typeof YOUTH_DEVELOPMENT> = {
       ...calibration,

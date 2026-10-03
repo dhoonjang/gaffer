@@ -1,5 +1,6 @@
 import {
   CharacterBookEntrySchema,
+  CharacterBookRevisionSchema,
   CharacterBookJobSchema,
   RecentFlowSchema,
 } from "@story-fm/domain";
@@ -20,8 +21,8 @@ import {
   ManagerVacancySchema,
   ManagerPoolEntrySchema,
   MatchRecordSchema,
-  PersonaSchema,
-  StaffPoolEntrySchema,
+  StoredPersonaSchema,
+  StoredStaffPoolEntrySchema,
   PlayerTrainingSchema,
   ManagerInterviewSchema,
   MediaFactSchema,
@@ -93,6 +94,7 @@ export const GameTablesSchema = z.object({
   }),
   // 필수 테이블 — 없으면 앞 걸음(형태 검사)이 이미 손상으로 답한다
   characterBook: z.array(CharacterBookEntrySchema),
+  characterBookRevisions: z.array(CharacterBookRevisionSchema),
   characterBookJobSequence: z.number().int().nonnegative(),
   characterBookJobs: z.array(CharacterBookJobSchema),
   players: z.array(GamePlayerSchema),
@@ -132,19 +134,33 @@ export const GameTablesSchema = z.object({
   retired: z.array(RetiredPlayerSchema),
   youthCandidates: z.array(YouthCandidateSchema),
   callUps: z.array(CallUpSchema),
-  personas: z.array(PersonaSchema),
+  personas: z.array(StoredPersonaSchema),
   boardRequests: z.array(BoardRequestSchema),
   // 없음이 뜻인 것 — 로드가 채우지 않는다
   /** 경질 카드 — 없으면 감독은 재직 중이다 (career.md §5.1) */
   dismissal: DismissalSchema.optional(),
   /**
-   * 무직 스태프 풀 — 없으면 그해의 결정적 추첨이 답하고, 빈 배열은 「다 데려갔다」다
+   * 무직 스태프 풀 — 생성 시 확정하며, 빈 배열은 「다 데려갔다」다
    * (people.md §2-2 · `staffPoolOf`)
    */
-  staffPool: z.array(StaffPoolEntrySchema).optional(),
+  staffPool: z.array(StoredStaffPoolEntrySchema),
   /** 이력 압축의 자국 — 없으면 아직 한 번도 접지 않았다 (agents.md §5-1) */
   historyDigest: HistoryDigestSchema.optional(),
 });
 
 export type GameTables = z.infer<typeof GameTablesSchema>;
-export const SaveSchema = GameTablesSchema.passthrough();
+export const SaveSchema = GameTablesSchema.passthrough().superRefine((state, ctx) => {
+  const books = new Map(state.characterBook.map((entry) => [entry.id, entry]));
+  if (books.size !== state.characterBook.length)
+    ctx.addIssue({ code: "custom", path: ["characterBook"], message: "캐릭터북 id 중복" });
+  for (const table of ["personas", "staffPool"] as const)
+    state[table].forEach((person, index) => {
+      const book = books.get(person.characterBookId);
+      if (!book || book.kind === "team" || book.name !== person.name)
+        ctx.addIssue({
+          code: "custom",
+          path: [table, index, "characterBookId"],
+          message: "인물 캐릭터북 참조 불일치",
+        });
+    });
+});

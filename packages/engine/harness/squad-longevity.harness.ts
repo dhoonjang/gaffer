@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ageOf } from "@story-fm/domain";
+import { playerOverall, ageOf } from "@story-fm/domain";
 import {
   activeContract,
   addDays,
@@ -49,10 +49,10 @@ function leagueTopMean(state: GameState): { overall: number; potential: number }
   for (const team of state.teams.filter((t) => isClubTeam(t.id))) {
     if (leagueOfTeamIn(state, team.id) !== league) continue;
     const top = firstTeamPlayers(state, team.id)
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)
+      .sort((a, b) => playerOverall(b) - playerOverall(a))
       .slice(0, TOP_N);
     for (const p of top) {
-      overall.push(p.attributes.overall);
+      overall.push(playerOverall(p));
       potential.push(p.attributes.potential);
     }
   }
@@ -75,7 +75,7 @@ function fillOurGoal(state: GameState): boolean {
   if (first.some((p) => groupOf(p) === "GK")) return false;
   const keeper = playersOf(state, state.userTeamId)
     .filter((p) => squadLevelOf(p) === "reserve" && groupOf(p) === "GK")
-    .sort((a, b) => b.attributes.overall - a.attributes.overall)[0];
+    .sort((a, b) => playerOverall(b) - playerOverall(a))[0];
   // 명부에 골키퍼가 한 명도 없는 것은 대역이 아니라 「GK 없는 구단」 가드의 몫이다
   if (keeper === undefined) return false;
   const starting = assignmentsOf(state, state.userTeamId, "starting").map((a) => a.playerId);
@@ -88,7 +88,7 @@ function fillOurGoal(state: GameState): boolean {
   if (board([{ playerId: keeper.id, level: "first" }]).ok) return true;
   const weakest = first
     .filter((p) => !starting.includes(p.id) && groupOf(p) !== "GK")
-    .sort((a, b) => a.attributes.overall - b.attributes.overall)[0]!;
+    .sort((a, b) => playerOverall(a) - playerOverall(b))[0]!;
   const swapped = board([
     { playerId: keeper.id, level: "first" },
     { playerId: weakest.id, level: "reserve" },

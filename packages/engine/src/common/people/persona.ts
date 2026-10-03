@@ -1,4 +1,7 @@
+import { storePersona, readPersona } from "./character-book";
+import type { StoredPersona, CharacterBookEntry } from "@story-fm/domain";
 import {
+  playerOverall,
   CAPTAIN_ROLE_LABEL,
   LEADER_ROLE_LABEL,
   HEAD_COACH_ROLE_LABEL,
@@ -8,6 +11,7 @@ import {
   STAFF_ROLES,
   type CharacterBookContent,
   type Persona,
+  type GamePlayer,
   type PersonaRole,
   type StaffRole,
   type StaffPoolEntry,
@@ -230,7 +234,7 @@ export function inventPersonName(rng: () => number, teamId: string, taken?: Set<
  */
 export function occupiedPersonNames(state: {
   teams: Array<{ managerName?: string }>;
-  personas?: Persona[];
+  personas?: StoredPersona[];
   manager?: { name: string };
   managerPool?: ReadonlyArray<{ name: string }>;
   staffPool?: ReadonlyArray<{ name: string }>;
@@ -654,17 +658,24 @@ export type { StaffArchetype };
  * (`headCoachOf`가 답한다). 감독이 다 자른 역할은 빈 배열이다.
  */
 export function staffOf(
-  state: { personas: readonly Persona[]; userTeamId?: string; date?: string },
+  state: {
+    personas: readonly StoredPersona[];
+    characterBook: CharacterBookEntry[];
+    userTeamId?: string;
+    date?: string;
+  },
   role?: StaffRole,
 ): Persona[] {
-  return state.personas.filter(
-    (p) =>
-      p.employment !== undefined &&
-      (state.userTeamId === undefined || p.employment.teamId === state.userTeamId) &&
-      (state.date === undefined || p.employment.contract.until >= state.date) &&
-      isStaffRole(p.role) &&
-      (role === undefined || p.role === role),
-  );
+  return state.personas
+    .filter(
+      (p) =>
+        p.employment !== undefined &&
+        (state.userTeamId === undefined || p.employment.teamId === state.userTeamId) &&
+        (state.date === undefined || p.employment.contract.until >= state.date) &&
+        isStaffRole(p.role) &&
+        (role === undefined || p.role === role),
+    )
+    .map((persona) => readPersona(state, persona));
 }
 
 /**
@@ -1045,7 +1056,7 @@ export function isFamousPlayer(overall: number, name: string): boolean {
 interface SpeakerSource {
   seed: number;
   userTeamId: string;
-  personas: readonly Persona[];
+  personas: readonly StoredPersona[];
   players?: Array<{
     id?: string;
     name: string;
@@ -1053,7 +1064,8 @@ interface SpeakerSource {
     isCaptain?: boolean;
     isViceCaptain?: boolean;
     /** 이름난 현역 판정용 — 없으면(축약 픽스처) 이름난 현역으로 서지 않는다 */
-    attributes?: { overall: number };
+    attributes?: GamePlayer["attributes"];
+    positions?: GamePlayer["positions"];
   }>;
   /** 가상 감독 판정용 — 없으면(축약 픽스처) 타 팀 벤치가 사전에 서지 않는다 */
   teams?: Array<{ id: string; managerName?: string }>;
@@ -1170,7 +1182,14 @@ function collectSpeakers(state: SpeakerSource): Map<string, SpeakerRole | null> 
     if (key && !seen.has(key)) seen.set(key, role);
   };
   for (const player of state.players ?? []) {
-    if (player.attributes !== undefined && isFamousPlayer(player.attributes.overall, player.name))
+    if (
+      player.attributes !== undefined &&
+      player.positions !== undefined &&
+      isFamousPlayer(
+        playerOverall({ attributes: player.attributes, positions: player.positions }),
+        player.name,
+      )
+    )
       // 유니폼 아이콘이 이미 말한다 — 라벨을 붙일 직책이 없다
       claim(player.name, { kind: "player" });
   }
@@ -1201,30 +1220,32 @@ function collectSpeakers(state: SpeakerSource): Map<string, SpeakerRole | null> 
 
 /** 공석이면 원장에 고용을 만들지 않는 임시 안내 정보를 반환한다. */
 export function headCoachOf(state: {
-  personas: readonly Persona[];
+  personas: readonly StoredPersona[];
+  characterBook: CharacterBookEntry[];
   userTeamId?: string;
   date?: string;
 }): Persona {
-  return (
-    state.personas.find(
-      (p) =>
-        p.role === "head_coach" &&
-        p.employment !== undefined &&
-        (state.userTeamId === undefined || p.employment.teamId === state.userTeamId) &&
-        (state.date === undefined || p.employment.contract.until >= state.date),
-    ) ?? {
-      characterId: "수석코치 공석",
-      name: "수석코치 공석",
-      role: "head_coach",
-      characterBook: {
-        name: "수석코치 공석",
-        keywords: [],
-        description: "수석코치 공석",
-        information: "수석코치가 공석입니다.",
-      },
-      seed: 0,
-    }
+  const found = state.personas.find(
+    (p) =>
+      p.role === "head_coach" &&
+      p.employment !== undefined &&
+      (state.userTeamId === undefined || p.employment.teamId === state.userTeamId) &&
+      (state.date === undefined || p.employment.contract.until >= state.date),
   );
+  return found
+    ? readPersona(state, found)
+    : {
+        characterId: "수석코치 공석",
+        name: "수석코치 공석",
+        role: "head_coach",
+        characterBook: {
+          name: "수석코치 공석",
+          keywords: [],
+          description: "수석코치 공석",
+          information: "수석코치가 공석입니다.",
+        },
+        seed: 0,
+      };
 }
 
 /**
@@ -1254,7 +1275,7 @@ const FACT_SPEAKER_ROLE: Record<FactChannel, StaffRole | null> = {
 };
 
 export function factSpeakerOf(
-  state: { personas: readonly Persona[] },
+  state: { personas: readonly StoredPersona[]; characterBook: CharacterBookEntry[] },
   channel: FactChannel,
 ): Persona {
   const role = FACT_SPEAKER_ROLE[channel];
@@ -1262,15 +1283,23 @@ export function factSpeakerOf(
 }
 
 /** 이 세이브의 구단주 — 수석코치와 같은 불변식이다: `personas`에 언제나 하나 있다 */
-export function ownerOf(state: { personas: readonly Persona[] }): Persona {
+export function ownerOf(state: {
+  personas: readonly StoredPersona[];
+  characterBook: CharacterBookEntry[];
+}): Persona {
   const found = state.personas.find((p) => p.role === "owner");
   if (!found) throw new Error("구단주 없음: personas에 owner가 없다");
-  return found;
+  return readPersona(state, found);
 }
 
 /** 이 세이브의 기자단 — `personas`의 기자들 */
-export function reportersOf(state: { personas: readonly Persona[] }): Persona[] {
-  return state.personas.filter((p) => p.role === "reporter");
+export function reportersOf(state: {
+  personas: readonly StoredPersona[];
+  characterBook: CharacterBookEntry[];
+}): Persona[] {
+  return state.personas
+    .filter((p) => p.role === "reporter")
+    .map((persona) => readPersona(state, persona));
 }
 
 /**
@@ -1507,7 +1536,12 @@ export function worldFigureByName(state: WorldFigureScope, name: string): Person
  * (friend·supporter)도 그대로다 — 구단이 아니라 감독의 사람들이다.
  */
 export function reseatClubPersonas(
-  state: { seed: number; date: string; personas?: Persona[] },
+  state: {
+    seed: number;
+    date: string;
+    personas?: StoredPersona[];
+    characterBook: CharacterBookEntry[];
+  },
   teamId: string,
   options: { crossedLeague: boolean },
 ): void {
@@ -1532,10 +1566,12 @@ export function reseatClubPersonas(
   const identities = new Set(retained.map((p) => p.characterId));
   state.personas = [
     ...retained,
-    ...additions.filter((p) => {
-      if (identities.has(p.characterId)) return false;
-      identities.add(p.characterId);
-      return true;
-    }),
+    ...additions
+      .map((persona) => storePersona(state, persona))
+      .filter((p) => {
+        if (identities.has(p.characterId)) return false;
+        identities.add(p.characterId);
+        return true;
+      }),
   ];
 }

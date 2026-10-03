@@ -9,6 +9,7 @@ import {
   recordTrainingReport,
 } from "../../common/core/state";
 import {
+  playerOverall,
   seasonRating,
   type GamePlayer,
   attributeAxisOf,
@@ -94,8 +95,8 @@ export function buildTrainingBrief(
       familiarity: assignment?.familiarity ?? 0,
       condition: player.state.condition,
       form: Math.round(player.state.form * 100) / 100,
-      room: Math.max(0, player.attributes.potential - player.attributes.overall),
-      overall: player.attributes.overall,
+      room: Math.max(0, player.attributes.potential - playerOverall(player)),
+      overall: playerOverall(player),
       apps: statOf(state, player.id)?.apps ?? 0,
       rating: ratingOf(state, player.id),
     });

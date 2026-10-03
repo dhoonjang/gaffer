@@ -12,6 +12,7 @@ import {
   playerName,
 } from "../../common/core/state";
 import {
+  playerOverall,
   type MatchRecord,
   outcomeLabel,
   outcomeFor,
@@ -30,7 +31,7 @@ import {
   type TacticAxisKey,
 } from "@story-fm/domain";
 import { competitionLabel, competitionName } from "../../common/data/cup-catalog";
-import { injuryHistoryOf, pronenessValue } from "../../common/players/injury";
+import { injuryHistoryOf, injuryProneness } from "../../common/players/injury";
 import { injuryWeight } from "@story-fm/sim";
 import { leagueOfTeamIn } from "../../common/core/league-membership";
 import { computeStandings } from "../../common/views/standings";
@@ -158,7 +159,7 @@ export const injuryRisk: CoachEye = (state) => {
       player: p,
       history: injuryHistoryOf(state, p.id),
       // 순서는 코어의 저울이 정한다 — 무엇을 말할지는 읽는 쪽이 정한다
-      weight: injuryWeight(p, 0, pronenessValue(p)),
+      weight: injuryWeight(p, 0, injuryProneness(state, p.id)),
     }))
     .filter((r) => r.history.count > 0)
     .sort((a, b) => b.weight - a.weight || (a.player.id < b.player.id ? -1 : 1))
@@ -253,7 +254,7 @@ function prospectsOf(state: GameState): GamePlayer[] {
     .sort(
       (a, b) =>
         (growthOutlook(state, b)?.tier ?? -1) - (growthOutlook(state, a)?.tier ?? -1) ||
-        a.attributes.overall - b.attributes.overall ||
+        playerOverall(a) - playerOverall(b) ||
         (a.id < b.id ? -1 : 1),
     )
     .slice(0, PROSPECTS_SHOWN);
@@ -287,7 +288,7 @@ export const prospects: CoachEye = (state) => {
       young
         .map(
           (p) =>
-            `${p.name} ${ageOf(p.birthdate, state.date)}세 종합 ${p.attributes.overall} ` +
+            `${p.name} ${ageOf(p.birthdate, state.date)}세 종합 ${playerOverall(p)} ` +
             `성장 가능성 ${growthOutlook(state, p)?.label ?? "판단 보류"} · ${monthlyGrowth(state, p.id)}`,
         )
         .join(" / "),

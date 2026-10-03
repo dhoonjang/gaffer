@@ -1,4 +1,4 @@
-import { pairOfMatchId } from "@story-fm/domain";
+import { playerOverall, pairOfMatchId } from "@story-fm/domain";
 import { type MatchRecord, type GamePlayer, type ShotOrigin } from "@story-fm/domain";
 import { type GameState, playerById, firstTeamPlayers } from "../../common/core/state";
 
@@ -193,7 +193,7 @@ export function finishingXi(
     .filter((p): p is GamePlayer => p !== null && p.teamId === teamId);
   if (listed.length > 0) return listed;
   return [...firstTeamPlayers(state, teamId)]
-    .sort((a, b) => b.attributes.overall - a.attributes.overall)
+    .sort((a, b) => playerOverall(b) - playerOverall(a))
     .slice(0, EXTRA_TIME_XI);
 }
 

@@ -176,7 +176,7 @@
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `teams` `GameTeam`               | AI 전술 역량치 · 현 감독 이름/부임일/지난 재임 + 카탈로그에서 복사한 정체성(이름·약칭·소속·체급·구장·브랜드·초기 우승) | `packages/domain/src/common/team.ts`         |
 | `players` `GamePlayer`           | 16축·상태·포지션 목록·주장·부주장·임대·성장 캐리 + 국적(협회 코드)·홈그로운 협회                                       | `packages/domain/src/common/player.ts`       |
-| ↳ `PlayerAttributes`             | 16축 + `overall`(파생 캐시) + `potential`                                                                              | `packages/domain/src/common/player.ts`       |
+| ↳ `PlayerAttributes`             | 16축 + `potential` (종합은 조회 시 파생)                                                                               | `packages/domain/src/common/player.ts`       |
 | ↳ `PlayerState`                  | 폼(−1\~1) · 체력(0\~100) · 부상 성향                                                                                   | `packages/domain/src/common/player.ts`       |
 | ↳ `PlayerPosition`               | 가능 포지션 + 적응도 + `isNatural`(하나 이상)                                                                          | `packages/domain/src/common/player.ts`       |
 | `tactics` `TeamTactics`          | 팀당 1개 — `spec` + `assignments` + `shelved` + `setPieceTakers` + `setPieceRoutine` + 팀 기억                         | `packages/domain/src/common/team-tactics.ts` |
@@ -235,20 +235,20 @@
 전부 `gamePlayerId`로 선수를 참조한다. 공통 패턴: **현재 상태 = 아직 닫히지 않은
 row, 지난 일 = 그대로 이력.**
 
-| 엔티티                             | 무엇 · "현재"의 표현                                                                                           | 정의                                               |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `injuries` `Injury`                | 부위·심각도·원인 — `returnedOn === null`이 현재 부상                                                           | `packages/domain/src/common/health.ts`             |
-| `bookings` `Booking`               | 경고·퇴장 (경기·대회·분) — 누적은 대회 안에서만 쌓인다                                                         | `packages/domain/src/common/discipline.ts`         |
-| `suspensions` `Suspension`         | 정지 — `status === "active"`, 잔여는 `length − served`. `competitionId`·`scope`가 걸리는 경기를 정한다         | `packages/domain/src/common/discipline.ts`         |
-| `moves` `PlayerMove`               | **소속 변경 원장** — 만료·유스·은퇴·보충                                                                       | `packages/domain/src/common/player-moves.ts`       |
-| `growthLog` `GrowthEntry`          | 성장 한 칸 — 대상은 축·`pos:CODE`·`tactical`, 출처는 `origin` 코드. **감독 팀 선수만** (아래 ⚠️)               | `packages/domain/src/common/player-development.ts` |
-| `trainingReports` `TrainingReport` | 훈련 결산 카드 — 한 구간(`from`~`to`)이 남긴 것: 세션 수 · `moved` · `marks`(갈래 코드와 근거 한 줄). 40장 링  | `packages/domain/src/common/player-development.ts` |
-| `seasonStats` `SeasonStat`         | 시즌 × 팀 × **대회** — 출전·출전 분·득점·도움·`ratingSum`·슛·xG·선방·클린시트·카드 (2군은 `reserve*`로 갈린다) | `packages/domain/src/common/player-statistics.ts`  |
-| `transferList` `TransferListing`   | 이적 리스트 등재 — 호가와 함께                                                                                 | `packages/domain/src/common/player-management.ts`  |
-| `playerTraining` `PlayerTraining`  | 개인 훈련 — 겨냥한 축(1·2군) · 배우는 자리(1군만)                                                              | `packages/domain/src/common/player-management.ts`  |
-| `roleMemory` `RoleMemory`          | 역할 기억 — 선수 × 자리 → 마지막에 맡긴 역할                                                                   | `packages/domain/src/common/team-tactics.ts`       |
-| `milestones` `Milestone`           | 마일스톤 — 데뷔·첫 골·구단 통산 문턱·해트트릭. **감독 팀 선수만** (아래 ⚠️)                                    | `packages/domain/src/common/player-statistics.ts`  |
-| `retired` `RetiredPlayer`          | **은퇴 명부** — 그만둔 사람의 id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. **감독 팀에서 은퇴한 선수만**   | `packages/domain/src/story/career-records.ts`      |
+| 엔티티                             | 무엇 · "현재"의 표현                                                                                          | 정의                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `injuries` `Injury`                | 부위·심각도·원인 — `returnedOn === null`이 현재 부상                                                          | `packages/domain/src/common/health.ts`             |
+| `bookings` `Booking`               | 경고·퇴장 (경기·대회·분) — 누적은 대회 안에서만 쌓인다                                                        | `packages/domain/src/common/discipline.ts`         |
+| `suspensions` `Suspension`         | 정지 — `status === "active"`, 잔여는 `length − served`. `competitionId`·`scope`가 걸리는 경기를 정한다        | `packages/domain/src/common/discipline.ts`         |
+| `moves` `PlayerMove`               | **소속 변경 원장** — 만료·유스·은퇴·보충                                                                      | `packages/domain/src/common/player-moves.ts`       |
+| `growthLog` `GrowthEntry`          | 성장 한 칸 — 대상은 축·`pos:CODE`·`tactical`, 출처는 `origin` 코드. **감독 팀 선수만** (아래 ⚠️)              | `packages/domain/src/common/player-development.ts` |
+| `trainingReports` `TrainingReport` | 훈련 결산 카드 — 한 구간(`from`~`to`)이 남긴 것: 세션 수 · `moved` · `marks`(갈래 코드와 근거 한 줄). 40장 링 | `packages/domain/src/common/player-development.ts` |
+| `seasonStats` `SeasonStat`         | 시즌 × 팀 × **대회** — 출전·출전 분·득점·도움·`ratingSum`·슛·xG·선방·클린시트·카드 (2군은 대회 ID로 구분)     | `packages/domain/src/common/player-statistics.ts`  |
+| `transferList` `TransferListing`   | 이적 리스트 등재 — 호가와 함께                                                                                | `packages/domain/src/common/player-management.ts`  |
+| `playerTraining` `PlayerTraining`  | 개인 훈련 — 겨냥한 축(1·2군) · 배우는 자리(1군만)                                                             | `packages/domain/src/common/player-management.ts`  |
+| `roleMemory` `RoleMemory`          | 역할 기억 — 선수 × 자리 → 마지막에 맡긴 역할                                                                  | `packages/domain/src/common/team-tactics.ts`       |
+| `milestones` `Milestone`           | 마일스톤 — 데뷔·첫 골·구단 통산 문턱·해트트릭. **감독 팀 선수만** (아래 ⚠️)                                   | `packages/domain/src/common/player-statistics.ts`  |
+| `retired` `RetiredPlayer`          | **은퇴 명부** — 그만둔 사람의 id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. **감독 팀에서 은퇴한 선수만**  | `packages/domain/src/story/career-records.ts`      |
 
 ⚠️ **`growthLog`는 감독 팀 선수 것만 담는다.** 4,000행에서 오래된 쪽부터 잘리는
 로그인데, 코어 월간 성장(`developsByCore` — 우리 2군 + 모든 타 팀)을 전부 남기면
@@ -278,12 +278,12 @@ row, 지난 일 = 그대로 이력.**
 **`seasonStats`의 칸은 두 시뮬이 같은 문으로 얹는다** (`addToSeasonStat` →
 [match.md](../match/match.md) §6). 출전 분·슛·xG·선방·클린시트·카드는 그 경기가
 남긴 것만 서고(optional), 세는 것은 **1군 대회 경기**뿐이다 — 친선은 장부에 닿지 않고
-([season.md](season.md) §2) 2군 리그는 `reserve*` 칸으로 갈린다. 카드는
+([season.md](season.md) §2) 2군 리그는 `reserve:<리그>` 대회 행으로 갈린다. 카드는
 `BOOKING`이 원본이라 시즌 합계도 그 문(`packages/engine/src/match/flow/discipline.ts`)이 함께 적는다: 세는 자리를
 마감 쪽에 따로 두면 연장의 카드가 한쪽에만 남는다.
 
 ⚠️ **행의 열쇠는 (선수, 시즌, 팀, 대회) 넷이다.** 리그·컵·대항전이 저마다 행을 갖고,
-2군 리그는 그 대회 id(`reserve:<리그>`)의 행에 `reserve*` 칸으로 쌓인다. 대회 축이
+2군 리그는 그 대회 id(`reserve:<리그>`)의 행에 같은 통계 칸으로 쌓인다. 대회 축이
 없으면 "리그 12경기 3골"을 말할 자리가 없고, FA컵에서 여섯 골을 넣은 로테이션 공격수가
 리그 득점왕이 된다 ([season.md](season.md) §6).
 
@@ -295,28 +295,29 @@ row, 지난 일 = 그대로 이력.**
 
 ### 3.6 감독 · 서사
 
-| 엔티티                                             | 무엇                                                                                                                                   | 정의                                           |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `manager` `Manager`                                | 이름·배경 · 계약 · 개인 생활은 GM 서사                                                                                                 | `packages/domain/src/common/manager.ts`        |
-| `seasonRecords` `SeasonRecord`                     | 시즌 성적 — 감독에 소속(팀을 옮겨도 남는다)                                                                                            | `packages/domain/src/common/manager-career.ts` |
-| `trophies` `Trophy` · `achievements` `Achievement` | 우승 · 업적                                                                                                                            | `packages/domain/src/common/manager-career.ts` |
-| `awards` `SeasonAward`                             | 시상 — 코드·**대회**·수상자·근거 수치. 리그도 컵·대항전도, **세계 전체**에 쌓인다 ([season.md](season.md) §6)                          | `packages/domain/src/common/player-awards.ts`  |
-| `personas` `Persona`                               | 인물 — 수석코치·구단주·기자, 그리고 고용 정보를 든 코치·의료진·스카우트 (people.md §2-2)                                               | `packages/domain/src/common/persona.ts`        |
-| `staffPool` `StaffPoolEntry`                       | 자리를 찾는 코치·의료진·스카우트 — 이름·자리·초기 캐릭터북·요구 연봉. 여름마다 다시 선다 (people.md §2-2). 없으면 그해의 추첨이 답한다 | `packages/domain/src/common/persona.ts`        |
-| `chat` `ChatTurn`                                  | 대화 이력 — `user`/`model`/`operator`                                                                                                  | `packages/engine/src/common/core/state.ts`     |
-| ↳ `ToolCallRecord`                                 | 도구·명령 호출 — 요약·항목(`brief`)·카드 payload·톤·`silent`·장면 안 줄 위치                                                           | `packages/engine/src/common/core/state.ts`     |
-| ↳ `CommandBrief`                                   | 화면이 세우는 요약 — 머리줄 + 항목. 없는 기록은 말풍선에 서지 않는다                                                                   | `packages/engine/src/common/core/state.ts`     |
-| ↳ `CommandBriefItem`                               | 항목 하나 — 이름(`label`) · 값(`text`) · 갈래(`note`) · 증감(`delta`)                                                                  | `packages/engine/src/common/core/state.ts`     |
-| ↳ `GoalMark` `CardMark`                            | 그 턴의 골·카드 — 장부의 사건이지 중계 문장의 파싱이 아니다                                                                            | `packages/engine/src/common/core/state.ts`     |
-| `pendingEdits` `PendingEdit`                       | 아직 GM이 읽지 않은 화면 조작 — 같은 키는 마지막 것만                                                                                  | `packages/engine/src/common/core/state.ts`     |
-| `pendingNews`                                      | 아직 GM이 읽지 않은 경기 밖 소식 — 결산이 함께 굴린 재정·다른 경기                                                                     | `packages/engine/src/common/core/state.ts`     |
-| `historyDigest` `HistoryDigest`                    | 접힌 평시 이력의 요약 — 접은 지점 · **지난 일**(`text`) · **열린 일**(`open`) · 후보(`candidates`) · 겹 수 (llm/agents.md §5-1)        | `packages/domain/src/common/memory.ts`         |
+| 엔티티                                             | 무엇                                                                                                                            | 정의                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `manager` `Manager`                                | 이름·배경 · 계약 · 개인 생활은 GM 서사                                                                                          | `packages/domain/src/common/manager.ts`        |
+| `seasonRecords` `SeasonRecord`                     | 시즌 성적 — 감독에 소속(팀을 옮겨도 남는다)                                                                                     | `packages/domain/src/common/manager-career.ts` |
+| `trophies` `Trophy` · `achievements` `Achievement` | 우승 · 업적                                                                                                                     | `packages/domain/src/common/manager-career.ts` |
+| `awards` `SeasonAward`                             | 시상 — 코드·**대회**·수상자·근거 수치. 리그도 컵·대항전도, **세계 전체**에 쌓인다 ([season.md](season.md) §6)                   | `packages/domain/src/common/player-awards.ts`  |
+| `personas` `StoredPersona`                         | 인물 — 수석코치·구단주·기자, 그리고 고용 정보를 든 코치·의료진·스카우트 (people.md §2-2)                                        | `packages/domain/src/common/persona.ts`        |
+| `staffPool` `StoredStaffPoolEntry`                 | 자리를 찾는 코치·의료진·스카우트 — 이름·자리·캐릭터북 참조·요구 연봉. 여름마다 다시 선다 (people.md §2-2). 새 게임에서 확정한다 | `packages/domain/src/common/persona.ts`        |
+| `chat` `ChatTurn`                                  | 대화 이력 — `user`/`model`/`operator`                                                                                           | `packages/engine/src/common/core/state.ts`     |
+| ↳ `ToolCallRecord`                                 | 도구·명령 호출 — 요약·항목(`brief`)·카드 payload·톤·`silent`·장면 안 줄 위치                                                    | `packages/engine/src/common/core/state.ts`     |
+| ↳ `CommandBrief`                                   | 화면이 세우는 요약 — 머리줄 + 항목. 없는 기록은 말풍선에 서지 않는다                                                            | `packages/engine/src/common/core/state.ts`     |
+| ↳ `CommandBriefItem`                               | 항목 하나 — 이름(`label`) · 값(`text`) · 갈래(`note`) · 증감(`delta`)                                                           | `packages/engine/src/common/core/state.ts`     |
+| ↳ `GoalMark` `CardMark`                            | 그 턴의 골·카드 — 장부의 사건이지 중계 문장의 파싱이 아니다                                                                     | `packages/engine/src/common/core/state.ts`     |
+| `pendingEdits` `PendingEdit`                       | 아직 GM이 읽지 않은 화면 조작 — 같은 키는 마지막 것만                                                                           | `packages/engine/src/common/core/state.ts`     |
+| `pendingNews`                                      | 아직 GM이 읽지 않은 경기 밖 소식 — 결산이 함께 굴린 재정·다른 경기                                                              | `packages/engine/src/common/core/state.ts`     |
+| `historyDigest` `HistoryDigest`                    | 접힌 평시 이력의 요약 — 접은 지점 · **지난 일**(`text`) · **열린 일**(`open`) · 후보(`candidates`) · 겹 수 (llm/agents.md §5-1) | `packages/domain/src/common/memory.ts`         |
 
 캐릭터북 관련 저장은 다음 계약을 따른다.
 
 | 저장                       | 내용                                                          |
 | -------------------------- | ------------------------------------------------------------- |
 | `characterBook`            | 팀·선수·인물의 ID·종류·이름·키워드·설명·정보·항목 버전        |
+| `characterBookRevisions`   | 편집 전 본문·버전과 추가 정보·작업 ID를 보존하는 이력         |
 | `characterBookJobSequence` | 편집 요청 ID를 위한 단조 증가 순번                            |
 | `characterBookJobs`        | 대상·추가 정보·실행 상태·시도 횟수와 실패 정보를 든 편집 요청 |
 | `ChatTurn.characterBook`   | 해당 턴에 주입한 본문·버전의 사본; 과거 메시지 재현의 원본    |
@@ -411,15 +412,10 @@ erDiagram
 | MOTM                  | `motmOf` — `MatchResult.ratings` 최고(동점은 골·도움·출전 시간)   | 평점이 원본이다. 저장하면 결산 판정이 평점을 다듬은 뒤 MOTM만 옛 값으로 남는다                                  |
 | 리그 소속             | `leagueOfTeamIn` = 승강 기록 → `GAME_TEAM.leagueId` → 카탈로그    | 카탈로그가 기본, 세이브는 승강이 있을 때만 덮는다 (§1)                                                          |
 
+부상 위험 배수는 `INJURY`의 최근 730일 실제 결장 구간에서 계산하며 저장하지 않는다.
+
 **저장하는 파생값과 별도 누적값** — 각각의 이유가 있다.
 
-- `PlayerAttributes.overall` — 가중 평균의 캐시다. 읽을 때마다 다시 굴리지 않고
-  축이 바뀌는 자리에서만 갱신한다(`recomputeOverall`). ⚠️ **로드할 때는 한 번 다시
-  굴린다** — 세이브에 든 값은 저장된 그 순간의 공식으로 찍혀 있어, 공식이 움직이면
-  한 세이브 안에 두 눈금이 선다 (→ [player](player.md) §4).
-- `PlayerState.injuryProneness` — `INJURY` 표에는 다친 기록만 있고 "안 다치고 몇
-  경기를 뛰었나"가 없다. 스캔으로는 오르는 쪽만 셀 수 있어 값이 1 아래로 못
-  내려가고, 리그 평균이 시즌마다 위로 밀린다.
 - `PlayerState.caps` · `internationalGoals`(통산 A매치 출전·골)도 같다 — 소집 표는
   최근 두 시즌만 남으므로 표에서 파생하면 통산이 세 시즌 뒤에 사라진다
   (→ [competition](../match/competition.md) §5-1). `summerReturn`(여름 대회로 늦어진 합류일)도
@@ -433,7 +429,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 20`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
+**`SAVE_VERSION = 21`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
 세이브 버전과 별도로 `config/game-version.yml`이 소유한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 
@@ -444,7 +440,7 @@ erDiagram
 - 새 테이블·새 필드는 스키마에 **필수**로 선다. optional은 「없음이 뜻을 갖는」 필드에만
   둔다(`dismissal` — 없으면 재직 중 · `pendingMatch` — 없으면 경기 중이 아니다).
 - 읽는 쪽에 「없을 수 있다」는 폴백을 두지 않는다. 없으면 스키마가 막는다.
-- 파생 캐시(`overall`)는 로드 때 다시 굴린다 — 마이그레이션이 아니라 캐시 재계산이다.
+- `overall`은 저장하지 않는다. 16축과 보유 포지션에서 필요할 때 계산한다.
 
 ### 로드가 하는 일 (`validate`)
 
@@ -736,3 +732,13 @@ tmp 쓰기가 실패하면 그 tmp는 **그 자리에서 거둔다**. 이름이 
 관리자 선수·팀 추가/편집의 필드 계약은 domain의 `catalog-input.ts`가 소유한다. 폼·API·코어가 같은 스키마로 검증하고, 팀 정원·컵 구성 같은 세계 불변식은 코어가 저장 전에 확인한다.
 
 진행 중 경기에는 최근 10분의 검증된 흐름 집계가 저장된다. 전술 효과의 근거 문장은 생성된 판독 산문이 아니라 감독 지시의 출처다. 이 저장 의미와 흐름 필드 때문에 저장 버전은 12다.
+
+### 인물 기록의 원본과 조회
+
+1군·2군 시즌 기록은 대회별 `SEASON_STAT`의 같은 출전·득점·도움·평점 필드를 쓴다.
+`reserve:` 대회만 2군 합계로 접고, 1군 순위·시상·평균에는 섞지 않는다.
+조회 결과의 `reserveApps` 등은 이 행에서 계산하며 저장하지 않는다.
+
+진행 중 인물의 캐릭터북 본문은 `characterBook`이 소유한다. 페르소나와 고용 후보는
+같은 항목을 참조한다. 생성 템플릿의 본문은 최초 등록에만 사용한다.
+캐릭터북 갱신은 이전 항목과 추가 정보, 완료된 버전을 보존해 원문을 되찾을 수 있게 한다.

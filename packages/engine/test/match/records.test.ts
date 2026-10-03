@@ -1,3 +1,4 @@
+import { sumSeasonStats } from "@story-fm/domain";
 import {
   sortByChain,
   TOP_SCORER_ORDER,
@@ -423,9 +424,14 @@ describe("통산 기록 · 마일스톤", () => {
         apps: 4,
         goals: 1,
         ratingSum: 24,
-        reserveApps: 12,
-        reserveGoals: 9,
-        reserveRatingSum: 84,
+      }),
+      stat({
+        season: 1,
+        teamId: "t1",
+        competitionId: "reserve:epl",
+        apps: 12,
+        goals: 9,
+        ratingSum: 84,
       }),
     ]);
     expect(totals.apps).toBe(4);
@@ -433,6 +439,38 @@ describe("통산 기록 · 마일스톤", () => {
     expect(totals.reserveApps).toBe(12);
     expect(totals.reserveGoals).toBe(9);
     expect(totals.reserveRating).toBe(7);
+  });
+
+  it("2군 단독 행도 1군 합계에 섞이지 않고 조회는 원본을 바꾸지 않는다", () => {
+    const row = stat({
+      season: 1,
+      teamId: "t1",
+      competitionId: "reserve:epl",
+      apps: 3,
+      goals: 2,
+      ratingSum: 21,
+    });
+    const total = sumSeasonStats([row])!;
+    expect(total).toMatchObject({
+      apps: 0,
+      goals: 0,
+      reserveApps: 3,
+      reserveGoals: 2,
+      reserveRatingSum: 21,
+    });
+    total.apps = 99;
+    expect(row.apps).toBe(3);
+    const mixed = sumSeasonStats([
+      row,
+      stat({ season: 1, teamId: "t1", apps: 2, goals: 1, ratingSum: 12 }),
+    ]);
+    expect(mixed).toMatchObject({
+      apps: 2,
+      goals: 1,
+      ratingSum: 12,
+      reserveApps: 3,
+      reserveGoals: 2,
+    });
   });
 
   it("문턱은 넘는 그 경기에만 선다 — 99경기는 아무것도, 100경기째가 마일스톤", () => {

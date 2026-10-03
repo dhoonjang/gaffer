@@ -20,10 +20,10 @@ import type {
   TrainingReport,
 } from "@story-fm/domain";
 import {
+  playerOverall,
   FAMILIARITY_BASELINE,
   MATCHDAY_BENCH,
   SET_PIECE_ROLES,
-  bestOverall,
   competitionRowsOf,
   positionGroupOfPlayer,
   sumSeasonStats,
@@ -636,17 +636,9 @@ export function groupOf(player: GamePlayer): PositionGroup {
   return positionGroupOfPlayer(player);
 }
 
-/**
- * 능력치 변경 후 overall 재계산 — **표시용 종합의 단일 공식** `bestOverall`.
- *
- * ⚠️ 보유 자리 목록을 반드시 넘긴다 — 주 포지션 하나로 내면 어드민 표와 게임의
- * OVR이 갈린다 (player.md §4).
- */
-export function recomputeOverall(player: GamePlayer): void {
-  player.attributes.overall = bestOverall(player.attributes, player.positions);
-  if (player.attributes.potential < player.attributes.overall) {
-    player.attributes.potential = player.attributes.overall;
-  }
+/** 잠재력은 현재 기량보다 낮아질 수 없다. */
+export function ensurePotentialFloor(player: GamePlayer): void {
+  player.attributes.potential = Math.max(player.attributes.potential, playerOverall(player));
 }
 
 // ── 전술·배치 ───────────────────────────────────────────

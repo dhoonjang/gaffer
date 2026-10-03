@@ -1,4 +1,4 @@
-import { CLUB_TIER_KO, GROWTH_OUTLOOKS, observedOverall } from "@story-fm/domain";
+import { playerOverall, CLUB_TIER_KO, GROWTH_OUTLOOKS, observedOverall } from "@story-fm/domain";
 import type { PlayerMoveKind } from "@story-fm/domain";
 import { describeStaffPool } from "../story/people/staff-employment";
 import { openManagerOffers } from "../story/world/manager-employment";
@@ -332,7 +332,7 @@ function ourRow(state: GameState, p: GamePlayer): string {
   return (
     `${p.id} ${number}${p.name} ${ageOf(p.birthdate, state.date)}세 ${naturalPositionOf(p).position} ` +
     `${physiqueLabel(p.height, p.weight)}(${footLabel(p.foot)}) ` +
-    `OVR${p.attributes.overall} 폼 ${formLabel(p.state.form)} ` +
+    `OVR${playerOverall(p)} 폼 ${formLabel(p.state.form)} ` +
     `체력${p.state.condition} ${adaptation}` +
     `${formatMoney(contract?.weeklyWage ?? 0)}${contractLabel(contract)} ` +
     `${role} ${statLine(stat)}${status}${armband(p)}` +
@@ -468,7 +468,7 @@ function playerRow(state: GameState, p: GamePlayer): string {
  * 순서는 그 값을 그대로 말한다. 정렬 키는 그 행이 찍는 관측값과 같아야 한다.
  */
 function sortRating(state: GameState, p: GamePlayer): number {
-  return observedOverall(p.attributes.overall, observationOf(state, p.id));
+  return observedOverall(playerOverall(p), observationOf(state, p.id));
 }
 
 /**
@@ -876,10 +876,7 @@ function historyLines(state: GameState, p: GamePlayer): string[] {
 
   const injuries = state.injuries.filter((i) => i.gamePlayerId === p.id);
   if (injuries.length > 0) {
-    const daysOut = injuries.reduce(
-      (sum, i) => sum + Math.max(0, diffDays(i.occurredOn, i.returnedOn ?? i.expectedReturn)),
-      0,
-    );
+    const { daysOut } = injuryHistoryOf(state, p.id, null);
     const recent = injuries
       .slice(-3)
       .map(
@@ -1234,7 +1231,7 @@ function assignedRow(
   ].filter((x): x is string => x !== null);
   return (
     `  ${position.padEnd(4)} ${p.name}${armband(p)} (${p.id}) ${ageOf(p.birthdate, state.date)}세 · ` +
-    `${roleLabel(position, roleId)} · OVR${p.attributes.overall} 자리적합${roleFit(p.attributes, position, roleId)} 포지션적응${proficiencyAt(p, position)} ` +
+    `${roleLabel(position, roleId)} · OVR${playerOverall(p)} 자리적합${roleFit(p.attributes, position, roleId)} 포지션적응${proficiencyAt(p, position)} ` +
     `전술적응${familiarity} · 폼 ${formLabel(p.state.form)} 체력${p.state.condition}` +
     // **라인업을 세우는 자리가 계약 만료를 읽는 자리이기도 하다** —
     // 만료일이 없으면 감독은 여름에 사라질 주전을 붙박이로 세운다

@@ -1,3 +1,5 @@
+import { storePersona } from "../common/people/character-book";
+import { refreshStaffPool } from "../story/people/staff-employment";
 import { syncCharacterBook } from "./workflows/story/character-book";
 import type {
   AxisValues,
@@ -10,6 +12,7 @@ import type {
   TeamTactics,
 } from "@story-fm/domain";
 import {
+  playerOverall,
   freshPlayerState,
   ATTRIBUTE_AXES,
   FAMILIARITY_BASELINE,
@@ -60,7 +63,7 @@ import {
 import { makeRng, randInt } from "../common/core/rng";
 import { installDefaultTraining } from "../story/players/training-plan";
 import {
-  recomputeOverall,
+  ensurePotentialFloor,
   type GameState,
   proficiencyAt,
   squadLevelOf,
@@ -184,7 +187,6 @@ function instantiatePlayers(seed: number, only?: (teamId: string) => boolean): G
       attributes: {
         // 카탈로그의 16축을 그대로 복사 (2-레이어 분리 — 이후 변화는 GAME_PLAYER에만)
         ...(Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, entry[a]])) as AxisValues),
-        overall: 50, // 아래 recomputeOverall이 주 포지션 가중치로 채운다
         potential: entry.potential,
       },
       state: freshPlayerState({
@@ -198,7 +200,7 @@ function instantiatePlayers(seed: number, only?: (teamId: string) => boolean): G
       }),
       isCaptain: false,
     };
-    recomputeOverall(player);
+    ensurePotentialFloor(player);
     players.push(player);
   }
   return players;
@@ -286,7 +288,7 @@ function buildInitialSquads(
   for (const team of teams) {
     const squad = players
       .filter((p) => p.teamId === team.id)
-      .sort((a, b) => b.attributes.overall - a.attributes.overall);
+      .sort((a, b) => playerOverall(b) - playerOverall(a));
     // 2부 클럽은 컵에만 나온다 — 2군 개발 스쿼드를 둘 이유가 없다 (전원 1군)
     if (!isTopFlight(team.id)) {
       for (const player of squad) player.squadLevel = "first";
@@ -345,7 +347,7 @@ function buildInitialSquads(
      */
     const rank = (p: GamePlayer) => (core.has(p.id) ? 0 : essential.has(p.id) ? 1 : 2);
     const ordered = [...squad].sort(
-      (a, b) => rank(a) - rank(b) || b.attributes.overall - a.attributes.overall,
+      (a, b) => rank(a) - rank(b) || playerOverall(b) - playerOverall(a),
     );
 
     const registered: RegistrablePlayer[] = [];
@@ -801,8 +803,10 @@ export function createGame(input: CreateGameInput): GameState {
     trainingReports: [],
     seasonStats: [],
     characterBook: [],
+    characterBookRevisions: [],
     characterBookJobSequence: 0,
     characterBookJobs: [],
+    staffPool: [],
     playerTraining: [],
     roleMemory: [],
     managerInterviews: [],
@@ -825,17 +829,7 @@ export function createGame(input: CreateGameInput): GameState {
     },
     // 부임하면 사람이 먼저 기다린다 — 수석코치는 시드로 결정되므로
     // 같은 세이브는 언제 열어도 같은 사람이다 (persona.ts)
-    personas: [
-      generateHeadCoach(seed, input.userTeamId, calendar.preseasonStart),
-      generateOwner(seed, input.userTeamId),
-      // 기자단 — 회견은 세계가 먼저 부르는 자리라 부를 사람이 세이브에 있어야 한다
-      ...generateReporters(seed, input.userTeamId),
-      /**
-       * 코치 둘 · 의료진 · 스카우트 — 감독이 오기 전부터 그 구단에 있던 사람들이다
-       * (people.md §2-2). 부임일이 오늘보다 앞서는 이유가 그것이다.
-       */
-      ...generateStaff(seed, input.userTeamId, calendar.preseasonStart),
-    ],
+    personas: [],
     history: [],
     seasonRecords: [],
     trophies: [],
@@ -845,6 +839,18 @@ export function createGame(input: CreateGameInput): GameState {
 
     chat: [],
   };
+
+  state.personas = [
+    generateHeadCoach(seed, input.userTeamId, calendar.preseasonStart),
+    generateOwner(seed, input.userTeamId),
+    // 기자단 — 회견은 세계가 먼저 부르는 자리라 부를 사람이 세이브에 있어야 한다
+    ...generateReporters(seed, input.userTeamId),
+    /**
+     * 코치 둘 · 의료진 · 스카우트 — 감독이 오기 전부터 그 구단에 있던 사람들이다
+     * (people.md §2-2). 부임일이 오늘보다 앞서는 이유가 그것이다.
+     */
+    ...generateStaff(seed, input.userTeamId, calendar.preseasonStart),
+  ].map((persona) => storePersona(state, persona));
 
   // 명부 밖 벤치의 가상 감독 — 페르소나가 선 뒤에 채워야 그 이름들을 피해서 뽑는다
   ensureSeededManagers(state);
@@ -870,12 +876,7 @@ export function createGame(input: CreateGameInput): GameState {
   seedInjuryHistory(state);
   // 통산 캡·골 — 없으면 서른 살 주전이 첫 소집에서 데뷔한다 (competition.md §5-1)
   seedInternationalCaps(state);
-  /**
-   * **부임 회견** — 오늘이 부임 첫날이다 (people.md §4 · career.md §5.1). 감독이
-   * 처음 마주하는 것이 수석코치 한 사람일 이유가 없다.
-   *
-   * 세계·계약·훈련이 다 선 **뒤**여야 카드가 그 사실들을 읽는다.
-   */
   syncCharacterBook(state);
+  refreshStaffPool(state, state.season);
   return state;
 }

@@ -6,7 +6,7 @@ import type {
   SubCause,
   TacticsSpec,
 } from "@story-fm/domain";
-import { positionGroupOfPlayer } from "@story-fm/domain";
+import { playerOverall, positionGroupOfPlayer } from "@story-fm/domain";
 import { subLimitsOf } from "./match-ledger";
 
 /**
@@ -86,7 +86,7 @@ export function planBenchSubs(view: BenchView, rng: () => number): BenchSub[] {
   const benchOf = (group: string) =>
     view.bench
       .filter((p) => positionGroupOfPlayer(p) === group && !used.has(p.id))
-      .sort((a, b) => b.attributes.overall - a.attributes.overall)[0];
+      .sort((a, b) => playerOverall(b) - playerOverall(a))[0];
   const take = (sub: BenchSub) => {
     off.add(sub.out.id);
     used.add(sub.in.id);
@@ -118,7 +118,7 @@ export function planBenchSubs(view: BenchView, rng: () => number): BenchSub[] {
  */
 export function injurySubOf(hurt: Player, bench: readonly Player[]): Player | null {
   const group = positionGroupOfPlayer(hurt);
-  const byOverall = (a: Player, b: Player) => b.attributes.overall - a.attributes.overall;
+  const byOverall = (a: Player, b: Player) => playerOverall(b) - playerOverall(a);
   const same = bench.filter((p) => positionGroupOfPlayer(p) === group).sort(byOverall)[0];
   if (same) return same;
   return (

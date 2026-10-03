@@ -240,7 +240,6 @@ export function generateYouthPlayer(
     ...physiqueOf(`${nameEn}-${slugifyName(teamId)}-${season}-${index}`, position, axes),
     attributes: {
       ...axes,
-      overall,
       // 뽑아 둔 그 여지를 **실측 종합 위에 그대로** 얹는다 — 축 표집이 종합을 흔든
       // 만큼 천장도 함께 흔들리되, `potential − overall`은 언제나 나이 대역 안이다
       // (player.md §6.5). 천장을 고정하고 종합만 흔들면 대역 밖의 사람이 난다.
@@ -320,7 +319,6 @@ export function generatePromotionSigning(
     ...physiqueOf(key, position, axes),
     attributes: {
       ...axes,
-      overall,
       potential: clamp99(overall + randInt(rng, SIGNING_UPSIDE.min, SIGNING_UPSIDE.max)),
     },
     ...(homegrownCountry === undefined ? {} : { homegrownCountry }),

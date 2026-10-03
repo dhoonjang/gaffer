@@ -1,5 +1,6 @@
 import type { Formation, GamePlayer, TacticAssignment } from "@story-fm/domain";
 import {
+  playerOverall,
   DEFAULT_FORMATION,
   FORMATIONS,
   MATCHDAY_BENCH,
@@ -125,7 +126,7 @@ function lineupFit(p: GamePlayer, slot: string, prof = proficiencyAt(p, slot)): 
   const nonGkPenalty = slot !== "GK" && groupOf(p) === "GK" ? -400 : 0;
   return (
     prof * 1.2 +
-    p.attributes.overall +
+    playerOverall(p) +
     (sameGroup ? SAME_GROUP_BONUS : 0) +
     (onNatural ? NATURAL_SLOT_BONUS : 0) +
     gkPenalty +
@@ -308,7 +309,7 @@ export function buildAssignments(
   // 벤치 9 — GK 1명 포함 우선, 나머지는 OVR 상위
   const rest = pool
     .filter((p) => !used.has(p.id))
-    .sort((a, b) => b.attributes.overall - a.attributes.overall);
+    .sort((a, b) => playerOverall(b) - playerOverall(a));
   const benchGk = rest.find((p) => groupOf(p) === "GK");
   const bench: GamePlayer[] = [];
   if (benchGk) bench.push(benchGk);

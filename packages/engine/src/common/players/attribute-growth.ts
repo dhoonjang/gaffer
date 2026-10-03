@@ -1,4 +1,4 @@
-import { type GameState, recomputeOverall, recordGrowth } from "../core/state";
+import { type GameState, ensurePotentialFloor, recordGrowth } from "../core/state";
 import {
   type GamePlayer,
   type AttributeAxis,
@@ -108,7 +108,7 @@ export function applyAttributeStep(
   player.growthCarry = { ...player.growthCarry, [axis]: carry - applied };
 
   player.attributes[axis] = value + applied;
-  recomputeOverall(player);
+  ensurePotentialFloor(player);
   recordGrowth(
     state,
     player.id,

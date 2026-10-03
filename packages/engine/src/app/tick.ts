@@ -1,5 +1,6 @@
 import { expireStaffContracts } from "../story/people/staff-employment";
 import {
+  playerOverall,
   type TickEvent,
   type ScheduleEntry,
   type TrainingSession,
@@ -68,10 +69,8 @@ import {
 } from "@story-fm/sim";
 import {
   resolveInjuries,
-  pronenessValue,
+  injuryProneness,
   TRAINING_INJURY_PER_SESSION,
-  trainingExposure,
-  easeProneness,
 } from "../common/players/injury";
 import {
   isAwayFromClub,
@@ -392,16 +391,15 @@ function dailyTick(
    * 쓰러지고, 그중 누가 걸리는지도 경기와 같은 저울(`injuryWeight`)로 정한다.
    *
    * ⚠️ **대상은 결산과 같은 문을 지난다**(`trainsWithFirstTeam` — season.md §8
-   * 불변식). 갈라 두면 훈련장에 서지도 않은 2군이 훈련 중에 다치고, 다치지 않고
-   * 소화한 몫(`easeProneness`)도 함께 받는다.
+   * 불변식). 갈라 두면 훈련장에 서지도 않은 2군이 훈련 중에 다친다.
    */
   if (trainingLoad > 0) {
     const candidates = players.filter((p) => trainsWithFirstTeam(state, p));
     if (candidates.length > 0) {
       const avgProneness =
-        candidates.reduce((s, p) => s + pronenessValue(p), 0) / candidates.length;
+        candidates.reduce((s, p) => s + injuryProneness(state, p.id), 0) / candidates.length;
       if (rng() < TRAINING_INJURY_PER_SESSION * trainingLoad * avgProneness) {
-        const weights = candidates.map((p) => injuryWeight(p, 0, pronenessValue(p)));
+        const weights = candidates.map((p) => injuryWeight(p, 0, injuryProneness(state, p.id)));
         const total = weights.reduce((s, w) => s + w, 0);
         let roll = rng() * total;
         let victim = candidates[candidates.length - 1]!;
@@ -419,9 +417,6 @@ function dailyTick(
           `훈련 중 부상: ${victim.name} — ${part}, 약 ${days}일 결장 예상`,
         );
       }
-      // 훈련도 노출이다 — 다치지 않고 소화한 만큼 성향이 내려간다
-      const exposure = trainingExposure(trainingLoad, candidates.length);
-      for (const p of candidates) easeProneness(p, exposure);
     }
   }
 
@@ -604,7 +599,7 @@ export function settleQuickMatch(
     competitionId !== null && match.stage === "final" ? {} : null;
   /**
    * 실제로 그라운드를 밟은 선수 — 교체 투입까지.
-   * 출전 기록·평점·폼·피로·부상·성향이 전부 이 **한 목록**에 걸린다. 하나라도
+   * 출전 기록·평점·폼·피로·부상이 전부 이 **한 목록**에 걸린다. 하나라도
    * 선발로 좁히면 로테이션 자원만 그 눈금 밖에 남는다.
    */
   const onPitch = {
@@ -816,14 +811,6 @@ export function settleQuickMatch(
     if (!player || isInjured(state, player.id)) continue;
     openInjuryFor(state, player, "match", injuryRng);
   }
-  /**
-   * 뛰었는데 안 다쳤으면 성향이 내려간다 — **뛴 선수 전원, 다친 선수까지.**
-   * 균형식이 "경기당 기대 상승 = 출전 한 번의 하강"이므로(injury.ts) 예외를
-   * 두면 눈금이 밀린다. 유저 경기(`finalizeMatch`)와 같은 규칙이다.
-   */
-  for (const side of ["home", "away"] as const) {
-    for (const p of onPitch[side]) easeProneness(p);
-  }
   // 재정 — AI 팀도 홈 수입·중계 수당·원정 비용을 갖는다 (잔고만 갱신)
   applyAiMatchFinance(state, match);
   const entry = state.schedule.find((e) => e.type === "match" && e.refId === match.id);
@@ -839,7 +826,7 @@ function reserveXI(state: GameState, teamId: string): GamePlayer[] {
   const available = (p: GamePlayer) => isAvailable(state, p);
   const xi = reservePlayers(state, teamId)
     .filter(available)
-    .sort((a, b) => b.attributes.overall - a.attributes.overall)
+    .sort((a, b) => playerOverall(b) - playerOverall(a))
     .slice(0, 11);
   if (xi.length < 11) {
     const used = new Set(xi.map((p) => p.id));
@@ -857,7 +844,7 @@ function reserveXI(state: GameState, teamId: string): GamePlayer[] {
 /**
  * 2군 리그 경기 간이 시뮬 — **결과는 출전과 성장에만 닿는다** (season.md §2 2군 리그).
  *
- * 정산은 `SEASON_STAT`의 2군 전용 열(`reserveApps` 등)뿐이다. 폼·체력·부상·카드·
+ * 정산은 `SEASON_STAT`의 2군 대회 행뿐이다. 폼·체력·부상·카드·
  * 정지·라커룸·재정에 손대지 않는 것은 빠뜨린 게 아니라 설계다 — 2군 경기가 1군
  * 몸 상태에 닿기 시작하면 콜업 직후 선수의 상태를 감독이 설명할 수 없게 되는데,
  * 감독에게는 그 일정을 조정할 손잡이가 없다. 영향은 성장 확률 한 축으로 모인다
@@ -958,10 +945,10 @@ export function simulateReserveMatch(state: GameState, match: MatchRecord, diges
        */
       // 2군 리그도 제 대회 id를 갖는다(`reserve:<리그>`) — 1군 행과 섞이지 않는다
       const stat = ensureSeasonStat(state, p.id, teamId, reserveCompetitionId, p);
-      stat.reserveApps = (stat.reserveApps ?? 0) + 1;
-      if (goals > 0) stat.reserveGoals = (stat.reserveGoals ?? 0) + goals;
-      if (assists > 0) stat.reserveAssists = (stat.reserveAssists ?? 0) + assists;
-      stat.reserveRatingSum = (stat.reserveRatingSum ?? 0) + rating;
+      stat.apps += 1;
+      if (goals > 0) stat.goals += goals;
+      if (assists > 0) stat.assists = (stat.assists ?? 0) + assists;
+      stat.ratingSum = (stat.ratingSum ?? 0) + rating;
     }
   }
   // 감독 팀 경기만 한 줄 — 2군 리그는 감독 팀만 편성되지만, 문은 명시적으로 지킨다

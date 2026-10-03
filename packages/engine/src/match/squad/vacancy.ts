@@ -1,4 +1,4 @@
-import { positionGroupOf, type GamePlayer } from "@story-fm/domain";
+import { playerOverall, positionGroupOf, type GamePlayer } from "@story-fm/domain";
 import { groupOf, proficiencyAt } from "../../common/core/state";
 
 /** 빈 전술 자리는 GK 여부·자리 숙련도·기량·id 순으로 채운다. */
@@ -13,7 +13,7 @@ export function pickVacancy(
     .sort(
       (a, b) =>
         proficiencyAt(b, position) - proficiencyAt(a, position) ||
-        b.attributes.overall - a.attributes.overall ||
+        playerOverall(b) - playerOverall(a) ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     )[0];
 }

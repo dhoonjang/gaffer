@@ -1,3 +1,4 @@
+import { readPersona } from "../../../common/people/character-book";
 import type { CharacterBookContent, CharacterBookEntry } from "@story-fm/domain";
 import type { GameState } from "../../../common/core/state";
 import { teamCatalog } from "../../../common/data/team-catalog";
@@ -45,7 +46,10 @@ export function syncCharacterBook(state: GameState): void {
       "player",
       retiredPersona(state.seed, retired).characterBook,
     );
-  const personas = [...state.personas, ...personaCatalog(state.seed)];
+  const personas = [
+    ...state.personas.map((p) => readPersona(state, p)),
+    ...personaCatalog(state.seed),
+  ];
   for (const team of state.teams) {
     if (team.managerName && team.managerName !== state.manager.name)
       personas.push(generateVirtualManager(state.seed, team.managerName));

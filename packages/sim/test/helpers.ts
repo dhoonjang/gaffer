@@ -37,14 +37,12 @@ export function makePlayer(
       // 16축 전부를 base로 채우고, GK만 goalkeeping을 따로 준다
       ...(Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, base])) as AxisValues),
       goalkeeping: group === "GK" ? base : 22,
-      overall: base,
       potential: Math.min(99, base + 5),
       ...overrides,
     },
     state: {
       form: 0,
       condition: 75,
-      injuryProneness: 1,
       fatigue: 0,
       caps: 0,
       internationalGoals: 0,

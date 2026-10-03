@@ -1,4 +1,9 @@
-import { personaBookOf } from "../../common/people/character-book";
+import {
+  personaBookOf,
+  storePersona,
+  storeStaffCandidate,
+  readStaffCandidate,
+} from "../../common/people/character-book";
 import {
   formatMoney,
   type CharacterBookContent,
@@ -8,6 +13,7 @@ import {
   PERSONA_ROLE_LABEL,
   STAFF_ROLES,
   type Persona,
+  type StoredPersona,
   type StaffPoolEntry,
   type StaffRole,
 } from "@story-fm/domain";
@@ -51,6 +57,7 @@ const SALARY_ROUNDING = 1_000;
  */
 function drawPool(state: GameState, season: number): StaffPoolEntry[] {
   const taken = occupiedPersonNames(state);
+  for (const entry of state.characterBook) if (entry.kind !== "team") taken.add(entry.name);
   const rows: StaffPoolEntry[] = [];
   for (const role of STAFF_ROLES) {
     const table = shuffled(staffArchetypesOf(role), state.seed, `staff-pool:${role}:${season}`);
@@ -78,26 +85,9 @@ function drawPool(state: GameState, season: number): StaffPoolEntry[] {
   return rows;
 }
 
-/**
- * 지금 자리를 찾는 사람들 — **읽기만 한다** (people.md §2-2).
- *
- * 표가 없으면(새 게임) 그해의 추첨을 그 자리에서 돌려준다. 세이브를 건드리지
- * 않는 것이 요점이다: 프롬프트 입력을 조립하는 자리(`describeStaffPool`)와 화면이 이
- * 함수를 부르는데, 입력을 만드는 일이 상태를 바꾸면 같은 턴을 두 번 그릴 때 세계가
- * 달라진다. 추첨이 결정적이라 나중에 `ensureStaffPool`이 적어 넣는 값과 같다.
- */
+/** 현재 후보 조건과 같은 인물의 최신 캐릭터북을 조립한다. 조회는 상태를 바꾸지 않는다. */
 export function staffPoolOf(state: GameState): readonly StaffPoolEntry[] {
-  return state.staffPool ?? drawPool(state, state.season);
-}
-
-/**
- * 풀을 **적어 넣는다** — 고용·해고가 표를 고쳐 쓰기 전에 부른다. 멱등이다(있으면
- * 손대지 않는다). 새 게임은 `undefined`로 서므로 첫 고용·해고가 그해의 추첨을 여기서
- * 굳힌다 — 추첨이 (시드, 시즌)으로 결정적이라 `staffPoolOf`가 보여 준 사람과 같다.
- */
-export function ensureStaffPool(state: GameState): void {
-  if (state.staffPool !== undefined) return;
-  state.staffPool = drawPool(state, state.season);
+  return state.staffPool.map((entry) => readStaffCandidate(state, entry));
 }
 
 /**
@@ -110,11 +100,14 @@ export function ensureStaffPool(state: GameState): void {
  * @param season 새로 시작하는 시즌 — 전환은 `season++` 뒤에 이 함수를 부른다
  */
 export function refreshStaffPool(state: GameState, season: number): void {
-  const kept = (state.staffPool ?? []).filter(
-    (e) => e.from !== undefined && e.listedOn >= season - 1,
-  );
+  const kept = state.staffPool.filter((e) => e.from !== undefined && e.listedOn >= season - 1);
   const keptNames = new Set(kept.map((e) => e.name));
-  state.staffPool = [...kept, ...drawPool(state, season).filter((e) => !keptNames.has(e.name))];
+  state.staffPool = [
+    ...kept,
+    ...drawPool(state, season)
+      .filter((e) => !keptNames.has(e.name))
+      .map((entry) => storeStaffCandidate(state, entry)),
+  ];
 }
 
 /** 확인된 스태프 풀의 한 줄에 실제 고용 계약을 붙인다. */
@@ -210,10 +203,13 @@ export function hireStaff(state: GameState, input: HireStaffInput): CommandResul
     return { ok: false, message: "기존 선수·스태프 계약을 포함한 주급 여력을 넘습니다" };
   const persona =
     existing ??
-    staffPersonaOf(
+    storePersona(
       state,
-      { name: input.name, role, title, characterBook, ask: input.salary, listedOn: state.season },
-      { salary: input.salary, since: state.date, until: input.until },
+      staffPersonaOf(
+        state,
+        { name: input.name, role, title, characterBook, ask: input.salary, listedOn: state.season },
+        { salary: input.salary, since: state.date, until: input.until },
+      ),
     );
   const renewing = existing?.employment !== undefined;
   const since = existing?.employment?.since ?? state.date;
@@ -226,7 +222,7 @@ export function hireStaff(state: GameState, input: HireStaffInput): CommandResul
     contract: { salary: input.salary, until: input.until },
   };
   if (!existing) state.personas.push(persona);
-  state.staffPool = pool.filter((e) => e.name !== persona.name);
+  state.staffPool = state.staffPool.filter((e) => e.name !== persona.name);
   return {
     ok: true,
     brief: {
@@ -242,7 +238,7 @@ export function hireStaff(state: GameState, input: HireStaffInput): CommandResul
 }
 
 export function archiveEmployment(
-  persona: Persona,
+  persona: Pick<StoredPersona, "employment" | "employmentHistory">,
   endedOn: string,
   reason: "renewed" | "expired" | "released",
 ): void {
@@ -294,13 +290,12 @@ export function releaseStaff(state: GameState, input: { name: string }): Command
     });
   }
   archiveEmployment(persona, state.date, "released");
-  ensureStaffPool(state);
   state.staffPool = [
     {
       name: persona.name,
       role: persona.role,
       title: employment.title,
-      characterBook: persona.characterBook,
+      characterBookId: persona.characterBookId,
       ask: employment.contract.salary,
       listedOn: state.season,
       from: state.userTeamId,
@@ -336,13 +331,12 @@ export function expireStaffContracts(state: GameState, on: string): string[] {
     )
       continue;
     archiveEmployment(persona, addDays(job.contract.until, 1), "expired");
-    ensureStaffPool(state);
     state.staffPool = [
       {
         name: persona.name,
         role: persona.role,
         title: job.title,
-        characterBook: persona.characterBook,
+        characterBookId: persona.characterBookId,
         ask: job.contract.salary,
         listedOn: state.season,
         from: job.teamId,

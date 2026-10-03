@@ -64,7 +64,6 @@ import { careerTotalsOf, settleMilestones } from "../../../../story/players/care
 import { clampForm, formDeltaFromMatch } from "../../../../common/players/form";
 import { recordCard } from "../../../../match/flow/discipline";
 import { openInjuryFor } from "../health/injury";
-import { easeProneness } from "../../../../common/players/injury";
 import { applyMatchFinance } from "../../../../common/finance/finance";
 import { advanceEuroKnockouts } from "../competition/euro-knockout";
 import { advanceDomesticCups } from "../competition/domestic-cup";
@@ -444,12 +443,6 @@ export function finalizeMatch(state: GameState): MatchDigest {
         : `상대 ${player.name} ${part} 부상`,
     );
   }
-  /** 뛴 만큼 부상 성향이 내려간다 — **양 팀 모두, 다친 선수까지** */
-  for (const id of [...homeLineup, ...awayLineup]) {
-    const p = playerById(state, id);
-    if (p) easeProneness(p);
-  }
-
   // 재정 — 매치데이(관중)·생중계 수당·승리 수당·원정 비용 (finance.ts)
   applyMatchFinance(state, match, outcome, financeLines);
 

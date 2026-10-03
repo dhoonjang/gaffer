@@ -1,5 +1,5 @@
 import type { GamePlayer } from "@story-fm/domain";
-import { naturalPositionOf } from "@story-fm/domain";
+import { playerOverall, naturalPositionOf } from "@story-fm/domain";
 import { playersOf, type GameState } from "../core/state";
 
 /**
@@ -23,7 +23,7 @@ export function betterAtPosition(state: GameState, teamId: string, player: GameP
     (p) =>
       p.id !== player.id &&
       naturalPositionOf(p).position === position &&
-      p.attributes.overall > player.attributes.overall,
+      playerOverall(p) > playerOverall(player),
   ).length;
 }
 
@@ -39,7 +39,7 @@ function topElevenMean(overalls: number[]): number {
  * 승강(2부 클럽 줄 세우기)과 체급 재산정의 전력 축이 같은 자를 쓴다.
  */
 export function squadRating(state: GameState, teamId: string): number {
-  return topElevenMean(playersOf(state, teamId).map((p) => p.attributes.overall));
+  return topElevenMean(playersOf(state, teamId).map((p) => playerOverall(p)));
 }
 
 /**
@@ -54,8 +54,8 @@ export function squadRatingsOf(state: GameState): Map<string, number> {
   const bySquad = new Map<string, number[]>();
   for (const p of state.players) {
     const list = bySquad.get(p.teamId);
-    if (list) list.push(p.attributes.overall);
-    else bySquad.set(p.teamId, [p.attributes.overall]);
+    if (list) list.push(playerOverall(p));
+    else bySquad.set(p.teamId, [playerOverall(p)]);
   }
   const ratings = new Map<string, number>();
   for (const [teamId, overalls] of bySquad) ratings.set(teamId, topElevenMean(overalls));

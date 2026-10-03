@@ -13,7 +13,7 @@ import {
   tickOtherClubs,
   type GameState,
 } from "@story-fm/engine";
-import { applyFamiliarityGain } from "@story-fm/domain";
+import { playerOverall, applyFamiliarityGain } from "@story-fm/domain";
 import { dailyRecovery } from "@story-fm/sim";
 import { createTestGame, playMockMatch } from "../helpers";
 
@@ -100,7 +100,7 @@ describe("타 팀은 로테이션으로 다리를 안배한다", () => {
     // 스쿼드에 지친 선수를 심고 그 자리가 바뀌는지 본다 — 로테이션은 그 순간의
     // 체력만 읽으므로(`simSquadOf`) 시즌을 굴려 피로를 쌓을 필요가 없다
     const xi = simSquadOf(state, "mancity", leagueOfTeamIn(state, "mancity")).starters;
-    const victim = xi.find((p) => p.attributes.overall < 88) ?? xi[5]!;
+    const victim = xi.find((p) => playerOverall(p) < 88) ?? xi[5]!;
     victim.state.condition = 40;
     const after = simSquadOf(state, "mancity", leagueOfTeamIn(state, "mancity")).starters.map(
       (p) => p.id,
@@ -112,7 +112,7 @@ describe("타 팀은 로테이션으로 다리를 안배한다", () => {
     const state = createTestGame(7);
     const xi = simSquadOf(state, "mancity", leagueOfTeamIn(state, "mancity")).starters;
     // 팀에서 가장 뛰어난 선수 — 8점 안쪽의 대체 자원이 없을 만한 자리
-    const star = [...xi].sort((a, b) => b.attributes.overall - a.attributes.overall)[0]!;
+    const star = [...xi].sort((a, b) => playerOverall(b) - playerOverall(a))[0]!;
     star.state.condition = 20;
     const after = simSquadOf(state, "mancity", leagueOfTeamIn(state, "mancity")).starters.map(
       (p) => p.id,
@@ -152,7 +152,7 @@ describe("로테이션으로 뺀 선수는 그 경기에서 빠진다", () => {
     if (!fixture) {
       const state = createTestGame(7);
       const before = simSquadOf(state, "mancity", leagueOfTeamIn(state, "mancity"));
-      const victim = before.starters.find((p) => p.attributes.overall < 88) ?? before.starters[5]!;
+      const victim = before.starters.find((p) => playerOverall(p) < 88) ?? before.starters[5]!;
       victim.state.condition = 40;
       fixture = {
         state,

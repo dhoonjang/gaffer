@@ -1,3 +1,4 @@
+import { ATTRIBUTE_AXES, playerOverall } from "@story-fm/domain";
 import { describe, expect, it } from "vitest";
 import {
   advanceLiveMatch,
@@ -447,7 +448,7 @@ describe("회귀: 부상·정지 선수는 경기에 나설 수 없다", () => {
     const original = assignmentsOf(state, state.userTeamId, "starting");
     const starter = original[1]!;
     const later = playerById(state, original[2]!.playerId)!;
-    later.attributes.overall = 99;
+    for (const axis of ATTRIBUTE_AXES) later.attributes[axis] = 99;
     later.positions.push({ position: starter.position, proficiency: 99, isNatural: false });
     state.injuries.push({
       id: "inj-r1",
@@ -507,7 +508,7 @@ describe("회귀: 부상·정지 선수는 경기에 나설 수 없다", () => {
     const inXI = new Set(assignmentsOf(state, opponentId, "starting").map((a) => a.playerId));
     const spare = playersOf(state, opponentId)
       .filter((p) => !inXI.has(p.id))
-      .sort((a, b) => b.attributes.overall - a.attributes.overall);
+      .sort((a, b) => playerOverall(b) - playerOverall(a));
     const banned = spare[0]!;
     const reserve = spare[1]!;
     state.suspensions.push({
