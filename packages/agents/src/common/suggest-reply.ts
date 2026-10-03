@@ -37,7 +37,8 @@ export function takeSuggestion(text: string): { text: string; suggestion?: strin
   return { text: stripped, ...(suggestion === undefined ? {} : { suggestion }) };
 }
 
-function normalizeSuggestion(raw: string): string | undefined {
+/** 한 줄로 펴고 감싼 따옴표를 벗긴다 — 비었거나 상한을 넘으면 제안이 없다 */
+export function normalizeSuggestion(raw: string): string | undefined {
   const line = raw.replace(/\s+/gu, " ").trim().replace(WRAPPING_QUOTES_RE, "").trim();
   return line.length === 0 || line.length > SUGGESTION_MAX_CHARS ? undefined : line;
 }

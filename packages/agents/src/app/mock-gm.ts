@@ -137,5 +137,6 @@ export function buildOnboardingTurn(state: GameState): GmTurnResult {
       pick(rng, ONBOARDING_CLOSERS)(tag),
     ].join("\n"),
     toolCalls: [],
+    suggestion: "선수단부터 보자",
   };
 }

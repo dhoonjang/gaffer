@@ -20,6 +20,7 @@ import { type GameLLM, resolveLlmMode, createGameLLM, agentConfig } from "@story
 import { type GmTurnResult } from "../../../common/gm-types";
 import { buildOnboardingTurn } from "../../mock-gm";
 import { retryOnce, ModelOutputError, readOutput } from "../../../common/retry";
+import { normalizeSuggestion } from "../../../common/suggest-reply";
 
 /**
  * 첫 장면 검사 — 문법과 화자(수석코치 등장·감독 미발화)까지만 본다. 내용은 보지 않는다.
@@ -101,5 +102,11 @@ export async function runOnboarding(
   const stamped = parseSceneHeader(turn.text).point
     ? turn.text
     : `[${state.date} ${formatClock(clockOf(state))}]\n${turn.text}`;
-  return { text: stamped, toolCalls: [], usage: turn.usage };
+  const suggestion = normalizeSuggestion(turn.report.suggestion);
+  return {
+    text: stamped,
+    toolCalls: [],
+    usage: turn.usage,
+    ...(suggestion === undefined ? {} : { suggestion }),
+  };
 }

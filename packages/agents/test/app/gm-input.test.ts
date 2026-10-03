@@ -455,7 +455,7 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
     ].join("\n");
 
   /** 판정 하나 — 출력 스키마가 받는 산출의 모양 (첫 장면 `scene`은 `reply`가 붙인다) */
-  const report = {};
+  const report = { suggestion: "선수단부터 보자" };
 
   /**
    * 시작 사건과 첫 장면을 JSON 하나로 낸 응답 — 실모드에서 어댑터가 읽어 `output`에 세우는
