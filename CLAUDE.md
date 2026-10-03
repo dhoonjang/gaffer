@@ -26,7 +26,7 @@ Vision, architecture and development conventions all live in
 <id>` streams one kind as jsonl for aggregation (docs/common/llm/models.md §5). Failed turns
   are kept too — that is where the timeouts live. Ask the record, not the prompt text.
 - **Playing a season** — the `simulation` skill opens the fixed scenario and plays one
-  season through the local API, one turn at a time (`.claude/skills/simulation/`).
+  season through the local API, one turn at a time (`.agents/skills/simulation/`).
   Its rules: one turn at a time and never in parallel, substitutions and positions
   decided at every stop, and the ledger (`views`) over the prose.
 - **Commit / push** — only when the user asks. Commit to the branch already

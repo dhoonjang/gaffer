@@ -164,7 +164,8 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
   `config/llm.yml` are where it lives; screens, tests and docs never move it.
   Every traced LLM call records the version, so it is what makes a log from
   months ago comparable to today's (→ [docs/common/llm/models.md](docs/common/llm/models.md)
-  §5-2; the digit rules and path map are the `game-version` skill).
+  §5-2; the digit rules and path map are the
+  [game-version skill](.agents/skills/game-version/SKILL.md)).
 - Commit and push only when the user asks. When a unit of work is done, commit to
   **the branch already checked out** and `git push origin HEAD` — never switch
   branches to commit.
@@ -227,10 +228,9 @@ domain, and open a new one only when none does. The measurements are in
 
 **The gate is CI, not your machine.** `.github/workflows/ci.yml` runs
 `typecheck` · `lint` · `format:check` · `pnpm test` · `pnpm e2e`, and its verdict
-is what `/merge` waits on. **It does not run while the PR is a draft** — a branch still
-being worked on burns runner minutes nobody reads. `/merge` marks the PR ready,
-and that is what starts the run it then watches. Every job must be green; a
-shard is not a sample.
+must be green before merging. **It does not run while the PR is a draft** — a branch
+still being worked on burns runner minutes nobody reads. Marking the PR ready starts
+the run. Every job must be green; a shard is not a sample.
 
 **It also does not run when nothing it could catch has changed.** A change
 confined to `.md` files skips the code jobs and lands on the `changes` check
@@ -257,6 +257,17 @@ red change merged green. How the gate is sharded and what it runs on is
   server through `reuseExistingServer` and the two trample each other.
   (`E2E_SLOT=1`–`9` splits port, build output and save directory together if a
   parallel run is genuinely needed.)
+
+### Development agent skills
+
+Shared project skills live in `.agents/skills/`. Claude Code discovers the same
+files through symlinks in `.claude/skills/`; edit the shared originals only.
+Agents without automatic skill discovery should read the relevant `SKILL.md`:
+
+- [game-version](.agents/skills/game-version/SKILL.md) — decide whether a change
+  affects model input and update `config/game-version.yml` accordingly.
+- [simulation](.agents/skills/simulation/SKILL.md) — play a fixed scenario for one
+  season through the local API, reading and deciding one turn at a time.
 
 ### Working alongside others
 

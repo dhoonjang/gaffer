@@ -48,7 +48,7 @@ description: >-
 
 - 게임은 **`http://localhost:3000`의 dev 서버**를 통해 돌린다. 유저의 서버다 —
   절대 죽이지 않는다. `curl -s localhost:3000/api/games`가 답하면 그대로 쓴다.
-- 아무것도 듣지 않으면 `pnpm dev`를 백그라운드로 띄우고(`run_in_background`)
+- 아무것도 듣지 않으면 `pnpm dev`를 백그라운드로 띄우고(에이전트의 백그라운드 실행 기능)
   `GET /api/games`가 200을 줄 때까지 기다린다. 띄운 서버는 시뮬이 끝나도
   그대로 둔다 — 로그 · 세이브를 유저가 열어 볼 자리다.
 - 실모드여야 한다: `config/llm.yml`의 provider 키(`GEMINI_API_KEY` 또는
@@ -61,10 +61,13 @@ description: >-
 
 ### 2-2. 작업 폴더와 환경
 
+저장소 루트에서 실행한다. Bash · curl · jq · Node · pnpm이 필요하다.
+후속 명령에도 `SIM_DIR` · `SIM_HOST` · `SIM_GAME`과 `B`를 같은 값으로 전달한다.
+
 ```bash
-export SIM_DIR=<scratchpad>/simulation      # 상태 · 저널 · 요청 원문
+export SIM_DIR=$(mktemp -d /tmp/story-fm-simulation.XXXXXX)      # 상태 · 저널 · 요청 원문
 export SIM_HOST=http://localhost:3000
-B=.claude/skills/simulation/bin              # 이 스킬의 스크립트 다섯
+B=.agents/skills/simulation/bin              # 이 스킬의 스크립트 다섯
 ```
 
 | 스크립트                                   | 무엇                                                                                                                                             |
@@ -112,7 +115,7 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
 - **요청은 언제나 하나만 날아 있다.** `turn.sh`가 돌아오기 전에 다른 `turn.sh` ·
   `lineup.sh`를 보내지 않는다. 서버는 게임 하나에 잠금 하나라 두 번째 요청은
   3초 뒤 409로 물러난다 — 그 409가 보이면 내가 병렬로 보낸 것이다.
-- **백그라운드 없음.** `run_in_background`로 턴을 보내지 않는다.
+- **백그라운드 없음.** 에이전트의 백그라운드 실행 기능으로 턴을 보내지 않는다.
   서브에이전트에게 경기를 나눠 주지 않는다. `for … turn.sh` 루프로 여러 턴을
   한 번에 돌리지 않는다 — 「경기 끝까지 `match.sh` N번」도 안 된다. 정지점마다
   읽을 것이 있다.
@@ -268,8 +271,10 @@ GM이 "확정됐다"고 써도 `views`에 없으면 **되지 않은 것**이다 
   vs 장부) · 턴 id(`pnpm log`에서 찾는다 — 실패한 턴도 남는다). 고치지 않는다 —
   플레이 중 발견은 이슈가 된다.
 - **시즌이 끝나면**(7/1이 다시 오면) 유저에게 보고한다: 최종 순위 · 전적 · 컵 ·
-  잔고 · 유스 계약 · 만료 처리 · 발견 목록. 그 뒤 발견마다 `issue`
-  스킬로 — 우선순위는 유저가 정한다. `pnpm log --games`가 기록의 위치를 준다.
+  잔고 · 유스 계약 · 만료 처리 · 발견 목록. 발견마다 기존 GitHub 이슈를 확인하고
+  새 이슈를 만들거나 관련 이슈에 재현 조건과 턴 id를 보탠다. 사용 가능한 GitHub
+  도구나 `gh`를 쓰고, 접근할 수 없으면 `$SIM_DIR/findings.md`를 전달한다.
+  우선순위는 유저가 정한다. `pnpm log --games`가 기록의 위치를 준다.
 
 ## 9. 막혔을 때
 

@@ -820,7 +820,7 @@ turn
 
 **올리는 것은 판단이고, 코드는 자동으로 올리지 않는다.** 경로만으로 「모델 입력의
 변화」가 갈리지 않기 때문이다 — 같은 파일의 한 줄이 주석일 수도 프롬프트일 수도
-있다. 판단 절차와 경로 지도는 `.claude/skills/game-version`이 들고 있고, 규약은 둘:
+있다. 판단 절차와 경로 지도는 `.agents/skills/game-version`이 들고 있고, 규약은 둘:
 
 - 한 PR은 **가장 높은 자리로 한 번만** 올린다 — 이 저장소는 squash-merge라 PR 하나가
   main의 커밋 하나다.
@@ -1009,7 +1009,7 @@ pnpm log --board --game game-f0o7              전술판 선반만 — 전술판
 | 기록 창고 — 타임라인·원문·`tapLlm`  | `packages/llm/src/turn-trace.ts` (`traceTurn` · `noteFact` · `noteTurn`)                                                                                                     |
 | 사실의 문·갈래·상태 요약            | `packages/engine/src/common/core/journal.ts` · 체크포인트 검증 `packages/engine/src/match/flow/match-flow.ts` · `packages/engine/src/app/workflows/match/flow/match-flow.ts` |
 | 게임 버전 (§5-2)                    | `config/game-version.yml` · 읽는 자리 `packages/llm/src/game-version.ts`                                                                                                     |
-| 버전 판단 규칙 (§5-2)               | `.claude/skills/game-version/SKILL.md`                                                                                                                                       |
+| 버전 판단 규칙 (§5-2)               | `.agents/skills/game-version/SKILL.md`                                                                                                                                       |
 | 턴 인덱스에 묶는 자리               | `apps/web/application/lib/turn-runner.ts` · `apps/web/app/api/games/route.ts`                                                                                                |
 | 기록 라우트(dev 전용)               | `apps/web/app/api/games/[id]/trace/[index]/route.ts`                                                                                                                         |
 | 타임라인 팝업·롱프레스              | `apps/web/domains/common/ui/turn-trace.tsx` · `components/chat.tsx`                                                                                                          |
