@@ -1,4 +1,13 @@
 import {
+  NEGOTIATION_OPENING_OUTPUT,
+  NEGOTIATION_OPENING_SYSTEM,
+} from "../negotiation/negotiation-opening";
+import { MARKET_PLANNER_SYSTEM, MARKET_PLAN_INPUT } from "../negotiation/market-planner";
+import {
+  NEGOTIATION_COMPACTOR_SYSTEM,
+  NEGOTIATION_DIGEST_INPUT,
+} from "../negotiation/negotiation-gm";
+import {
   CHARACTER_BOOK_EDITOR_SYSTEM,
   CHARACTER_BOOK_EDITOR_OUTPUT,
 } from "../story/character-book-editor";
@@ -18,6 +27,17 @@ export interface OutputAgent {
 
 export function outputAgents(): readonly OutputAgent[] {
   return [
+    {
+      agent: "negotiation-gm",
+      system: NEGOTIATION_OPENING_SYSTEM,
+      schema: NEGOTIATION_OPENING_OUTPUT,
+    },
+    { agent: "market-planner", system: MARKET_PLANNER_SYSTEM, schema: MARKET_PLAN_INPUT },
+    {
+      agent: "negotiation-compactor",
+      system: NEGOTIATION_COMPACTOR_SYSTEM,
+      schema: NEGOTIATION_DIGEST_INPUT,
+    },
     {
       agent: "character-book-editor",
       system: CHARACTER_BOOK_EDITOR_SYSTEM,

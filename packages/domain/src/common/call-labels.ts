@@ -6,6 +6,8 @@ export const CALL_LABELS = {
   hire_staff: "스태프 고용·재계약",
   release_staff: "스태프 계약 해지",
   resign: "사임",
+  start_negotiation: "협상 시작",
+  set_transfer_list: "이적 명단 변경",
   start_match: "경기 시작",
   tactic_orders: "전술 지시",
   training_orders: "훈련 지시",
