@@ -128,7 +128,7 @@ export function buildOnboardingTurn(state: GameState): GmTurnResult {
       `[${state.date} ${formatClock(clockOf(state))} · ${scene.place(team, clubProfileIn(state, state.userTeamId).stadium)}]`,
       scene.line(),
       pick(rng, ONBOARDING_WELCOMES)(state.manager.name, tag, persona.name),
-      personaBookOf(state, persona).description,
+      `@: ${personaBookOf(state, persona).description}`,
       `${tag} “${state.manager.background}”${josaOf(state.manager.background, "이라는/라는")} 이력도 검토했습니다.`,
       `${tag} 스쿼드의 축은 ${views.squad.players
         .slice(0, 3)

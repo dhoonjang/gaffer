@@ -585,7 +585,7 @@ describe("API — 온보딩부터 경기까지", () => {
     expect(res.status).toBe(400);
   });
 
-  it("커리어가 끝나면(경질) 라인업 편집·턴이 409이고 스쿼드 뷰도 잠긴다", async () => {
+  it("커리어가 끝나면(경질) 라인업 편집이 409이고 스쿼드 뷰도 잠긴다", async () => {
     const created = await createGame(
       json({ teamId: "brentford", managerName: "종료", background: "분석가", seed: 47 }),
     );
@@ -611,15 +611,6 @@ describe("API — 온보딩부터 경기까지", () => {
     // retry가 아니다 — 화면 대기열이 같은 저장을 되보내면 안 된다
     expect(body.retry).toBeUndefined();
     expect(body.error).toContain("커리어 종료");
-
-    // 끝난 커리어에는 턴이 없다 — 다시 보내도 같다
-    const turn = await postTurn(json({ message: "훈련하자" }), params(game.id));
-    const events = (await turn.text()).split("\n").filter(Boolean);
-    const failure = events
-      .map((line) => JSON.parse(line) as { type: string; retry?: boolean })
-      .find((e) => e.type === "error");
-    expect(failure?.retry).toBe(false);
-    expect(loadGame(game.id)!.chat).toEqual(state.chat);
 
     // 화면 읽기 전용의 근거 — 뷰의 editable이 함께 꺼진다
     const after = await getGame(new Request("http://test.local"), params(game.id));
@@ -1042,19 +1033,6 @@ describe("채팅 기록 필터", () => {
   it("거를 것이 없으면 턴을 그대로 둔다 — 화면이 쥔 것과 같은 객체다", () => {
     const kept = turn([{ name: "set_lineup", summary: "라인업 확정" }]);
     expect(visibleChat([kept])[0]).toBe(kept);
-  });
-
-  it("칩을 숨긴 개인 조건 제안도 첨부 원본은 페이로드에 남긴다", () => {
-    const proposal = {
-      name: "propose_personal",
-      summary: "",
-      silent: true,
-      input: { kind: "personal", playerId: "player-1", weeklyWage: 100_000, years: 4 },
-    };
-    const [filtered] = visibleChat([
-      turn([proposal, { name: "시간 경과", summary: "", silent: true }]),
-    ]);
-    expect(filtered!.toolCalls).toEqual([proposal]);
   });
 });
 

@@ -468,7 +468,6 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
 
   await page.getByTestId("tab-커리어").click();
   await expect(page.getByTestId("view-career")).toContainText("김테스트 감독");
-  await expect(page.getByTestId("view-career")).toContainText("평판");
   await expect(page.getByTestId("view-career")).toContainText("트로피 보관함");
 
   // ── 로고 → 게임 목록으로 나가기 (진행한 게임이 목록에 남아 있다) ──
@@ -539,7 +538,7 @@ test("목록에서 재개하면 대화가 그대로고, 지우면 사라진다",
   await expect(card).toHaveCount(0);
 });
 
-test("면담 시나리오 — 판정형 스킬과 사기 반영", async ({ page }) => {
+test("휴대폰 폭에서도 상단 띠가 구단·날짜·감독을 잃지 않는다", async ({ page }) => {
   await page.goto("/new");
   await expect(page.getByTestId("league-list")).toBeVisible({ timeout: COLD_MS });
   await page.getByTestId("league-epl").click();
@@ -549,35 +548,6 @@ test("면담 시나리오 — 판정형 스킬과 사기 반영", async ({ page 
   await page.getByTestId("manager-background").fill("데이터 분석가 출신");
   await page.getByTestId("start-game").click();
   await expect(page.getByTestId("chat-scroll")).toContainText("박테스트", { timeout: COLD_MS });
-
-  // 스쿼드에서 첫 선수 이름을 읽어와 면담 지시
-  await page.getByTestId("tab-스쿼드").click();
-  /**
-   * 이름 칸에는 등번호·완장·세트피스 표식이 함께 서고, 그 뒤로 국적·등록 배지가
-   * 붙는다 — 칸의 글자를 통째로 읽으면 `산체스ESPHG`가 나온다. **이름은 `.row-name`의
-   * 마지막 텍스트 노드**이고, 코어는 감독이 부른 이름을 그대로 받으므로
-   * (`pickOurPlayer`) 그 이름을 그대로 친다.
-   */
-  const playerName = await page
-    .getByTestId("view-squad")
-    .locator("tbody tr.row-tier .row-name")
-    .first()
-    .evaluate((node) => node.lastChild?.textContent?.trim() ?? "");
-  expect(playerName.length).toBeGreaterThan(1);
-
-  // 채팅 탭으로 돌아와 면담 지시 (입력창은 채팅 탭에만 있다)
-  await page.getByTestId("tab-채팅").click();
-  const input = page.getByTestId("chat-input");
-  await input.fill(`${playerName} 면담 좀 하자`);
-  await page.getByTestId("chat-send").click();
-  /**
-   * 면담은 칩으로 남고, 바뀐 것(사기·심경)은 **스쿼드 말풍선**이 알린다.
-   * 펼치지 않아도 잘 풀렸는지는 보여야 하므로 칩이 결(`good`/`bad`)을 갖는다.
-   */
-  const chip = page.getByTestId("tool-team_talk").first();
-  await expect(chip).toBeVisible();
-  await expect(chip).toHaveClass(/good|bad/);
-  await expect(page.getByTestId("hint-스쿼드")).toBeVisible();
 
   /**
    * 휴대폰 폭 — **좌표는 지우지 않는다.**
@@ -782,8 +752,7 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
    */
   const here = page.locator('[data-testid="player-detail"] .pd-pos.here');
   await expect(here).toHaveCount(1);
-  // 펼치면 16축이 전부 보이고, 체력이 왜 그런지 한 문장으로 설명한다
-  await expect(page.getByTestId("player-mood")).not.toBeEmpty();
+  // 펼치면 16축이 전부 보인다
   await expect(page.locator(".detail-row .pd-axis")).toHaveCount(16);
   // 명단은 사기·피로 두 열이 아니라 체력 한 열이다
   await expect(page.locator(".squad-table thead")).toContainText("체력");

@@ -53,6 +53,7 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 | `live-match-stats`     | 실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·코너·거리·볼 인플레이의 평균·중간값·sd | [live-match](../match/live-match.md) §9.3 · [football-reference](../match/football-reference.md)  |
 | `live-player-load`     | 풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표(`EXPECTED_LOAD`)에 서는가          | [live-match](../match/live-match.md) §7 · [football-reference](../match/football-reference.md) §7 |
 | `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                      | [live-match](../match/live-match.md) §6 · §9.3                                                    |
+| `quick-outcomes`       | 간이 시뮬의 연장 득점 · 퇴장 효과 · 상금 비중                                                        | [match](../match/match.md)                                                                        |
 | `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·홈 이점·전력 기울기가 같은 눈금인가     | [match](../match/match.md) §8.5 · [live-match](../match/live-match.md) §9.3                       |
 | `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                    | [match](../match/match.md) §4.1                                                                   |
 | `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입                                                    | [finance](finance.md) §10.1                                                                       |
@@ -94,7 +95,7 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 ([prompts](llm/prompts.md) §2).
 
 설정대로 걸면 `config/llm.yml`이 보내는 제공자 하나만 잰다.
-**`LIVE_SCHEMA_TARGET=<provider>:<model>`**을 주면 열 선언 전부를 그 제공자·그 모델로 건다 —
+**`LIVE_SCHEMA_TARGET=<provider>:<model>`**을 주면 선언 전부를 그 제공자·그 모델로 건다 —
 모델 ID는 저장소에 적지 않으므로 운영자가 그 자리에서 준다. 그 제공자의 선택 속성 한도
 (`PROVIDER_TRAITS.outputOptionalLimit` — [models](llm/models.md) §3-2)를 넘는 선언은
 걸지 않고 「한도 밖」으로 센다: 400을 맞아 알아내는 자리가 아니라 오프라인 테스트가 잡는

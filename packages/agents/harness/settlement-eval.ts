@@ -320,7 +320,7 @@ async function main() {
     blockers,
     limitations: [
       "One generated match; boundary smoke only, no correctness, quality, adoption or baseline improvement claim.",
-      "No commentator prose, GM notes/moods, save, trace or disk journal. Only real deterministic match events supply context.",
+      "No commentator prose, GM notes, save, trace or disk journal. Only real deterministic match events supply context.",
       "Total latency covers evaluateSettlement plus settleMatchRating; excludes match simulation, finalizeMatch anchors and post-run checks.",
       "Failures retain reported usage; incomplete usage means unknown dollar cost.",
     ],

@@ -27,12 +27,13 @@ import { outOfBand, reportOf, skipOf, type Readings } from "../../engine/harness
  * 하나가 그 호출을 400으로 떨군다 (models.md §3-2) — 오프라인 불변식
  * (`skill-descriptions.test.ts`) 하나로는 그 문을 재지 못한다.
  *
+ * 선언 열은 `outputAgents()`다 — 캐릭터북 편집 · 온보딩 · 이력 압축. 해석기와 결산은
+ * Jev의 타입 평가로 나가므로 이 열에 없다.
+ *
  * **`LIVE_SCHEMA_TARGET=<provider>:<model>`** — 선언 열 전부를 **그 제공자·그 모델**로
- * 건다. `config/llm.yml`은 오늘 열 자리를 한 제공자로 보내므로 설정대로만 걸면 나머지
- * 둘의 문은 재지 못하는데, 이 하네스가 답해야 하는 질문은 **셋이 각각 무엇을 받는가**다
- * — 2026-09-17 실측: Anthropic은 선택 속성(`required`에 없는 `properties`)이 24를 넘는
- * 스키마에 400을 내 해석기 넷의 `ops`(27~81개)가 구조적으로 못 들어가고, Google은
- * `maxItems`만 걷으면 열 선언이 전부 지난다.
+ * 건다. 설정대로만 걸면 `config/llm.yml`이 고른 제공자 하나의 문만 재는데, 이 하네스가
+ * 답해야 하는 질문은 **제공자마다 무엇을 받는가**다 — Anthropic은 선택 속성(`required`에
+ * 없는 `properties`)이 한도를 넘는 스키마에 400을 내고, Google은 `maxItems`를 걷어야 한다.
  * 모델 ID를 저장소에 적을 수는 없으니(AGENTS.md §6) 운영자가 그 자리에서 준다. 설정의
  * 나머지(토큰 상한 · 시한 · 재시도)는 그 에이전트의 것을 그대로 쓰고, 사고 눈금은 설정
  * 파서와 같은 규칙으로 옮긴다 — Google은 반드시 실어야 하고, 나머지 둘은 적힌 것이

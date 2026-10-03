@@ -119,8 +119,8 @@ function corpusOf(state: GameState): ReadonlyArray<readonly [string, string]> {
     ["평일 오전은 세트피스 반복 훈련 잡아줘", "set_training"],
     ["훈련 쉬자", "set_training"],
     [`${who} 주장 시키자`, "set_captain"],
-    ["다들 모여봐", "team_talk"],
-    [`${who} 면담 좀 하자`, "team_talk"],
+    ["훈련 잡아줘", "set_training"],
+    ["4-4-2로 수비적으로 가자", "set_tactics"],
     ["하루 넘기자", "시간 경과"],
   ] as const;
 }
