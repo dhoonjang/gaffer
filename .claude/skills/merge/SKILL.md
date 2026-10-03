@@ -73,7 +73,10 @@ locally to duplicate it** (AGENTS.md §5).
 
 **CI does not run on a draft PR.** `resolve` leaves the PR draft on purpose, so
 nothing has been verified yet when you get here — marking it ready is what starts
-the run:
+the run. Give the §3 push a few seconds first — when the push and `gh pr ready`
+land together the run ends `skipped`. If it already shows skipped:
+`gh pr ready --undo && gh pr ready`, and before merging confirm the green run's
+`headSha` equals `git rev-parse HEAD`.
 
 ```bash
 gh pr ready          # already ready → it says so; that is fine

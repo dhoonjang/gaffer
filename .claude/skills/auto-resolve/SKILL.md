@@ -103,7 +103,8 @@ freeing its slot is what lets §4 launch something that will move.
 
 **An open PR whose worktree is gone** strands a branch nobody can land. Revive
 it — cut a worktree off the PR's own head, and have the session push back to
-that branch:
+that branch. Dependabot's PRs (`.github/dependabot.yml`) are not orphans — they
+belong to the user; leave them and do not count them:
 
 ```bash
 orca worktree create --repo name:story-fm --name <slug>-resume \
@@ -167,7 +168,7 @@ Reached only from §2. Confirm twice before ending, because a false ending
 abandons work:
 
 ```bash
-gh pr list --state open --limit 50 --json number,url    # must be empty
+gh pr list --state open --limit 50 --json number,url,author --jq '[.[] | select(.author.login != "app/dependabot")]'   # must be empty
 orca worktree ps --json                                  # only the main worktree
 ```
 

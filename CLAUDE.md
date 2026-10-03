@@ -27,8 +27,8 @@ Vision, architecture and development conventions all live in
   are kept too — that is where the timeouts live. Ask the record, not the prompt text.
 - **Playing a season** — the `simulation` skill opens the fixed scenario and plays one
   season through the local API, one turn at a time (`.claude/skills/simulation/`).
-  Its rules are the lessons of the first run: substitutions, positions, contracts,
-  the ledger over the prose — and never in parallel.
+  Its rules: one turn at a time and never in parallel, substitutions and positions
+  decided at every stop, and the ledger (`views`) over the prose.
 - **Commit / push** — only when the user asks. Commit to the branch already
   checked out and `git push origin HEAD`; name the paths you add, and never
   rebase, stash or switch branches (AGENTS.md §5).

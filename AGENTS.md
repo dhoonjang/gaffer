@@ -179,12 +179,12 @@ formulas and curves, invariants, boundary conditions, state transitions — the
 things that go wrong quietly and stay wrong. Everything else costs more than it
 returns:
 
-| Write a test for                               | Do not                                            |
-| ---------------------------------------------- | ------------------------------------------------- |
-| a formula, a curve, a rounding rule            | a string the screen shows the moment it breaks    |
-| an invariant (books balance, no duplicate ids) | what `strict` already rejects                     |
-| a boundary (0, cap, last day of the season)    | the implementation restated line by line          |
-| a state transition (offer → contract → squad)  | a value the seed owns and a seed change will move |
+| Write a test for                                  | Do not                                            |
+| ------------------------------------------------- | ------------------------------------------------- |
+| a formula, a curve, a rounding rule               | a string the screen shows the moment it breaks    |
+| an invariant (books balance, no duplicate ids)    | what `strict` already rejects                     |
+| a boundary (0, cap, last day of the season)       | the implementation restated line by line          |
+| a state transition (contract expiry → free agent) | a value the seed owns and a seed change will move |
 
 "It is a new feature" is not a reason on its own. A change whose whole behavior
 is visible on screen ships without a test; a change to a number nobody can see
@@ -315,7 +315,7 @@ non-deterministic LLM.
 
 ## Status
 
-🚧 **Playable prototype (data model v20, SAVE_VERSION 20, game version 18.0.0).** Onboarding → chat
+🚧 **Playable prototype** — save shape is `SAVE_VERSION` (`packages/engine/src/app/persistence.ts`), model input is `config/game-version.yml`. Onboarding → chat
 instructions → match → season rollover → multi-season runs end to end. What is
 built and what is not is listed in [overview.md](docs/overview.md) §7.
 

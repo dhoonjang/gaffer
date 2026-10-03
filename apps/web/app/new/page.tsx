@@ -259,7 +259,7 @@ export default function NewGamePage() {
             <span>
               <div className="appointment-club">{team.name}</div>
               <div className="tier">
-                {league?.name ?? ""} · 구단 체급: {CLUB_TIER_KO[team.tier]}
+                {league?.name ?? ""} · {CLUB_TIER_KO[team.tier]}
               </div>
             </span>
           </div>
