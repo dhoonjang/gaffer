@@ -550,6 +550,7 @@ describe("agent center ledger and bounded search", () => {
     const state = structuredClone(base);
     const own = state.players.find((p) => p.teamId === state.userTeamId)!;
     const other = state.players.find((p) => p.teamId !== state.userTeamId)!;
+    own.positions.forEach((p, index) => (p.isNatural = index === 0));
     const originalContract = structuredClone(activeContract(state, own.id));
     const originalCash = financeOf(state, state.userTeamId).balance;
     for (const input of [
@@ -565,6 +566,9 @@ describe("agent center ledger and bounded search", () => {
       setTransferListing(state, { playerId: own.id, listed: true, askingPrice: 123456 }).ok,
     ).toBe(true);
     const listed = structuredClone(state);
+    expect(buildAgentCenterView(state).transferList[0]?.positions).toEqual([
+      own.positions[0]!.position,
+    ]);
     expect(
       setTransferListing(state, { playerId: own.id, listed: true, askingPrice: 123456 }).ok,
     ).toBe(true);
@@ -625,6 +629,7 @@ describe("agent center ledger and bounded search", () => {
   });
   it("searches current public player facts with stable bounded pages and eligible inquiry ids", () => {
     const s = setup();
+    s.player.positions.forEach((p, index) => (p.isNatural = index === 0));
     const first = searchAgentCenterPlayers(s.state, { pageSize: 3 });
     const second = searchAgentCenterPlayers(s.state, { page: 2, pageSize: 3 });
     expect(first.players).toHaveLength(3);
@@ -650,6 +655,17 @@ describe("agent center ledger and bounded search", () => {
       position: s.player.positions[0]!.position,
     });
     expect(found.players.find((p) => p.id === s.player.id)?.existingNegotiationId).toBe(s.n.id);
+    expect(found.players.find((p) => p.id === s.player.id)?.positions).toEqual([
+      s.player.positions[0]!.position,
+    ]);
+    const supported = s.player.positions.find((p) => !p.isNatural);
+    if (supported)
+      expect(
+        searchAgentCenterPlayers(s.state, {
+          name: s.player.id,
+          position: supported.position,
+        }).players.some((p) => p.id === s.player.id),
+      ).toBe(true);
     expect(searchAgentCenterPlayers(s.state, { page: 1000000, pageSize: 50 }).players).toEqual([]);
     expect(() => searchAgentCenterPlayers(s.state, { pageSize: 51 })).toThrow(RangeError);
     expect(() => searchAgentCenterPlayers(s.state, { page: 0 })).toThrow(RangeError);

@@ -333,6 +333,9 @@ export function NegotiationPanel({
         </section>
         <AgentCenterSearch
           gameId={gameId}
+          refreshKey={JSON.stringify(
+            view.cases.map(({ id, status, revision }) => [id, status, revision]),
+          )}
           disabled={disabled}
           canInquire={view.teamId !== null}
           onSelect={onSelect}

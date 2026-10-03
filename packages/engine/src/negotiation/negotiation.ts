@@ -10,6 +10,7 @@ import {
   SetTransferListingSchema,
   AgentCenterSearchSchema,
   ageOf,
+  naturalPositionsOf,
   type AgentCenterView,
   type AgentCenterSearchInput,
   type AgentCenterSearchResult,
@@ -650,7 +651,7 @@ export function buildAgentCenterView(state: GameState): AgentCenterView {
             playerId: player.id,
             name: player.name,
             age: ageOf(player.birthdate, state.date),
-            positions: player.positions.map((p) => p.position),
+            positions: naturalPositionsOf(player).map((p) => p.position),
             listedOn: listing.listedOn,
             ...(listing.askingPrice === undefined ? {} : { askingPrice: listing.askingPrice }),
             ...(listing.note === undefined ? {} : { note: listing.note }),
@@ -730,7 +731,7 @@ export function searchAgentCenterPlayers(
       teamId: p.teamId,
       teamName: teams.get(p.teamId) ?? p.teamId,
       age: ageOf(p.birthdate, state.date),
-      positions: p.positions.map((slot) => slot.position),
+      positions: naturalPositionsOf(p).map((slot) => slot.position),
       kind: p.teamId === FREE_AGENT_TEAM ? "free" : "transfer",
       existingNegotiationId:
         state.negotiations.find(

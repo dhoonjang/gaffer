@@ -461,6 +461,20 @@ describe("one negotiation GM and exact consent", () => {
         expect(
           state.negotiations.find((item) => item.id === n.id)!.proposals.map((p) => p.terms),
         ).toEqual(before.map((p) => p.terms));
+        if (kind === "renewal") {
+          const renewed = state.negotiations.find((item) => item.id === n.id)!;
+          expect(renewed.medical).toBeNull();
+          expect(renewed.signed).toBeNull();
+          expect(
+            actNegotiation(
+              state,
+              renewed.id,
+              { kind: "sign" },
+              { kind: "user", partyId: state.userTeamId },
+            ).ok,
+          ).toBe(true);
+          expect(renewed.status).toBe("completed");
+        }
       } finally {
         vi.unstubAllEnvs();
       }

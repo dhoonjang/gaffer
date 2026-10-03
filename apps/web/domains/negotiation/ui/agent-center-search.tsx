@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AgentCenterSearchResult } from "@story-fm/domain";
 import { PlayerName } from "@/domains/common/ui/player-card";
 
@@ -7,17 +7,24 @@ type Results = AgentCenterSearchResult;
 type Candidate = Results["players"][number];
 export function AgentCenterSearch({
   gameId,
+  refreshKey,
   disabled,
   canInquire,
   onSelect,
   onInquiry,
 }: {
   gameId: string;
+  refreshKey: string;
   disabled: boolean;
   canInquire: boolean;
   onSelect: (id: string) => void;
   onInquiry: (player: Candidate) => void;
 }) {
+  const searchRef = useRef<HTMLElement>(null);
+  const changePage = (next: number) => {
+    setPage(next);
+    searchRef.current?.scrollIntoView({ block: "start" });
+  };
   const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState("");
   const [club, setClub] = useState("");
@@ -64,9 +71,9 @@ export function AgentCenterSearch({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [expanded, gameId, hasQuery, name, club, position, page]);
+  }, [expanded, gameId, refreshKey, hasQuery, name, club, position, page]);
   return (
-    <section className="negotiation-overview-section agent-center-search">
+    <section ref={searchRef} className="negotiation-overview-section agent-center-search">
       <button
         className="agent-search-toggle"
         data-testid="agent-search-toggle"
@@ -144,11 +151,11 @@ export function AgentCenterSearch({
           ))}
           {results && (page > 1 || results.hasMore) && (
             <nav className="agent-search-pages" aria-label="검색 결과 페이지">
-              <button disabled={loading || page === 1} onClick={() => setPage(page - 1)}>
+              <button disabled={loading || page === 1} onClick={() => changePage(page - 1)}>
                 이전
               </button>
               <span>{page}</span>
-              <button disabled={loading || !results.hasMore} onClick={() => setPage(page + 1)}>
+              <button disabled={loading || !results.hasMore} onClick={() => changePage(page + 1)}>
                 다음
               </button>
             </nav>
