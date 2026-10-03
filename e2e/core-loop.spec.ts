@@ -58,7 +58,9 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
 test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화로 이어진다", async ({ page }) => {
   const fixture = seedAgentCenter();
   const readNegotiations = async () => {
-    const response = await page.request.get(`/api/games/${fixture.gameId}/negotiation`);
+    const response = await page.request.get(`/api/games/${fixture.gameId}/negotiation`, {
+      maxRetries: 1,
+    });
     expect(response.ok()).toBe(true);
     return ((await response.json()) as { negotiation: OfficeViews["negotiation"] }).negotiation;
   };
