@@ -32,8 +32,7 @@ Add the type label too when it obviously applies: `bug`, `enhancement`,
 
 ## Tasks — split the work, weigh each one
 
-**The issue carries no total.** Sizing the whole issue was a number nobody used:
-`resolve` takes issues in priority order regardless, and one concern stays one
+**The issue carries no total.** `resolve` takes issues in priority order regardless, and one concern stays one
 issue however long it is. What the plan needs is the **breakdown** — that is what
 `resolve` copies into the PR and splits into lanes.
 

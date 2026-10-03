@@ -52,10 +52,10 @@ test("부임은 리그 → 팀 → 감독 한 단계씩 서고, 되돌아갈 수
   await expect(page.getByTestId("step-context")).toContainText("프리미어리그");
 
   await page.getByTestId("team-arsenal").click();
-  // 마지막 단계는 부임 직전의 확인 — 팀과 보드 기대가 이름을 적기 전에 서 있다
+  // 마지막 단계는 부임 직전의 확인 — 팀과 그 체급이 이름을 적기 전에 서 있다
   const appointment = page.getByTestId("appointment");
   await expect(appointment).toContainText("아스날");
-  await expect(appointment).toContainText("우승 경쟁");
+  await expect(appointment).toContainText("우승권");
   await expect(appointment).toContainText("프리미어리그");
   await expect(page.getByTestId("start-game")).toContainText("아스날");
 
