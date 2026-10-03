@@ -36,11 +36,11 @@ export const PATCH = adminWrite(async function (request: Request) {
     raw === null ||
     !("characterId" in raw) ||
     typeof raw.characterId !== "string" ||
-    !("characterBook" in raw)
+    !("lorebook" in raw)
   ) {
-    return NextResponse.json({ error: "인물과 캐릭터북이 필요합니다" }, { status: 400 });
+    return NextResponse.json({ error: "인물과 로어북이 필요합니다" }, { status: 400 });
   }
-  const result = adminUpdatePersonaBook(raw.characterId, raw.characterBook, seed);
+  const result = adminUpdatePersonaBook(raw.characterId, raw.lorebook, seed);
   if (!result.ok) return NextResponse.json({ error: result.message }, { status: 400 });
   return NextResponse.json({ people: adminPersonaCatalog(seed), seed, message: result.message });
 });

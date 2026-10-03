@@ -1,7 +1,4 @@
-import {
-  CHARACTER_BOOK_EDITOR_SYSTEM,
-  CHARACTER_BOOK_EDITOR_OUTPUT,
-} from "../story/character-book-editor";
+import { LOREBOOK_EDITOR_SYSTEM, LOREBOOK_EDITOR_OUTPUT } from "../story/lorebook-editor";
 import type { GenerativeAgentName, JsonObjectSchema } from "@story-fm/llm";
 import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../story/history-compactor";
 import { ONBOARDING_JUDGE_SYSTEM, REPORT_ONBOARDING_INPUT } from "../story/onboarding-judge";
@@ -19,9 +16,9 @@ export interface OutputAgent {
 export function outputAgents(): readonly OutputAgent[] {
   return [
     {
-      agent: "character-book-editor",
-      system: CHARACTER_BOOK_EDITOR_SYSTEM,
-      schema: CHARACTER_BOOK_EDITOR_OUTPUT,
+      agent: "lorebook-editor",
+      system: LOREBOOK_EDITOR_SYSTEM,
+      schema: LOREBOOK_EDITOR_OUTPUT,
     },
     { agent: "onboarding-judge", system: ONBOARDING_JUDGE_SYSTEM, schema: REPORT_ONBOARDING_INPUT },
     { agent: "history-compactor", system: HISTORY_COMPACTOR_SYSTEM, schema: REPORT_DIGEST_INPUT },

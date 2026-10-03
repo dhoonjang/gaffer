@@ -3,10 +3,10 @@ import {
   storePersona,
   storeStaffCandidate,
   readStaffCandidate,
-} from "../../common/people/character-book";
+} from "../../common/people/lorebook";
 import {
   formatMoney,
-  type CharacterBookContent,
+  type LorebookContent,
   HireStaffInputSchema,
   type HireStaffInput,
   isStaffRole,
@@ -57,7 +57,7 @@ const SALARY_ROUNDING = 1_000;
  */
 function drawPool(state: GameState, season: number): StaffPoolEntry[] {
   const taken = occupiedPersonNames(state);
-  for (const entry of state.characterBook) if (entry.kind !== "team") taken.add(entry.name);
+  for (const entry of state.lorebook) if (entry.kind !== "team") taken.add(entry.name);
   const rows: StaffPoolEntry[] = [];
   for (const role of STAFF_ROLES) {
     const table = shuffled(staffArchetypesOf(role), state.seed, `staff-pool:${role}:${season}`);
@@ -73,7 +73,7 @@ function drawPool(state: GameState, season: number): StaffPoolEntry[] {
         name,
         role,
         title: archetype.title,
-        characterBook: staffSeedBook(state.seed, name, role, archetype),
+        lorebook: staffSeedBook(state.seed, name, role, archetype),
         ask: Math.max(
           SALARY_ROUNDING,
           Math.round((base * factor) / SALARY_ROUNDING) * SALARY_ROUNDING,
@@ -85,7 +85,7 @@ function drawPool(state: GameState, season: number): StaffPoolEntry[] {
   return rows;
 }
 
-/** 현재 후보 조건과 같은 인물의 최신 캐릭터북을 조립한다. 조회는 상태를 바꾸지 않는다. */
+/** 현재 후보 조건과 같은 인물의 최신 로어북을 조립한다. 조회는 상태를 바꾸지 않는다. */
 export function staffPoolOf(state: GameState): readonly StaffPoolEntry[] {
   return state.staffPool.map((entry) => readStaffCandidate(state, entry));
 }
@@ -122,7 +122,7 @@ export function staffPersonaOf(
     name: entry.name,
     role: entry.role,
     title: entry.title,
-    characterBook: entry.characterBook,
+    lorebook: entry.lorebook,
     since: contract.since,
     until: contract.until,
     salary: contract.salary,
@@ -168,16 +168,16 @@ export function hireStaff(state: GameState, input: HireStaffInput): CommandResul
     existing?.employment?.title ??
     entry?.title ??
     existing?.employmentHistory?.at(-1)?.title;
-  const characterBook: CharacterBookContent | undefined =
+  const lorebook: LorebookContent | undefined =
     (existing
       ? personaBookOf(state, existing)
-      : state.characterBook.find((b) => b.kind === "person" && b.name === input.name)) ??
-    entry?.characterBook ??
-    input.characterBook;
-  if (!role || !title || !characterBook)
-    return { ok: false, message: "새 스태프의 역할·직책·캐릭터북이 필요합니다" };
-  if (characterBook.name !== (existing?.name ?? input.name))
-    return { ok: false, message: "캐릭터북의 이름과 계약 당사자가 다릅니다" };
+      : state.lorebook.find((b) => b.kind === "person" && b.name === input.name)) ??
+    entry?.lorebook ??
+    input.lorebook;
+  if (!role || !title || !lorebook)
+    return { ok: false, message: "새 스태프의 역할·직책·로어북이 필요합니다" };
+  if (lorebook.name !== (existing?.name ?? input.name))
+    return { ok: false, message: "로어북의 이름과 계약 당사자가 다릅니다" };
   const limit = role === "head_coach" ? HEAD_COACH_LIMIT : STAFF_LIMIT[role];
   const occupied = state.personas.filter(
     (p) =>
@@ -207,7 +207,7 @@ export function hireStaff(state: GameState, input: HireStaffInput): CommandResul
       state,
       staffPersonaOf(
         state,
-        { name: input.name, role, title, characterBook, ask: input.salary, listedOn: state.season },
+        { name: input.name, role, title, lorebook, ask: input.salary, listedOn: state.season },
         { salary: input.salary, since: state.date, until: input.until },
       ),
     );
@@ -295,7 +295,7 @@ export function releaseStaff(state: GameState, input: { name: string }): Command
       name: persona.name,
       role: persona.role,
       title: employment.title,
-      characterBookId: persona.characterBookId,
+      lorebookId: persona.lorebookId,
       ask: employment.contract.salary,
       listedOn: state.season,
       from: state.userTeamId,
@@ -336,7 +336,7 @@ export function expireStaffContracts(state: GameState, on: string): string[] {
         name: persona.name,
         role: persona.role,
         title: job.title,
-        characterBookId: persona.characterBookId,
+        lorebookId: persona.lorebookId,
         ask: job.contract.salary,
         listedOn: state.season,
         from: job.teamId,
@@ -355,7 +355,7 @@ export function expireStaffContracts(state: GameState, on: string): string[] {
 export function describeStaffPool(state: GameState): string[] {
   return staffPoolOf(state).map(
     (e) =>
-      `${e.name} · ${e.title} · ${state.characterBook.find((b) => b.kind === "person" && b.name === e.name)?.description ?? e.characterBook.description} · 요구 연봉 ${formatMoney(e.ask)}${
+      `${e.name} · ${e.title} · ${state.lorebook.find((b) => b.kind === "person" && b.name === e.name)?.description ?? e.lorebook.description} · 요구 연봉 ${formatMoney(e.ask)}${
         e.from === undefined ? "" : ` · ${teamNameIn(state, e.from)} 출신`
       }`,
   );

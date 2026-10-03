@@ -19,7 +19,7 @@ export const ONBOARDING_JUDGE_SYSTEM = `당신은 새로 부임하는 축구 감
 # 입력
 <club> — 부임 구단: 이름·격·구단주·수석코치·주장·핵심 선수·유망주.
 <background> — 배경 문단.
-<character_book> — 첫 장면에 활용할 인물의 기록.
+<lorebook> — 첫 장면에 활용할 인물의 기록.
 <snapshot> — 오늘 날짜와 선수단·일정의 사실. 첫 장면이 짚을 것이 여기 있다.
 
 # 산출

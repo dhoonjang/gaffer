@@ -171,7 +171,7 @@ export interface ChatTurn {
    */
   events?: TickEvent[];
   /** Exact book snapshots sent with this input; UI does not render prompt metadata. */
-  characterBook?: import("@story-fm/domain").CharacterBookInjection[];
+  lorebook?: import("@story-fm/domain").LorebookInjection[];
   /**
    * **경기 중에 오간 말인가** — 이력에서 중계와 평시를 가르는 표식.
    *

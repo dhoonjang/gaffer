@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { DateString } from "./date-string";
-import { CharacterBookContentSchema } from "./character-book";
+import { LorebookContentSchema } from "./lorebook";
 
-/** 신원·직책·고용은 원장, 서사는 네 필드 캐릭터북에 둔다. */
+/** 신원·직책·고용은 원장, 서사는 네 필드 로어북에 둔다. */
 
 /**
  * 인물이 세계에서 맡은 자리 — 채팅 @태그의 뿌리이자 **열린 집합**이다.
@@ -84,7 +84,7 @@ export const HireStaffInputSchema = z.object({
   until: DateString,
   role: z.enum(["head_coach", ...STAFF_ROLES]).optional(),
   title: z.string().trim().min(1).optional(),
-  characterBook: CharacterBookContentSchema.optional(),
+  lorebook: LorebookContentSchema.optional(),
 });
 export type HireStaffInput = z.infer<typeof HireStaffInputSchema>;
 
@@ -101,7 +101,7 @@ export const PersonaSchema = z.object({
    * 의미가 없고 화면에서도 그 사람이 아니라 직책이 말하는 것처럼 읽힌다.
    * 직책은 인물 카드가 따로 알려 준다.
    */
-  characterBook: CharacterBookContentSchema,
+  lorebook: LorebookContentSchema,
   characterId: z.string().min(1),
   name: z.string().min(1),
   role: PersonaRoleSchema,
@@ -113,7 +113,7 @@ export const PersonaSchema = z.object({
   /**
    * 실존 인물인가 — 이름만 실제이고 성격·대사는 게임이 지어낸 것이다.
    * 실명 부채의 장부(sources.md §7)가 이 표식으로 센다. **프롬프트에는 실리지 않는다**
-   * (docs/common/llm/prompts.md §5-3) — 인물 서사는 캐릭터북, 실제 사실은 원장이 소유한다.
+   * (docs/common/llm/prompts.md §5-3) — 인물 서사는 로어북, 실제 사실은 원장이 소유한다.
    * 가상 인물엔 없다(옵셔널).
    */
   real: z.boolean().optional(),
@@ -136,8 +136,8 @@ export const PersonaSchema = z.object({
 export type Persona = z.infer<typeof PersonaSchema>;
 
 /** Save records point to the single current book; seed/preview personas carry prose. */
-export const StoredPersonaSchema = PersonaSchema.omit({ characterBook: true }).extend({
-  characterBookId: z.string().min(1),
+export const StoredPersonaSchema = PersonaSchema.omit({ lorebook: true }).extend({
+  lorebookId: z.string().min(1),
 });
 export type StoredPersona = z.infer<typeof StoredPersonaSchema>;
 
@@ -177,7 +177,7 @@ export function personaRoleLabel(role: PersonaRole): string | undefined {
  * **여름의 결정적 추첨**이고, 부르는 쪽이 AI 구단이 아니라 **감독뿐**이며, 요구 연봉을
  * 넘기면 흥정 없이 그 자리에서 계약된다.
  *
- * 초기 캐릭터북은 생성 때 완성한다. 채용·해고는 서사를 다시 추첨하지 않는다.
+ * 초기 로어북은 생성 때 완성한다. 채용·해고는 서사를 다시 추첨하지 않는다.
  */
 export const StaffPoolEntrySchema = z.object({
   /** 이름이 곧 `characterId`다 (people.md §1) */
@@ -185,8 +185,8 @@ export const StaffPoolEntrySchema = z.object({
   role: z.enum(["head_coach", ...STAFF_ROLES]),
   /** 그 사람이 맡을 자리 — 「피지컬 코치」 */
   title: z.string().min(1),
-  /** 채용 전 초기 책. 지속적 기록은 세이브의 캐릭터북에서 읽는다. */
-  characterBook: CharacterBookContentSchema,
+  /** 채용 전 초기 책. 지속적 기록은 세이브의 로어북에서 읽는다. */
+  lorebook: LorebookContentSchema,
   /** 요구 연봉 (£/년) — 이 이상을 부르면 그 자리에서 계약된다 */
   ask: z.number().int().min(0),
   /** 이 줄이 선 시즌 — 여름 갱신이 「그해 자른 사람만 남긴다」를 판단하는 기준 */
@@ -195,11 +195,9 @@ export const StaffPoolEntrySchema = z.object({
   from: z.string().min(1).optional(),
 });
 export type StaffPoolEntry = z.infer<typeof StaffPoolEntrySchema>;
-export const StoredStaffPoolEntrySchema = StaffPoolEntrySchema.omit({ characterBook: true }).extend(
-  {
-    characterBookId: z.string().min(1),
-  },
-);
+export const StoredStaffPoolEntrySchema = StaffPoolEntrySchema.omit({ lorebook: true }).extend({
+  lorebookId: z.string().min(1),
+});
 export type StoredStaffPoolEntry = z.infer<typeof StoredStaffPoolEntrySchema>;
 
 /** 수석코치의 직책 라벨 — 고용 정보의 `title`이 이 값이다 (people.md §2-2) */

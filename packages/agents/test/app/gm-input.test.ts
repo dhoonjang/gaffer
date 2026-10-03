@@ -4,7 +4,8 @@ import {
   addDays,
   advanceTime,
   applyScenePoint,
-  selectCharacterBook,
+  selectLorebook,
+  stampLorebook,
   clubHonoursLine,
   clubProfileIn,
   createGame,
@@ -121,9 +122,9 @@ describe("레퍼런스 층 — <club>·<manager> (캐시되는 시스템 블록)
       ].join("\n"),
     );
     expect(ref).toBe(`${describeClub(state)}\n\n${describeManager(state.manager)}`);
-    // 경기 레퍼런스도 같은 두 블록으로 연다. 캐릭터북은 유저 턴에서만 주입한다.
+    // 경기 레퍼런스도 같은 두 블록으로 연다. 로어북은 유저 턴에서만 주입한다.
     expect(buildMatchReference(state).startsWith(ref)).toBe(true);
-    expect(buildMatchReference(state)).not.toContain("<character_book>");
+    expect(buildMatchReference(state)).not.toContain("<lorebook>");
   });
 
   it("무직이면 <club>이 서지 않는다 — 옛 구단을 세우면 아직 그 구단의 감독처럼 쓴다", () => {
@@ -526,7 +527,7 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
     await onboardInRealMode(state, llm);
 
     expect(request?.user).toContain(coachId);
-    expect(request?.user).toContain("<character_book>");
+    expect(request?.user).toContain("<lorebook>");
     // 첫 장면이 짚을 사실은 스냅샷이 갖는다 — 오늘 날짜가 그 자리의 표식이다
     expect(request?.user).toContain(state.date);
     // 시스템은 이 호출의 프롬프트 하나다 — 날짜가 섞이면 캐시 프리픽스가 매 게임 갈린다
@@ -620,16 +621,16 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
       toolCalls: [],
       at: state.date,
     });
-    const cards = selectCharacterBook(state.characterBook, coach.name, []);
+    const cards = stampLorebook(state, selectLorebook(state.lorebook, coach.name, []));
 
     const sent = buildGmTurnMessage(state, cards);
     // 한 메시지다 — 카드 → 조작 → 발화. 스냅샷은 여기 없다 (어댑터가 뒤에 붙인다)
-    expect(sent.endsWith("</character_book>")).toBe(true);
+    expect(sent.endsWith("</lorebook>")).toBe(true);
     expect(sent).toContain(
       "<operator>전술판 적용 완료 — 압박 상향\n전술판 적용 완료 — 라인 상향</operator>",
     );
     expect(sent.indexOf(`@김감독: ${coach.characterId} 불러줘`)).toBeLessThan(
-      sent.indexOf("<character_book>"),
+      sent.indexOf("<lorebook>"),
     );
     expect(sent).not.toContain("<snapshot>");
 
@@ -684,11 +685,10 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
     expect(request?.user).toContain(`<operator>${orders[0]}</operator>`);
     expect(request?.user).toContain(
       JSON.stringify(
-        state.characterBook.find((entry) => entry.id === `person:${coach.characterId}`)!
-          .information,
+        state.lorebook.find((entry) => entry.id === `person:${coach.characterId}`)!.information,
       ),
     );
-    expect(request?.user.endsWith("</character_book>")).toBe(true);
+    expect(request?.user.endsWith("</lorebook>")).toBe(true);
     // 스냅샷은 유저 메시지 밖이다 — 어댑터가 발화 뒤에 붙이고 이력에서 걷는다
     expect(request?.user).not.toContain("<snapshot>");
     expect(request?.stateNote).toContain("<snapshot>");

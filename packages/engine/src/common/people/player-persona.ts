@@ -1,10 +1,13 @@
 import {
   ageOf,
+  associationName,
   naturalPositionOf,
+  strongFootOf,
+  type Foot,
   weightSlotOf,
   type GamePlayer,
   type PlayerCatalogEntry,
-  type CharacterBookContent,
+  type LorebookContent,
   type Persona,
   type RetiredPlayer,
   type WeightSlot,
@@ -12,9 +15,9 @@ import {
 import { buildSeasonCalendar, FIRST_SEASON } from "../core/calendar";
 import { makeRng, pickWeighted } from "../core/rng";
 import { personaKeywords } from "./persona";
-import { personaSeedBook } from "../data/catalog-character-book";
+import { personaSeedBook } from "../data/catalog-lorebook";
 
-/** 선수 시드는 초기 책만 만든다. 진행 중 서사는 세이브의 캐릭터북이 소유한다. */
+/** 선수 시드는 초기 책만 만든다. 진행 중 서사는 세이브의 로어북이 소유한다. */
 
 interface PlayerArchetype {
   label: string;
@@ -199,7 +202,7 @@ function ageBandOf(age: number): AgeBand {
  *
  * ⚠️ `state.date`로 재면 안 된다. 시즌이 흐르는 동안 선수가 나이 경계를 넘는 순간
  * 같은 선수가 다른 원형으로 바뀌어, **같은 세이브는 언제 열어도 같은 사람을 만난다**는
- * 요구(people.md 요구사항 1)가 깨진다. 진행 중의 변화는 캐릭터북이 기록한다.
+ * 요구(people.md 요구사항 1)가 깨진다. 진행 중의 변화는 로어북이 기록한다.
  */
 const PERSONA_AGE_REF = buildSeasonCalendar(FIRST_SEASON).preseasonStart;
 
@@ -226,6 +229,26 @@ export interface PersonaSubject {
   birthdate: string;
   /** 주 포지션 코드 — `naturalPositionOf`가 답하는 그 값 */
   position: string;
+  /** 한 줄 설명에 서는 바뀌지 않는 기본 정보 (`identityFactsOf`) */
+  facts: readonly string[];
+}
+
+const STRONG_FOOT_KO = { left: "왼발", right: "오른발", both: "양발" } as const;
+
+/** 선수의 바뀌지 않는 기본 정보 — 국적 · 출생연도 · 주발 · 키, 있는 것만 */
+function identityFactsOf(player: {
+  birthdate: string;
+  nationality?: string;
+  foot?: Foot;
+  height?: number;
+}): string[] {
+  const foot = strongFootOf(player.foot);
+  return [
+    ...(player.nationality ? [associationName(player.nationality)] : []),
+    `${player.birthdate.slice(0, 4)}년생`,
+    ...(foot ? [STRONG_FOOT_KO[foot]] : []),
+    ...(player.height ? [`${player.height}cm`] : []),
+  ];
 }
 
 /** 선수 한 명을 그 넷으로 — 뽑기가 보는 것은 언제나 이만큼이다 */
@@ -235,6 +258,7 @@ function personaSubjectOf(player: GamePlayer): PersonaSubject {
     name: player.name,
     birthdate: player.birthdate,
     position: naturalPositionOf(player).position,
+    facts: identityFactsOf(player),
   };
 }
 
@@ -261,6 +285,7 @@ export function retiredPersona(seed: number, retired: RetiredPlayer): Persona {
     name: retired.name,
     birthdate: retired.birthdate,
     position: retired.position,
+    facts: identityFactsOf(retired),
   });
 }
 
@@ -274,18 +299,19 @@ function personaFrom(seed: number, subject: PersonaSubject): Persona {
   };
   return {
     ...identity,
-    characterBook: personaSeedBook({
+    lorebook: personaSeedBook({
       ...identity,
       archetype: archetype.label,
       traits: archetype.traits,
       motivation: archetype.motivation,
       speechStyle: archetype.speech,
       keywords: personaKeywords(identity),
+      facts: subject.facts,
     }),
   };
 }
 
-/** Catalog defaults and generated character books share the same flavor draw. */
+/** Catalog defaults and generated lorebooks share the same flavor draw. */
 function archetypeOf(seed: number, subject: PersonaSubject): PlayerArchetype {
   const rng = makeRng(seed, `persona:player:${subject.id}`);
   const slot = weightSlotOf(subject.position);
@@ -294,11 +320,12 @@ function archetypeOf(seed: number, subject: PersonaSubject): PlayerArchetype {
 }
 
 /** Catalog books use one fixed seed and the catalog id, before any game exists. */
-export function catalogPlayerBook(player: PlayerCatalogEntry): CharacterBookContent {
+export function catalogPlayerBook(player: PlayerCatalogEntry): LorebookContent {
   return personaFrom(0, {
     id: player.id,
     name: player.nameKo,
     birthdate: player.birthdate,
     position: naturalPositionOf(player).position,
-  }).characterBook;
+    facts: identityFactsOf(player),
+  }).lorebook;
 }

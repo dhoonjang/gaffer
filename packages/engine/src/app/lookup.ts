@@ -4,7 +4,7 @@ import { describeStaffPool } from "../story/people/staff-employment";
 import { openManagerOffers } from "../story/world/manager-employment";
 import { pendingManagerInterviews } from "../common/core/state";
 import { interviewFactText } from "@story-fm/domain";
-import { personaBookOf } from "../common/people/character-book";
+import { personaBookOf } from "../common/people/lorebook";
 import type {
   CallUp,
   GrowthOutlookKey,

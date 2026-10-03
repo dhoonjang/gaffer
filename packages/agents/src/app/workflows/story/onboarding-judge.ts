@@ -1,8 +1,9 @@
-import { characterBookText } from "@story-fm/domain";
+import { lorebookText } from "@story-fm/domain";
 import {
   type GameState,
   headCoachOf,
-  selectCharacterBook,
+  selectLorebook,
+  stampLorebook,
   humanizePlayerIds,
   formatClock,
   clockOf,
@@ -49,8 +50,8 @@ export function isValidOnboardingText(state: GameState, text: string): boolean {
  * 도구의 인자다.
  */
 export function buildOnboardingJudgePrompt(state: GameState, background: string): string {
-  const coach = characterBookText(
-    selectCharacterBook(state.characterBook, headCoachOf(state).name, []),
+  const coach = lorebookText(
+    stampLorebook(state, selectLorebook(state.lorebook, headCoachOf(state).name, [])),
   );
   return [
     buildClubBlock(state),

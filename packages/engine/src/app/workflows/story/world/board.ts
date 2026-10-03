@@ -8,7 +8,7 @@ import { archiveEmployment } from "../../../../story/people/staff-employment";
 import { addDays } from "../../../../common/core/dates";
 import { item } from "../../../../common/commands/brief";
 
-/** Execute employment decisions; expectations and warnings belong in the character book. */
+/** Execute employment decisions; expectations and warnings belong in the lorebook. */
 export function reviewBoard(state: GameState, raw: unknown): CommandResult {
   const parsed = BoardReviewSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: "유효한 고용 결정이 필요합니다" };

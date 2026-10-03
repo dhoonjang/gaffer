@@ -13,7 +13,7 @@ export * from "./common/orders-ops";
 export * from "./common/finance-orders";
 export * from "./app/workflows/common/finance-orders";
 export * from "./story/history-compactor";
-export * from "./story/character-book-editor";
+export * from "./story/lorebook-editor";
 export * from "./story/training-rater";
 export * from "./app/workflows/story/training-rater";
 export * from "./common/gm-types";

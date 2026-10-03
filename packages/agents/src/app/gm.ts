@@ -1,4 +1,4 @@
-import { selectCharacterBook, syncCharacterBook } from "@story-fm/engine";
+import { selectLorebook, stampLorebook, syncLorebook } from "@story-fm/engine";
 /**
  * GM 오케스트레이터 — 장면 라우팅 (agents.md §1·§2). 국면은 `state.phase` 하나로 갈린다 —
  * `match`면 매치 GM, 아니면 평시 GM이고 둘 다 호출 하나다.
@@ -294,7 +294,7 @@ async function openTurn(
 interface GmCall {
   result: TurnResult;
   /** 이번 턴에 세운 인물 카드 — 턴 뒤가 기록으로 남긴다 */
-  characters: import("@story-fm/domain").CharacterBookInjection[];
+  characters: import("@story-fm/domain").LorebookInjection[];
   /**
    * 이 호출의 스냅샷이 비운 소식·기사 — 넘김으로 장면 없이 끝난 턴은 아무도 전하지
    * 않았으므로 다음 평시 턴에 되돌린다 (agents.md §2).
@@ -375,12 +375,15 @@ async function callGm(
    * 같은 자리에 다시 선다 — 그래서 레퍼런스(캐시 프리픽스)가 흔들리지 않는다
    * (people.md §6 · agents.md §5).
    */
-  syncCharacterBook(state);
+  syncLorebook(state);
   const lastModel = [...state.chat].reverse().find((turn) => turn.role === "model");
-  const characters = selectCharacterBook(
-    state.characterBook,
-    `${message}\n${lastModel?.text ?? ""}`,
-    injectedCharacters(state),
+  const characters = stampLorebook(
+    state,
+    selectLorebook(
+      state.lorebook,
+      `${message}\n${lastModel?.text ?? ""}`,
+      injectedCharacters(state),
+    ),
   );
   /**
    * 이번 턴의 유저 메시지 — **평시는 채팅 꼬리에서 그린다.** 다음 턴 이력이 같은 꼬리를

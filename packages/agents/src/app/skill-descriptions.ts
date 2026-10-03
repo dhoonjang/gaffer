@@ -107,7 +107,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "감독과 당사자가 합의한 스태프 고용·재계약을 기록한다. name·salary(연봉 £)·until(만료일)을 명시한다. 풀 밖 사람은 role·title·characterBook을 함께 제공한다. 기존 재직자는 같은 이름으로 갱신하며 급여·기한을 자동 결정하지 않는다. 제안만으로 체결하지 않는다.",
+      "감독과 당사자가 합의한 스태프 고용·재계약을 기록한다. name·salary(연봉 £)·until(만료일)을 명시한다. 풀 밖 사람은 role·title·lorebook을 함께 제공한다. 기존 재직자는 같은 이름으로 갱신하며 급여·기한을 자동 결정하지 않는다. 제안만으로 체결하지 않는다.",
   },
   {
     name: "start_match",
@@ -157,7 +157,7 @@ export const SKILL_CATALOG = [
     group: "대화·서사",
     readOnly: false,
     description:
-      "대화와 사건으로 캐릭터에 기록할 내용이 생겼을 때 캐릭터북 갱신을 접수한다. characterId는 항목 id 또는 이름, additionalInformation은 새로 드러난 사정·행동·기억·관점이다. 이름을 바꾸지 않는다. 처음 등장한 인물은 newCharacter에 이름·키워드·한 줄 설명·정보를 함께 적는다. 편집은 비동기로 진행되며 접수만으로 완료됐다고 말하지 않는다.",
+      "대화와 사건으로 캐릭터에 기록할 내용이 생겼을 때 로어북 갱신을 접수한다. characterId는 항목 id 또는 이름, additionalInformation은 새로 드러난 사정·행동·기억·관점이다. 이름을 바꾸지 않는다. 처음 등장한 인물은 newCharacter에 이름·키워드·한 줄 설명·정보를 함께 적는다. 편집은 비동기로 진행되며 접수만으로 완료됐다고 말하지 않는다.",
   },
   {
     name: "apply_finance_event",

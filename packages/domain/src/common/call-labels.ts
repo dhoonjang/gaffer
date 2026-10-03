@@ -22,7 +22,7 @@ export const CALL_LABELS = {
   set_set_piece_routine: "세트피스 인원",
   set_training: "훈련 지정",
   set_shootout_order: "승부차기 순서",
-  update_character: "캐릭터북 갱신",
+  update_character: "로어북 갱신",
   review_board: "감독 고용 결정",
   offer_manager_job: "감독직 제안",
   set_retirement: "은퇴 결정",

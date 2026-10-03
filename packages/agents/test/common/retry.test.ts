@@ -188,7 +188,7 @@ describe("이력 요약 — 후보만 정규화하고 검증 전에는 원문을
     const state = structuredClone(base);
     state.players = [];
     state.personas = [];
-    state.characterBook = Array.from({ length: count }, (_, i) => ({
+    state.lorebook = Array.from({ length: count }, (_, i) => ({
       id: `person:summary-${i}`,
       kind: "person" as const,
       version: 2,
@@ -214,11 +214,11 @@ describe("이력 요약 — 후보만 정규화하고 검증 전에는 원문을
   }
 
   it.each([3, CHARACTER_CANDIDATES_MAX + 5])(
-    "풀 %i명의 요약은 명부 설명만 최대 30명 남기고 캐릭터북은 편집하지 않는다",
+    "풀 %i명의 요약은 명부 설명만 최대 30명 남기고 로어북은 편집하지 않는다",
     async (count) => {
       const state = historyState(count);
       const before = structuredClone(state);
-      const chosen = state.characterBook.at(-1)!;
+      const chosen = state.lorebook.at(-1)!;
       const runTurn = vi.fn<GameLLM["runTurn"]>().mockResolvedValue(
         answered({
           past: "  지난 결정과 이유  ",
@@ -248,10 +248,10 @@ describe("이력 요약 — 후보만 정규화하고 검증 전에는 원문을
       expect(new Set(candidates.map(({ name }) => name)).size).toBe(candidates.length);
       expect(candidates[0]).toEqual({ name: chosen.name, description: chosen.description });
       for (const candidate of candidates) {
-        const canonical = before.characterBook.find(({ name }) => name === candidate.name)!;
+        const canonical = before.lorebook.find(({ name }) => name === candidate.name)!;
         expect(candidate).toEqual({ name: canonical.name, description: canonical.description });
       }
-      // 원문·캐릭터북·편집 작업 원장은 요약 성공에도 그대로다.
+      // 원문·로어북·편집 작업 원장은 요약 성공에도 그대로다.
       expect(state).toEqual({ ...before, historyDigest: state.historyDigest });
     },
   );
@@ -265,7 +265,7 @@ describe("이력 요약 — 후보만 정규화하고 검증 전에는 원문을
         failure === "후보 상한 초과"
           ? {
               past: "검증되지 않은 요약",
-              candidates: state.characterBook.map(({ name, description }) => ({
+              candidates: state.lorebook.map(({ name, description }) => ({
                 name,
                 description,
               })),

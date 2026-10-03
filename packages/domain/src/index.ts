@@ -46,7 +46,7 @@ export * from "./common/call-labels";
 export { LN2, dexp, dlog, dsigmoid, dhypot } from "./common/dmath";
 
 export * from "./common/catalog-input";
-export * from "./common/character-book";
+export * from "./common/lorebook";
 
 export * from "./common/finance";
 

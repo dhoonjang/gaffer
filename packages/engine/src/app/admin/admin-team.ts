@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import {
   CatalogTeamEditSchema,
   CatalogTeamInputSchema,
-  type CharacterBookContent,
+  type LorebookContent,
   type Formation,
 } from "@story-fm/domain";
 import { catalogPath } from "../../common/core/paths";
@@ -66,7 +66,7 @@ export interface AdminTeamRow extends TeamCatalogEntry {
 }
 
 export interface AdminTeamInput {
-  characterBook?: CharacterBookContent;
+  lorebook?: LorebookContent;
   id: string;
   name: string;
   shortName: string;
@@ -161,7 +161,7 @@ export function adminUpdateTeam(teamId: string, patch: AdminTeamPatch): AdminRes
   const team = next.teams.find((t) => t.id === teamId);
   if (!team) return { ok: false, message: `카탈로그에 없는 팀입니다: ${teamId}` };
 
-  if (patch.characterBook !== undefined) team.characterBook = patch.characterBook;
+  if (patch.lorebook !== undefined) team.lorebook = patch.lorebook;
 
   if (patch.name !== undefined) {
     team.name = patch.name.trim();
@@ -217,7 +217,7 @@ export function adminAddTeam(input: AdminTeamInput): AdminResult {
   const team: TeamCatalogEntry = withTeamBook({
     id,
     name: input.name.trim(),
-    ...(input.characterBook === undefined ? {} : { characterBook: input.characterBook }),
+    ...(input.lorebook === undefined ? {} : { lorebook: input.lorebook }),
     shortName: input.shortName.trim(),
     leagueId: input.leagueId,
     tier: input.tier,

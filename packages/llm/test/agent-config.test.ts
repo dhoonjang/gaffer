@@ -82,7 +82,7 @@ describe("에이전트별 LLM 설정", () => {
     model: gemini-judge
     max_tokens: 650
     timeout_ms: 6500
-  character-book-editor:
+  lorebook-editor:
     provider: google
     model: gemini-editor
     max_tokens: 500

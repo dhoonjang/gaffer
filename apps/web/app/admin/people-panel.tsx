@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  CharacterBookContentSchema,
-  personaRoleLabel,
-  type CharacterBookContent,
-} from "@story-fm/domain";
+import { LorebookContentSchema, personaRoleLabel, type LorebookContent } from "@story-fm/domain";
 import type { AdminPersonaRow } from "@story-fm/engine";
-import { CharacterBookFields, characterBookInput } from "./character-book-fields";
+import { LorebookFields, lorebookInput } from "./lorebook-fields";
 import { Modal } from "./modal";
 
 interface PeopleResponse {
@@ -27,7 +23,7 @@ export function PeoplePanel({
   const [people, setPeople] = useState<AdminPersonaRow[]>([]);
   const [query, setQuery] = useState("");
   const [person, setPerson] = useState<AdminPersonaRow | null>(null);
-  const [book, setBook] = useState<CharacterBookContent>();
+  const [book, setBook] = useState<LorebookContent>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +44,7 @@ export function PeoplePanel({
 
   async function save() {
     if (!person) return;
-    const parsed = CharacterBookContentSchema.safeParse(characterBookInput(person.name, book));
+    const parsed = LorebookContentSchema.safeParse(lorebookInput(person.name, book));
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "입력 오류");
       return;
@@ -59,7 +55,7 @@ export function PeoplePanel({
       const response = await fetch(`/api/admin/catalog/person?seed=${seed}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characterId: person.characterId, characterBook: parsed.data }),
+        body: JSON.stringify({ characterId: person.characterId, lorebook: parsed.data }),
       });
       const data: PeopleResponse = await response.json();
       if (!response.ok) throw new Error(data.error ?? "저장 실패");
@@ -94,7 +90,7 @@ export function PeoplePanel({
           <input value={query} onChange={(event) => setQuery(event.target.value)} />
         </label>
       </div>
-      <p>새 게임의 인물 캐릭터북을 편집합니다. 생성 인물은 게임 시드에 맞춰 조회합니다.</p>
+      <p>새 게임의 인물 로어북을 편집합니다. 생성 인물은 게임 시드에 맞춰 조회합니다.</p>
       <table className="admin-table">
         <thead>
           <tr>
@@ -111,13 +107,13 @@ export function PeoplePanel({
               <tr key={row.characterId}>
                 <td>{row.name}</td>
                 <td>{personaRoleLabel(row.role)}</td>
-                <td>{row.characterBook.description}</td>
+                <td>{row.lorebook.description}</td>
                 <td>
                   <button
                     className="ghost-btn"
                     onClick={() => {
                       setPerson(row);
-                      setBook(row.characterBook);
+                      setBook(row.lorebook);
                       setError(null);
                     }}
                   >
@@ -139,7 +135,7 @@ export function PeoplePanel({
           }
         >
           {error && <div className="admin-msg err">{error}</div>}
-          <CharacterBookFields name={person.name} book={book} onChange={setBook} />
+          <LorebookFields name={person.name} book={book} onChange={setBook} />
         </Modal>
       )}
     </>

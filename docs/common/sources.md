@@ -416,18 +416,18 @@ loan` — 의 인원은 넣지 않는다.
 
 ## 7. 자산과 출처 기록
 
-| 자료             | 현재 저장과 처리                                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 선수 시드        | `packages/engine/src/common/data/`의 실명 카탈로그. 자료에 없는 선수는 절차 생성 경로로 구성한다.                              |
-| 능력치·신체·주발 | 외부 시드와 파생 값을 구분한다. 결측값 처리와 생성 모델은 [player.md](player.md)에 정의한다.                                   |
-| 초기 주급        | `RealPlayerSeed.weeklyWage`가 있으면 초기 계약에 사용한다. 없으면 `wageExpectationOf`로 산정한다.                              |
-| 부상 이력        | `injury-history.ts`의 QID별 기록을 새 게임의 부상 원장으로 펼친다. 표에 없는 선수는 미조사 상태이며 초기 성향은 평균값이다.    |
-| 홈그로운         | 경력 원자료 대신 `deriveHomegrownCountry`의 결정적 생성 규칙을 사용한다. 실선수의 등록 이력을 입증하는 자료는 아니다.          |
-| 인물             | `coach-seeds.ts`·`owner-seeds.ts`·`world-figures.ts`의 실명과 생성 이름을 사용한다. 캐릭터북의 성격·동기·대사는 게임의 서사다. |
-| 구단색           | `club-colours.ts`가 색 값과 항목별 출처 URL을 소유한다.                                                                        |
-| 구장             | `club-profile.ts`의 이름·수용인원을 재정 모델이 읽는다.                                                                        |
-| 구단 문장        | 클럽 ID에서 결정적으로 생성한다. [팀 표현](team.md) §3.1을 따른다.                                                             |
-| 서체             | `apps/web/public/fonts/`의 Pretendard Variable·Barlow Condensed와 각 폴더의 `OFL.txt`.                                         |
+| 자료             | 현재 저장과 처리                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 선수 시드        | `packages/engine/src/common/data/`의 실명 카탈로그. 자료에 없는 선수는 절차 생성 경로로 구성한다.                            |
+| 능력치·신체·주발 | 외부 시드와 파생 값을 구분한다. 결측값 처리와 생성 모델은 [player.md](player.md)에 정의한다.                                 |
+| 초기 주급        | `RealPlayerSeed.weeklyWage`가 있으면 초기 계약에 사용한다. 없으면 `wageExpectationOf`로 산정한다.                            |
+| 부상 이력        | `injury-history.ts`의 QID별 기록을 새 게임의 부상 원장으로 펼친다. 표에 없는 선수는 미조사 상태이며 초기 성향은 평균값이다.  |
+| 홈그로운         | 경력 원자료 대신 `deriveHomegrownCountry`의 결정적 생성 규칙을 사용한다. 실선수의 등록 이력을 입증하는 자료는 아니다.        |
+| 인물             | `coach-seeds.ts`·`owner-seeds.ts`·`world-figures.ts`의 실명과 생성 이름을 사용한다. 로어북의 성격·동기·대사는 게임의 서사다. |
+| 구단색           | `club-colours.ts`가 색 값과 항목별 출처 URL을 소유한다.                                                                      |
+| 구장             | `club-profile.ts`의 이름·수용인원을 재정 모델이 읽는다.                                                                      |
+| 구단 문장        | 클럽 ID에서 결정적으로 생성한다. [팀 표현](team.md) §3.1을 따른다.                                                           |
+| 서체             | `apps/web/public/fonts/`의 Pretendard Variable·Barlow Condensed와 각 폴더의 `OFL.txt`.                                       |
 
 `pnpm pseudonymize`는 선수·구단·구장 표시 이름의 결정적 변환 도구다. ID를 유지하며,
 이 도구의 존재가 현재 시드의 가명화를 뜻하지는 않는다. 진행 중인 세이브는 저장된

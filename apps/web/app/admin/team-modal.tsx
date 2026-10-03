@@ -8,10 +8,10 @@ import {
   FORMATIONS,
   josa,
   type Formation,
-  type CharacterBookContent,
+  type LorebookContent,
 } from "@story-fm/domain";
 import { Modal } from "./modal";
-import { CharacterBookFields, characterBookInput } from "./character-book-fields";
+import { LorebookFields, lorebookInput } from "./lorebook-fields";
 import {
   GRADES,
   TACTICAL_STYLES,
@@ -38,7 +38,7 @@ type Mode = "create" | "edit";
 
 /** 서버로 보내는 모양 — 폼 상태를 이 꼴로 접어 놓고 원본과 비교한다 */
 interface TeamFields {
-  characterBook?: CharacterBookContent;
+  lorebook?: LorebookContent;
   name: string;
   shortName: string;
   leagueId: string;
@@ -68,9 +68,7 @@ export function TeamModal({
 }) {
   const [id, setId] = useState("");
   const [name, setName] = useState(team?.name ?? "");
-  const [characterBook, setCharacterBook] = useState<CharacterBookContent | undefined>(
-    team?.characterBook,
-  );
+  const [lorebook, setLorebook] = useState<LorebookContent | undefined>(team?.lorebook);
   const [shortName, setShortName] = useState(team?.shortName ?? "");
   const [leagueId, setLeagueId] = useState(team?.leagueId ?? defaultLeagueId);
   const [tier, setTier] = useState<Grade>(team?.tier ?? 3);
@@ -85,7 +83,7 @@ export function TeamModal({
   const [formError, setFormError] = useState<string | null>(null);
 
   const fields: TeamFields = {
-    characterBook: characterBookInput(name.trim(), characterBook),
+    lorebook: lorebookInput(name.trim(), lorebook),
     name: name.trim(),
     shortName: shortName.trim(),
     leagueId,
@@ -110,7 +108,7 @@ export function TeamModal({
     } else {
       const patch = changedFields<TeamFields>(
         {
-          characterBook: team!.characterBook,
+          lorebook: team!.lorebook,
           name: team!.name,
           shortName: team!.shortName,
           leagueId: team!.leagueId,
@@ -220,7 +218,7 @@ export function TeamModal({
         </div>
       )}
 
-      <CharacterBookFields name={name} book={characterBook} onChange={setCharacterBook} />
+      <LorebookFields name={name} book={lorebook} onChange={setLorebook} />
       <div className="admin-fields">
         {mode === "create" && (
           <label className="admin-field grow">

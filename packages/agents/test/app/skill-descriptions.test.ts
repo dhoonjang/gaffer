@@ -772,7 +772,7 @@ describe("GM financial decisions and staff agreements", () => {
       title: "기술 코치",
       salary: 1000,
       until: `${Number(state.date.slice(0, 4)) + 1}-03-17`,
-      characterBook: {
+      lorebook: {
         name,
         keywords: [name],
         description: "기술 코치",

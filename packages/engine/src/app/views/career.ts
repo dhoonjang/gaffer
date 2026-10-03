@@ -1,6 +1,6 @@
 import { openManagerOffers } from "../../story/world/manager-employment";
 import { tierOfTeamIn } from "../../common/core/club-tier";
-import { personaBookOf } from "../../common/people/character-book";
+import { personaBookOf } from "../../common/people/lorebook";
 import {
   type ClubTier,
   type GrowthOutlook,
@@ -94,7 +94,7 @@ export interface StaffMemberView {
   role: "head_coach" | StaffRole;
   /** 이름 옆의 직책 — 「피지컬 코치」. 역할 라벨(「코치」)보다 좁다 */
   title: string;
-  /** 세이브의 최신 캐릭터북 설명 */
+  /** 세이브의 최신 로어북 설명 */
   description: string;
   /** 부임일 — 감독보다 앞설 수 있다 (people.md §2-2) */
   since: string | null;

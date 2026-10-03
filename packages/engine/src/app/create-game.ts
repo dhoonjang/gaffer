@@ -1,6 +1,6 @@
-import { storePersona } from "../common/people/character-book";
+import { storePersona } from "../common/people/lorebook";
 import { refreshStaffPool } from "../story/people/staff-employment";
-import { syncCharacterBook } from "./workflows/story/character-book";
+import { syncLorebook } from "./workflows/story/lorebook";
 import type {
   AxisValues,
   Contract,
@@ -802,10 +802,10 @@ export function createGame(input: CreateGameInput): GameState {
     growthLog: [],
     trainingReports: [],
     seasonStats: [],
-    characterBook: [],
-    characterBookRevisions: [],
-    characterBookJobSequence: 0,
-    characterBookJobs: [],
+    lorebook: [],
+    lorebookRevisions: [],
+    lorebookJobSequence: 0,
+    lorebookJobs: [],
     staffPool: [],
     playerTraining: [],
     roleMemory: [],
@@ -876,7 +876,7 @@ export function createGame(input: CreateGameInput): GameState {
   seedInjuryHistory(state);
   // 통산 캡·골 — 없으면 서른 살 주전이 첫 소집에서 데뷔한다 (competition.md §5-1)
   seedInternationalCaps(state);
-  syncCharacterBook(state);
+  syncLorebook(state);
   refreshStaffPool(state, state.season);
   return state;
 }
