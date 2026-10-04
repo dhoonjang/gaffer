@@ -84,26 +84,27 @@ function validReferences(
     refs.reportIds.every((id) => state.schedule.some((e) => e.id === id && e.teamId === team))
   );
 }
+export function getMailRequestResult(state: GameState, requestId: string): MailResult | null {
+  if (!state.mailRequests.includes(requestId)) return null;
+  const thread = state.mailThreads.find(
+    (t) =>
+      t.ownerTeamId === managedTeamId(state) && t.messages.some((m) => m.requestId === requestId),
+  );
+  const message = thread?.messages.find((m) => m.requestId === requestId);
+  return {
+    ok: true,
+    message: "이미 발송한 메일입니다",
+    replayed: true,
+    threadId: thread?.id,
+    messageId: message?.id,
+  };
+}
 export function sendMail(state: GameState, raw: unknown): MailResult {
   const parsed = MailSendSchema.safeParse(raw);
   if (!parsed.success) return fail("메일 형식이 올바르지 않습니다");
   const input = parsed.data;
-  const replay = state.mailRequests.includes(input.requestId);
-  if (replay) {
-    const thread = state.mailThreads.find(
-      (t) =>
-        t.ownerTeamId === managedTeamId(state) &&
-        t.messages.some((m) => m.requestId === input.requestId),
-    );
-    const message = thread?.messages.find((m) => m.requestId === input.requestId);
-    return {
-      ok: true,
-      message: "이미 발송한 메일입니다",
-      replayed: true,
-      threadId: thread?.id,
-      messageId: message?.id,
-    };
-  }
+  const replay = getMailRequestResult(state, input.requestId);
+  if (replay) return replay;
   const team = managedTeamId(state),
     contact = resolveMailRecipient(state, input.recipient);
   if (state.phase === "match" || !team || !contact)

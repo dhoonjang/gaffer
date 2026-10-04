@@ -8,6 +8,10 @@ import {
   dueMailReplies,
   buildMailView,
   resolveMailRecipient,
+  resolveMailRecipientText,
+  searchMailRecipients,
+  getMailRequestResult,
+  staffOf,
   mailMessageForViewer,
   deliverIncomingMail,
   activeContract,
@@ -977,5 +981,95 @@ describe("mail ledger and economic acceptance", () => {
       s.action({ kind: "accept", proposalId: s.n.proposals.at(-1)!.id }, s.model(s.player.id)).ok,
     ).toBe(false);
     expect(s.state).toEqual(wageBefore);
+  });
+});
+
+describe("mail recipient name resolution", () => {
+  it("resolves club aliases and player English/Korean shorthand while typos remain suggestions only", () => {
+    const s = setup();
+    s.player.id = "sandro-tonali";
+    s.player.name = "산드로 토날리";
+    const club = s.state.teams.find((t) => t.id === s.n.sellerId)!;
+    club.id = "mancity";
+    s.state.finances.find((f) => f.teamId === s.n.sellerId)!.teamId = club.id;
+    s.player.teamId = club.id;
+    for (const query of [
+      "토날리",
+      "산드로 토날리",
+      "Sandro Tonali",
+      "tonali",
+      "토날리 에이전트",
+      "토날리의 대리인",
+    ]) {
+      const result = resolveMailRecipientText(s.state, query);
+      expect(result.ok).toBe(true);
+      if (result.ok)
+        expect(result.contact.recipient).toEqual({ kind: "agent", playerId: s.player.id });
+    }
+    for (const query of ["맨시티", "Manchester City", "mancity"]) {
+      const result = resolveMailRecipientText(s.state, query);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.contact.recipient).toEqual({ kind: "club", teamId: club.id });
+    }
+    const before = structuredClone(s.state);
+    expect(resolveMailRecipientText(s.state, "Sandor Tonali").ok).toBe(false);
+    expect(
+      searchMailRecipients(s.state, { query: "Sandor Tonali" }).candidates.some(
+        (c) => c.recipient.kind === "agent" && c.recipient.playerId === s.player.id,
+      ),
+    ).toBe(true);
+    expect(resolveMailRecipientText(s.state, "zzzz-nonexistent").ok).toBe(false);
+    expect(s.state).toEqual(before);
+  });
+  it("rejects duplicate club names and cross-kind ambiguity instead of silently choosing a recipient", () => {
+    const s = setup();
+    const clubs = s.state.teams
+      .filter((t) => t.id !== s.state.userTeamId && s.state.finances.some((f) => f.teamId === t.id))
+      .slice(0, 2);
+    expect(clubs).toHaveLength(2);
+    clubs.forEach((t) => (t.name = "같은 구단"));
+    const duplicate = resolveMailRecipientText(s.state, "같은 구단");
+    expect(duplicate.ok).toBe(false);
+    if (!duplicate.ok)
+      expect(duplicate.candidates.filter((c) => c.recipient.kind === "club")).toHaveLength(2);
+    clubs[0]!.name = "토날리";
+    s.player.name = "토날리";
+    const cross = resolveMailRecipientText(s.state, "토날리");
+    expect(cross.ok).toBe(false);
+    if (!cross.ok)
+      expect(new Set(cross.candidates.map((c) => c.recipient.kind))).toEqual(
+        new Set(["club", "agent"]),
+      );
+  });
+  it("bounds autocomplete payloads, resolves actual own staff and replays successful delivery before new name lookup", () => {
+    const s = setup();
+    const person = staffOf(s.state, "coach")[0]!;
+    expect(person).toBeDefined();
+    const staff = resolveMailRecipientText(s.state, person.name);
+    expect(staff.ok).toBe(true);
+    if (staff.ok)
+      expect(staff.contact.recipient).toEqual({ kind: "staff", personId: person.characterId });
+    const found = searchMailRecipients(s.state, { query: s.player.name, limit: 1 });
+    expect(found.candidates).toHaveLength(1);
+    expect(Object.keys(found.candidates[0]!).sort()).toEqual(
+      ["contactId", "description", "label", "recipient"].sort(),
+    );
+    expect(() => searchMailRecipients(s.state, { query: "abc", limit: 21 })).toThrow(RangeError);
+    expect(() => searchMailRecipients(s.state, { query: "" })).toThrow(RangeError);
+    const sent = sendMail(s.state, {
+      requestId: "named-delivery",
+      recipient: { kind: "club", teamId: s.n.sellerId },
+      subject: "문의",
+      body: "원문",
+    });
+    expect(sent.ok).toBe(true);
+    const before = structuredClone(s.state);
+    expect(getMailRequestResult(s.state, "named-delivery")).toMatchObject({
+      replayed: true,
+      threadId: sent.threadId,
+      messageId: sent.messageId,
+    });
+    expect(getMailRequestResult(s.state, "unknown-request")).toBeNull();
+    expect(s.state).toEqual(before);
   });
 });

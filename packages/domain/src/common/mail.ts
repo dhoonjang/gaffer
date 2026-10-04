@@ -68,3 +68,25 @@ export interface MailView {
   unread: number;
   recipients: MailContact[];
 }
+
+/** Browser form input; the server resolves free text before invoking MailSendSchema. */
+export const MailUiSendSchema = MailSendSchema.omit({ recipient: true })
+  .extend({
+    recipient: MailRecipientSchema.optional(),
+    recipientText: z.string().trim().min(1).max(160).optional(),
+  })
+  .refine((input) => input.recipient !== undefined || input.recipientText !== undefined, {
+    message: "수신인을 입력해 주세요",
+  });
+export const MailRecipientSearchSchema = z
+  .object({
+    query: z.string().trim().min(1).max(160),
+    limit: z.number().int().min(1).max(20).default(8),
+  })
+  .strict();
+export interface MailRecipientCandidate extends MailContact {
+  description?: string;
+}
+export type MailRecipientResolution =
+  | { ok: true; contact: MailRecipientCandidate }
+  | { ok: false; message: string; candidates: MailRecipientCandidate[] };

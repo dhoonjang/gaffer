@@ -1264,6 +1264,115 @@ describe("협상 요청 경계", () => {
     expect(loadGame(id)!.chat).toEqual(before.chat);
     expect(loadGame(id)!.mailThreads).toEqual(twice.mailThreads);
   });
+  it("수신인 이름 검색과 발송은 모호성을 거절하고 정확한 선택·원래 요청 ID를 유지한다", async () => {
+    const { POST, GET } = await import("../../app/api/games/[id]/mail/route");
+    const before = loadGame(id)!;
+    try {
+      const state = structuredClone(before);
+      const foreign = state.players.filter((p) => p.teamId !== state.userTeamId).slice(0, 2);
+      const first = foreign[0]!,
+        second = foreign[1]!;
+      first.name = "수신인 검증 선수";
+      second.name = "수신인 동명이인";
+      saveGame(state);
+      const lookup = await GET(
+        new Request("http://test.local?query=" + encodeURIComponent(first.name) + "&limit=8"),
+        params(id),
+      );
+      expect(lookup.status).toBe(200);
+      const candidates = (await lookup.json()) as {
+        candidates: { recipient: { kind: string; playerId?: string } }[];
+      };
+      expect(
+        candidates.candidates.some(
+          (c) => c.recipient.kind === "agent" && c.recipient.playerId === first.id,
+        ),
+      ).toBe(true);
+      expect(loadGame(id)).toEqual(state);
+      for (const query of [
+        "query=" + "a".repeat(161),
+        "query=선수&limit=21",
+        "query=선수&limit=1.5",
+        "query=선수&extra=true",
+        "query=하나&query=둘",
+      ])
+        expect((await GET(new Request("http://test.local?" + query), params(id))).status).toBe(400);
+      const input = {
+        kind: "send",
+        requestId: "text-recipient-retry",
+        recipientText: first.name,
+        subject: "문의",
+        body: "계약 가능성을 문의합니다.",
+      };
+      const sent = await POST(json(input), params(id));
+      expect(sent.status).toBe(200);
+      const sentResult = (await sent.json()) as { threadId: string; messageId: string };
+      const once = loadGame(id)!;
+      expect(
+        once.mailThreads.find((t) => t.id === sentResult.threadId)?.messages.at(-1)?.direction,
+      ).toBe("outbound");
+      first.name = "이름이 변경된 선수";
+      const renamed = structuredClone(once);
+      renamed.players.find((p) => p.id === first.id)!.name = first.name;
+      saveGame(renamed);
+      const replay = await POST(json({ ...input, recipientText: "이제 없는 이름" }), params(id));
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({
+        threadId: sentResult.threadId,
+        messageId: sentResult.messageId,
+        replayed: true,
+      });
+      expect(loadGame(id)).toEqual(renamed);
+      const unknown = await POST(
+        json({ ...input, requestId: "unknown-recipient", recipientText: "존재하지않는수신인" }),
+        params(id),
+      );
+      expect(unknown.status).toBe(400);
+      expect(await unknown.json()).toMatchObject({ candidates: [] });
+      const duplicate = structuredClone(renamed);
+      duplicate.players.find((p) => p.id === first.id)!.name = "수신인 동명이인";
+      saveGame(duplicate);
+      const ambiguous = await POST(
+        json({ ...input, requestId: "ambiguous-recipient", recipientText: second.name }),
+        params(id),
+      );
+      expect(ambiguous.status).toBe(400);
+      expect(
+        ((await ambiguous.json()) as { candidates: unknown[] }).candidates.length,
+      ).toBeGreaterThan(1);
+      expect(loadGame(id)).toEqual(duplicate);
+      expect(
+        (
+          await POST(
+            json({
+              ...input,
+              requestId: "selected-recipient",
+              recipientText: "틀린 이름",
+              recipient: { kind: "agent", playerId: first.id },
+            }),
+            params(id),
+          )
+        ).status,
+      ).toBe(200);
+      const selected = loadGame(id)!;
+      expect(
+        (
+          await POST(
+            json({
+              ...input,
+              requestId: "extra-recipient",
+              recipient: { kind: "agent", playerId: first.id },
+              actor: "world",
+            }),
+            params(id),
+          )
+        ).status,
+      ).toBe(400);
+      expect(loadGame(id)).toEqual(selected);
+    } finally {
+      saveGame(before);
+    }
+  });
   it("센터 검색은 범위를 검증하고 저장·대화·시장 검토를 바꾸지 않는다", async () => {
     const { GET } = await import("../../app/api/games/[id]/agent-center/players/route");
     const before = loadGame(id)!;

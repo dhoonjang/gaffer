@@ -320,7 +320,11 @@ export interface NameRanking<T> {
 
 const NOTHING: NameRanking<never> = { matches: [], best: null };
 
-export function rankByName<T extends NamedItem>(query: string, pool: readonly T[]): NameRanking<T> {
+export function rankByName<T extends NamedItem>(
+  query: string,
+  pool: readonly T[],
+  options: { allowFuzzy?: boolean } = {},
+): NameRanking<T> {
   const q = parseQuery(query);
   if (!q) return NOTHING;
 
@@ -330,7 +334,7 @@ export function rankByName<T extends NamedItem>(query: string, pool: readonly T[
     if (score > 0) scored.push({ item, score });
   }
   // 확실한 일치가 하나라도 있으면 흔들림은 추정하지 않는다 — 잡음이 섞이고 느려진다
-  if (scored.length === 0) {
+  if (scored.length === 0 && options.allowFuzzy !== false) {
     for (const item of pool) {
       const score = slipScore(q, indexOf(item));
       if (score > 0) scored.push({ item, score });

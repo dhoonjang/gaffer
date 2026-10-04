@@ -151,7 +151,7 @@
   font-size: 12px;
   color: var(--text-3);
 }
-.mail-compose :is(input, select, textarea) {
+.mail-compose :is(input, textarea) {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -163,10 +163,7 @@
   border: 0;
   border-radius: 0;
 }
-.mail-compose select option {
-  background: var(--panel);
-}
-.mail-compose :is(input, select, textarea):focus-visible {
+.mail-compose :is(input, textarea):focus-visible {
   outline: 0;
   box-shadow: inset 0 -2px var(--accent);
 }
@@ -400,4 +397,68 @@
   font-size: 10px;
   line-height: 14px;
   text-align: center;
+}
+
+.mailbox .mail-attach-action:not(:disabled):hover {
+  background: transparent;
+  color: var(--text);
+}
+.mail-thread-toolbar > div {
+  flex: 1;
+}
+.mail-recipient-control {
+  position: relative;
+  min-width: 0;
+}
+.mail-recipient-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  padding: 4px;
+  background: var(--pop);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px #0004;
+}
+.mail-recipient-results [role="listbox"] {
+  display: grid;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.mailbox .mail-recipient-results button {
+  display: grid;
+  justify-content: stretch;
+  text-align: left;
+  width: 100%;
+  border: 0;
+  gap: 4px;
+}
+.mail-recipient-results button[aria-selected="true"] {
+  background: var(--panel-2);
+}
+.mail-recipient-results strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.mail-recipient-results small,
+.mail-recipient-results p,
+.mail-recipient-hint {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.mail-recipient-results p {
+  margin: 8px;
+}
+.mail-recipient-hint {
+  margin: 8px 0;
+}
+.mail-thread > .mail-compose {
+  margin-top: 24px;
+}
+
+.mail-thread > .mail-compose textarea {
+  min-height: 200px;
 }

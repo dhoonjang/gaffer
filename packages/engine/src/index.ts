@@ -169,3 +169,5 @@ export { repairNegotiationSquads } from "./app/workflows/negotiation-squad";
 export * from "./common/mail/mail";
 
 export { deliverTrainingReportMail } from "./app/workflows/mail-reports";
+
+export * from "./common/mail/recipient-search";

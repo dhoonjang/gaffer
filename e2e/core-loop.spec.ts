@@ -81,9 +81,7 @@ test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 �
   await input.fill("메일을 검토한 뒤 훈련을 논의하자");
   await openPanel("메일함");
   await page.getByTestId("mail-compose").click();
-  await page
-    .getByTestId("mail-recipient")
-    .selectOption(JSON.stringify({ kind: "club", teamId: fixture.targetTeamId }));
+  await page.getByTestId("mail-recipient").fill(fixture.targetTeamId);
   await page.getByTestId("mail-subject").fill(`${fixture.targetName} 영입 문의`);
   await page
     .getByTestId("mail-body")
@@ -95,9 +93,7 @@ test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 �
   expect(thread.messages).toHaveLength(1);
   expect(thread.messages[0]!.direction).toBe("outbound");
   await page.getByTestId("mail-compose").click();
-  await page
-    .getByTestId("mail-recipient")
-    .selectOption(JSON.stringify({ kind: "club", teamId: fixture.targetTeamId }));
+  await page.getByTestId("mail-recipient").fill(fixture.targetTeamId);
   await page.getByTestId("mail-subject").fill("문의 보충");
   await page
     .getByTestId("mail-body")

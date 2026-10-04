@@ -630,7 +630,7 @@ export function IconPaperclip({ size = 18 }: IconProps) {
 export function IconReply({ size = 18 }: IconProps) {
   return (
     <svg {...base(size)}>
-      <path d="m9 5-6 6 6 6M3 11h10a7 7 0 0 1 7 7" />
+      <path d="M4 5v5a5 5 0 0 0 5 5h11m-5-5 5 5-5 5" />
     </svg>
   );
 }
