@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { ManagerSpellSchema } from "./team-coach";
 
+/** 무소속 — 클럽이 아니라 클럽이 없는 상태 (team-catalog `freeagents`) */
+export const FREE_AGENT_TEAM = "freeagents";
+
 /**
  * 게임 팀 (GAME_TEAM) — 정규화된 테이블. 라인업은 TACTIC_ASSIGNMENT에, 재정은 FINANCE에
  * 있고, id는 카탈로그 팀 id를 재사용한다.

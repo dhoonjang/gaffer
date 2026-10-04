@@ -1,3 +1,4 @@
+import { MAIL_REPLY_SYSTEM, MAIL_REPLY_OUTPUT } from "./workflows/mail/reply-prompt";
 import { LOREBOOK_EDITOR_SYSTEM, LOREBOOK_EDITOR_OUTPUT } from "../story/lorebook-editor";
 import type { GenerativeAgentName, JsonObjectSchema } from "@story-fm/llm";
 import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../story/history-compactor";
@@ -15,6 +16,7 @@ export interface OutputAgent {
 
 export function outputAgents(): readonly OutputAgent[] {
   return [
+    { agent: "gm", system: MAIL_REPLY_SYSTEM, schema: MAIL_REPLY_OUTPUT },
     {
       agent: "lorebook-editor",
       system: LOREBOOK_EDITOR_SYSTEM,

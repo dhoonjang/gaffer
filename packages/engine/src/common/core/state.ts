@@ -136,6 +136,7 @@ export interface ToolCallRecord {
 
 /** 채팅 턴 — 도구 호출 기록 포함 (UI가 호출 칩으로 렌더) */
 export interface ChatTurn {
+  mailMessageIds?: string[];
   /**
    * 누가 한 말인가.
    *
@@ -768,7 +769,10 @@ export function isSuspendedFor(
  */
 export function isAvailable(state: GameState, player: GamePlayer): boolean {
   return (
-    !isInjured(state, player.id) && !isSuspended(state, player.id) && !isAwayFromClub(state, player)
+    activeContract(state, player.id)?.registrationStatus !== "pending" &&
+    !isInjured(state, player.id) &&
+    !isSuspended(state, player.id) &&
+    !isAwayFromClub(state, player)
   );
 }
 
@@ -785,6 +789,7 @@ export function isAvailableFor(
   competitionId: string | null,
 ): boolean {
   return (
+    activeContract(state, player.id)?.registrationStatus !== "pending" &&
     !isInjured(state, player.id) &&
     !isSuspendedFor(state, player.id, competitionId) &&
     !isAwayFromClub(state, player)

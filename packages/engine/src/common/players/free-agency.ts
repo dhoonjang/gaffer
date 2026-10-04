@@ -1,4 +1,6 @@
-import type { Contract, GamePlayer } from "@story-fm/domain";
+import { writeOffPlayerContract } from "../finance/transfer-accounting";
+import { FREE_AGENT_TEAM, type Contract, type GamePlayer } from "@story-fm/domain";
+export { FREE_AGENT_TEAM } from "@story-fm/domain";
 import { activeContract, type GameState, releaseFromTactics } from "../core/state";
 import { forgetRoles } from "./role-memory";
 
@@ -7,9 +9,6 @@ import { forgetRoles } from "./role-memory";
  * 따른다 (→ docs/common/season.md §6). 무소속 선수를 데려가는 길은 없고, 그는 은퇴할
  * 때까지 세계에 남는다.
  */
-
-/** 무소속 — 클럽이 아니라 클럽이 없는 상태 (team-catalog `freeagents`) */
-export const FREE_AGENT_TEAM = "freeagents";
 
 export function isFreeAgent(player: GamePlayer): boolean {
   return player.teamId === FREE_AGENT_TEAM;
@@ -39,6 +38,9 @@ export function contractExpiresBy(contract: Contract, on: string): boolean {
  */
 export function clearDepartedState(state: GameState, player: GamePlayer, from: string): void {
   releaseFromTactics(state, from, player.id);
+  state.transferListings = state.transferListings.filter(
+    (listing) => listing.gamePlayerId !== player.id,
+  );
   state.playerTraining = state.playerTraining.filter((t) => t.gamePlayerId !== player.id);
   forgetRoles(state, player.id);
   player.isCaptain = false;
@@ -48,7 +50,10 @@ export function clearDepartedState(state: GameState, player: GamePlayer, from: s
 /** 계약이 끝난 선수를 무소속으로 보낸다 — 계약은 여기서 끊기고 이동 원장에 한 줄이 선다 */
 export function toFreeAgency(state: GameState, player: GamePlayer, on = state.date): void {
   const contract = activeContract(state, player.id);
-  if (contract) contract.status = "ended";
+  if (contract) {
+    writeOffPlayerContract(state, contract, on);
+    contract.status = "ended";
+  }
   const from = player.teamId;
   clearDepartedState(state, player, from);
   player.teamId = FREE_AGENT_TEAM;

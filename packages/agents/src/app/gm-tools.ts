@@ -1,3 +1,4 @@
+import { managedNegotiationOverview } from "../negotiation/overview";
 import { HireStaffInputSchema } from "@story-fm/domain";
 import { applyForManagerJob } from "@story-fm/engine";
 import { ManagerJobOfferSchema, InterviewOutcomeSchema } from "@story-fm/domain";
@@ -13,6 +14,12 @@ import {
 
 import { z } from "zod";
 import {
+  MailSendSchema,
+  ProposalTermsSchema,
+  currentProposal,
+  SetTransferListingSchema,
+  OpenNegotiationSchema,
+  NegotiationActionSchema,
   CharacterUpdateSchema,
   POSITION_CODES,
   DateString,
@@ -35,6 +42,17 @@ import {
   type BoardMove,
 } from "@story-fm/domain";
 import {
+  sendMail,
+  buildMailView,
+  readMailThread,
+  pickTeam,
+  pickPlayerAmong,
+  managedTeamId,
+  setTransferListing,
+  openNegotiation,
+  actNegotiation,
+  repairNegotiationSquads,
+  buildNegotiationConfirmation,
   requestCharacterUpdate,
   type GameState,
   journal,
@@ -382,6 +400,260 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
 
   const tools: GameToolSpec[] = [
     startMatchTool,
+    wrap(
+      "start_negotiation",
+      descriptions.start_negotiation,
+      OpenNegotiationSchema.extend({
+        playerId: z
+          .string()
+          .trim()
+          .min(1)
+          .max(160)
+          .describe(
+            "선수 이름 또는 실제 선수 id. 캐릭터북의 player: 접두어가 붙은 항목 id가 아니다. 모호하면 search_players로 확인한다",
+          ),
+        buyerId: z
+          .string()
+          .trim()
+          .min(1)
+          .max(160)
+          .optional()
+          .describe(
+            "영입 구단 이름·약칭 또는 실제 구단 id. 생략하면 현재 맡은 구단. 명시한 구단을 찾지 못하면 get_team으로 확인한다",
+          ),
+      }),
+      async (input) => {
+        const team =
+          input.buyerId === undefined ? managedTeamId(state) : pickTeam(state, input.buyerId);
+        if (team === null)
+          return {
+            ok: false,
+            message:
+              "현재 맡은 구단이 없습니다. 영입 구단을 명시하고 get_career로 감독의 재직을 확인하세요",
+          };
+        if (typeof team !== "string" && !team.ok)
+          return {
+            ...team,
+            message: `${team.message}. get_team에 구단 이름·약칭을 넣어 확인하거나 정확한 구단을 지정하세요. 생략하면 현재 맡은 구단입니다`,
+          };
+        const buyerId = typeof team === "string" ? team : team.teamId;
+        const picked = pickPlayerAmong(
+          state,
+          input.kind === "renewal"
+            ? state.players.filter((p) => p.teamId === buyerId)
+            : state.players,
+          input.playerId,
+          input.kind === "renewal" ? "재계약 구단 선수 명단" : "이 세계 선수 명단",
+        );
+        if (!picked.ok)
+          return {
+            ...picked,
+            message: `${picked.message}. search_players로 확인하고 player: 접두어 없는 실제 선수 id 또는 정확한 이름을 지정하세요`,
+          };
+        const player = picked.player;
+        const opened = openNegotiation(state, { ...input, playerId: player.id, buyerId });
+        return opened.ok && opened.negotiationId
+          ? {
+              ...opened,
+              message: `${opened.message}. 협상 id: ${opened.negotiationId}. 제안이나 상대 동의는 아직 새로 기록하지 않았습니다. 메인 대화에서 최신 장부를 조회하고 조건을 논의하세요.`,
+            }
+          : opened;
+      },
+    ),
+    wrap(
+      "update_negotiation",
+      descriptions.update_negotiation,
+      z
+        .object({
+          negotiationId: z.string().min(1),
+          partyId: z.string().min(1),
+          action: NegotiationActionSchema,
+        })
+        .strict(),
+      (input) => {
+        const teamId = managedTeamId(state);
+        const n = state.negotiations.find((item) => item.id === input.negotiationId);
+        if (!n || teamId === null || ![n.buyerId, n.sellerId].includes(teamId))
+          return { ok: false, message: "우리 구단이 참여한 협상만 변경할 수 있습니다" };
+        const managed = input.partyId === teamId;
+        const allowed = managed
+          ? ["draft", "send", "withdraw", "medical"]
+          : input.partyId === n.buyerId
+            ? [
+                "send",
+                "accept",
+                "reject",
+                "withdraw",
+                "medical",
+                "acknowledge_medical",
+                "sign",
+                "register",
+              ]
+            : ["send", "accept", "reject", "withdraw"];
+        if (!allowed.includes(input.action.kind))
+          return {
+            ok: false,
+            message: "감독의 동의·위험 확인·최종 서명은 직접 확인 카드에서만 실행할 수 있습니다",
+          };
+        const result = actNegotiation(state, n.id, input.action, {
+          kind: managed && input.action.kind !== "draft" ? "user" : "model",
+          partyId: input.partyId,
+        });
+        if (result.ok) {
+          if (input.action.kind === "sign" && n.status === "completed")
+            repairNegotiationSquads(state, [n.sellerId]);
+          if (input.action.kind === "register") repairNegotiationSquads(state, [n.buyerId]);
+        }
+        return result.ok
+          ? {
+              ...result,
+              message: `${result.message}. 현재 협상 id: ${n.id}, revision: ${n.revision}`,
+            }
+          : result;
+      },
+    ),
+    wrap(
+      "request_negotiation_confirmation",
+      descriptions.request_negotiation_confirmation,
+      z
+        .object({
+          negotiationId: z.string().min(1),
+          stage: z.enum(["agreement", "medical", "sign"]),
+        })
+        .strict(),
+      (input) => {
+        const payload = buildNegotiationConfirmation(state, input.negotiationId, input.stage);
+        return payload
+          ? {
+              ok: true,
+              message:
+                "현재의 정확한 조건을 감독의 직접 확인 카드에 제시했습니다. 동의·위험 확인·서명은 아직 실행하지 않았습니다",
+              payload,
+            }
+          : {
+              ok: false,
+              message:
+                "이 단계에서 확인할 유효한 조건이 없습니다. 최신 제안·당사자 동의·메디컬 장부를 조회하세요",
+            };
+      },
+    ),
+    wrap(
+      "send_mail",
+      descriptions.send_mail,
+      MailSendSchema.omit({ requestId: true }).extend({ proposal: ProposalTermsSchema.optional() }),
+      (input) => {
+        const draft = structuredClone(state);
+        const { proposal, ...mail } = input;
+        let proposalId: string | undefined;
+        if (proposal) {
+          const n = draft.negotiations.find((n) => n.id === input.negotiationId);
+          const team = managedTeamId(draft);
+          if (!n || !team || ![n.buyerId, n.sellerId].includes(team))
+            return { ok: false, message: "제안 메일에는 우리 구단의 정확한 협상 id가 필요합니다" };
+          const outcome = actNegotiation(
+            draft,
+            n.id,
+            { kind: "send", terms: proposal },
+            { kind: "user", partyId: team },
+          );
+          if (!outcome.ok) return outcome;
+          proposalId = currentProposal(n, proposal.scope)?.id;
+        }
+        const result = sendMail(draft, {
+          ...mail,
+          requestId: crypto.randomUUID(),
+          ...(proposalId
+            ? {
+                references: {
+                  playerIds: mail.references?.playerIds ?? [],
+                  reportIds: mail.references?.reportIds ?? [],
+                  proposalIds: [...new Set([...(mail.references?.proposalIds ?? []), proposalId])],
+                },
+              }
+            : {}),
+        });
+        if (result.ok) Object.assign(state, draft);
+        return result;
+      },
+    ),
+    wrap(
+      "read_mail",
+      descriptions.read_mail,
+      z.object({ threadId: z.string().min(1) }).strict(),
+      (input) => {
+        const outcome = readMailThread(state, input.threadId);
+        if (!outcome.ok) return outcome;
+        const thread = buildMailView(state).threads.find((thread) => thread.id === input.threadId);
+        return {
+          ...outcome,
+          message: JSON.stringify({
+            ...outcome,
+            thread: thread ? { ...thread, messages: thread.messages.slice(-12) } : null,
+          }),
+        };
+      },
+    ),
+    read("get_mail", descriptions.get_mail, z.object({}).strict(), () => {
+      const mail = buildMailView(state);
+      return {
+        ok: true,
+        message: JSON.stringify({
+          unread: mail.unread,
+          recipients: mail.recipients,
+          threads: mail.threads.slice(0, 12).map((thread) => ({
+            id: thread.id,
+            contactId: thread.contactId,
+            label: thread.label,
+            recipient: thread.recipient,
+            unread: thread.messages
+              .slice(thread.lastReadMessage)
+              .filter((message) => message.direction !== "outbound").length,
+            latest: thread.messages.at(-1)
+              ? {
+                  id: thread.messages.at(-1)!.id,
+                  subject: thread.messages.at(-1)!.subject,
+                  on: thread.messages.at(-1)!.on,
+                  direction: thread.messages.at(-1)!.direction,
+                }
+              : null,
+          })),
+        }),
+      };
+    }),
+    wrap(
+      "set_transfer_list",
+      descriptions.set_transfer_list,
+      SetTransferListingSchema.extend({
+        playerId: z
+          .string()
+          .trim()
+          .min(1)
+          .max(160)
+          .describe("우리 구단 선수의 이름 또는 player: 접두어 없는 실제 id"),
+      }),
+      (input) => {
+        const picked = pickPlayerAmong(
+          state,
+          state.players.filter((p) => p.teamId === managedTeamId(state)),
+          input.playerId,
+          "우리 구단 선수 명단",
+        );
+        if (!picked.ok)
+          return {
+            ...picked,
+            message: `${picked.message}. search_players로 우리 구단의 정확한 선수 이름 또는 id를 확인하세요`,
+          };
+        return setTransferListing(state, { ...input, playerId: picked.player.id });
+      },
+    ),
+    read("get_negotiations", descriptions.get_negotiations, z.object({}), () => {
+      return {
+        ok: true,
+        message: JSON.stringify({
+          ...managedNegotiationOverview(state),
+        }),
+      };
+    }),
     wrap(
       "set_lineup",
       CORE_COMMAND_LABELS.set_lineup!,

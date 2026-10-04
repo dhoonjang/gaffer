@@ -95,7 +95,7 @@ describe("스킬 설명 — 코드가 유일한 원본이다", () => {
 describe("규칙이 사는 자리", () => {
   /**
    * 설명은 고정층에 매 턴 실린다 — 길이 예산이 없으면 규칙 하나를 지울 때마다 설명
-   * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈5,300자)에 한 도구
+   * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈7,400자)에 한 도구
    * 몫(600자)의 여유를 얹은 값이다 — **도구가 늘 때만** 그만큼 올린다. **도구가 줄면
    * 함께 내린다**: 상한이 총량의 두 배로 남으면 설명이 한 벌씩 더 붙어도 걸리지 않는다.
    */
@@ -104,7 +104,7 @@ describe("규칙이 사는 자리", () => {
     for (const skill of SKILL_CATALOG) {
       expect(skill.description.length, skill.name).toBeLessThanOrEqual(600);
     }
-    expect(total).toBeLessThanOrEqual(5_900);
+    expect(total).toBeLessThanOrEqual(8_000);
   });
 
   it("GM은 직접 명령 대신 역할별 해석 스킬을 받는다", () => {
@@ -471,11 +471,11 @@ describe("출력 스키마는 제공자의 문을 지난다", () => {
   };
 
   /**
-   * 열은 전부 도구 없이 답한다 — GM 둘을 뺀 에이전트 이름과 목록이 하나씩 맞는다.
+   * 열은 전부 도구 없이 답한다 — 메일 회신도 수행하는 평시 GM과 판정 에이전트 이름이 목록에 맞는다.
    * 에이전트가 하나 늘면 설정(`AGENT_NAMES`)과 이 목록 중 하나가 먼저 빨개진다.
    */
-  it("GM 둘을 뺀 에이전트 전부가 출력 스키마로 답한다 — 도구 이름은 없다", () => {
-    const GMS = new Set(["gm", "match-gm"]);
+  it("출력 스키마를 사용하는 에이전트가 선언된다", () => {
+    const GMS = new Set(["match-gm"]);
     const expected = AGENT_NAMES.filter((name) => !GMS.has(name));
     expect(DECLARED.map((entry) => entry.agent).sort()).toEqual([...expected].sort());
     for (const entry of DECLARED) expect(entry.schema.type, entry.agent).toBe("object");

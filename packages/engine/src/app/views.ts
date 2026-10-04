@@ -1,3 +1,6 @@
+import { buildMailView } from "../common/mail/mail";
+import type { MailView, NegotiationView } from "@story-fm/domain";
+import { buildNegotiationView } from "../negotiation/negotiation";
 import { type MatchView, buildMatchView } from "../match/views/live";
 import { type SquadView, buildSquadView } from "./views/squad";
 import { type CalendarView, buildCalendarView } from "./calendar-view";
@@ -54,6 +57,8 @@ export interface OfficeViews {
   /** 대회 — 우리 리그 + 우리 대항전. 대회별 순위표와 일정이 한 자리에 (overview §5) */
   competitions: CompetitionsView;
   career: CareerView;
+  negotiation: NegotiationView;
+  mail: MailView;
 }
 
 /**
@@ -99,6 +104,8 @@ export function buildOfficeViews(
       return buildCompetitionsView(state, ratings, next);
     },
     career: () => buildCareerView(state),
+    negotiation: () => buildNegotiationView(state),
+    mail: () => buildMailView(state),
   };
   const keys = only ?? (Object.keys(builders) as (keyof OfficeViews)[]);
   return Object.fromEntries(keys.map((key) => [key, builders[key]()]));

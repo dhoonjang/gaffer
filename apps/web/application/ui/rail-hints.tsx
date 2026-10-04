@@ -14,6 +14,7 @@ import {
   IconJersey,
   IconMatch,
   IconPerson,
+  IconMail,
   IconSquad,
   IconTrophy,
   type IconComponent,
@@ -25,10 +26,11 @@ const PANEL_ICON: Record<PanelKey, IconComponent> = {
   재정: IconFinance,
   대회: IconTrophy,
   커리어: IconCareer,
+  메일함: IconMail,
 };
 
 /** 아이콘 줄에서의 자리 — 꼬리가 몇 칸 왼쪽을 가리킬지 정한다 */
-const PANEL_ORDER: PanelKey[] = ["스쿼드", "달력", "재정", "대회", "커리어"];
+const PANEL_ORDER: PanelKey[] = ["메일함", "스쿼드", "달력", "대회", "재정", "커리어"];
 
 /**
  * 호출 → 아이콘 — **줄이 무엇에 관한 것인지 먼저 보인다.**

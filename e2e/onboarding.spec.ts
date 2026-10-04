@@ -20,10 +20,20 @@ test("새 게임 첫 메시지가 부임 장면과 수석코치 브리핑으로 
   await expect(firstTurn).toContainText("온보딩테스트");
   // 화자 태그는 사람 이름이고 직책은 세이브가 안다 (docs/story/people.md §3)
   await expect(firstTurn.locator(".speaker-role").first()).toHaveText("수석코치");
-  // 다만 **소개할 때 한 번만** — 같은 사람이 이어 말하는 줄엔 이름만 남는다.
-  // 온보딩은 수석코치가 연속으로 말하므로 직책은 정확히 한 번 보인다
-  await expect(firstTurn.locator(".speaker-role")).toHaveCount(1);
-  await expect(firstTurn.locator(".narration")).toHaveCount(1);
+  // 환영 인사와 브리핑 사이에 인물 소개 지문이 있어 두 대사 묶음으로 나뉜다.
+  // 같은 화자가 이어 말하는 브리핑 줄들은 하나의 이름·직책 머리 아래에 남는다.
+  const speeches = firstTurn.locator(".say");
+  await expect(speeches).toHaveCount(2);
+  const coachName = await speeches.first().locator(".speaker").textContent();
+  await expect(speeches.last().locator(".speaker")).toHaveText(coachName!);
+  await expect(speeches.first().locator(".speaker-role")).toHaveText("수석코치");
+  await expect(speeches.last().locator(".speaker-role")).toHaveText("수석코치");
+  await expect(speeches.first().locator("xpath=following-sibling::*[1]")).toHaveClass(
+    "line narration",
+  );
+  await expect(speeches.last().locator(".say-who")).toHaveCount(1);
+  expect(await speeches.last().locator(".line").count()).toBeGreaterThanOrEqual(3);
+  await expect(firstTurn.locator(".narration")).toHaveCount(2);
   expect(await firstTurn.locator(".line").count()).toBeGreaterThanOrEqual(4);
 
   // 입력창의 자리는 대화 길이와 무관하다 — 첫 턴 하나뿐인 지금도 바닥에 붙어 있다.

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { leagueCatalog, loadGame, saveGame, teamCatalog } from "@story-fm/engine";
+import { openNegotiation, leagueCatalog, loadGame, saveGame, teamCatalog } from "@story-fm/engine";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -561,10 +561,51 @@ describe("API — 온보딩부터 경기까지", () => {
     )!;
     const oneWord = `${word}는 좋은 선수다.`;
     state.chat.push({ role: "model", text: oneWord, toolCalls: [], at: state.date });
+    const references = theirs
+      .filter((p) => count.get(p.name) === 1 && p.id !== called.id && p.id !== wordId)
+      .slice(0, 5);
+    const [target, fullMention, idMention, hiddenTarget, hiddenMention] = references;
+    if (!target || !fullMention || !idMention || !hiddenTarget || !hiddenMention)
+      throw new Error("사전 협상 참조 fixture 부족");
+    const opened = openNegotiation(state, {
+      playerId: target.id,
+      buyerId: state.userTeamId,
+      kind: "transfer",
+      background: "협상 대상",
+    });
+    const negotiation = state.negotiations.find((n) => n.id === opened.negotiationId);
+    if (!negotiation) throw new Error("협상 생성 실패");
+    state.chat.push({
+      role: "model",
+      text: `${fullMention.name}와 ${idMention.id}도 대안입니다.`,
+      toolCalls: [],
+      at: state.date,
+    });
+    const otherBuyer = state.finances.find(
+      (f) => f.teamId !== state.userTeamId && f.teamId !== hiddenTarget.teamId,
+    );
+    if (!otherBuyer) throw new Error("비공개 협상 구단 fixture 부족");
+    const privateOpened = openNegotiation(
+      state,
+      {
+        playerId: hiddenTarget.id,
+        buyerId: otherBuyer.teamId,
+        kind: "transfer",
+        background: "세계 협상",
+      },
+      "world",
+    );
+    const privateCase = state.negotiations.find((n) => n.id === privateOpened.negotiationId);
+    if (!privateCase) throw new Error("비공개 협상 생성 실패");
     saveGame(state);
 
     const res = await getGame(new Request("http://test.local"), params(game.id));
     const payload = (await res.json()) as GamePayload;
+    expect(payload.playerNames[target.id]).toBe(target.name);
+    expect(payload.playerNames[fullMention.id]).toBe(fullMention.name);
+    expect(payload.playerNames[idMention.id]).toBe(idMention.name);
+    expect(payload.playerNames[hiddenTarget.id]).toBeUndefined();
+    expect(payload.playerNames[hiddenMention.id]).toBeUndefined();
     expect(payload.playerNames[called.id], "이야기가 부른 선수가 사전에 없다").toBe(called.name);
     // 자가 맞는지부터 — 화면이라면 이 낱말에 손잡이가 선다
     expect(playerIdsIn(oneWord, onScreen), "낱말 열쇠를 못 고른 테스트다").toContain(wordId);
@@ -1149,5 +1190,229 @@ describe("계측 라우트 — 히트율의 문턱", () => {
     expect(body.agents.find((a) => a.agent === "match-gm")!.cacheHitRate).toBeNull();
     expect(body.totals.billed).toBe(21_300);
     resetLlmUsage();
+  });
+});
+
+describe("협상 요청 경계", () => {
+  let id: string;
+  beforeAll(async () => {
+    const response = await createGame(
+      json({ teamId: "everton", managerName: "협상 감독", background: "분석가", seed: 872 }),
+    );
+    id = ((await response.json()) as GamePayload).id;
+  });
+  it("메일 전송은 같은 연락처에 합치고 재시도해도 즉시 답장이나 대화를 만들지 않는다", async () => {
+    const { POST, GET } = await import("../../app/api/games/[id]/mail/route");
+    const before = loadGame(id)!;
+    const input = {
+      kind: "send",
+      requestId: "mail-route-872",
+      recipient: { kind: "club", teamId: "liverpool" },
+      subject: "영입 문의",
+      body: "조건을 논의하고 싶습니다.",
+    };
+    expect((await POST(json({ ...input, actor: "world" }), params(id))).status).toBe(400);
+    expect((await POST(json(input), params(id))).status).toBe(200);
+    const once = loadGame(id)!;
+    expect((await POST(json(input), params(id))).status).toBe(200);
+    expect(loadGame(id)!.mailThreads).toEqual(once.mailThreads);
+    expect(once.chat).toEqual(before.chat);
+    expect(once.date).toEqual(before.date);
+    expect(
+      once.mailThreads.flatMap((t) => t.messages).every((m) => m.direction === "outbound"),
+    ).toBe(true);
+    expect(
+      (await POST(json({ ...input, requestId: "mail-route-second-872" }), params(id))).status,
+    ).toBe(200);
+    const twice = loadGame(id)!;
+    expect(twice.mailThreads).toHaveLength(once.mailThreads.length);
+    expect(twice.mailThreads.flatMap((t) => t.messages)).toHaveLength(2);
+    expect((await GET(new Request("http://test.local"), params(id))).status).toBe(200);
+    expect(loadGame(id)!.mailThreads).toEqual(twice.mailThreads);
+    const invalidAttachment = await postTurn(
+      json({ message: "메일 검토", mailMessageIds: ["mail-does-not-exist"] }),
+      params(id),
+    );
+    const events = await invalidAttachment.text();
+    expect(events).toContain('"type":"error"');
+    expect(loadGame(id)!.chat).toEqual(before.chat);
+    expect(loadGame(id)!.mailThreads).toEqual(twice.mailThreads);
+  });
+  it("수신인 이름 검색과 발송은 모호성을 거절하고 정확한 선택·원래 요청 ID를 유지한다", async () => {
+    const { POST, GET } = await import("../../app/api/games/[id]/mail/route");
+    const before = loadGame(id)!;
+    try {
+      const state = structuredClone(before);
+      const foreign = state.players.filter((p) => p.teamId !== state.userTeamId).slice(0, 2);
+      const first = foreign[0]!,
+        second = foreign[1]!;
+      first.name = "수신인 검증 선수";
+      second.name = "수신인 동명이인";
+      saveGame(state);
+      const lookup = await GET(
+        new Request("http://test.local?query=" + encodeURIComponent(first.name) + "&limit=8"),
+        params(id),
+      );
+      expect(lookup.status).toBe(200);
+      const candidates = (await lookup.json()) as {
+        candidates: { recipient: { kind: string; playerId?: string } }[];
+      };
+      expect(
+        candidates.candidates.some(
+          (c) => c.recipient.kind === "agent" && c.recipient.playerId === first.id,
+        ),
+      ).toBe(true);
+      expect(loadGame(id)).toEqual(state);
+      for (const query of [
+        "query=" + "a".repeat(161),
+        "query=선수&limit=21",
+        "query=선수&limit=1.5",
+        "query=선수&extra=true",
+        "query=하나&query=둘",
+      ])
+        expect((await GET(new Request("http://test.local?" + query), params(id))).status).toBe(400);
+      const input = {
+        kind: "send",
+        requestId: "text-recipient-retry",
+        recipientText: first.name,
+        subject: "문의",
+        body: "계약 가능성을 문의합니다.",
+      };
+      const sent = await POST(json(input), params(id));
+      expect(sent.status).toBe(200);
+      const sentResult = (await sent.json()) as { threadId: string; messageId: string };
+      const once = loadGame(id)!;
+      expect(
+        once.mailThreads.find((t) => t.id === sentResult.threadId)?.messages.at(-1)?.direction,
+      ).toBe("outbound");
+      first.name = "이름이 변경된 선수";
+      const renamed = structuredClone(once);
+      renamed.players.find((p) => p.id === first.id)!.name = first.name;
+      saveGame(renamed);
+      const replay = await POST(json({ ...input, recipientText: "이제 없는 이름" }), params(id));
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({
+        threadId: sentResult.threadId,
+        messageId: sentResult.messageId,
+        replayed: true,
+      });
+      expect(loadGame(id)).toEqual(renamed);
+      const unknown = await POST(
+        json({ ...input, requestId: "unknown-recipient", recipientText: "존재하지않는수신인" }),
+        params(id),
+      );
+      expect(unknown.status).toBe(400);
+      expect(await unknown.json()).toMatchObject({ candidates: [] });
+      const duplicate = structuredClone(renamed);
+      duplicate.players.find((p) => p.id === first.id)!.name = "수신인 동명이인";
+      saveGame(duplicate);
+      const ambiguous = await POST(
+        json({ ...input, requestId: "ambiguous-recipient", recipientText: second.name }),
+        params(id),
+      );
+      expect(ambiguous.status).toBe(400);
+      expect(
+        ((await ambiguous.json()) as { candidates: unknown[] }).candidates.length,
+      ).toBeGreaterThan(1);
+      expect(loadGame(id)).toEqual(duplicate);
+      expect(
+        (
+          await POST(
+            json({
+              ...input,
+              requestId: "selected-recipient",
+              recipientText: "틀린 이름",
+              recipient: { kind: "agent", playerId: first.id },
+            }),
+            params(id),
+          )
+        ).status,
+      ).toBe(200);
+      const selected = loadGame(id)!;
+      expect(
+        (
+          await POST(
+            json({
+              ...input,
+              requestId: "extra-recipient",
+              recipient: { kind: "agent", playerId: first.id },
+              actor: "world",
+            }),
+            params(id),
+          )
+        ).status,
+      ).toBe(400);
+      expect(loadGame(id)).toEqual(selected);
+    } finally {
+      saveGame(before);
+    }
+  });
+  it("협상 조회는 세이브와 채팅을 바꾸지 않는다", async () => {
+    const { GET } = await import("../../app/api/games/[id]/negotiation/route");
+    const before = loadGame(id)!;
+    const response = await GET(new Request("http://test.local/"), params(id));
+    expect(response.status).toBe(200);
+    expect(loadGame(id)).toEqual(before);
+  });
+  it("행위자 주입을 거부하고 저장된 요청 재전송은 상태 변경을 중복하지 않는다", async () => {
+    const { POST } = await import("../../app/api/games/[id]/negotiation/route");
+    const state = loadGame(id)!;
+    const player = state.players.find((p) => p.teamId === state.userTeamId)!;
+    const opened = openNegotiation(state, {
+      playerId: player.id,
+      buyerId: state.userTeamId,
+      kind: "renewal",
+      background: "재계약 논의",
+    });
+    if (!opened.ok || !opened.negotiationId) throw new Error(opened.message);
+    saveGame(state);
+    const input = {
+      requestId: "withdraw-route-872",
+      negotiationId: opened.negotiationId,
+      revision: state.negotiations.find((n) => n.id === opened.negotiationId)!.revision,
+      action: { kind: "withdraw", reason: "조건 재검토" },
+    };
+    expect(
+      (await POST(json({ ...input, actor: { kind: "world", partyId: player.id } }), params(id)))
+        .status,
+    ).toBe(400);
+    for (const action of [
+      { kind: "read" },
+      { kind: "message", channel: "player", text: "legacy" },
+      {
+        kind: "open",
+        playerId: player.id,
+        buyerId: state.userTeamId,
+        negotiationKind: "renewal",
+        background: "legacy",
+      },
+    ]) {
+      expect((await POST(json({ ...input, action }), params(id))).status).toBe(400);
+    }
+    expect((await POST(json({ ...input, negotiationId: null }), params(id))).status).toBe(400);
+    const first = await POST(json(input), params(id));
+    expect(first.status).toBe(200);
+    const saved = loadGame(id)!;
+    const createdCase = saved.negotiations.find((n) => n.playerId === player.id)!;
+    expect(createdCase.closed).toEqual({ on: state.date, reason: "조건 재검토" });
+    expect(createdCase.proposals).toEqual([]);
+    expect((await POST(json(input), params(id))).status).toBe(200);
+    expect(loadGame(id)!.negotiations).toEqual(saved.negotiations);
+    expect(loadGame(id)!.chat).toEqual(saved.chat);
+    const negotiation = saved.negotiations.find((n) => n.playerId === player.id)!;
+    expect(
+      (
+        await POST(
+          json({
+            requestId: "stale-route-872",
+            negotiationId: negotiation.id,
+            revision: negotiation.revision + 1,
+            action: { kind: "withdraw", reason: "조건 재검토" },
+          }),
+          params(id),
+        )
+      ).status,
+    ).toBe(409);
+    expect(loadGame(id)!.negotiations).toEqual(saved.negotiations);
   });
 });

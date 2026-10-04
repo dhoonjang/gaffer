@@ -1,7 +1,14 @@
 "use client";
-import { PlayerCardProvider } from "../../domains/common/ui/player-card";
+import { SquadView } from "@/domains/match/ui/squad/squad-view";
+import { Mailbox, type MailDraft } from "./mailbox";
+import { NegotiationConfirmation } from "./negotiation-confirmation";
+import { PlayerNegotiationAction } from "./player-negotiation-action";
+import {
+  PlayerCardProvider,
+  type PlayerCardDefaultActions,
+} from "../../domains/common/ui/player-card";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { GamePayload, GameSlice } from "@/application/lib/store";
 import { humanDate } from "@/domains/common/lib/dateline";
@@ -10,6 +17,7 @@ import { mergeSlice } from "@/application/lib/game-slice";
 import { reducedMotion } from "@/domains/common/lib/motion";
 import type { AttentionItemView, ChatTurn } from "@story-fm/engine";
 import type { TurnOperation } from "@story-fm/agents";
+import { ChatTurnFeedback, ChatTurnError } from "./chat-feedback";
 import { ChatTurnView, turnStamp } from "./chat";
 import { chatForActiveMatch } from "@/domains/match/lib/match-chat";
 import { buildTraceIndex } from "@/domains/common/lib/turn-trace-index";
@@ -22,7 +30,7 @@ import { useLiveMatch } from "@/domains/match/lib/use-live-match";
 import { LiveEvents, LivePitch, liveClockOf } from "../../domains/match/ui/live-pitch";
 import { RailHints, useRailHints } from "./rail-hints";
 import { Loading } from "../../domains/common/ui/loading";
-import { SquadView, CalendarView, FinanceView, CompetitionsView, CareerView } from "./office";
+import { CalendarView, FinanceView, CompetitionsView, CareerView } from "./office";
 import { MatchReportPanel } from "../../domains/match/ui/match-report";
 import { createLineupSaver, type LineupSaver } from "../../domains/match/ui/lineup-saver";
 import {
@@ -41,13 +49,13 @@ import {
   IconCalendar,
   IconCareer,
   IconChat,
+  IconMail,
   IconChevron,
   IconFinance,
   IconMark,
   IconMenu,
   IconSquad,
   IconTrophy,
-  IconClose,
 } from "../../domains/common/ui/icons";
 
 /**
@@ -62,11 +70,12 @@ import {
  * 채팅과 같은 줄에 나란히 세우면 화면의 주인이 무엇인지가 흐려진다.
  */
 const PANELS = [
-  { key: "스쿼드", Icon: IconSquad },
-  { key: "달력", Icon: IconCalendar },
-  { key: "재정", Icon: IconFinance },
-  { key: "대회", Icon: IconTrophy },
-  { key: "커리어", Icon: IconCareer },
+  { key: "메일함", label: "메일함", Icon: IconMail },
+  { key: "스쿼드", label: "선수단", Icon: IconSquad },
+  { key: "달력", label: "일정", Icon: IconCalendar },
+  { key: "대회", label: "대회", Icon: IconTrophy },
+  { key: "재정", label: "재정", Icon: IconFinance },
+  { key: "커리어", label: "커리어", Icon: IconCareer },
 ] as const;
 type Panel = (typeof PANELS)[number]["key"];
 
@@ -205,6 +214,10 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const [entering, setEntering] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mailDraft, setMailDraft] = useState<MailDraft | null>(null);
+  const [mailAttachments, setMailAttachments] = useState<string[]>([]);
+  const storyScrollStamp = useRef("");
+  const [negotiationBusy, setNegotiationBusy] = useState(false);
   const liveMatch =
     pendingMatch === null ||
     (pendingMatch.beforeKickoff === true && !(busy && entering === pendingMatch.matchId))
@@ -470,8 +483,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 이 호출이 아무 일도 하지 않고, `panel`이 의존성에 있어 닫는 순간 다시 붙는다.
    */
   useEffect(() => {
+    const stamp = `${game?.chat.length}/${busy}/${streamText}`;
+    if (storyScrollStamp.current === stamp) return;
+    storyScrollStamp.current = stamp;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [game?.chat.length, busy, streamText, panel]);
+  }, [game?.chat.length, busy, streamText, game?.phase]);
 
   /** 경기가 끝나는 순간을 잡는다 — 판세가 사라지면 그 경기의 종료 화면을 연다 */
   const matchGone = pendingMatch === null;
@@ -501,8 +517,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const send = useCallback(
     async (text?: string, operation?: TurnOperation): Promise<TurnStreamFailure | null> => {
       const message = operation ? "" : (text ?? input).trim();
-      if ((!message && !operation) || busy || !game) return null;
+      if ((!message && !operation) || busy || negotiationBusy || !game) return null;
       const seq = ++turnSeqRef.current;
+      const attachmentIds = operation ? [] : [...mailAttachments];
+      const adoptPayload = (payload: GamePayload) => {
+        if (turnSeqRef.current !== seq) return;
+        setGame(payload);
+        if (attachmentIds.length) setMailAttachments([]);
+      };
       setBusy(true);
       setError(null);
       setErrorDetail(null);
@@ -567,6 +589,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
             text: message,
             toolCalls: [],
             at: game.date,
+            ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
             ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
           };
       if (optimistic) setGame((g) => (g ? { ...g, chat: [...g.chat, optimistic] } : g));
@@ -621,7 +644,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
             const res = await fetch(`/api/games/${gameId}?settled=1`);
             const data = (await res.json()) as GamePayload | { error: string; retry?: boolean };
             if (!("error" in data)) {
-              if (turnSeqRef.current === seq) setGame(data);
+              if (turnSeqRef.current === seq) adoptPayload(data);
               return;
             }
             if (data.retry !== true) return;
@@ -644,7 +667,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
         finished = true;
         stopPump();
         // 지난 알림의 "읽음"은 새 GM 턴이 들어오는 렌더에서 함께 풀린다 (`hintTurn`)
-        if (payload) setGame(payload);
+        if (payload) adoptPayload(payload);
         setStreamText("");
         setBusy(false);
         /**
@@ -656,7 +679,10 @@ export function GameScreen({ gameId }: { gameId: string }) {
          * 장부 뷰(스쿼드·달력…)를 열어 두었으면 입력칸 자체가 없어 `ref`가 null이다 —
          * 그때는 아무 일도 하지 않는다. 읽고 있는 화면에서 커서를 뺏지 않는다.
          */
-        requestAnimationFrame(() => inputRef.current?.focus());
+        requestAnimationFrame(() => {
+          const input = inputRef.current;
+          if (input && !input.closest("[hidden], [inert]")) input.focus();
+        });
       };
       // 글자 공개 속도: 기본 ~60자/초, 밀린 만큼 가속. 진행량은 경과 시간
       // 기준이라 rAF·인터벌 어느 틱이 와도 총 속도는 같다.
@@ -701,6 +727,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
         {
           ...(operation ? { operation } : message ? { message } : {}),
           orders,
+          ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
         },
         {
           onDelta: (text) => {
@@ -719,7 +746,18 @@ export function GameScreen({ gameId }: { gameId: string }) {
       if (!pendingPayloadRef.current) commit(null);
       return failure ?? null;
     },
-    [input, busy, game, liveMatch?.matchId, liveMatch?.live, gameId, saver, pauseLive],
+    [
+      input,
+      mailAttachments,
+      busy,
+      negotiationBusy,
+      game,
+      liveMatch?.matchId,
+      liveMatch?.live,
+      gameId,
+      saver,
+      pauseLive,
+    ],
   );
   sendRef.current = send;
 
@@ -771,6 +809,35 @@ export function GameScreen({ gameId }: { gameId: string }) {
     return at === undefined ? undefined : () => setTraceAt(at);
   };
 
+  const playerCardActions = useCallback<PlayerCardDefaultActions>(
+    (card, close) =>
+      game ? (
+        <PlayerNegotiationAction
+          key={card.id}
+          card={card}
+          game={game}
+          blocked={
+            busy ||
+            negotiationBusy ||
+            pendingMatch !== null ||
+            game.phase === "match" ||
+            game.views.career.dismissal !== null
+          }
+          onContext={(text) => {
+            setInput(text);
+            setPanel(null);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+          onMail={(draft) => {
+            setMailDraft(draft);
+            setPanel("메일함");
+          }}
+          onClose={close}
+        />
+      ) : null,
+    [game, busy, negotiationBusy, pendingMatch],
+  );
+
   if (error && !game)
     return (
       <main className="onboarding">
@@ -785,7 +852,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
     );
 
   /** 폭이 곧 가독성인 뷰 — 전술판+명단·열두 달 격자는 900px 안에 넣을 수 없다 */
-  const wide = shownPanel === "스쿼드" || shownPanel === "달력";
+  const wide = shownPanel === "스쿼드" || shownPanel === "달력" || shownPanel === "메일함";
 
   /**
    * 다음 경기 날짜 — 시간 이동 버튼이 목표 시점을 **그대로 적어 보내려고** 쓴다.
@@ -891,6 +958,30 @@ export function GameScreen({ gameId }: { gameId: string }) {
           const render = (turn: ChatTurn, i: number) => {
             // 감독의 발화를 눌러도 열리는 것은 **그 발화가 실려 나간 호출**이다 —
             // 인덱스를 아는 이 자리가 그것을 해석한다 (`buildTraceIndex`)
+            if (turn.role === "user")
+              return (
+                <Fragment key={i}>
+                  <ChatTurnFeedback
+                    key={i}
+                    userTurn={turn}
+                    thinking={false}
+                    date={game.date}
+                    playerNames={game.playerNames}
+                    onLongPress={traceOpener(turn)}
+                  />
+                  {turn.mailMessageIds?.map((id) => (
+                    <div
+                      className="mail-attachment saved"
+                      data-testid="chat-mail-attachment"
+                      key={id}
+                    >
+                      {game.views.mail.threads
+                        .flatMap((thread) => thread.messages)
+                        .find((message) => message.id === id)?.subject ?? "첨부 메일"}
+                    </div>
+                  ))}
+                </Fragment>
+              );
             if (turn.role !== "model")
               return (
                 <ChatTurnView
@@ -901,21 +992,33 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 />
               );
             const node = (
-              <ChatTurnView
-                key={i}
-                turn={turn}
-                playerNames={game.playerNames}
-                speakerRoles={game.speakerRoles}
-                prevStamp={prevStamp}
-                /**
-                 * 레일에 세울 말풍선 — **자동 알림은 그 턴에 바뀐 장부 전부,
-                 * 칩을 누르면 그 지시 하나만.** 경기 중에는 장부 레일이 서지
-                 * 않으므로 칩도 제자리에서 펼친다(손잡이를 주지 않는다).
-                 */
-                onRevealHint={inMatch ? undefined : rail.reveal}
-                revealedCall={rail.revealedCall}
-                onLongPress={traceOpener(turn)}
-              />
+              <Fragment key={i}>
+                <ChatTurnView
+                  key={i}
+                  turn={turn}
+                  playerNames={game.playerNames}
+                  speakerRoles={game.speakerRoles}
+                  prevStamp={prevStamp}
+                  /**
+                   * 레일에 세울 말풍선 — **자동 알림은 그 턴에 바뀐 장부 전부,
+                   * 칩을 누르면 그 지시 하나만.** 경기 중에는 장부 레일이 서지
+                   * 않으므로 칩도 제자리에서 펼친다(손잡이를 주지 않는다).
+                   */
+                  onRevealHint={inMatch ? undefined : rail.reveal}
+                  revealedCall={rail.revealedCall}
+                  onLongPress={traceOpener(turn)}
+                />
+                {turn.toolCalls.map((call, index) => (
+                  <NegotiationConfirmation
+                    key={index}
+                    payload={call.payload}
+                    game={game}
+                    blocked={busy || negotiationBusy || pendingMatch !== null}
+                    onGame={setGame}
+                    onBusy={setNegotiationBusy}
+                  />
+                ))}
+              </Fragment>
             );
             prevStamp = turnStamp(turn) ?? prevStamp;
             return node;
@@ -962,40 +1065,22 @@ export function GameScreen({ gameId }: { gameId: string }) {
             prevStamp={lastStamp}
           />
         )}
-        {/* 기다리는 중 — **말로 적지 않는다.** "세계가 반응하는 중…"은 매 턴 같은
-            문장이 대화 사이에 끼어 실제 대사인 척했다. 점 세 개면 충분하다 */}
-        {busy && !streamText && (
-          <div className="thinking" role="status" aria-label="응답을 기다리는 중">
-            <i />
-            <i />
-            <i />
-          </div>
-        )}
+        <ChatTurnFeedback
+          thinking={busy && !streamText}
+          date={game.date}
+          playerNames={game.playerNames}
+        />
       </div>
-      {/* 턴 실패 알림 — **게임 밖의 사건**이라 대화 흐름이 아니라 별도 띠로
-              보여준다. 세계의 화자는 이 일을 알지 못한다 (turn-runner.ts) */}
-      {error && (
-        <div className="turn-error" data-testid="turn-error" title={errorDetail ?? undefined}>
-          <span>{error}</span>
-          <div className="turn-error-actions">
-            {errorRetry && (
-              <button onClick={() => send()} disabled={busy || !input.trim()}>
-                다시 시도
-              </button>
-            )}
-            <button
-              className="ghost"
-              onClick={() => {
-                setError(null);
-                setErrorDetail(null);
-              }}
-              aria-label="알림 닫기"
-            >
-              <IconClose size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+      <ChatTurnError
+        error={error}
+        detail={errorDetail}
+        onRetry={errorRetry ? () => void send() : undefined}
+        disabled={busy || !input.trim()}
+        onDismiss={() => {
+          setError(null);
+          setErrorDetail(null);
+        }}
+      />
       {/**
        * 시계가 멎었다 — **오류가 아니라 사실이다.** 모델의 첫 줄 헤더가 연달아
        * 읽히지 않으면 세계는 오늘에 머무는데, 그건 화면 어디에도 보이지 않고
@@ -1009,17 +1094,45 @@ export function GameScreen({ gameId }: { gameId: string }) {
           </span>
         </div>
       )}
+      {mailAttachments.length > 0 && (
+        <div className="mail-attachments">
+          {mailAttachments.map((id) => {
+            const message = game.views.mail.threads
+              .flatMap((thread) => thread.messages)
+              .find((message) => message.id === id);
+            return (
+              <div
+                className="mail-attachment"
+                data-testid="mail-attachment"
+                data-message-id={id}
+                key={id}
+              >
+                <span>{message?.subject ?? "첨부 메일"}</span>
+                <button
+                  aria-label="첨부 제거"
+                  disabled={busy || negotiationBusy}
+                  onClick={() => setMailAttachments((ids) => ids.filter((value) => value !== id))}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <Composer
         input={input}
         onInput={setInput}
         onSend={send}
         onOperate={(operation) => void send(undefined, operation)}
-        busy={busy}
+        busy={busy || negotiationBusy}
         inMatch={inMatch}
         canSkip={canSkip}
         nextMatchDate={nextMatchDate}
         inputRef={inputRef}
-        suggestion={suggestion}
+        suggestion={mailAttachments.length ? undefined : suggestion}
+        sendOnly={mailAttachments.length > 0}
+        placeholder={mailAttachments.length ? "첨부 메일과 함께 지시를 입력하세요." : undefined}
         liveControl={
           liveMatch?.live && !liveMatch.live.finished
             ? {
@@ -1042,8 +1155,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
     <PlayerCardProvider
       gameId={gameId}
       playerNames={game.playerNames}
-      stamp={`${game.date}/${game.chat.length}`}
+      stamp={`${game.date}/${game.chat.length}/${game.views.negotiation.cases.map((n) => `${n.id}:${n.revision}:${n.status}`).join(",")}`}
       inMatch={inMatch}
+      defaultActions={playerCardActions}
     >
       {/* `data-phase` — 화면에 단계를 적지 않는 대신 e2e가 읽는 자리. 감독에게는
           달력·채팅이 이미 말해 주므로 배지가 자리를 차지할 이유가 없었다 */}
@@ -1140,6 +1254,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
             <nav className="rail rail-dock" aria-label="화면 이동">
               <button
                 className={panel === null ? "active" : ""}
+                disabled={negotiationBusy}
                 onClick={() => {
                   setPanel(null);
                   setMenuOpen(false);
@@ -1147,27 +1262,41 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 data-testid="tab-채팅"
                 title="채팅"
                 aria-label="채팅"
+                aria-pressed={panel === null}
               >
                 <IconChat />
               </button>
               <span className="rail-sep" />
               {menuOpen && <div className="rail-scrim" onClick={() => setMenuOpen(false)} />}
               <div className={`rail-panels${menuOpen ? " open" : ""}`}>
-                {PANELS.map(({ key, Icon }) => (
+                {PANELS.map(({ key, label, Icon }) => (
                   <button
                     key={key}
                     className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
+                    disabled={
+                      negotiationBusy ||
+                      (key === "메일함" && (pendingMatch !== null || game.phase === "match"))
+                    }
                     onClick={() => {
                       rail.markSeen(key);
                       setPanel(panel === key ? null : key);
                       setMenuOpen(false);
                     }}
                     data-testid={`tab-${key}`}
-                    title={key}
-                    aria-label={key}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={panel === key}
                   >
                     <Icon />
-                    <span className="rail-label">{key}</span>
+                    <span className="rail-label">{label}</span>
+                    {key === "메일함" && game.views.mail.unread > 0 && (
+                      <span
+                        className="mail-unread"
+                        aria-label={`${game.views.mail.unread} 새 메일`}
+                      >
+                        {game.views.mail.unread}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1181,6 +1310,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
               >
                 <IconMenu />
               </button>
+
               {/**
                * 바뀐 장부를 알리는 말풍선 — **다음 클릭에 닫히고, 칩으로 다시 부른다.**
                *
@@ -1360,7 +1490,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     `key`로 장부마다 새로 세운다 — 탭을 옮길 때 흐려졌다 든다 */}
                   <div
                     key={shownPanel ?? "none"}
-                    className={`view-scroll ledger-body${wide ? " wide" : ""}`}
+                    className={`view-scroll ledger-body${wide ? " wide" : ""}${shownPanel === "메일함" ? " mailbox-panel-body" : ""}`}
                   >
                     {shownPanel === "스쿼드" && squadView(() => setPanel(null))}
                     {shownPanel === "달력" && (
@@ -1368,6 +1498,30 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     )}
                     {shownPanel === "재정" && <FinanceView finance={game.views.finance} />}
                     {shownPanel === "대회" && competitionsView}
+                    {shownPanel === "메일함" && (
+                      <Mailbox
+                        gameId={gameId}
+                        mail={game.views.mail}
+                        initialDraft={mailDraft}
+                        onDraftConsumed={() => setMailDraft(null)}
+                        disabled={busy || negotiationBusy || pendingMatch !== null}
+                        onGame={(next, readOnly) =>
+                          setGame((current) =>
+                            current && readOnly
+                              ? { ...current, views: { ...current.views, mail: next.views.mail } }
+                              : next,
+                          )
+                        }
+                        onBusy={setNegotiationBusy}
+                        onAttach={(id) => {
+                          setMailAttachments((ids) =>
+                            ids.includes(id) || ids.length >= 3 ? ids : [...ids, id],
+                          );
+                          if (!window.matchMedia("(min-width: 1024px)").matches) setPanel(null);
+                          requestAnimationFrame(() => inputRef.current?.focus());
+                        }}
+                      />
+                    )}
                     {shownPanel === "커리어" && (
                       <CareerView squad={game.views.squad} career={game.views.career} />
                     )}

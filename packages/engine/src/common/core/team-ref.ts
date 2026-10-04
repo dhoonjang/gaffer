@@ -16,6 +16,9 @@ import { teamNameIn, teamShortNameIn, type GameState } from "./state";
 /** 부분 일치로 닿지 않는 약칭만 둔다 ("맨유"는 "맨체스터 유나이티드"의 부분 문자열이 아니다) */
 const TEAM_ALIASES: Record<string, string> = {
   맨유: "manutd",
+  manchesterunited: "manutd",
+  manchestercity: "mancity",
+  tottenhamhotspur: "tottenham",
   맨시티: "mancity",
   스퍼스: "tottenham",
   아스널: "arsenal",

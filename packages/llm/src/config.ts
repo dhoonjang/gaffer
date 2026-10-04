@@ -34,7 +34,6 @@ const RETIRED_AGENT_NAMES = [
   "reader-baseline",
   "match-sheet",
   "scout-rater",
-  "negotiation-gm",
   "market-orders",
   "table-orders",
   "scouting",

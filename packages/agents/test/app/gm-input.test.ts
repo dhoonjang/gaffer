@@ -57,6 +57,7 @@ import {
   type GmToolCall,
 } from "@story-fm/agents";
 import { awardTitle, normalizeSpeaker } from "@story-fm/domain";
+import { agentConfig, ScriptedGameLLM } from "@story-fm/llm";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@story-fm/llm";
 
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
@@ -330,7 +331,9 @@ describe("상태 스냅샷 (매 턴 갱신되는 휘발성 블록)", () => {
     // 전원이 선다 — 한 명이라도 빠지면 GM이 그 선수를 모른다
     expect(squad.filter((p) => !note.includes(p.name))).toHaveLength(0);
     // 이름뿐이다 — id도 능력치도 따라오지 않는다
-    expect(squad.filter((p) => note.includes(p.id))).toHaveLength(0);
+    expect(
+      squad.filter((p) => note.match(/<squad>[\s\S]*?<\/squad>/)?.[0]?.includes(p.id)),
+    ).toHaveLength(0);
     const squadLines = note.split("\n").filter((l) => /^- [12]군 \d+: /.test(l));
     expect(squadLines.length).toBeGreaterThan(0);
     for (const line of squadLines) {
@@ -1569,5 +1572,45 @@ describe("해석기가 읽는 지난 턴 — 이번 턴의 꼬리는 @감독: �
     expect(block).toContain("@: 지난 장면");
     expect(block).not.toContain("이번 턴의 말");
     expect(block).not.toContain("전술판에서 라인을 내렸다");
+  });
+});
+
+describe("main GM starts a spoken-name renewal", () => {
+  it("opens exact core IDs and continues the main scene without a separate model or navigation payload", async () => {
+    const state = game();
+    const player = state.players.find((p) => p.teamId === state.userTeamId)!;
+    player.name = "세네 라먼스";
+    const team = state.teams.find((t) => t.id === state.userTeamId)!;
+    let calls = 0;
+    stubRunTurn.mockImplementation(async (request: TurnRequest): Promise<TurnResult> => {
+      calls++;
+      const client = new ScriptedGameLLM(agentConfig("gm"), () => ({
+        calls: [
+          {
+            tool: "start_negotiation",
+            input: {
+              playerId: "라먼스",
+              buyerId: team.name,
+              kind: "renewal",
+              background: "감독의 재계약 요청",
+            },
+          },
+        ],
+        text: `[${state.date} AM 10:00]\n@: 라먼스의 재계약 협상을 열었다.\n@선수 대리인: 계약 조건을 여기서 논의하시죠.`,
+      }));
+      return client.runTurn(request);
+    });
+    vi.stubEnv("LLM_MODE", "real");
+    try {
+      const turn = await runGmTurn(state, "라먼스랑 재계약 협상 시작하자");
+      expect(calls).toBe(1);
+      expect(turn.text).toContain("재계약 협상을 열었다");
+      expect(turn.toolCalls.find((c) => c.name === "start_negotiation")?.payload).toBeUndefined();
+      expect(state.negotiations[0]?.playerId).toBe(player.id);
+      expect(state.negotiations[0]?.buyerId).toBe(state.userTeamId);
+      expect(state.negotiations[0]?.proposals).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

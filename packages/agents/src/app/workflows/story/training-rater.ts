@@ -1,4 +1,5 @@
 import {
+  deliverTrainingReportMail,
   type GameState,
   type TrainingBrief,
   recordEmptyTrainingReport,
@@ -32,7 +33,9 @@ export async function reportTraining(
    * 훈련장의 일을 지어낸다 (season.md §4).
    */
   if (evaluator === undefined && resolveLlmMode() === "mock") {
-    return { report: recordEmptyTrainingReport(state, brief) };
+    const report = recordEmptyTrainingReport(state, brief);
+    if (report) deliverTrainingReportMail(state, report);
+    return { report };
   }
   let report: TrainingReport | null = null;
   let client = evaluator;
@@ -54,5 +57,6 @@ export async function reportTraining(
   if (report === null && !trainingSettled(state, brief)) {
     report = recordEmptyTrainingReport(state, brief);
   }
+  if (report) deliverTrainingReportMail(state, report);
   return { report };
 }

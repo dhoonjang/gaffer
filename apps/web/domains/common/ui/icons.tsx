@@ -86,6 +86,17 @@ export function IconChat({ size = 18 }: IconProps) {
   );
 }
 
+/** 협상 — 양측의 대화. */
+export function IconNegotiation({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="7" r="3" />
+      <path d="M7 18v-2a5 5 0 0 1 10 0v2" />
+      <path d="M3 11h4m-2-2 2 2-2 2M21 20h-4m2-2-2 2 2 2" />
+    </svg>
+  );
+}
+
 /** 스쿼드 — 사람 둘 */
 export function IconSquad({ size = 18 }: IconProps) {
   return (
@@ -589,6 +600,37 @@ export function IconPause({ size = 18 }: IconProps) {
     <svg {...solid(size)}>
       <rect x="6.5" y="5" width="4" height="14" rx="1.2" />
       <rect x="13.5" y="5" width="4" height="14" rx="1.2" />
+    </svg>
+  );
+}
+
+export function IconMail({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 6 9 7 9-7" />
+    </svg>
+  );
+}
+
+export function IconCompose({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z" />
+    </svg>
+  );
+}
+export function IconPaperclip({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L12 3a7 7 0 0 1 10 10l-9 9" />
+    </svg>
+  );
+}
+export function IconReply({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M4 5v5a5 5 0 0 0 5 5h11m-5-5 5 5-5 5" />
     </svg>
   );
 }

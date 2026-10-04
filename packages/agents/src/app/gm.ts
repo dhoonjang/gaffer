@@ -1,3 +1,4 @@
+import { advanceOperationWithWorld, advanceSceneWithWorld } from "./workflows/date-work";
 import { selectLorebook, stampLorebook, syncLorebook } from "@story-fm/engine";
 /**
  * GM 오케스트레이터 — 장면 라우팅 (agents.md §1·§2). 국면은 `state.phase` 하나로 갈린다 —
@@ -13,8 +14,6 @@ import { selectLorebook, stampLorebook, syncLorebook } from "@story-fm/engine";
  * 장부(`TurnLedger`)와 턴 앞이 남긴 것(`TurnOpening`)뿐이다.
  */
 import {
-  advanceForOperation,
-  applyScenePoint,
   awaitingShootout,
   buildTrainingBrief,
   clockOf,
@@ -36,7 +35,7 @@ import {
   type GoalMark,
   type TrainingBrief,
 } from "@story-fm/engine";
-import type { BoardMove, MatchEvent, MediaFact, TickEvent } from "@story-fm/domain";
+import type { MailMessage, BoardMove, MatchEvent, MediaFact, TickEvent } from "@story-fm/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
 import { reportTraining } from "./workflows/story/training-rater";
 import { buildMatchTools } from "./workflows/match/match-gm";
@@ -258,7 +257,7 @@ async function openTurn(
   const clockFrom = clockOf(state);
   // 손잡이로 넘긴 시간은 모델보다 먼저 흐른다 — 코어가 먼저 굴리고 "그 사이
   // 벌어진 일"을 상태에 실어, 모델은 도착한 자리에서 보고한다
-  const skipped = peace && operation ? advanceForOperation(state, operation) : null;
+  const skipped = peace && operation ? await advanceOperationWithWorld(state, operation) : null;
   if (skipped) {
     noteTimePassed(
       ledger,
@@ -319,6 +318,7 @@ async function callGm(
   onText: ((delta: string) => void) | undefined,
   operatorOrders: readonly string[] | undefined,
   boardMoves: readonly BoardMove[] | undefined,
+  mailAttachments: readonly MailMessage[] | undefined,
 ): Promise<GmCall> {
   const { inMatch, kickoff, operator } = shape;
   const peace = !inMatch;
@@ -399,8 +399,8 @@ async function callGm(
     { role: operator ? ("operator" as const) : ("user" as const), text: message },
   ];
   const turnMessage = inMatch
-    ? renderTurnGroup(state, turnLines, [])
-    : buildGmTurnMessage(state, characters);
+    ? renderTurnGroup(state, turnLines, [], mailAttachments)
+    : buildGmTurnMessage(state, characters, mailAttachments);
   /**
    * 소식은 **스냅샷에 실린 그 턴에 비워진다** — `pendingEdits`와 같은 규약이다.
    * 경기 중 스냅샷은 장부(`buildLedgerNote`)라 소식을 읽지 않으므로 그때는 남겨 둔다.
@@ -580,7 +580,7 @@ async function closeTurn(
   // ⚠️ 시계를 옮기는 자리는 여기 하나다 — 날짜를 미는지 고정하는지는 출처가 정한다
   if (scenePoint) {
     const from = { date: opening.from, clock: opening.clockFrom };
-    const moved = applyScenePoint(state, scenePoint, clockSourceOf(shape, opening));
+    const moved = await advanceSceneWithWorld(state, scenePoint, clockSourceOf(shape, opening));
     movedFact = {
       from,
       to: { ...moved.reached },
@@ -723,6 +723,7 @@ export async function runGmTurn(
    * 문장이라면 이쪽은 어느 축이 어디서 어디로 갔는가다 (agents.md §3 지시 해석).
    */
   boardMoves?: readonly BoardMove[],
+  options?: { mailAttachments?: readonly MailMessage[] },
 ): Promise<GmTurnResult> {
   const inMatch = state.phase === "match";
   const shape: TurnShape = {
@@ -757,6 +758,7 @@ export async function runGmTurn(
     onText,
     operatorOrders,
     boardMoves,
+    options?.mailAttachments,
   );
   if (call.result.stopReason !== "handoff") return closeTurn(state, shape, opening, ledger, call);
   /**

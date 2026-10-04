@@ -2,6 +2,7 @@ import { TACTIC_OPS } from "../match/tactic-orders";
 import { TRAINING_OPS } from "../story/training-orders";
 import { FINANCE_OPS } from "../common/finance-orders";
 import type { MatchEvent, ShootoutOutcome } from "@story-fm/domain";
+import { contractEndForYears } from "@story-fm/domain";
 import { eventCauseText, formatScore, shootoutTally } from "@story-fm/domain";
 import {
   addDays,
@@ -10,6 +11,7 @@ import {
   describeNextFixture,
   formatClock,
   minutesOfClock,
+  managedTeamId,
   nextMatchFor,
   playerName,
   teamName,
@@ -79,6 +81,99 @@ const WEEKDAYS = [1, 2, 3, 4, 5] as const;
  * 말은 이 표의 키와 같게 맞춘다 (`e2e/*.spec.ts`).
  */
 const SCRIPT: readonly ScriptLine[] = [
+  {
+    say: "테스트 이적 명단 등록",
+    gm: ({ state }) => {
+      const player = state.players.find(
+        (p) =>
+          p.teamId === managedTeamId(state) &&
+          state.contracts.some((c) => c.gamePlayerId === p.id && c.status === "active"),
+      );
+      return player
+        ? [
+            {
+              tool: "set_transfer_list",
+              input: { playerId: player.id, listed: true, askingPrice: 10000000 },
+            },
+          ]
+        : [];
+    },
+  },
+  {
+    say: "테스트 재계약 협상",
+    gm: ({ state }) => {
+      const player = state.players.find(
+        (p) =>
+          p.teamId === managedTeamId(state) &&
+          state.contracts.some((c) => c.gamePlayerId === p.id && c.status === "active"),
+      );
+      return player
+        ? [
+            {
+              tool: "start_negotiation",
+              input: { playerId: player.id, kind: "renewal", background: "재계약 논의" },
+            },
+          ]
+        : [];
+    },
+  },
+
+  {
+    say: "테스트 재계약 조건 제안",
+    gm: ({ state }) => {
+      const n = state.negotiations.find(
+        (n) => n.kind === "renewal" && n.buyerId === managedTeamId(state) && n.status === "open",
+      );
+      if (!n) return [];
+      return [
+        {
+          tool: "update_negotiation",
+          input: {
+            negotiationId: n.id,
+            partyId: n.playerId,
+            action: {
+              kind: "send",
+              terms: {
+                scope: "player",
+                fee: 0,
+                installments: [],
+                weeklyWage: Math.floor((n.bounds.minWeeklyWage + n.bounds.maxWeeklyWage) / 2),
+                signingBonus: 0,
+                since: state.date,
+                until: contractEndForYears(state.date, 3),
+                promises: [],
+                expiresOn: addDays(state.date, 14),
+              },
+            },
+          },
+        },
+        {
+          tool: "request_negotiation_confirmation",
+          input: { negotiationId: n.id, stage: "agreement" },
+        },
+      ];
+    },
+  },
+  {
+    say: "테스트 재계약 최종 확인",
+    gm: ({ state }) => {
+      const n = state.negotiations.find(
+        (n) => n.kind === "renewal" && n.buyerId === managedTeamId(state) && n.status === "open",
+      );
+      return n
+        ? [
+            {
+              tool: "request_negotiation_confirmation",
+              input: { negotiationId: n.id, stage: "sign" },
+            },
+          ]
+        : [];
+    },
+  },
+  {
+    say: "테스트 메일 첨부 확인",
+    gm: () => [{ tool: "get_mail", input: {} }],
+  },
   {
     say: "훈련 잡아줘",
     ops: () => weekly(WEEKDAYS, "빌드업", ["passing", "vision"]),

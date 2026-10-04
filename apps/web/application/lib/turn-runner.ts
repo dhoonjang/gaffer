@@ -3,6 +3,7 @@ import {
   bindJournal,
   journal,
   loadGame,
+  mailMessageForViewer,
   saveGame,
   setPlayerTactic,
   setSetPieceTakers,
@@ -328,6 +329,7 @@ export function runTurnLocked(
    * 경기를 진행할 때 한 묶음으로 전달된다 — 그래서 **한 번의 LLM 호출**로 끝난다.
    */
   orders?: readonly MatchBoardOrder[],
+  mailMessageIds: readonly string[] = [],
 ): Promise<TurnOutcome> {
   // 원문은 호출이 끝나는 즉시 이 게임의 사이드카에 앉고(models.md §5), 그 이름들이
   // model 턴을 채팅에 밀어 넣는 자리에서 턴 인덱스에 묶인다 — 턴이 실패해 묶이지
@@ -350,6 +352,22 @@ export function runTurnLocked(
          * `start_match`로 경기가 열렸어도 화자는 아직 평시 GM이라 평시 이력에 남는다
          * (agents.md §5) — 중계는 그다음 턴(킥오프)부터다.
          */
+        const uniqueMailIds = [...new Set(mailMessageIds)];
+        const mailAttachments = uniqueMailIds.map((messageId) =>
+          mailMessageForViewer(state, messageId),
+        );
+        if (
+          uniqueMailIds.length > 3 ||
+          mailAttachments.some((message) => message === null) ||
+          (operation && uniqueMailIds.length > 0)
+        )
+          return {
+            ok: false as const,
+            status: 400,
+            error: "첨부 메일을 확인할 수 없습니다",
+            retry: false,
+          };
+        const validAttachments = mailAttachments.filter((message) => message !== null);
         const inMatch = state.phase === "match";
         const matchId = state.pendingMatch?.matchId;
         const mark = inMatch ? { inMatch: true as const, ...(matchId ? { matchId } : {}) } : {};
@@ -431,12 +449,15 @@ export function runTurnLocked(
         state.chat.push({
           role: operation ? "operator" : "user",
           text: said,
+          ...(uniqueMailIds.length ? { mailMessageIds: uniqueMailIds } : {}),
           toolCalls: [],
           at: state.date,
           ...mark,
         });
         try {
-          const turn = await runGmTurn(state, said, onDelta, operation, appliedOrders, boardMoves);
+          const turn = await runGmTurn(state, said, onDelta, operation, appliedOrders, boardMoves, {
+            mailAttachments: validAttachments,
+          });
           state.chat.push({
             role: "model",
             text: turn.text,

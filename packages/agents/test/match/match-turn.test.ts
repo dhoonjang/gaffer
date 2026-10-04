@@ -1201,12 +1201,10 @@ describe("시계 — 출처가 날짜의 주인을 정한다", () => {
     else process.env.LLM_MODE = previousMode;
   });
 
-  /**
-   * 장면 하나만 내는 모델 — 도구를 강제한 호출(결산 판정)은 빈손으로 돌린다.
-   * 그쪽은 앵커가 남으므로 이 판의 시계와는 상관이 없다.
-   */
-  const scene = (text: string) => async (req: TurnRequest) =>
-    req.outputSchema === undefined ? answered(text) : { ...answered(""), output: { ops: {} } };
+  const scene = (text: string) => async (req: TurnRequest) => {
+    if (req.outputSchema === undefined) return answered(text);
+    return { ...answered(""), output: { ops: {} } };
+  };
 
   /** 시점 헤더 한 줄 — 읽히는 형식은 `[날짜 시간대 시:분]`이다 (prompts.md §1) */
   const header = (date: string, clock = "오후 3:20") => `[${date} ${clock}]`;

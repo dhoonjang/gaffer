@@ -306,7 +306,15 @@ ${fields}`;
 
   it("rejects retired comparison roles in production configuration", () => {
     const agents = fullAgents();
-    for (const name of ["reader-baseline", "scout-rater", "training-rater", "finalize-match"]) {
+    for (const name of [
+      "reader-baseline",
+      "scout-rater",
+      "training-rater",
+      "finalize-match",
+      "negotiation-gm",
+      "negotiation-compactor",
+      "market-planner",
+    ]) {
       expect(() => parseLlmConfig(yamlOf({ ...agents, [name]: { ...AGENT_BLOCK } }))).toThrow();
     }
     expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();
