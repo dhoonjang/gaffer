@@ -1,5 +1,5 @@
 "use client";
-import { SquadManagement } from "./squad-management";
+import { SquadView } from "@/domains/match/ui/squad/squad-view";
 import { Mailbox, type MailDraft } from "./mailbox";
 import { NegotiationConfirmation } from "./negotiation-confirmation";
 import { PlayerNegotiationAction } from "./player-negotiation-action";
@@ -70,10 +70,10 @@ import {
  * 채팅과 같은 줄에 나란히 세우면 화면의 주인이 무엇인지가 흐려진다.
  */
 const PANELS = [
+  { key: "메일함", label: "메일함", Icon: IconMail },
   { key: "스쿼드", label: "선수단", Icon: IconSquad },
   { key: "달력", label: "일정", Icon: IconCalendar },
   { key: "대회", label: "대회", Icon: IconTrophy },
-  { key: "메일함", label: "메일함", Icon: IconMail },
   { key: "재정", label: "재정", Icon: IconFinance },
   { key: "커리어", label: "커리어", Icon: IconCareer },
 ] as const;
@@ -901,7 +901,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 놓기만 한다. 다른 것은 **돌아갈 자리**뿐이라 그것만 받는다.
    */
   const squadView = (goBack: () => void) => (
-    <SquadManagement
+    <SquadView
       game={game}
       onUpdate={applyLineupSave}
       onGoToChat={goBack}
