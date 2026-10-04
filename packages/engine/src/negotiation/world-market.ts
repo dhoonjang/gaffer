@@ -76,14 +76,16 @@ export function marketReviewCohort(state: GameState): string[] {
         diffDays(review.get(id)!.reviewedOn, state.date) >= MARKET_REVIEW_INTERVAL_DAYS,
     )
     .slice(0, MARKET_REVIEW_OLDEST_CLUBS);
-  const urgent = teams
-    .filter(
-      (id) =>
-        !oldest.includes(id) &&
-        review.has(id) &&
-        review.get(id)!.fingerprint !== marketClubFingerprint(state, id),
+  const urgent: string[] = [];
+  for (const id of teams) {
+    if (
+      !oldest.includes(id) &&
+      review.has(id) &&
+      review.get(id)!.fingerprint !== marketClubFingerprint(state, id)
     )
-    .slice(0, MARKET_REVIEW_URGENT_CLUBS);
+      urgent.push(id);
+    if (urgent.length === MARKET_REVIEW_URGENT_CLUBS) break;
+  }
   return [...oldest, ...urgent];
 }
 function activeCase(n: Negotiation): boolean {
@@ -93,31 +95,63 @@ function activeCase(n: Negotiation): boolean {
     (n.status === "completed" && n.registration !== "registered")
   );
 }
-function viableSquad(state: GameState, teamId: string) {
-  const squad = state.players.filter((p) => p.teamId === teamId && activeContract(state, p.id));
-  const level = squad.length ? squad.reduce((s, p) => s + playerOverall(p), 0) / squad.length : 60;
+function marketQueries(state: GameState) {
+  const levels = new Map<string, number>();
+  const groups = new Map<string, PositionGroup>();
+  const contracts = new Map<string, ReturnType<typeof activeContract>>();
+  const injuries = new Map<string, ReturnType<typeof openInjury>>();
+  return {
+    overall: (p: GameState["players"][number]) => {
+      if (!levels.has(p.id)) levels.set(p.id, playerOverall(p));
+      return levels.get(p.id)!;
+    },
+    group: (p: GameState["players"][number]) => {
+      if (!groups.has(p.id)) groups.set(p.id, positionGroupOfPlayer(p));
+      return groups.get(p.id)!;
+    },
+    contract: (id: string) => {
+      if (!contracts.has(id)) contracts.set(id, activeContract(state, id));
+      return contracts.get(id) ?? null;
+    },
+    injury: (id: string) => {
+      if (!injuries.has(id)) injuries.set(id, openInjury(state, id));
+      return injuries.get(id) ?? null;
+    },
+  };
+}
+function viableSquad(state: GameState, teamId: string, queries = marketQueries(state)) {
+  const squad = state.players.filter((p) => p.teamId === teamId && queries.contract(p.id));
+  const level = squad.length
+    ? squad.reduce((s, p) => s + queries.overall(p), 0) / squad.length
+    : 60;
   return {
     level,
     players: squad.filter(
       (p) =>
-        playerOverall(p) >= level - 15 &&
-        activeContract(state, p.id)?.registrationStatus !== "pending" &&
-        (!openInjury(state, p.id) ||
-          diffDays(state.date, openInjury(state, p.id)!.expectedReturn) < LONG_INJURY_DAYS),
+        queries.overall(p) >= level - 15 &&
+        queries.contract(p.id)?.registrationStatus !== "pending" &&
+        (!queries.injury(p.id) ||
+          diffDays(state.date, queries.injury(p.id)!.expectedReturn) < LONG_INJURY_DAYS),
     ),
   };
 }
 export function decideWorldMarket(state: GameState, buyerId: string): WorldMarketIntent | null {
   const managed = managedTeamId(state);
   if (buyerId === managed) return null;
-  const squad = viableSquad(state, buyerId);
+  const queries = marketQueries(state);
+  // canRegisterFor reads only the destination first-team squad from players.
+  const registrationState = {
+    ...state,
+    players: state.players.filter((p) => p.teamId === buyerId),
+  };
+  const squad = viableSquad(state, buyerId, queries);
   const renewing = squad.players
     .filter((p) => {
-      const c = activeContract(state, p.id)!;
+      const c = queries.contract(p.id)!;
       return (
         c.until >= state.date &&
         c.until <= addDays(state.date, RENEWAL_HORIZON_DAYS) &&
-        ageOf(p.birthdate, state.date) < (positionGroupOfPlayer(p) === "GK" ? 38 : 35) &&
+        ageOf(p.birthdate, state.date) < (queries.group(p) === "GK" ? 38 : 35) &&
         !state.negotiations.some(
           (n) =>
             n.playerId === p.id &&
@@ -130,8 +164,8 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
     })
     .sort(
       (a, b) =>
-        activeContract(state, a.id)!.until.localeCompare(activeContract(state, b.id)!.until) ||
-        playerOverall(b) - playerOverall(a) ||
+        queries.contract(a.id)!.until.localeCompare(queries.contract(b.id)!.until) ||
+        queries.overall(b) - queries.overall(a) ||
         a.id.localeCompare(b.id),
     )[0];
   if (renewing)
@@ -147,10 +181,10 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
   );
   if (acquisitions.length >= MARKET_ACTIVE_ACQUISITIONS) return null;
   const depth = { GK: 0, DF: 0, MF: 0, FW: 0 };
-  squad.players.forEach((p) => depth[positionGroupOfPlayer(p)]++);
+  squad.players.forEach((p) => depth[queries.group(p)]++);
   for (const n of acquisitions) {
     const p = state.players.find((p) => p.id === n.playerId);
-    if (p && p.teamId !== buyerId) depth[positionGroupOfPlayer(p)]++;
+    if (p && p.teamId !== buyerId) depth[queries.group(p)]++;
   }
   const needed = (Object.keys(DEPTH_TARGET) as PositionGroup[])
     .filter((group) => depth[group] < DEPTH_TARGET[group])
@@ -165,8 +199,8 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
     .filter((p) => {
       if (
         p.teamId === buyerId ||
-        positionGroupOfPlayer(p) !== needed ||
-        openInjury(state, p.id) ||
+        queries.group(p) !== needed ||
+        queries.injury(p.id) ||
         ageOf(p.birthdate, state.date) > 34
       )
         return false;
@@ -182,23 +216,23 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
         )
       )
         return false;
-      if (p.teamId === FREE_AGENT_TEAM) return !activeContract(state, p.id);
+      if (p.teamId === FREE_AGENT_TEAM) return !queries.contract(p.id);
       if (
         !isTransferWindow(state.date) ||
-        !activeContract(state, p.id) ||
-        activeContract(state, p.id)!.until < addDays(state.date, 2)
+        !queries.contract(p.id) ||
+        queries.contract(p.id)!.until < addDays(state.date, 2)
       )
         return false;
       if (p.teamId === managed) return state.transferListings.some((l) => l.gamePlayerId === p.id);
       let seller = sellerSquads.get(p.teamId);
       if (!seller) {
-        seller = viableSquad(state, p.teamId);
+        seller = viableSquad(state, p.teamId, queries);
         sellerSquads.set(p.teamId, seller);
       }
       return (
         seller.players.filter(
           (s) =>
-            positionGroupOfPlayer(s) === needed &&
+            queries.group(s) === needed &&
             !state.negotiations.some(
               (n) =>
                 n.playerId === s.id &&
@@ -217,11 +251,12 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
         Number(b.teamId === FREE_AGENT_TEAM) - Number(a.teamId === FREE_AGENT_TEAM) ||
         Number(state.transferListings.some((l) => l.gamePlayerId === b.id)) -
           Number(state.transferListings.some((l) => l.gamePlayerId === a.id)) ||
-        Math.abs(playerOverall(a) - squad.level) - Math.abs(playerOverall(b) - squad.level) ||
+        Math.abs(queries.overall(a) - squad.level) - Math.abs(queries.overall(b) - squad.level) ||
         a.id.localeCompare(b.id),
     );
   for (const p of candidates) {
-    if (playerOverall(p) < squad.level - 15 || !canRegisterFor(state, p, buyerId).ok) continue;
+    if (queries.overall(p) < squad.level - 15 || !canRegisterFor(registrationState, p, buyerId).ok)
+      continue;
     const kind = p.teamId === FREE_AGENT_TEAM ? "free" : "transfer";
     const bounds = negotiationBounds(state, { playerId: p.id, buyerId, sellerId: p.teamId, kind });
     if (
