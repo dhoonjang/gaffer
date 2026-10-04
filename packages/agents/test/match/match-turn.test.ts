@@ -1201,20 +1201,8 @@ describe("시계 — 출처가 날짜의 주인을 정한다", () => {
     else process.env.LLM_MODE = previousMode;
   });
 
-  /** 시장 검토도 실제 구조화 계약을 통과시킨다. 이 테스트의 구단은 새 행동 없이 현황을 유지한다. */
   const scene = (text: string) => async (req: TurnRequest) => {
     if (req.outputSchema === undefined) return answered(text);
-    if (req.outputSchema.properties && "clubs" in req.outputSchema.properties) {
-      const facts = JSON.parse(req.stateNote!) as { clubs: { team: { id: string } }[] };
-      return {
-        ...answered(""),
-        output: {
-          clubs: facts.clubs.map(({ team }) => ({ teamId: team.id, plan: "현재 계획 유지" })),
-          negotiations: [],
-          board: [],
-        },
-      };
-    }
     return { ...answered(""), output: { ops: {} } };
   };
 

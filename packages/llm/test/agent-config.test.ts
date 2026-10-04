@@ -77,21 +77,6 @@ describe("에이전트별 LLM 설정", () => {
     max_tokens: 400
     timeout_ms: 4000
     thinking_level: low
-  negotiation-gm:
-    provider: google
-    model: negotiation-test
-    max_tokens: 100
-    timeout_ms: 1000
-  market-planner:
-    provider: google
-    model: market-test
-    max_tokens: 100
-    timeout_ms: 1000
-  negotiation-compactor:
-    provider: google
-    model: compact-test
-    max_tokens: 100
-    timeout_ms: 1000
   onboarding-judge:
     provider: google
     model: gemini-judge
@@ -321,7 +306,15 @@ ${fields}`;
 
   it("rejects retired comparison roles in production configuration", () => {
     const agents = fullAgents();
-    for (const name of ["reader-baseline", "scout-rater", "training-rater", "finalize-match"]) {
+    for (const name of [
+      "reader-baseline",
+      "scout-rater",
+      "training-rater",
+      "finalize-match",
+      "negotiation-gm",
+      "negotiation-compactor",
+      "market-planner",
+    ]) {
       expect(() => parseLlmConfig(yamlOf({ ...agents, [name]: { ...AGENT_BLOCK } }))).toThrow();
     }
     expect(() => parseLlmConfig(configWith("").replace("match-reader:", "match-sheet:"))).toThrow();

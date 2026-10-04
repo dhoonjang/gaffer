@@ -1,21 +1,9 @@
 import { z } from "zod";
 import { DateString } from "../common/date-string";
 import { InjurySchema } from "../common/health";
-import { ATTRIBUTE_AXES, POSITION_CODES, type AttributeAxis } from "../common/player";
 
 const Id = z.string().trim().min(1).max(160);
-export const NegotiationStartedPayloadSchema = z
-  .object({
-    kind: z.literal("negotiation"),
-    negotiationId: Id,
-    suggestion: z.string().trim().min(1).max(1000).optional(),
-  })
-  .strict();
-export type NegotiationStartedPayload = z.infer<typeof NegotiationStartedPayloadSchema>;
-
 const Money = z.number().int().min(0).max(1_000_000_000);
-export const NegotiationChannelSchema = z.enum(["club", "player", "internal"]);
-export type NegotiationChannel = z.infer<typeof NegotiationChannelSchema>;
 export const ProposalTermsSchema = z
   .object({
     scope: z.enum(["club", "player"]),
@@ -40,14 +28,6 @@ export const NegotiationProposalSchema = z.object({
   reason: z.string().max(2000),
 });
 export type NegotiationProposal = z.infer<typeof NegotiationProposalSchema>;
-export const NegotiationMessageSchema = z.object({
-  id: Id,
-  on: DateString,
-  channel: NegotiationChannelSchema,
-  author: z.enum(["manager", "gm", "system"]),
-  partyId: Id.nullable(),
-  text: z.string().min(1).max(20000),
-});
 export const NegotiationBoundsSchema = z.object({
   fingerprint: z.string(),
   asOf: DateString,
@@ -80,13 +60,10 @@ export const NegotiationSchema = z.object({
   sourceContractId: Id.nullable(),
   bounds: NegotiationBoundsSchema,
   status: z.enum(["open", "signed", "completed", "withdrawn"]),
+  closed: z.object({ on: DateString, reason: z.string().min(1).max(2000) }).nullable(),
   revision: z.number().int().nonnegative(),
-  messages: z.array(NegotiationMessageSchema),
   proposals: z.array(NegotiationProposalSchema),
   drafts: z.array(ProposalTermsSchema).max(2),
-  digest: z.object({ through: z.number().int().nonnegative(), text: z.string().max(6000) }),
-  nextReplyOn: DateString.nullable(),
-  lastReadMessage: z.number().int().nonnegative(),
   medical: z
     .object({
       requestedOn: DateString,
@@ -124,7 +101,6 @@ export const MarketReviewSchema = z.object({
     z.object({
       teamId: Id,
       reviewedOn: DateString,
-      plan: z.string().max(2000),
       fingerprint: z.string(),
     }),
   ),
@@ -138,16 +114,6 @@ export const OpenNegotiationSchema = z
   })
   .strict();
 export const NegotiationActionSchema = z.discriminatedUnion("kind", [
-  z.object({
-    ...OpenNegotiationSchema.omit({ kind: true }).shape,
-    kind: z.literal("open"),
-    negotiationKind: OpenNegotiationSchema.shape.kind,
-  }),
-  z.object({
-    kind: z.literal("message"),
-    channel: NegotiationChannelSchema,
-    text: z.string().trim().min(1).max(6000),
-  }),
   z.object({ kind: z.literal("draft"), terms: ProposalTermsSchema }),
   z.object({ kind: z.literal("send"), terms: ProposalTermsSchema }),
   z.object({ kind: z.literal("accept"), proposalId: Id }),
@@ -157,13 +123,12 @@ export const NegotiationActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("sign") }),
   z.object({ kind: z.literal("register") }),
   z.object({ kind: z.literal("withdraw"), reason: z.string().min(1).max(2000) }),
-  z.object({ kind: z.literal("read") }),
 ]);
 export type NegotiationAction = z.infer<typeof NegotiationActionSchema>;
 export const NegotiationRequestSchema = z
   .object({
     requestId: Id,
-    negotiationId: Id.nullable(),
+    negotiationId: Id,
     revision: z.number().int().nonnegative(),
     action: NegotiationActionSchema,
   })
@@ -175,9 +140,7 @@ export interface NegotiationView {
   cases: Array<
     Omit<Negotiation, "bounds"> & { playerName: string; buyerName: string; sellerName: string }
   >;
-  unread: number;
   payments: TransferPayment[];
-  transferList: AgentCenterTransferListing[];
 }
 export function currentProposal(
   n: Pick<Negotiation, "proposals">,
@@ -209,12 +172,6 @@ export function isTransferWindow(date: string): boolean {
   const month = date.slice(5, 7);
   return month === "01" || month === "07" || month === "08";
 }
-export const NEGOTIATION_CHANNEL_LABELS: Record<NegotiationChannel, string> = {
-  club: "상대 구단",
-  player: "선수 에이전트",
-  internal: "내부 업무",
-};
-
 function contractDate(value: string): Date {
   const date = new Date(`${value}T00:00:00Z`);
   if (
@@ -248,51 +205,7 @@ export const SetTransferListingSchema = z
   })
   .strict();
 export type SetTransferListingInput = z.infer<typeof SetTransferListingSchema>;
-export const AgentCenterSearchSchema = z
-  .object({
-    name: z.string().trim().max(100).optional(),
-    club: z.string().trim().max(100).optional(),
-    position: z.string().trim().max(20).optional(),
-    positions: z
-      .array(
-        z
-          .string()
-          .trim()
-          .toUpperCase()
-          .refine((p) => POSITION_CODES.includes(p)),
-      )
-      .max(POSITION_CODES.length)
-      .optional(),
-    minOverall: z.number().min(0).max(100).optional(),
-    attributes: z
-      .array(z.object({ axis: z.enum(ATTRIBUTE_AXES), min: z.number().min(0).max(100) }).strict())
-      .max(ATTRIBUTE_AXES.length)
-      .optional(),
-    page: z.number().int().min(1).max(1_000_000).default(1),
-    pageSize: z.number().int().min(1).max(50).default(20),
-  })
-  .strict();
-export type AgentCenterSearchInput = z.input<typeof AgentCenterSearchSchema>;
-export interface AgentCenterPlayer {
-  id: string;
-  name: string;
-  teamId: string;
-  teamName: string;
-  age: number;
-  positions: string[];
-  overall: { value: number; margin: number };
-  attributes: { axis: AttributeAxis; value: number; margin: number }[];
-  existingNegotiationId: string | null;
-  kind: "transfer" | "free";
-}
-export interface AgentCenterSearchResult {
-  players: AgentCenterPlayer[];
-  total: number;
-  page: number;
-  pageSize: number;
-  hasMore: boolean;
-}
-export interface AgentCenterTransferListing {
+export interface TransferListingRow {
   playerId: string;
   name: string;
   age: number;
@@ -302,8 +215,8 @@ export interface AgentCenterTransferListing {
   note?: string;
   negotiationIds: string[];
 }
-export interface AgentCenterView {
+export interface TransferListingView {
   teamId: string | null;
   date: string;
-  transferList: AgentCenterTransferListing[];
+  transferList: TransferListingRow[];
 }

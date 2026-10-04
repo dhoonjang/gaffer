@@ -23,7 +23,7 @@ The game serves three experiences:
 
 1. **Life as a manager.** The main GM runs training, everyday scenes and press
    conferences; choices accumulate into stories, memories and relationships.
-2. **Negotiation.** The agent center and natural-language conversations connect transfers, renewals and a living market. One GM owns each negotiation.
+2. **Negotiation.** The main GM handles transfers and renewals through natural-language conversations and contact-based mail. The deterministic core handles NPC market activity.
 3. **Live football.** Team building and tactics meet in a spatial match that the
    manager can interrupt and influence through natural language.
 
@@ -68,7 +68,7 @@ narrative; contracts, employment, finances and match records remain validated le
 ```
 docs/              # present service, grouped by experience
   story/           # everyday life, training, people, press, board and career
-  negotiation/     # agent center, negotiations, transfers, renewals and the world market
+  negotiation/     # negotiation ledgers, transfers, renewals and the deterministic world market
   match/           # live match, tactics and competitions
   common/          # shared players, teams, contracts, finance, saves, AI infrastructure and UI
 config/            # providers, models and game version
@@ -76,7 +76,7 @@ apps/
   web/
     app/           # Next routes and API transport
     application/   # whole-game UI and turn orchestration
-    domains/       # story/ · negotiation/ · match/ · common/ (ui, lib, styles)
+    domains/       # story/ · match/ · common/ (ui, lib, styles)
   match-cli/       # headless live match
 packages/
   domain/src/      # browser-safe Zod models and pure rules, by domain
@@ -323,7 +323,7 @@ non-deterministic LLM.
 | -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | —              | Whole game and ownership                                                                  | [overview](docs/overview.md) · [architecture](docs/architecture.md) |
 | `story/`       | Main GM, people, daily life, training, press and board                                    | [story](docs/story/README.md)                                       |
-| `negotiation/` | Negotiation GM, agent center, conditions, medicals, contracts and the world market        | [negotiation](docs/negotiation/README.md)                           |
+| `negotiation/` | Negotiation ledgers, conditions, medicals, contracts and the deterministic world market   | [negotiation](docs/negotiation/README.md)                           |
 | `match/`       | Match GM, tactics, live simulation and competitions                                       | [match](docs/match/README.md)                                       |
 | `common/`      | Shared state, players, teams, contracts, finance, season orchestration and infrastructure | [common](docs/common/README.md)                                     |
 

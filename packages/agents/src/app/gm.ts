@@ -1,7 +1,4 @@
-import {
-  advanceOperationWithWorld,
-  advanceSceneWithWorld,
-} from "./workflows/negotiation/date-work";
+import { advanceOperationWithWorld, advanceSceneWithWorld } from "./workflows/date-work";
 import { selectLorebook, stampLorebook, syncLorebook } from "@story-fm/engine";
 /**
  * GM 오케스트레이터 — 장면 라우팅 (agents.md §1·§2). 국면은 `state.phase` 하나로 갈린다 —

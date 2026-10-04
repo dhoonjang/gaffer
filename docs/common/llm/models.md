@@ -490,7 +490,7 @@ description, parameters }`가 최상위에 펼쳐진다(Chat Completions의 `fun
   실호출로 걸어 받는지·산출이 돌아오는지를 본다 ([prompts.md](prompts.md) §2).
 - **개수와 값의 한도는 코어가 지킨다.** 어댑터가 스키마 표현을 걷어도 Zod·코어 검증은
   남는다. 직접 지시에서 명령 수를 조용히 잘라 부분 적용하지 않고 묶음의 유효성을 본다.
-- **GM(`gm` · `negotiation-gm` · `match-gm`)은 도구를 쥔다** — 거기서는 **무엇을
+- **GM(`gm` · `match-gm`)은 도구를 쥔다** — 거기서는 **무엇을
   부를지 고르는 것**이 일이다. 한 요청에 `tools`와 `outputSchema`를 함께 싣는 자리는 없다.
 
 ## 3-3. `operator_channel` — 상태 스냅샷을 어디에 넣는가

@@ -1609,7 +1609,6 @@ describe("main GM starts a spoken-name renewal", () => {
       expect(state.negotiations[0]?.playerId).toBe(player.id);
       expect(state.negotiations[0]?.buyerId).toBe(state.userTeamId);
       expect(state.negotiations[0]?.proposals).toEqual([]);
-      expect(state.negotiations[0]?.messages.some((m) => m.author === "gm")).toBe(false);
     } finally {
       vi.unstubAllEnvs();
     }

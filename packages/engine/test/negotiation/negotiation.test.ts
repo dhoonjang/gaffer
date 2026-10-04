@@ -1,7 +1,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { GameState, NegotiationActor } from "@story-fm/engine";
 import type { ProposalTerms } from "@story-fm/domain";
+import { addDays } from "../../src/common/core/dates";
 import {
+  processWorldMarket,
+  marketReviewCohort,
+  marketClubFingerprint,
+  decideWorldManager,
+  decideWorldMarket,
+  applyWorldMarketIntent,
+  progressWorldMarketDeals,
   actNegotiation,
   sendMail,
   completeMailReply,
@@ -21,16 +29,13 @@ import {
   isAvailable,
   openNegotiation,
   setTransferListing,
-  searchAgentCenterPlayers,
-  buildAgentCenterView,
+  buildTransferListingView,
   toFreeAgency,
   repairNegotiationSquads,
-  appendNegotiationMessage,
   settleNegotiations,
   summarise,
 } from "@story-fm/engine";
-import { createMiniGame } from "../helpers";
-import { observedPlayerFacts, observationMargin } from "../../src/common/players/observation";
+import { createMiniGame, resultOf } from "../helpers";
 let base: GameState;
 beforeAll(() => {
   base = createMiniGame();
@@ -324,19 +329,6 @@ it("a rival transfer withdraws incompatible unsigned cases while preserving sign
   expect(s.state.negotiations.find((n) => n.buyerId === rival.id)?.status).toBe("withdrawn");
   expect(s.state.transferPayments.some((p) => p.paidOn === null)).toBe(true);
 });
-it("seller unread and read offsets use only visible messages", () => {
-  const s = agreed();
-  s.state.userTeamId = s.n.sellerId;
-  appendNegotiationMessage(s.state, s.n, "club", "gm", "매각 조건 확인", s.n.buyerId);
-  appendNegotiationMessage(s.state, s.n, "player", "gm", "비공개 선수 계약", s.player.id);
-  expect(buildNegotiationView(s.state).unread).toBe(1);
-  expect(
-    actNegotiation(s.state, s.n.id, { kind: "read" }, { kind: "user", partyId: s.n.sellerId }).ok,
-  ).toBe(true);
-  const view = buildNegotiationView(s.state);
-  expect(view.unread).toBe(0);
-  expect(view.cases[0]?.lastReadMessage).toBe(view.cases[0]?.messages.length);
-});
 it("transfer proceeds and sale gain do not count twice as operating revenue", () => {
   const summary = summarise([
     {
@@ -393,7 +385,6 @@ it("live-match checkpoints reject all negotiating mutations atomically", () => {
     }).ok,
   ).toBe(false);
   expect(s.state).toEqual(before);
-  expect(s.action({ kind: "read" }).ok).toBe(true);
 });
 
 it("a free-agent destination cannot become the buyer of a managed-club sale", () => {
@@ -412,34 +403,6 @@ it("a free-agent destination cannot become the buyer of a managed-club sale", ()
   });
   expect(result.ok).toBe(false);
   expect(state).toEqual(before);
-});
-
-it("user-created cases wait for input while world-created cases retain their reply schedule", () => {
-  const s = setup();
-  expect(s.n.nextReplyOn).toBeNull();
-  expect(s.n.messages.some((m) => m.author === "gm")).toBe(false);
-  const otherBuyer = s.state.finances.find(
-    (f) => f.teamId !== s.n.buyerId && f.teamId !== s.n.sellerId,
-  );
-  if (!otherBuyer) throw new Error("fixture buyer missing");
-  const opened = openNegotiation(
-    s.state,
-    {
-      playerId: s.player.id,
-      buyerId: otherBuyer.teamId,
-      kind: "transfer",
-      background: "세계 영입 논의",
-    },
-    "world",
-  );
-  expect(opened.ok).toBe(true);
-  expect(s.state.negotiations.find((n) => n.id === opened.negotiationId)?.nextReplyOn).toBe(
-    s.state.date,
-  );
-  expect(
-    s.action({ kind: "message", channel: "club", text: "이적료 조건을 알고 싶습니다" }).ok,
-  ).toBe(true);
-  expect(s.n.nextReplyOn).toBe(s.state.date);
 });
 
 describe("natural-language offers require explicit current consent", () => {
@@ -563,10 +526,8 @@ describe("natural-language offers require explicit current consent", () => {
 describe("agent center ledger and bounded search", () => {
   it("resumes a withdrawn case without carrying agreement or erasing its history", () => {
     const s = agreed();
-    s.n.digest = { through: 1, text: "지난 조건" };
     const oldProposal = s.n.proposals[0]!;
     expect(s.action({ kind: "withdraw", reason: "보류" }).ok).toBe(true);
-    const messages = structuredClone(s.n.messages);
     const revision = s.n.revision;
     const input = {
       playerId: s.player.id,
@@ -576,11 +537,8 @@ describe("agent center ledger and bounded search", () => {
     };
     expect(openNegotiation(s.state, input).negotiationId).toBe(s.n.id);
     expect(s.state.negotiations).toHaveLength(1);
-    expect(s.n.messages.slice(0, messages.length)).toEqual(messages);
-    expect(s.n.digest.text).toBe("지난 조건");
     expect(s.n.revision).toBeGreaterThan(revision);
     expect(s.n.proposals.every((p) => p.status === "superseded")).toBe(true);
-    expect(s.n.nextReplyOn).toBeNull();
     expect(s.action({ kind: "accept", proposalId: oldProposal.id }).ok).toBe(false);
     const before = structuredClone(s.state);
     expect(openNegotiation(s.state, input).negotiationId).toBe(s.n.id);
@@ -641,7 +599,7 @@ describe("agent center ledger and bounded search", () => {
       setTransferListing(state, { playerId: own.id, listed: true, askingPrice: 123456 }).ok,
     ).toBe(true);
     const listed = structuredClone(state);
-    expect(buildAgentCenterView(state).transferList[0]?.positions).toEqual([
+    expect(buildTransferListingView(state).transferList[0]?.positions).toEqual([
       own.positions[0]!.position,
     ]);
     expect(
@@ -669,7 +627,6 @@ describe("agent center ledger and bounded search", () => {
     let before = structuredClone(state);
     expect(setTransferListing(state, { playerId: own.id, listed: true }).ok).toBe(false);
     expect(state).toEqual(before);
-    expect(searchAgentCenterPlayers(state, { pageSize: 2 }).players).toHaveLength(2);
     state.phase = "idle";
     state.dismissal = {
       on: state.date,
@@ -693,129 +650,14 @@ describe("agent center ledger and bounded search", () => {
       kind: "transfer",
       background: "매각 문의",
     });
-    expect(buildAgentCenterView(state).transferList[0]?.negotiationIds).toEqual([
+    expect(buildTransferListingView(state).transferList[0]?.negotiationIds).toEqual([
       opened.negotiationId,
     ]);
     toFreeAgency(state, own);
     expect(state.transferListings).toEqual([]);
-    expect(buildAgentCenterView(state).transferList).toEqual([]);
+    expect(buildTransferListingView(state).transferList).toEqual([]);
     state.transferListings.push({ gamePlayerId: own.id, listedOn: state.date });
-    expect(buildAgentCenterView(state).transferList).toEqual([]);
-  });
-  it("searches current public player facts with stable bounded pages and eligible inquiry ids", () => {
-    const s = setup();
-    s.player.positions.forEach((p, index) => (p.isNatural = index === 0));
-    const first = searchAgentCenterPlayers(s.state, { pageSize: 3 });
-    const second = searchAgentCenterPlayers(s.state, { page: 2, pageSize: 3 });
-    expect(first.players).toHaveLength(3);
-    expect(second.players).toHaveLength(3);
-    expect(new Set([...first.players, ...second.players].map((p) => p.id)).size).toBe(6);
-    expect(searchAgentCenterPlayers(s.state, { pageSize: 3 })).toEqual(first);
-    expect(first.players.every((p) => p.teamId !== s.state.userTeamId)).toBe(true);
-    expect(Object.keys(first.players[0]!).sort()).toEqual(
-      [
-        "id",
-        "name",
-        "teamId",
-        "teamName",
-        "age",
-        "positions",
-        "overall",
-        "attributes",
-        "existingNegotiationId",
-        "kind",
-      ].sort(),
-    );
-    const found = searchAgentCenterPlayers(s.state, {
-      name: s.player.name,
-      club: s.player.teamId,
-      position: s.player.positions[0]!.position,
-    });
-    expect(found.players.find((p) => p.id === s.player.id)?.existingNegotiationId).toBe(s.n.id);
-    expect(found.players.find((p) => p.id === s.player.id)?.positions).toEqual([
-      s.player.positions[0]!.position,
-    ]);
-    const row = found.players.find((p) => p.id === s.player.id)!;
-    const observed = observedPlayerFacts(s.state, s.player);
-    expect(row.overall).toEqual({
-      value: observed.overall,
-      margin: observationMargin(s.state, s.player.id, "overall"),
-    });
-    for (const attr of row.attributes)
-      expect(attr).toEqual({
-        axis: attr.axis,
-        value: observed.attributes[attr.axis],
-        margin: observationMargin(s.state, s.player.id, attr.axis),
-      });
-    const attribute = row.attributes[0]!;
-    expect(
-      searchAgentCenterPlayers(s.state, {
-        name: s.player.id,
-        minOverall: row.overall.value,
-        attributes: [{ axis: attribute.axis, min: attribute.value }],
-      }).players,
-    ).toHaveLength(1);
-    expect(
-      searchAgentCenterPlayers(s.state, { name: s.player.id, minOverall: row.overall.value + 0.01 })
-        .players,
-    ).toHaveLength(0);
-    expect(
-      searchAgentCenterPlayers(s.state, {
-        name: s.player.id,
-        attributes: [{ axis: attribute.axis, min: attribute.value + 0.01 }],
-      }).players,
-    ).toHaveLength(0);
-    expect(row.attributes.map((a) => a.axis)).not.toContain("potential");
-    const secondAttribute = row.attributes[1]!;
-    expect(
-      searchAgentCenterPlayers(s.state, {
-        name: s.player.id,
-        attributes: [
-          { axis: attribute.axis, min: attribute.value },
-          { axis: secondAttribute.axis, min: secondAttribute.value + 0.01 },
-        ],
-      }).players,
-    ).toHaveLength(0);
-    expect(() => searchAgentCenterPlayers(s.state, { positions: ["INVALID"] })).toThrow(RangeError);
-    expect(() => searchAgentCenterPlayers(s.state, { minOverall: 101 })).toThrow(RangeError);
-    const union = searchAgentCenterPlayers(s.state, { positions: ["GK", "CF"], pageSize: 50 });
-    expect(
-      searchAgentCenterPlayers(s.state, { positions: ["GK", "CF"], page: 2, pageSize: 2 }).players,
-    ).toEqual(union.players.slice(2, 4));
-    expect(union.total).toBe(
-      searchAgentCenterPlayers(s.state, { position: "GK", pageSize: 50 }).total +
-        searchAgentCenterPlayers(s.state, { position: "CF", pageSize: 50 }).total -
-        searchAgentCenterPlayers(s.state, { position: "GK", pageSize: 50 }).players.filter((p) =>
-          s.state.players
-            .find((v) => v.id === p.id)!
-            .positions.some((slot) => slot.position === "CF"),
-        ).length,
-    );
-    const supported = s.player.positions.find((p) => !p.isNatural);
-    if (supported)
-      expect(
-        searchAgentCenterPlayers(s.state, {
-          name: s.player.id,
-          position: supported.position,
-        }).players.some((p) => p.id === s.player.id),
-      ).toBe(true);
-    expect(searchAgentCenterPlayers(s.state, { page: 1000000, pageSize: 50 }).players).toEqual([]);
-    expect(() => searchAgentCenterPlayers(s.state, { pageSize: 51 })).toThrow(RangeError);
-    expect(() => searchAgentCenterPlayers(s.state, { page: 0 })).toThrow(RangeError);
-    toFreeAgency(s.state, s.player);
-    const free = searchAgentCenterPlayers(s.state, { name: s.player.id });
-    expect(free.players.find((p) => p.id === s.player.id)?.kind).toBe("free");
-    expect(free.players.find((p) => p.id === s.player.id)?.existingNegotiationId).toBeNull();
-    const contractless = s.state.players.find(
-      (p) => p.teamId !== s.state.userTeamId && p.teamId !== "freeagents",
-    )!;
-    const contract = activeContract(s.state, contractless.id)!;
-    contract.status = "ended";
-    expect(
-      searchAgentCenterPlayers(s.state, { name: contractless.id }).players.some(
-        (p) => p.id === contractless.id,
-      ),
-    ).toBe(false);
+    expect(buildTransferListingView(state).transferList).toEqual([]);
   });
   it("reopening a signed future inquiry returns its case without duplicating commitments", () => {
     const s = agreed("12");
@@ -973,7 +815,7 @@ describe("mail ledger and economic acceptance", () => {
     expect(s.action({ kind: "send", terms }, s.model(s.n.sellerId)).ok).toBe(false);
     expect(s.state).toEqual(before);
     expect(buildNegotiationView(s.state).cases[0]).not.toHaveProperty("bounds");
-    expect(s.action({ kind: "message", channel: "club", text: "계속 설득" }).ok).toBe(true);
+    expect(s.action({ kind: "draft", terms: s.terms }).ok).toBe(true);
     expect(s.n.bounds.fingerprint).toBe(before.negotiations[0]!.bounds.fingerprint);
     expect(s.action({ kind: "send", terms: { ...s.terms, weeklyWage: 1000000000 } }).ok).toBe(true);
     const wageBefore = structuredClone(s.state);
@@ -1072,4 +914,206 @@ describe("mail recipient name resolution", () => {
     expect(getMailRequestResult(s.state, "unknown-request")).toBeNull();
     expect(s.state).toEqual(before);
   });
+});
+
+describe("deterministic world market", () => {
+  it("reviews at seven days, never mutates the managed club, and repeats a date without duplicate obligations", () => {
+    const state = structuredClone(base);
+    const managedPlayers = structuredClone(
+      state.players.filter((p) => p.teamId === state.userTeamId),
+    );
+    const managedContracts = structuredClone(
+      state.contracts.filter((c) => managedPlayers.some((p) => p.id === c.gamePlayerId)),
+    );
+    state.marketReview.clubs = state.finances
+      .filter((f) => f.teamId !== state.userTeamId)
+      .map((f) => ({
+        teamId: f.teamId,
+        reviewedOn: state.date,
+        fingerprint: marketClubFingerprint(state, f.teamId),
+      }));
+    state.date = addDays(state.date, 6);
+    expect(marketReviewCohort(state)).toEqual([]);
+    state.date = addDays(state.date, 1);
+    expect(marketReviewCohort(state).length).toBeGreaterThan(0);
+    processWorldMarket(state);
+    const after = structuredClone(state);
+    processWorldMarket(state);
+    expect(state).toEqual(after);
+    expect(state.players.filter((p) => p.teamId === state.userTeamId)).toEqual(managedPlayers);
+    expect(
+      state.contracts.filter((c) => managedPlayers.some((p) => p.id === c.gamePlayerId)),
+    ).toEqual(managedContracts);
+  });
+  it("only finishes an NPC buyer after recorded seller consent and a clean timed exam, exactly once", () => {
+    const s = agreed();
+    s.state.userTeamId = s.n.sellerId;
+    s.n.proposals.find((p) => p.terms.scope === "club")!.acceptedBy = [s.n.buyerId];
+    progressWorldMarketDeals(s.state);
+    expect(s.n.medical).toBeNull();
+    expect(
+      actNegotiation(
+        s.state,
+        s.n.id,
+        { kind: "accept", proposalId: s.n.proposals.find((p) => p.terms.scope === "club")!.id },
+        { kind: "user", partyId: s.n.sellerId },
+      ).ok,
+    ).toBe(true);
+    processWorldMarket(s.state);
+    expect(s.n.medical?.examinedOn).toBeNull();
+    s.state.date = s.terms.since;
+    processWorldMarket(s.state);
+    expect(s.n.status).toBe("completed");
+    expect(s.player.teamId).toBe(s.n.buyerId);
+    const balances = s.state.finances.map((f) => f.balance),
+      payments = structuredClone(s.state.transferPayments),
+      mails = structuredClone(s.state.mailThreads);
+    processWorldMarket(s.state);
+    expect(s.state.finances.map((f) => f.balance)).toEqual(balances);
+    expect(s.state.transferPayments).toEqual(payments);
+    expect(s.state.mailThreads).toEqual(mails);
+  });
+  it("withdraws an NPC acquisition when actual injury appears before examination instead of acknowledging risk", () => {
+    const s = agreed();
+    s.state.userTeamId = s.n.sellerId;
+    processWorldMarket(s.state);
+    s.state.injuries.push({
+      id: "market-injury",
+      gamePlayerId: s.player.id,
+      bodyPart: "발목",
+      severity: "minor",
+      cause: "training",
+      occurredOn: s.state.date,
+      expectedReturn: addDays(s.state.date, 14),
+      returnedOn: null,
+    });
+    const injuries = structuredClone(s.state.injuries),
+      balance = financeOf(s.state, s.n.buyerId).balance;
+    s.state.date = s.terms.since;
+    processWorldMarket(s.state);
+    expect(s.n.status).toBe("withdrawn");
+    expect(s.player.teamId).toBe(s.n.sellerId);
+    expect(s.n.medical?.acknowledgedBy).toEqual([]);
+    expect(s.state.injuries).toEqual(injuries);
+    expect(financeOf(s.state, s.n.buyerId).balance).toBe(balance);
+  });
+  it("rejects attempts to use deterministic automation to renew a managed player", () => {
+    const state = structuredClone(base),
+      player = state.players.find((p) => p.teamId === state.userTeamId)!;
+    const before = structuredClone(state);
+    expect(
+      applyWorldMarketIntent(state, {
+        playerId: player.id,
+        buyerId: state.userTeamId,
+        kind: "renewal",
+        interest: false,
+        reason: "automation",
+      }),
+    ).toBeNull();
+    expect(decideWorldManager(state, state.userTeamId)).toBeNull();
+    expect(state).toEqual(before);
+  });
+});
+
+it("manager review waits ninety days and treats fourteen-day injury absences as mitigating evidence", () => {
+  const state = structuredClone(base),
+    team = state.teams.find((t) => t.id !== state.userTeamId && t.managerName)!;
+  team.managerSince = state.date;
+  state.date = addDays(state.date, 89);
+  const template = state.matches[0]!;
+  state.matches = Array.from({ length: 8 }, (_, i) => ({
+    ...template,
+    id: `board-loss-${i}`,
+    season: state.season,
+    date: state.date,
+    competitionId: "premier",
+    homeTeamId: team.id,
+    awayTeamId: state.userTeamId,
+    result: resultOf({ homeGoals: 0, awayGoals: 1 }),
+  }));
+  expect(decideWorldManager(state, team.id)).toBeNull();
+  state.date = addDays(state.date, 1);
+  expect(decideWorldManager(state, team.id)?.action).toBe("dismiss");
+  const players = state.players.filter((p) => p.teamId === team.id).slice(0, 4);
+  expect(players).toHaveLength(4);
+  state.injuries = players.map((p) => ({
+    id: `board-injury-${p.id}`,
+    gamePlayerId: p.id,
+    bodyPart: "발목",
+    severity: "moderate",
+    cause: "training",
+    occurredOn: state.date,
+    expectedReturn: addDays(state.date, 14),
+    returnedOn: null,
+  }));
+  expect(decideWorldManager(state, team.id)).toBeNull();
+  state.injuries.forEach((i) => (i.expectedReturn = addDays(state.date, 13)));
+  expect(decideWorldManager(state, team.id)?.action).toBe("dismiss");
+  state.matches.forEach((m) => (m.competitionId = "reserve:premier"));
+  expect(decideWorldManager(state, team.id)).toBeNull();
+});
+
+it("NPC renewal uses the contract ledger while an unaffordable acquisition leaves no partial case", () => {
+  const state = structuredClone(base),
+    player = state.players.find(
+      (p) => p.teamId !== state.userTeamId && activeContract(state, p.id),
+    )!;
+  const contract = activeContract(state, player.id)!,
+    oldId = contract.id;
+  contract.until = addDays(state.date, 100);
+  const id = applyWorldMarketIntent(state, {
+    playerId: player.id,
+    buyerId: player.teamId,
+    kind: "renewal",
+    interest: false,
+    reason: "계약 유지",
+  });
+  expect(id).not.toBeNull();
+  expect(activeContract(state, player.id)?.id).not.toBe(oldId);
+  expect(state.negotiations.find((n) => n.id === id)?.status).toBe("completed");
+  expect(state.contracts.find((c) => c.id === oldId)?.status).toBe("ended");
+  const failed = structuredClone(base),
+    buyer = failed.finances.find(
+      (f) => f.teamId !== failed.userTeamId && f.teamId !== player.teamId,
+    )!;
+  buyer.balance = 0;
+  const before = structuredClone(failed);
+  expect(
+    applyWorldMarketIntent(failed, {
+      playerId: player.id,
+      buyerId: buyer.teamId,
+      kind: "transfer",
+      interest: false,
+      reason: "현금 부족",
+    }),
+  ).toBeNull();
+  expect(failed).toEqual(before);
+});
+
+it("withdrawal cooldown runs fourteen days from actual closure rather than original inquiry", () => {
+  const state = structuredClone(base),
+    player = state.players.find(
+      (p) => p.teamId !== state.userTeamId && activeContract(state, p.id),
+    )!;
+  activeContract(state, player.id)!.until = addDays(state.date, 100);
+  const opened = openNegotiation(
+    state,
+    { playerId: player.id, buyerId: player.teamId, kind: "renewal", background: "계약 검토" },
+    "world",
+  );
+  const n = state.negotiations.find((n) => n.id === opened.negotiationId)!;
+  state.date = addDays(state.date, 30);
+  expect(
+    actNegotiation(
+      state,
+      n.id,
+      { kind: "withdraw", reason: "조건 보류" },
+      { kind: "model", partyId: player.teamId },
+    ).ok,
+  ).toBe(true);
+  expect(n.closed).toEqual({ on: state.date, reason: "조건 보류" });
+  state.date = addDays(state.date, 13);
+  expect(decideWorldMarket(state, player.teamId)?.playerId).not.toBe(player.id);
+  state.date = addDays(state.date, 1);
+  expect(decideWorldMarket(state, player.teamId)?.playerId).toBe(player.id);
 });

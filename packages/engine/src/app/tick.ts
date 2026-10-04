@@ -1,5 +1,7 @@
+import { processWorldMarket } from "./workflows/world-market";
+import { dueMailReplies } from "../common/mail/mail";
 import { deliverCoreReportMail } from "./workflows/mail-reports";
-import { settleNegotiations, negotiationMarketDue } from "../negotiation/negotiation";
+import { settleNegotiations } from "../negotiation/negotiation";
 import { repairNegotiationSquads } from "./workflows/negotiation-squad";
 import { expireStaffContracts } from "../story/people/staff-employment";
 import {
@@ -983,7 +985,7 @@ const MAX_OPEN_ENDED_DAYS = 90;
 export function advanceTime(
   state: GameState,
   until: "next_match" | { days: number } | { clock: string },
-  stopForMarket = false,
+  stopForMailReplies = false,
 ): AdvanceOutcome {
   if (state.phase !== "idle") {
     return {
@@ -1076,6 +1078,7 @@ export function advanceTime(
      */
     const contractDay = reviewManagerContract(state, kind.board);
     simulateOtherMatches(state, kind.matchday);
+    processWorldMarket(state);
     // 녹아웃 — 직전 단계가 끝났으면 다음 단계를 편성한다.
     // 대항전을 먼저 돌려야 예약된 대항전 날짜가 컵 날짜 선택에 반영된다.
     if (hasCups(state.world)) {
@@ -1114,7 +1117,7 @@ export function advanceTime(
       return { ok: true, events, stopped: "matchday", trained };
     }
 
-    if (needsAttention || (stopForMarket && negotiationMarketDue(state))) {
+    if (needsAttention || (stopForMailReplies && dueMailReplies(state).length > 0)) {
       closeDay("attention");
       return {
         ok: true,
@@ -1233,7 +1236,7 @@ export function applyScenePoint(
   state: GameState,
   target: ScenePoint,
   source: ClockSource,
-  stopForMarket = false,
+  stopForMailReplies = false,
 ): SceneAdvance {
   const here = (): ScenePoint => ({ date: state.date, clock: clockOf(state) });
 
@@ -1262,7 +1265,7 @@ export function applyScenePoint(
   }
 
   const days = diffDays(state.date, target.date);
-  const result = advanceTime(state, { days }, stopForMarket);
+  const result = advanceTime(state, { days }, stopForMailReplies);
   // 목표 날짜에 닿았을 때만 시각을 옮긴다 — 중간에 멈췄으면 그 날의 시작이다
   if (state.date === target.date && minutesOfClock(target.clock) > minutesOfClock(DAY_START)) {
     state.clock = target.clock;
@@ -1287,12 +1290,12 @@ export function applyScenePoint(
 export function advanceForOperation(
   state: GameState,
   operation: TurnOperation,
-  stopForMarket = false,
+  stopForMailReplies = false,
 ): AdvanceOutcome | null {
   if (state.phase !== "idle") return null;
   if (operation.kind === "enter_match" || operation.kind === "match_stop") return null;
   if (operation.kind === "skip_days")
-    return advanceTime(state, { days: operation.days }, stopForMarket);
+    return advanceTime(state, { days: operation.days }, stopForMailReplies);
   const days = diffDays(state.date, operation.date);
-  return days > 0 ? advanceTime(state, { days }, stopForMarket) : null;
+  return days > 0 ? advanceTime(state, { days }, stopForMailReplies) : null;
 }

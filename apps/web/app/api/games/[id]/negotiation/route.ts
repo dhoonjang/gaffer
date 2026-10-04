@@ -40,7 +40,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       traceBoard(id, async () => {
         const state = loadGame(id);
         if (!state) return NextResponse.json({ error: "게임을 찾을 수 없습니다" }, { status: 404 });
-        const requestedAction = parsed.data.action;
         const result = applyNegotiationRequest(state, parsed.data);
         journal({
           kind: "command",
@@ -57,16 +56,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         if (state.lorebookJobs.length > 0) after(() => processLorebookJobs(id));
         return NextResponse.json({
           game: payload,
-          negotiationId:
-            result.negotiationId ??
-            (requestedAction.kind === "open"
-              ? state.negotiations.find(
-                  (n) =>
-                    n.playerId === requestedAction.playerId &&
-                    n.buyerId === requestedAction.buyerId &&
-                    n.status === "open",
-                )?.id
-              : parsed.data.negotiationId),
+          negotiationId: result.negotiationId ?? parsed.data.negotiationId,
           saved: true,
         });
       }),

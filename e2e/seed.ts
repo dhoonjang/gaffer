@@ -115,7 +115,7 @@ export function seedFinishedSeason(teamId = "arsenal", seed = 406): string {
 }
 
 /** Inquiry and renewal use the same persisted world as the main GM. */
-export function seedAgentCenter() {
+export function seedMailNegotiation() {
   const state = appoint({
     teamId: "arsenal",
     managerName: "협상 감독",

@@ -177,7 +177,6 @@ export async function replyToMail(
             return { ok: false, message: "현재 연락 상대의 조건 범위가 아닙니다" };
           const partyId = recipient.kind === "club" ? recipient.teamId : n.playerId;
           const result = actNegotiation(draft, n.id, action, { kind: "model", partyId });
-          if (result.ok) n.nextReplyOn = null;
           records.push({
             kind: "command",
             name: "mail_negotiation_action",
@@ -236,8 +235,6 @@ export async function replyToMail(
           );
           if (outcome.ok && outcome.negotiationId) {
             openedIds.add(outcome.negotiationId);
-            const opened = draft.negotiations.find((n) => n.id === outcome.negotiationId);
-            if (opened) opened.nextReplyOn = null;
           }
           return outcome;
         },

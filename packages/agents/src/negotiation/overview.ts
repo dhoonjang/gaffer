@@ -2,7 +2,7 @@ import { currentProposal } from "@story-fm/domain";
 import {
   agentForPlayer,
   personaBookOf,
-  buildAgentCenterView,
+  buildTransferListingView,
   managedTeamId,
   playerName,
   teamNameIn,
@@ -12,7 +12,7 @@ import {
 /** Exact ledgers plus a bounded, visible narrative excerpt; mail prose never grants execution authority. */
 export function managedNegotiationOverview(state: GameState) {
   const teamId = managedTeamId(state);
-  const transferList = buildAgentCenterView(state).transferList;
+  const transferList = buildTransferListingView(state).transferList;
   return {
     transferList,
     cases: state.negotiations
@@ -28,11 +28,16 @@ export function managedNegotiationOverview(state: GameState) {
           n.sellerId === teamId && n.buyerId !== teamId
             ? (["club"] as const)
             : (["club", "player"] as const);
-        const visible = n.messages.filter(
-          (m) =>
-            scopes.some((scope) => scope === m.channel) ||
-            (m.channel === "internal" && m.partyId === teamId),
-        );
+        const visible = state.mailThreads
+          .filter(
+            (thread) =>
+              thread.ownerTeamId === teamId &&
+              (!(n.sellerId === teamId && n.buyerId !== teamId) ||
+                thread.recipient.kind === "club"),
+          )
+          .flatMap((thread) => thread.messages)
+          .filter((message) => message.negotiationId === n.id)
+          .sort((a, b) => a.on.localeCompare(b.on) || a.at.localeCompare(b.at));
         const last = visible.at(-1);
         const representative = agentForPlayer(state, n.playerId);
         return {
@@ -52,8 +57,8 @@ export function managedNegotiationOverview(state: GameState) {
           buyer: teamNameIn(state, n.buyerId),
           seller: teamNameIn(state, n.sellerId),
           status: n.status,
+          closed: n.closed,
           revision: n.revision,
-          nextReplyOn: n.nextReplyOn,
           currentConditions: scopes.map((scope) => ({
             scope,
             draft: n.drafts.find((draft) => draft.scope === scope) ?? null,
@@ -77,24 +82,21 @@ export function managedNegotiationOverview(state: GameState) {
             .filter((proposal) => proposal !== null),
           narrativeContext: {
             nonbinding: true,
-            latestExchange: ["manager", "gm"].flatMap((author) => {
-              const message = [...visible].reverse().find((m) => m.author === author);
+            latestExchange: ["outbound", "inbound"].flatMap((direction) => {
+              const message = [...visible].reverse().find((m) => m.direction === direction);
               return message
                 ? [
                     {
-                      author: message.author,
-                      partyId: message.partyId,
-                      channel: message.channel,
+                      direction: message.direction,
                       on: message.on,
-                      excerpt: message.text.slice(0, 400),
+                      subject: message.subject,
+                      excerpt: message.body.slice(0, 400),
                     },
                   ]
                 : [];
             }),
           },
-          lastUpdate: last
-            ? { on: last.on, channel: last.channel, author: last.author, partyId: last.partyId }
-            : null,
+          lastUpdate: last ? { on: last.on, at: last.at, direction: last.direction } : null,
           medical: n.medical
             ? {
                 readyOn: n.medical.readyOn,

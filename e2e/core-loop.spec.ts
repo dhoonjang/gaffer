@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import type { OfficeViews } from "@story-fm/engine";
-import { seedAgentCenter, seedFinishedSeason, seedSellerAgreement } from "./seed";
+import { seedMailNegotiation, seedFinishedSeason, seedSellerAgreement } from "./seed";
 import { COLD_MS } from "./timeouts";
 
 /**
@@ -56,15 +56,20 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
 });
 
 test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 이어진다", async ({ page }) => {
-  const fixture = seedAgentCenter();
+  const fixture = seedMailNegotiation();
   await page.goto(`/game/${fixture.gameId}`);
   const input = page.getByTestId("chat-input");
   await expect(input).toBeVisible({ timeout: COLD_MS });
   const openPanel = async (key: string) => {
     const tab = page.getByTestId(`tab-${key}`);
-    if ((await tab.getAttribute("class"))?.split(/\s+/).includes("active")) return;
-    if (!(await tab.isVisible())) await page.getByTestId("rail-toggle").click();
+    if ((await tab.getAttribute("aria-pressed")) === "true") return;
+    const menu = page.getByTestId("rail-toggle");
+    if (key !== "채팅" && (await menu.isVisible())) {
+      if ((await menu.getAttribute("aria-expanded")) !== "true") await menu.click();
+      await expect(menu).toHaveAttribute("aria-expanded", "true");
+    }
     await tab.click();
+    await expect(tab).toHaveAttribute("aria-pressed", "true");
   };
   const readMail = async () => {
     const response = await page.request.get(`/api/games/${fixture.gameId}/mail`, { maxRetries: 1 });

@@ -52,7 +52,6 @@ import {
   openNegotiation,
   actNegotiation,
   repairNegotiationSquads,
-  buildNegotiationView,
   buildNegotiationConfirmation,
   requestCharacterUpdate,
   type GameState,
@@ -501,7 +500,6 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           partyId: input.partyId,
         });
         if (result.ok) {
-          n.nextReplyOn = null;
           if (input.action.kind === "sign" && n.status === "completed")
             repairNegotiationSquads(state, [n.sellerId]);
           if (input.action.kind === "register") repairNegotiationSquads(state, [n.buyerId]);
@@ -560,7 +558,6 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           );
           if (!outcome.ok) return outcome;
           proposalId = currentProposal(n, proposal.scope)?.id;
-          n.nextReplyOn = null;
         }
         const result = sendMail(draft, {
           ...mail,
@@ -650,11 +647,9 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       },
     ),
     read("get_negotiations", descriptions.get_negotiations, z.object({}), () => {
-      const view = buildNegotiationView(state);
       return {
         ok: true,
         message: JSON.stringify({
-          unread: view.unread,
           ...managedNegotiationOverview(state),
         }),
       };

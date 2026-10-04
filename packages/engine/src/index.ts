@@ -171,3 +171,6 @@ export * from "./common/mail/mail";
 export { deliverTrainingReportMail } from "./app/workflows/mail-reports";
 
 export * from "./common/mail/recipient-search";
+
+export * from "./negotiation/world-market";
+export * from "./app/workflows/world-market";
