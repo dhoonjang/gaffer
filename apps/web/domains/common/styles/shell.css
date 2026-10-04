@@ -436,8 +436,14 @@ textarea {
   border-color: var(--accent);
 }
 .onboarding textarea {
-  min-height: 108px;
+  /* 빈 칸의 안내(placeholder)가 잘리지 않는 높이 — 좁아져 줄이 늘면 칸도 함께 는다 */
+  min-height: calc(5lh + 26px);
   resize: vertical;
+}
+@media (max-width: 699px) {
+  .onboarding textarea {
+    min-height: calc(6lh + 26px);
+  }
 }
 .primary-btn {
   background: var(--accent);
@@ -1594,6 +1600,16 @@ textarea {
 /* 아이콘 줄 — 오른쪽 끝. 글자 없이 아이콘만 두되 `title`·`aria-label`로 이름을
    남긴다(화면에 조작 안내를 깔지 않는다는 규칙). 선택 상태는 밝기로 알린다 —
    어두운 화면에서 그림자는 보이지 않고 밝기만 보인다. */
+/* 장부 다섯을 싣는 서랍 그릇 — 넓은 화면에선 풀려서 칸들이 줄에 그대로 선다 */
+.rail-panels {
+  display: contents;
+}
+/* 메뉴 버튼·서랍의 이름·서랍 뒤 막은 700 아래에서만 선다 (responsive.css) */
+.rail-dock .rail-toggle,
+.rail-label,
+.rail-scrim {
+  display: none;
+}
 .rail {
   /* 말풍선 꼬리가 이 두 값으로 아이콘 자리를 되짚는다 — 한 곳에서만 고친다 */
   --rail-btn: 34px;

@@ -553,8 +553,8 @@ test("휴대폰 폭에서도 상단 띠가 구단·날짜·감독을 잃지 않�
    * 휴대폰 폭 — **좌표는 지우지 않는다.**
    *
    * 구단·감독·지금은 화면이 바뀌어도 그대로여야 하는 값이라, 좁아지면 군말만
-   * 줄이고(직함·연도) 아이콘 줄이 자기 줄을 받는다. 좌표를 지우는 쪽으로 좁히면
-   * 띠가 격자 칸보다 넓어져 **아이콘 줄의 마지막 칸이 잘린다** — 그 둘을 함께 지킨다.
+   * 줄이고(직함·연도) 장부 아이콘은 메뉴 버튼 하나로 접힌다. 좌표를 지우는 쪽으로 좁히면
+   * 띠가 격자 칸보다 넓어져 **메뉴 버튼이 잘린다** — 그 둘을 함께 지킨다.
    */
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByTestId("team-name")).toBeVisible();
@@ -562,7 +562,7 @@ test("휴대폰 폭에서도 상단 띠가 구단·날짜·감독을 잃지 않�
   await expect(page.locator(".topbar-sub")).toContainText("박테스트");
   const fits = await page.evaluate(() => {
     const bar = document.querySelector(".topbar")!;
-    const last = [...bar.querySelectorAll(".rail button")].at(-1)!;
+    const last = bar.querySelector(".rail-toggle")!;
     return {
       barClipped: bar.scrollWidth > bar.clientWidth + 1,
       // 마지막 칸이 띠 안에 온전히 들어와 있나 — 잘리면 오른쪽이 넘친다
@@ -572,6 +572,14 @@ test("휴대폰 폭에서도 상단 띠가 구단·날짜·감독을 잃지 않�
   });
   expect(fits.barClipped).toBe(false);
   expect(fits.lastBtnRight).toBeLessThanOrEqual(fits.barRight);
+
+  // 장부는 서랍으로 접히고 채팅은 띠에 남는다. 칸을 고르면 그 장부가 서며 서랍이 닫힌다
+  await expect(page.getByTestId("tab-채팅")).toBeVisible();
+  await expect(page.getByTestId("tab-스쿼드")).toBeHidden();
+  await page.getByTestId("rail-toggle").click();
+  await page.getByTestId("tab-스쿼드").click();
+  await expect(page.getByTestId("tab-스쿼드")).toBeHidden();
+  await expect(page.getByTestId("squad-table")).toBeVisible();
 });
 
 test("달력 상세와 전술판 라인업 편집", async ({ page }) => {

@@ -199,12 +199,90 @@
   .topbar .brand {
     font-size: var(--fs-base);
   }
-  .rail button {
-    width: 30px;
-    height: 30px;
+  /**
+   * 평시 장부 다섯 → **오른쪽 서랍.** 띠에는 채팅과 메뉴 버튼이 남고, 서랍 안에서는
+   * 아이콘 옆에 이름이 선다 — 아이콘만으로 여섯을 가려 읽을 폭이 없는 화면이다.
+   * 채팅은 접지 않는다 — 어느 장부에서든 한 번에 돌아올 자리다. 경기 중의 탭
+   * 줄(`.match-rail`)은 화면 전환 그 자체라 접지 않는다.
+   */
+  .rail-dock {
+    --rail-btn: 40px;
   }
-  .rail .rail-sep {
-    margin: 0 2px;
+  .rail-dock .rail-toggle {
+    display: grid;
+  }
+  .rail-dock > .rail-sep {
+    display: none;
+  }
+  .rail-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    background: var(--scrim);
+  }
+  .rail-panels {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    width: min(240px, 80vw);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-1);
+    padding: var(--sp-4) var(--sp-3);
+    background: var(--panel);
+    box-shadow: var(--shadow-pop);
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform var(--panel-anim) var(--ease-panel),
+      visibility 0s linear var(--panel-anim);
+  }
+  .rail-panels.open {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--panel-anim) var(--ease-panel);
+  }
+  .rail .rail-panels button {
+    width: auto;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    padding: 0 var(--sp-3);
+    font: inherit;
+  }
+  .rail .rail-panels button.active {
+    background: var(--panel-2);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .rail .rail-panels button.active:focus-visible {
+    box-shadow:
+      var(--ring),
+      inset 3px 0 0 var(--accent);
+  }
+  .rail .rail-panels button.hinted::after {
+    top: 50%;
+    right: var(--sp-3);
+    margin-top: -3.5px;
+  }
+  .rail-label {
+    display: inline;
+  }
+  /* 서랍이 무대 위 모든 것을 덮도록 — 띠가 쌓임 맥락이라 띠째 올린다 */
+  .topbar.menu-open {
+    z-index: 60;
+  }
+  /* 알림의 꼬리는 메뉴 버튼을 짚는다 — 접힌 줄에선 칸을 셀 자리가 없다 */
+  .rail-dock .rail-hints {
+    min-width: 0;
+  }
+  .rail-dock .rail-hints::after {
+    right: calc(var(--rail-btn) / 2 - 4px);
   }
   /**
    * 좁은 화면 — **군말을 줄인다.** (지우지 않는다)
@@ -213,9 +291,29 @@
    * 날짜와 분은 그대로 남는다. 이만큼 줄이면 각주가 제목 옆 한 줄에 그대로 서고,
    * 그래도 모자라면 `flex-wrap`이 아래로 접는다.
    */
+  /**
+   * 구단 · 감독 · 지금은 **문장 옆 두 줄**로 선다 — 한 줄에 다 들어가는 폭과 못 들어가는
+   * 폭이 기기마다 갈려, 접히는 대로 두면 각주가 문장 밑으로 기어들어 이름과 어긋난다.
+   * 문장이 두 줄의 가운데에 서고, 이름과 각주는 같은 왼쪽 선에서 시작한다.
+   */
   .topbar-meta {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
     column-gap: 8px;
+    row-gap: 1px;
     line-height: 1.3;
+  }
+  .topbar-club-line {
+    display: contents;
+  }
+  .topbar-club-line .crest {
+    grid-row: span 2;
+  }
+  .topbar-club,
+  .topbar-sub,
+  .topbar-agenda {
+    grid-column: 2;
   }
   .topbar-sub {
     font-size: var(--fs-xs);
@@ -272,43 +370,42 @@
     flex: none;
     min-height: auto;
   }
+  /**
+   * 명단은 **화면 폭 안에 선다** — 넓은 화면의 560px 하한을 두면 폼·체력이 화면 밖으로
+   * 밀려 옆으로 밀어야 보이고, 한 열로 쌓인 전술판도 그 넓이의 가운데에 서서 오른쪽이
+   * 잘린다. 접히는 열(나이·적응·평점)과 국적이 빠지면 남은 다섯 열이 폭에 들어온다.
+   * 표식(HG·U21·배지)은 이름 아래로 접히고, 번호·완장·이름은 한 덩어리로 남는다.
+   */
+  .view-scroll .squad-view,
+  .roster-scroll .squad-table {
+    min-width: 0;
+  }
+  .squad-table .nat {
+    display: none;
+  }
+  .roster-scroll .squad-table td:first-child {
+    white-space: normal;
+    text-align: left;
+  }
+  .squad-table .row-name {
+    white-space: nowrap;
+  }
+  /* 빈 교체 자리는 접는다 — 비워 둔 폭에 이름이 밀려 둘째 줄로 떨어진다. 고르는 동안
+     화살표가 선 행만 그만큼 밀린다 */
+  .squad-table .swap-slot:empty {
+    display: none;
+  }
 }
 /**
- * ── 아주 좁은 화면(휴대폰)의 상단 띠 — **두 줄로 선다** ──────
+ * ── 아주 좁은 화면(휴대폰)의 상단 띠 — 여백만 줄인다 ──────
  *
- * 아이콘 여섯에 로고와 구단·감독·시각까지 한 줄에 넣을 폭이 없다. 글자를 더 줄이면
- * 남는 게 없고, 억지로 밀어 넣으면 각주가 아이콘 밑으로 기어든다. 그래서 이동
- * 수단이 **자기 줄**을 받는다 — 화면 폭에 고르게 퍼져 손가락에도 맞는다.
- *
- * 휴대폰의 아래쪽 탭 바와 같은 물건이 위에 있는 셈이라, 눌러야 할 것이 어디 있는지
- * 오히려 또렷하다.
+ * 장부 아이콘은 이미 메뉴 버튼으로 접혀 있고(위 700 아래 규칙), 경기 중의 띠는
+ * `match.css`가 한 줄로 세운다.
  */
 @media (max-width: 479px) {
   .topbar {
-    flex-wrap: wrap;
-    /* 두 줄로 서는 띠는 제 높이를 스스로 잡는다 — 한 줄짜리 하한이 뜻을 잃는다 */
     min-height: 0;
     padding: 5px 10px 3px;
-    row-gap: 0;
-  }
-  .rail {
-    flex-basis: 100%;
-    margin-left: 0;
-    gap: 0;
-  }
-  /**
-   * 칸이 줄을 **똑같이 나눠 갖는다** — 손가락에 맞는 폭이 저절로 나오고, 경기 중
-   * 셋이든 평시 여섯이든 같은 모양이 된다(`space-between`은 셋일 때 양 끝으로
-   * 흩어져 서로 남처럼 보였다). 켜진 칸의 넓은 바탕이 지금 어디인지도 말해 준다.
-   */
-  .rail button,
-  .rail.match-rail button {
-    flex: 1;
-    width: auto;
-  }
-  /* 고르게 나뉜 줄에서는 칸막이가 뜻을 잃는다 — 칸의 경계가 이미 폭으로 보인다 */
-  .rail .rail-sep {
-    display: none;
   }
 }
 /**

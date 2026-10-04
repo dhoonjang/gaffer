@@ -508,6 +508,15 @@ export function IconChevronUp({ size = 14 }: IconProps) {
   );
 }
 
+/** 메뉴 — 세 줄. 좁은 화면에서 접힌 아이콘 줄을 서랍으로 연다 */
+export function IconMenu({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  );
+}
+
 /** 닫기 — 두 획의 X. `✕` 글자는 폰트마다 굵기가 달라 버튼 안에서 홀로 튄다 */
 export function IconClose({ size = 14 }: IconProps) {
   return (

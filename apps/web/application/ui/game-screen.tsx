@@ -44,6 +44,7 @@ import {
   IconChevron,
   IconFinance,
   IconMark,
+  IconMenu,
   IconSquad,
   IconTrophy,
   IconClose,
@@ -218,6 +219,16 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 접힘이 끝나고 나서 지운다.
    */
   const [shownPanel, setShownPanel] = useState<Panel | null>(null);
+  /** 좁은 화면(700 아래)에서 아이콘 줄이 접혀 든 서랍이 열렸나 — 넓은 화면에선 뜻이 없다 */
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   useEffect(() => {
     if (panel !== null) {
       setShownPanel(panel);
@@ -1046,7 +1057,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
           ...(matchViewport.height ? { height: matchViewport.height } : {}),
         }}
       >
-        <header className="topbar">
+        <header className={`topbar${menuOpen ? " menu-open" : ""}`}>
           {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) */}
           <Link href="/" className="brand" data-testid="home-link" title="게임 목록으로">
             <IconMark />
@@ -1119,11 +1130,20 @@ export function GameScreen({ gameId }: { gameId: string }) {
               ))}
             </nav>
           )}
+          {/*
+           * 700 아래에서는 장부 다섯이 **오른쪽 서랍으로 접힌다** — 띠에는 채팅과 메뉴 버튼만
+           * 남고, 서랍 안에서는 아이콘 옆에 이름이 선다. 채팅은 접지 않는다 — 어느 장부에서든
+           * 한 번에 돌아올 자리다. 넓은 화면에선 서랍 그릇(`.rail-panels`)이 풀려 한 줄이
+           * 그대로다(responsive.css). 알림은 서랍 밖에 걸려 접혀 있어도 보인다.
+           */}
           {liveMatch === null && (
-            <nav className="rail" aria-label="화면 이동">
+            <nav className="rail rail-dock" aria-label="화면 이동">
               <button
                 className={panel === null ? "active" : ""}
-                onClick={() => setPanel(null)}
+                onClick={() => {
+                  setPanel(null);
+                  setMenuOpen(false);
+                }}
                 data-testid="tab-채팅"
                 title="채팅"
                 aria-label="채팅"
@@ -1131,21 +1151,36 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 <IconChat />
               </button>
               <span className="rail-sep" />
-              {PANELS.map(({ key, Icon }) => (
-                <button
-                  key={key}
-                  className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
-                  onClick={() => {
-                    rail.markSeen(key);
-                    setPanel(panel === key ? null : key);
-                  }}
-                  data-testid={`tab-${key}`}
-                  title={key}
-                  aria-label={key}
-                >
-                  <Icon />
-                </button>
-              ))}
+              {menuOpen && <div className="rail-scrim" onClick={() => setMenuOpen(false)} />}
+              <div className={`rail-panels${menuOpen ? " open" : ""}`}>
+                {PANELS.map(({ key, Icon }) => (
+                  <button
+                    key={key}
+                    className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
+                    onClick={() => {
+                      rail.markSeen(key);
+                      setPanel(panel === key ? null : key);
+                      setMenuOpen(false);
+                    }}
+                    data-testid={`tab-${key}`}
+                    title={key}
+                    aria-label={key}
+                  >
+                    <Icon />
+                    <span className="rail-label">{key}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                className={`rail-toggle${panel !== null ? " active" : ""}${rail.hints.length > 0 ? " hinted" : ""}`}
+                onClick={() => setMenuOpen(true)}
+                data-testid="rail-toggle"
+                title="메뉴"
+                aria-label="메뉴"
+                aria-expanded={menuOpen}
+              >
+                <IconMenu />
+              </button>
               {/**
                * 바뀐 장부를 알리는 말풍선 — **다음 클릭에 닫히고, 칩으로 다시 부른다.**
                *
