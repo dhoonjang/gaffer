@@ -278,6 +278,25 @@ describe("LLM 응답 실패", () => {
  * 재시도가 같은 지시를 두 번 태우고 이미 적용된 교체 지시는 400으로 굳는다.
  */
 describe("기다리기를 멈춘 턴", () => {
+  it("첨부 메일 ID는 본문과 함께 직렬화하고 클라이언트 원문은 보내지 않는다", async () => {
+    const fetchMock = vi.fn(async () => new Response('{"type":"error","error":"stop"}\n'));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await streamTurn(
+        "g",
+        { message: "이 메일을 검토해 주세요", mailMessageIds: ["mail-1-m3"] },
+        { onDelta: () => {}, onDone: () => {} },
+      );
+      const request = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(request[1].body as string)).toEqual({
+        message: "이 메일을 검토해 주세요",
+        mailMessageIds: ["mail-1-m3"],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("서버가 알린 실패만 `settled` — 끊긴 스트림은 아니다", async () => {
     const ndjson = (body: string) =>
       new Response(body, { headers: { "Content-Type": "application/x-ndjson" } });

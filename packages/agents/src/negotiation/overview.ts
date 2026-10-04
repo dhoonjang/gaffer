@@ -1,5 +1,7 @@
 import { currentProposal } from "@story-fm/domain";
 import {
+  agentForPlayer,
+  personaBookOf,
   buildAgentCenterView,
   managedTeamId,
   playerName,
@@ -7,7 +9,7 @@ import {
   type GameState,
 } from "@story-fm/engine";
 
-/** Exact ledgers plus a bounded, visible narrative excerpt; the independent thread remains authoritative. */
+/** Exact ledgers plus a bounded, visible narrative excerpt; mail prose never grants execution authority. */
 export function managedNegotiationOverview(state: GameState) {
   const teamId = managedTeamId(state);
   const transferList = buildAgentCenterView(state).transferList;
@@ -32,12 +34,20 @@ export function managedNegotiationOverview(state: GameState) {
             (m.channel === "internal" && m.partyId === teamId),
         );
         const last = visible.at(-1);
+        const representative = agentForPlayer(state, n.playerId);
         return {
           id: n.id,
           playerId: n.playerId,
           buyerId: n.buyerId,
           sellerId: n.sellerId,
           player: playerName(state, n.playerId),
+          playerRepresentative: {
+            partyId: n.playerId,
+            name: representative?.name ?? "선수 대리인",
+            information: representative
+              ? personaBookOf(state, representative).information.slice(0, 1500)
+              : "",
+          },
           kind: n.kind,
           buyer: teamNameIn(state, n.buyerId),
           seller: teamNameIn(state, n.sellerId),

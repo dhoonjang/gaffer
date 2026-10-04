@@ -11,7 +11,7 @@ import {
 } from "@story-fm/domain";
 import { PlayerName } from "@/domains/common/ui/player-card";
 
-export function AgentCenterSearch({
+export function PlayerSearch({
   gameId,
   refreshKey,
   disabled,

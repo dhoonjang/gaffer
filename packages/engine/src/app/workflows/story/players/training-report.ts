@@ -1,3 +1,4 @@
+import { deliverTrainingReportMail } from "../../mail-reports";
 import {
   type GameState,
   assignmentsOf,
@@ -238,5 +239,7 @@ export function applyTrainingOutcomes(
    * 사실이고, 카드가 없으면 다음 턴의 GM은 훈련장에서 무슨 일이 있었는지 지어낸다
    * (docs/common/season.md §4).
    */
-  return cardFor(state, brief, moved, marks);
+  const report = cardFor(state, brief, moved, marks);
+  deliverTrainingReportMail(state, report);
+  return report;
 }

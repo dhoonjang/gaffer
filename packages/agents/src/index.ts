@@ -33,3 +33,7 @@ export * from "./app/workflows/negotiation/world-market";
 export * from "./app/workflows/negotiation/date-work";
 
 export * from "./app/workflows/negotiation/negotiation-opening";
+
+export * from "./app/workflows/mail/reply";
+export * from "./app/workflows/mail/context";
+export * from "./app/workflows/negotiation/npc-buyer";

@@ -27,14 +27,12 @@ export function mockNegotiationLlm(
     const managed = managedTeamId(state);
     const act = (partyId: string, action: unknown) =>
       calls.push({ tool: "negotiation_action", input: { partyId, action } });
-    const contract = state.contracts.find(
-      (c) => c.gamePlayerId === n.playerId && c.status === "active",
-    );
     const terms = (scope: "club" | "player"): ProposalTerms => ({
       scope,
-      fee: scope === "club" ? 1000000 : 0,
+      fee: scope === "club" ? Math.floor((n.bounds.minFee + n.bounds.maxFee) / 2) : 0,
       installments: [],
-      weeklyWage: scope === "player" ? Math.max(500, Math.round(contract?.weeklyWage ?? 500)) : 0,
+      weeklyWage:
+        scope === "player" ? Math.floor((n.bounds.minWeeklyWage + n.bounds.maxWeeklyWage) / 2) : 0,
       signingBonus: 0,
       since:
         n.kind === "renewal" && [n.buyerId, n.sellerId].includes(managed ?? "")

@@ -22,12 +22,7 @@ import {
   userPlayers,
   type GameState,
 } from "@story-fm/engine";
-import {
-  NegotiationStartedPayloadSchema,
-  tacticAxisOf,
-  tacticWord,
-  type MatchRecord,
-} from "@story-fm/domain";
+import { tacticAxisOf, tacticWord, type MatchRecord } from "@story-fm/domain";
 import {
   SKILL_CATALOG,
   TIME_PASSED,
@@ -336,7 +331,9 @@ describe("상태 스냅샷 (매 턴 갱신되는 휘발성 블록)", () => {
     // 전원이 선다 — 한 명이라도 빠지면 GM이 그 선수를 모른다
     expect(squad.filter((p) => !note.includes(p.name))).toHaveLength(0);
     // 이름뿐이다 — id도 능력치도 따라오지 않는다
-    expect(squad.filter((p) => note.includes(p.id))).toHaveLength(0);
+    expect(
+      squad.filter((p) => note.match(/<squad>[\s\S]*?<\/squad>/)?.[0]?.includes(p.id)),
+    ).toHaveLength(0);
     const squadLines = note.split("\n").filter((l) => /^- [12]군 \d+: /.test(l));
     expect(squadLines.length).toBeGreaterThan(0);
     for (const line of squadLines) {
@@ -1579,64 +1576,42 @@ describe("해석기가 읽는 지난 턴 — 이번 턴의 꼬리는 @감독: �
 });
 
 describe("main GM starts a spoken-name renewal", () => {
-  it.each([false, true])(
-    "returns the exact case target when opening suggestion fails=%s",
-    async (replyFails) => {
-      const state = game();
-      const player = state.players.find((p) => p.teamId === state.userTeamId)!;
-      player.name = "세네 라먼스";
-      const team = state.teams.find((t) => t.id === state.userTeamId)!;
-      let negotiationCalls = 0;
-      stubRunTurn.mockImplementation(async (request: TurnRequest): Promise<TurnResult> => {
-        const negotiation = request.outputSchema !== undefined;
-        if (negotiation) {
-          negotiationCalls += 1;
-          if (replyFails) throw new Error("negotiation provider unavailable");
-        }
-        const client = new ScriptedGameLLM(
-          agentConfig(negotiation ? "negotiation-gm" : "gm"),
-          () =>
-            negotiation
-              ? {
-                  output: { suggestion: "재계약 조건을 논의하고 싶습니다." },
-                }
-              : {
-                  calls: [
-                    {
-                      tool: "start_negotiation",
-                      input: {
-                        playerId: "라먼스",
-                        buyerId: team.name,
-                        kind: "renewal",
-                        background: "감독의 재계약 요청",
-                      },
-                    },
-                  ],
-                  text: `[${state.date} AM 10:00]\n@: 라먼스의 재계약 협상을 열었다. 답변과 조건은 개별 협상 화면에서 확인할 수 있다.`,
-                },
-        );
-        return client.runTurn(request);
-      });
-      vi.stubEnv("LLM_MODE", "real");
-      try {
-        const turn = await runGmTurn(state, "라먼스랑 재계약 협상 시작하자");
-        expect(turn.text).toContain("재계약 협상을 열었다");
-        const started = turn.toolCalls.find((call) => call.name === "start_negotiation");
-        expect(NegotiationStartedPayloadSchema.parse(started?.payload)).toEqual({
-          kind: "negotiation",
-          negotiationId: state.negotiations[0]?.id,
-          ...(!replyFails ? { suggestion: "재계약 조건을 논의하고 싶습니다." } : {}),
-        });
-        expect(negotiationCalls).toBe(1);
-        expect(state.negotiations[0]?.playerId).toBe(player.id);
-        expect(state.negotiations[0]?.buyerId).toBe(state.userTeamId);
-        expect(state.negotiations[0]?.messages.some((message) => message.author === "gm")).toBe(
-          false,
-        );
-        expect(state.negotiations[0]?.proposals).toEqual([]);
-      } finally {
-        vi.unstubAllEnvs();
-      }
-    },
-  );
+  it("opens exact core IDs and continues the main scene without a separate model or navigation payload", async () => {
+    const state = game();
+    const player = state.players.find((p) => p.teamId === state.userTeamId)!;
+    player.name = "세네 라먼스";
+    const team = state.teams.find((t) => t.id === state.userTeamId)!;
+    let calls = 0;
+    stubRunTurn.mockImplementation(async (request: TurnRequest): Promise<TurnResult> => {
+      calls++;
+      const client = new ScriptedGameLLM(agentConfig("gm"), () => ({
+        calls: [
+          {
+            tool: "start_negotiation",
+            input: {
+              playerId: "라먼스",
+              buyerId: team.name,
+              kind: "renewal",
+              background: "감독의 재계약 요청",
+            },
+          },
+        ],
+        text: `[${state.date} AM 10:00]\n@: 라먼스의 재계약 협상을 열었다.\n@선수 대리인: 계약 조건을 여기서 논의하시죠.`,
+      }));
+      return client.runTurn(request);
+    });
+    vi.stubEnv("LLM_MODE", "real");
+    try {
+      const turn = await runGmTurn(state, "라먼스랑 재계약 협상 시작하자");
+      expect(calls).toBe(1);
+      expect(turn.text).toContain("재계약 협상을 열었다");
+      expect(turn.toolCalls.find((c) => c.name === "start_negotiation")?.payload).toBeUndefined();
+      expect(state.negotiations[0]?.playerId).toBe(player.id);
+      expect(state.negotiations[0]?.buyerId).toBe(state.userTeamId);
+      expect(state.negotiations[0]?.proposals).toEqual([]);
+      expect(state.negotiations[0]?.messages.some((m) => m.author === "gm")).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

@@ -603,3 +603,12 @@ export function IconPause({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+export function IconMail({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 6 9 7 9-7" />
+    </svg>
+  );
+}

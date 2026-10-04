@@ -1,3 +1,10 @@
+import {
+  mainMailOverview,
+  mailAttachmentsContext,
+  ownedMailAttachments,
+  mailHistoryContext,
+  historicalMailBudget,
+} from "./workflows/mail/context";
 import { managedNegotiationOverview } from "../negotiation/overview";
 import { addDays } from "@story-fm/engine";
 import { offerSeat, offerTerms } from "../story/employment-context";
@@ -904,6 +911,7 @@ export function buildGmStateNote(state: GameState, passed?: TimePassed | null): 
     ),
     // 한 줄에 하나 — 이어 붙이면 일곱 항목이 가운뎃점 사이에 묻힌다
     block("alerts", alerts.join("\n")),
+    block("mail", JSON.stringify(mainMailOverview(state))),
     block(
       "negotiations",
       JSON.stringify({
@@ -1191,9 +1199,17 @@ function windowOf(state: GameState): { turns: GameState["chat"] } {
  */
 export function renderTurnGroup(
   state: GameState,
-  turns: ReadonlyArray<Pick<ChatTurn, "role" | "text">>,
+  turns: ReadonlyArray<Pick<ChatTurn, "role" | "text"> & { mailMessageIds?: readonly string[] }>,
   cards: readonly LorebookInjection[],
+  attachments?: readonly import("@story-fm/domain").MailMessage[],
+  expandedMail?: Map<string, import("@story-fm/domain").MailMessage>,
 ): string {
+  const ids = turns.flatMap((turn) => turn.mailMessageIds ?? []);
+  const mail = attachments
+    ? mailAttachmentsContext(attachments)
+    : expandedMail
+      ? mailHistoryContext(state, ids, expandedMail)
+      : mailAttachmentsContext(ownedMailAttachments(state, ids));
   return [
     // 오퍼레이터 지시도 같은 유저 메시지 안이다 — 갈리는 건 **내용의 형식**이다.
     // 감독 발화인지 조작인지를 본문이 밝힌다
@@ -1203,6 +1219,7 @@ export function renderTurnGroup(
         : buildManagerMessage(state, turn.text),
     ),
   ]
+    .concat(mail || [])
     .concat(lorebookText(cards) || [])
     .filter((block): block is string => block !== null)
     .join("\n\n");
@@ -1217,15 +1234,24 @@ export function renderTurnGroup(
  * 발화를 채팅에 먼저 밀어 넣는 것이 이 함수의 전제이고, `historyEnd`·
  * `recordCharacterInjection`도 같은 전제 위에 선다.
  */
-export function buildGmTurnMessage(state: GameState, cards: readonly LorebookInjection[]): string {
+export function buildGmTurnMessage(
+  state: GameState,
+  cards: readonly LorebookInjection[],
+  attachments?: readonly import("@story-fm/domain").MailMessage[],
+): string {
   const chat = relevantTurns(state);
-  return renderTurnGroup(state, chat.slice(historyEnd(chat)), cards);
+  return renderTurnGroup(state, chat.slice(historyEnd(chat)), cards, attachments);
 }
 
 export function buildGmHistory(
   state: GameState,
 ): Array<{ role: "user" | "assistant"; content: string }> {
-  return groupTurns(windowOf(state).turns).map((group) =>
+  const turns = windowOf(state).turns;
+  const expandedMail = historicalMailBudget(
+    state,
+    turns.flatMap((turn) => turn.mailMessageIds ?? []),
+  );
+  return groupTurns(turns).map((group) =>
     group[0]?.role === "model"
       ? { role: "assistant" as const, content: group.map((turn) => turn.text).join("\n\n") }
       : {
@@ -1236,6 +1262,8 @@ export function buildGmHistory(
             state,
             group,
             group.flatMap((turn) => turn.lorebook ?? []),
+            undefined,
+            expandedMail,
           ),
         },
   );

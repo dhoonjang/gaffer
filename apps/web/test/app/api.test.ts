@@ -1227,6 +1227,43 @@ describe("협상 요청 경계", () => {
     );
     id = ((await response.json()) as GamePayload).id;
   });
+  it("메일 전송은 같은 연락처에 합치고 재시도해도 즉시 답장이나 대화를 만들지 않는다", async () => {
+    const { POST, GET } = await import("../../app/api/games/[id]/mail/route");
+    const before = loadGame(id)!;
+    const input = {
+      kind: "send",
+      requestId: "mail-route-872",
+      recipient: { kind: "club", teamId: "liverpool" },
+      subject: "영입 문의",
+      body: "조건을 논의하고 싶습니다.",
+    };
+    expect((await POST(json({ ...input, actor: "world" }), params(id))).status).toBe(400);
+    expect((await POST(json(input), params(id))).status).toBe(200);
+    const once = loadGame(id)!;
+    expect((await POST(json(input), params(id))).status).toBe(200);
+    expect(loadGame(id)!.mailThreads).toEqual(once.mailThreads);
+    expect(once.chat).toEqual(before.chat);
+    expect(once.date).toEqual(before.date);
+    expect(
+      once.mailThreads.flatMap((t) => t.messages).every((m) => m.direction === "outbound"),
+    ).toBe(true);
+    expect(
+      (await POST(json({ ...input, requestId: "mail-route-second-872" }), params(id))).status,
+    ).toBe(200);
+    const twice = loadGame(id)!;
+    expect(twice.mailThreads).toHaveLength(once.mailThreads.length);
+    expect(twice.mailThreads.flatMap((t) => t.messages)).toHaveLength(2);
+    expect((await GET(new Request("http://test.local"), params(id))).status).toBe(200);
+    expect(loadGame(id)!.mailThreads).toEqual(twice.mailThreads);
+    const invalidAttachment = await postTurn(
+      json({ message: "메일 검토", mailMessageIds: ["mail-does-not-exist"] }),
+      params(id),
+    );
+    const events = await invalidAttachment.text();
+    expect(events).toContain('"type":"error"');
+    expect(loadGame(id)!.chat).toEqual(before.chat);
+    expect(loadGame(id)!.mailThreads).toEqual(twice.mailThreads);
+  });
   it("센터 검색은 범위를 검증하고 저장·대화·시장 검토를 바꾸지 않는다", async () => {
     const { GET } = await import("../../app/api/games/[id]/agent-center/players/route");
     const before = loadGame(id)!;

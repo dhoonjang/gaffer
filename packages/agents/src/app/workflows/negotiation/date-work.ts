@@ -1,3 +1,5 @@
+import { progressNpcBuyerNegotiations } from "./npc-buyer";
+import { processMailReplies } from "../mail/reply";
 import { diffDays, type TurnOperation } from "@story-fm/domain";
 import {
   MAX_REQUESTED_DAYS,
@@ -41,6 +43,8 @@ export async function advanceOperationWithWorld(
   for (;;) {
     const seat = managedTeamId(state);
     await processWorldMarket(state);
+    await processMailReplies(state);
+    progressNpcBuyerNegotiations(state);
     if (managedTeamId(state) !== seat)
       return { ...result, stopped: "attention", pendingDateEvents: false };
     if (!result.pendingDateEvents || state.phase !== "idle") return result;
@@ -60,8 +64,11 @@ export async function advanceSceneWithWorld(
   const cap = addDays(from, MAX_REQUESTED_DAYS);
   const bounded = { ...target, date: target.date > cap ? cap : target.date };
   let result = applyScenePoint(state, bounded, source, true);
-  if (source === "header" && (result.pendingDateEvents || state.date !== from))
+  if (source === "header" && (result.pendingDateEvents || state.date !== from)) {
     await processWorldMarket(state);
+    await processMailReplies(state);
+    progressNpcBuyerNegotiations(state);
+  }
   if (managedTeamId(state) !== seat)
     return {
       ...result,
@@ -81,6 +88,8 @@ export async function advanceSceneWithWorld(
     const combined = combine(result, next);
     result = { ...combined, reached: next.reached, short: next.short };
     await processWorldMarket(state);
+    await processMailReplies(state);
+    progressNpcBuyerNegotiations(state);
     if (managedTeamId(state) !== seat)
       return {
         ...result,

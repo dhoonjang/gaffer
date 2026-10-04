@@ -1,8 +1,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { GameState } from "@story-fm/engine";
+import type { GameState, NegotiationActor } from "@story-fm/engine";
 import type { ProposalTerms } from "@story-fm/domain";
 import {
   actNegotiation,
+  sendMail,
+  completeMailReply,
+  dueMailReplies,
+  buildMailView,
+  resolveMailRecipient,
+  mailMessageForViewer,
+  deliverIncomingMail,
   activeContract,
   applyNegotiationRequest,
   buildNegotiationView,
@@ -43,7 +50,7 @@ function setup(effectiveDay = "02") {
     scope: "player",
     fee: 0,
     installments: [],
-    weeklyWage: 1000,
+    weeklyWage: Math.max(1000, n.bounds.minWeeklyWage),
     signingBonus: 200,
     since: "2025-07-02",
     until: "2026-07-02",
@@ -56,8 +63,9 @@ function setup(effectiveDay = "02") {
   terms.expiresOn = state.date.slice(0, 8) + "10";
   const user = { kind: "user" as const, partyId: state.userTeamId };
   const model = (partyId: string) => ({ kind: "model" as const, partyId });
-  const action = (a: unknown, actor = user) => actNegotiation(state, n.id, a, actor);
-  return { state, player, n, terms, user, model, action };
+  const action = (a: unknown, actor: NegotiationActor = user) =>
+    actNegotiation(state, n.id, a, actor);
+  return { state, player, n, terms, user, model, action, fee: Math.max(1000, n.bounds.minFee) };
 }
 function agreed(effectiveDay = "02") {
   const s = setup(effectiveDay);
@@ -67,7 +75,7 @@ function agreed(effectiveDay = "02") {
       terms: {
         ...s.terms,
         scope: "club",
-        fee: 1000,
+        fee: s.fee,
         signingBonus: 0,
         weeklyWage: 0,
         installments: [{ date: s.terms.until, amount: 500 }],
@@ -115,7 +123,9 @@ describe("negotiation ledger", () => {
   it("supersedes consent with a new immutable proposal", () => {
     const s = agreed();
     const first = structuredClone(s.n.proposals[1]);
-    expect(s.action({ kind: "send", terms: { ...s.terms, weeklyWage: 2000 } }).ok).toBe(true);
+    expect(
+      s.action({ kind: "send", terms: { ...s.terms, weeklyWage: s.terms.weeklyWage + 1000 } }).ok,
+    ).toBe(true);
     expect(s.n.proposals[1]).toEqual({ ...first, status: "superseded" });
     expect(s.n.proposals[2]!.acceptedBy).toEqual([s.state.userTeamId]);
     expect(s.action({ kind: "medical" }).ok).toBe(false);
@@ -133,14 +143,14 @@ describe("negotiation ledger", () => {
     const seller = financeOf(s.state, s.n.sellerId).balance;
     expect(s.action({ kind: "sign" }).ok).toBe(true);
     expect(s.player.teamId).toBe(s.n.buyerId);
-    expect(activeContract(s.state, s.player.id)?.weeklyWage).toBe(1000);
+    expect(activeContract(s.state, s.player.id)?.weeklyWage).toBe(s.terms.weeklyWage);
     expect(isAvailable(s.state, s.player)).toBe(false);
-    expect(financeOf(s.state, s.n.buyerId).balance).toBe(buyer - 1200);
-    expect(financeOf(s.state, s.n.sellerId).balance).toBe(seller + 1000);
+    expect(financeOf(s.state, s.n.buyerId).balance).toBe(buyer - s.fee - 200);
+    expect(financeOf(s.state, s.n.sellerId).balance).toBe(seller + s.fee);
     settleNegotiations(s.state);
-    expect(financeOf(s.state, s.n.buyerId).balance).toBe(buyer - 1200);
+    expect(financeOf(s.state, s.n.buyerId).balance).toBe(buyer - s.fee - 200);
     const summary = summarise(financeOf(s.state, s.n.buyerId).ledger);
-    expect(summary.cashNet).toBe(-1200);
+    expect(summary.cashNet).toBe(-s.fee - 200);
     expect(summary.pnlNet).toBe(0);
     for (const p of s.state.players)
       if (p.teamId === s.n.buyerId && p.id !== s.player.id) p.squadLevel = "reserve";
@@ -148,8 +158,8 @@ describe("negotiation ledger", () => {
     expect(activeContract(s.state, s.player.id)?.registrationStatus).toBe("registered");
     s.state.date = s.terms.until;
     settleNegotiations(s.state);
-    expect(financeOf(s.state, s.n.buyerId).balance).toBe(buyer - 1700);
-    expect(activeContract(s.state, s.player.id)?.acquisition?.amortized).toBe(1700);
+    expect(financeOf(s.state, s.n.buyerId).balance).toBe(buyer - s.fee - 700);
+    expect(activeContract(s.state, s.player.id)?.acquisition?.amortized).toBe(s.fee + 700);
   });
   it("does not mutate injury facts during examination and refuses changed evidence", () => {
     const s = agreed();
@@ -224,7 +234,7 @@ describe("negotiation boundaries", () => {
     s.state.date = s.terms.since;
     settleNegotiations(s.state);
     expect(s.action({ kind: "acknowledge_medical" }).ok).toBe(true);
-    financeOf(s.state, s.n.buyerId).balance = 1699;
+    financeOf(s.state, s.n.buyerId).balance = s.fee + 699;
     const before = structuredClone(s.state);
     expect(s.action({ kind: "sign" }).ok).toBe(false);
     expect(s.state).toEqual(before);
@@ -490,7 +500,7 @@ describe("natural-language offers require explicit current consent", () => {
       actNegotiation(
         s.state,
         s.n.id,
-        { kind: "send", terms: { ...s.terms, weeklyWage: 2000 } },
+        { kind: "send", terms: { ...s.terms, weeklyWage: s.terms.weeklyWage + 1000 } },
         s.model(s.player.id),
       ).ok,
     ).toBe(true);
@@ -523,7 +533,7 @@ describe("natural-language offers require explicit current consent", () => {
       actNegotiation(
         s.state,
         s.n.id,
-        { kind: "send", terms: { ...s.terms, weeklyWage: 2000 } },
+        { kind: "send", terms: { ...s.terms, weeklyWage: s.terms.weeklyWage + 1000 } },
         s.model(s.player.id),
       ).ok,
     ).toBe(true);
@@ -535,7 +545,7 @@ describe("natural-language offers require explicit current consent", () => {
     expect(s.state).toEqual(before);
     expect(s.action({ kind: "accept", proposalId: revised.id }).ok).toBe(true);
     expect(s.action({ kind: "sign" }).ok).toBe(true);
-    expect(activeContract(s.state, s.player.id)?.weeklyWage).toBe(2000);
+    expect(activeContract(s.state, s.player.id)?.weeklyWage).toBe(s.terms.weeklyWage + 1000);
   });
   it("medical requires non-expired agreed offers even before expiry settlement", () => {
     const s = agreed();
@@ -820,5 +830,152 @@ describe("agent center ledger and bounded search", () => {
       }).negotiationId,
     ).toBe(s.n.id);
     expect(s.state).toEqual(before);
+  });
+});
+
+describe("mail ledger and economic acceptance", () => {
+  it("sends once, coalesces the cursor, waits for game time and rejects stale completion atomically", () => {
+    const s = setup();
+    const recipient = { kind: "club", teamId: s.n.sellerId };
+    const input = {
+      requestId: "mail-test-1",
+      recipient,
+      subject: "문의",
+      body: "첫 연락",
+      negotiationId: s.n.id,
+    };
+    const sent = sendMail(s.state, input);
+    expect(sent.ok).toBe(true);
+    const saved = structuredClone(s.state);
+    expect(sendMail(s.state, input)).toMatchObject({
+      ok: true,
+      threadId: sent.threadId,
+      messageId: sent.messageId,
+      replayed: true,
+    });
+    expect(s.state).toEqual(saved);
+    expect(dueMailReplies(s.state)).toEqual([]);
+    const cursor = sent.messageId!;
+    expect(sendMail(s.state, { ...input, requestId: "mail-test-2", body: "추가 연락" }).ok).toBe(
+      true,
+    );
+    expect(s.state.mailReplyJobs).toHaveLength(1);
+    s.state.date = s.terms.since;
+    const job = dueMailReplies(s.state)[0]!;
+    expect(job).toBeDefined();
+    const before = structuredClone(s.state);
+    expect(
+      completeMailReply(s.state, job.id, {
+        throughMessageId: cursor,
+        subject: "회신",
+        body: "답변",
+      }).ok,
+    ).toBe(false);
+    expect(s.state).toEqual(before);
+    expect(
+      completeMailReply(s.state, job.id, {
+        throughMessageId: job.throughMessageId,
+        subject: "회신",
+        body: "답변",
+        negotiationId: s.n.id,
+      }).ok,
+    ).toBe(true);
+    const completed = structuredClone(s.state);
+    expect(
+      completeMailReply(s.state, job.id, {
+        throughMessageId: job.throughMessageId,
+        subject: "회신",
+        body: "답변",
+      }).replayed,
+    ).toBe(true);
+    expect(s.state).toEqual(completed);
+    expect(buildMailView(s.state).unread).toBe(1);
+    expect(sendMail(s.state, { ...input, requestId: "mail-test-3" }).ok).toBe(true);
+    expect(s.state.mailReplyJobs).toHaveLength(2);
+  });
+  it("uses stable contacts, validates recipient and attachments, and isolates a former manager's mail", () => {
+    const s = setup();
+    const recipient = { kind: "agent", playerId: s.player.id };
+    const first = resolveMailRecipient(s.state, recipient)!;
+    const another = s.state.players.find(
+      (p) =>
+        p.id !== s.player.id &&
+        resolveMailRecipient(s.state, { kind: "agent", playerId: p.id })?.contactId ===
+          first.contactId,
+    );
+    const alternative = another ?? s.state.players.find((p) => p.id !== s.player.id)!;
+    const input = {
+      requestId: "agent-mail",
+      recipient,
+      subject: "조건",
+      body: "문의",
+      negotiationId: s.n.id,
+    };
+    const sent = sendMail(s.state, input);
+    expect(sent.ok).toBe(true);
+    const second = sendMail(s.state, {
+      ...input,
+      requestId: "agent-mail-2",
+      recipient: { kind: "agent", playerId: alternative.id },
+    });
+    if (another) expect(second.threadId).toBe(sent.threadId);
+    else expect(second.ok).toBe(false);
+    const before = structuredClone(s.state);
+    expect(
+      sendMail(s.state, {
+        ...input,
+        requestId: "bad-staff",
+        recipient: { kind: "staff", personId: "nonexistent" },
+      }).ok,
+    ).toBe(false);
+    expect(s.state).toEqual(before);
+    expect(mailMessageForViewer(s.state, sent.messageId!)).not.toBeNull();
+    s.state.dismissal = {
+      on: s.state.date,
+      season: s.state.season,
+      kind: "sacked",
+      teamId: s.state.userTeamId,
+      tier: 1,
+    };
+    expect(buildMailView(s.state).threads).toEqual([]);
+    expect(mailMessageForViewer(s.state, sent.messageId!)).toBeNull();
+  });
+  it("records incoming reports once without inventing an outbound message or reply task", () => {
+    const s = setup();
+    const input = {
+      requestId: "inbound-test",
+      recipient: { kind: "club", teamId: s.n.sellerId },
+      subject: "접근",
+      body: "실제 연락",
+      negotiationId: s.n.id,
+    };
+    expect(deliverIncomingMail(s.state, input).ok).toBe(true);
+    const before = structuredClone(s.state);
+    expect(deliverIncomingMail(s.state, input).replayed).toBe(true);
+    expect(s.state).toEqual(before);
+    expect(s.state.mailReplyJobs).toEqual([]);
+    expect(s.state.mailThreads[0]!.messages[0]!.direction).toBe("inbound");
+  });
+  it("lets the manager offer unrealistic terms but blocks NPC consent and hides private reservations", () => {
+    const s = setup();
+    const terms = { ...s.terms, scope: "club", fee: 1, weeklyWage: 0, signingBonus: 0 };
+    expect(s.action({ kind: "send", terms }).ok).toBe(true);
+    const before = structuredClone(s.state),
+      proposal = s.n.proposals[0]!;
+    expect(s.action({ kind: "accept", proposalId: proposal.id }, s.model(s.n.sellerId)).ok).toBe(
+      false,
+    );
+    expect(s.state).toEqual(before);
+    expect(s.action({ kind: "send", terms }, s.model(s.n.sellerId)).ok).toBe(false);
+    expect(s.state).toEqual(before);
+    expect(buildNegotiationView(s.state).cases[0]).not.toHaveProperty("bounds");
+    expect(s.action({ kind: "message", channel: "club", text: "계속 설득" }).ok).toBe(true);
+    expect(s.n.bounds.fingerprint).toBe(before.negotiations[0]!.bounds.fingerprint);
+    expect(s.action({ kind: "send", terms: { ...s.terms, weeklyWage: 1000000000 } }).ok).toBe(true);
+    const wageBefore = structuredClone(s.state);
+    expect(
+      s.action({ kind: "accept", proposalId: s.n.proposals.at(-1)!.id }, s.model(s.player.id)).ok,
+    ).toBe(false);
+    expect(s.state).toEqual(wageBefore);
   });
 });

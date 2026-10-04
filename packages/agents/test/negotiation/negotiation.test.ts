@@ -1,9 +1,11 @@
 import { negotiationReference } from "../../src/negotiation/context";
 import { managedNegotiationOverview } from "../../src/negotiation/overview";
-import { contractEndForYears, NegotiationStartedPayloadSchema } from "@story-fm/domain";
+import { contractEndForYears } from "@story-fm/domain";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   MAX_REQUESTED_DAYS,
+  sendMail,
+  dueMailReplies,
   agentForPlayer,
   actNegotiation,
   addDays,
@@ -14,6 +16,11 @@ import {
 } from "@story-fm/engine";
 import { agentConfig, ScriptedGameLLM, type GameLLM, type TurnRequest } from "@story-fm/llm";
 import {
+  progressNpcBuyerNegotiations,
+  processMailReplies,
+  replyToMail,
+  mainMailOverview,
+  historicalMailBudget,
   marketClubFingerprint,
   marketClubFacts,
   buildGmStateNote,
@@ -47,6 +54,359 @@ function setup() {
   return { state, n };
 }
 const config = () => agentConfig("negotiation-gm");
+
+describe("main dialogue and scheduled mail", () => {
+  function sendForCase(
+    state: GameState,
+    n: GameState["negotiations"][number],
+    kind: "club" | "agent" = "agent",
+  ) {
+    const result = sendMail(state, {
+      requestId: "mail-request",
+      recipient: kind === "club" ? { kind, teamId: n.sellerId } : { kind, playerId: n.playerId },
+      subject: "계약 문의",
+      body: "조건을 논의하고 싶습니다. 감독의 동의나 서명을 대신하지 마세요.",
+      negotiationId: n.id,
+      references: { playerIds: [n.playerId], proposalIds: [], reportIds: [] },
+    });
+    expect(result.ok).toBe(true);
+    return state.mailReplyJobs[0]!;
+  }
+  it("stores only a contact until the game date arrives, then delivers one idempotent reply", async () => {
+    const { state, n } = setup();
+    const job = sendForCase(state, n);
+    let calls = 0;
+    const llm = new ScriptedGameLLM(agentConfig("gm"), () => {
+      calls++;
+      return { output: { subject: "회신", body: "조건을 검토하겠습니다." } };
+    });
+    expect(dueMailReplies(state)).toHaveLength(0);
+    expect(await replyToMail(state, job.id, llm)).toBe(false);
+    expect(calls).toBe(0);
+    expect(n.proposals).toHaveLength(0);
+    state.date = addDays(state.date, 1);
+    expect(await replyToMail(state, job.id, llm)).toBe(true);
+    expect(await replyToMail(state, job.id, llm)).toBe(false);
+    expect(calls).toBe(1);
+    expect(state.mailThreads[0]?.messages.map((m) => m.direction)).toEqual(["outbound", "inbound"]);
+    expect(state.negotiations[0]?.signed).toBeNull();
+  });
+  it("rolls back counterpart actions on provider failure and leaves the job retryable", async () => {
+    const { state, n } = setup();
+    const job = sendForCase(state, n, "club");
+    state.date = job.dueOn;
+    const before = structuredClone(state);
+    const failed: GameLLM = {
+      async runTurn(request) {
+        const tool = request.tools?.find((t) => t.name === "negotiation_action");
+        if (!tool) throw new Error("mail action tool missing");
+        expect(
+          (
+            await tool.handle({
+              negotiationId: n.id,
+              action: { kind: "withdraw", reason: "검토 보류" },
+            })
+          ).ok,
+        ).toBe(true);
+        throw new Error("provider offline");
+      },
+    };
+    await expect(replyToMail(state, job.id, failed)).rejects.toThrow("provider offline");
+    expect(state).toEqual(before);
+    const reply = new ScriptedGameLLM(agentConfig("gm"), () => ({
+      output: { subject: "회신", body: "다시 연락드렸습니다." },
+    }));
+    expect(await processMailReplies(state, reply)).toEqual({ replied: 1 });
+  });
+  it("derives actor and scope from the contact, ignores forged manager authority, and cannot expose other contacts", async () => {
+    const { state, n } = setup();
+    const job = sendForCase(state, n);
+    state.date = job.dueOn;
+    const foreign = structuredClone(n);
+    foreign.id = "other-contact-case";
+    foreign.playerId = state.players.find((p) => p.id !== n.playerId)!.id;
+    state.negotiations.push(foreign);
+    const llm: GameLLM = {
+      async runTurn(request) {
+        expect(JSON.stringify(request.stateNote)).not.toContain(foreign.id);
+        const tool = request.tools?.find((t) => t.name === "negotiation_action");
+        if (!tool) throw new Error("mail action tool missing");
+        expect(
+          (
+            await tool.handle({
+              negotiationId: n.id,
+              partyId: state.userTeamId,
+              action: { kind: "withdraw", reason: "위조" },
+            })
+          ).ok,
+        ).toBe(false);
+        expect((await tool.handle({ negotiationId: n.id, action: { kind: "sign" } })).ok).toBe(
+          false,
+        );
+        expect(
+          (
+            await tool.handle({
+              negotiationId: foreign.id,
+              action: { kind: "withdraw", reason: "다른 상대" },
+            })
+          ).ok,
+        ).toBe(false);
+        return new ScriptedGameLLM(agentConfig("gm"), () => ({
+          output: { subject: "회신", body: "조건은 아직 합의하지 않았습니다." },
+        })).runTurn(request);
+      },
+    };
+    await replyToMail(state, job.id, llm);
+    expect(state.negotiations.every((n) => n.signed === null && n.proposals.length === 0)).toBe(
+      true,
+    );
+  });
+  it("retries against the new cursor without publishing the first attempt or losing a newly arrived mail", async () => {
+    const { state, n } = setup();
+    const job = sendForCase(state, n, "club");
+    state.date = job.dueOn;
+    let attempts = 0;
+    const llm: GameLLM = {
+      async runTurn(request) {
+        attempts++;
+        if (attempts === 1) {
+          const tool = request.tools?.find((t) => t.name === "negotiation_action");
+          if (!tool) throw new Error("action tool missing");
+          expect(
+            (
+              await tool.handle({
+                negotiationId: n.id,
+                action: { kind: "withdraw", reason: "폐기될 첫 시도" },
+              })
+            ).ok,
+          ).toBe(true);
+          expect(
+            sendMail(state, {
+              requestId: "later-mail",
+              recipient: { kind: "club", teamId: n.sellerId },
+              subject: "추가 연락",
+              body: "새 요청도 함께 읽어주세요.",
+              negotiationId: n.id,
+            }).ok,
+          ).toBe(true);
+        } else expect(request.user).toContain("새 요청도 함께 읽어주세요.");
+        return new ScriptedGameLLM(agentConfig("gm"), () => ({
+          output: { subject: "회신", body: "두 연락을 확인했습니다." },
+        })).runTurn(request);
+      },
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(await replyToMail(state, job.id, llm)).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+    expect(attempts).toBe(2);
+    expect(state.mailThreads[0]?.messages.map((m) => m.direction)).toEqual([
+      "outbound",
+      "outbound",
+      "inbound",
+    ]);
+    expect(state.negotiations[0]?.status).toBe("open");
+    expect(state.mailReplyJobs[0]?.throughMessageId).toBe(state.mailThreads[0]?.messages[1]?.id);
+  });
+
+  it("keeps a formal proposal and its mail atomic and blocks main-model manager acceptance", async () => {
+    const { state, n } = setup();
+    const tools = buildGmTools(state, []);
+    const terms = {
+      scope: "club",
+      fee: Math.floor((n.bounds.minFee + n.bounds.maxFee) / 2),
+      weeklyWage: 0,
+      signingBonus: 0,
+      installments: [],
+      since: addDays(state.date, 2),
+      until: contractEndForYears(addDays(state.date, 2), 3),
+      promises: [],
+      expiresOn: addDays(state.date, 14),
+    };
+    const third = state.teams.find(
+      (t) =>
+        ![n.buyerId, n.sellerId].includes(t.id) && state.finances.some((f) => f.teamId === t.id),
+    )!;
+    const before = structuredClone(state);
+    const send = tools.find((t) => t.name === "send_mail")!;
+    expect(
+      (
+        await send.handle({
+          recipient: { kind: "club", teamId: third.id },
+          subject: "제안",
+          body: "조건 제안입니다.",
+          negotiationId: n.id,
+          proposal: terms,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(state).toEqual(before);
+    expect(
+      (
+        await send.handle({
+          recipient: { kind: "club", teamId: n.sellerId },
+          subject: "제안",
+          body: "조건 제안입니다.",
+          negotiationId: n.id,
+          proposal: terms,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(state.negotiations[0]?.proposals).toHaveLength(1);
+    expect(state.mailThreads[0]?.messages[0]?.references.proposalIds).toEqual([
+      state.negotiations[0]?.proposals[0]?.id,
+    ]);
+    const update = tools.find((t) => t.name === "update_negotiation")!;
+    expect(
+      (
+        await update.handle({
+          negotiationId: n.id,
+          partyId: state.userTeamId,
+          action: { kind: "accept", proposalId: state.negotiations[0]!.proposals[0]!.id },
+        })
+      ).ok,
+    ).toBe(false);
+    expect(state.negotiations[0]?.signed).toBeNull();
+  });
+  it("progresses only an agreed NPC buyer sale, waits for actual medical and reports completion once", () => {
+    const state = structuredClone(base),
+      seller = state.userTeamId;
+    const player = state.players.find((p) => p.teamId === seller)!;
+    const buyer = state.teams.find(
+      (t) => t.id !== seller && state.finances.some((f) => f.teamId === t.id),
+    )!.id;
+    state.injuries = state.injuries.filter((i) => i.gamePlayerId !== player.id);
+    const opened = openNegotiation(state, {
+      kind: "transfer",
+      playerId: player.id,
+      buyerId: buyer,
+      background: "매각 논의",
+    });
+    const n = state.negotiations.find((n) => n.id === opened.negotiationId)!;
+    const since = addDays(state.date, 2);
+    const common = {
+      fee: 0,
+      weeklyWage: 0,
+      signingBonus: 0,
+      installments: [],
+      since,
+      until: contractEndForYears(since, 3),
+      promises: [],
+      expiresOn: addDays(state.date, 14),
+    };
+    expect(
+      actNegotiation(
+        state,
+        n.id,
+        {
+          kind: "send",
+          terms: {
+            ...common,
+            scope: "club",
+            fee: Math.floor((n.bounds.minFee + n.bounds.maxFee) / 2),
+          },
+        },
+        { kind: "model", partyId: buyer },
+      ).ok,
+    ).toBe(true);
+    expect(
+      actNegotiation(
+        state,
+        n.id,
+        {
+          kind: "send",
+          terms: {
+            ...common,
+            scope: "player",
+            weeklyWage: Math.floor((n.bounds.minWeeklyWage + n.bounds.maxWeeklyWage) / 2),
+          },
+        },
+        { kind: "model", partyId: buyer },
+      ).ok,
+    ).toBe(true);
+    const club = n.proposals.find((p) => p.terms.scope === "club")!,
+      personal = n.proposals.find((p) => p.terms.scope === "player")!;
+    expect(
+      actNegotiation(
+        state,
+        n.id,
+        { kind: "accept", proposalId: personal.id },
+        { kind: "model", partyId: player.id },
+      ).ok,
+    ).toBe(true);
+    progressNpcBuyerNegotiations(state);
+    expect(n.medical).toBeNull();
+    expect(n.signed).toBeNull();
+    expect(
+      actNegotiation(
+        state,
+        n.id,
+        { kind: "accept", proposalId: club.id },
+        { kind: "user", partyId: seller },
+      ).ok,
+    ).toBe(true);
+    progressNpcBuyerNegotiations(state);
+    expect(n.medical?.examinedOn).toBeNull();
+    expect(n.signed).toBeNull();
+    state.date = addDays(state.date, 1);
+    settleNegotiations(state);
+    const medical = n.medical!;
+    medical.injuries.push({
+      id: "medical-risk",
+      gamePlayerId: player.id,
+      bodyPart: "무릎",
+      severity: "minor",
+      cause: "other",
+      occurredOn: state.date,
+      expectedReturn: addDays(state.date, 3),
+      returnedOn: null,
+    });
+    progressNpcBuyerNegotiations(state);
+    expect(n.signed).toBeNull();
+    medical.injuries = [];
+    progressNpcBuyerNegotiations(state);
+    expect(n.status).toBe("signed");
+    state.date = since;
+    settleNegotiations(state);
+    progressNpcBuyerNegotiations(state);
+    expect(n.status).toBe("completed");
+    expect(player.teamId).toBe(buyer);
+    const moves = state.moves.length,
+      mail = state.mailThreads
+        .flatMap((t) => t.messages)
+        .filter((m) => m.subject.includes("이적 완료"));
+    expect(mail).toHaveLength(1);
+    progressNpcBuyerNegotiations(state);
+    expect(state.moves).toHaveLength(moves);
+    expect(
+      state.mailThreads.flatMap((t) => t.messages).filter((m) => m.subject.includes("이적 완료")),
+    ).toHaveLength(1);
+  });
+
+  it("keeps default main context bounded and expands only recent distinct historical attachments", () => {
+    const { state, n } = setup();
+    sendForCase(state, n);
+    for (let i = 1; i <= 4; i++)
+      sendMail(state, {
+        requestId: `contact-${i}`,
+        recipient: { kind: "agent", playerId: n.playerId },
+        subject: `mail-${i}`,
+        body: "x".repeat(12000),
+        negotiationId: n.id,
+      });
+    const ids = state.mailThreads[0]!.messages.map((m) => m.id);
+    const expanded = historicalMailBudget(state, [...ids, ...ids]);
+    expect(expanded.size).toBe(3);
+    expect([...expanded.values()].reduce((sum, m) => sum + m.body.length, 0)).toBeLessThanOrEqual(
+      18000,
+    );
+    const overview = JSON.stringify(mainMailOverview(state));
+    expect(overview.length).toBeLessThan(8000);
+    expect(overview).not.toContain("x".repeat(301));
+  });
+});
 
 describe("player representative context", () => {
   it("keeps the seeded representative and player consent identity across opening and contract replies", async () => {
@@ -267,16 +627,13 @@ describe("main GM negotiation references", () => {
           })
         ).ok,
       ).toBe(true);
-      expect(NegotiationStartedPayloadSchema.parse(calls[0]?.payload)).toMatchObject({
-        kind: "negotiation",
-        negotiationId: state.negotiations[0]?.id,
-      });
+      expect(calls[0]?.payload).toBeUndefined();
       expect(state.negotiations[0]?.playerId).toBe(player.id);
       expect(state.negotiations[0]?.buyerId).toBe(team.id);
       expect(state.negotiations[0]?.messages.some((message) => message.author === "gm")).toBe(
         false,
       );
-      expect(NegotiationStartedPayloadSchema.parse(calls[0]?.payload).suggestion).toBeTruthy();
+      expect(calls[0]?.summary).toContain(state.negotiations[0]!.id);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -295,11 +652,8 @@ describe("main GM negotiation references", () => {
       expect(rejected.ok).toBe(false);
       expect(rejected.message).toContain("get_team");
       expect(calls).toHaveLength(2);
-      expect(NegotiationStartedPayloadSchema.parse(calls[0]?.payload).suggestion).toBeTruthy();
-      expect(NegotiationStartedPayloadSchema.parse(calls[1]?.payload)).toEqual({
-        kind: "negotiation",
-        negotiationId: before[0]?.id,
-      });
+      expect(calls[0]?.summary).toContain(state.negotiations[0]!.id);
+      expect(calls[1]?.payload).toBeUndefined();
       expect(state.negotiations).toEqual(before);
     } finally {
       vi.unstubAllEnvs();
@@ -411,8 +765,8 @@ describe("one negotiation GM and exact consent", () => {
       scope: "player" as const,
       fee: 0,
       installments: [],
-      weeklyWage: 90000,
-      signingBonus: 500000,
+      weeklyWage: Math.floor((n.bounds.minWeeklyWage + n.bounds.maxWeeklyWage) / 2),
+      signingBonus: 0,
       since: addDays(state.date, 2),
       until: contractEndForYears(addDays(state.date, 2), 4),
       promises: [],
@@ -544,6 +898,58 @@ describe("one negotiation GM and exact consent", () => {
 });
 
 describe("date-driven world review", () => {
+  it("delivers a new or reopened world inquiry once without a separate user negotiation turn", async () => {
+    const state = structuredClone(base);
+    const player = state.players.find((p) => p.teamId === state.userTeamId)!;
+    const buyer = state.teams.find(
+      (t) => t.id !== state.userTeamId && state.finances.some((f) => f.teamId === t.id),
+    )!;
+    const planner = new ScriptedGameLLM(agentConfig("market-planner"), (request) => {
+      const input = JSON.parse(request.stateNote ?? "{}") as { clubs: { team: { id: string } }[] };
+      return {
+        output: {
+          clubs: input.clubs.map((c) => ({ teamId: c.team.id, plan: "선수 검토" })),
+          negotiations: input.clubs.some((c) => c.team.id === buyer.id)
+            ? [
+                {
+                  kind: "transfer",
+                  playerId: player.id,
+                  buyerId: buyer.id,
+                  background: "실제 명단에 근거한 영입 문의",
+                },
+              ]
+            : [],
+          board: [],
+        },
+      };
+    });
+    const noUserGm: GameLLM = {
+      async runTurn() {
+        throw new Error("user independent GM must not run");
+      },
+    };
+    await processWorldMarket(state, planner, noUserGm);
+    const id = state.negotiations[0]!.id;
+    expect(state.mailThreads[0]?.messages).toHaveLength(1);
+    expect(state.mailThreads[0]?.messages[0]?.direction).toBe("inbound");
+    expect(state.mailReplyJobs).toHaveLength(0);
+    expect(state.negotiations[0]?.messages.some((m) => m.author === "gm")).toBe(false);
+    await processWorldMarket(state, planner, noUserGm);
+    expect(state.mailThreads[0]?.messages).toHaveLength(1);
+    expect(
+      actNegotiation(
+        state,
+        id,
+        { kind: "withdraw", reason: "새 조건 검토" },
+        { kind: "user", partyId: state.userTeamId },
+      ).ok,
+    ).toBe(true);
+    state.date = addDays(state.date, 7);
+    await processWorldMarket(state, planner, noUserGm);
+    expect(state.negotiations[0]?.id).toBe(id);
+    expect(state.mailThreads[0]?.messages).toHaveLength(2);
+  });
+
   it("completes an AI renewal through the mock GM and the same dated core", async () => {
     vi.stubEnv("LLM_MODE", "mock");
     try {
@@ -637,6 +1043,10 @@ describe("date-driven world review", () => {
   });
   it("retries a failed due reply on the same reviewed date without replaying planning", async () => {
     const { state, n } = setup();
+    state.userTeamId = state.teams.find(
+      (t) =>
+        ![n.buyerId, n.sellerId].includes(t.id) && state.finances.some((f) => f.teamId === t.id),
+    )!.id;
     state.marketReview.lastDate = state.date;
     n.nextReplyOn = state.date;
     const failed: GameLLM = {
@@ -648,7 +1058,9 @@ describe("date-driven world review", () => {
     expect(state.negotiations[0]?.nextReplyOn).toBe(state.date);
     const reply = new ScriptedGameLLM(config(), () => ({ text: "협상 답변을 재개합니다" }));
     expect(await processWorldMarket(state, failed, reply)).toEqual({ reviewed: 0, replied: 1 });
-    expect(state.negotiations.find((item) => item.id === n.id)?.nextReplyOn).toBeNull();
+    expect(state.negotiations.find((item) => item.id === n.id)?.nextReplyOn).toBe(
+      addDays(state.date, 1),
+    );
   });
   it("bounds each day's planning and rotates clubs without replay on reads", async () => {
     const state = structuredClone(base);

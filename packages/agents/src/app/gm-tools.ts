@@ -1,5 +1,4 @@
 import { managedNegotiationOverview } from "../negotiation/overview";
-import { suggestNegotiationOpening } from "./workflows/negotiation/negotiation-opening";
 import { HireStaffInputSchema } from "@story-fm/domain";
 import { applyForManagerJob } from "@story-fm/engine";
 import { ManagerJobOfferSchema, InterviewOutcomeSchema } from "@story-fm/domain";
@@ -15,9 +14,12 @@ import {
 
 import { z } from "zod";
 import {
+  MailSendSchema,
+  ProposalTermsSchema,
+  currentProposal,
   SetTransferListingSchema,
   OpenNegotiationSchema,
-  NegotiationStartedPayloadSchema,
+  NegotiationActionSchema,
   CharacterUpdateSchema,
   POSITION_CODES,
   DateString,
@@ -40,12 +42,18 @@ import {
   type BoardMove,
 } from "@story-fm/domain";
 import {
+  sendMail,
+  buildMailView,
+  readMailThread,
   pickTeam,
   pickPlayerAmong,
   managedTeamId,
   setTransferListing,
   openNegotiation,
+  actNegotiation,
+  repairNegotiationSquads,
   buildNegotiationView,
+  buildNegotiationConfirmation,
   requestCharacterUpdate,
   type GameState,
   journal,
@@ -444,29 +452,177 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
             message: `${picked.message}. search_players로 확인하고 player: 접두어 없는 실제 선수 id 또는 정확한 이름을 지정하세요`,
           };
         const player = picked.player;
-        const existingIds = new Set(state.negotiations.map((n) => n.id));
         const opened = openNegotiation(state, { ...input, playerId: player.id, buyerId });
-        let suggestion: string | undefined;
-        if (opened.ok && opened.negotiationId && !existingIds.has(opened.negotiationId)) {
-          try {
-            suggestion = await suggestNegotiationOpening(state, opened.negotiationId);
-          } catch (error: unknown) {
-            console.warn("[start_negotiation] 협상은 보존하고 제안 문구는 생략합니다:", error);
-          }
-        }
         return opened.ok && opened.negotiationId
           ? {
               ...opened,
-              message: `${opened.message}. 이번 요청으로 제안을 발송하거나 상대 답변을 생성하지 않았습니다. 협상 화면에서 감독의 입력을 기다립니다.`,
-              payload: NegotiationStartedPayloadSchema.parse({
-                kind: "negotiation",
-                negotiationId: opened.negotiationId,
-                ...(suggestion === undefined ? {} : { suggestion }),
-              }),
+              message: `${opened.message}. 협상 id: ${opened.negotiationId}. 제안이나 상대 동의는 아직 새로 기록하지 않았습니다. 메인 대화에서 최신 장부를 조회하고 조건을 논의하세요.`,
             }
           : opened;
       },
     ),
+    wrap(
+      "update_negotiation",
+      descriptions.update_negotiation,
+      z
+        .object({
+          negotiationId: z.string().min(1),
+          partyId: z.string().min(1),
+          action: NegotiationActionSchema,
+        })
+        .strict(),
+      (input) => {
+        const teamId = managedTeamId(state);
+        const n = state.negotiations.find((item) => item.id === input.negotiationId);
+        if (!n || teamId === null || ![n.buyerId, n.sellerId].includes(teamId))
+          return { ok: false, message: "우리 구단이 참여한 협상만 변경할 수 있습니다" };
+        const managed = input.partyId === teamId;
+        const allowed = managed
+          ? ["draft", "send", "withdraw", "medical"]
+          : input.partyId === n.buyerId
+            ? [
+                "send",
+                "accept",
+                "reject",
+                "withdraw",
+                "medical",
+                "acknowledge_medical",
+                "sign",
+                "register",
+              ]
+            : ["send", "accept", "reject", "withdraw"];
+        if (!allowed.includes(input.action.kind))
+          return {
+            ok: false,
+            message: "감독의 동의·위험 확인·최종 서명은 직접 확인 카드에서만 실행할 수 있습니다",
+          };
+        const result = actNegotiation(state, n.id, input.action, {
+          kind: managed && input.action.kind !== "draft" ? "user" : "model",
+          partyId: input.partyId,
+        });
+        if (result.ok) {
+          n.nextReplyOn = null;
+          if (input.action.kind === "sign" && n.status === "completed")
+            repairNegotiationSquads(state, [n.sellerId]);
+          if (input.action.kind === "register") repairNegotiationSquads(state, [n.buyerId]);
+        }
+        return result.ok
+          ? {
+              ...result,
+              message: `${result.message}. 현재 협상 id: ${n.id}, revision: ${n.revision}`,
+            }
+          : result;
+      },
+    ),
+    wrap(
+      "request_negotiation_confirmation",
+      descriptions.request_negotiation_confirmation,
+      z
+        .object({
+          negotiationId: z.string().min(1),
+          stage: z.enum(["agreement", "medical", "sign"]),
+        })
+        .strict(),
+      (input) => {
+        const payload = buildNegotiationConfirmation(state, input.negotiationId, input.stage);
+        return payload
+          ? {
+              ok: true,
+              message:
+                "현재의 정확한 조건을 감독의 직접 확인 카드에 제시했습니다. 동의·위험 확인·서명은 아직 실행하지 않았습니다",
+              payload,
+            }
+          : {
+              ok: false,
+              message:
+                "이 단계에서 확인할 유효한 조건이 없습니다. 최신 제안·당사자 동의·메디컬 장부를 조회하세요",
+            };
+      },
+    ),
+    wrap(
+      "send_mail",
+      descriptions.send_mail,
+      MailSendSchema.omit({ requestId: true }).extend({ proposal: ProposalTermsSchema.optional() }),
+      (input) => {
+        const draft = structuredClone(state);
+        const { proposal, ...mail } = input;
+        let proposalId: string | undefined;
+        if (proposal) {
+          const n = draft.negotiations.find((n) => n.id === input.negotiationId);
+          const team = managedTeamId(draft);
+          if (!n || !team || ![n.buyerId, n.sellerId].includes(team))
+            return { ok: false, message: "제안 메일에는 우리 구단의 정확한 협상 id가 필요합니다" };
+          const outcome = actNegotiation(
+            draft,
+            n.id,
+            { kind: "send", terms: proposal },
+            { kind: "user", partyId: team },
+          );
+          if (!outcome.ok) return outcome;
+          proposalId = currentProposal(n, proposal.scope)?.id;
+          n.nextReplyOn = null;
+        }
+        const result = sendMail(draft, {
+          ...mail,
+          requestId: crypto.randomUUID(),
+          ...(proposalId
+            ? {
+                references: {
+                  playerIds: mail.references?.playerIds ?? [],
+                  reportIds: mail.references?.reportIds ?? [],
+                  proposalIds: [...new Set([...(mail.references?.proposalIds ?? []), proposalId])],
+                },
+              }
+            : {}),
+        });
+        if (result.ok) Object.assign(state, draft);
+        return result;
+      },
+    ),
+    wrap(
+      "read_mail",
+      descriptions.read_mail,
+      z.object({ threadId: z.string().min(1) }).strict(),
+      (input) => {
+        const outcome = readMailThread(state, input.threadId);
+        if (!outcome.ok) return outcome;
+        const thread = buildMailView(state).threads.find((thread) => thread.id === input.threadId);
+        return {
+          ...outcome,
+          message: JSON.stringify({
+            ...outcome,
+            thread: thread ? { ...thread, messages: thread.messages.slice(-12) } : null,
+          }),
+        };
+      },
+    ),
+    read("get_mail", descriptions.get_mail, z.object({}).strict(), () => {
+      const mail = buildMailView(state);
+      return {
+        ok: true,
+        message: JSON.stringify({
+          unread: mail.unread,
+          recipients: mail.recipients,
+          threads: mail.threads.slice(0, 12).map((thread) => ({
+            id: thread.id,
+            contactId: thread.contactId,
+            label: thread.label,
+            recipient: thread.recipient,
+            unread: thread.messages
+              .slice(thread.lastReadMessage)
+              .filter((message) => message.direction !== "outbound").length,
+            latest: thread.messages.at(-1)
+              ? {
+                  id: thread.messages.at(-1)!.id,
+                  subject: thread.messages.at(-1)!.subject,
+                  on: thread.messages.at(-1)!.on,
+                  direction: thread.messages.at(-1)!.direction,
+                }
+              : null,
+          })),
+        }),
+      };
+    }),
     wrap(
       "set_transfer_list",
       descriptions.set_transfer_list,

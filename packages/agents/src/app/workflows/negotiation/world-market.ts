@@ -1,5 +1,6 @@
 import { playerOverall, type Negotiation } from "@story-fm/domain";
 import {
+  deliverIncomingMail,
   squadRegistrationOf,
   journal,
   type JournalEntry,
@@ -207,6 +208,7 @@ export async function processWorldMarket(
   const records: JournalEntry[] = [];
   const due = draft.marketReview.lastDate !== draft.date;
   let reviewed = 0;
+  let incoming = 0;
   if (due) {
     const ids = draft.teams
       .filter((t) => t.id !== FREE_AGENT_TEAM && draft.finances.some((f) => f.teamId === t.id))
@@ -304,8 +306,33 @@ export async function processWorldMarket(
         source: "tool",
       });
       for (const input of answer.negotiations) {
+        const previous = new Map(draft.negotiations.map((n) => [n.id, n.status]));
         const outcome = openNegotiation(draft, input, "world");
         if (!outcome.ok) throw new ModelOutputError(outcome.message);
+        const n = draft.negotiations.find((n) => n.id === outcome.negotiationId);
+        const team = managedTeamId(draft);
+        if (
+          n &&
+          team &&
+          [n.buyerId, n.sellerId].includes(team) &&
+          !["open", "signed"].includes(previous.get(n.id) ?? "")
+        ) {
+          n.nextReplyOn = null;
+          const player = draft.players.find((p) => p.id === n.playerId);
+          const delivered = deliverIncomingMail(draft, {
+            requestId: `world-contact:${n.id}:${n.revision}`,
+            recipient:
+              n.kind === "transfer"
+                ? { kind: "club", teamId: n.buyerId === team ? n.sellerId : n.buyerId }
+                : { kind: "agent", playerId: n.playerId },
+            subject: `${player?.name ?? n.playerId} ${n.kind === "renewal" ? "재계약" : "이적"} 문의`,
+            body: `${player?.name ?? n.playerId} 선수의 ${n.kind === "renewal" ? "재계약" : "이적"} 가능성에 관해 연락드립니다. 조건을 논의할 수 있는지 구단의 입장을 알려 주십시오.`,
+            negotiationId: n.id,
+            references: { playerIds: [n.playerId], proposalIds: [], reportIds: [] },
+          });
+          if (!delivered.ok) throw new ModelOutputError(delivered.message);
+          if (!delivered.replayed) incoming++;
+        }
       }
       for (const input of answer.board) {
         const outcome = reviewBoard(draft, input);
@@ -323,7 +350,7 @@ export async function processWorldMarket(
     }
     draft.marketReview.lastDate = draft.date;
   }
-  let replied = 0;
+  let replied = incoming;
   const managed = managedTeamId(draft);
   const pending = draft.negotiations
     .filter((n) => n.status === "open" && n.nextReplyOn !== null && n.nextReplyOn <= draft.date)
@@ -338,7 +365,8 @@ export async function processWorldMarket(
     );
   const userCases = pending.filter((n) => n.buyerId === managed || n.sellerId === managed);
   const aiCases = pending.filter((n) => n.buyerId !== managed && n.sellerId !== managed);
-  for (const n of [...userCases, ...aiCases.slice(0, MARKET_AI_REPLIES_PER_DAY)]) {
+  for (const n of userCases) n.nextReplyOn = null;
+  for (const n of aiCases.slice(0, MARKET_AI_REPLIES_PER_DAY)) {
     const result = await runNegotiationTurn(
       draft,
       n.id,

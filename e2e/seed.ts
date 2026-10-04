@@ -11,6 +11,9 @@ import {
   eventTexts,
   activeContract,
   addDays,
+  openNegotiation,
+  actNegotiation,
+  buildNegotiationConfirmation,
 } from "@story-fm/engine";
 import { buildOnboardingTurn } from "@story-fm/agents";
 
@@ -137,5 +140,84 @@ export function seedAgentCenter() {
     originalContractId: contract.id,
     targetId: target.id,
     targetName: target.name,
+    targetTeamId: target.teamId,
+  };
+}
+
+/** A buyer offer is confirmed by the seller without exposing the player's private terms. */
+export function seedSellerAgreement() {
+  const state = appoint({
+    teamId: "arsenal",
+    managerName: "매각 감독",
+    seed: 873,
+    world: ONE_LEAGUE,
+  });
+  const player = state.players.find(
+    (p) => p.teamId === state.userTeamId && activeContract(state, p.id),
+  );
+  const buyer = state.teams.find((t) => t.id !== state.userTeamId);
+  if (!player || !buyer) throw new Error("매각 협상 대상이 없습니다");
+  const opened = openNegotiation(state, {
+    kind: "transfer",
+    playerId: player.id,
+    buyerId: buyer.id,
+    background: "매각 조건 검토",
+  });
+  if (!opened.ok || !opened.negotiationId) throw new Error(opened.message);
+  const item = state.negotiations.find((n) => n.id === opened.negotiationId)!;
+  const common = {
+    installments: [],
+    since: addDays(state.date, 2),
+    until: addDays(state.date, 367),
+    expiresOn: addDays(state.date, 7),
+    promises: [],
+  };
+  const club = actNegotiation(
+    state,
+    item.id,
+    {
+      kind: "send",
+      terms: {
+        ...common,
+        scope: "club",
+        fee: Math.max(0, Math.min(item.bounds.minFee, item.bounds.maxFee)),
+        weeklyWage: 0,
+        signingBonus: 0,
+      },
+    },
+    { kind: "model", partyId: buyer.id },
+  );
+  if (!club.ok) throw new Error(club.message);
+  const privateOffer = actNegotiation(
+    state,
+    item.id,
+    {
+      kind: "send",
+      terms: {
+        ...common,
+        scope: "player",
+        fee: 0,
+        weeklyWage: Math.max(0, Math.min(item.bounds.minWeeklyWage, item.bounds.maxWeeklyWage)),
+        signingBonus: 0,
+      },
+    },
+    { kind: "model", partyId: buyer.id },
+  );
+  if (!privateOffer.ok) throw new Error(privateOffer.message);
+  const payload = buildNegotiationConfirmation(state, item.id, "agreement");
+  if (!payload || payload.playerProposalId !== null || !payload.clubProposalId)
+    throw new Error("매각 확인 범위가 잘못되었습니다");
+  state.chat.push({
+    role: "model",
+    at: state.date,
+    text: "@: 상대 구단이 이적 조건을 제안했습니다.",
+    toolCalls: [{ name: "request_negotiation_confirmation", summary: "매각 조건 확인", payload }],
+  });
+  saveGame(state);
+  return {
+    gameId: state.id,
+    negotiationId: item.id,
+    clubProposalId: payload.clubProposalId,
+    sellerId: state.userTeamId,
   };
 }

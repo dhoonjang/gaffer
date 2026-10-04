@@ -1,5 +1,7 @@
 import {
   NegotiationSchema,
+  MailThreadSchema,
+  MailReplyJobSchema,
   TransferListingSchema,
   TransferPaymentSchema,
   MarketReviewSchema,
@@ -106,6 +108,9 @@ export const GameTablesSchema = z.object({
   transferPayments: z.array(TransferPaymentSchema),
   marketReview: MarketReviewSchema,
   negotiationRequests: z.array(z.string()),
+  mailThreads: z.array(MailThreadSchema),
+  mailReplyJobs: z.array(MailReplyJobSchema),
+  mailRequests: z.array(z.string()),
   players: z.array(GamePlayerSchema),
   teams: z.array(GameTeamSchema),
   tactics: z.array(TeamTacticsSchema),

@@ -38,7 +38,7 @@ import {
   type GoalMark,
   type TrainingBrief,
 } from "@story-fm/engine";
-import type { BoardMove, MatchEvent, MediaFact, TickEvent } from "@story-fm/domain";
+import type { MailMessage, BoardMove, MatchEvent, MediaFact, TickEvent } from "@story-fm/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
 import { reportTraining } from "./workflows/story/training-rater";
 import { buildMatchTools } from "./workflows/match/match-gm";
@@ -321,6 +321,7 @@ async function callGm(
   onText: ((delta: string) => void) | undefined,
   operatorOrders: readonly string[] | undefined,
   boardMoves: readonly BoardMove[] | undefined,
+  mailAttachments: readonly MailMessage[] | undefined,
 ): Promise<GmCall> {
   const { inMatch, kickoff, operator } = shape;
   const peace = !inMatch;
@@ -401,8 +402,8 @@ async function callGm(
     { role: operator ? ("operator" as const) : ("user" as const), text: message },
   ];
   const turnMessage = inMatch
-    ? renderTurnGroup(state, turnLines, [])
-    : buildGmTurnMessage(state, characters);
+    ? renderTurnGroup(state, turnLines, [], mailAttachments)
+    : buildGmTurnMessage(state, characters, mailAttachments);
   /**
    * 소식은 **스냅샷에 실린 그 턴에 비워진다** — `pendingEdits`와 같은 규약이다.
    * 경기 중 스냅샷은 장부(`buildLedgerNote`)라 소식을 읽지 않으므로 그때는 남겨 둔다.
@@ -725,6 +726,7 @@ export async function runGmTurn(
    * 문장이라면 이쪽은 어느 축이 어디서 어디로 갔는가다 (agents.md §3 지시 해석).
    */
   boardMoves?: readonly BoardMove[],
+  options?: { mailAttachments?: readonly MailMessage[] },
 ): Promise<GmTurnResult> {
   const inMatch = state.phase === "match";
   const shape: TurnShape = {
@@ -759,6 +761,7 @@ export async function runGmTurn(
     onText,
     operatorOrders,
     boardMoves,
+    options?.mailAttachments,
   );
   if (call.result.stopReason !== "handoff") return closeTurn(state, shape, opening, ledger, call);
   /**

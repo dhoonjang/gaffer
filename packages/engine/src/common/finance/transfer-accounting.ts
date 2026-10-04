@@ -45,3 +45,9 @@ export function writeOffPlayerContract(
   });
   asset.amortized = asset.cost;
 }
+
+export function reservedTransferPayments(state: GameState, teamId: string): number {
+  return state.transferPayments
+    .filter((p) => p.fromTeamId === teamId && !p.paidOn)
+    .reduce((sum, p) => sum + p.amount, 0);
+}

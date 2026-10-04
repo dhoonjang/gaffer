@@ -1,3 +1,4 @@
+import { MAIL_REPLY_SYSTEM, MAIL_REPLY_OUTPUT } from "./workflows/mail/reply-prompt";
 import {
   NEGOTIATION_OPENING_OUTPUT,
   NEGOTIATION_OPENING_SYSTEM,
@@ -24,6 +25,7 @@ export interface OutputAgent {
 
 export function outputAgents(): readonly OutputAgent[] {
   return [
+    { agent: "gm", system: MAIL_REPLY_SYSTEM, schema: MAIL_REPLY_OUTPUT },
     {
       agent: "negotiation-gm",
       system: NEGOTIATION_OPENING_SYSTEM,

@@ -136,6 +136,7 @@ export interface ToolCallRecord {
 
 /** 채팅 턴 — 도구 호출 기록 포함 (UI가 호출 칩으로 렌더) */
 export interface ChatTurn {
+  mailMessageIds?: string[];
   /**
    * 누가 한 말인가.
    *

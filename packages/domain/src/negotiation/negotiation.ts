@@ -48,6 +48,27 @@ export const NegotiationMessageSchema = z.object({
   partyId: Id.nullable(),
   text: z.string().min(1).max(20000),
 });
+export const NegotiationBoundsSchema = z.object({
+  fingerprint: z.string(),
+  asOf: DateString,
+  minFee: Money,
+  maxFee: Money,
+  minWeeklyWage: Money,
+  maxWeeklyWage: Money,
+  maxSigningBonus: Money,
+  minYears: z.number(),
+  maxYears: z.number(),
+  reasons: z.array(z.string()),
+});
+export const NegotiationConfirmationPayloadSchema = z.object({
+  kind: z.literal("negotiation-confirmation"),
+  negotiationId: Id,
+  revision: z.number().int().nonnegative(),
+  stage: z.enum(["agreement", "medical", "sign"]),
+  playerProposalId: Id.nullable(),
+  clubProposalId: Id.nullable(),
+});
+export type NegotiationConfirmationPayload = z.infer<typeof NegotiationConfirmationPayloadSchema>;
 export const NegotiationSchema = z.object({
   id: Id,
   playerId: Id,
@@ -57,6 +78,7 @@ export const NegotiationSchema = z.object({
   openedOn: DateString,
   background: z.string().max(4000),
   sourceContractId: Id.nullable(),
+  bounds: NegotiationBoundsSchema,
   status: z.enum(["open", "signed", "completed", "withdrawn"]),
   revision: z.number().int().nonnegative(),
   messages: z.array(NegotiationMessageSchema),
@@ -150,21 +172,29 @@ export type NegotiationRequest = z.infer<typeof NegotiationRequestSchema>;
 export interface NegotiationView {
   teamId: string | null;
   date: string;
-  cases: Array<Negotiation & { playerName: string; buyerName: string; sellerName: string }>;
+  cases: Array<
+    Omit<Negotiation, "bounds"> & { playerName: string; buyerName: string; sellerName: string }
+  >;
   unread: number;
   payments: TransferPayment[];
   transferList: AgentCenterTransferListing[];
 }
 export function currentProposal(
-  n: Negotiation,
+  n: Pick<Negotiation, "proposals">,
   scope: ProposalTerms["scope"],
 ): NegotiationProposal | undefined {
   return [...n.proposals].reverse().find((p) => p.terms.scope === scope && p.status === "open");
 }
-export function proposalParties(n: Negotiation, scope: ProposalTerms["scope"]): string[] {
+export function proposalParties(
+  n: Pick<Negotiation, "buyerId" | "sellerId" | "playerId">,
+  scope: ProposalTerms["scope"],
+): string[] {
   return scope === "club" ? [n.buyerId, n.sellerId] : [n.buyerId, n.playerId];
 }
-export function proposalAgreed(n: Negotiation, p: NegotiationProposal | undefined): boolean {
+export function proposalAgreed(
+  n: Pick<Negotiation, "buyerId" | "sellerId" | "playerId">,
+  p: NegotiationProposal | undefined,
+): boolean {
   return (
     !!p &&
     p.status === "open" &&

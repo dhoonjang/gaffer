@@ -1,0 +1,227 @@
+.mailbox {
+  padding: 24px;
+  color: var(--text);
+  min-width: 0;
+}
+.mailbox button,
+.negotiation-confirmation button {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-2);
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.mailbox button:disabled,
+.negotiation-confirmation button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.mailbox-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.mailbox-head h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.mailbox-head small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.mail-threads {
+  display: grid;
+}
+.mailbox .mail-thread-row {
+  display: grid;
+  gap: 5px;
+  text-align: left;
+  padding: 14px 0;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+}
+.mail-thread-row strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.mail-thread-row span,
+.mail-thread-row small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.mail-compose {
+  display: grid;
+  gap: 14px;
+}
+.mail-compose label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.mail-compose :is(input, select, textarea) {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.mail-compose textarea {
+  min-height: 230px;
+  resize: vertical;
+  line-height: 1.8;
+}
+.mail-compose footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.mail-compose button[type="submit"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.mail-thread h3 {
+  font-size: 16px;
+  margin: 20px 0;
+}
+.mail-message {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.mail-message header {
+  display: grid;
+  gap: 6px;
+}
+.mail-message header strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.mail-message header span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.mail-message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.9;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.mail-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 24px 0;
+}
+.mail-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  background: var(--panel-2);
+  color: var(--text-2);
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.mail-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mail-attachment button {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 0 3px;
+}
+.mail-attachment.saved {
+  width: max-content;
+  max-width: 90%;
+  margin: 6px 0 12px auto;
+}
+.negotiation-confirmation {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+.negotiation-confirmation header {
+  display: grid;
+  gap: 6px;
+}
+.negotiation-confirmation header span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.negotiation-confirmation h4 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  margin: 16px 0 8px;
+}
+.confirmation-terms {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 6px;
+  font-size: 13px;
+}
+.confirmation-terms dt {
+  color: var(--text-3);
+}
+.confirmation-terms dd {
+  margin: 0;
+}
+.confirmation-terms > div {
+  grid-column: 1/-1;
+  color: var(--text-2);
+  line-height: 1.8;
+}
+.confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .mailbox {
+    padding: 18px 16px;
+  }
+  .mail-attachments {
+    padding-inline: 16px;
+  }
+}
+
+.ledger-body.mailbox-panel-body {
+  padding: 0;
+}
+
+.rail button:has(.mail-unread) {
+  position: relative;
+}
+.mail-unread {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+}

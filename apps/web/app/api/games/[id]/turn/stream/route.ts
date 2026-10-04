@@ -19,6 +19,7 @@ const TurnSchema = z
      * `operation`이 들고, 모델이 읽을 문장은 서버가 거기서 만든다.
      */
     message: z.string().min(1).max(1000).optional(),
+    mailMessageIds: z.array(z.string().trim().min(1).max(160)).max(3).optional(),
     /**
      * 화면 조작(시간 이동·경기 진행 손잡이) — 감독의 발화로 취급하지 않는다.
      * **구조체다**: 문장을 되읽던 시절에는 UI 문구 한 글자가 곧 계약이었다
@@ -113,6 +114,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           (text) => send({ type: "delta", text }),
           body.data.operation,
           body.data.orders,
+          body.data.mailMessageIds,
         );
         if (outcome.ok) {
           send({ type: "done", payload: outcome.payload });

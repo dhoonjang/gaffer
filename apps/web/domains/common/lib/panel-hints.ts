@@ -13,7 +13,7 @@ import type { ChatTurn, ToolCallRecord } from "@story-fm/engine";
  */
 
 /** 아이콘 줄의 키 — `PANELS`와 같은 값이어야 한다 */
-export type PanelKey = "스쿼드" | "달력" | "재정" | "대회" | "커리어" | "에이전트 센터";
+export type PanelKey = "스쿼드" | "달력" | "재정" | "대회" | "커리어" | "메일함";
 
 /**
  * 호출이 바꾼 장부 — **호출 하나에 화면 하나.**
@@ -24,8 +24,12 @@ export type PanelKey = "스쿼드" | "달력" | "재정" | "대회" | "커리어
  * 쪽**으로 보낸다.
  */
 export const PANEL_OF: Record<string, PanelKey> = {
-  set_transfer_list: "에이전트 센터",
-  start_negotiation: "에이전트 센터",
+  set_transfer_list: "스쿼드",
+  start_negotiation: "메일함",
+  update_negotiation: "메일함",
+  request_negotiation_confirmation: "메일함",
+  send_mail: "메일함",
+  read_mail: "메일함",
   // ── 스쿼드 — 선수단과 판이 바뀐 것 ──
   set_lineup: "스쿼드",
   set_squad_level: "스쿼드",

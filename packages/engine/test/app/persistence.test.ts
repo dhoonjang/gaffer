@@ -29,6 +29,7 @@ import {
   listGameSummaries,
   loadGame,
   saveGame,
+  sendMail,
   SAVE_VERSION,
   type GameListEntry,
   type GameSummary,
@@ -121,11 +122,23 @@ describe("세이브 내구성 — 업데이트·크래시에도 게임이 살아
   it("저장·로드 왕복이 상태를 보존한다", () => {
     const state = createTestGame();
     state.season = 3;
+    const recipient = state.finances.find((f) => f.teamId !== state.userTeamId)!;
+    expect(
+      sendMail(state, {
+        requestId: "roundtrip-mail",
+        recipient: { kind: "club", teamId: recipient.teamId },
+        subject: "저장할 연락",
+        body: "원문 보존",
+      }).ok,
+    ).toBe(true);
     saveGame(state);
     const loaded = loadGame(state.id);
     expect(loaded).not.toBeNull();
     expect(loaded?.season).toBe(3);
     expect(loaded?.teams.length).toBe(teamCatalog().length);
+    expect(loaded?.mailThreads).toEqual(state.mailThreads);
+    expect(loaded?.mailReplyJobs).toEqual(state.mailReplyJobs);
+    expect(loaded?.mailRequests).toEqual(state.mailRequests);
   });
 
   it("인물 원본·편집 이력을 왕복 보존하고 끊어진 참조는 거부한다", () => {

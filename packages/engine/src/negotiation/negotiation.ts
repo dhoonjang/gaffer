@@ -1,3 +1,5 @@
+import { dueMailReplies } from "../common/mail/mail";
+import { negotiationBounds, acceptanceBoundError } from "./acceptance-bounds";
 import {
   NegotiationActionSchema,
   NegotiationRequestSchema,
@@ -16,6 +18,7 @@ import {
   type AgentCenterSearchInput,
   type AgentCenterSearchResult,
   type Negotiation,
+  type NegotiationConfirmationPayload,
   type NegotiationAction,
   type NegotiationChannel,
   type NegotiationView,
@@ -36,7 +39,10 @@ import { addDays } from "../common/core/dates";
 import { clearDepartedState, FREE_AGENT_TEAM } from "../common/players/free-agency";
 import { canRegisterFor } from "../common/players/registration";
 import { recordFinance } from "../common/finance/finance";
-import { amortizePlayerContract } from "../common/finance/transfer-accounting";
+import {
+  reservedTransferPayments,
+  amortizePlayerContract,
+} from "../common/finance/transfer-accounting";
 
 export interface NegotiationResult {
   ok: boolean;
@@ -129,6 +135,7 @@ export function openNegotiation(
       if (proposal.status === "open") proposal.status = "superseded";
     previous.status = "open";
     previous.sourceContractId = source?.id ?? null;
+    previous.bounds = negotiationBounds(state, previous);
     previous.background = input.background;
     previous.drafts = [];
     previous.medical = null;
@@ -154,6 +161,12 @@ export function openNegotiation(
     openedOn: state.date,
     background: input.background,
     sourceContractId: activeContract(state, player.id)?.id ?? null,
+    bounds: negotiationBounds(state, {
+      playerId: player.id,
+      buyerId: input.buyerId,
+      sellerId: player.teamId,
+      kind: input.kind,
+    }),
     status: "open",
     revision: 0,
     messages: [],
@@ -273,6 +286,10 @@ export function actNegotiation(
       if (invalid) return fail(invalid);
       if (!proposalParties(n, a.terms.scope).includes(actor.partyId))
         return fail("이 조건의 당사자가 아닙니다");
+      if (a.kind === "send" && actor.kind === "model") {
+        const error = acceptanceBoundError(state, n, a.terms, actor.partyId);
+        if (error) return fail(error);
+      }
       if (a.kind === "draft")
         n.drafts = [...n.drafts.filter((t) => t.scope !== a.terms.scope), a.terms];
       else {
@@ -302,6 +319,10 @@ export function actNegotiation(
         !proposalParties(n, p.terms.scope).includes(actor.partyId)
       )
         return fail("동의할 수 있는 유효한 제안이 아닙니다");
+      if (a.kind === "accept" && actor.kind === "model") {
+        const error = acceptanceBoundError(state, n, p.terms, actor.partyId);
+        if (error) return fail(error);
+      }
       if (a.kind === "reject") {
         p.status = "rejected";
         p.reason = a.reason;
@@ -373,10 +394,14 @@ export function actNegotiation(
         )
       )
         return fail("이미 서명한 다른 계약이 있습니다");
+      for (const proposal of [player, ...(club ? [club] : [])])
+        for (const party of proposalParties(n, proposal.terms.scope)) {
+          if (party === managedTeamId(state)) continue;
+          const error = acceptanceBoundError(state, n, proposal.terms, party);
+          if (error) return fail(error);
+        }
       const fee = club ? totalTransferFee(club.terms) : 0;
-      const reserved = state.transferPayments
-        .filter((p) => p.fromTeamId === n.buyerId && !p.paidOn)
-        .reduce((s, p) => s + p.amount, 0);
+      const reserved = reservedTransferPayments(state, n.buyerId);
       if (financeOf(state, n.buyerId).balance < fee + player.terms.signingBonus + reserved)
         return fail("미래 지급 의무를 포함한 자금이 부족합니다");
       n.signed = { on: state.date, playerProposalId: player.id, clubProposalId: club?.id ?? null };
@@ -417,6 +442,10 @@ export function actNegotiation(
       n.nextReplyOn = null;
       appendNegotiationMessage(state, n, "internal", "system", a.reason);
       break;
+  }
+  if (state.players.some((p) => p.id === n.playerId)) {
+    const bounds = negotiationBounds(state, n);
+    if (bounds.fingerprint !== n.bounds.fingerprint) n.bounds = bounds;
   }
   n.revision += 1;
   return success(n, "협상 요청을 처리했습니다");
@@ -596,6 +625,54 @@ function visibleMessages(n: Negotiation, teamId: string | null, messages = n.mes
         (m.partyId === teamId || (m.partyId === null && teamId === n.buyerId))),
   );
 }
+function publicNegotiation(n: Negotiation) {
+  const { bounds: _bounds, ...visible } = structuredClone(n);
+  void _bounds;
+  return visible;
+}
+export function buildNegotiationConfirmation(
+  state: GameState,
+  id: string,
+  stage: NegotiationConfirmationPayload["stage"],
+): NegotiationConfirmationPayload | null {
+  const n = state.negotiations.find((n) => n.id === id),
+    team = managedTeamId(state);
+  if (
+    !n ||
+    n.status !== "open" ||
+    !team ||
+    ![n.buyerId, n.sellerId].includes(team) ||
+    !sourceValid(state, n)
+  )
+    return null;
+  const player = currentProposal(n, "player"),
+    club = currentProposal(n, "club");
+  const visiblePlayer = n.buyerId === team ? player : undefined;
+  const proposals = [...(visiblePlayer ? [visiblePlayer] : []), ...(club ? [club] : [])];
+  if (!proposals.length || proposals.some((p) => p.terms.expiresOn < state.date)) return null;
+  if (
+    stage !== "agreement" &&
+    (team !== n.buyerId ||
+      !proposalAgreed(n, player) ||
+      (n.kind === "transfer" && !proposalAgreed(n, club)))
+  )
+    return null;
+  if (stage === "medical" && !n.medical?.examinedOn) return null;
+  if (
+    stage === "sign" &&
+    n.kind !== "renewal" &&
+    (!n.medical?.examinedOn || !n.medical.acknowledgedBy.includes(team))
+  )
+    return null;
+  return {
+    kind: "negotiation-confirmation",
+    negotiationId: id,
+    revision: n.revision,
+    stage,
+    playerProposalId: visiblePlayer?.id ?? null,
+    clubProposalId: club?.id ?? null,
+  };
+}
 export function buildNegotiationView(state: GameState): NegotiationView {
   const teamId = managedTeamId(state);
   const cases = state.negotiations.filter(
@@ -606,7 +683,7 @@ export function buildNegotiationView(state: GameState): NegotiationView {
     date: state.date,
     transferList: buildAgentCenterView(state).transferList,
     cases: cases.map((n) => ({
-      ...structuredClone(n),
+      ...publicNegotiation(n),
       ...(n.sellerId === teamId && n.buyerId !== teamId
         ? {
             proposals: structuredClone(n.proposals.filter((p) => p.terms.scope === "club")),
@@ -635,7 +712,9 @@ export function negotiationMarketDue(state: GameState): boolean {
   return (
     state.negotiations.some(
       (n) => n.status === "open" && n.nextReplyOn !== null && n.nextReplyOn <= state.date,
-    ) || state.marketReview.lastDate !== state.date
+    ) ||
+    dueMailReplies(state).length > 0 ||
+    state.marketReview.lastDate !== state.date
   );
 }
 

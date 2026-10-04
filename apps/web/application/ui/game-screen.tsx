@@ -1,20 +1,18 @@
 "use client";
-import { NegotiationPanel } from "../../domains/negotiation/ui/negotiation-panel";
+import { SquadManagement } from "./squad-management";
+import { Mailbox, type MailDraft } from "./mailbox";
+import { NegotiationConfirmation } from "./negotiation-confirmation";
 import { PlayerNegotiationAction } from "./player-negotiation-action";
 import {
   PlayerCardProvider,
   type PlayerCardDefaultActions,
 } from "../../domains/common/ui/player-card";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { GamePayload, GameSlice } from "@/application/lib/store";
 import { humanDate } from "@/domains/common/lib/dateline";
 import { matchHeadFacts, matchScoreOf, matchTitleOf } from "@/domains/match/lib/match-head";
-import {
-  negotiationOpeningSuggestion,
-  negotiationStartedInTurn,
-} from "@/application/lib/negotiation-navigation";
 import { mergeSlice } from "@/application/lib/game-slice";
 import { reducedMotion } from "@/domains/common/lib/motion";
 import type { AttentionItemView, ChatTurn } from "@story-fm/engine";
@@ -32,7 +30,7 @@ import { useLiveMatch } from "@/domains/match/lib/use-live-match";
 import { LiveEvents, LivePitch, liveClockOf } from "../../domains/match/ui/live-pitch";
 import { RailHints, useRailHints } from "./rail-hints";
 import { Loading } from "../../domains/common/ui/loading";
-import { SquadView, CalendarView, FinanceView, CompetitionsView, CareerView } from "./office";
+import { CalendarView, FinanceView, CompetitionsView, CareerView } from "./office";
 import { MatchReportPanel } from "../../domains/match/ui/match-report";
 import { createLineupSaver, type LineupSaver } from "../../domains/match/ui/lineup-saver";
 import {
@@ -51,7 +49,7 @@ import {
   IconCalendar,
   IconCareer,
   IconChat,
-  IconNegotiation,
+  IconMail,
   IconChevron,
   IconFinance,
   IconMark,
@@ -75,7 +73,7 @@ const PANELS = [
   { key: "스쿼드", label: "선수단", Icon: IconSquad },
   { key: "달력", label: "일정", Icon: IconCalendar },
   { key: "대회", label: "대회", Icon: IconTrophy },
-  { key: "에이전트 센터", label: "에이전트 센터", Icon: IconNegotiation },
+  { key: "메일함", label: "메일함", Icon: IconMail },
   { key: "재정", label: "재정", Icon: IconFinance },
   { key: "커리어", label: "커리어", Icon: IconCareer },
 ] as const;
@@ -216,11 +214,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const [entering, setEntering] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [activeNegotiationId, setActiveNegotiationId] = useState<string | null>(null);
-  const chooseNegotiation = useCallback((id: string | null) => {
-    setActiveNegotiationId(id);
-    if (!window.matchMedia("(min-width: 1024px)").matches) setPanel(null);
-  }, []);
+  const [mailDraft, setMailDraft] = useState<MailDraft | null>(null);
+  const [mailAttachments, setMailAttachments] = useState<string[]>([]);
   const storyScrollStamp = useRef("");
   const [negotiationBusy, setNegotiationBusy] = useState(false);
   const liveMatch =
@@ -488,12 +483,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 이 호출이 아무 일도 하지 않고, `panel`이 의존성에 있어 닫는 순간 다시 붙는다.
    */
   useEffect(() => {
-    if (activeNegotiationId !== null && game?.phase !== "match") return;
     const stamp = `${game?.chat.length}/${busy}/${streamText}`;
     if (storyScrollStamp.current === stamp) return;
     storyScrollStamp.current = stamp;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [game?.chat.length, busy, streamText, activeNegotiationId, game?.phase]);
+  }, [game?.chat.length, busy, streamText, game?.phase]);
 
   /** 경기가 끝나는 순간을 잡는다 — 판세가 사라지면 그 경기의 종료 화면을 연다 */
   const matchGone = pendingMatch === null;
@@ -525,19 +519,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
       const message = operation ? "" : (text ?? input).trim();
       if ((!message && !operation) || busy || negotiationBusy || !game) return null;
       const seq = ++turnSeqRef.current;
-      const baseChatLength = game.chat.length;
+      const attachmentIds = operation ? [] : [...mailAttachments];
       const adoptPayload = (payload: GamePayload) => {
         if (turnSeqRef.current !== seq) return;
         setGame(payload);
-        const target = negotiationStartedInTurn(
-          payload.chat,
-          baseChatLength,
-          payload.views.negotiation.cases.map((item) => item.id),
-          payload.phase,
-        );
-        if (target) {
-          chooseNegotiation(target);
-        }
+        if (attachmentIds.length) setMailAttachments([]);
       };
       setBusy(true);
       setError(null);
@@ -603,6 +589,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
             text: message,
             toolCalls: [],
             at: game.date,
+            ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
             ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
           };
       if (optimistic) setGame((g) => (g ? { ...g, chat: [...g.chat, optimistic] } : g));
@@ -740,6 +727,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
         {
           ...(operation ? { operation } : message ? { message } : {}),
           orders,
+          ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
         },
         {
           onDelta: (text) => {
@@ -760,9 +748,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
     },
     [
       input,
+      mailAttachments,
       busy,
       negotiationBusy,
-      chooseNegotiation,
       game,
       liveMatch?.matchId,
       liveMatch?.live,
@@ -821,18 +809,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
     return at === undefined ? undefined : () => setTraceAt(at);
   };
 
-  const choosePlayerNegotiation = useCallback(
-    (id: string, next?: GamePayload) => {
-      if (next && (next.id !== gameId || (game && next.chat.length < game.chat.length))) return;
-      if (next) setGame(next);
-      if ((next ?? game)?.phase === "match") return;
-      chooseNegotiation(id);
-      requestAnimationFrame(() =>
-        document.querySelector<HTMLTextAreaElement>(".negotiation-stage textarea")?.focus(),
-      );
-    },
-    [game, gameId, chooseNegotiation],
-  );
   const playerCardActions = useCallback<PlayerCardDefaultActions>(
     (card, close) =>
       game ? (
@@ -847,12 +823,19 @@ export function GameScreen({ gameId }: { gameId: string }) {
             game.phase === "match" ||
             game.views.career.dismissal !== null
           }
-          onBusy={setNegotiationBusy}
-          onChoose={choosePlayerNegotiation}
+          onContext={(text) => {
+            setInput(text);
+            setPanel(null);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+          onMail={(draft) => {
+            setMailDraft(draft);
+            setPanel("메일함");
+          }}
           onClose={close}
         />
       ) : null,
-    [game, busy, negotiationBusy, pendingMatch, choosePlayerNegotiation],
+    [game, busy, negotiationBusy, pendingMatch],
   );
 
   if (error && !game)
@@ -869,7 +852,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
     );
 
   /** 폭이 곧 가독성인 뷰 — 전술판+명단·열두 달 격자는 900px 안에 넣을 수 없다 */
-  const wide = shownPanel === "스쿼드" || shownPanel === "달력" || shownPanel === "에이전트 센터";
+  const wide = shownPanel === "스쿼드" || shownPanel === "달력" || shownPanel === "메일함";
 
   /**
    * 다음 경기 날짜 — 시간 이동 버튼이 목표 시점을 **그대로 적어 보내려고** 쓴다.
@@ -918,7 +901,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 놓기만 한다. 다른 것은 **돌아갈 자리**뿐이라 그것만 받는다.
    */
   const squadView = (goBack: () => void) => (
-    <SquadView
+    <SquadManagement
       game={game}
       onUpdate={applyLineupSave}
       onGoToChat={goBack}
@@ -958,9 +941,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const chatPane = (
     <section
       className={`chat-pane${inMatch ? " broadcasting" : ""}`}
-      aria-hidden={matchPanelOpen || (activeNegotiationId !== null && !inMatch) || undefined}
-      inert={matchPanelOpen || (activeNegotiationId !== null && !inMatch)}
-      hidden={activeNegotiationId !== null && !inMatch}
+      aria-hidden={matchPanelOpen || undefined}
+      inert={matchPanelOpen}
     >
       <div className="chat-scroll" ref={scrollRef} data-testid="chat-scroll">
         {/* 화면 조작은 그리지 않는다 — 감독이 한 말이 아니다. 모델 이력에는
@@ -978,14 +960,27 @@ export function GameScreen({ gameId }: { gameId: string }) {
             // 인덱스를 아는 이 자리가 그것을 해석한다 (`buildTraceIndex`)
             if (turn.role === "user")
               return (
-                <ChatTurnFeedback
-                  key={i}
-                  userTurn={turn}
-                  thinking={false}
-                  date={game.date}
-                  playerNames={game.playerNames}
-                  onLongPress={traceOpener(turn)}
-                />
+                <Fragment key={i}>
+                  <ChatTurnFeedback
+                    key={i}
+                    userTurn={turn}
+                    thinking={false}
+                    date={game.date}
+                    playerNames={game.playerNames}
+                    onLongPress={traceOpener(turn)}
+                  />
+                  {turn.mailMessageIds?.map((id) => (
+                    <div
+                      className="mail-attachment saved"
+                      data-testid="chat-mail-attachment"
+                      key={id}
+                    >
+                      {game.views.mail.threads
+                        .flatMap((thread) => thread.messages)
+                        .find((message) => message.id === id)?.subject ?? "첨부 메일"}
+                    </div>
+                  ))}
+                </Fragment>
               );
             if (turn.role !== "model")
               return (
@@ -997,21 +992,33 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 />
               );
             const node = (
-              <ChatTurnView
-                key={i}
-                turn={turn}
-                playerNames={game.playerNames}
-                speakerRoles={game.speakerRoles}
-                prevStamp={prevStamp}
-                /**
-                 * 레일에 세울 말풍선 — **자동 알림은 그 턴에 바뀐 장부 전부,
-                 * 칩을 누르면 그 지시 하나만.** 경기 중에는 장부 레일이 서지
-                 * 않으므로 칩도 제자리에서 펼친다(손잡이를 주지 않는다).
-                 */
-                onRevealHint={inMatch ? undefined : rail.reveal}
-                revealedCall={rail.revealedCall}
-                onLongPress={traceOpener(turn)}
-              />
+              <Fragment key={i}>
+                <ChatTurnView
+                  key={i}
+                  turn={turn}
+                  playerNames={game.playerNames}
+                  speakerRoles={game.speakerRoles}
+                  prevStamp={prevStamp}
+                  /**
+                   * 레일에 세울 말풍선 — **자동 알림은 그 턴에 바뀐 장부 전부,
+                   * 칩을 누르면 그 지시 하나만.** 경기 중에는 장부 레일이 서지
+                   * 않으므로 칩도 제자리에서 펼친다(손잡이를 주지 않는다).
+                   */
+                  onRevealHint={inMatch ? undefined : rail.reveal}
+                  revealedCall={rail.revealedCall}
+                  onLongPress={traceOpener(turn)}
+                />
+                {turn.toolCalls.map((call, index) => (
+                  <NegotiationConfirmation
+                    key={index}
+                    payload={call.payload}
+                    game={game}
+                    blocked={busy || negotiationBusy || pendingMatch !== null}
+                    onGame={setGame}
+                    onBusy={setNegotiationBusy}
+                  />
+                ))}
+              </Fragment>
             );
             prevStamp = turnStamp(turn) ?? prevStamp;
             return node;
@@ -1087,6 +1094,32 @@ export function GameScreen({ gameId }: { gameId: string }) {
           </span>
         </div>
       )}
+      {mailAttachments.length > 0 && (
+        <div className="mail-attachments">
+          {mailAttachments.map((id) => {
+            const message = game.views.mail.threads
+              .flatMap((thread) => thread.messages)
+              .find((message) => message.id === id);
+            return (
+              <div
+                className="mail-attachment"
+                data-testid="mail-attachment"
+                data-message-id={id}
+                key={id}
+              >
+                <span>{message?.subject ?? "첨부 메일"}</span>
+                <button
+                  aria-label="첨부 제거"
+                  disabled={busy || negotiationBusy}
+                  onClick={() => setMailAttachments((ids) => ids.filter((value) => value !== id))}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <Composer
         input={input}
         onInput={setInput}
@@ -1097,7 +1130,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
         canSkip={canSkip}
         nextMatchDate={nextMatchDate}
         inputRef={inputRef}
-        suggestion={suggestion}
+        suggestion={mailAttachments.length ? undefined : suggestion}
+        sendOnly={mailAttachments.length > 0}
+        placeholder={mailAttachments.length ? "첨부 메일과 함께 지시를 입력하세요." : undefined}
         liveControl={
           liveMatch?.live && !liveMatch.live.finished
             ? {
@@ -1240,7 +1275,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
                     disabled={
                       negotiationBusy ||
-                      (key === "에이전트 센터" && (pendingMatch !== null || game.phase === "match"))
+                      (key === "메일함" && (pendingMatch !== null || game.phase === "match"))
                     }
                     onClick={() => {
                       rail.markSeen(key);
@@ -1254,12 +1289,12 @@ export function GameScreen({ gameId }: { gameId: string }) {
                   >
                     <Icon />
                     <span className="rail-label">{label}</span>
-                    {key === "에이전트 센터" && game.views.negotiation.unread > 0 && (
+                    {key === "메일함" && game.views.mail.unread > 0 && (
                       <span
-                        className="negotiation-unread"
-                        aria-label={`${game.views.negotiation.unread} 에이전트 센터 새 소식`}
+                        className="mail-unread"
+                        aria-label={`${game.views.mail.unread} 새 메일`}
                       >
-                        {game.views.negotiation.unread}
+                        {game.views.mail.unread}
                       </span>
                     )}
                   </button>
@@ -1351,100 +1386,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
             {/* 스코어보드는 경기장 칸 위에 붙는다 — 대화 칸은 무대 높이를 통째로 쓴다 */}
             {liveMatch && <MatchHeadline match={liveMatch} clock={liveClock} />}
             {chatPane}
-            {activeNegotiationId !== null && !inMatch && (
-              <section className="chat-pane negotiation-stage">
-                <NegotiationPanel
-                  gameId={gameId}
-                  view={game.views.negotiation}
-                  blocked={busy || game.phase === "match" || pendingMatch !== null}
-                  onGame={setGame}
-                  onBusy={setNegotiationBusy}
-                  selectedId={activeNegotiationId}
-                  renderMessages={(messages) => {
-                    let previousStamp: string | null = null;
-                    return messages.map((message) => {
-                      const turn: ChatTurn = {
-                        role: message.author === "manager" ? "user" : "model",
-                        text: message.text,
-                        toolCalls: [],
-                        at: message.on,
-                      };
-                      const node = (
-                        <ChatTurnView
-                          key={message.id}
-                          turn={turn}
-                          playerNames={game.playerNames}
-                          speakerRoles={game.speakerRoles}
-                          prevStamp={previousStamp}
-                        />
-                      );
-                      previousStamp = turnStamp(turn) ?? previousStamp;
-                      return node;
-                    });
-                  }}
-                  renderPending={({ text, thinking }) => (
-                    <ChatTurnFeedback
-                      text={text}
-                      thinking={thinking}
-                      date={game.date}
-                      playerNames={game.playerNames}
-                    />
-                  )}
-                  renderError={({ error, onRetry, onDismiss, busy: pending }) => (
-                    <ChatTurnError
-                      error={error}
-                      onRetry={onRetry}
-                      onDismiss={onDismiss}
-                      disabled={pending}
-                    />
-                  )}
-                  onMainChat={() => {
-                    chooseNegotiation(null);
-                  }}
-                  renderComposer={({
-                    text,
-                    channel,
-                    onText,
-                    onSend,
-                    busy: negotiationPending,
-                    inputRef: negotiationInputRef,
-                  }) => {
-                    const suggestion = negotiationOpeningSuggestion(
-                      game.chat,
-                      game.views.negotiation.cases.find((item) => item.id === activeNegotiationId),
-                      channel,
-                    );
-                    return (
-                      <Composer
-                        input={text}
-                        onInput={onText}
-                        onSend={onSend}
-                        onOperate={() => {}}
-                        busy={negotiationPending}
-                        inMatch={false}
-                        canSkip={false}
-                        nextMatchDate={null}
-                        inputRef={negotiationInputRef}
-                        sendOnly
-                        maxLength={6000}
-                        suggestion={suggestion ?? undefined}
-                        placeholder={
-                          suggestion
-                            ? undefined
-                            : channel === "player"
-                              ? "에이전트와 계약 조건을 논의하세요."
-                              : "구단과 이적 조건을 논의하세요."
-                        }
-                        testId="negotiation-input"
-                      />
-                    );
-                  }}
-                  onSelect={(id) => {
-                    chooseNegotiation(id);
-                  }}
-                />
-              </section>
-            )}
             {matchPanelOpen && liveMatch && (
               <section className="match-side-panel" aria-labelledby="match-panel-title">
                 <header className="match-detail-heading">
@@ -1549,7 +1490,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     `key`로 장부마다 새로 세운다 — 탭을 옮길 때 흐려졌다 든다 */}
                   <div
                     key={shownPanel ?? "none"}
-                    className={`view-scroll ledger-body${wide ? " wide" : ""}${shownPanel === "에이전트 센터" ? " negotiation-panel-body" : ""}`}
+                    className={`view-scroll ledger-body${wide ? " wide" : ""}${shownPanel === "메일함" ? " mailbox-panel-body" : ""}`}
                   >
                     {shownPanel === "스쿼드" && squadView(() => setPanel(null))}
                     {shownPanel === "달력" && (
@@ -1557,20 +1498,28 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     )}
                     {shownPanel === "재정" && <FinanceView finance={game.views.finance} />}
                     {shownPanel === "대회" && competitionsView}
-                    {shownPanel === "에이전트 센터" && (
-                      <NegotiationPanel
-                        mode="list"
-                        onSelect={(id) => {
-                          chooseNegotiation(id);
-                        }}
+                    {shownPanel === "메일함" && (
+                      <Mailbox
                         gameId={gameId}
-                        view={game.views.negotiation}
-                        expiringContracts={game.views.finance.expiringContracts}
-                        blocked={
-                          busy || negotiationBusy || game.phase === "match" || pendingMatch !== null
+                        mail={game.views.mail}
+                        initialDraft={mailDraft}
+                        onDraftConsumed={() => setMailDraft(null)}
+                        disabled={busy || negotiationBusy || pendingMatch !== null}
+                        onGame={(next, readOnly) =>
+                          setGame((current) =>
+                            current && readOnly
+                              ? { ...current, views: { ...current.views, mail: next.views.mail } }
+                              : next,
+                          )
                         }
-                        onGame={setGame}
                         onBusy={setNegotiationBusy}
+                        onAttach={(id) => {
+                          setMailAttachments((ids) =>
+                            ids.includes(id) || ids.length >= 3 ? ids : [...ids, id],
+                          );
+                          if (!window.matchMedia("(min-width: 1024px)").matches) setPanel(null);
+                          requestAnimationFrame(() => inputRef.current?.focus());
+                        }}
                       />
                     )}
                     {shownPanel === "커리어" && (

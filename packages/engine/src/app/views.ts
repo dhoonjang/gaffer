@@ -1,4 +1,5 @@
-import type { NegotiationView } from "@story-fm/domain";
+import { buildMailView } from "../common/mail/mail";
+import type { MailView, NegotiationView } from "@story-fm/domain";
 import { buildNegotiationView } from "../negotiation/negotiation";
 import { type MatchView, buildMatchView } from "../match/views/live";
 import { type SquadView, buildSquadView } from "./views/squad";
@@ -57,6 +58,7 @@ export interface OfficeViews {
   competitions: CompetitionsView;
   career: CareerView;
   negotiation: NegotiationView;
+  mail: MailView;
 }
 
 /**
@@ -103,6 +105,7 @@ export function buildOfficeViews(
     },
     career: () => buildCareerView(state),
     negotiation: () => buildNegotiationView(state),
+    mail: () => buildMailView(state),
   };
   const keys = only ?? (Object.keys(builders) as (keyof OfficeViews)[]);
   return Object.fromEntries(keys.map((key) => [key, builders[key]()]));

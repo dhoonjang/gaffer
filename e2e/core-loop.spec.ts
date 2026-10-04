@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import type { OfficeViews } from "@story-fm/engine";
-import { seedAgentCenter, seedFinishedSeason } from "./seed";
+import { seedAgentCenter, seedFinishedSeason, seedSellerAgreement } from "./seed";
 import { COLD_MS } from "./timeouts";
 
 /**
@@ -55,13 +55,21 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
   await expect(page.locator('[data-testid^="cal-fixture-"]').first()).toBeVisible();
 });
 
-test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화로 이어진다", async ({ page }) => {
+test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 이어진다", async ({ page }) => {
   const fixture = seedAgentCenter();
-  const centerButton = page.getByTestId("tab-에이전트 센터");
-  const showCenter = async () => {
-    if (!(await centerButton.getAttribute("class"))?.split(/\s+/).includes("active"))
-      await centerButton.click();
-    await expect(page.getByTestId("agent-center-tab-search")).toBeVisible();
+  await page.goto(`/game/${fixture.gameId}`);
+  const input = page.getByTestId("chat-input");
+  await expect(input).toBeVisible({ timeout: COLD_MS });
+  const openPanel = async (key: string) => {
+    const tab = page.getByTestId(`tab-${key}`);
+    if ((await tab.getAttribute("class"))?.split(/\s+/).includes("active")) return;
+    if (!(await tab.isVisible())) await page.getByTestId("rail-toggle").click();
+    await tab.click();
+  };
+  const readMail = async () => {
+    const response = await page.request.get(`/api/games/${fixture.gameId}/mail`, { maxRetries: 1 });
+    expect(response.ok()).toBe(true);
+    return ((await response.json()) as { mail: OfficeViews["mail"] }).mail;
   };
   const readNegotiations = async () => {
     const response = await page.request.get(`/api/games/${fixture.gameId}/negotiation`, {
@@ -70,148 +78,126 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
     expect(response.ok()).toBe(true);
     return ((await response.json()) as { negotiation: OfficeViews["negotiation"] }).negotiation;
   };
-  await page.goto(`/game/${fixture.gameId}`);
-  const mainInput = page.getByTestId("chat-input");
-  await expect(mainInput).toBeVisible({ timeout: COLD_MS });
-  const draft = "협상 뒤 훈련 계획을 계속 논의하자";
-  await mainInput.fill(draft);
-  await showCenter();
-  await page.getByTestId("agent-center-tab-search").click();
-  await page.getByTestId("agent-search-name").fill(fixture.targetName);
-  // The row itself owns the player id, so duplicate names never choose a different player.
-  const targetRow = page.locator(
-    `[data-testid="agent-search-result"][data-player-id="${fixture.targetId}"]`,
-  );
-  await targetRow.locator(".player-name").click();
-  await page.getByTestId("player-card-negotiation").click();
-  const stage = page.locator(".negotiation-stage");
-  const input = stage.getByTestId("negotiation-input");
-  await expect(input).toBeVisible();
-  const opened = (await readNegotiations()).cases.find((n) => n.playerId === fixture.targetId)!;
-  expect(opened.messages.filter((message) => message.author === "gm")).toHaveLength(0);
-  expect(opened.proposals).toHaveLength(0);
-
-  await expect(page.getByTestId("agent-center-tab-search")).toBeVisible();
-  await page.getByTestId("tab-채팅").click();
-  await expect(input).toBeVisible();
-  await expect(page.getByTestId("tab-채팅")).toHaveClass("active");
-  await expect(centerButton).not.toHaveClass(/active/);
-  await showCenter();
-
-  const requestIds: string[] = [];
-  let releaseFailure: (() => void) | undefined;
-  await page.route(`**/api/games/${fixture.gameId}/negotiation`, async (route) => {
-    if (route.request().method() !== "POST") return route.continue();
-    const body = route.request().postDataJSON() as { requestId: string; action: { kind: string } };
-    if (body.action.kind !== "message") return route.continue();
-    requestIds.push(body.requestId);
-    if (requestIds.length > 1) return route.continue();
-    await new Promise<void>((resolve) => {
-      releaseFailure = resolve;
-    });
-    // The server commits, but its response is lost: retry must replay the same request.
-    const committed = await route.fetch();
-    expect(committed.ok()).toBe(true);
-    await route.fulfill({ status: 503, json: { error: "일시적인 연결 오류" } });
-  });
-
-  await input.fill("영입 조건을 논의하겠습니다.");
-  await stage.getByRole("button", { name: "전송", exact: true }).click();
-  await expect(stage.getByRole("status", { name: "응답을 기다리는 중" })).toBeVisible();
-  await expect(
-    stage.locator(".turn-user").filter({ hasText: "영입 조건을 논의하겠습니다." }),
-  ).toHaveCount(1);
-  await expect(input).toBeDisabled();
-  await expect.poll(() => releaseFailure !== undefined).toBe(true);
-  releaseFailure!();
-  await expect(stage.getByTestId("turn-error")).toContainText("일시적인 연결 오류");
-  await expect(input).toHaveValue("영입 조건을 논의하겠습니다.");
-  await expect(stage.getByRole("status", { name: "응답을 기다리는 중" })).toHaveCount(0);
-  await stage.getByRole("button", { name: "다시 시도", exact: true }).click();
-  await expect(stage.getByRole("button", { name: "조건 확인 후 합의", exact: true })).toBeVisible();
-  expect(requestIds).toHaveLength(2);
-  expect(requestIds[1]).toBe(requestIds[0]);
-  await expect(
-    stage.locator(".turn-user").filter({ hasText: "영입 조건을 논의하겠습니다." }),
-  ).toHaveCount(1);
-  await page.unroute(`**/api/games/${fixture.gameId}/negotiation`);
-  await stage.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
-  await stage.getByRole("combobox", { name: "대화 상대" }).selectOption("player");
-  await stage.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
-  await expect(stage.getByRole("button", { name: "메디컬 요청", exact: true })).toBeVisible();
-  await expect(stage.getByRole("button", { name: "최종 서명", exact: true })).toHaveCount(0);
-  await stage.getByRole("button", { name: "메인 대화로", exact: true }).click();
-  await expect(mainInput).toHaveValue(draft);
-  await expect(page.getByTestId("agent-center-tab-search")).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  await showCenter();
-  await page.getByTestId("agent-center-tab-search").click();
-  await page.getByTestId("agent-search-name").fill(fixture.targetName);
-  await targetRow.locator(".player-name").click();
-  await expect(page.getByTestId("player-card-negotiation")).toHaveText("대화 이어가기");
-  await page.getByTestId("player-card-negotiation").click();
-  await expect(input).toBeVisible();
-  await expect(page.getByTestId("agent-center-tab-search")).not.toBeVisible();
-  await expect(page.getByTestId("tab-채팅")).toHaveClass("active");
-  await expect(centerButton).not.toHaveClass(/active/);
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const reopened = (await readNegotiations()).cases.filter((n) => n.playerId === fixture.targetId);
-  expect(reopened).toHaveLength(1);
-  expect(reopened[0]!.id).toBe(opened.id);
-  await stage.getByRole("button", { name: "메인 대화로", exact: true }).click();
-
-  await mainInput.fill("테스트 이적 명단 등록");
-  await page.getByTestId("chat-send").click();
-  await expect(page.getByTestId("tool-set_transfer_list")).toBeVisible();
-  await expect(mainInput).toBeEnabled();
-  await showCenter();
-  await page.getByTestId("agent-center-tab-transfers").click();
-  await expect(page.getByTestId("agent-transfer-listing")).toContainText(fixture.ownName);
-  await expect(page.getByTestId("agent-transfer-listing")).toContainText("10,000,000");
-  await page.getByTestId("agent-center-tab-contracts").click();
-  const expiring = page.getByTestId("agent-expiring-contract").filter({ hasText: fixture.ownName });
-  await expiring.locator(".player-name").click();
-  await page.getByTestId("player-card-negotiation").click();
-  await expect(input).toBeVisible();
-  const renewalFromCard = (await readNegotiations()).cases.find(
-    (n) => n.playerId === fixture.ownId,
-  )!;
-  expect(renewalFromCard.kind).toBe("renewal");
-  expect(renewalFromCard.proposals).toHaveLength(0);
-  await stage.getByRole("button", { name: "메인 대화로", exact: true }).click();
-  await page.getByTestId("tab-채팅").click();
-  await mainInput.fill("테스트 재계약 협상");
-  await page.getByTestId("chat-send").click();
-  await expect(input).toBeVisible();
-  await input.fill("재계약 조건을 논의하겠습니다.");
-  await stage.getByRole("button", { name: "전송", exact: true }).click();
-  await stage.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
-  const ready = (await readNegotiations()).cases.find((n) => n.playerId === fixture.ownId)!;
-  expect(ready.id).toBe(renewalFromCard.id);
-  expect(ready.signed).toBeNull();
-  await stage.getByRole("button", { name: "최종 서명", exact: true }).click();
-  await expect(stage).toContainText("등록 완료");
-  const signed = (await readNegotiations()).cases.find((n) => n.id === ready.id)!;
-  expect(signed.status).toBe("completed");
-  expect(signed.signed).not.toBeNull();
-  await page.reload();
-  expect((await readNegotiations()).cases.find((n) => n.id === ready.id)?.signed).toEqual(
-    signed.signed,
-  );
-  await page.getByTestId("tab-스쿼드").click();
+  await input.fill("메일을 검토한 뒤 훈련을 논의하자");
+  await openPanel("메일함");
+  await page.getByTestId("mail-compose").click();
   await page
-    .getByTestId("panel-스쿼드")
-    .getByRole("button", { name: fixture.ownName, exact: true })
-    .first()
-    .click();
-  await expect(page.getByTestId("player-card-negotiation")).toHaveText("협상 다시 시작");
-  await page.getByTestId("player-card-negotiation").click();
+    .getByTestId("mail-recipient")
+    .selectOption(JSON.stringify({ kind: "club", teamId: fixture.targetTeamId }));
+  await page.getByTestId("mail-subject").fill(`${fixture.targetName} 영입 문의`);
+  await page
+    .getByTestId("mail-body")
+    .fill(`${fixture.targetName} 선수의 이적 협상 의향과 조건을 알려주세요.`);
+  await page.getByTestId("mail-send").click();
+  await expect.poll(async () => (await readMail()).threads.length).toBe(1);
+  let thread = (await readMail()).threads[0]!;
+  const threadId = thread.id;
+  expect(thread.messages).toHaveLength(1);
+  expect(thread.messages[0]!.direction).toBe("outbound");
+  await page.getByTestId("mail-compose").click();
+  await page
+    .getByTestId("mail-recipient")
+    .selectOption(JSON.stringify({ kind: "club", teamId: fixture.targetTeamId }));
+  await page.getByTestId("mail-subject").fill("문의 보충");
+  await page
+    .getByTestId("mail-body")
+    .fill("아직 구체적인 금액을 제안한 것은 아닙니다. 구단의 입장을 먼저 듣겠습니다.");
+  await page.getByTestId("mail-send").click();
+  await expect.poll(async () => (await readMail()).threads[0]!.messages.length).toBe(2);
+  expect((await readMail()).threads.map((item) => item.id)).toEqual([threadId]);
+  await openPanel("채팅");
+  await expect(input).toHaveValue("메일을 검토한 뒤 훈련을 논의하자");
+  await input.fill("");
+  await page.getByTestId("time-skip-toggle").click();
+  await page.getByTestId("skip-day").click();
+  await expect(input).toBeEnabled({ timeout: COLD_MS });
+  await expect
+    .poll(
+      async () =>
+        (await readMail()).threads
+          .find((item) => item.id === threadId)!
+          .messages.filter((message) => message.direction === "inbound").length,
+    )
+    .toBe(1);
+  thread = (await readMail()).threads.find((item) => item.id === threadId)!;
+  const incoming = thread.messages.at(-1)!;
+  await openPanel("메일함");
+  await page.getByTestId("mail-thread").filter({ hasText: thread.label }).click();
+  await page.getByTestId("mail-attach").last().click();
+  await expect(page.getByTestId("mail-attachment")).toHaveAttribute("data-message-id", incoming.id);
+  await input.fill("첨부한 회신 내용을 확인하고 다음 행동을 정리해줘");
+  const sent = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      request.url().endsWith(`/api/games/${fixture.gameId}/turn/stream`),
+  );
+  await page.getByTestId("chat-send").click();
+  expect((await sent).postDataJSON().mailMessageIds).toEqual([incoming.id]);
+  await expect(input).toBeEnabled();
+  await expect(page.getByTestId("mail-attachment")).toHaveCount(0);
+  expect(
+    (await readMail()).threads
+      .find((item) => item.id === threadId)!
+      .messages.filter((message) => message.direction === "inbound"),
+  ).toHaveLength(1);
+
+  await openPanel("채팅");
+  await input.fill("테스트 재계약 협상");
+  await page.getByTestId("chat-send").click();
+  await expect(page.getByTestId("tool-start_negotiation")).toBeVisible();
   await expect(input).toBeVisible();
-  const resumed = (await readNegotiations()).cases.find((n) => n.id === ready.id)!;
-  expect(resumed.status).toBe("open");
-  expect(resumed.signed).toBeNull();
-  expect(resumed.messages.slice(0, signed.messages.length)).toEqual(signed.messages);
-  expect(resumed.proposals.every((proposal) => proposal.status !== "open")).toBe(true);
-  await expect(stage.getByRole("button", { name: "최종 서명", exact: true })).toHaveCount(0);
+  await expect(input).toBeEnabled();
+  await expect(page.getByTestId("negotiation-input")).toHaveCount(0);
+  await input.fill("테스트 재계약 조건 제안");
+  await page.getByTestId("chat-send").click();
+  const confirmation = page.getByTestId("negotiation-confirmation").last();
+  await expect(
+    confirmation.getByRole("button", { name: "조건 확인 후 합의", exact: true }),
+  ).toBeVisible();
+  await confirmation.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
+  const ready = (await readNegotiations()).cases.find((item) => item.playerId === fixture.ownId)!;
+  expect(ready.signed).toBeNull();
+  await input.fill("테스트 재계약 최종 확인");
+  await page.getByTestId("chat-send").click();
+  await confirmation.getByRole("button", { name: "최종 서명", exact: true }).click();
+  await expect
+    .poll(async () => (await readNegotiations()).cases.find((item) => item.id === ready.id)?.status)
+    .toBe("completed");
+  await page.reload();
+  expect((await readMail()).threads.find((item) => item.id === threadId)?.messages).toEqual(
+    thread.messages,
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openPanel("메일함");
+  await page.getByTestId("mail-thread").filter({ hasText: thread.label }).click();
+  await page.getByTestId("mail-attach").last().click();
+  await expect(input).toBeVisible();
+  await expect(page.getByTestId("tab-채팅")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("mail-attachment")).toHaveAttribute("data-message-id", incoming.id);
+});
+
+test("매각 감독은 비공개 선수 조건 없이 구단 이적 조건에 합의한다", async ({ page, request }) => {
+  const fixture = seedSellerAgreement();
+  await page.goto(`/game/${fixture.gameId}`);
+  const card = page.getByTestId("negotiation-confirmation");
+  await expect(card).toBeVisible({ timeout: COLD_MS });
+  const read = async () => {
+    const response = await request.get(`/api/games/${fixture.gameId}/negotiation`);
+    return (
+      (await response.json()) as { negotiation: OfficeViews["negotiation"] }
+    ).negotiation.cases.find((n) => n.id === fixture.negotiationId)!;
+  };
+  expect((await read()).proposals.every((p) => p.terms.scope === "club")).toBe(true);
+  const accept = card.getByRole("button", { name: "조건 확인 후 합의", exact: true });
+  await expect(accept).toBeEnabled();
+  await accept.click();
+  await expect
+    .poll(async () =>
+      (await read()).proposals
+        .find((p) => p.id === fixture.clubProposalId)
+        ?.acceptedBy.includes(fixture.sellerId),
+    )
+    .toBe(true);
+  expect((await read()).proposals.every((p) => p.terms.scope === "club")).toBe(true);
 });

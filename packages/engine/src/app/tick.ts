@@ -1,3 +1,4 @@
+import { deliverCoreReportMail } from "./workflows/mail-reports";
 import { settleNegotiations, negotiationMarketDue } from "../negotiation/negotiation";
 import { repairNegotiationSquads } from "./workflows/negotiation-squad";
 import { expireStaffContracts } from "../story/people/staff-employment";
@@ -1049,6 +1050,7 @@ export function advanceTime(
     );
     // 새 날은 하루의 시작으로 연다 — 장면의 시각은 날짜를 넘을 수 없다
     state.clock = DAY_START;
+    deliverCoreReportMail(state);
     /**
      * 하루의 사실 — 이 날에 쌓인 사건과 소화된 훈련, 시계가 선 이유 (models.md §5-3).
      * 이 아래의 어느 `return`도 이 문을 지난다 — 멈춘 날이 기록에 없으면 멈춘 이유도 없다.

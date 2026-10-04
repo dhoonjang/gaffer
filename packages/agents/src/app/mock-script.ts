@@ -2,6 +2,7 @@ import { TACTIC_OPS } from "../match/tactic-orders";
 import { TRAINING_OPS } from "../story/training-orders";
 import { FINANCE_OPS } from "../common/finance-orders";
 import type { MatchEvent, ShootoutOutcome } from "@story-fm/domain";
+import { contractEndForYears } from "@story-fm/domain";
 import { eventCauseText, formatScore, shootoutTally } from "@story-fm/domain";
 import {
   addDays,
@@ -117,6 +118,62 @@ const SCRIPT: readonly ScriptLine[] = [
     },
   },
 
+  {
+    say: "테스트 재계약 조건 제안",
+    gm: ({ state }) => {
+      const n = state.negotiations.find(
+        (n) => n.kind === "renewal" && n.buyerId === managedTeamId(state) && n.status === "open",
+      );
+      if (!n) return [];
+      return [
+        {
+          tool: "update_negotiation",
+          input: {
+            negotiationId: n.id,
+            partyId: n.playerId,
+            action: {
+              kind: "send",
+              terms: {
+                scope: "player",
+                fee: 0,
+                installments: [],
+                weeklyWage: Math.floor((n.bounds.minWeeklyWage + n.bounds.maxWeeklyWage) / 2),
+                signingBonus: 0,
+                since: state.date,
+                until: contractEndForYears(state.date, 3),
+                promises: [],
+                expiresOn: addDays(state.date, 14),
+              },
+            },
+          },
+        },
+        {
+          tool: "request_negotiation_confirmation",
+          input: { negotiationId: n.id, stage: "agreement" },
+        },
+      ];
+    },
+  },
+  {
+    say: "테스트 재계약 최종 확인",
+    gm: ({ state }) => {
+      const n = state.negotiations.find(
+        (n) => n.kind === "renewal" && n.buyerId === managedTeamId(state) && n.status === "open",
+      );
+      return n
+        ? [
+            {
+              tool: "request_negotiation_confirmation",
+              input: { negotiationId: n.id, stage: "sign" },
+            },
+          ]
+        : [];
+    },
+  },
+  {
+    say: "테스트 메일 첨부 확인",
+    gm: () => [{ tool: "get_mail", input: {} }],
+  },
   {
     say: "훈련 잡아줘",
     ops: () => weekly(WEEKDAYS, "빌드업", ["passing", "vision"]),
