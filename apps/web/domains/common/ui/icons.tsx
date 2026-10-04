@@ -612,3 +612,25 @@ export function IconMail({ size = 15 }: IconProps) {
     </svg>
   );
 }
+
+export function IconCompose({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z" />
+    </svg>
+  );
+}
+export function IconPaperclip({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L12 3a7 7 0 0 1 10 10l-9 9" />
+    </svg>
+  );
+}
+export function IconReply({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="m9 5-6 6 6 6M3 11h10a7 7 0 0 1 7 7" />
+    </svg>
+  );
+}
