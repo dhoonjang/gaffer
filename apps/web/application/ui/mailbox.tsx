@@ -500,21 +500,6 @@ export function Mailbox({
               <h3>{thread.label}</h3>
               <span>주고받은 메일 {thread.messages.length}개</span>
             </div>
-            <button
-              disabled={disabled || pending}
-              data-testid="mail-compose"
-              title="메일 작성"
-              aria-label="메일 작성"
-              className="mail-icon-button"
-              onClick={() => {
-                setCompose(true);
-                setReplying(false);
-                replyThreadId.current = null;
-                setError(null);
-              }}
-            >
-              <IconCompose />
-            </button>
           </header>
           {thread.messages.map((message) => (
             <article

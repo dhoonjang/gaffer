@@ -92,6 +92,7 @@ test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 �
   const threadId = thread.id;
   expect(thread.messages).toHaveLength(1);
   expect(thread.messages[0]!.direction).toBe("outbound");
+  await page.getByRole("button", { name: "메일 목록", exact: true }).click();
   await page.getByTestId("mail-compose").click();
   await page.getByTestId("mail-recipient").fill(fixture.targetTeamId);
   await page.getByTestId("mail-subject").fill("문의 보충");
