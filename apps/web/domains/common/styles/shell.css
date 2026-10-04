@@ -1619,6 +1619,17 @@ textarea {
     color var(--ease),
     background var(--ease);
 }
+.rail .rail-panel {
+  width: auto;
+  display: flex;
+  gap: 5px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+.rail-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
 .rail button:hover {
   color: var(--text);
   background: var(--panel-2);
@@ -2232,16 +2243,16 @@ textarea {
  * ── 손잡이가 서는 폭 ───────────────────────────────────────
  *
  * 경계를 끌 수 있는 것은 **두 칸이 실제로 나란히 설 때**뿐이다. 그 아래에서는
- * 장부가 채팅을 덮거나(1200px 미만) 반반이 이미 최소 폭이라 나눌 경계가 없다.
+ * 장부가 채팅을 덮거나(1024px 미만) 반반이 이미 최소 폭이라 나눌 경계가 없다.
  * 갈리는 폭은 서랍(`--drawer`)과 같은 이유로 둘이다 — 경기 판은 `--bp-md`부터
- * 채팅 옆에 서고, 장부는 `--bp-lg`부터다.
+ * 채팅 옆에 서며 장부도 같은 `--bp-md`부터다.
  */
 @media (min-width: 1024px) {
   .stage-split.panel-split.with-board.open {
     --split-live: 1;
   }
 }
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .stage-split.panel-split.with-ledger.open {
     --split-live: 1;
   }
@@ -2297,14 +2308,14 @@ textarea {
  * 혼자 맡고, 몸통은 그 값을 묻는 한 블록이 갖는다.
  *
  * 갈리는 이유: 경기 무대는 `--bp-md`부터 반반이고(장부와 달리 덮지 않는다) 장부는
- * `--bp-lg`부터다. 그 아래에서는 얹을 채팅 칸이 애초에 옆에 없다.
+ * `--bp-md`부터다. 그 아래에서는 얹을 채팅 칸이 애초에 옆에 없다.
  */
 @media (min-width: 1024px) {
   .stage-split.panel-split.with-board.open.board-open {
     --drawer: 1;
   }
 }
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .stage-split.panel-split.with-ledger.open.board-open {
     --drawer: 1;
   }
@@ -2507,7 +2518,7 @@ textarea {
   }
 }
 /**
- * ── 1200px 미만의 장부 — **나누지 않고 덮는다** ─────────────
+ * ── 1024px 미만의 장부 — **나누지 않고 덮는다** ─────────────
  *
  * 나란히 두면 둘 다 못 읽는다: 채팅은 한 줄이 스무 자로 끊기고 명단 표(560px)는
  * 가로로 스크롤된다. 그렇다고 채팅을 지우면(예전 방식) 장부를 여는 순간 대화가
@@ -2516,7 +2527,7 @@ textarea {
  * 그래서 **같은 칸에 겹쳐 두고 오른쪽에서 밀어 넣는다.** 채팅은 그 아래 그대로
  * 남아 있고, 닫으면 있던 자리에서 다시 드러난다 — 스크롤도 쓰던 입력도 그대로다.
  */
-@media (max-width: 1199px) {
+@media (max-width: 1023px) {
   .stage-split.panel-split.with-ledger,
   .stage-split.panel-split.with-ledger.open {
     grid-template-columns: minmax(0, 1fr);

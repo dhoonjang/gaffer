@@ -19,6 +19,7 @@ import {
   summarise,
 } from "@story-fm/engine";
 import { createMiniGame } from "../helpers";
+import { observedPlayerFacts, observationMargin } from "../../src/common/players/observation";
 let base: GameState;
 beforeAll(() => {
   base = createMiniGame();
@@ -645,6 +646,8 @@ describe("agent center ledger and bounded search", () => {
         "teamName",
         "age",
         "positions",
+        "overall",
+        "attributes",
         "existingNegotiationId",
         "kind",
       ].sort(),
@@ -658,6 +661,62 @@ describe("agent center ledger and bounded search", () => {
     expect(found.players.find((p) => p.id === s.player.id)?.positions).toEqual([
       s.player.positions[0]!.position,
     ]);
+    const row = found.players.find((p) => p.id === s.player.id)!;
+    const observed = observedPlayerFacts(s.state, s.player);
+    expect(row.overall).toEqual({
+      value: observed.overall,
+      margin: observationMargin(s.state, s.player.id, "overall"),
+    });
+    for (const attr of row.attributes)
+      expect(attr).toEqual({
+        axis: attr.axis,
+        value: observed.attributes[attr.axis],
+        margin: observationMargin(s.state, s.player.id, attr.axis),
+      });
+    const attribute = row.attributes[0]!;
+    expect(
+      searchAgentCenterPlayers(s.state, {
+        name: s.player.id,
+        minOverall: row.overall.value,
+        attributes: [{ axis: attribute.axis, min: attribute.value }],
+      }).players,
+    ).toHaveLength(1);
+    expect(
+      searchAgentCenterPlayers(s.state, { name: s.player.id, minOverall: row.overall.value + 0.01 })
+        .players,
+    ).toHaveLength(0);
+    expect(
+      searchAgentCenterPlayers(s.state, {
+        name: s.player.id,
+        attributes: [{ axis: attribute.axis, min: attribute.value + 0.01 }],
+      }).players,
+    ).toHaveLength(0);
+    expect(row.attributes.map((a) => a.axis)).not.toContain("potential");
+    const secondAttribute = row.attributes[1]!;
+    expect(
+      searchAgentCenterPlayers(s.state, {
+        name: s.player.id,
+        attributes: [
+          { axis: attribute.axis, min: attribute.value },
+          { axis: secondAttribute.axis, min: secondAttribute.value + 0.01 },
+        ],
+      }).players,
+    ).toHaveLength(0);
+    expect(() => searchAgentCenterPlayers(s.state, { positions: ["INVALID"] })).toThrow(RangeError);
+    expect(() => searchAgentCenterPlayers(s.state, { minOverall: 101 })).toThrow(RangeError);
+    const union = searchAgentCenterPlayers(s.state, { positions: ["GK", "CF"], pageSize: 50 });
+    expect(
+      searchAgentCenterPlayers(s.state, { positions: ["GK", "CF"], page: 2, pageSize: 2 }).players,
+    ).toEqual(union.players.slice(2, 4));
+    expect(union.total).toBe(
+      searchAgentCenterPlayers(s.state, { position: "GK", pageSize: 50 }).total +
+        searchAgentCenterPlayers(s.state, { position: "CF", pageSize: 50 }).total -
+        searchAgentCenterPlayers(s.state, { position: "GK", pageSize: 50 }).players.filter((p) =>
+          s.state.players
+            .find((v) => v.id === p.id)!
+            .positions.some((slot) => slot.position === "CF"),
+        ).length,
+    );
     const supported = s.player.positions.find((p) => !p.isNatural);
     if (supported)
       expect(

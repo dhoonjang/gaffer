@@ -1,6 +1,10 @@
 "use client";
 import { NegotiationPanel } from "../../domains/negotiation/ui/negotiation-panel";
-import { PlayerCardProvider } from "../../domains/common/ui/player-card";
+import { PlayerNegotiationAction } from "./player-negotiation-action";
+import {
+  PlayerCardProvider,
+  type PlayerCardDefaultActions,
+} from "../../domains/common/ui/player-card";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -67,12 +71,12 @@ import {
  * 채팅과 같은 줄에 나란히 세우면 화면의 주인이 무엇인지가 흐려진다.
  */
 const PANELS = [
-  { key: "스쿼드", Icon: IconSquad },
-  { key: "달력", Icon: IconCalendar },
-  { key: "재정", Icon: IconFinance },
-  { key: "대회", Icon: IconTrophy },
-  { key: "커리어", Icon: IconCareer },
-  { key: "에이전트 센터", Icon: IconNegotiation },
+  { key: "스쿼드", label: "선수단", Icon: IconSquad },
+  { key: "달력", label: "일정", Icon: IconCalendar },
+  { key: "대회", label: "대회", Icon: IconTrophy },
+  { key: "에이전트 센터", label: "에이전트 센터", Icon: IconNegotiation },
+  { key: "재정", label: "재정", Icon: IconFinance },
+  { key: "커리어", label: "커리어", Icon: IconCareer },
 ] as const;
 type Panel = (typeof PANELS)[number]["key"];
 
@@ -802,6 +806,41 @@ export function GameScreen({ gameId }: { gameId: string }) {
     return at === undefined ? undefined : () => setTraceAt(at);
   };
 
+  const choosePlayerNegotiation = useCallback(
+    (id: string, next?: GamePayload) => {
+      if (next && (next.id !== gameId || (game && next.chat.length < game.chat.length))) return;
+      if (next) setGame(next);
+      if ((next ?? game)?.phase === "match") return;
+      setActiveNegotiationId(id);
+      setPanel(null);
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLTextAreaElement>(".negotiation-stage textarea")?.focus(),
+      );
+    },
+    [game, gameId],
+  );
+  const playerCardActions = useCallback<PlayerCardDefaultActions>(
+    (card, close) =>
+      game ? (
+        <PlayerNegotiationAction
+          key={card.id}
+          card={card}
+          game={game}
+          blocked={
+            busy ||
+            negotiationBusy ||
+            pendingMatch !== null ||
+            game.phase === "match" ||
+            game.views.career.dismissal !== null
+          }
+          onBusy={setNegotiationBusy}
+          onChoose={choosePlayerNegotiation}
+          onClose={close}
+        />
+      ) : null,
+    [game, busy, negotiationBusy, pendingMatch, choosePlayerNegotiation],
+  );
+
   if (error && !game)
     return (
       <main className="onboarding">
@@ -1074,8 +1113,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
     <PlayerCardProvider
       gameId={gameId}
       playerNames={game.playerNames}
-      stamp={`${game.date}/${game.chat.length}`}
+      stamp={`${game.date}/${game.chat.length}/${game.views.negotiation.cases.map((n) => `${n.id}:${n.revision}:${n.status}`).join(",")}`}
       inMatch={inMatch}
+      defaultActions={playerCardActions}
     >
       {/* `data-phase` — 화면에 단계를 적지 않는 대신 e2e가 읽는 자리. 감독에게는
           달력·채팅이 이미 말해 주므로 배지가 자리를 차지할 이유가 없었다 */}
@@ -1178,10 +1218,10 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 <IconChat />
               </button>
               <span className="rail-sep" />
-              {PANELS.map(({ key, Icon }) => (
+              {PANELS.map(({ key, label, Icon }) => (
                 <button
                   key={key}
-                  className={`${panel === key || (key === "에이전트 센터" && activeNegotiationId !== null) ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
+                  className={`rail-panel ${panel === key || (key === "에이전트 센터" && activeNegotiationId !== null) ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
                   disabled={
                     negotiationBusy ||
                     (key === "에이전트 센터" && (pendingMatch !== null || game.phase === "match"))
@@ -1191,10 +1231,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     setPanel(panel === key ? null : key);
                   }}
                   data-testid={`tab-${key}`}
-                  title={key}
-                  aria-label={key}
+                  title={label}
+                  aria-label={label}
                 >
                   <Icon />
+                  <span className="rail-label">{label}</span>
                   {key === "에이전트 센터" && game.views.negotiation.unread > 0 && (
                     <span
                       className="negotiation-unread"

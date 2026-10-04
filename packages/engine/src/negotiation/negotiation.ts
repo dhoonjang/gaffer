@@ -11,6 +11,7 @@ import {
   AgentCenterSearchSchema,
   ageOf,
   naturalPositionsOf,
+  ATTRIBUTE_AXES,
   type AgentCenterView,
   type AgentCenterSearchInput,
   type AgentCenterSearchResult,
@@ -30,6 +31,7 @@ import {
 import { norm, pickTeam } from "../common/core/team-ref";
 import { rankByName } from "../common/core/name-match";
 import { playerPoolOf, inPlayerPool } from "../common/players/player-pool";
+import { observedPlayerFacts, observationMargin } from "../common/players/observation";
 import { addDays } from "../common/core/dates";
 import { clearDepartedState, FREE_AGENT_TEAM } from "../common/players/free-agency";
 import { canRegisterFor } from "../common/players/registration";
@@ -694,7 +696,19 @@ export function searchAgentCenterPlayers(
   const teams = new Map(state.teams.map((team) => [team.id, teamNameIn(state, team.id)]));
   const financialClubs = new Set(state.finances.map((f) => f.teamId));
   const retired = new Set(state.retired.map((p) => p.gamePlayerId));
-  const pool = playerPoolOf(state, { ...(position ? { position } : {}) });
+  const positions = [...(query.positions ?? []), ...(position ? [position] : [])];
+  const pools = positions.length
+    ? positions.map((position) => playerPoolOf(state, { position }))
+    : [playerPoolOf(state, {})];
+  const observations = new Map<string, ReturnType<typeof observedPlayerFacts>>();
+  const factsFor = (p: GameState["players"][number]) => {
+    let facts = observations.get(p.id);
+    if (!facts) {
+      facts = observedPlayerFacts(state, p);
+      observations.set(p.id, facts);
+    }
+    return facts;
+  };
   const clubPick = club ? pickTeam(state, query.club ?? "") : null;
   const contracts = new Map(
     state.contracts
@@ -713,8 +727,16 @@ export function searchAgentCenterPlayers(
           (clubPick?.ok && p.teamId === clubPick.teamId) ||
           norm(teams.get(p.teamId) ?? "").includes(club) ||
           norm(p.teamId).includes(club)) &&
-        inPlayerPool(state, p, pool),
+        pools.some((pool) => inPlayerPool(state, p, pool)),
     )
+    .filter((p) => {
+      if (query.minOverall === undefined && !query.attributes?.length) return true;
+      const facts = factsFor(p);
+      return (
+        (query.minOverall === undefined || facts.overall >= query.minOverall) &&
+        (query.attributes ?? []).every(({ axis, min }) => facts.attributes[axis] >= min)
+      );
+    })
     .sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
     );
@@ -732,6 +754,15 @@ export function searchAgentCenterPlayers(
       teamName: teams.get(p.teamId) ?? p.teamId,
       age: ageOf(p.birthdate, state.date),
       positions: naturalPositionsOf(p).map((slot) => slot.position),
+      overall: {
+        value: factsFor(p).overall,
+        margin: observationMargin(state, p.id, "overall", factsFor(p).knowledge),
+      },
+      attributes: ATTRIBUTE_AXES.map((axis) => ({
+        axis,
+        value: factsFor(p).attributes[axis],
+        margin: observationMargin(state, p.id, axis, factsFor(p).knowledge),
+      })),
       kind: p.teamId === FREE_AGENT_TEAM ? "free" : "transfer",
       existingNegotiationId:
         state.negotiations.find(

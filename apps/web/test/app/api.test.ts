@@ -1237,11 +1237,27 @@ describe("협상 요청 경계", () => {
       "name=" + "a".repeat(101),
       "actor=world",
       "page=1&page=2",
+      "positions=GK,INVALID",
+      "minOverall=101",
+      "attributes=broken-json",
+      "attributes=" + encodeURIComponent(JSON.stringify([{ axis: "potential", min: 50 }])),
+      "attributes=" + encodeURIComponent(JSON.stringify([{ axis: "pace", min: -1 }])),
     ]) {
       expect((await GET(new Request(`http://test.local/?${query}`), params(id))).status).toBe(400);
     }
     const response = await GET(new Request("http://test.local/?page=1&pageSize=3"), params(id));
     expect(response.status).toBe(200);
+    expect(
+      (
+        await GET(
+          new Request(
+            "http://test.local/?positions=GK,CF&minOverall=0&attributes=" +
+              encodeURIComponent(JSON.stringify([{ axis: "pace", min: 0 }])),
+          ),
+          params(id),
+        )
+      ).status,
+    ).toBe(200);
     const body = (await response.json()) as {
       players: { id: string; kind: string }[];
       total: number;

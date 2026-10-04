@@ -24,7 +24,7 @@ export function useDialog(
     return () => {
       document.removeEventListener("keydown", key);
       document.body.style.overflow = overflow;
-      restore?.focus();
+      if (restore && !restore.closest("[hidden], [inert]")) restore.focus();
     };
   }, [ref, initial]);
   return (event: KeyboardEvent<HTMLDivElement>) => {

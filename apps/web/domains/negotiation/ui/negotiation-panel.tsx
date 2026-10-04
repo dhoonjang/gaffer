@@ -2,6 +2,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -103,14 +104,15 @@ export function NegotiationPanel({
     inputRef: RefObject<HTMLTextAreaElement | null>;
   }) => ReactNode;
 }) {
+  const centerId = useId();
+  const [centerTab, setCenterTab] = useState("negotiations");
+  const centerTabs = [
+    { id: "negotiations", label: "협상" },
+    { id: "search", label: "선수 찾기" },
+    { id: "contracts", label: "계약 만료" },
+    { id: "transfers", label: "이적 명단" },
+  ];
   const [menuOpen, setMenuOpen] = useState(false);
-  const mounted = useRef(false);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => {
@@ -191,14 +193,6 @@ export function NegotiationPanel({
         }
         if (action.kind !== "read") pendingRequests.delete(gameId);
         onGame(data.game);
-        if (
-          action.kind === "open" &&
-          mounted.current &&
-          data.negotiationId &&
-          data.game.views.negotiation.cases.some((candidate) => candidate.id === data.negotiationId)
-        )
-          onSelect(data.negotiationId);
-
         if (action.kind === "message") {
           setText("");
         }
@@ -217,7 +211,7 @@ export function NegotiationPanel({
         onBusy(false);
       }
     },
-    [blocked, pending, gameId, item, onBusy, onGame, onSelect],
+    [blocked, pending, gameId, item, onBusy, onGame],
   );
   useEffect(() => {
     if (!item || pending || blocked || item.messages.length <= item.lastReadMessage) return;
@@ -257,239 +251,277 @@ export function NegotiationPanel({
   const payments = view.payments.filter((payment) => payment.negotiationId === selected);
   return (
     <section className={`negotiation-workspace negotiation-${mode}`} aria-label="협상">
-      <aside className="negotiation-list">
-        <header className="negotiation-list-header">
-          <h2>
-            에이전트 센터 <small>{view.unread > 0 && view.unread}</small>
-          </h2>
-        </header>
-        {error && !item && (
-          <div role="alert" className="negotiation-notice">
-            {error}
-            <button onClick={() => setError(null)} aria-label="알림 닫기">
-              ×
-            </button>
-          </div>
-        )}
-        <section className="negotiation-overview-section">
-          <h3>
-            진행 중 <small>{view.cases.filter((n) => !archived(n)).length}</small>
-          </h3>
-          <div className="negotiation-cases">
-            {!view.cases.some((n) => !archived(n)) && (
-              <p className="negotiation-empty">
-                진행 중인 협상이 없습니다. 메인 대화에서 영입·매각·재계약을 지시하세요.
-              </p>
-            )}
-            {view.cases
-              .filter((n) => !archived(n))
-              .map((n) => (
-                <button
-                  key={n.id}
-                  className={selected === n.id ? "selected" : ""}
-                  onClick={() => {
-                    attemptedRead.current.delete(n.id);
-                    if (
-                      selected === n.id &&
-                      n.messages.length > n.lastReadMessage &&
-                      !pending &&
-                      !blocked
-                    ) {
-                      attemptedRead.current.set(n.id, n.messages.at(-1)?.id ?? "");
-                      void act({ kind: "read" }, n);
-                    }
-                    setSelected(n.id);
-                  }}
-                >
-                  <div className="negotiation-row-heading">
-                    <b>
-                      {n.playerName} ·{" "}
-                      {n.kind === "renewal"
-                        ? "재계약"
-                        : n.kind === "free"
-                          ? "자유계약"
-                          : n.sellerId === view.teamId
-                            ? "매각"
-                            : "영입"}
-                    </b>
-                    <time>{n.messages.at(-1)?.on ?? n.openedOn}</time>
-                    {n.messages.length > n.lastReadMessage && (
-                      <span className="negotiation-new" aria-label="새 소식">
-                        새 소식
-                      </span>
-                    )}
-                  </div>
-                  <span className="negotiation-next">
-                    {n.buyerId === view.teamId
-                      ? n.kind === "renewal" || n.kind === "free"
-                        ? "선수 측"
-                        : n.sellerName
-                      : n.buyerName}{" "}
-                    · {caseStatus(n, view.teamId, view.date)}
-                  </span>
-                </button>
-              ))}
-          </div>
-        </section>
-        <AgentCenterSearch
-          gameId={gameId}
-          refreshKey={JSON.stringify(
-            view.cases.map(({ id, status, revision }) => [id, status, revision]),
-          )}
-          disabled={disabled}
-          canInquire={view.teamId !== null}
-          onSelect={onSelect}
-          onInquiry={(player) =>
-            void act(
-              {
-                kind: "open",
-                negotiationKind: player.kind,
-                playerId: player.id,
-                buyerId: view.teamId ?? "",
-                background: `${player.name} ${player.kind === "free" ? "계약" : "이적"} 문의`,
-              },
-              undefined,
-            )
-          }
-        />
-        <section className="negotiation-overview-section">
-          <h3>
-            계약 만료 예정 <small>{expiringContracts.length}</small>
-          </h3>
-          {!expiringContracts.length && (
-            <p className="negotiation-empty">1년 안에 만료되는 계약이 없습니다.</p>
-          )}
-          {expiringContracts.map((contract) => {
-            const renewal = view.cases.find(
-              (n) => n.playerId === contract.playerId && n.kind === "renewal" && !archived(n),
-            );
-            return (
-              <div
-                className="negotiation-expiring"
-                data-testid="agent-expiring-contract"
-                key={contract.playerId}
-              >
-                <div>
-                  <PlayerName id={contract.playerId} name={contract.name} />
-                  <span>
-                    {contract.age}세 · {humanDate(contract.until, { year: true, weekday: false })}{" "}
-                    만료 · {contract.daysLeft}일 남음
-                  </span>
-                </div>
-                <div>
-                  <strong>{money(contract.weeklyWage)}/주</strong>
-                  <button
-                    disabled={disabled || (!renewal && !view.teamId)}
-                    onClick={() =>
-                      renewal
-                        ? setSelected(renewal.id)
-                        : void act(
-                            {
-                              kind: "open",
-                              negotiationKind: "renewal",
-                              playerId: contract.playerId,
-                              buyerId: view.teamId ?? "",
-                              background: `${contract.name} 재계약 문의`,
-                            },
-                            undefined,
-                          )
-                    }
-                  >
-                    {renewal ? "대화 이어가기" : "재계약 문의"}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </section>
-        <section className="negotiation-overview-section">
-          <h3>
-            매각 명단 <small>{view.transferList.length}</small>
-          </h3>
-          {!view.transferList.length && (
-            <p className="negotiation-empty">메인 대화에서 매각할 선수를 지정하세요.</p>
-          )}
-          {view.transferList.map((player) => (
-            <div
-              className="negotiation-expiring"
-              data-testid="agent-transfer-listing"
-              key={player.playerId}
-            >
-              <div>
-                <PlayerName id={player.playerId} name={player.name} />
-                <span>
-                  {player.age}세 · {player.positions.join(" · ")} ·{" "}
-                  {humanDate(player.listedOn, { weekday: false })} 등록
-                </span>
-                {player.note && <span>{player.note}</span>}
-              </div>
-              <div>
-                <strong>
-                  {player.askingPrice === undefined ? "가격 협의" : money(player.askingPrice)}
-                </strong>
-                {player.negotiationIds.map((id) => (
-                  <button key={id} disabled={disabled} onClick={() => onSelect(id)}>
-                    매각 대화
-                  </button>
-                ))}
-              </div>
+      {mode === "list" && (
+        <aside className="negotiation-list">
+          <header className="negotiation-list-header">
+            <h2>
+              에이전트 센터 <small>{view.unread > 0 && view.unread}</small>
+            </h2>
+          </header>
+          {error && !item && (
+            <div role="alert" className="negotiation-notice">
+              {error}
+              <button onClick={() => setError(null)} aria-label="알림 닫기">
+                ×
+              </button>
             </div>
-          ))}
-        </section>
-        <details className="negotiation-overview-section">
-          <summary>
-            종료된 협상 <small>{view.cases.filter(archived).length}</small>
-          </summary>
-          <div className="negotiation-cases">
-            {view.cases.filter(archived).map((n) => (
+          )}
+          <div className="agent-center-tabs" role="tablist" aria-label="에이전트 센터">
+            {centerTabs.map((tab, index) => (
               <button
-                key={n.id}
-                className={selected === n.id ? "selected" : ""}
-                onClick={() => {
-                  attemptedRead.current.delete(n.id);
-                  if (
-                    selected === n.id &&
-                    n.messages.length > n.lastReadMessage &&
-                    !pending &&
-                    !blocked
-                  ) {
-                    attemptedRead.current.set(n.id, n.messages.at(-1)?.id ?? "");
-                    void act({ kind: "read" }, n);
+                key={tab.id}
+                id={`${centerId}-tab-${tab.id}`}
+                data-testid={`agent-center-tab-${tab.id}`}
+                role="tab"
+                aria-selected={centerTab === tab.id}
+                aria-controls={`${centerId}-panel-${tab.id}`}
+                tabIndex={centerTab === tab.id ? 0 : -1}
+                onClick={() => setCenterTab(tab.id)}
+                onKeyDown={(event) => {
+                  const target =
+                    event.key === "ArrowRight"
+                      ? (index + 1) % centerTabs.length
+                      : event.key === "ArrowLeft"
+                        ? (index + centerTabs.length - 1) % centerTabs.length
+                        : event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? centerTabs.length - 1
+                            : null;
+                  if (target !== null) {
+                    event.preventDefault();
+                    setCenterTab(centerTabs[target]!.id);
+                    const tabs =
+                      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                        '[role="tab"]',
+                      );
+                    tabs?.item(target).focus();
                   }
-                  setSelected(n.id);
                 }}
               >
-                <div className="negotiation-row-heading">
-                  <b>
-                    {n.playerName} ·{" "}
-                    {n.kind === "renewal"
-                      ? "재계약"
-                      : n.kind === "free"
-                        ? "자유계약"
-                        : n.sellerId === view.teamId
-                          ? "매각"
-                          : "영입"}
-                  </b>
-                  <time>{n.messages.at(-1)?.on ?? n.openedOn}</time>
-                  {n.messages.length > n.lastReadMessage && (
-                    <span className="negotiation-new" aria-label="새 소식">
-                      새 소식
-                    </span>
-                  )}
-                </div>
-                <span className="negotiation-next">
-                  {n.buyerId === view.teamId
-                    ? n.kind === "renewal" || n.kind === "free"
-                      ? "선수 측"
-                      : n.sellerName
-                    : n.buyerName}{" "}
-                  · {caseStatus(n, view.teamId, view.date)}
-                </span>
+                {tab.label}
               </button>
             ))}
           </div>
-        </details>
-      </aside>
+          <div
+            role="tabpanel"
+            id={`${centerId}-panel-negotiations`}
+            aria-labelledby={`${centerId}-tab-negotiations`}
+            hidden={centerTab !== "negotiations"}
+          >
+            <section className="negotiation-overview-section">
+              <h3>
+                진행 중 <small>{view.cases.filter((n) => !archived(n)).length}</small>
+              </h3>
+              <div className="negotiation-cases">
+                {!view.cases.some((n) => !archived(n)) && (
+                  <p className="negotiation-empty">
+                    진행 중인 협상이 없습니다. 메인 대화에서 영입·매각·재계약을 지시하세요.
+                  </p>
+                )}
+                {view.cases
+                  .filter((n) => !archived(n))
+                  .map((n) => (
+                    <button
+                      key={n.id}
+                      className={selected === n.id ? "selected" : ""}
+                      onClick={() => {
+                        attemptedRead.current.delete(n.id);
+                        if (
+                          selected === n.id &&
+                          n.messages.length > n.lastReadMessage &&
+                          !pending &&
+                          !blocked
+                        ) {
+                          attemptedRead.current.set(n.id, n.messages.at(-1)?.id ?? "");
+                          void act({ kind: "read" }, n);
+                        }
+                        setSelected(n.id);
+                      }}
+                    >
+                      <div className="negotiation-row-heading">
+                        <b>
+                          {n.playerName} ·{" "}
+                          {n.kind === "renewal"
+                            ? "재계약"
+                            : n.kind === "free"
+                              ? "자유계약"
+                              : n.sellerId === view.teamId
+                                ? "매각"
+                                : "영입"}
+                        </b>
+                        <time>{n.messages.at(-1)?.on ?? n.openedOn}</time>
+                        {n.messages.length > n.lastReadMessage && (
+                          <span className="negotiation-new" aria-label="새 소식">
+                            새 소식
+                          </span>
+                        )}
+                      </div>
+                      <span className="negotiation-next">
+                        {n.buyerId === view.teamId
+                          ? n.kind === "renewal" || n.kind === "free"
+                            ? "선수 측"
+                            : n.sellerName
+                          : n.buyerName}{" "}
+                        · {caseStatus(n, view.teamId, view.date)}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </section>
+            <details className="negotiation-overview-section">
+              <summary>
+                종료된 협상 <small>{view.cases.filter(archived).length}</small>
+              </summary>
+              <div className="negotiation-cases">
+                {view.cases.filter(archived).map((n) => (
+                  <button
+                    key={n.id}
+                    className={selected === n.id ? "selected" : ""}
+                    onClick={() => {
+                      attemptedRead.current.delete(n.id);
+                      if (
+                        selected === n.id &&
+                        n.messages.length > n.lastReadMessage &&
+                        !pending &&
+                        !blocked
+                      ) {
+                        attemptedRead.current.set(n.id, n.messages.at(-1)?.id ?? "");
+                        void act({ kind: "read" }, n);
+                      }
+                      setSelected(n.id);
+                    }}
+                  >
+                    <div className="negotiation-row-heading">
+                      <b>
+                        {n.playerName} ·{" "}
+                        {n.kind === "renewal"
+                          ? "재계약"
+                          : n.kind === "free"
+                            ? "자유계약"
+                            : n.sellerId === view.teamId
+                              ? "매각"
+                              : "영입"}
+                      </b>
+                      <time>{n.messages.at(-1)?.on ?? n.openedOn}</time>
+                      {n.messages.length > n.lastReadMessage && (
+                        <span className="negotiation-new" aria-label="새 소식">
+                          새 소식
+                        </span>
+                      )}
+                    </div>
+                    <span className="negotiation-next">
+                      {n.buyerId === view.teamId
+                        ? n.kind === "renewal" || n.kind === "free"
+                          ? "선수 측"
+                          : n.sellerName
+                        : n.buyerName}{" "}
+                      · {caseStatus(n, view.teamId, view.date)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </details>
+          </div>
+          <div
+            role="tabpanel"
+            id={`${centerId}-panel-search`}
+            aria-labelledby={`${centerId}-tab-search`}
+            hidden={centerTab !== "search"}
+          >
+            <AgentCenterSearch
+              gameId={gameId}
+              refreshKey={JSON.stringify(
+                view.cases.map(({ id, status, revision }) => [id, status, revision]),
+              )}
+              disabled={disabled}
+              active={centerTab === "search"}
+            />
+          </div>
+          <div
+            role="tabpanel"
+            id={`${centerId}-panel-contracts`}
+            aria-labelledby={`${centerId}-tab-contracts`}
+            hidden={centerTab !== "contracts"}
+          >
+            <section className="negotiation-overview-section">
+              <h3>
+                계약 만료 예정 <small>{expiringContracts.length}</small>
+              </h3>
+              {!expiringContracts.length && (
+                <p className="negotiation-empty">1년 안에 만료되는 계약이 없습니다.</p>
+              )}
+              <div className="agent-table-scroll">
+                <table className="agent-player-table">
+                  <thead>
+                    <tr>
+                      <th>선수</th>
+                      <th>나이</th>
+                      <th>만료일</th>
+                      <th>남은 기간</th>
+                      <th>주급</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expiringContracts.map((contract) => (
+                      <tr data-testid="agent-expiring-contract" key={contract.playerId}>
+                        <td>
+                          <PlayerName id={contract.playerId} name={contract.name} />
+                        </td>
+                        <td>{contract.age}</td>
+                        <td>{humanDate(contract.until, { year: true, weekday: false })}</td>
+                        <td>{contract.daysLeft}일</td>
+                        <td>{money(contract.weeklyWage)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+          <div
+            role="tabpanel"
+            id={`${centerId}-panel-transfers`}
+            aria-labelledby={`${centerId}-tab-transfers`}
+            hidden={centerTab !== "transfers"}
+          >
+            <section className="negotiation-overview-section">
+              <h3>
+                매각 명단 <small>{view.transferList.length}</small>
+              </h3>
+              {!view.transferList.length && (
+                <p className="negotiation-empty">메인 대화에서 매각할 선수를 지정하세요.</p>
+              )}
+              {view.transferList.map((player) => (
+                <div
+                  className="negotiation-expiring"
+                  data-testid="agent-transfer-listing"
+                  key={player.playerId}
+                >
+                  <div>
+                    <PlayerName id={player.playerId} name={player.name} />
+                    <span>
+                      {player.age}세 · {player.positions.join(" · ")} ·{" "}
+                      {humanDate(player.listedOn, { weekday: false })} 등록
+                    </span>
+                    {player.note && <span>{player.note}</span>}
+                  </div>
+                  <div>
+                    <strong>
+                      {player.askingPrice === undefined ? "가격 협의" : money(player.askingPrice)}
+                    </strong>
+                    {player.negotiationIds.map((id) => (
+                      <button key={id} disabled={disabled} onClick={() => onSelect(id)}>
+                        매각 대화
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+          </div>
+        </aside>
+      )}
       <article className="negotiation-detail">
         {error && item && (
           <div role="alert" className="negotiation-notice">

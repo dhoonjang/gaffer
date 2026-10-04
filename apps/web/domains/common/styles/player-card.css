@@ -287,3 +287,17 @@
     height: 40px;
   }
 }
+
+.pc-negotiation-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pc-negotiation-action button {
+  background: var(--accent);
+  color: var(--bg);
+}
+.pc-negotiation-action .error-text {
+  font-size: var(--fs-xs);
+}

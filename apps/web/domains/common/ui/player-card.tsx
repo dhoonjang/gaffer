@@ -45,6 +45,7 @@ import {
 
 /** 지금 화면이 이 선수에게 걸 수 있는 조작 — 없으면 `null` */
 export type PlayerCardActions = (playerId: string) => ReactNode;
+export type PlayerCardDefaultActions = (card: PlayerCardView, close: () => void) => ReactNode;
 
 interface PlayerCardHandle {
   open: (playerId: string) => void;
@@ -87,6 +88,7 @@ export function PlayerCardProvider({
   stamp,
   inMatch,
   children,
+  defaultActions,
 }: {
   gameId: string;
   /** 서버가 고른 사전 — 우리 선수단과 이야기가 부른 선수 (`namesForChat`) */
@@ -95,11 +97,13 @@ export function PlayerCardProvider({
   /** 경기가 굴러가는 중인가 — 심경 한 줄은 지난 경기까지의 것이라 그동안 서지 않는다 */
   inMatch: boolean;
   children: ReactNode;
+  defaultActions?: PlayerCardDefaultActions;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [actions, setActionsState] = useState<PlayerCardActions | null>(null);
   const names = useMemo(() => buildPlayerNameIndex(playerNames), [playerNames]);
   const open = useCallback((playerId: string) => setOpenId(playerId), []);
+  const close = useCallback(() => setOpenId(null), []);
   const setActions = useCallback(
     (next: PlayerCardActions | null) => setActionsState(() => next),
     [],
@@ -113,12 +117,14 @@ export function PlayerCardProvider({
       {children}
       {openId !== null && (
         <PlayerCardOverlay
+          key={`${gameId}/${openId}`}
           gameId={gameId}
           playerId={openId}
           stamp={stamp}
           inMatch={inMatch}
           actions={actions?.(openId) ?? null}
-          onClose={() => setOpenId(null)}
+          defaultActions={defaultActions}
+          onClose={close}
         />
       )}
     </PlayerCardContext.Provider>
@@ -215,6 +221,7 @@ function PlayerCardOverlay({
   stamp,
   inMatch,
   actions,
+  defaultActions,
   onClose,
 }: {
   gameId: string;
@@ -223,6 +230,7 @@ function PlayerCardOverlay({
   inMatch: boolean;
   /** 지금 화면이 맡긴 이 선수의 조작 — 닫기 왼쪽에 선다 */
   actions: ReactNode;
+  defaultActions?: PlayerCardDefaultActions;
   onClose: () => void;
 }) {
   const [card, setCard] = useState<PlayerCardView | null>(() =>
@@ -283,6 +291,7 @@ function PlayerCardOverlay({
         )}
         <div className="pc-actions">
           {actions && <span className="pc-side">{actions}</span>}
+          {card && defaultActions?.(card, onClose)}
           <button
             className="pc-close"
             type="button"

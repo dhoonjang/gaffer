@@ -1,5 +1,6 @@
 import { writeOffPlayerContract } from "../finance/transfer-accounting";
-import type { Contract, GamePlayer } from "@story-fm/domain";
+import { FREE_AGENT_TEAM, type Contract, type GamePlayer } from "@story-fm/domain";
+export { FREE_AGENT_TEAM } from "@story-fm/domain";
 import { activeContract, type GameState, releaseFromTactics } from "../core/state";
 import { forgetRoles } from "./role-memory";
 
@@ -8,9 +9,6 @@ import { forgetRoles } from "./role-memory";
  * 따른다 (→ docs/common/season.md §6). 무소속 선수를 데려가는 길은 없고, 그는 은퇴할
  * 때까지 세계에 남는다.
  */
-
-/** 무소속 — 클럽이 아니라 클럽이 없는 상태 (team-catalog `freeagents`) */
-export const FREE_AGENT_TEAM = "freeagents";
 
 export function isFreeAgent(player: GamePlayer): boolean {
   return player.teamId === FREE_AGENT_TEAM;

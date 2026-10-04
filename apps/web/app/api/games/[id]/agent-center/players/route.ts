@@ -13,7 +13,19 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   for (const [key, value] of params) {
     if (key in input)
       return NextResponse.json({ error: "검색 조건을 중복 지정할 수 없습니다" }, { status: 400 });
-    input[key] = key === "page" || key === "pageSize" ? Number(value) : value;
+    if (key === "attributes") {
+      try {
+        input[key] = JSON.parse(value);
+      } catch {
+        return NextResponse.json(
+          { error: "능력치 검색 조건이 올바르지 않습니다" },
+          { status: 400 },
+        );
+      }
+    } else if (key === "positions") input[key] = value ? value.split(",") : [];
+    else
+      input[key] =
+        key === "page" || key === "pageSize" || key === "minOverall" ? Number(value) : value;
   }
   const parsed = AgentCenterSearchSchema.safeParse(input);
   if (!parsed.success)

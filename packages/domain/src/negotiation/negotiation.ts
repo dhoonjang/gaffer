@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateString } from "../common/date-string";
 import { InjurySchema } from "../common/health";
+import { ATTRIBUTE_AXES, POSITION_CODES, type AttributeAxis } from "../common/player";
 
 const Id = z.string().trim().min(1).max(160);
 export const NegotiationStartedPayloadSchema = z
@@ -222,6 +223,21 @@ export const AgentCenterSearchSchema = z
     name: z.string().trim().max(100).optional(),
     club: z.string().trim().max(100).optional(),
     position: z.string().trim().max(20).optional(),
+    positions: z
+      .array(
+        z
+          .string()
+          .trim()
+          .toUpperCase()
+          .refine((p) => POSITION_CODES.includes(p)),
+      )
+      .max(POSITION_CODES.length)
+      .optional(),
+    minOverall: z.number().min(0).max(100).optional(),
+    attributes: z
+      .array(z.object({ axis: z.enum(ATTRIBUTE_AXES), min: z.number().min(0).max(100) }).strict())
+      .max(ATTRIBUTE_AXES.length)
+      .optional(),
     page: z.number().int().min(1).max(1_000_000).default(1),
     pageSize: z.number().int().min(1).max(50).default(20),
   })
@@ -234,6 +250,8 @@ export interface AgentCenterPlayer {
   teamName: string;
   age: number;
   positions: string[];
+  overall: { value: number; margin: number };
+  attributes: { axis: AttributeAxis; value: number; margin: number }[];
   existingNegotiationId: string | null;
   kind: "transfer" | "free";
 }

@@ -90,8 +90,9 @@ export function IconChat({ size = 18 }: IconProps) {
 export function IconNegotiation({ size = 18 }: IconProps) {
   return (
     <svg {...base(size)}>
-      <path d="M3 4h13v9H9l-4 3v-3H3z" />
-      <path d="M18 8h3v11h-3v3l-4-3h-4v-3" />
+      <circle cx="12" cy="7" r="3" />
+      <path d="M7 18v-2a5 5 0 0 1 10 0v2" />
+      <path d="M3 11h4m-2-2 2 2-2 2M21 20h-4m2-2-2 2 2 2" />
     </svg>
   );
 }

@@ -70,13 +70,14 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   const draft = "협상 뒤 훈련 계획을 계속 논의하자";
   await mainInput.fill(draft);
   await page.getByTestId("tab-에이전트 센터").click();
-  await page.getByTestId("agent-search-toggle").click();
+  await page.getByTestId("agent-center-tab-search").click();
   await page.getByTestId("agent-search-name").fill(fixture.targetName);
   // The row itself owns the player id, so duplicate names never choose a different player.
   const targetRow = page.locator(
     `[data-testid="agent-search-result"][data-player-id="${fixture.targetId}"]`,
   );
-  await targetRow.getByTestId("agent-search-inquiry").click();
+  await targetRow.locator(".player-name").click();
+  await page.getByTestId("player-card-negotiation").click();
   const stage = page.locator(".negotiation-stage");
   const input = stage.getByTestId("negotiation-input");
   await expect(input).toBeVisible();
@@ -95,9 +96,11 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   await expect(mainInput).toHaveValue(draft);
 
   await page.getByTestId("tab-에이전트 센터").click();
-  await page.getByTestId("agent-search-toggle").click();
+  await page.getByTestId("agent-center-tab-search").click();
   await page.getByTestId("agent-search-name").fill(fixture.targetName);
-  await targetRow.getByRole("button", { name: "대화 이어가기", exact: true }).click();
+  await targetRow.locator(".player-name").click();
+  await expect(page.getByTestId("player-card-negotiation")).toHaveText("대화 이어가기");
+  await page.getByTestId("player-card-negotiation").click();
   await expect(input).toBeVisible();
   const reopened = (await readNegotiations()).cases.filter((n) => n.playerId === fixture.targetId);
   expect(reopened).toHaveLength(1);
@@ -109,8 +112,20 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   await expect(page.getByTestId("tool-set_transfer_list")).toBeVisible();
   await expect(mainInput).toBeEnabled();
   await page.getByTestId("tab-에이전트 센터").click();
+  await page.getByTestId("agent-center-tab-transfers").click();
   await expect(page.getByTestId("agent-transfer-listing")).toContainText(fixture.ownName);
   await expect(page.getByTestId("agent-transfer-listing")).toContainText("10,000,000");
+  await page.getByTestId("agent-center-tab-contracts").click();
+  const expiring = page.getByTestId("agent-expiring-contract").filter({ hasText: fixture.ownName });
+  await expiring.locator(".player-name").click();
+  await page.getByTestId("player-card-negotiation").click();
+  await expect(input).toBeVisible();
+  const renewalFromCard = (await readNegotiations()).cases.find(
+    (n) => n.playerId === fixture.ownId,
+  )!;
+  expect(renewalFromCard.kind).toBe("renewal");
+  expect(renewalFromCard.proposals).toHaveLength(0);
+  await stage.getByRole("button", { name: "메인 대화로", exact: true }).click();
   await page.getByTestId("tab-채팅").click();
   await mainInput.fill("테스트 재계약 협상");
   await page.getByTestId("chat-send").click();
@@ -119,6 +134,7 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   await stage.getByRole("button", { name: "전송", exact: true }).click();
   await stage.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
   const ready = (await readNegotiations()).cases.find((n) => n.playerId === fixture.ownId)!;
+  expect(ready.id).toBe(renewalFromCard.id);
   expect(ready.signed).toBeNull();
   await stage.getByRole("button", { name: "최종 서명", exact: true }).click();
   await expect(stage).toContainText("등록 완료");

@@ -8,6 +8,13 @@
  * 실제로 그랬다. 여기서는 한 열로 쌓고 스크롤을 페이지에 돌려준다.
  */
 @media (max-width: 1023px) {
+  .app:not(.in-match) .topbar {
+    flex-wrap: wrap;
+  }
+  .rail:not(.match-rail) {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
   .squad-view,
   .squad-layout {
     display: block;
@@ -195,6 +202,20 @@
   .topbar {
     gap: 8px;
     padding: 0 10px;
+  }
+  .rail .rail-panel {
+    flex: 1;
+    min-width: 0;
+    height: auto;
+    min-height: 40px;
+    padding: 4px;
+    flex-direction: column;
+    gap: 2px;
+    white-space: normal;
+  }
+  .rail-label {
+    font-size: 11px;
+    line-height: 1.2;
   }
   .topbar .brand {
     font-size: var(--fs-base);
