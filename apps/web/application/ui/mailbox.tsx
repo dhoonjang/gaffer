@@ -406,9 +406,6 @@ export function Mailbox({
           )}
         </div>
       </label>
-      {(!recipient || recipient.kind === "agent") && (
-        <p className="mail-recipient-hint">선수에게 보내는 메일은 담당 에이전트에게 전달됩니다.</p>
-      )}
       <label className="mail-field">
         <span>제목</span>
         <input

@@ -443,17 +443,13 @@
   font-weight: 500;
 }
 .mail-recipient-results small,
-.mail-recipient-results p,
-.mail-recipient-hint {
+.mail-recipient-results p {
   color: var(--text-3);
   font-size: 12px;
   line-height: 1.6;
 }
 .mail-recipient-results p {
   margin: 8px;
-}
-.mail-recipient-hint {
-  margin: 8px 0;
 }
 .mail-thread > .mail-compose {
   margin-top: 24px;
