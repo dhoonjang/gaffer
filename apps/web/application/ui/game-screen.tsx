@@ -19,6 +19,7 @@ import { mergeSlice } from "@/application/lib/game-slice";
 import { reducedMotion } from "@/domains/common/lib/motion";
 import type { AttentionItemView, ChatTurn } from "@story-fm/engine";
 import type { TurnOperation } from "@story-fm/agents";
+import { ChatTurnFeedback, ChatTurnError } from "./chat-feedback";
 import { ChatTurnView, turnStamp } from "./chat";
 import { chatForActiveMatch } from "@/domains/match/lib/match-chat";
 import { buildTraceIndex } from "@/domains/common/lib/turn-trace-index";
@@ -56,7 +57,6 @@ import {
   IconMark,
   IconSquad,
   IconTrophy,
-  IconClose,
 } from "../../domains/common/ui/icons";
 
 /**
@@ -216,6 +216,10 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const [entering, setEntering] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeNegotiationId, setActiveNegotiationId] = useState<string | null>(null);
+  const chooseNegotiation = useCallback((id: string | null) => {
+    setActiveNegotiationId(id);
+    if (!window.matchMedia("(min-width: 1024px)").matches) setPanel(null);
+  }, []);
   const storyScrollStamp = useRef("");
   const [negotiationBusy, setNegotiationBusy] = useState(false);
   const liveMatch =
@@ -521,8 +525,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
           payload.phase,
         );
         if (target) {
-          setActiveNegotiationId(target);
-          setPanel(null);
+          chooseNegotiation(target);
         }
       };
       setBusy(true);
@@ -748,6 +751,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
       input,
       busy,
       negotiationBusy,
+      chooseNegotiation,
       game,
       liveMatch?.matchId,
       liveMatch?.live,
@@ -811,13 +815,12 @@ export function GameScreen({ gameId }: { gameId: string }) {
       if (next && (next.id !== gameId || (game && next.chat.length < game.chat.length))) return;
       if (next) setGame(next);
       if ((next ?? game)?.phase === "match") return;
-      setActiveNegotiationId(id);
-      setPanel(null);
+      chooseNegotiation(id);
       requestAnimationFrame(() =>
         document.querySelector<HTMLTextAreaElement>(".negotiation-stage textarea")?.focus(),
       );
     },
-    [game, gameId],
+    [game, gameId, chooseNegotiation],
   );
   const playerCardActions = useCallback<PlayerCardDefaultActions>(
     (card, close) =>
@@ -962,6 +965,17 @@ export function GameScreen({ gameId }: { gameId: string }) {
           const render = (turn: ChatTurn, i: number) => {
             // 감독의 발화를 눌러도 열리는 것은 **그 발화가 실려 나간 호출**이다 —
             // 인덱스를 아는 이 자리가 그것을 해석한다 (`buildTraceIndex`)
+            if (turn.role === "user")
+              return (
+                <ChatTurnFeedback
+                  key={i}
+                  userTurn={turn}
+                  thinking={false}
+                  date={game.date}
+                  playerNames={game.playerNames}
+                  onLongPress={traceOpener(turn)}
+                />
+              );
             if (turn.role !== "model")
               return (
                 <ChatTurnView
@@ -1033,40 +1047,22 @@ export function GameScreen({ gameId }: { gameId: string }) {
             prevStamp={lastStamp}
           />
         )}
-        {/* 기다리는 중 — **말로 적지 않는다.** "세계가 반응하는 중…"은 매 턴 같은
-            문장이 대화 사이에 끼어 실제 대사인 척했다. 점 세 개면 충분하다 */}
-        {busy && !streamText && (
-          <div className="thinking" role="status" aria-label="응답을 기다리는 중">
-            <i />
-            <i />
-            <i />
-          </div>
-        )}
+        <ChatTurnFeedback
+          thinking={busy && !streamText}
+          date={game.date}
+          playerNames={game.playerNames}
+        />
       </div>
-      {/* 턴 실패 알림 — **게임 밖의 사건**이라 대화 흐름이 아니라 별도 띠로
-              보여준다. 세계의 화자는 이 일을 알지 못한다 (turn-runner.ts) */}
-      {error && (
-        <div className="turn-error" data-testid="turn-error" title={errorDetail ?? undefined}>
-          <span>{error}</span>
-          <div className="turn-error-actions">
-            {errorRetry && (
-              <button onClick={() => send()} disabled={busy || !input.trim()}>
-                다시 시도
-              </button>
-            )}
-            <button
-              className="ghost"
-              onClick={() => {
-                setError(null);
-                setErrorDetail(null);
-              }}
-              aria-label="알림 닫기"
-            >
-              <IconClose size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+      <ChatTurnError
+        error={error}
+        detail={errorDetail}
+        onRetry={errorRetry ? () => void send() : undefined}
+        disabled={busy || !input.trim()}
+        onDismiss={() => {
+          setError(null);
+          setErrorDetail(null);
+        }}
+      />
       {/**
        * 시계가 멎었다 — **오류가 아니라 사실이다.** 모델의 첫 줄 헤더가 연달아
        * 읽히지 않으면 세계는 오늘에 머무는데, 그건 화면 어디에도 보이지 않고
@@ -1205,15 +1201,15 @@ export function GameScreen({ gameId }: { gameId: string }) {
           {liveMatch === null && (
             <nav className="rail" aria-label="화면 이동">
               <button
-                className={panel === null && activeNegotiationId === null ? "active" : ""}
+                className={panel === null ? "active" : ""}
                 disabled={negotiationBusy}
                 onClick={() => {
-                  setActiveNegotiationId(null);
                   setPanel(null);
                 }}
                 data-testid="tab-채팅"
                 title="채팅"
                 aria-label="채팅"
+                aria-pressed={panel === null}
               >
                 <IconChat />
               </button>
@@ -1221,7 +1217,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
               {PANELS.map(({ key, label, Icon }) => (
                 <button
                   key={key}
-                  className={`rail-panel ${panel === key || (key === "에이전트 센터" && activeNegotiationId !== null) ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
+                  className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
                   disabled={
                     negotiationBusy ||
                     (key === "에이전트 센터" && (pendingMatch !== null || game.phase === "match"))
@@ -1233,9 +1229,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
                   data-testid={`tab-${key}`}
                   title={label}
                   aria-label={label}
+                  aria-pressed={panel === key}
                 >
                   <Icon />
-                  <span className="rail-label">{label}</span>
                   {key === "에이전트 센터" && game.views.negotiation.unread > 0 && (
                     <span
                       className="negotiation-unread"
@@ -1352,9 +1348,24 @@ export function GameScreen({ gameId }: { gameId: string }) {
                       return node;
                     });
                   }}
+                  renderPending={({ text, thinking }) => (
+                    <ChatTurnFeedback
+                      text={text}
+                      thinking={thinking}
+                      date={game.date}
+                      playerNames={game.playerNames}
+                    />
+                  )}
+                  renderError={({ error, onRetry, onDismiss, busy: pending }) => (
+                    <ChatTurnError
+                      error={error}
+                      onRetry={onRetry}
+                      onDismiss={onDismiss}
+                      disabled={pending}
+                    />
+                  )}
                   onMainChat={() => {
-                    setActiveNegotiationId(null);
-                    setPanel(null);
+                    chooseNegotiation(null);
                   }}
                   renderComposer={({
                     text,
@@ -1389,8 +1400,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     );
                   }}
                   onSelect={(id) => {
-                    setActiveNegotiationId(id);
-                    if (id === null) setPanel("에이전트 센터");
+                    chooseNegotiation(id);
                   }}
                 />
               </section>
@@ -1511,8 +1521,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                       <NegotiationPanel
                         mode="list"
                         onSelect={(id) => {
-                          setActiveNegotiationId(id);
-                          setPanel(null);
+                          chooseNegotiation(id);
                         }}
                         gameId={gameId}
                         view={game.views.negotiation}

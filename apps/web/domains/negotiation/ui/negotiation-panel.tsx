@@ -15,11 +15,11 @@ import {
   currentProposal,
   contractEndForYears,
   proposalAgreed,
-  type NegotiationAction,
   type NegotiationChannel,
   type NegotiationView,
   type ProposalTerms,
 } from "@story-fm/domain";
+import { useNegotiationRequest } from "./use-negotiation-request";
 import { AgentCenterSearch } from "./agent-center-search";
 import { humanDate } from "@/domains/common/lib/dateline";
 import { PlayerName } from "@/domains/common/ui/player-card";
@@ -68,7 +68,6 @@ function caseStatus(item: Case, teamId: string | null, date: string): string {
     return "구단 조건 합의";
   return item.proposals.length > 0 ? "조건 논의 중" : "협상 중";
 }
-const pendingRequests = new Map<string, { key: string; requestId: string }>();
 
 export function NegotiationPanel({
   gameId,
@@ -81,6 +80,8 @@ export function NegotiationPanel({
   onSelect,
   renderMessages,
   renderComposer,
+  renderPending,
+  renderError,
   expiringContracts = [],
   onMainChat,
 }: {
@@ -95,6 +96,13 @@ export function NegotiationPanel({
   expiringContracts?: OfficeViews["finance"]["expiringContracts"];
   onMainChat?: () => void;
   renderMessages?: (messages: NegotiationView["cases"][number]["messages"]) => ReactNode;
+  renderPending?: (props: { text: string | null; thinking: boolean }) => ReactNode;
+  renderError?: (props: {
+    error: string | null;
+    onRetry?: () => void;
+    onDismiss: () => void;
+    busy: boolean;
+  }) => ReactNode;
   renderComposer?: (props: {
     text: string;
     channel: NegotiationChannel;
@@ -140,86 +148,16 @@ export function NegotiationPanel({
   }, [menuOpen, closeMenu]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const attemptedRead = useRef(new Map<string, string>());
   const selected = mode === "detail" ? selectedId : null;
   const setSelected = onSelect;
   const [channel, setChannel] = useState<NegotiationChannel>("club");
-  const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const item = view.cases.find((n) => n.id === selected);
+  const { text, setText, error, pending, optimisticText, thinking, dismiss, retry, act } =
+    useNegotiationRequest({ gameId, item, channel, blocked, onGame, onBusy });
   useEffect(() => {
     setMenuOpen(false);
-    setText("");
     setChannel(item?.kind === "transfer" ? "club" : "player");
   }, [selected, item?.kind]);
-  const act = useCallback(
-    async (action: NegotiationAction, target: Case | undefined = item) => {
-      if (blocked || pending) return false;
-      setPending(true);
-      onBusy(true);
-      if (action.kind !== "read") setError(null);
-      try {
-        const response = await fetch(`/api/games/${gameId}/negotiation`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requestId: (() => {
-              if (action.kind === "read") return crypto.randomUUID();
-              const key = JSON.stringify({ action, id: target?.id, revision: target?.revision });
-              const prior = pendingRequests.get(gameId);
-              if (prior?.key === key) return prior.requestId;
-              const requestId = crypto.randomUUID();
-              pendingRequests.set(gameId, { key, requestId });
-              return requestId;
-            })(),
-            negotiationId: target?.id ?? null,
-            revision: target?.revision ?? 0,
-            action,
-          }),
-        });
-        const data = (await response.json()) as {
-          game?: GamePayload;
-          negotiationId?: string;
-          warning?: string;
-          error?: string;
-        };
-        if (!response.ok || !data.game) {
-          if (response.status === 409) {
-            const refresh = await fetch(`/api/games/${gameId}`);
-            if (refresh.ok) onGame((await refresh.json()) as GamePayload);
-          }
-          throw new Error(data.error ?? "요청을 처리하지 못했습니다");
-        }
-        if (action.kind !== "read") pendingRequests.delete(gameId);
-        onGame(data.game);
-        if (action.kind === "message") {
-          setText("");
-        }
-        if (action.kind !== "read") setError(data.warning ?? null);
-        return true;
-      } catch (cause) {
-        if (action.kind !== "read")
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "응답을 확인하지 못했습니다. 협상을 다시 열어 저장 여부를 확인하세요.",
-          );
-        return false;
-      } finally {
-        setPending(false);
-        onBusy(false);
-      }
-    },
-    [blocked, pending, gameId, item, onBusy, onGame],
-  );
-  useEffect(() => {
-    if (!item || pending || blocked || item.messages.length <= item.lastReadMessage) return;
-    const cursor = item.messages.at(-1)?.id ?? "";
-    if (attemptedRead.current.get(item.id) === cursor) return;
-    attemptedRead.current.set(item.id, cursor);
-    void act({ kind: "read" }, item);
-  }, [item, pending, blocked, act]);
   const availableChannels = useMemo(
     () =>
       item?.kind !== "transfer"
@@ -235,7 +173,7 @@ export function NegotiationPanel({
   useEffect(() => {
     if (mode !== "detail") return;
     timelineRef.current?.scrollTo({ top: timelineRef.current.scrollHeight });
-  }, [mode, selected, channel, item?.messages.length]);
+  }, [mode, selected, channel, item?.messages.length, optimisticText, thinking]);
   useEffect(() => {
     if (mode === "detail" && selected && !blocked) inputRef.current?.focus();
   }, [mode, selected, blocked]);
@@ -258,14 +196,6 @@ export function NegotiationPanel({
               에이전트 센터 <small>{view.unread > 0 && view.unread}</small>
             </h2>
           </header>
-          {error && !item && (
-            <div role="alert" className="negotiation-notice">
-              {error}
-              <button onClick={() => setError(null)} aria-label="알림 닫기">
-                ×
-              </button>
-            </div>
-          )}
           <div className="agent-center-tabs" role="tablist" aria-label="에이전트 센터">
             {centerTabs.map((tab, index) => (
               <button
@@ -325,19 +255,8 @@ export function NegotiationPanel({
                     <button
                       key={n.id}
                       className={selected === n.id ? "selected" : ""}
-                      onClick={() => {
-                        attemptedRead.current.delete(n.id);
-                        if (
-                          selected === n.id &&
-                          n.messages.length > n.lastReadMessage &&
-                          !pending &&
-                          !blocked
-                        ) {
-                          attemptedRead.current.set(n.id, n.messages.at(-1)?.id ?? "");
-                          void act({ kind: "read" }, n);
-                        }
-                        setSelected(n.id);
-                      }}
+                      disabled={blocked || pending}
+                      onClick={() => setSelected(n.id)}
                     >
                       <div className="negotiation-row-heading">
                         <b>
@@ -378,19 +297,8 @@ export function NegotiationPanel({
                   <button
                     key={n.id}
                     className={selected === n.id ? "selected" : ""}
-                    onClick={() => {
-                      attemptedRead.current.delete(n.id);
-                      if (
-                        selected === n.id &&
-                        n.messages.length > n.lastReadMessage &&
-                        !pending &&
-                        !blocked
-                      ) {
-                        attemptedRead.current.set(n.id, n.messages.at(-1)?.id ?? "");
-                        void act({ kind: "read" }, n);
-                      }
-                      setSelected(n.id);
-                    }}
+                    disabled={blocked || pending}
+                    onClick={() => setSelected(n.id)}
                   >
                     <div className="negotiation-row-heading">
                       <b>
@@ -523,14 +431,6 @@ export function NegotiationPanel({
         </aside>
       )}
       <article className="negotiation-detail">
-        {error && item && (
-          <div role="alert" className="negotiation-notice">
-            {error}
-            <button onClick={() => setError(null)} aria-label="알림 닫기">
-              ×
-            </button>
-          </div>
-        )}
         {!item ? (
           <div className="negotiation-empty">협상 건을 선택하세요.</div>
         ) : (
@@ -797,7 +697,9 @@ export function NegotiationPanel({
                   ))}
                 </section>
               )}
+              {renderPending?.({ text: optimisticText, thinking })}
             </div>
+            {renderError?.({ error, onRetry: retry, onDismiss: dismiss, busy: disabled })}
             {item.status === "open" &&
               renderComposer?.({
                 text,

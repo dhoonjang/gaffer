@@ -26,8 +26,7 @@
 }
 .negotiation-list :where(button:not(.player-name)),
 .negotiation-proposals button,
-.negotiation-progress button,
-.negotiation-notice button {
+.negotiation-progress button {
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -145,19 +144,6 @@
 }
 .negotiation-detail > article.negotiation-detail > .composer {
   flex: none;
-}
-.negotiation-notice {
-  flex: none;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text-2);
-  background: var(--panel-2);
-  padding: 12px 14px;
-  margin: 12px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 .negotiation-proposals h3,
 .negotiation-progress h3 {

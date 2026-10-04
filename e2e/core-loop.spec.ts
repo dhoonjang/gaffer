@@ -57,6 +57,12 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
 
 test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화로 이어진다", async ({ page }) => {
   const fixture = seedAgentCenter();
+  const centerButton = page.getByTestId("tab-에이전트 센터");
+  const showCenter = async () => {
+    if (!(await centerButton.getAttribute("class"))?.split(/\s+/).includes("active"))
+      await centerButton.click();
+    await expect(page.getByTestId("agent-center-tab-search")).toBeVisible();
+  };
   const readNegotiations = async () => {
     const response = await page.request.get(`/api/games/${fixture.gameId}/negotiation`, {
       maxRetries: 1,
@@ -69,7 +75,7 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   await expect(mainInput).toBeVisible({ timeout: COLD_MS });
   const draft = "협상 뒤 훈련 계획을 계속 논의하자";
   await mainInput.fill(draft);
-  await page.getByTestId("tab-에이전트 센터").click();
+  await showCenter();
   await page.getByTestId("agent-center-tab-search").click();
   await page.getByTestId("agent-search-name").fill(fixture.targetName);
   // The row itself owns the player id, so duplicate names never choose a different player.
@@ -85,8 +91,50 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   expect(opened.messages.filter((message) => message.author === "gm")).toHaveLength(0);
   expect(opened.proposals).toHaveLength(0);
 
+  await expect(page.getByTestId("agent-center-tab-search")).toBeVisible();
+  await page.getByTestId("tab-채팅").click();
+  await expect(input).toBeVisible();
+  await expect(page.getByTestId("tab-채팅")).toHaveClass("active");
+  await expect(centerButton).not.toHaveClass(/active/);
+  await showCenter();
+
+  const requestIds: string[] = [];
+  let releaseFailure: (() => void) | undefined;
+  await page.route(`**/api/games/${fixture.gameId}/negotiation`, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    const body = route.request().postDataJSON() as { requestId: string; action: { kind: string } };
+    if (body.action.kind !== "message") return route.continue();
+    requestIds.push(body.requestId);
+    if (requestIds.length > 1) return route.continue();
+    await new Promise<void>((resolve) => {
+      releaseFailure = resolve;
+    });
+    // The server commits, but its response is lost: retry must replay the same request.
+    const committed = await route.fetch();
+    expect(committed.ok()).toBe(true);
+    await route.fulfill({ status: 503, json: { error: "일시적인 연결 오류" } });
+  });
+
   await input.fill("영입 조건을 논의하겠습니다.");
   await stage.getByRole("button", { name: "전송", exact: true }).click();
+  await expect(stage.getByRole("status", { name: "응답을 기다리는 중" })).toBeVisible();
+  await expect(
+    stage.locator(".turn-user").filter({ hasText: "영입 조건을 논의하겠습니다." }),
+  ).toHaveCount(1);
+  await expect(input).toBeDisabled();
+  await expect.poll(() => releaseFailure !== undefined).toBe(true);
+  releaseFailure!();
+  await expect(stage.getByTestId("turn-error")).toContainText("일시적인 연결 오류");
+  await expect(input).toHaveValue("영입 조건을 논의하겠습니다.");
+  await expect(stage.getByRole("status", { name: "응답을 기다리는 중" })).toHaveCount(0);
+  await stage.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect(stage.getByRole("button", { name: "조건 확인 후 합의", exact: true })).toBeVisible();
+  expect(requestIds).toHaveLength(2);
+  expect(requestIds[1]).toBe(requestIds[0]);
+  await expect(
+    stage.locator(".turn-user").filter({ hasText: "영입 조건을 논의하겠습니다." }),
+  ).toHaveCount(1);
+  await page.unroute(`**/api/games/${fixture.gameId}/negotiation`);
   await stage.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
   await stage.getByRole("combobox", { name: "대화 상대" }).selectOption("player");
   await stage.getByRole("button", { name: "조건 확인 후 합의", exact: true }).click();
@@ -94,14 +142,20 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   await expect(stage.getByRole("button", { name: "최종 서명", exact: true })).toHaveCount(0);
   await stage.getByRole("button", { name: "메인 대화로", exact: true }).click();
   await expect(mainInput).toHaveValue(draft);
+  await expect(page.getByTestId("agent-center-tab-search")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
 
-  await page.getByTestId("tab-에이전트 센터").click();
+  await showCenter();
   await page.getByTestId("agent-center-tab-search").click();
   await page.getByTestId("agent-search-name").fill(fixture.targetName);
   await targetRow.locator(".player-name").click();
   await expect(page.getByTestId("player-card-negotiation")).toHaveText("대화 이어가기");
   await page.getByTestId("player-card-negotiation").click();
   await expect(input).toBeVisible();
+  await expect(page.getByTestId("agent-center-tab-search")).not.toBeVisible();
+  await expect(page.getByTestId("tab-채팅")).toHaveClass("active");
+  await expect(centerButton).not.toHaveClass(/active/);
+  await page.setViewportSize({ width: 1280, height: 900 });
   const reopened = (await readNegotiations()).cases.filter((n) => n.playerId === fixture.targetId);
   expect(reopened).toHaveLength(1);
   expect(reopened[0]!.id).toBe(opened.id);
@@ -111,7 +165,7 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   await page.getByTestId("chat-send").click();
   await expect(page.getByTestId("tool-set_transfer_list")).toBeVisible();
   await expect(mainInput).toBeEnabled();
-  await page.getByTestId("tab-에이전트 센터").click();
+  await showCenter();
   await page.getByTestId("agent-center-tab-transfers").click();
   await expect(page.getByTestId("agent-transfer-listing")).toContainText(fixture.ownName);
   await expect(page.getByTestId("agent-transfer-listing")).toContainText("10,000,000");

@@ -1619,17 +1619,6 @@ textarea {
     color var(--ease),
     background var(--ease);
 }
-.rail .rail-panel {
-  width: auto;
-  display: flex;
-  gap: 5px;
-  padding: 0 8px;
-  white-space: nowrap;
-}
-.rail-label {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-}
 .rail button:hover {
   color: var(--text);
   background: var(--panel-2);
