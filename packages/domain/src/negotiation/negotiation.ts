@@ -181,7 +181,7 @@ export function isTransferWindow(date: string): boolean {
 }
 export const NEGOTIATION_CHANNEL_LABELS: Record<NegotiationChannel, string> = {
   club: "상대 구단",
-  player: "선수 측",
+  player: "선수 에이전트",
   internal: "내부 업무",
 };
 

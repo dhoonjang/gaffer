@@ -1,8 +1,10 @@
+import { negotiationReference } from "../../src/negotiation/context";
 import { managedNegotiationOverview } from "../../src/negotiation/overview";
 import { contractEndForYears, NegotiationStartedPayloadSchema } from "@story-fm/domain";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   MAX_REQUESTED_DAYS,
+  agentForPlayer,
   actNegotiation,
   addDays,
   appendNegotiationMessage,
@@ -45,6 +47,51 @@ function setup() {
   return { state, n };
 }
 const config = () => agentConfig("negotiation-gm");
+
+describe("player representative context", () => {
+  it("keeps the seeded representative and player consent identity across opening and contract replies", async () => {
+    const { state, n } = setup();
+    const agent = agentForPlayer(state, n.playerId);
+    const representative = {
+      partyId: n.playerId,
+      name: agent?.name ?? "선수 대리인",
+      lorebookId: agent ? `person:${agent.characterId}` : null,
+    };
+    const namedReference = JSON.parse(
+      negotiationReference(
+        n,
+        [],
+        [
+          {
+            id: "person:representative",
+            name: "계약 대리인",
+            role: "agent",
+            information: "선수 계약 대리",
+          },
+        ],
+      ),
+    ) as { playerRepresentative: { partyId: string; name: string; lorebookId: string } };
+    expect(namedReference.playerRepresentative).toEqual({
+      partyId: n.playerId,
+      name: "계약 대리인",
+      lorebookId: "person:representative",
+    });
+    const expected = JSON.stringify(representative);
+    const opening = new ScriptedGameLLM(config(), (request) => {
+      expect(request.system).toContainEqual(expect.stringContaining(expected));
+      expect(request.tools).toBeUndefined();
+      return { output: { suggestion: "대리인과 계약 조건을 논의하고 싶습니다." } };
+    });
+    await suggestNegotiationOpening(state, n.id, opening);
+    const reply = new ScriptedGameLLM(config(), (request) => {
+      expect(request.system).toContainEqual(expect.stringContaining(expected));
+      expect(request.user).toBe("[player] 계약 기간을 논의합시다.");
+      return { text: `@${representative.name}: 선수의 계약 조건을 논의하겠습니다.` };
+    });
+    await runNegotiationTurn(state, n.id, "player", "계약 기간을 논의합시다.", reply);
+    expect(state.negotiations.find((item) => item.id === n.id)?.proposals).toHaveLength(0);
+  });
+});
 
 describe("opening suggestion boundary", () => {
   it("retries invalid structured output without tools or ledger writes", async () => {

@@ -37,23 +37,29 @@ export function PlayerNegotiationAction({
   }, [onBusy]);
   const managedTeamId = game.views.negotiation.teamId;
   const own = card.teamId === managedTeamId;
-  const active = game.views.negotiation.cases.find(
+  const kind = own ? "renewal" : card.teamId === FREE_AGENT_TEAM ? "free" : "transfer";
+  const matching = game.views.negotiation.cases.filter(
     (n) =>
       n.playerId === card.id &&
       n.buyerId === managedTeamId &&
-      (n.status === "open" || n.status === "signed") &&
-      (!own || n.kind === "renewal"),
+      n.sellerId === card.teamId &&
+      n.kind === kind,
   );
-  const kind = own ? "renewal" : card.teamId === FREE_AGENT_TEAM ? "free" : "transfer";
+  const active = matching.find((n) => n.status === "open" || n.status === "signed");
+  const previous = [...matching]
+    .reverse()
+    .find((n) => n.status === "withdrawn" || n.status === "completed");
   if (!managedTeamId) return null;
   if (!active && own && (!card.contractUntil || card.contractUntil < game.date)) return null;
   const label = active
     ? "대화 이어가기"
-    : own
-      ? "재계약 협상 시작"
-      : kind === "free"
-        ? "계약 문의"
-        : "이적 문의";
+    : previous
+      ? "협상 다시 시작"
+      : own
+        ? "재계약 협상 시작"
+        : kind === "free"
+          ? "계약 문의"
+          : "이적 문의";
   const choose = async () => {
     if (blocked || request.current) return;
     if (active) {

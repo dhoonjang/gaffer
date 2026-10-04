@@ -1,3 +1,4 @@
+import { negotiationCounterparts } from "./negotiation-counterparts";
 import { stampLorebook, type GameState } from "@story-fm/engine";
 import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@story-fm/llm";
 import { readOutput, retryOnce } from "../../../common/retry";
@@ -22,13 +23,18 @@ export async function suggestNegotiationOpening(
   if (!n) throw new Error("협상을 찾을 수 없습니다");
   if (!llm && resolveLlmMode() === "mock") {
     const name = state.players.find((player) => player.id === n.playerId)?.name ?? n.playerId;
-    return `${name} 선수의 ${n.kind === "renewal" ? "재계약" : n.sellerId === state.userTeamId ? "매각" : "영입"} 조건을 논의하고 싶습니다. 구단과 선수의 입장을 듣고 함께 조건을 검토하겠습니다.`;
+    return `${name} 선수의 ${n.kind === "renewal" ? "재계약" : n.sellerId === state.userTeamId ? "매각" : "영입"} 조건을 논의하고 싶습니다. 구단과 선수 대리인의 입장을 듣고 함께 조건을 검토하겠습니다.`;
   }
+  const counterparts = negotiationCounterparts(state, n);
   const output = await retryOnce("negotiation-opening", async () => {
     const result = await (llm ?? createGameLLM(agentConfig("negotiation-gm"))).runTurn({
       system: [
         NEGOTIATION_OPENING_SYSTEM,
-        negotiationReference(n, stampLorebook(state, negotiationLorebookEntries(state, n))),
+        negotiationReference(
+          n,
+          stampLorebook(state, negotiationLorebookEntries(state, n, counterparts)),
+          counterparts,
+        ),
       ],
       history: [],
       user: negotiationSnapshot(state, n),

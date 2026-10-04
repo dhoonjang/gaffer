@@ -11,9 +11,6 @@ import {
   requestCharacterUpdate,
   managedTeamId,
   addDays,
-  directorOf,
-  agentForPlayer,
-  personaBookOf,
   type GameState,
 } from "@story-fm/engine";
 import { agentConfig, createGameLLM, type GameLLM, type GameToolSpec } from "@story-fm/llm";
@@ -33,6 +30,7 @@ import {
   negotiationReference,
   negotiationSnapshot,
 } from "../../../negotiation/context";
+import { negotiationCounterparts } from "./negotiation-counterparts";
 import { mockNegotiationLlm } from "./mock-negotiation";
 
 /** A failed provider/tool loop commits neither partial consent nor character jobs. */
@@ -102,22 +100,9 @@ export async function runNegotiationTurn(
       },
     },
   ];
-  const counterparts = [
-    directorOf(draft, n.buyerId),
-    ...(n.kind === "transfer" ? [directorOf(draft, n.sellerId)] : []),
-    agentForPlayer(draft, n.playerId),
-    ...draft.personas.filter(
-      (p) => p.role === "owner" && [n.buyerId, n.sellerId].includes(draft.userTeamId),
-    ),
-  ]
-    .filter((p) => p !== null)
-    .map((p) => ({
-      id: "lorebookId" in p ? p.lorebookId : `person:${p.characterId}`,
-      name: p.name,
-      information: personaBookOf(draft, p).information,
-    }));
+  const counterparts = negotiationCounterparts(draft, n);
   const config = agentConfig("negotiation-gm");
-  const client = llm ?? mockNegotiationLlm(config, draft, n) ?? createGameLLM(config);
+  const client = llm ?? mockNegotiationLlm(config, draft, n, channel) ?? createGameLLM(config);
   const records: JournalEntry[] = [];
   let touched = false;
   for (const tool of tools) {
@@ -149,7 +134,7 @@ export async function runNegotiationTurn(
           ),
         ],
         history: negotiationHistory(n),
-        user: message ?? `[${channel}] 현재 협상 장부와 예정된 답변에 반응하세요.`,
+        user: `[${channel}] ${message ?? "현재 협상 장부와 예정된 답변에 반응하세요."}`,
         stateNote: negotiationSnapshot(draft, n),
         tools,
       });

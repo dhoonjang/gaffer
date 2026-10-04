@@ -547,6 +547,66 @@ describe("natural-language offers require explicit current consent", () => {
 });
 
 describe("agent center ledger and bounded search", () => {
+  it("resumes a withdrawn case without carrying agreement or erasing its history", () => {
+    const s = agreed();
+    s.n.digest = { through: 1, text: "지난 조건" };
+    const oldProposal = s.n.proposals[0]!;
+    expect(s.action({ kind: "withdraw", reason: "보류" }).ok).toBe(true);
+    const messages = structuredClone(s.n.messages);
+    const revision = s.n.revision;
+    const input = {
+      playerId: s.player.id,
+      buyerId: s.n.buyerId,
+      kind: "transfer",
+      background: "다시 논의",
+    };
+    expect(openNegotiation(s.state, input).negotiationId).toBe(s.n.id);
+    expect(s.state.negotiations).toHaveLength(1);
+    expect(s.n.messages.slice(0, messages.length)).toEqual(messages);
+    expect(s.n.digest.text).toBe("지난 조건");
+    expect(s.n.revision).toBeGreaterThan(revision);
+    expect(s.n.proposals.every((p) => p.status === "superseded")).toBe(true);
+    expect(s.n.nextReplyOn).toBeNull();
+    expect(s.action({ kind: "accept", proposalId: oldProposal.id }).ok).toBe(false);
+    const before = structuredClone(s.state);
+    expect(openNegotiation(s.state, input).negotiationId).toBe(s.n.id);
+    expect(s.state).toEqual(before);
+    const buyer = s.state.finances.find((f) => ![s.n.buyerId, s.n.sellerId].includes(f.teamId))!;
+    expect(
+      openNegotiation(s.state, { ...input, buyerId: buyer.teamId }, "world").negotiationId,
+    ).not.toBe(s.n.id);
+  });
+  it("reuses completed renewal history with unique contracts and payment obligations", () => {
+    const s = setup("01");
+    const own = s.state.players.find((p) => p.teamId === s.state.userTeamId)!;
+    const input = { playerId: own.id, buyerId: own.teamId, kind: "renewal", background: "재계약" };
+    const id = openNegotiation(s.state, input).negotiationId!;
+    for (let round = 0; round < 2; round++) {
+      expect(openNegotiation(s.state, input).negotiationId).toBe(id);
+      const action = (a: unknown, partyId = own.teamId) =>
+        actNegotiation(s.state, id, a, {
+          kind: partyId === own.teamId ? "user" : "model",
+          partyId,
+        });
+      expect(action({ kind: "send", terms: s.terms }).ok).toBe(true);
+      const n = s.state.negotiations.find((n) => n.id === id)!;
+      expect(action({ kind: "accept", proposalId: n.proposals.at(-1)!.id }, own.id).ok).toBe(true);
+      expect(action({ kind: "sign" }).ok).toBe(true);
+      expect(n.status).toBe("completed");
+    }
+    const contracts = s.state.contracts.filter((c) => c.id.startsWith(id));
+    expect(contracts).toHaveLength(2);
+    expect(new Set(contracts.map((c) => c.id)).size).toBe(2);
+    expect(contracts.filter((c) => c.status === "active")).toHaveLength(1);
+    const payments = s.state.transferPayments.filter((p) => p.negotiationId === id);
+    expect(payments).toHaveLength(2);
+    expect(new Set(payments.map((p) => p.id)).size).toBe(2);
+    expect(payments.every((p) => p.paidOn === s.state.date)).toBe(true);
+    const settled = structuredClone(s.state);
+    settleNegotiations(s.state);
+    settleNegotiations(s.state);
+    expect(s.state).toEqual(settled);
+  });
   it("lists only owned players, preserves date and repeated requests, and never sells", () => {
     const state = structuredClone(base);
     const own = state.players.find((p) => p.teamId === state.userTeamId)!;

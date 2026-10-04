@@ -279,7 +279,7 @@ export function NegotiationPanel({
                       <span className="negotiation-next">
                         {n.buyerId === view.teamId
                           ? n.kind === "renewal" || n.kind === "free"
-                            ? "선수 측"
+                            ? "에이전트 측"
                             : n.sellerName
                           : n.buyerName}{" "}
                         · {caseStatus(n, view.teamId, view.date)}
@@ -321,7 +321,7 @@ export function NegotiationPanel({
                     <span className="negotiation-next">
                       {n.buyerId === view.teamId
                         ? n.kind === "renewal" || n.kind === "free"
-                          ? "선수 측"
+                          ? "에이전트 측"
                           : n.sellerName
                         : n.buyerName}{" "}
                       · {caseStatus(n, view.teamId, view.date)}
@@ -452,8 +452,8 @@ export function NegotiationPanel({
                 </h2>
                 <div className="negotiation-header-meta">
                   <span>
-                    {item.kind === "renewal" || item.kind === "free"
-                      ? `${item.playerName} 측 ↔ ${item.buyerName}`
+                    {channel === "player"
+                      ? `${item.playerName} 에이전트 ↔ ${item.buyerName}`
                       : `${item.sellerName} ↔ ${item.buyerName}`}
                   </span>
                   <span className="negotiation-state-badge">
@@ -529,7 +529,12 @@ export function NegotiationPanel({
                 ),
               )}
               {!item.messages.some((m) => m.channel === channel || m.channel === "internal") && (
-                <p className="muted">아직 대화가 없습니다. 상대와 조건을 논의하세요.</p>
+                <p className="muted">
+                  아직 대화가 없습니다.{" "}
+                  {channel === "player"
+                    ? "에이전트와 계약 조건을 논의하세요."
+                    : "구단과 이적 조건을 논의하세요."}
+                </p>
               )}
               {item.drafts
                 .filter((draft) => draft.scope === channel)

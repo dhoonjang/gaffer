@@ -1394,7 +1394,13 @@ export function GameScreen({ gameId }: { gameId: string }) {
                         sendOnly
                         maxLength={6000}
                         suggestion={suggestion ?? undefined}
-                        placeholder={suggestion ? undefined : "상대와 조건을 논의하세요."}
+                        placeholder={
+                          suggestion
+                            ? undefined
+                            : channel === "player"
+                              ? "에이전트와 계약 조건을 논의하세요."
+                              : "구단과 이적 조건을 논의하세요."
+                        }
                         testId="negotiation-input"
                       />
                     );
@@ -1526,7 +1532,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
                         gameId={gameId}
                         view={game.views.negotiation}
                         expiringContracts={game.views.finance.expiringContracts}
-                        blocked={busy || game.phase === "match" || pendingMatch !== null}
+                        blocked={
+                          busy || negotiationBusy || game.phase === "match" || pendingMatch !== null
+                        }
                         onGame={setGame}
                         onBusy={setNegotiationBusy}
                       />

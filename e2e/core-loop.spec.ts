@@ -199,4 +199,19 @@ test("에이전트 센터 문의와 GM의 재계약은 같은 장부와 대화�
   expect((await readNegotiations()).cases.find((n) => n.id === ready.id)?.signed).toEqual(
     signed.signed,
   );
+  await page.getByTestId("tab-스쿼드").click();
+  await page
+    .getByTestId("panel-스쿼드")
+    .getByRole("button", { name: fixture.ownName, exact: true })
+    .first()
+    .click();
+  await expect(page.getByTestId("player-card-negotiation")).toHaveText("협상 다시 시작");
+  await page.getByTestId("player-card-negotiation").click();
+  await expect(input).toBeVisible();
+  const resumed = (await readNegotiations()).cases.find((n) => n.id === ready.id)!;
+  expect(resumed.status).toBe("open");
+  expect(resumed.signed).toBeNull();
+  expect(resumed.messages.slice(0, signed.messages.length)).toEqual(signed.messages);
+  expect(resumed.proposals.every((proposal) => proposal.status !== "open")).toBe(true);
+  await expect(stage.getByRole("button", { name: "최종 서명", exact: true })).toHaveCount(0);
 });

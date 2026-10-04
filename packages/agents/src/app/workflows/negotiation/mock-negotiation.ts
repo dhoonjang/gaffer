@@ -3,9 +3,10 @@ import {
   currentProposal,
   proposalAgreed,
   type Negotiation,
+  type NegotiationChannel,
   type ProposalTerms,
 } from "@story-fm/domain";
-import { addDays, managedTeamId, type GameState } from "@story-fm/engine";
+import { addDays, agentForPlayer, managedTeamId, type GameState } from "@story-fm/engine";
 import {
   ScriptedGameLLM,
   resolveLlmMode,
@@ -18,6 +19,7 @@ export function mockNegotiationLlm(
   config: AgentConfig,
   state: GameState,
   n: Negotiation,
+  channel: NegotiationChannel = "internal",
 ): GameLLM | undefined {
   if (resolveLlmMode() !== "mock") return undefined;
   return new ScriptedGameLLM(config, () => {
@@ -77,7 +79,10 @@ export function mockNegotiationLlm(
       }
       return {
         calls,
-        text: "@: 조건을 검토해 상대의 제안을 남겼습니다. 현재 조건을 확인하고 동의하려면 화면에서 명시적으로 합의해 주세요.",
+        text:
+          channel === "player"
+            ? `@${agentForPlayer(state, n.playerId)?.name ?? "선수 대리인"}: 선수를 대리해 계약 조건을 검토하고 제안을 남겼습니다. 현재 조건을 확인하고 동의하려면 화면에서 명시적으로 합의해 주세요.`
+            : "@: 구단 조건을 검토해 상대의 제안을 남겼습니다. 현재 조건을 확인하고 동의하려면 화면에서 명시적으로 합의해 주세요.",
       };
     }
     const stale =

@@ -104,6 +104,7 @@ export function openNegotiation(
     (n) =>
       n.playerId === player.id &&
       n.buyerId === input.buyerId &&
+      n.sellerId === player.teamId &&
       n.kind === input.kind &&
       (n.status === "open" || n.status === "signed"),
   );
@@ -113,6 +114,37 @@ export function openNegotiation(
     return fail(
       "기존 협상의 현재 계약 또는 소속이 변경되었습니다. 해당 협상을 철회한 뒤 다시 문의하세요",
     );
+  const previous = [...state.negotiations]
+    .reverse()
+    .find(
+      (n) =>
+        n.playerId === player.id &&
+        n.buyerId === input.buyerId &&
+        n.sellerId === player.teamId &&
+        n.kind === input.kind &&
+        (n.status === "withdrawn" || n.status === "completed"),
+    );
+  if (previous) {
+    for (const proposal of previous.proposals)
+      if (proposal.status === "open") proposal.status = "superseded";
+    previous.status = "open";
+    previous.sourceContractId = source?.id ?? null;
+    previous.background = input.background;
+    previous.drafts = [];
+    previous.medical = null;
+    previous.signed = null;
+    previous.registration = "not_submitted";
+    previous.nextReplyOn = mode === "world" ? state.date : null;
+    previous.revision += 1;
+    appendNegotiationMessage(
+      state,
+      previous,
+      "internal",
+      "system",
+      `협상 재개: ${input.background}`,
+    );
+    return success(previous, "이전 협상을 이어갑니다");
+  }
   const n: Negotiation = {
     id: `neg-${state.date}-${state.negotiations.length + 1}`,
     playerId: player.id,
@@ -366,7 +398,7 @@ export function actNegotiation(
       payments.forEach((p, i) => {
         if (p.amount > 0)
           state.transferPayments.push({
-            id: `${n.id}-pay${i}`,
+            id: `${player.id}-pay${i}`,
             negotiationId: n.id,
             playerId: n.playerId,
             fromTeamId: n.buyerId,
@@ -485,7 +517,7 @@ export function settleNegotiations(state: GameState): void {
       player.squadNumber = undefined;
       player.squadLevel = "reserve";
       state.moves.push({
-        id: `${n.id}-move`,
+        id: `${proposal.id}-move`,
         gamePlayerId: player.id,
         fromTeamId: from,
         toTeamId: n.buyerId,
@@ -494,7 +526,7 @@ export function settleNegotiations(state: GameState): void {
       });
     }
     state.contracts.push({
-      id: `${n.id}-contract`,
+      id: `${proposal.id}-contract`,
       gamePlayerId: player.id,
       teamId: n.buyerId,
       weeklyWage: proposal.terms.weeklyWage,
@@ -769,6 +801,8 @@ export function searchAgentCenterPlayers(
           (n) =>
             n.playerId === p.id &&
             n.buyerId === teamId &&
+            n.sellerId === p.teamId &&
+            n.kind === (p.teamId === FREE_AGENT_TEAM ? "free" : "transfer") &&
             (n.status === "open" || n.status === "signed") &&
             (n.status === "signed" || sourceValid(state, n)),
         )?.id ?? null,

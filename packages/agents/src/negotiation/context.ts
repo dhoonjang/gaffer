@@ -7,7 +7,7 @@ import {
 } from "@story-fm/domain";
 import { addDays, type GameState } from "@story-fm/engine";
 
-type NegotiationCounterpart = { id: string; name: string; information: string };
+type NegotiationCounterpart = { id: string; name: string; role?: string; information: string };
 
 export function negotiationLorebookEntries(
   state: GameState,
@@ -39,6 +39,11 @@ export function negotiationReference(
       sellerId: n.sellerId,
       kind: n.kind,
       background: n.background,
+    },
+    playerRepresentative: {
+      partyId: n.playerId,
+      name: counterparts.find((person) => person.role === "agent")?.name ?? "선수 대리인",
+      lorebookId: counterparts.find((person) => person.role === "agent")?.id ?? null,
     },
     counterparts,
     lorebook,
