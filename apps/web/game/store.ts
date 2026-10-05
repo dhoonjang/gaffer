@@ -150,6 +150,7 @@ function namesForConversations(
   for (const n of negotiation.cases) mentioned.add(n.playerId);
   const texts = state.chat;
   for (const turn of texts) {
+    if (turn.addressee) mentioned.add(turn.addressee.playerId);
     let ids = chatNames.mentions.get(turn.text);
     if (!ids) {
       ids = [...(turn.text.match(ID_LIKE) ?? []), ...playerIdsIn(turn.text, chatNames.index)];

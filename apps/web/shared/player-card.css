@@ -229,7 +229,6 @@
 .pc-actions {
   display: flex;
   flex-shrink: 0;
-  justify-content: flex-end;
   gap: 8px;
   padding: 12px var(--pc-padding);
   border-top: 1px solid var(--line);
@@ -238,26 +237,34 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 88px;
+  gap: 6px;
   height: 36px;
   margin: 0;
-  padding: 0 20px;
+  padding: 0 14px;
   border: 0;
   border-radius: var(--r-sm);
   font: inherit;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background var(--ease);
+  transition:
+    background var(--ease),
+    color var(--ease);
 }
-/* 화면이 맡긴 조작 — 닫기와 떨어져 왼쪽 끝에 서고, 닫기보다 가라앉아 있다 */
+.pc-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pc-actions button svg {
+  flex-shrink: 0;
+}
+/* 조작은 왼쪽부터 선다 — 닫기만 오른쪽 끝에 떨어져 있다 */
 .pc-side {
   display: inline-flex;
   gap: 8px;
-  margin-right: auto;
 }
 .pc-actions .pc-side button {
   min-width: 0;
-  padding: 0 14px;
   background: transparent;
   color: var(--text-2);
   font-weight: 500;
@@ -266,12 +273,30 @@
   background: var(--panel-2);
   color: var(--text);
 }
-.pc-close {
+/* 닫기는 면이 없다 — 카드 밖을 눌러도·Esc로도 닫힌다 */
+.pc-actions .pc-close {
+  margin-left: auto;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--text-2);
+}
+.pc-close:hover {
   background: var(--panel-2);
   color: var(--text);
 }
-.pc-close:hover {
+.pc-secondary {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.pc-secondary:hover:not(:disabled) {
   background: color-mix(in srgb, white 8%, var(--panel-2));
+}
+.pc-primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+.pc-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, white 12%, var(--accent));
 }
 .pc-actions button:focus-visible {
   outline: none;
@@ -286,18 +311,7 @@
     min-width: 0;
     height: 40px;
   }
-}
-
-.pc-negotiation-action {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.pc-negotiation-action button {
-  background: var(--accent);
-  color: var(--bg);
-}
-.pc-negotiation-action .error-text {
-  font-size: var(--fs-xs);
+  .pc-actions .pc-close {
+    flex: 0 0 auto;
+  }
 }

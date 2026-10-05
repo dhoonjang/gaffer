@@ -9,6 +9,7 @@ import { managedNegotiationOverview } from "./negotiation-overview";
 import {
   addDays,
   playerName,
+  teamNameIn,
   type GameState,
   type ChatTurn,
   teamName,
@@ -134,6 +135,13 @@ export function buildGmDigest(state: GameState): string | null {
 /** 유저의 자연어를 모델이 읽는 감독 화자 형식으로 감싼다. */
 export function buildManagerMessage(state: GameState, message: string): string {
   return `@${state.manager.name}: ${message}`;
+}
+
+/** 감독이 그 말을 건넨 사람 — 소속은 말을 건 그날의 것이다 */
+function addresseeLine(state: GameState, addressee: ChatTurn["addressee"]): string | null {
+  if (!addressee) return null;
+  const team = teamNameIn(state, addressee.teamId);
+  return `<addressee team="${team}">${playerName(state, addressee.playerId)}</addressee>`;
 }
 
 /**
@@ -1198,7 +1206,9 @@ function windowOf(state: GameState): { turns: GameState["chat"] } {
  */
 export function renderTurnGroup(
   state: GameState,
-  turns: ReadonlyArray<Pick<ChatTurn, "role" | "text"> & { mailMessageIds?: readonly string[] }>,
+  turns: ReadonlyArray<
+    Pick<ChatTurn, "role" | "text" | "addressee"> & { mailMessageIds?: readonly string[] }
+  >,
   cards: readonly LorebookInjection[],
   attachments?: readonly import("@gaffer/domain").MailMessage[],
   expandedMail?: Map<string, import("@gaffer/domain").MailMessage>,
@@ -1212,10 +1222,10 @@ export function renderTurnGroup(
   return [
     // 오퍼레이터 지시도 같은 유저 메시지 안이다 — 갈리는 건 **내용의 형식**이다.
     // 감독 발화인지 조작인지를 본문이 밝힌다
-    ...turns.map((turn) =>
+    ...turns.flatMap((turn) =>
       turn.role === "operator"
-        ? buildOperatorMessage(turn.text)
-        : buildManagerMessage(state, turn.text),
+        ? [buildOperatorMessage(turn.text)]
+        : [buildManagerMessage(state, turn.text), addresseeLine(state, turn.addressee)],
     ),
   ]
     .concat(mail || [])

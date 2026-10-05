@@ -1,5 +1,6 @@
 import {
   teamName,
+  teamNameIn,
   formatMoney,
   addDays,
   advanceTime,
@@ -702,6 +703,26 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
     expect(request?.stateNote).toContain("<snapshot>");
     // 다음 턴의 이력이 같은 자리를 같은 글자로 다시 그린다
     expect(buildGmHistory(state).at(-2)?.content).toBe(request?.user);
+  });
+
+  it("말을 건 상대는 감독 줄 바로 뒤에 서고, 이적한 뒤에도 그날의 소속으로 다시 그린다", () => {
+    const state = game();
+    const target = state.players.find((p) => p.teamId !== state.userTeamId)!;
+    const from = target.teamId;
+    state.chat.push({
+      role: "user",
+      text: "요즘 어때?",
+      addressee: { playerId: target.id, teamId: from },
+      toolCalls: [],
+      at: state.date,
+    });
+    const sent = buildGmTurnMessage(state, []);
+    expect(sent).toBe(
+      `@김감독: 요즘 어때?\n\n<addressee team="${teamNameIn(state, from)}">${target.name}</addressee>`,
+    );
+    state.chat.push({ role: "model", text: "@코치: 좋습니다", toolCalls: [], at: state.date });
+    target.teamId = state.userTeamId;
+    expect(buildGmHistory(state)[0]?.content).toBe(sent);
   });
 
   it("카드도 조작도 없는 턴은 발화 한 줄이 곧 메시지다", () => {

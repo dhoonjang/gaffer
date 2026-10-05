@@ -25,6 +25,8 @@ type TurnStreamBody = {
   /** 감독이 친 말 — 손잡이를 누른 턴에는 없다 */
   message?: string;
   mailMessageIds?: readonly string[];
+  /** 감독이 말을 건넨 선수 — 선수 카드의 「말 걸기」 */
+  addresseeId?: string;
   /**
    * 감독이 친 말이 아니라 손잡이를 누른 것 — **구조체로 보낸다.**
    * 모델이 읽을 `<operator>…</operator>` 문장은 서버가 여기서 만든다 (docs/agents/agents.md §2).
@@ -112,6 +114,7 @@ export async function streamTurn(
         ...(body.operation !== undefined ? { operation: body.operation } : {}),
         ...(body.orders && body.orders.length > 0 ? { orders: body.orders } : {}),
         ...(body.mailMessageIds?.length ? { mailMessageIds: body.mailMessageIds } : {}),
+        ...(body.addresseeId !== undefined ? { addresseeId: body.addresseeId } : {}),
       }),
       signal: abort.signal,
     });

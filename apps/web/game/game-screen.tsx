@@ -2,7 +2,7 @@
 import { SquadView } from "@/screens/squad/squad-view";
 import { Mailbox, type MailDraft } from "../screens/mailbox/mailbox";
 import { NegotiationConfirmation } from "../screens/mailbox/negotiation-confirmation";
-import { PlayerNegotiationAction } from "../screens/mailbox/player-negotiation-action";
+import { PlayerContactActions } from "../screens/mailbox/player-contact-actions";
 import { PlayerCardProvider, type PlayerCardDefaultActions } from "../shared/player-card";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -216,6 +216,12 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const [busy, setBusy] = useState(false);
   const [mailDraft, setMailDraft] = useState<MailDraft | null>(null);
   const [mailAttachments, setMailAttachments] = useState<string[]>([]);
+  /** 선수 카드의 「말 걸기」로 정한 상대 — 다음 한마디에 실리고 보낸 뒤 걷힌다 */
+  const [addressee, setAddressee] = useState<{
+    playerId: string;
+    teamId: string;
+    name: string;
+  } | null>(null);
   const storyScrollStamp = useRef("");
   const [negotiationBusy, setNegotiationBusy] = useState(false);
   const liveMatch =
@@ -520,10 +526,12 @@ export function GameScreen({ gameId }: { gameId: string }) {
       if ((!message && !operation) || busy || negotiationBusy || !game) return null;
       const seq = ++turnSeqRef.current;
       const attachmentIds = operation ? [] : [...mailAttachments];
+      const talkTo = operation ? null : addressee;
       const adoptPayload = (payload: GamePayload) => {
         if (turnSeqRef.current !== seq) return;
         setGame(payload);
         if (attachmentIds.length) setMailAttachments([]);
+        if (talkTo) setAddressee(null);
       };
       setBusy(true);
       setError(null);
@@ -590,6 +598,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
             toolCalls: [],
             at: game.date,
             ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
+            ...(talkTo ? { addressee: { playerId: talkTo.playerId, teamId: talkTo.teamId } } : {}),
             ...(activeMatchId ? { inMatch: true as const, matchId: activeMatchId } : {}),
           };
       if (optimistic) setGame((g) => (g ? { ...g, chat: [...g.chat, optimistic] } : g));
@@ -728,6 +737,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
           ...(operation ? { operation } : message ? { message } : {}),
           orders,
           ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
+          ...(talkTo ? { addresseeId: talkTo.playerId } : {}),
         },
         {
           onDelta: (text) => {
@@ -749,6 +759,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
     [
       input,
       mailAttachments,
+      addressee,
       busy,
       negotiationBusy,
       game,
@@ -812,7 +823,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const playerCardActions = useCallback<PlayerCardDefaultActions>(
     (card, close) =>
       game ? (
-        <PlayerNegotiationAction
+        <PlayerContactActions
           key={card.id}
           card={card}
           game={game}
@@ -823,8 +834,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
             game.phase === "match" ||
             game.views.career.dismissal !== null
           }
-          onContext={(text) => {
-            setInput(text);
+          onTalk={() => {
+            setAddressee({ playerId: card.id, teamId: card.teamId, name: card.name });
             setPanel(null);
             requestAnimationFrame(() => inputRef.current?.focus());
           }}
@@ -961,6 +972,12 @@ export function GameScreen({ gameId }: { gameId: string }) {
             if (turn.role === "user")
               return (
                 <Fragment key={i}>
+                  {turn.addressee && (
+                    <div className="mail-attachment saved addressee" data-testid="chat-addressee">
+                      <IconChat size={13} />
+                      {game.playerNames[turn.addressee.playerId] ?? "선수"}
+                    </div>
+                  )}
                   <ChatTurnFeedback
                     key={i}
                     userTurn={turn}
@@ -1094,8 +1111,21 @@ export function GameScreen({ gameId }: { gameId: string }) {
           </span>
         </div>
       )}
-      {mailAttachments.length > 0 && (
+      {(mailAttachments.length > 0 || addressee) && (
         <div className="mail-attachments">
+          {addressee && (
+            <div className="mail-attachment" data-testid="addressee">
+              <IconChat size={13} />
+              <span>{addressee.name}</span>
+              <button
+                aria-label="말 걸기 취소"
+                disabled={busy || negotiationBusy}
+                onClick={() => setAddressee(null)}
+              >
+                ×
+              </button>
+            </div>
+          )}
           {mailAttachments.map((id) => {
             const message = game.views.mail.threads
               .flatMap((thread) => thread.messages)
@@ -1130,9 +1160,15 @@ export function GameScreen({ gameId }: { gameId: string }) {
         canSkip={canSkip}
         nextMatchDate={nextMatchDate}
         inputRef={inputRef}
-        suggestion={mailAttachments.length ? undefined : suggestion}
-        sendOnly={mailAttachments.length > 0}
-        placeholder={mailAttachments.length ? "첨부 메일과 함께 지시를 입력하세요." : undefined}
+        suggestion={mailAttachments.length || addressee ? undefined : suggestion}
+        sendOnly={mailAttachments.length > 0 || addressee !== null}
+        placeholder={
+          addressee
+            ? `${addressee.name}에게 할 말`
+            : mailAttachments.length
+              ? "첨부 메일과 함께 지시를 입력하세요."
+              : undefined
+        }
         liveControl={
           liveMatch?.live && !liveMatch.live.finished
             ? {

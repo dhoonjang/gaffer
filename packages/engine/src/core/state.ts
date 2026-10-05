@@ -138,6 +138,12 @@ export interface ToolCallRecord {
 export interface ChatTurn {
   mailMessageIds?: string[];
   /**
+   * 감독이 이 말을 건넨 사람 — 선수 카드의 「말 걸기」로 정한 `user` 턴에만 있다.
+   * 소속은 그 턴의 것으로 남긴다 — 이적한 뒤에도 지난 이력이 같은 글자로 그려져야
+   * 캐시 프리픽스가 끊기지 않는다.
+   */
+  addressee?: { playerId: string; teamId: string };
+  /**
    * 누가 한 말인가.
    *
    * - `user` — **감독이 직접 친 말.** 모델에는 `@감독이름: …` 발화로 들어간다.

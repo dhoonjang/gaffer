@@ -321,6 +321,11 @@
   max-width: 90%;
   margin: 6px 0 12px auto;
 }
+/* 말을 건 상대는 그 말 위에 선다 — 아래 말풍선과 붙어 한 덩어리로 읽힌다 */
+.mail-attachment.saved.addressee {
+  /* 대화 목록의 간격(20px)을 거슬러 말풍선에 6px까지 붙인다 */
+  margin: 0 0 -14px auto;
+}
 .negotiation-confirmation {
   margin: 18px 0;
   padding: 18px;

@@ -15,6 +15,8 @@ const TurnSchema = z
      */
     message: z.string().min(1).max(1000).optional(),
     mailMessageIds: z.array(z.string().trim().min(1).max(160)).max(3).optional(),
+    /** 감독이 말을 건넨 선수 — 선수 카드의 「말 걸기」. 조작 턴에는 오지 않는다 */
+    addresseeId: z.string().trim().min(1).max(160).optional(),
     /**
      * 화면 조작(시간 이동·경기 진행 손잡이) — 감독의 발화로 취급하지 않는다.
      * **구조체다**: 문장을 되읽던 시절에는 UI 문구 한 글자가 곧 계약이었다
@@ -110,6 +112,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           body.data.operation,
           body.data.orders,
           body.data.mailMessageIds,
+          body.data.addresseeId,
         );
         if (outcome.ok) {
           send({ type: "done", payload: outcome.payload });

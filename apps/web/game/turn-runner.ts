@@ -4,6 +4,7 @@ import {
   journal,
   loadGame,
   mailMessageForViewer,
+  playerById,
   saveGame,
   setPlayerTactic,
   setSetPieceTakers,
@@ -330,6 +331,8 @@ export function runTurnLocked(
    */
   orders?: readonly MatchBoardOrder[],
   mailMessageIds: readonly string[] = [],
+  /** 감독이 말을 건넨 선수 — 만남인지 통화인지는 GM이 그 자리에서 연다 */
+  addresseeId?: string,
 ): Promise<TurnOutcome> {
   // 원문은 호출이 끝나는 즉시 이 게임의 사이드카에 앉고(models.md §5), 그 이름들이
   // model 턴을 채팅에 밀어 넣는 자리에서 턴 인덱스에 묶인다 — 턴이 실패해 묶이지
@@ -368,6 +371,14 @@ export function runTurnLocked(
             retry: false,
           };
         const validAttachments = mailAttachments.filter((message) => message !== null);
+        const addressee = addresseeId === undefined ? null : playerById(state, addresseeId);
+        if (addresseeId !== undefined && (addressee === null || operation))
+          return {
+            ok: false as const,
+            status: 400,
+            error: "말을 건넬 선수를 찾을 수 없습니다",
+            retry: false,
+          };
         const inMatch = state.phase === "match";
         const matchId = state.pendingMatch?.matchId;
         const mark = inMatch ? { inMatch: true as const, ...(matchId ? { matchId } : {}) } : {};
@@ -450,6 +461,7 @@ export function runTurnLocked(
           role: operation ? "operator" : "user",
           text: said,
           ...(uniqueMailIds.length ? { mailMessageIds: uniqueMailIds } : {}),
+          ...(addressee ? { addressee: { playerId: addressee.id, teamId: addressee.teamId } } : {}),
           toolCalls: [],
           at: state.date,
           ...mark,

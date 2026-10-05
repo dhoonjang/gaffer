@@ -21,6 +21,7 @@ import {
   physiqueLabel,
 } from "@gaffer/domain";
 import type { PlayerCardView } from "@gaffer/engine";
+import { IconClose } from "@/shared/icons";
 import { useDialog } from "@/shared/use-dialog";
 import { contractUntil, humanDate } from "@/shared/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/shared/player-facts";
@@ -290,14 +291,15 @@ function PlayerCardOverlay({
           <PlayerCardBody card={card} inMatch={inMatch} />
         )}
         <div className="pc-actions">
-          {actions && <span className="pc-side">{actions}</span>}
           {card && defaultActions?.(card, onClose)}
+          {actions && <span className="pc-side">{actions}</span>}
           <button
             className="pc-close"
             type="button"
             onClick={onClose}
             data-testid="player-card-close"
           >
+            <IconClose size={14} />
             닫기
           </button>
         </div>
