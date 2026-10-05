@@ -847,7 +847,8 @@ export function buildGmStateNote(state: GameState, passed?: TimePassed | null): 
 
   // 스카우팅 진행과 도착한 보고서는 **같은 사람의 것이다** — 덩어리 둘의 이름이 하나다
 
-  const coach = coachCues(state);
+  // 부상 이력은 의무실 줄이 이미 싣는다 — 코치의 눈이 같은 사람들을 한 번 더 세우지 않는다
+  const coach = coachCues(state).filter((cue) => cue.code !== "injury-risk" || atRisk.length === 0);
   const offseason = offseasonFacts(state);
   const international = internationalFacts(state);
   const edits = state.pendingEdits ?? [];

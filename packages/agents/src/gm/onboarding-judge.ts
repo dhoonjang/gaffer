@@ -94,8 +94,8 @@ function buildClubBlock(state: GameState): string {
   return [
     `<club name="${teamNameIn(state, state.userTeamId)}">`,
     `격: ${CLUB_TIER_KO[tierOfTeamIn(state, state.userTeamId)]}`,
-    `구단주: ${owner.characterId} ${owner.name}`,
-    `수석코치: ${coach.characterId} ${coach.name}`,
+    `구단주: ${personLabel(owner)}`,
+    `수석코치: ${personLabel(coach)}`,
     `주장: ${captain ? row(captain) : "없음"}`,
     `핵심 선수:`,
     ...key.map((p) => `- ${row(p)}`),
@@ -144,4 +144,9 @@ export function buildOnboardingJudgePrompt(state: GameState, background: string)
     ...(coach ? [coach] : []),
     buildGmStateNote(state),
   ].join("\n");
+}
+
+/** id가 이름과 같으면 이름 한 번이다 */
+function personLabel(person: { characterId: string; name: string }): string {
+  return person.characterId === person.name ? person.name : `${person.characterId} ${person.name}`;
 }
