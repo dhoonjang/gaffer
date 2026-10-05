@@ -10,6 +10,7 @@ import {
   clockOf,
   formatClock,
   humanizePlayerIds,
+  stripLedgerIds,
   journal,
   markEntered,
   markEventsSeen,
@@ -638,7 +639,7 @@ async function closeTurn(
   // 선수 id를 이름으로 바꾸고 헤더를 되붙여 저장한다 — ⚠️ 헤더를 떼면 화면
   // (scene-stamp)의 시각이 스트리밍이 끝나는 순간 사라진다.
   // 경기 장면의 헤더는 모델의 것이 아니라 장부의 분이다 (스트리밍에 나간 것과 같다)
-  let body = humanizePlayerIds(state, scene.body);
+  let body = stripLedgerIds(humanizePlayerIds(state, scene.body));
   let header = scene.header;
   /**
    * **장면이 비어 돌아온 턴** — 왕복 상한을 도구로 채우면(`stopReason === "tool_use"`)

@@ -1082,6 +1082,26 @@ export function humanizePlayerIds(state: GameState, text: string): string {
   return text.replace(pattern, (id) => names.get(id) ?? id);
 }
 
+/**
+ * 장부 id — 협상(`neg-<날짜>-<n>`·제안 `-p<n>`)과 메일(`mail-<n>`·메시지 `-m<n>`).
+ * 형식의 원본은 `team/negotiation.ts`·`people/mail.ts`의 생성 자리다.
+ */
+const LEDGER_ID =
+  /[ \t]*`?(?<![\w-])(?:neg-\d{4}-\d{2}-\d{2}-\d+(?:-p\d+)?|mail-\d+(?:-m\d+)?)(?![\w-])`?/g;
+
+/**
+ * 서사 텍스트에서 장부 id를 걷는다 — 이름으로 바꿀 것이 없는 id라 지우고, 지운 자리에
+ * 남은 빈 괄호와 괄호·쉼표 앞뒤 공백을 정리한다.
+ */
+export function stripLedgerIds(text: string): string {
+  const stripped = text.replace(LEDGER_ID, "");
+  if (stripped === text) return text;
+  return stripped
+    .replace(/\([ \t]*[,·]?[ \t]*\)/g, "")
+    .replace(/\([ \t]+/g, "(")
+    .replace(/[ \t]+([,)])/g, "$1");
+}
+
 /** 매치데이 벤치 규모 — 값은 도메인이 하나만 갖는다 (`squad-rules.ts`) */
 export { MATCHDAY_BENCH };
 

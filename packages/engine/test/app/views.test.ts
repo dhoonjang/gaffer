@@ -9,6 +9,7 @@ import {
   type BracketStageView,
   financeOf,
   humanizePlayerIds,
+  stripLedgerIds,
   motmOf,
   type MatchReportPlayerView,
   setTraining,
@@ -400,6 +401,19 @@ describe("컵 진행", () => {
 
 describe("id → 이름 치환", () => {
   const state = createTestGame();
+
+  it("stripLedgerIds가 협상·메일 id를 걷고 남은 괄호를 정리한다", () => {
+    expect(
+      stripLedgerIds(
+        "두 선수 모두 장부에 정식 협상 건(래시포드 `neg-2026-07-01-1`, 쿠냐 `neg-2026-07-01-2`)으로 개설되었습니다.",
+      ),
+    ).toBe("두 선수 모두 장부에 정식 협상 건(래시포드, 쿠냐)으로 개설되었습니다.");
+    expect(stripLedgerIds("제안(neg-2026-07-01-1-p2)을 보냈고 회신 메일(mail-3-m1)이 왔다.")).toBe(
+      "제안을 보냈고 회신 메일이 왔다.",
+    );
+    // 더 긴 낱말의 일부는 id가 아니다
+    expect(stripLedgerIds("x-mail-3 그대로")).toBe("x-mail-3 그대로");
+  });
 
   it("humanizePlayerIds가 서사 속 선수 id를 이름으로 바꾼다", () => {
     const p = userPlayers(state)[0]!;
