@@ -97,11 +97,33 @@ const LOREBOOK_SCENE_WEIGHT = 1;
 const LOREBOOK_NAME_HIT = 3;
 const LOREBOOK_KEYWORD_HIT = 1;
 
-function lorebookHits(entry: LorebookEntry, text: string): { score: number; first: number } {
+/** 낱말이 시작하는 자리인가 — 「페르난데스」 안의 「난데스」나 지명 속 성은 부른 것이 아니다 */
+function startsWord(text: string, at: number): boolean {
+  return at === 0 || !/[\p{L}\p{N}]/u.test(text[at - 1]!);
+}
+
+function wordAt(text: string, word: string): number {
+  for (let at = text.indexOf(word); at >= 0; at = text.indexOf(word, at + 1))
+    if (startsWord(text, at)) return at;
+  return -1;
+}
+
+/**
+ * `familiar`가 아닌 항목은 **이름의 일부인 키워드**(성)로 걸리지 않는다 — 세계에는 같은 성이
+ * 수십 명이고, 장면이 「마르티네스」라 부른 사람은 우리가 아는 그 사람이다.
+ */
+function lorebookHits(
+  entry: LorebookEntry,
+  text: string,
+  familiar: boolean,
+): { score: number; first: number } {
+  const name = entry.name.normalize("NFKC").toLowerCase();
   let score = 0;
   let first = Infinity;
-  for (const [i, keyword] of [entry.name, ...entry.keywords].entries()) {
-    const at = text.indexOf(keyword.normalize("NFKC").toLowerCase());
+  for (const [i, raw] of [entry.name, ...entry.keywords].entries()) {
+    const keyword = raw.normalize("NFKC").toLowerCase();
+    if (i > 0 && !familiar && name.includes(keyword)) continue;
+    const at = wordAt(text, keyword);
     if (at < 0) continue;
     score += i === 0 ? LOREBOOK_NAME_HIT : LOREBOOK_KEYWORD_HIT;
     first = Math.min(first, at);
@@ -109,8 +131,20 @@ function lorebookHits(entry: LorebookEntry, text: string): { score: number; firs
   return { score, first };
 }
 
+/** 성만으로 불러도 되는 항목 — 우리 선수단과 우리 구단의 인물 */
+export function familiarLorebookIds(
+  state: Pick<GameState, "players" | "personas" | "userTeamId">,
+): Set<string> {
+  return new Set([
+    ...state.players
+      .filter((player) => player.teamId === state.userTeamId)
+      .map((player) => `player:${player.id}`),
+    ...state.personas.map((persona) => persona.lorebookId),
+  ]);
+}
+
 /**
- * 이번 턴에 실을 항목 — 감독의 말(`said`)과 직전 장면(`scene`)에서 이름·키워드가 맞은
+ * 이번 턴에 실을 항목 — 감독의 말(`said`)과 직전 장면(`scene`)에서 이름·키워드가 낱말 머리에 맞은
  * 것 중 이력에 같은 버전이 없는 것을 관련도 순으로 `LOREBOOK_CARDS_PER_TURN`개까지.
  * 같은 점수는 감독의 말에서 먼저 불린 쪽, 그다음 장면에서 먼저 불린 쪽, 그다음 사전 순서다.
  */
@@ -119,6 +153,8 @@ export function selectLorebook(
   said: string,
   injected: readonly LorebookInjection[],
   scene = "",
+  /** 없으면 모든 항목이 성으로도 걸린다 */
+  familiar?: ReadonlySet<string>,
 ): LorebookEntry[] {
   const manager = said.normalize("NFKC").toLowerCase();
   const before = scene.normalize("NFKC").toLowerCase();
@@ -128,8 +164,9 @@ export function selectLorebook(
   return entries
     .flatMap((entry, order) => {
       if (present.get(entry.id) === entry.version) return [];
-      const inSaid = lorebookHits(entry, manager);
-      const inScene = lorebookHits(entry, before);
+      const known = familiar === undefined || familiar.has(entry.id);
+      const inSaid = lorebookHits(entry, manager, known);
+      const inScene = lorebookHits(entry, before, known);
       const score = inSaid.score * LOREBOOK_MANAGER_WEIGHT + inScene.score * LOREBOOK_SCENE_WEIGHT;
       return score > 0 ? [{ entry, score, said: inSaid.first, scene: inScene.first, order }] : [];
     })

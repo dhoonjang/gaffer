@@ -55,6 +55,18 @@ describe("로어북 주입과 편집", () => {
       selectLorebook([keywordOnly, named[0]!], "오른발", [], "선수0").map((entry) => entry.id),
     ).toEqual(["player:0", "player:k"]);
   });
+  it("성만으로는 아는 사람만 걸리고, 낱말 머리에서만 맞는다", () => {
+    const ours = { ...card("player:ours", "리산드로 마르티네스"), keywords: ["마르티네스"] };
+    const theirs = { ...card("player:theirs", "에밀리아노 마르티네스"), keywords: ["마르티네스"] };
+    const familiar = new Set([ours.id]);
+    const ids = (said: string) =>
+      selectLorebook([ours, theirs], said, [], "", familiar).map((entry) => entry.id);
+    expect(ids("마르티네스는 어때?")).toEqual(["player:ours"]);
+    // 전체 이름으로 부르면 남의 선수도 걸린다
+    expect(ids("에밀리아노 마르티네스 소식")).toEqual(["player:theirs", "player:ours"]);
+    // 낱말 한가운데는 부른 것이 아니다
+    expect(selectLorebook([ours], "로드리게스마르티네스", [], "", familiar)).toEqual([]);
+  });
   it("편집은 접수만으로 적용되지 않고 기존 이름을 보존한다", () => {
     const state = stateOf();
     const before = structuredClone(state.lorebook[0]!);

@@ -1,6 +1,7 @@
 import { advanceOperationWithWorld, advanceSceneWithWorld } from "./date-work";
 import {
   selectLorebook,
+  familiarLorebookIds,
   playerName,
   stampLorebook,
   syncLorebook,
@@ -396,6 +397,7 @@ async function callGm(
       addressee ? `${playerName(state, addressee.playerId)}\n${message}` : message,
       injectedCharacters(state),
       lastModel?.text ?? "",
+      familiarLorebookIds(state),
     ),
   );
   /**
