@@ -14,11 +14,7 @@ export function mainMailOverview(state: GameState) {
   const mail = buildMailView(state);
   return {
     unread: mail.unread,
-    contacts: mail.recipients.map(({ contactId, label, recipient }) => ({
-      contactId,
-      label,
-      recipient,
-    })),
+    // 주소록은 싣지 않는다 — 세계의 모든 구단이라 수백 건이다. 보낼 상대는 get_mail이 준다
     recent: [...mail.threads]
       .sort(
         (a, b) =>

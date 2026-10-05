@@ -276,6 +276,8 @@ describe("main dialogue and scheduled mail", () => {
     );
     const overview = JSON.stringify(mainMailOverview(state));
     expect(overview.length).toBeLessThan(8000);
+    expect(overview).not.toContain("recipients");
+    expect(overview).not.toContain('"contacts"');
     expect(overview).not.toContain("x".repeat(301));
   });
 });
