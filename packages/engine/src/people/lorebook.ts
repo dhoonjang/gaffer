@@ -85,24 +85,57 @@ export function readStaffCandidate(
   return { ...terms, lorebook: bookContent(lorebook) };
 }
 
+/** 한 턴에 새로 싣는 로어북 항목의 상한 — 넘치면 관련도가 높은 쪽부터 남는다 */
+export const LOREBOOK_CARDS_PER_TURN = 5;
+
+/**
+ * 관련도 — 감독이 이번에 한 말이 직전 장면보다 무겁고, 이름이 키워드보다 무겁다.
+ * 키워드는 맞은 개수만큼 더한다.
+ */
+const LOREBOOK_MANAGER_WEIGHT = 2;
+const LOREBOOK_SCENE_WEIGHT = 1;
+const LOREBOOK_NAME_HIT = 3;
+const LOREBOOK_KEYWORD_HIT = 1;
+
+function lorebookHits(entry: LorebookEntry, text: string): { score: number; first: number } {
+  let score = 0;
+  let first = Infinity;
+  for (const [i, keyword] of [entry.name, ...entry.keywords].entries()) {
+    const at = text.indexOf(keyword.normalize("NFKC").toLowerCase());
+    if (at < 0) continue;
+    score += i === 0 ? LOREBOOK_NAME_HIT : LOREBOOK_KEYWORD_HIT;
+    first = Math.min(first, at);
+  }
+  return { score, first };
+}
+
+/**
+ * 이번 턴에 실을 항목 — 감독의 말(`said`)과 직전 장면(`scene`)에서 이름·키워드가 맞은
+ * 것 중 이력에 같은 버전이 없는 것을 관련도 순으로 `LOREBOOK_CARDS_PER_TURN`개까지.
+ * 같은 점수는 감독의 말에서 먼저 불린 쪽, 그다음 장면에서 먼저 불린 쪽, 그다음 사전 순서다.
+ */
 export function selectLorebook(
   entries: readonly LorebookEntry[],
-  text: string,
+  said: string,
   injected: readonly LorebookInjection[],
+  scene = "",
 ): LorebookEntry[] {
-  const normalized = text.normalize("NFKC").toLowerCase();
+  const manager = said.normalize("NFKC").toLowerCase();
+  const before = scene.normalize("NFKC").toLowerCase();
   const present = new Map<string, number>();
   for (const entry of injected)
     present.set(entry.id, Math.max(present.get(entry.id) ?? 0, entry.version));
   return entries
-    .filter(
-      (entry) =>
-        present.get(entry.id) !== entry.version &&
-        [entry.name, ...entry.keywords].some((keyword) =>
-          normalized.includes(keyword.normalize("NFKC").toLowerCase()),
-        ),
-    )
-    .map((entry) => ({ ...entry, keywords: [...entry.keywords] }));
+    .flatMap((entry, order) => {
+      if (present.get(entry.id) === entry.version) return [];
+      const inSaid = lorebookHits(entry, manager);
+      const inScene = lorebookHits(entry, before);
+      const score = inSaid.score * LOREBOOK_MANAGER_WEIGHT + inScene.score * LOREBOOK_SCENE_WEIGHT;
+      return score > 0 ? [{ entry, score, said: inSaid.first, scene: inScene.first, order }] : [];
+    })
+    .sort((a, b) => b.score - a.score || a.said - b.said || a.scene - b.scene || a.order - b.order)
+    .slice(0, LOREBOOK_CARDS_PER_TURN)
+    .map(({ entry }) => ({ ...entry, keywords: [...entry.keywords] }));
 }
 
 type LorebookState = Pick<

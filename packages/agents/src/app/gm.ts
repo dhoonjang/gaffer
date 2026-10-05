@@ -1,6 +1,7 @@
 import { advanceOperationWithWorld, advanceSceneWithWorld } from "./date-work";
 import {
   selectLorebook,
+  playerName,
   stampLorebook,
   syncLorebook,
   awaitingShootout,
@@ -386,12 +387,15 @@ async function callGm(
    */
   syncLorebook(state);
   const lastModel = [...state.chat].reverse().find((turn) => turn.role === "model");
+  // 말을 건 상대는 이름을 부르지 않아도 감독의 말에서 불린 것으로 센다
+  const addressee = state.chat.at(-1)?.addressee;
   const characters = stampLorebook(
     state,
     selectLorebook(
       state.lorebook,
-      `${message}\n${lastModel?.text ?? ""}`,
+      addressee ? `${playerName(state, addressee.playerId)}\n${message}` : message,
       injectedCharacters(state),
+      lastModel?.text ?? "",
     ),
   );
   /**

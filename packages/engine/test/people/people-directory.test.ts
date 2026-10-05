@@ -4,6 +4,7 @@ import {
   completeCharacterUpdate,
   requestCharacterUpdate,
   selectLorebook,
+  LOREBOOK_CARDS_PER_TURN,
 } from "../../src/people/lorebook";
 
 const card = (id = "player:one", name = "김선수"): LorebookEntry => ({
@@ -32,6 +33,27 @@ describe("로어북 주입과 편집", () => {
     expect(
       selectLorebook([{ ...entry, version: 2 }], "김선수", [{ ...entry, now: "" }]),
     ).toHaveLength(1);
+  });
+  it("한 턴에 상한까지만 싣고, 감독의 말이 장면보다·이름이 키워드보다 앞선다", () => {
+    const named = Array.from({ length: LOREBOOK_CARDS_PER_TURN + 2 }, (_, i) =>
+      card(`player:${i}`, `선수${i}`),
+    );
+    const said = named.map((entry) => entry.name).join(" ");
+    expect(selectLorebook(named, said, [])).toHaveLength(LOREBOOK_CARDS_PER_TURN);
+    // 감독이 늦게 부른 이름도 장면에서만 불린 이름보다 앞선다
+    const picked = selectLorebook(named, "선수6", [], "선수0 선수1 선수2 선수3 선수4 선수5");
+    expect(picked.map((entry) => entry.id)).toEqual([
+      "player:6",
+      "player:0",
+      "player:1",
+      "player:2",
+      "player:3",
+    ]);
+    // 장면에서 이름이 불린 쪽이 감독의 말에서 키워드만 맞은 쪽보다 앞선다 (3 > 1×2)
+    const keywordOnly = { ...card("player:k", "박선수"), keywords: ["오른발"] };
+    expect(
+      selectLorebook([keywordOnly, named[0]!], "오른발", [], "선수0").map((entry) => entry.id),
+    ).toEqual(["player:0", "player:k"]);
   });
   it("편집은 접수만으로 적용되지 않고 기존 이름을 보존한다", () => {
     const state = stateOf();
