@@ -1,19 +1,8 @@
-import { advanceOperationWithWorld, advanceSceneWithWorld } from "./workflows/date-work";
-import { selectLorebook, stampLorebook, syncLorebook } from "@story-fm/engine";
-/**
- * GM 오케스트레이터 — 장면 라우팅 (agents.md §1·§2). 국면은 `state.phase` 하나로 갈린다 —
- * `match`면 매치 GM, 아니면 평시 GM이고 둘 다 호출 하나다.
- *
- * **모드로 갈리지 않는다.** 실모드는 설정된 제공자의 tool loop이고, `LLM_MODE=mock`은
- * 그 모델 자리에 대본 어댑터를 세운다(`mock-gm.ts` — agents.md §8) — 도구도 입력 조립도
- * 기록도 같은 코드다. 상태 변경의 유일한 통로는 엔진 명령 하나뿐이다.
- *
- * 실모드 한 턴은 **앞·호출·뒤** 셋이다 (agents.md §2 「턴은 앞·호출·뒤 셋이다」) —
- * `openTurn`이 모델보다 먼저 코어를 굴리고, `callGm`이 3층 입력을 조립해 부르고,
- * `closeTurn`이 장면·시계·결산을 받아 적는다. 세 단계가 주고받는 것은 이번 턴의
- * 장부(`TurnLedger`)와 턴 앞이 남긴 것(`TurnOpening`)뿐이다.
- */
+import { advanceOperationWithWorld, advanceSceneWithWorld } from "./date-work";
 import {
+  selectLorebook,
+  stampLorebook,
+  syncLorebook,
   awaitingShootout,
   buildTrainingBrief,
   clockOf,
@@ -35,19 +24,36 @@ import {
   type GoalMark,
   type TrainingBrief,
 } from "@story-fm/engine";
+/**
+ * GM 오케스트레이터 — 장면 라우팅 (agents.md §1·§2). 국면은 `state.phase` 하나로 갈린다 —
+ * `match`면 매치 GM, 아니면 평시 GM이고 둘 다 호출 하나다.
+ *
+ * **모드로 갈리지 않는다.** 실모드는 설정된 제공자의 tool loop이고, `LLM_MODE=mock`은
+ * 그 모델 자리에 대본 어댑터를 세운다(`mock-gm.ts` — agents.md §8) — 도구도 입력 조립도
+ * 기록도 같은 코드다. 상태 변경의 유일한 통로는 엔진 명령 하나뿐이다.
+ *
+ * 실모드 한 턴은 **앞·호출·뒤** 셋이다 (agents.md §2 「턴은 앞·호출·뒤 셋이다」) —
+ * `openTurn`이 모델보다 먼저 코어를 굴리고, `callGm`이 3층 입력을 조립해 부르고,
+ * `closeTurn`이 장면·시계·결산을 받아 적는다. 세 단계가 주고받는 것은 이번 턴의
+ * 장부(`TurnLedger`)와 턴 앞이 남긴 것(`TurnOpening`)뿐이다.
+ */
 import type { MailMessage, BoardMove, MatchEvent, MediaFact, TickEvent } from "@story-fm/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
-import { reportTraining } from "./workflows/story/training-rater";
-import { buildMatchTools } from "./workflows/match/match-gm";
-import { eventsBlockOf } from "../match/context";
-import { KICKOFF_BLOCK, MATCH_GM_SYSTEM, type MatchToolContext } from "../match/match-gm";
-import { finalizeMatchTurn } from "./workflows/match/finalize-match";
+import { reportTraining } from "../evaluators/training-rater";
+import {
+  buildMatchTools,
+  KICKOFF_BLOCK,
+  MATCH_GM_SYSTEM,
+  type MatchToolContext,
+} from "../gm/match-gm";
+import { eventsBlockOf, buildLedgerNote } from "../shared/match-context";
+import { finalizeMatchTurn } from "../evaluators/finalize-match";
 import { mockGmLlm } from "./mock-gm";
-import { retryOnce } from "../common/retry";
-import { GM_SYSTEM } from "../story/gm-prompt";
-import { buildGmTools, collectMatchMarks } from "./gm-tools";
-import { takeSuggestion } from "../common/suggest-reply";
-import { scoreBeforeEvents } from "../match/match-script";
+import { retryOnce } from "../shared/retry";
+import { GM_SYSTEM } from "../gm/gm-prompt";
+import { buildGmTools, collectMatchMarks } from "../gm/gm-tools";
+import { takeSuggestion } from "../shared/suggest-reply";
+import { scoreBeforeEvents } from "../shared/match-script";
 import {
   buildGmDigest,
   buildGmHistory,
@@ -62,10 +68,13 @@ import {
   renderTurnGroup,
   stampMatchScene,
   stampMatchStream,
-} from "./gm-input";
-import { buildGmReference } from "./workflows/common/context";
-import { parseSceneHeader, sanitizeCasterText, sanitizeSceneText } from "../common/context";
-import { buildLedgerNote } from "../match/context";
+} from "../gm/gm-input";
+import {
+  buildGmReference,
+  parseSceneHeader,
+  sanitizeCasterText,
+  sanitizeSceneText,
+} from "../shared/context";
 import {
   GmTurnFailure,
   TIME_PASSED,
@@ -73,15 +82,15 @@ import {
   type GmToolCall,
   type GmTurnResult,
   type TurnOperation,
-} from "../common/gm-types";
+} from "../shared/gm-types";
 
 // 분할 전 gm.ts의 export 표면 유지 — 프롬프트·도구·입력 빌더는 형제 파일에 있다
-export * from "../story/gm-prompt";
-export * from "./gm-tools";
-export * from "../match/context";
-export * from "./gm-input";
-export * from "../common/context";
-export * from "./workflows/common/context";
+export * from "../gm/gm-prompt";
+export * from "../gm/gm-tools";
+export * from "../shared/match-context";
+export * from "../gm/gm-input";
+export * from "../shared/context";
+export * from "../shared/context";
 
 /** 진행이 멈춘 이유 — 선언한 시점에 못 미쳤을 때 다음 턴 상태에 실린다 */
 const ADVANCE_STOP_KO: Record<string, string> = {
@@ -606,7 +615,7 @@ async function closeTurn(
    * 내부 판정이라 칩으로 세우지 않는다. 결과는 **장부의 결산 카드**가 갖는다
    * (`state.trainingReports`) — 달력 일지가 그 카드를 문장으로 펼치고, 다음 턴의
    * 스냅샷 `<coach>` 첫 줄이 구간과 이름을 싣는다
-   * (docs/common/season.md §4 · docs/common/llm/agents.md §6).
+   * (docs/players/training.md · docs/agents/agents.md §6).
    */
   for (const brief of ledger.training) {
     await reportTraining(state, brief);

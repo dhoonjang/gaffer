@@ -7,8 +7,8 @@ import { COLD_MS } from "./timeouts";
  * 게임 목록 → 새 게임(팀 선택 + 감독 직접 입력) → 부임 브리핑 → 훈련 지시
  * (스킬 카드) → 경기일 진행 → 킥오프 → 경기 완주 → 오피스 4뷰 검증
  *
- * ⚠️ **채팅에 치는 말은 mock 대본의 키다** (`packages/agents/src/app/mock-script.ts` —
- * docs/common/llm/agents.md §8). 대본은 자연어를 해석하지 않으므로 글자가 하나만 달라도
+ * ⚠️ **채팅에 치는 말은 mock 대본의 키다** (`packages/agents/src/gm/mock-script.ts` —
+ * docs/agents/agents.md §8). 대본은 자연어를 해석하지 않으므로 글자가 하나만 달라도
  * 그 턴은 아무 도구도 부르지 않는다. 표에 없는 말을 치는 자리는 「턴이 그냥 돈다」를
  * 재는 자리뿐이다.
  */
@@ -234,7 +234,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
    */
   await expect(page.locator(".kickoff-gate .kg-line")).toHaveCount(22);
   // 중계는 화자다 — 문구가 아니라 그 화자의 말풍선(`.say.broadcast`)이 섰는지를 본다
-  // (`BROADCAST_SPEAKER`, packages/domain/src/common/persona.ts)
+  // (`BROADCAST_SPEAKER`, packages/domain/src/people/persona.ts)
   const broadcast = page.locator(".say.broadcast");
   await expect(broadcast).toHaveCount(0);
   await page.getByTestId("kickoff-enter").click();
@@ -434,7 +434,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
 
   await page.getByTestId("tab-재정").click();
   await expect(page.getByTestId("view-finance")).toContainText("구단 잔고");
-  // 실시간 재정 활동 + 이번 달 진행 중 집계 (docs/common/finance.md)
+  // 실시간 재정 활동 + 이번 달 진행 중 집계 (docs/team/finance.md)
   await expect(page.getByTestId("fin-feed")).toContainText("선수 주급");
   await expect(page.getByTestId("view-finance")).toContainText("월간 재정 보고서");
   await expect(page.getByTestId("view-finance")).toContainText("진행 중");
@@ -632,7 +632,7 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   /*
    * 채팅으로 모양을 말해도 **판은 그대로 서 있다** — 프리셋은 새 게임의 최초 배치를
    * 만드는 데만 쓰고, 세이브가 시작된 뒤 자리를 옮기는 것은 칩을 끄는 일이다
-   * (docs/common/team.md §6). 그 지시에서 상태가 되는 것은 전술 6축뿐이다.
+   * (docs/team/team.md §6). 그 지시에서 상태가 되는 것은 전술 6축뿐이다.
    */
   await page.getByTestId("tab-채팅").click();
   await page.getByTestId("chat-input").fill("4-4-2로 수비적으로 가자");

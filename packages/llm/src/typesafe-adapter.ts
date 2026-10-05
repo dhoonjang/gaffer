@@ -229,7 +229,7 @@ function parseAnswers(
   return { model: parsed.data.model, answers };
 }
 
-export interface TypesafeEvaluationAccounting {
+interface TypesafeEvaluationAccounting {
   attempts: number;
   /** False when any attempted request has no valid provider token report. */
   usageComplete: boolean;

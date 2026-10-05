@@ -61,10 +61,10 @@ vi.mock("@story-fm/engine", () => ({
 vi.mock("@story-fm/llm", () => ({
   traceBoard: async (_id: string, action: () => Promise<unknown>) => action(),
 }));
-vi.mock("@/application/lib/store", () => ({
+vi.mock("@/game/store", () => ({
   toPayload: () => ({ id: "live", views: {}, chatLength: 0 }),
 }));
-vi.mock("@/application/lib/turn-runner", () => ({
+vi.mock("@/game/turn-runner", () => ({
   LOCK_WAIT_MS: { turn: 3000 },
   withGameLock: async (_id: string, _wait: number, action: () => Promise<unknown>) => action(),
   applyMatchBoardOrder: () => {
@@ -72,7 +72,7 @@ vi.mock("@/application/lib/turn-runner", () => ({
     return memory.rejectOrder ? { ok: false, message: "invalid order" } : { ok: true };
   },
 }));
-import { handleLiveAction, readLiveMatch } from "@/application/lib/live-match-server";
+import { handleLiveAction, readLiveMatch } from "@/game/live-match-server";
 
 beforeEach(() => {
   memory.db = {

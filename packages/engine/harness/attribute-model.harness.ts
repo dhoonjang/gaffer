@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ageOf, bestOverall, weightSlotOf, type WeightSlot } from "@story-fm/domain";
-import { deriveAxes, type SeedAxes } from "../src/common/world/attributes";
-import { CATALOG_AGE_REF, derivePositions } from "../src/common/world/catalog";
+import { deriveAxes, type SeedAxes } from "../src/players/catalog/attributes";
+import { CATALOG_AGE_REF, derivePositions } from "../src/players/catalog/catalog";
 import {
   RETARGET_TOLERANCE,
   potentialGapBand,
   synthesizeSeed,
-} from "../src/common/world/synthesis";
-import { SQUAD_SEEDS } from "../src/common/data/squad-seeds";
-import { TIER_BASE, strengthBase, teamCatalog } from "../src/common/data/team-catalog";
+} from "../src/players/catalog/synthesis";
+import { SQUAD_SEEDS } from "../src/players/catalog/squad-seeds";
+import { TIER_BASE, strengthBase, teamCatalog } from "../src/core/catalog/team-catalog";
 import { ATTRIBUTE_MODEL } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
 

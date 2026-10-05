@@ -2,20 +2,20 @@ import { dlog, dsigmoid } from "@story-fm/domain";
 import type { Player } from "@story-fm/domain";
 
 /** 슈팅 가중 리그 평균 75가 기회 xG를 그대로 실현하는 기준점. */
-export const FINISHING_PIVOT = 75;
+const FINISHING_PIVOT = 75;
 /** 0~99 능력치를 기준점 주변의 대칭 눈금으로 옮기는 폭. */
-export const FINISHING_SCALE = 34;
+const FINISHING_SCALE = 34;
 /** 같은 기회의 골 오즈를 결정력이 움직이는 세기. */
-export const FINISHING_LOGIT_WEIGHT = 0.55;
+const FINISHING_LOGIT_WEIGHT = 0.55;
 /** 슈팅별 xG가 경로 평균 주변에 모이는 정도 — 작을수록 꼬리가 넓다. */
-export const SHOT_XG_CONCENTRATION = 16;
+const SHOT_XG_CONCENTRATION = 16;
 
 /** 기회 질이 0일 때 골이 못 된 슛이 유효슈팅으로 남을 로그오즈. */
 const SAVED_LOGIT_BASE = -1.15;
 /** 기회 질이 그 로그오즈를 끌어올리는 세기 — 좋은 기회일수록 골문 안으로 간다. */
 const SAVED_LOGIT_XG_WEIGHT = 2.1;
 /** 골문을 벗어난 슛 중 수비 몸에 맞는 비율 — 나머지가 유효슈팅 실패다. */
-export const BLOCKED_SHARE = 0.38;
+const BLOCKED_SHARE = 0.38;
 
 /** 부동소수점 로그의 정의역만 지키는 수치 안전값 — 밸런스 상·하한이 아니다. */
 const PROBABILITY_EPSILON = Number.EPSILON;
@@ -82,7 +82,7 @@ export function samplePoisson(rng: () => number, lambda: number): number {
   return count - 1;
 }
 
-export type ShotOutcome = "goal" | "saved" | "blocked" | "off_target";
+type ShotOutcome = "goal" | "saved" | "blocked" | "off_target";
 
 /**
  * 골이 되지 못한 슛이 **유효슈팅(선방)으로 남을 확률**.
@@ -92,7 +92,7 @@ export function savedShare(xg: number): number {
   return sigmoid(SAVED_LOGIT_BASE + SAVED_LOGIT_XG_WEIGHT * xg);
 }
 
-export interface SampledShot {
+interface SampledShot {
   xg: number;
   goalProbability: number;
   outcome: ShotOutcome;
@@ -123,16 +123,16 @@ export function sampleShot(
 // ── 페널티 — 승부차기와 경기 중이 같은 식을 쓴다 ────────────────
 //
 // 경기 중 페널티·승부차기·간이 시뮬이 모두 지나는 `packages/sim`이 원본이고,
-// 승부차기(`engine/competition/shootout.ts`)는 여기서 import한다 (match.md §3.4).
+// 승부차기(`engine/match/shootout.ts`)는 여기서 import한다 (match.md §3.4).
 
 /** 성공률의 바닥 — 아무리 약한 키커도 이 아래로 내려가지 않는다 */
-export const PENALTY_FLOOR = 0.62;
+const PENALTY_FLOOR = 0.62;
 /** 성공률의 천장 — 아무리 강한 키커도 이 위로 올라가지 않는다 */
-export const PENALTY_CEILING = 0.8;
+const PENALTY_CEILING = 0.8;
 /** 키커와 골키퍼의 기량이 같을 때의 성공률 — 대역의 가운데 */
-export const PENALTY_BASE = 0.71;
+const PENALTY_BASE = 0.71;
 /** 기량 차 1당 오르내리는 폭 — 26점 차가 대역의 끝에 닿는다 */
-export const PENALTY_EDGE = 0.0035;
+const PENALTY_EDGE = 0.0035;
 
 /** 키커의 페널티 기량 — 결정력·침착성·킥력의 가중 평균 */
 const PENALTY_WEIGHTS = { finishing: 0.5, composure: 0.3, kicking: 0.2 } as const;
@@ -165,7 +165,7 @@ export function keeperSkill(p: Player | null): number {
  * 이 킥의 성공 확률 — 키커와 골키퍼의 기량 차가 정한다.
  *
  * ⚠️ **양쪽 다 막는다.** 대역(0.62~0.80)은 문서가 쥔 값이고, 페널티가 실력이 덜
- * 갈리는 무대라는 설계가 거기 들어 있다 (→ docs/match/competition.md §6).
+ * 갈리는 무대라는 설계가 거기 들어 있다 (→ docs/season/competition.md §6).
  *
  * 경기 중 페널티는 이 값이 곧 그 슛의 `xg`이자 `goalProbability`다 — 결정력을 한 번
  * 더 얹지 않는다. `penaltySkill`이 이미 결정력 0.5를 싣고 있어 두 번 세는 것이 된다.

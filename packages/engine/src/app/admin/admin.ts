@@ -21,10 +21,10 @@ import {
   resetCatalog,
   saveCatalog,
   seedCatalog,
-} from "../../common/world/catalog";
-import { claimPlayerId } from "../../common/world/player-id";
-import { leagueName } from "../../common/data/league-catalog";
-import { isClubTeam, teamCatalog, teamCatalogById } from "../../common/data/team-catalog";
+} from "../../players/catalog/catalog";
+import { claimPlayerId } from "../../core/catalog/player-id";
+import { leagueName } from "../../core/catalog/league-catalog";
+import { isClubTeam, teamCatalog, teamCatalogById } from "../../core/catalog/team-catalog";
 
 /**
  * 선수 카탈로그 어드민 — **게임과 무관한 초기치 DB만** 편집한다.
@@ -77,12 +77,12 @@ export type CatalogPlayerInput = CatalogPlayerInputMeta & AxisValues;
  * 실측을 지워 모델 추정으로 되돌림, 숫자면 그 값. 카탈로그의 주급은 실측이고
  * 없는 것이 기본이라, 0과 "값 없음"이 갈리지 않으면 새 게임 계약이 £0/주가 된다.
  */
-export type CatalogPlayerPatch = Partial<Omit<CatalogPlayerInput, "weeklyWage">> & {
+type CatalogPlayerPatch = Partial<Omit<CatalogPlayerInput, "weeklyWage">> & {
   weeklyWage?: number | null;
 };
 
 /** 선수 한 명의 편집 한 번 — 소속·포지션·수치가 같은 요청에 담긴다 */
-export interface CatalogPlayerEdit extends CatalogPlayerPatch {
+interface CatalogPlayerEdit extends CatalogPlayerPatch {
   /** 옮겨 갈 팀. 지금 소속과 같으면 이동은 없던 일이 된다 */
   teamId?: string;
   /** 가능 포지션 전체 교체 (멀티 포지션) */
@@ -90,7 +90,7 @@ export interface CatalogPlayerEdit extends CatalogPlayerPatch {
 }
 
 /** 어드민 목록 행 — 파생값(나이·OVR·주 포지션)을 표시용으로 함께 담는다 */
-export interface CatalogPlayerRow extends PlayerCatalogEntry {
+interface CatalogPlayerRow extends PlayerCatalogEntry {
   /** 시즌 1 개막 기준 나이 (파생) */
   age: number;
   /** 주 포지션 공식으로 계산한 OVR (파생 — 저장하지 않는다) */

@@ -1,18 +1,18 @@
-import { HISTORY_CHAR_KEEP } from "../src/common/core/history-window";
+import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
 import { defineHarness, type Harness } from "./harness";
 
 /**
- * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/common/balance-harness.md`).
+ * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/balance-harness.md`).
  *
  * `why`는 그 구간이 왜 그 자리인지의 한 줄이고, 긴 근거는 `doc`이 가리키는 문서 절이
  * 쥔다. 여기에 없는 숫자를 하네스 본체가 직접 적으면 기댓값이 다시 두 곳으로 갈린다.
  */
 
 const MATCH = "docs/match/match.md §7";
-const FINANCE = "docs/common/finance.md §10";
-const HISTORY = "docs/common/llm/agents.md §5-1";
-const PROMPTS = "docs/common/llm/prompts.md §7";
-const TOOL_CONTRACT = "docs/common/llm/prompts.md §2";
+const FINANCE = "docs/team/finance.md §10";
+const HISTORY = "docs/agents/agents.md §5-1";
+const PROMPTS = "docs/agents/prompts.md §7";
+const TOOL_CONTRACT = "docs/agents/prompts.md §2";
 
 export const WORLD_SEASON = defineHarness({
   id: "world-season",
@@ -334,7 +334,7 @@ export const FINANCE_MULTI_SEASON = defineHarness({
 export const FINANCE_SECOND_TIER = defineHarness({
   id: "finance-second-tier",
   what: "리그전을 굴리지 않는 2부의 한 시즌 수지",
-  doc: "docs/common/finance.md §5.1",
+  doc: "docs/team/finance.md §5.1",
   cost: "전체 세계 한 시즌 · 수 분",
   // prettier-ignore
   bands: [
@@ -395,7 +395,7 @@ export const AI_BENCH = defineHarness({
 export const SQUAD_LONGEVITY = defineHarness({
   id: "squad-longevity",
   what: "15시즌을 넘긴 뒤에도 구단이 선발 XI·계약을 세우는가 · 리그 체급의 드리프트",
-  doc: "docs/common/season.md §6·§9",
+  doc: "docs/season/season.md §6·§9",
   cost: "세계 하나 · 월간 성장 180번 + 전환 15번 · 약 30초",
   // prettier-ignore
   bands: [
@@ -423,12 +423,12 @@ export const SQUAD_LONGEVITY = defineHarness({
 
 /**
  * 유스 육성 — **2군 리그가 돌고, 감독의 선택이 유망주의 성장 속도를 가르는가**
- * (`docs/common/season.md` §2 2군 리그).
+ * (`docs/season/season.md` §2 2군 리그).
  */
 export const YOUTH_DEVELOPMENT = defineHarness({
   id: "youth-development",
   what: "2군 경기 수 · 출전·집중 육성이 가르는 성장 격차",
-  doc: "docs/common/season.md §2",
+  doc: "docs/season/season.md §2",
   cost: "세계 하나 · 한 시즌 완주 · 수 분",
   // prettier-ignore
   bands: [
@@ -456,7 +456,7 @@ export const YOUTH_DEVELOPMENT = defineHarness({
 
 /**
  * 유스 인테이크의 **꼬리** — 한 여름 세계 전체가 낳은 잠재력·종합의 위 끝이
- * 시드 세계의 그것과 같은 자리에 서는가 (`docs/common/season.md` §6).
+ * 시드 세계의 그것과 같은 자리에 서는가 (`docs/season/season.md` §6).
  *
  * `squad-longevity`가 재는 것은 **평균**이다 — 리그 체급이 세대마다 가라앉는가.
  * 평균은 멎어 있는데 위 끝만 부풀 수 있고, 그때 세계의 엘리트가 해마다 합성 유스로
@@ -470,7 +470,7 @@ export const YOUTH_DEVELOPMENT = defineHarness({
 export const YOUTH_INTAKE_TAIL = defineHarness({
   id: "youth-intake-tail",
   what: "한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히",
-  doc: "docs/common/season.md §6",
+  doc: "docs/season/season.md §6",
   cost: "세계 넷 × 두 여름 · 약 20초",
   // prettier-ignore
   bands: [
@@ -497,7 +497,7 @@ export const YOUTH_INTAKE_TAIL = defineHarness({
 });
 
 /**
- * 종합 눈금 — **그 숫자가 굴리는 것들의 분포** (`docs/common/player.md` §4).
+ * 종합 눈금 — **그 숫자가 굴리는 것들의 분포** (`docs/players/player.md` §4).
  *
  * 종합은 화면의 숫자 하나가 아니라 주급 서열·잠재력 간격·등급 색이 함께 읽는
  * 눈금이다. 눈금을 옮기면 그 넷이 전부 따라 움직이는데, 얼마나 움직이는지는 코드를
@@ -507,7 +507,7 @@ export const YOUTH_INTAKE_TAIL = defineHarness({
 export const OVERALL_SCALE = defineHarness({
   id: "overall-scale",
   what: "종합이 굴리는 것들의 분포 — 자리별 평균 · 축 범위 밖 · 주급 · 잠재력 간격",
-  doc: "docs/common/player.md §4",
+  doc: "docs/players/player.md §4",
   cost: "세계 하나 · 시드당 몇 초 × 2시드",
   // prettier-ignore
   bands: [
@@ -541,12 +541,12 @@ export const OVERALL_SCALE = defineHarness({
     { metric: "잠재력 간격 p50", role: "measure", unit: "score", why: "" },
     { metric: "잠재력 간격 p90", role: "measure", unit: "score", why: "" },
     { metric: "잠재력 간격 최대", role: "measure", unit: "score", why: "" },
-    { metric: "잠재력 대역 상한 초과 비율", role: "measure", unit: "ratio", why: "`docs/common/player.md` §6.5의 나이별 참고 상한 — 시드의 성장 여지를 해석할 측정값이다" },
+    { metric: "잠재력 대역 상한 초과 비율", role: "measure", unit: "ratio", why: "`docs/players/player.md` §6.5의 나이별 참고 상한 — 시드의 성장 여지를 해석할 측정값이다" },
   ],
 });
 
 /**
- * 자체 산정 모델(`world/synthesis.ts`)이 낸 분포와 **지금 시드 분포의 간격**.
+ * 자체 산정 모델(`players/catalog/synthesis.ts`)이 낸 분포와 **지금 시드 분포의 간격**.
  *
  * 밴드가 절대값이 아니라 차에 걸리는 이유는 시드가 갱신되기 때문이다 — "합성 평균이
  * 72~74"는 시드가 움직이는 순간 낡지만 "합성과 시드의 차가 ±2"는 그대로 묻는다.
@@ -556,7 +556,7 @@ export const OVERALL_SCALE = defineHarness({
 export const ATTRIBUTE_MODEL = defineHarness({
   id: "attribute-model",
   what: "자체 산정 모델이 낸 분포와 지금 시드 분포의 간격 — 체급·낙차·자리·나이·잠재력",
-  doc: "docs/common/player.md §13",
+  doc: "docs/players/player.md §13",
   cost: "세계를 세우지 않는다 — 시드 2,800명을 재고 같은 수를 합성한다, 수 초",
   // prettier-ignore
   bands: [

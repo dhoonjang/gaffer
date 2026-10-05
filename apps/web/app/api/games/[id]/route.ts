@@ -1,9 +1,9 @@
-import { processLorebookJobs } from "@/application/lib/lorebook-jobs";
+import { processLorebookJobs } from "@/game/lorebook-jobs";
 import { after, NextResponse } from "next/server";
 import { noteTurn, traceBoard } from "@story-fm/llm";
 import { deleteGame, loadGame } from "@story-fm/engine";
-import { toPayload } from "@/application/lib/store";
-import { LOCK_WAIT_MS, busyResponse, withGameLock } from "@/application/lib/turn-runner";
+import { toPayload } from "@/game/store";
+import { LOCK_WAIT_MS, busyResponse, withGameLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
 
 /**
@@ -12,7 +12,7 @@ import { invalidGameId } from "@/app/api/games/game-id";
  * `?settled=1`이면 **그 세이브의 잠금이 풀린 다음에** 읽는다. 화면이 기다리기를
  * 멈춘 뒤 상태를 다시 받는 자리가 쓴다 — 서버는 연결이 끊겨도 턴을 끝까지 돌려
  * 저장하므로, 지금 읽으면 아직 저장 전이라 옛 상태가 돌아오고 잠시 뒤 커밋과 함께
- * 화면이 다시 어긋난다 (docs/common/llm/models.md §1-1).
+ * 화면이 다시 어긋난다 (docs/agents/models.md §1-1).
  *
  * **기다림에는 상한이 있다** — 그 안에 잠금이 풀리지 않으면 409로 물러난다. 도는 턴은
  * 계속 돌고 있으니 화면이 다시 물어보면 된다. 상한이 없던 자리에서는 분 단위로 도는

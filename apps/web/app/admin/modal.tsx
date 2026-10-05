@@ -1,5 +1,5 @@
 "use client";
-import { useDialog } from "@/domains/common/lib/use-dialog";
+import { useDialog } from "@/shared/use-dialog";
 
 import { useId, useRef, type ReactNode } from "react";
 

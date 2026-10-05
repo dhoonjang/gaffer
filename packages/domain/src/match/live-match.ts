@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { MatchEvent, MatchSide, ShotOrigin } from "../common/match-events";
+import type { MatchEvent, MatchSide, ShotOrigin } from "./match-events";
 import type { PlayPhase } from "./match";
 
 /**
@@ -49,21 +49,21 @@ export type LiveAction = (typeof LIVE_ACTIONS)[number];
  * 판독기가 말 하나에 주는 개인 지시 — 시트의 `behavior` 줄이 싣는 것 (live-match.md §6.2).
  * 코어가 실재를 검증한 뒤 그 말의 자리 규칙을 덮는다.
  */
-export const LIVE_BEHAVIOR_ACTIONS = ["press", "mark", "cover", "support", "run", "hold"] as const;
+const LIVE_BEHAVIOR_ACTIONS = ["press", "mark", "cover", "support", "run", "hold"] as const;
 export const LiveBehaviorActionSchema = z.enum(LIVE_BEHAVIOR_ACTIONS);
-export type LiveBehaviorAction = z.infer<typeof LiveBehaviorActionSchema>;
+type LiveBehaviorAction = z.infer<typeof LiveBehaviorActionSchema>;
 
-export const LIVE_BEHAVIOR_WHEN = ["attack", "defend", "always"] as const;
+const LIVE_BEHAVIOR_WHEN = ["attack", "defend", "always"] as const;
 export const LiveBehaviorWhenSchema = z.enum(LIVE_BEHAVIOR_WHEN);
-export type LiveBehaviorWhen = z.infer<typeof LiveBehaviorWhenSchema>;
+type LiveBehaviorWhen = z.infer<typeof LiveBehaviorWhenSchema>;
 
-export const LIVE_LANES = ["left", "center", "right"] as const;
+const LIVE_LANES = ["left", "center", "right"] as const;
 export const LiveLaneSchema = z.enum(LIVE_LANES);
 export type LiveLane = z.infer<typeof LiveLaneSchema>;
 
-export const LIVE_BANDS = ["defense", "midfield", "attack"] as const;
+const LIVE_BANDS = ["defense", "midfield", "attack"] as const;
 export const LiveBandSchema = z.enum(LIVE_BANDS);
-export type LiveBand = z.infer<typeof LiveBandSchema>;
+type LiveBand = z.infer<typeof LiveBandSchema>;
 
 export interface LiveBehavior {
   player: string;
@@ -163,7 +163,7 @@ export const LIVE_PHASES = [
 ] as const;
 export type LivePhase = (typeof LIVE_PHASES)[number];
 
-export interface LiveHalfClock {
+interface LiveHalfClock {
   /** 이 하프에 센 중단 — 추가시간의 원본 */
   stoppages: number;
   /** 확정된 추가시간 (초) — 하프가 끝날 때 적힌다 */
@@ -232,7 +232,7 @@ export interface LiveMatchFrame {
 }
 
 /** 체크포인트 간격 (경기 시간 분) — 정지점이 없어도 이만큼 굴리면 확정한다 */
-export const CHECKPOINT_MAX_MINUTES = 5;
+const CHECKPOINT_MAX_MINUTES = 5;
 /** 체크포인트 간격 (틱) */
 export const CHECKPOINT_TICKS = Math.round((CHECKPOINT_MAX_MINUTES * 60) / LIVE_STEP);
 
@@ -252,11 +252,4 @@ export const STOP_EVENT_TYPES: ReadonlySet<string> = new Set([
   "extra_time_start",
   "extra_half_time",
   "full_time",
-]);
-
-/** 휴식을 여는 정지점 — 판독은 라커룸의 것이다 */
-export const BREAK_EVENT_TYPES: ReadonlySet<string> = new Set([
-  "half_time",
-  "extra_time_start",
-  "extra_half_time",
 ]);

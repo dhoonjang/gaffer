@@ -1,16 +1,11 @@
 import { after } from "next/server";
-import { processLorebookJobs } from "@/application/lib/lorebook-jobs";
+import { processLorebookJobs } from "@/game/lorebook-jobs";
 import { z } from "zod";
 import { TurnOperationSchema } from "@story-fm/agents";
 import { llmErrorKind } from "@story-fm/llm";
-import {
-  errorDetail,
-  runTurnLocked,
-  turnErrorMessage,
-  turnErrorRetry,
-} from "@/application/lib/turn-runner";
+import { errorDetail, runTurnLocked, turnErrorMessage, turnErrorRetry } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
-import { MatchBoardOrderSchema } from "@/domains/match/lib/match-orders";
+import { MatchBoardOrderSchema } from "@/shared/match-orders";
 
 const TurnSchema = z
   .object({
@@ -23,7 +18,7 @@ const TurnSchema = z
     /**
      * 화면 조작(시간 이동·경기 진행 손잡이) — 감독의 발화로 취급하지 않는다.
      * **구조체다**: 문장을 되읽던 시절에는 UI 문구 한 글자가 곧 계약이었다
-     * (docs/common/llm/agents.md §2).
+     * (docs/agents/agents.md §2).
      */
     operation: TurnOperationSchema.optional(),
     /**
@@ -43,7 +38,7 @@ const TurnSchema = z
  * ⚠️ **서버리스 배포에서만 읽힌다** — `next start`로 띄운 프로세스는 이 값을 보지
  * 않으므로 여기에 마감을 기대면 안 된다. 응답이 반드시 끝나는 근거는 모델 호출마다
  * 걸리는 시한 하나뿐이고(`config/llm.yml`의 `timeout_ms` · `withDeadline`), 게임
- * 잠금을 푸는 것도 그쪽이다 (llm/models.md §1-1).
+ * 잠금을 푸는 것도 그쪽이다 (agents/models.md §1-1).
  */
 export const maxDuration = 300;
 

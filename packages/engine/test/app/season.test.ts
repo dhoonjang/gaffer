@@ -1,13 +1,5 @@
-import { ATTRIBUTE_AXES } from "@story-fm/domain";
 import {
-  setRetirement,
-  toFreeAgency,
-  setSetPieceTakers,
-  successorCaptainOf,
-} from "@story-fm/engine";
-import { squadLevelOf } from "@story-fm/engine";
-import { describe, expect, it } from "vitest";
-import {
+  ATTRIBUTE_AXES,
   ageOf,
   disciplinePoints,
   GOALKEEPER_MIN,
@@ -17,6 +9,11 @@ import {
   type SeasonStat,
 } from "@story-fm/domain";
 import {
+  setRetirement,
+  toFreeAgency,
+  setSetPieceTakers,
+  successorCaptainOf,
+  squadLevelOf,
   activeContract,
   addDays,
   advanceTime,
@@ -65,6 +62,7 @@ import {
   weeklyWagesOf,
   type GameState,
 } from "@story-fm/engine";
+import { describe, expect, it } from "vitest";
 import { createMiniGame, createTestGame, playFullSeason, keepSeat, resultOf } from "../helpers";
 
 describe("순위표", () => {

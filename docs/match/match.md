@@ -61,10 +61,10 @@ flowchart LR
   판단마다 지금 체력을 읽고, 간이 시뮬은 킥오프 체력과 교체 시각의 추정 체력을 읽는다.
 - `profFactor = 0.10 + 0.90 × log(1 + clamp(적응도, 0, 99)/5) / log(1 + 99/5)` —
   0 → 0.10 · 25 → 0.63 · 70 → 0.90 · 99 → 1.00. 목록에 없는 자리의 폴백은 25다.
-  자리는 커리어가 만들므로 감점 폭이 크다(→ [player.md](../common/player.md) §8).
+  자리는 커리어가 만들므로 감점 폭이 크다(→ [player.md](../players/player.md) §8).
 - `famFactor = 1 − (1 − clamp(적응도, 0, 100)/100) × 0.15 × 자리 민감도`. 민감도는
   중원 1.4 · 수비 1.2 · AM 1.0 · 윙/CF 0.7 · ST 0.6 · GK 0.8(`TACTICAL_SENSITIVITY`) —
-  판을 몸으로 기억하는 것이라 중원이 최전방보다 크게 문다(→ [player.md](../common/player.md) §7).
+  판을 몸으로 기억하는 것이라 중원이 최전방보다 크게 문다(→ [player.md](../players/player.md) §7).
 - **지시 적용률**(`uptake` 0.45\~1.0)만은 팀 값이다 — 열한 명이 함께 소화한다.
   `0.45 + 0.35 × (감독 전술/99) + 0.20 × (팀 전술 적응도)`.
 - 명단의 `적응` 게이지는 두 적응도의 저장값을 섞은 표시용 파생값이고 계산은 위 두
@@ -126,7 +126,7 @@ flowchart TB
   시트의 `behavior`·`edge`·`focus`·`temper`·`legs`·`cohesion`과 코어 한도는
   [live-match.md](live-match.md) §6.2를 따른다.
 - **역할은 이름으로 부른다** — 「안쪽으로 파고들어」는 인사이드 포워드다. 코어는 이름·id·
-  약어를 같은 것으로 받는다(→ [player.md](../common/player.md) §3.1).
+  약어를 같은 것으로 받는다(→ [player.md](../players/player.md) §3.1).
 - **판을 못 보는 쪽에 좌표를 요구하지 않는다.** `set_player_tactic`은 좌표 대신 `move`
   (레인 × 밴드)를 받고, 수미·공미처럼 밴드로 닿지 않는 자리는 `position` 코드로 부른다.
   좌표는 화면의 드래그가 쓰는 값이다.
@@ -193,7 +193,7 @@ flowchart TB
 옮긴 뒤의 값)를 싣는다. 상태만 바꾸면 중계가 「상대가 던졌다」를 말할 수 없다. 종료 휘슬에는
 적지 않는다.
 
-### 3.4 승부차기 — 코어가 굴리고 매치 GM이 한 발씩 옮긴다 (`packages/engine/src/match/competition/shootout.ts`)
+### 3.4 승부차기 — 코어가 굴리고 매치 GM이 한 발씩 옮긴다 (`packages/engine/src/match/shootout.ts`)
 
 연장까지 치르고도 같으면 승부차기다. **킥 하나가 사건 하나로 장부에 남는다** —
 누가 찼고 누가 막아섰고 들어갔는지, 그 킥의 성공 확률까지(`ShootoutKick`).
@@ -236,7 +236,7 @@ flowchart TB
 수비에 더 남은 우리 팀은 공격 출구가 줄어 오픈플레이 기회 질이 인원 차당 2% 움직인다.
 인원 표의 범위 안에서만 적용되며 선수 능력·키커·공중볼 계산은 별도로 유지된다.
 
-### 3.6 경기 전 — 상대 리포트 (`packages/engine/src/match/flow/preview.ts`)
+### 3.6 경기 전 — 상대 리포트 (`packages/engine/src/match/preview.ts`)
 
 킥오프 전에 감독이 읽는 상대의 사실이다(`buildOpponentReport`). GM의 `<opponent>` 블록,
 조회 도구 `get_opponent_report`, 대회 탭의 다음 경기 카드가 같은 함수를 읽는다.
@@ -360,7 +360,7 @@ EventCause { code, playerIds, values?, pointId? }
 - **정산도 이 값 그대로**(`matchFatigueOf(pendingMatch.live)`) — 화면에서 본 소모와 장부에 남는 소모는
   같은 숫자다. 상대 팀도 같은 장부에서 정산된다.
 - **누적 피로**(시즌의 몸)는 출전 분과 훈련 세션의 부하(`sessionLoad`)가 쌓고 휴식이 뺀다(`fatigueFromMinutes` ·
-  `fatigueAfterDay` — [player.md](../common/player.md) §5.5). 회복에만 걸고 소모에는 걸지 않는다 —
+  `fatigueAfterDay` — [player.md](../players/player.md) §5.5). 회복에만 걸고 소모에는 걸지 않는다 —
   양쪽에 걸면 12월의 스쿼드가 통째로 바닥에 눕는다.
 
 ### 6.1 회복 (`dailyRecovery`)
@@ -394,23 +394,23 @@ EventCause { code, playerIds, values?, pointId? }
 
 ### 7.1 마감은 양 팀에 적는다
 
-| 무엇                                                                             | 우리 | 상대   |
-| -------------------------------------------------------------------------------- | ---- | ------ |
-| 시즌 기록 (`SEASON_STAT`)                                                        | ○    | ○      |
-| 폼 Δ (`packages/engine/src/common/players/form.ts` `formDeltaFromMatch`)         | ○    | ○      |
-| 체력 소모 (`matchFatigueOf(pendingMatch.live)` 그대로)                           | ○    | ○      |
-| 부상 확정 · 이력 기반 위험 배수 (`packages/engine/src/common/players/injury.ts`) | ○    | ○      |
-| 카드 → BOOKING·SUSPENSION (`packages/engine/src/match/flow/discipline.ts`)       | ○    | ○      |
-| 출장 정지 소화 (`serveSuspensions`)                                              | ○    | ○      |
-| 포지션 적응도                                                                    | ○    | ○      |
-| 사건·선수별 기록·점유 (`MATCH.result`)                                           | ○    | ○      |
-| 경기별 평점 (`MATCH.result.ratings`) · 결산 판정(LLM)                            | ○    | 결승만 |
-| 말풍선 한 줄 (카드·정지·부상 일수)                                               | ○    | ✗      |
-| 마일스톤 (`MILESTONE`)                                                           | ○    | ✗      |
+| 무엇                                                                      | 우리 | 상대   |
+| ------------------------------------------------------------------------- | ---- | ------ |
+| 시즌 기록 (`SEASON_STAT`)                                                 | ○    | ○      |
+| 폼 Δ (`packages/engine/src/players/form.ts` `formDeltaFromMatch`)         | ○    | ○      |
+| 체력 소모 (`matchFatigueOf(pendingMatch.live)` 그대로)                    | ○    | ○      |
+| 부상 확정 · 이력 기반 위험 배수 (`packages/engine/src/players/injury.ts`) | ○    | ○      |
+| 카드 → BOOKING·SUSPENSION (`packages/engine/src/match/discipline.ts`)     | ○    | ○      |
+| 출장 정지 소화 (`serveSuspensions`)                                       | ○    | ○      |
+| 포지션 적응도                                                             | ○    | ○      |
+| 사건·선수별 기록·점유 (`MATCH.result`)                                    | ○    | ○      |
+| 경기별 평점 (`MATCH.result.ratings`) · 결산 판정(LLM)                     | ○    | 결승만 |
+| 말풍선 한 줄 (카드·정지·부상 일수)                                        | ○    | ✗      |
+| 마일스톤 (`MILESTONE`)                                                    | ○    | ✗      |
 
 ### 7.2 시즌 기록 — 두 시뮬이 같은 눈금으로 적는다
 
-한 경기가 시즌 행에 얹는 몫은 한 함수가 센다(`packages/domain/src/common/player-statistics.ts` `addToSeasonStat`). 행의
+한 경기가 시즌 행에 얹는 몫은 한 함수가 센다(`packages/domain/src/players/player-statistics.ts` `addToSeasonStat`). 행의
 열쇠는 (선수, 시즌, 팀, 대회)라 리그 경기는 리그 행에, 컵 경기는 컵 행에 쌓인다
 (`ensureSeasonStat`). 친선은 이 문을 지나지 않고 2군 경기는 `reserve:<리그>` 대회 행에 같은 통계 칸으로 쌓인다.
 
@@ -436,14 +436,14 @@ EventCause { code, playerIds, values?, pointId? }
   감독 팀 선수 것뿐이며 2군·친선은 문턱을 밀지 않는다.
 - **포지션 적응도는 실제로 밟은 자리가 올린다** — `pendingMatch.live.positionsPlayed`의 자리가
   `MATCH_PROFICIENCY_GAIN`(1)만큼(상한 99, 양 팀 공통).
-- **평점**(`packages/engine/src/match/flow/ratings.ts`)은 기준선 6.0에서 장부 사실만으로 조정한다(난수 없음):
+- **평점**(`packages/engine/src/match/ratings.ts`)은 기준선 6.0에서 장부 사실만으로 조정한다(난수 없음):
   승 +0.4/패 −0.3 · 골 GK +2.0 · DF +1.4 · MF +1.1 · FW +0.9 · 도움 +0.6 · 무실점 GK +0.8/
   DF +0.5 · 실점(첫 골 면제) GK −0.3/DF −0.2 · 경고 −0.3 · 퇴장 −1.5, 범위 3.0\~10.0. 출전
   시간은 그라운드를 떠난 시각까지다(교체·퇴장). 경기 후 결산 에이전트가 중계 전부와 결산
-  표를 읽어 앵커 ±`RATING_BAND`(1.2) 안에서 재채점한다(→ [pipeline.md](../common/llm/pipeline.md) §5).
+  표를 읽어 앵커 ±`RATING_BAND`(1.2) 안에서 재채점한다(→ [pipeline.md](../agents/pipeline.md) §5).
   실패하면 앵커가 남는다.
 
-### 7.4 징계 — 카드가 정지가 되는 길 (`packages/engine/src/match/flow/discipline.ts`)
+### 7.4 징계 — 카드가 정지가 되는 길 (`packages/engine/src/match/discipline.ts`)
 
 카드 한 장은 `BOOKING` 한 줄로 남고 두 시뮬이 같은 문(`recordCard`)을 지난다.
 
@@ -452,7 +452,7 @@ EventCause { code, playerIds, values?, pointId? }
 왔는지(`competitionId`)와 어디까지 미치는지(`scope` — `competition` 그 대회뿐 · `jurisdiction`
 그 대회가 속한 관할 전체)를 든다. 관할은 다섯 나라와 `uefa`다.
 
-**규정 표는 대회가 아니라 협회가 갖는다**(`packages/engine/src/common/data/discipline-catalog.ts`) — 더비 표와
+**규정 표는 대회가 아니라 협회가 갖는다**(`packages/engine/src/core/catalog/discipline-catalog.ts`) — 더비 표와
 같은 결의 별도 표다.
 
 | 대회                                                     | 누적 눈금                                                                           | 그 뒤 주기 | 사면     | 퇴장 범위 |
@@ -476,7 +476,7 @@ EventCause { code, playerIds, values?, pointId? }
 선수는 그 대회 명단에서 자동으로 빠지고(`isAvailableFor`), 정지가 걸리면 어느 대회 몇
 경기인지 한 줄로 감독에게 간다. 남의 팀 정지는 브리핑하지 않는다.
 
-## 8. 간이 시뮬 (`packages/engine/src/match/flow/quick-sim.ts`)
+## 8. 간이 시뮬 (`packages/engine/src/match/quick-sim.ts`)
 
 시즌 2,100여 경기 중 감독의 경기만 실시간으로 굴고 나머지는 여기서 한 번에 처리한다.
 **팀의 평점에서 경기의 xG를 내고, 그 xG에서 슈팅과 골을 뽑는** 통계 모델이다 — 실측 득점
@@ -495,7 +495,7 @@ EventCause { code, playerIds, values?, pointId? }
 
 기여 가중(`QUICK_ZONE_CONTRIBUTION`)은 자리 묶음이 정하고 전술판의 전진 깊이가 연속으로
 옮긴다 — 4-3-3의 윙어가 공격에, 5-4-1의 윙백이 수비에 더 실린다. 축의 가중은
-`POSITION_WEIGHTS`([player.md](../common/player.md) §4)를 읽는다 — 자리별 종합이 쓰는 그 표라
+`POSITION_WEIGHTS`([player.md](../players/player.md) §4)를 읽는다 — 자리별 종합이 쓰는 그 표라
 새 표가 아니다.
 
 ### 8.2 팀 xG — 평점의 지수
@@ -571,7 +571,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 
 ### 8.6 라인업 · 연장 · 옆 구장
 
-**AI 로테이션**(`packages/engine/src/match/squad/simulation.ts`의 `simSquadOf`)은 스쿼드 운영의 기본이다. 자리를 내주는
+**AI 로테이션**(`packages/engine/src/match/simulation.ts`의 `simSquadOf`)은 스쿼드 운영의 기본이다. 자리를 내주는
 이유는 둘 — 오늘의 몸(피로 `ROTATION_FATIGUE` 20 이상)과 시즌의 몸(누적 피로 「지침」 위).
 같은 포지션군에서 `ROTATION_OVR_DROP` 안의 더 신선한 선수(`ROTATION_FRESHER`)가 대신 선다.
 정지·부상은 `isAvailableFor`로 같은 문에서 빠진다. 벤치도 같은 함수가 짠다.
@@ -591,7 +591,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 폼에 실린다), AI 팀도 전술을 익히고(`FAMILIARITY_DRIFT_CAP` 80), 부상 이력이 양 팀에 남는다. 폼·적응도·부상 이력이 감독 팀에만 쌓이면
 나머지 95%가 상태 없는 세계가 된다.
 
-## 9. 경기 화면 (`apps/web/domains/match/ui/match-view.tsx` · `packages/engine/src/app/views.ts`)
+## 9. 경기 화면 (`apps/web/screens/match/match-view.tsx` · `packages/engine/src/app/views/attention.ts`)
 
 경기장 칸에는 실시간 판만 서고, 터치라인 칸의 탭 넷이 번갈아 선다: **대화** · **팀**(전술판 +
 명단, 우리/상대) · **경기 기록**(쌓인 xG 계단선 + 팀 통계 + 전술 포인트 + 경기 사건) ·
@@ -710,30 +710,30 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 - **감독 팀의 능력치·전술 적응도는 결산 판정(LLM)에만 걸려 있어** mock 모드에서는 자라지
   않는다. 하네스가 `drillUserTactics`로 「훈련하는 감독」을 대신 모델링한다.
 - **분포 하네스는 PR 게이트가 아니다** — 시드당 몇 분이라 주 1회 스케줄로 돌고 손으로는
-  `pnpm balance`다([balance-harness.md](../common/balance-harness.md) §5).
+  `pnpm balance`다([balance-harness.md](../balance-harness.md) §5).
 
 ## 코드 위치
 
-| 무엇                                        | 어디                                                                                                                                                  |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 시드 난수 (`makeRng`·`shuffled`)            | `packages/sim/src/rng.ts` — 엔진(`packages/engine/src/common/core/rng.ts`)과 match-cli가 같이 부른다                                                  |
-| 선수의 경기 능력                            | `packages/sim/src/match-ability.ts`                                                                                                                   |
-| 실시간 경기 (말의 규칙 전부)                | `packages/sim/src/live/` (→ [live-match.md](live-match.md) §8.5)                                                                                      |
-| 부하 → 체력 · 회복 · 기대 부하표            | `packages/sim/src/load.ts` · `stamina.ts`                                                                                                             |
-| 장부                                        | `packages/sim/src/match-ledger.ts`                                                                                                                    |
-| 벤치 정책                                   | `packages/sim/src/bench.ts`                                                                                                                           |
-| 카드·부상 총량과 수신자                     | `packages/sim/src/discipline-model.ts` · `injury-model.ts`                                                                                            |
-| 슈팅 결과 표집 · 페널티                     | `packages/sim/src/shot-model.ts`                                                                                                                      |
-| 세트피스 키커                               | `packages/sim/src/set-piece-taker.ts`                                                                                                                 |
-| 경기 타입 지시 (출처·시트·명령)             | `packages/agents/src/match/jev-match-reader.ts` · `packages/agents/src/app/workflows/instructions.ts`                                                 |
-| 경기 흐름 · 킥오프 · 체크포인트 검증 · 마감 | `packages/engine/src/match/flow/match-flow.ts` · `packages/engine/src/app/workflows/match/flow/match-flow.ts` · `packages/sim/src/live/checkpoint.ts` |
-| 경기 전 상대 리포트                         | `packages/engine/src/match/flow/preview.ts` (`buildOpponentReport`)                                                                                   |
-| 간이 시뮬 · 평점 · 징계                     | `packages/engine/src/match/flow/quick-sim.ts` · `ratings.ts` · `discipline.ts`                                                                        |
-| 연장 · 승부차기                             | `packages/engine/src/match/competition/extra-time.ts` · `packages/engine/src/app/workflows/match/competition/extra-time.ts` · `shootout.ts`           |
-| 경기 리포트 뷰 · MOTM · xG 계단선           | `packages/engine/src/app/views.ts` (`buildMatchReport` · `motmOf` · `xgTimelineOf`)                                                                   |
-| 더비 표                                     | `packages/engine/src/common/data/derbies.ts` · `packages/engine/src/common/world/derby.ts`                                                            |
-| 경기 화면 · 실행기                          | `apps/web/domains/match/ui/match-view.tsx` · `apps/web/domains/match/lib/use-live-match.ts`                                                           |
-| 화면 없는 실행기                            | `apps/match-cli/src/main.ts`                                                                                                                          |
+| 무엇                                        | 어디                                                                                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 시드 난수 (`makeRng`·`shuffled`)            | `packages/sim/src/rng.ts` — 엔진(`packages/engine/src/core/rng.ts`)과 match-cli가 같이 부른다                                         |
+| 선수의 경기 능력                            | `packages/sim/src/match-ability.ts`                                                                                                   |
+| 실시간 경기 (말의 규칙 전부)                | `packages/sim/src/live/` (→ [live-match.md](live-match.md) §8.5)                                                                      |
+| 부하 → 체력 · 회복 · 기대 부하표            | `packages/sim/src/load.ts` · `stamina.ts`                                                                                             |
+| 장부                                        | `packages/sim/src/match-ledger.ts`                                                                                                    |
+| 벤치 정책                                   | `packages/sim/src/bench.ts`                                                                                                           |
+| 카드·부상 총량과 수신자                     | `packages/sim/src/discipline-model.ts` · `injury-model.ts`                                                                            |
+| 슈팅 결과 표집 · 페널티                     | `packages/sim/src/shot-model.ts`                                                                                                      |
+| 세트피스 키커                               | `packages/sim/src/set-piece-taker.ts`                                                                                                 |
+| 경기 타입 지시 (출처·시트·명령)             | `packages/agents/src/evaluators/jev-match-reader.ts` · `packages/agents/src/gm/instructions.ts`                                       |
+| 경기 흐름 · 킥오프 · 체크포인트 검증 · 마감 | `packages/engine/src/match/match-flow.ts` · `packages/engine/src/app/workflows/match-flow.ts` · `packages/sim/src/live/checkpoint.ts` |
+| 경기 전 상대 리포트                         | `packages/engine/src/match/preview.ts` (`buildOpponentReport`)                                                                        |
+| 간이 시뮬 · 평점 · 징계                     | `packages/engine/src/match/quick-sim.ts` · `ratings.ts` · `discipline.ts`                                                             |
+| 연장 · 승부차기                             | `packages/engine/src/match/extra-time.ts` · `packages/engine/src/match/extra-time.ts` · `shootout.ts`                                 |
+| 경기 리포트 뷰 · MOTM · xG 계단선           | `packages/engine/src/app/views/attention.ts` (`buildMatchReport` · `motmOf` · `xgTimelineOf`)                                         |
+| 더비 표                                     | `packages/engine/src/core/catalog/derbies.ts` · `packages/engine/src/core/derby.ts`                                                   |
+| 경기 화면 · 실행기                          | `apps/web/screens/match/match-view.tsx` · `apps/web/screens/match/use-live-match.ts`                                                  |
+| 화면 없는 실행기                            | `apps/match-cli/src/main.ts`                                                                                                          |
 
 간이 시뮬의 코너는 골로 잘린 구간의 실제 확정 시간만큼만 표집한다.
 

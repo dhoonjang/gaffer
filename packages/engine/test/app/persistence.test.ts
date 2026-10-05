@@ -10,10 +10,9 @@ import {
   writeFileSync,
   existsSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, hostname } from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { hostname } from "node:os";
 import {
   teamCatalog,
   requestCharacterUpdate,
@@ -708,7 +707,7 @@ describe("목록과 로드 — 어디서 멈췄는지 가른다", () => {
 /**
  * 세이브 파일 락 — **프로세스 경계를 넘는 잠금.** 프로세스 안 뮤텍스(apps/web)는
  * `next start` 인스턴스가 둘이면 서로를 모른다. 여기서 재는 것은 그 파일 하나가
- * 누구를 막고 누구를 회수하느냐다 (docs/common/llm/models.md §1-1).
+ * 누구를 막고 누구를 회수하느냐다 (docs/agents/models.md §1-1).
  */
 describe("세이브 파일 락 — 프로세스 경계", () => {
   /** 남이 쥔 것처럼 락 파일을 세운다 — 이 프로세스가 만들지 않은 락이다 */
@@ -790,7 +789,7 @@ describe("세이브 파일 락 — 프로세스 경계", () => {
   it("동시에 회수하는 프로세스도 임계 구간을 겹치지 않는다", async () => {
     const id = "lock-processes";
     foreignLock(id, { pid: deadPid(), host: hostname(), token: "dead" });
-    const lockModule = new URL("../../src/common/core/save-lock.ts", import.meta.url).href;
+    const lockModule = new URL("../../src/core/save-lock.ts", import.meta.url).href;
     const marker = path.join(dataDir(), "critical-marker");
     const code = `
       import { acquireSaveLock } from ${JSON.stringify(lockModule)};

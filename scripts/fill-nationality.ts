@@ -1,7 +1,7 @@
 import { sparql } from "./wikidata";
 /**
  * 시드 국적 채움 — 위키데이터가 정하고, 갈리면 대표팀 기록이 가른다
- * (docs/common/sources.md §4.1).
+ * (docs/core/sources.md §4.1).
  *
  *   pnpm fill-nationality           리포트만 낸다 (기본값 — 아무것도 쓰지 않는다)
  *   pnpm fill-nationality --write   시드 파일에 `nationality`를 적는다
@@ -10,7 +10,7 @@ import { sparql } from "./wikidata";
  * 생년월일을 `P569`로 채운 절차와 같은 결이다 — 조인 키는 `wikidataId`고, 이름은
  * 끼지 않으므로 오조인이 없다. 다른 점은 **빈 채로 둘 수 없다**는 것뿐이다:
  * 등록 규정도 대표팀도 전원에게 값을 요구하므로, 위키가 답하지 않는 선수는
- * 시드를 비워 두고 카탈로그가 그 클럽 협회로 세운다(`world/catalog.ts`).
+ * 시드를 비워 두고 카탈로그가 그 클럽 협회로 세운다(`players/catalog/catalog.ts`).
  *
  * ⚠️ **이 스크립트만이 시드의 `nationality`를 적는다.** 손으로 고치면 다음 실행이
  * 되돌린다 — 고쳐야 할 것이 있으면 위키데이터를 고치거나 아래 `OVERRIDES`에 적는다.
@@ -18,13 +18,13 @@ import { sparql } from "./wikidata";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ASSOCIATIONS, isAssociation } from "../packages/domain/src/common/nationality";
+import { ASSOCIATIONS, isAssociation } from "../packages/domain/src/core/nationality";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
 const SEED_FILES = [
-  "packages/engine/src/common/data/epl-players.ts",
-  "packages/engine/src/common/data/eu-squads.ts",
-  "packages/engine/src/common/data/market-leagues.ts",
+  "packages/engine/src/players/catalog/epl-players.ts",
+  "packages/engine/src/players/catalog/eu-squads.ts",
+  "packages/engine/src/players/catalog/market-leagues.ts",
 ];
 
 // ── 위키데이터 항목 → 협회 코드 ────────────────────────────────

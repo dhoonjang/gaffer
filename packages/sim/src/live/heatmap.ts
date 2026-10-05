@@ -22,7 +22,7 @@ import {
  *
  * 깊이·가로는 이 편의 기준이다 — 깊이는 우리 골라인에서, 가로는 `lateralOf`의 눈금.
  */
-export interface HeatBlob {
+interface HeatBlob {
   depth: number;
   lateral: number;
   back: number;
@@ -36,7 +36,7 @@ export interface Heatmap {
   blobs: HeatBlob[];
 }
 
-export interface HeatmapContext {
+interface HeatmapContext {
   attacking: boolean;
   /** 공의 깊이 (우리 골라인에서, m) */
   ballDepth: number;
@@ -129,7 +129,7 @@ export function heatmapDensity(h: Heatmap, depth: number, lateral: number): numb
 }
 
 /** 경기장 좌표의 점에서 — 이 편의 기준으로 옮겨 읽는다 */
-export function heatmapDensityAt(h: Heatmap, point: FieldPoint, side: MatchSide): number {
+function heatmapDensityAt(h: Heatmap, point: FieldPoint, side: MatchSide): number {
   return heatmapDensity(h, depthOf(point.x, side), lateralOf(point.y, side));
 }
 

@@ -77,14 +77,8 @@ export const XT_GRID: readonly [XtRow, XtRow, XtRow, XtRow, XtRow, XtRow, XtRow,
   ],
 ];
 
-/** 경기장 위의 한 점 — 공격 방향 기준 좌표(m) */
-export interface XtPoint {
-  x: number;
-  y: number;
-}
-
 /** 격자 칸 번호 — 열은 공격 방향(x), 행은 폭(y) */
-export interface XtCell {
+interface XtCell {
   col: number;
   row: number;
 }

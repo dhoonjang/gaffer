@@ -1,7 +1,7 @@
 import { sparql, UA } from "./wikidata";
 /**
  * 시드 완장·계약 지위 채움 — 위키가 공표한 사실만 적는다
- * (docs/common/sources.md §4.1).
+ * (docs/core/sources.md §4.1).
  *
  *   pnpm fill-squad-roles           리포트만 낸다 (기본값 — 아무것도 쓰지 않는다)
  *   pnpm fill-squad-roles --write   시드 파일에 완장·지위를 적는다
@@ -21,12 +21,12 @@ import { sparql, UA } from "./wikidata";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SquadStatus } from "../packages/domain/src/common/squad-rules";
+import type { SquadStatus } from "../packages/domain/src/players/squad-rules";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
 const SEED_FILES = [
-  "packages/engine/src/common/data/epl-players.ts",
-  "packages/engine/src/common/data/eu-squads.ts",
+  "packages/engine/src/players/catalog/epl-players.ts",
+  "packages/engine/src/players/catalog/eu-squads.ts",
 ];
 
 /** 직전 시즌 — 계약 지위의 근거가 되는 시즌 문서 */

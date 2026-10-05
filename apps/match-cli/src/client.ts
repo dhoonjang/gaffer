@@ -1,5 +1,5 @@
 /**
- * 화면 없는 **클라이언트** — 브라우저의 실행기(`apps/web/domains/match/lib/use-live-match.ts`)와 같은 일을
+ * 화면 없는 **클라이언트** — 브라우저의 실행기(`apps/web/screens/match/use-live-match.ts`)와 같은 일을
  * 로컬 서버에 대고 한다 (live-match.md §8).
  *
  * 서버의 확정 상태를 받아 같은 함수로 시계를 밀고, 체크포인트 간격마다 제출하고, 서버가 준

@@ -22,7 +22,7 @@ import {
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**
- * **mock 모드가 실 경로를 지나는가** (docs/common/llm/agents.md §8).
+ * **mock 모드가 실 경로를 지나는가** (docs/agents/agents.md §8).
  *
  * 재는 것은 대본의 문장이 아니라 **기록**이다: 표의 한 줄이 `gm-tools.ts`의 핸들러를
  * 지나 코어 명령의 이름으로 `recordCall`을 남기면, 화면의 칩·말풍선이 실모드와 같은

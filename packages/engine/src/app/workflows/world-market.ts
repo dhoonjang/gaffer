@@ -1,7 +1,7 @@
-import { managedTeamId, type GameState } from "../../common/core/state";
-import { deliverIncomingMail } from "../../common/mail/mail";
-import { reviewBoard } from "./story/world/board";
-import { repairNegotiationSquads } from "./negotiation-squad";
+import { managedTeamId, type GameState } from "../../core/state";
+import { deliverIncomingMail } from "../../people/mail";
+import { reviewBoard } from "./board";
+import { repairNegotiationSquads } from "../../team/negotiation-squad";
 import {
   decideWorldManager,
   decideWorldMarket,
@@ -10,8 +10,8 @@ import {
   marketReviewCohort,
   marketClubFingerprint,
   MARKET_DAILY_DEALS,
-} from "../../negotiation/world-market";
-export interface WorldMarketResult {
+} from "../../team/world-market";
+interface WorldMarketResult {
   reviewed: number;
   transfers: number;
   renewals: number;

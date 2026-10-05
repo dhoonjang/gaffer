@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * 밸런스 하네스 전용 — `pnpm balance`가 쓴다 (→ `docs/common/balance-harness.md`).
+ * 밸런스 하네스 전용 — `pnpm balance`가 쓴다 (→ `docs/balance-harness.md`).
  *
  * ⚠️ 이 설정의 `include`와 `vitest.config.ts`의 것은 **겹치지 않는다.** 하네스가
  * 테스트 디렉터리 아래로 들어가는 순간 `pnpm test`가 다시 걷고, 그러면 케이스를

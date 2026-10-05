@@ -1,4 +1,4 @@
-import { quickRoutineFactors } from "../../src/match/flow/quick-sim";
+import { quickRoutineFactors } from "../../src/match/quick-sim";
 import { describe, expect, it } from "vitest";
 import {
   PHASE_END,
@@ -25,7 +25,7 @@ import {
   type WorldScope,
 } from "@story-fm/engine";
 import { LEDGER_LIMITS } from "@story-fm/sim";
-import { recordCard } from "../../src/match/flow/discipline";
+import { recordCard } from "../../src/match/discipline";
 import { createTestGame, keepSeat, settleMatchdayQuick } from "../helpers";
 
 /**

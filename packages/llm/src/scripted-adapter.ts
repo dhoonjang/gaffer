@@ -11,11 +11,11 @@ import {
 
 /**
  * 대본 어댑터 — **모델을 부르지 않고 미리 정해진 도구 호출로 턴을 채운다**
- * (docs/common/llm/models.md §2-1).
+ * (docs/agents/models.md §2-1).
  *
  * 제공자 어댑터 셋과 같은 `GameLLM` 계약을 지키므로 부르는 쪽은 mock인지 알지
  * 못한다. e2e·오프라인 개발이 실 경로를 그대로 밟는 것이 이 어댑터의 유일한
- * 목적이다 (docs/common/llm/agents.md §8).
+ * 목적이다 (docs/agents/agents.md §8).
  *
  * **대본이 무엇을 아는지는 이 패키지의 일이 아니다** — 게임을 아는 쪽이 `script`를
  * 만들어 넘긴다. 제공자 중립 패키지가 훈련이며 경기를 알기 시작하면 어댑터 셋과
@@ -42,7 +42,7 @@ export interface ScriptedTurn {
 }
 
 /** 요청 하나를 받아 그 턴의 대본을 낸다 — 게임을 아는 쪽이 만든다 */
-export type TurnScript = (req: TurnRequest) => ScriptedTurn;
+type TurnScript = (req: TurnRequest) => ScriptedTurn;
 
 /** 부르지 않은 호출의 토큰은 0이다 — 장부가 픽션으로 차지 않는다 (models.md §2-1) */
 const NO_USAGE: TurnUsage = {
@@ -59,7 +59,7 @@ const NO_USAGE: TurnUsage = {
  * 같으면 제공자 원형이 아닌 메시지가 실호출에 실려 나가므로, 태그를 다르게 적어
  * 어댑터가 통째로 버리게 한다 (models.md §3).
  */
-export const SCRIPTED_MODEL_SUFFIX = "#scripted";
+const SCRIPTED_MODEL_SUFFIX = "#scripted";
 
 export class ScriptedGameLLM implements GameLLM {
   constructor(

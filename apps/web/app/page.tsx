@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { ClubColours } from "@story-fm/domain";
-import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/domains/common/ui/icons";
-import { GameListSkeleton } from "@/domains/common/ui/skeleton";
-import { Crest, clubStyle } from "@/domains/common/ui/crest";
-import { humanDate } from "@/domains/common/lib/dateline";
+import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/shared/icons";
+import { GameListSkeleton } from "@/shared/skeleton";
+import { Crest, clubStyle } from "@/shared/crest";
+import { humanDate } from "@/shared/dateline";
 
 interface GameSummary {
   id: string;
-  /** 팀 id·약칭·공식 색 — 슬롯이 문장과 구단 띠를 세우는 열쇠 (ui/design-system.md §2) */
+  /** 팀 id·약칭·공식 색 — 슬롯이 문장과 구단 띠를 세우는 열쇠 (web/design-system.md §2) */
   teamId: string;
   teamShortName: string;
   colours?: ClubColours;

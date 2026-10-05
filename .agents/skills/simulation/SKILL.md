@@ -306,8 +306,8 @@ GM이 "확정됐다"고 써도 `views`에 없으면 **되지 않은 것**이다 
   `POST /api/games/:id/turn/stream` · `POST /api/games/:id/lineup` ·
   `GET /api/games/:id/player/:playerId` · `GET /api/games/:id/match-report/:matchId`
 - 설계: [overview.md](../../../docs/overview.md) §2–§4 ·
-  [season.md](../../../docs/common/season.md) §5(시간) ·
+  [season.md](../../../docs/season/season.md) §5(시간) ·
   [match.md](../../../docs/match/match.md) §2(교체) ·
-  [career.md](../../../docs/story/career.md) §4–§5 ·
-  [people.md](../../../docs/story/people.md) §4 · §5-2
+  [career.md](../../../docs/people/career.md) §4–§5 ·
+  [people.md](../../../docs/people/people.md) §4 · §5-2
 - 기록: `pnpm log` · `pnpm log <turn-id>` · `pnpm log --facts <kind> --game <id>`

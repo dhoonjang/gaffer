@@ -72,7 +72,7 @@ export const TENDENCY_AXES: readonly TendencyAxis[] = [
 ];
 
 /** 성향의 해상도 — 차이를 얹은 뒤 0.01 단위로 떨어뜨려 표와 계산이 같은 값을 본다 */
-export const TENDENCY_RESOLUTION = 0.01;
+const TENDENCY_RESOLUTION = 0.01;
 
 /**
  * 자리 묶음의 기본 성향 — 그 자리의 **제네릭 역할**(GK·CD·FB·DM·CM·AM·W·DLF·AF)이 선다.

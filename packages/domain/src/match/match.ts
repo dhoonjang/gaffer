@@ -4,7 +4,7 @@ import {
   ShootoutOutcomeSchema,
   type ShootoutKick,
   type MatchEvent,
-} from "../common/match-events";
+} from "./match-events";
 import { z } from "zod";
 
 /** 반대편 — 이득과 대가, 약점을 가진 쪽과 이로운 쪽을 뒤집는 자리가 하나여야 한다 */
@@ -89,7 +89,7 @@ export function nextShootoutKick(
 export const FULL_TIME_MINUTES = 90;
 
 /** 연장까지 간 경기의 길이 */
-export const EXTRA_TIME_FULL_MINUTES = 120;
+const EXTRA_TIME_FULL_MINUTES = 120;
 
 /**
  * 한 경기의 **출전 시간** — 사건 목록이 원본이다.

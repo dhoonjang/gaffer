@@ -1,6 +1,6 @@
 /**
  * 하네스 리포트 — 측정값 파일(`readings.jsonl`)을 **읽을 표**와 **이탈 목록**으로
- * 접는다 (→ `docs/common/balance-harness.md` §5).
+ * 접는다 (→ `docs/balance-harness.md` §5).
  *
  * 이 파일에는 밴드 숫자가 없다. 구간도 판정도 측정값 줄이 서술자에서 그대로 실어
  * 온 것을 읽을 뿐이고(`ReadingLine`), 여기서 하는 일은 **누가 이탈했는가**를 세는

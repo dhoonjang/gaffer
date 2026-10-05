@@ -9,9 +9,6 @@ import {
   LorebookRevisionSchema,
   LorebookJobSchema,
   RecentFlowSchema,
-} from "@story-fm/domain";
-import { z } from "zod";
-import {
   AchievementSchema,
   BookingSchema,
   ContractSchema,
@@ -52,10 +49,11 @@ import {
   TrainingSessionSchema,
   TrophySchema,
 } from "@story-fm/domain";
+import { z } from "zod";
 
 /**
  * **세이브가 통과해야 하는 문** — 로드의 두 번째 걸음이자 유일한 검사
- * (→ [docs/common/game-state.md](../../../../docs/common/game-state.md) §6).
+ * (→ [docs/core/game-state.md](../../../../docs/core/game-state.md) §6).
  *
  * `packages/domain`의 Zod 스키마는 엔티티 정의(`z.infer`)이면서 여기서 로드의
  * 검사가 된다. 상태를 통째로 parse하고 그 결과를 그대로 상태로 쓰므로, `.default()`가

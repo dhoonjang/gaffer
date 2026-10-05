@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { MatchSideSchema } from "../common/match-events";
+import { MatchSideSchema } from "./match-events";
 import {
   BoardPointSchema,
   SetPieceRoutineSchema,
   SetPieceTakersSchema,
   TacticsSpecSchema,
-} from "../common/team-tactics";
+} from "../team/team-tactics";
 import { PointSchema, SheetLineSchema } from "./sheet";
 
 /**
@@ -13,7 +13,7 @@ import { PointSchema, SheetLineSchema } from "./sheet";
  * (live-match.md §8.1). 선수 객체는 싣지 않는다 — id로 가리키고 실행기가 자기 명단에서 찾는다.
  */
 
-export const LiveSlotSchema = z.object({
+const LiveSlotSchema = z.object({
   playerId: z.string().min(1),
   position: z.string().min(1),
   point: BoardPointSchema.optional(),

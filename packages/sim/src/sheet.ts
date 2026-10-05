@@ -31,23 +31,23 @@ export function readPoints(points: readonly Point[]): Point[] {
 // ── 한도 — ⚠️ 시작값이다. `edge` 3.5%가 xG를 얼마나 움직이는지는 하네스가 잰다 ──
 
 /** `edge` 한 step이 그 말의 경기 계수에 얹는 폭 */
-export const SHEET_STEP = [0.012, 0.024, 0.035] as const;
+const SHEET_STEP = [0.012, 0.024, 0.035] as const;
 /** 표적 하나가 받는 `edge`의 절대값 상한 */
 export const SHEET_TARGET_CAP = 0.035;
 /** 한 팀 `edge` 절대값 합의 상한 */
-export const SHEET_TEAM_BUDGET = 0.08;
+const SHEET_TEAM_BUDGET = 0.08;
 /** 한 팀 `edge` 부호 합의 상한 — 이득만 있는 시트는 없다 */
 export const SHEET_NET_CAP = 0.024;
 /** `focus` 한 step이 그 레인의 선택 효용에 얹는 몫 */
-export const SHEET_FOCUS_STEP = 0.12;
+const SHEET_FOCUS_STEP = 0.12;
 /** `temper` 한 step — 파울 확률의 배수 */
-export const SHEET_TEMPER_STEP = 1.3;
+const SHEET_TEMPER_STEP = 1.3;
 /** `legs` 한 step — 부하 배율 */
-export const SHEET_LEGS_STEP = 1.1;
+const SHEET_LEGS_STEP = 1.1;
 /** `cohesion` 한 step — 형태 오차의 배율 (+면 오차가 준다) */
-export const SHEET_COHESION_STEP = 0.15;
+const SHEET_COHESION_STEP = 0.15;
 
-export type SheetDropCode =
+type SheetDropCode =
   | "invalid-step"
   | "no-point"
   | "no-player"
@@ -60,13 +60,13 @@ export type SheetDropCode =
   | "team-budget"
   | "net-cap";
 
-export interface SheetDrop {
+interface SheetDrop {
   line: SheetLine;
   code: SheetDropCode;
 }
 
 /** 걸린 줄 하나가 화면·중계에 서는 모양 — 문장은 포인트의 것이다 */
-export interface SheetTag {
+interface SheetTag {
   pointId: string;
   shape: SheetShape;
   /** 이로운 편 */

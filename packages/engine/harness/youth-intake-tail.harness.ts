@@ -1,4 +1,4 @@
-import { TIER_BASE } from "../src/common/data/team-catalog";
+import { TIER_BASE } from "../src/core/catalog/team-catalog";
 import { describe, expect, it } from "vitest";
 import { playerOverall, ageOf } from "@story-fm/domain";
 import { generateYouthPlayer, isClubTeam, transitionSeason } from "@story-fm/engine";
@@ -9,7 +9,7 @@ import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
  * 한 여름 인테이크의 **꼬리** — 세계 전체가 낳은 잠재력·종합의 위 끝
- * (→ `docs/common/season.md` §6).
+ * (→ `docs/season/season.md` §6).
  *
  *   pnpm balance youth-intake-tail
  *

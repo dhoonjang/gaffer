@@ -15,13 +15,9 @@ export const AGENT_NAMES = [
 ] as const;
 
 export type GenerativeAgentName = (typeof AGENT_NAMES)[number];
-export const INSTRUCTION_AGENT_NAMES = [
-  "tactic-orders",
-  "training-orders",
-  "finance-orders",
-] as const;
+const INSTRUCTION_AGENT_NAMES = ["tactic-orders", "training-orders", "finance-orders"] as const;
 export type InstructionAgentName = (typeof INSTRUCTION_AGENT_NAMES)[number];
-export const EVALUATOR_NAMES = [
+const EVALUATOR_NAMES = [
   ...INSTRUCTION_AGENT_NAMES,
   "match-reader",
   "training-rater",
@@ -99,7 +95,7 @@ export interface OpenAiAgentConfig extends BaseAgentConfig {
 export type AgentConfig = AnthropicAgentConfig | GoogleAgentConfig | OpenAiAgentConfig;
 
 /** 모델이 아니라 **제공자**가 정하는 값들 (models.md §1-2·§4) */
-export interface ProviderTraits {
+interface ProviderTraits {
   /**
    * 사고 수준을 요청에 실을 수 있는가.
    *
@@ -245,7 +241,7 @@ const LlmConfigFileSchema = z
 
 type RawAgentConfig = z.infer<typeof RawAgentConfigSchema>;
 
-export interface LlmConfig {
+interface LlmConfig {
   version: 1;
   maxRetries: number;
   agents: Record<GenerativeAgentName, AgentConfig>;
@@ -361,7 +357,7 @@ export function findLlmConfigPath(startDir = process.cwd()): string {
   return findConfigFile(CONFIG_RELATIVE_PATH, startDir);
 }
 
-export function loadLlmConfig(configPath = findLlmConfigPath()): LlmConfig {
+function loadLlmConfig(configPath = findLlmConfigPath()): LlmConfig {
   return parseLlmConfig(readFileSync(configPath, "utf8"), configPath);
 }
 
@@ -424,7 +420,7 @@ export function keyNamesFor(provider: LlmProvider): string {
   return KEY_ENV_NAMES[provider].join(" 또는 ");
 }
 
-export type LlmMode = "mock" | "real";
+type LlmMode = "mock" | "real";
 
 /**
  * 지금 어느 모드인가 — `LLM_MODE`가 적혀 있으면 그것, 없으면 GM 에이전트의 키가

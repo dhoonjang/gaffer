@@ -1,4 +1,4 @@
-import { type RatingTone, ratingTone } from "../../match/flow/ratings";
+import { type RatingTone, ratingTone } from "../../match/ratings";
 import {
   type MilestoneCode,
   type AxisValues,
@@ -30,13 +30,13 @@ import {
   SET_PIECE_ROUTINE_KEYS,
   setPieceRoutineLevel,
   type GrowthOutlook,
+  observedFit,
 } from "@story-fm/domain";
 import {
   type Observation,
   type ConditionRead,
   observedPlayerFacts,
-} from "../../common/players/observation";
-import { observedFit } from "@story-fm/domain";
+} from "../../players/observation";
 import {
   type CareerSeasonView,
   type CareerTotalsView,
@@ -62,24 +62,20 @@ import {
   proficiencyAt,
   adaptationOf,
   isAvailableFor,
-} from "../../common/core/state";
+  openCallUp,
+} from "../../core/state";
 import { type TakerSlot, setPieceTakersOf, matchFatigueOf } from "@story-fm/sim";
-import { openCallUp } from "../../match/competition/international";
-import { internationalBreaksOf } from "../../common/players/international";
-import { type TacticsView } from "../../match/views/live";
-import { lineupSlotsOf } from "../../match/flow/match-flow";
-import { careerSeasonRowsOf, foldCareer } from "../../story/players/career";
-import { nextMatchFor } from "../../common/core/calendar";
-import { competitionShortName } from "../../common/data/cup-catalog";
-import {
-  isHomegrownFor,
-  occupiesSquadList,
-  squadRegistrationOf,
-} from "../../common/players/registration";
-import { formLabel, formAngle, formTone } from "../../common/players/form";
-import { conditionShown } from "../../common/views/observation";
-import { injuryHistoryOf, INJURY_SEVERITY_KO } from "../../common/players/injury";
-import { squadStatusOf } from "../../common/players/contract-status";
+import { internationalBreaksOf } from "../../players/international";
+import { type TacticsView } from "../../match/live-view";
+import { lineupSlotsOf } from "../../match/match-flow";
+import { careerSeasonRowsOf, foldCareer } from "../../players/career";
+import { nextMatchFor } from "../../core/calendar";
+import { competitionShortName } from "../../core/catalog/cup-catalog";
+import { isHomegrownFor, occupiesSquadList, squadRegistrationOf } from "../../team/registration";
+import { formLabel, formAngle, formTone } from "../../players/form";
+import { conditionShown } from "../../players/observation-view";
+import { injuryHistoryOf, INJURY_SEVERITY_KO } from "../../players/injury";
+import { squadStatusOf } from "../../players/contract-status";
 
 /**
  * 죽은 공 키커 한 자리 — **감독의 지정과 지금 실제로 설 사람이 나란히 선다**
@@ -92,7 +88,7 @@ import { squadStatusOf } from "../../common/players/contract-status";
  * 이름이 아니라 id다 — 명단 행이 이미 이름을 들고 있어, 뷰가 한 벌 더 적으면 같은
  * 선수의 표기가 두 곳에서 갈린다.
  */
-export interface SetPieceTakerView {
+interface SetPieceTakerView {
   /**
    * 감독이 지정한 선수 — 없으면 `null`.
    *
@@ -198,7 +194,7 @@ export interface SquadViewRowMeta {
   /** 둘째 국적 — 없으면 null */
   secondNationality: string | null;
   /**
-   * **통산 A매치 출전·골** (→ docs/match/competition.md §5-1) — 국적 바로 옆이다:
+   * **통산 A매치 출전·골** (→ docs/season/competition.md §5-1) — 국적 바로 옆이다:
    * 같은 사실의 앞뒤라(어느 나라 사람인가 · 그 나라로 몇 번 뛰었나) 떨어져 서면
    * 화면이 둘을 다른 축으로 다룬다. 없으면 0이고, 0을 어떻게 보일지는 화면이 정한다.
    */
@@ -216,7 +212,7 @@ export interface SquadViewRowMeta {
   squadLevel: "first" | "reserve";
   /**
    * **지금 클럽을 떠나 있는가** — A매치 소집이거나 여름 대회에서 아직 안 돌아왔다
-   * (→ docs/match/competition.md §5-1 · season.md §8 불변식). 아니면 null.
+   * (→ docs/season/competition.md §5-1 · season.md §8 불변식). 아니면 null.
    *
    * 부상·정지와 **같은** 갈래라 `available`이 셋을 함께 닫는다 —
    * 화면이 이 칸을 안 보면 소집된 주전이 선발 가능한 얼굴로 명단에 선다.
@@ -344,7 +340,7 @@ export interface SquadViewRowMeta {
   seasonAssists: number;
   /**
    * 이번 시즌 **대회별** 1군 기록 — 위 세 칸은 대회 합이라 "리그 12경기 3골"을
-   * 말할 자리가 없었다 (→ docs/common/game-state.md §3.4). 많이 뛴 대회부터 서고,
+   * 말할 자리가 없었다 (→ docs/core/game-state.md §3.4). 많이 뛴 대회부터 서고,
    * 대회가 하나뿐이면 합계가 이미 같은 수를 말했으므로 빈 배열이다.
    *
    * 대회 이름은 여기서 푼다 — 화면은 카탈로그를 읽지 못한다(`CareerSeasonView.team`과
@@ -394,7 +390,7 @@ export interface SquadViewRowMeta {
   contractUntil: string | null;
   /**
    * 계약에 합의한 역할, 없으면 현재 선수단에서 파생한 참고 역할.
-   * 화면과 GM이 `squadStatusOf`의 같은 값을 읽는다 (docs/story/people.md §5-2).
+   * 화면과 GM이 `squadStatusOf`의 같은 값을 읽는다 (docs/people/people.md §5-2).
    */
   squadStatus: SquadStatus;
   /** 현재 부상 (없으면 null) */
@@ -404,7 +400,7 @@ export interface SquadViewRowMeta {
   available: boolean;
 }
 
-export const ROLE_KO: Record<AssignmentRole, "선발" | "벤치"> = { starting: "선발", bench: "벤치" };
+const ROLE_KO: Record<AssignmentRole, "선발" | "벤치"> = { starting: "선발", bench: "벤치" };
 
 /**
  * 최근 경기 평점 — 폼의 시간 축.
@@ -432,7 +428,7 @@ export function recentRatingsOf(state: GameState, playerId: string, limit = 5): 
  *
  * 경기 중이면 `live`가 지금 그라운드에서 고른 값이라 그것이 이긴다 (match.md §8).
  */
-export function setPieceTakerViews(
+function setPieceTakerViews(
   squad: readonly GamePlayer[],
   designated: SetPieceTakers | undefined,
   starters: readonly TacticAssignment[],

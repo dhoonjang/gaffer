@@ -14,7 +14,7 @@ Vision, architecture and development conventions all live in
 - **Core vs LLM boundary** — the sim core is deterministic pure functions; the
   LLM injects judgment and narrative only. Never mix the two (AGENTS.md §4, §6).
 - **Adding an LLM call** — Zod validation, caching and an agent entry in
-  `config/llm.yml`. Never hard-code a model ID (docs/common/llm/models.md).
+  `config/llm.yml`. Never hard-code a model ID (docs/agents/models.md).
 - **Claude API details** (model IDs, pricing, caching, tool use) — check the
   `claude-api` skill or the current reference, never memory.
 - **Something looks wrong in play** — every turn keeps one timeline: the manager's
@@ -23,7 +23,7 @@ Vision, architecture and development conventions all live in
   with its input log, tick events, outcome and a state digest before/after.
   `pnpm log` lists turns, `pnpm log <turn-id>` opens a timeline, `pnpm log <call-id>`
   opens a call's raw text (`--path` hands you the file), `pnpm log --facts <kind> --game
-<id>` streams one kind as jsonl for aggregation (docs/common/llm/models.md §5). Failed turns
+<id>` streams one kind as jsonl for aggregation (docs/agents/models.md §5). Failed turns
   are kept too — that is where the timeouts live. Ask the record, not the prompt text.
 - **Playing a season** — the `simulation` skill opens the fixed scenario and plays one
   season through the local API, one turn at a time (`.agents/skills/simulation/`).

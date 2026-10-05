@@ -1,6 +1,6 @@
 import { invalidGameId } from "@/app/api/games/game-id";
-import { handleLiveAction, readLiveMatch } from "@/application/lib/live-match-server";
-import { LiveActionSchema } from "@/domains/match/lib/live-match-protocol";
+import { handleLiveAction, readLiveMatch } from "@/game/live-match-server";
+import { LiveActionSchema } from "@/screens/match/live-match-protocol";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

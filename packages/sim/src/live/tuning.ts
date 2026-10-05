@@ -609,7 +609,7 @@ export const FUEL_SPEED_FLOOR = 0.8;
 export const INJURED_SPEED = 0.25;
 
 /** 공을 몰고 갈 때의 속도 배율 */
-export const CARRY_SPEED = 0.82;
+const CARRY_SPEED = 0.82;
 
 /** 행동마다의 급함 — 최고 속도의 몫. 자리 이동은 조깅, 압박·침투·되돌아가기는 전력 */
 export const URGENCY: Record<LiveAction, number> = {
@@ -691,7 +691,7 @@ export const ATTACK_FRONT_MARGIN = 0.5;
  * 가중치 = `weight` × exp(`ball` × (공 깊이 − 52.5) ÷ 10 + Σ `tendency`의 기울기 × (성향 − 0.5))
  * × (`commit`이면 멘탈리티 배율). 성분들의 가중치는 합이 1이 되게 나눈다.
  */
-export interface HeatComponent {
+interface HeatComponent {
   /** 깊이 오프셋 — 상대 골 쪽이 + */
   depth: number;
   /** 가로 오프셋 — 제 측면의 터치라인 쪽이 +. 중앙에 선 말에게는 0이 된다 */

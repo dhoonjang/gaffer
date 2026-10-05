@@ -121,7 +121,7 @@ const PRESSING_INTENSITY_STEP = 0.07;
 /** 템포 한 칸이 강도에 얹는 몫 */
 const TEMPO_INTENSITY_STEP = 0.04;
 /** 태클 강도 갈래가 강도에 얹는 몫 */
-export const TACKLING_INTENSITY_STEP = 0.08;
+const TACKLING_INTENSITY_STEP = 0.08;
 const INTENSITY_MIN = 0.7;
 const INTENSITY_MAX = 1.3;
 

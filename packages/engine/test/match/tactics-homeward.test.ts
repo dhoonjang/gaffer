@@ -13,7 +13,7 @@ import {
 import { createTestGame } from "../helpers";
 
 /**
- * 전술을 바꿔도 **모두가 똑같이 헤매지는 않는다** (commands/lineup.ts `personalDistance`·`memoryRetention`).
+ * 전술을 바꿔도 **모두가 똑같이 헤매지는 않는다** (team/lineup.ts `personalDistance`·`memoryRetention`).
  * 각자 자기 기억과 성향을 기준으로 흔들린다.
  */
 

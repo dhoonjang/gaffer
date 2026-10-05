@@ -3,11 +3,11 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { IconArrowLeft } from "@/domains/common/ui/icons";
-import { LeagueListSkeleton } from "@/domains/common/ui/skeleton";
-import { Loading } from "@/domains/common/ui/loading";
+import { IconArrowLeft } from "@/shared/icons";
+import { LeagueListSkeleton } from "@/shared/skeleton";
+import { Loading } from "@/shared/loading";
 import { CLUB_TIER_KO, type ClubColours, type ClubTier } from "@story-fm/domain";
-import { Crest, clubStyle } from "@/domains/common/ui/crest";
+import { Crest, clubStyle } from "@/shared/crest";
 
 interface TeamEntry {
   id: string;
@@ -27,7 +27,7 @@ interface LeagueEntry {
   size: number;
   /**
    * 리그 정체성 색 — 그 리그 구단들의 공식 색에서 파생한 값을 카탈로그가 실어 보낸다
-   * (ui/design-system.md §2-1). 답이 리그 집합의 함수라 화면이 행마다 셀 수 없다.
+   * (web/design-system.md §2-1). 답이 리그 집합의 함수라 화면이 행마다 셀 수 없다.
    */
   tone?: string;
 }
@@ -47,7 +47,7 @@ type Step = (typeof STEPS)[number]["key"];
 const byTier = (a: TeamEntry, b: TeamEntry) => a.tier - b.tier;
 
 /**
- * 리그 띠의 색 한 칸 — 행 요소가 인라인으로 세운다 (ui/design-system.md §2 「주입」).
+ * 리그 띠의 색 한 칸 — 행 요소가 인라인으로 세운다 (web/design-system.md §2 「주입」).
  * 카탈로그가 색을 주지 못하면 `:root`의 기본값이 그대로 선다.
  */
 const leagueStyle = (tone: string | undefined): CSSProperties | undefined =>
@@ -144,7 +144,7 @@ export default function NewGamePage() {
     );
 
   return (
-    /* 구단 색은 팀 카드마다 선다 — 온보딩 루트가 들 것은 없다 (ui/design-system.md §2 「주입」) */
+    /* 구단 색은 팀 카드마다 선다 — 온보딩 루트가 들 것은 없다 (web/design-system.md §2 「주입」) */
     <main className="onboarding">
       <div className="onboarding-top">
         {step === "league" || prevStep === undefined ? (
@@ -196,7 +196,7 @@ export default function NewGamePage() {
             /**
              * 리그는 **세로 목록**이다 — 행 하나가 리그 하나고, 리그 띠·이름·국가·
              * 팀 수가 한 줄에 선다. 리그가 늘면 줄이 늘 뿐이라 개수가 배치를 바꾸지
-             * 않는다 (ui/design-system.md §7).
+             * 않는다 (web/design-system.md §7).
              */
             <div className="league-list" data-testid="league-list">
               {leagues.map((l) => (
@@ -204,7 +204,7 @@ export default function NewGamePage() {
                   key={l.id}
                   className={`league-row${leagueId === l.id ? " selected" : ""}`}
                   // 행마다 제 리그의 띠가 선다 — 팀 카드의 구단 띠와 같은 꼴이고,
-                  // 색은 「누구인가」만 말한다 (ui/design-system.md §2-1)
+                  // 색은 「누구인가」만 말한다 (web/design-system.md §2-1)
                   style={leagueStyle(l.tone)}
                   // 고른 리그는 워시·링만이 아니라 이것으로도 전해진다 (overview.md §5)
                   aria-current={leagueId === l.id ? "true" : undefined}

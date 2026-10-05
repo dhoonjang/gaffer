@@ -71,7 +71,7 @@ export type InjuryRiskGrade = "low" | "elevated" | "high";
 export type InjuryRiskCause = "condition" | "load" | "proneness" | "strength";
 
 /** 등급의 문턱 — 저울의 값이다 (player.md §5.3) */
-export const INJURY_RISK_FLOOR = { high: 88, elevated: 62 } as const;
+const INJURY_RISK_FLOOR = { high: 88, elevated: 62 } as const;
 /** 원인으로 이름을 대는 문턱 — 들림 전체에서 그 항이 차지하는 몫 */
 const INJURY_CAUSE_SHARE = 0.25;
 const INJURY_CAUSE_ORDER: readonly InjuryRiskCause[] = [

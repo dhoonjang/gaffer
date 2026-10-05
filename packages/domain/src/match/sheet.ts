@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MatchSideSchema } from "../common/match-events";
+import { MatchSideSchema } from "./match-events";
 import {
   LiveBandSchema,
   LiveBehaviorActionSchema,
@@ -12,8 +12,7 @@ import {
  * Jev는 시트의 타입 값을 판독하고 코어가 실재·예산·대가와 적용 가능성을 검증한다.
  */
 
-export const PointImportanceSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
-export type PointImportance = z.infer<typeof PointImportanceSchema>;
+const PointImportanceSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 
 /** 화면과 기록에 보관하는 감독 원문의 길이 상한 */
 export const POINT_TEXT_MAX = 120;
@@ -38,7 +37,7 @@ export type Point = z.infer<typeof PointSchema>;
  * 새 모양은 말의 규칙에서 움직이는 자리가 여섯과 다를 때만 선다.
  */
 export const SHEET_SHAPES = ["behavior", "edge", "focus", "temper", "legs", "cohesion"] as const;
-export const SheetShapeSchema = z.enum(SHEET_SHAPES);
+const SheetShapeSchema = z.enum(SHEET_SHAPES);
 export type SheetShape = z.infer<typeof SheetShapeSchema>;
 
 export const SHEET_SHAPE_KO: Record<SheetShape, string> = {
@@ -61,17 +60,14 @@ export const SHEET_SHAPE_KO: Record<SheetShape, string> = {
  * (`anyOf`를 쓰지 않는다 — agents `tool-schema.ts`). 모양과 표적의 짝이 맞는지는 코어가
  * 확인하고 어긋난 줄은 노트로 남긴다 (sim `sheet.ts`).
  */
-export const SheetTargetSchema = z.object({
+const SheetTargetSchema = z.object({
   player: z.string().min(1).optional(),
   side: MatchSideSchema.optional(),
   lane: LiveLaneSchema.optional(),
 });
-export type SheetTarget = z.infer<typeof SheetTargetSchema>;
 
-export const SheetSignSchema = z.union([z.literal(1), z.literal(-1)]);
-export type SheetSign = z.infer<typeof SheetSignSchema>;
+const SheetSignSchema = z.union([z.literal(1), z.literal(-1)]);
 export const SheetStepSchema = z.number().min(0).max(3);
-export type SheetStep = z.infer<typeof SheetStepSchema>;
 
 /**
  * 시트의 한 줄 — 포인트 하나의 수치 독해.

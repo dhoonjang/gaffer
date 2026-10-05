@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { MatchEventSchema } from "../common/match-events";
+import { MatchEventSchema } from "./match-events";
 import { LIVE_STEP } from "./live-match";
 
 export const RECENT_FLOW_SECONDS = 600;
 export const FLOW_TICKS_PER_SECOND = Math.round(1 / LIVE_STEP);
 const count = z.number().int().nonnegative();
-export const FlowTotalsSchema = z.object({
+const FlowTotalsSchema = z.object({
   possessionTicks: count,
   shots: count,
   xgMicros: count,
@@ -16,9 +16,9 @@ export const FlowTotalsSchema = z.object({
   fouls: count,
 });
 export type FlowTotals = z.infer<typeof FlowTotalsSchema>;
-export const FlowEventSchema = z.object({ tick: count, event: MatchEventSchema });
+const FlowEventSchema = z.object({ tick: count, event: MatchEventSchema });
 export type FlowEvent = z.infer<typeof FlowEventSchema>;
-export const FlowBucketSchema = z.object({
+const FlowBucketSchema = z.object({
   startTick: count,
   endTick: count,
   home: FlowTotalsSchema,

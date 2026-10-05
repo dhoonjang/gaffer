@@ -26,7 +26,7 @@ import { outOfBand, reportOf, type Readings } from "../../engine/harness/harness
 
 /**
  * 프롬프트 회귀 — **문구를 고치면 무엇이 움직였는가**를 LLM 없이 잰다
- * (→ docs/common/llm/prompts.md §7).
+ * (→ docs/agents/prompts.md §7).
  *
  *   pnpm balance prompt-regression
  *

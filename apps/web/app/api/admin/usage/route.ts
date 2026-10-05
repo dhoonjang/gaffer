@@ -17,7 +17,7 @@ import type { UsageAgentRow, UsageResponse } from "@/app/admin/types";
 
 /**
  * 계측 — 세션 장부와 에이전트 배치를 **행 하나로 합쳐** 낸다
- * (docs/common/llm/models.md §5-1).
+ * (docs/agents/models.md §5-1).
  *
  * **판정은 전부 여기서 난다.** 히트율도, 예산 대비 비율도, 「프리픽스가 깨진 것으로
  * 보인다」도 `usage-meter.ts`의 함수 그것을 불러 값으로 내려보낸다 — 화면이 다시

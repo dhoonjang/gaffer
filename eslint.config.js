@@ -2,8 +2,6 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import next from "@next/eslint-plugin-next";
-import ts from "typescript";
-import { URL, fileURLToPath } from "node:url";
 
 const browserImports = {
   paths: [
@@ -24,8 +22,8 @@ const browserImports = {
   patterns: [
     {
       group: [
-        "**/lib/store",
-        "**/lib/turn-runner",
+        "**/game/store",
+        "**/game/turn-runner",
         "./store",
         "./turn-runner",
         "**/live-match-server",
@@ -39,56 +37,46 @@ const browserImports = {
     },
   ],
 };
-const domains = ["story", "negotiation", "match"];
-// 공개 배럴의 이름도 실제 선언 위치로 판정한다. 수동 목록은 export가 늘 때 경계를 놓친다.
-const packages = ["domain", "engine", "agents"];
-const entrypoints = packages.map((pkg) =>
-  fileURLToPath(new URL(`./packages/${pkg}/src/index.ts`, import.meta.url)),
-);
-const program = ts.createProgram(entrypoints, {
-  module: ts.ModuleKind.ESNext,
-  moduleResolution: ts.ModuleResolutionKind.Bundler,
-  target: ts.ScriptTarget.ESNext,
-  skipLibCheck: true,
-});
-const checker = program.getTypeChecker();
-const exportsByPackage = entrypoints.map((entry, i) => {
-  const module = checker.getSymbolAtLocation(program.getSourceFile(entry));
-  return {
-    name: "@story-fm/" + packages[i],
-    exports: checker.getExportsOfModule(module).flatMap((symbol) => {
-      const declaration =
-        symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
-      if (!(declaration.flags & ts.SymbolFlags.Value)) return [];
-      const file = declaration.declarations?.[0]?.getSourceFile().fileName ?? "";
-      const owner = file.match(
-        /packages\/(?:domain|engine|agents)\/src\/(common|story|negotiation|match|app)\//,
-      )?.[1];
-      return owner ? [{ name: symbol.name, owner }] : [];
-    }),
-  };
-});
-const publicImports = (owner, pkg) =>
-  exportsByPackage
-    .filter((entry) => entry.name !== "@story-fm/" + pkg)
-    .map((entry) => ({
-      name: entry.name,
-      importNames: entry.exports
-        .filter((item) => item.owner !== "common" && item.owner !== owner)
-        .map((item) => item.name),
-      allowTypeImports: true,
-      message: "공개 API도 선언의 소유 도메인을 따른다. 여러 도메인의 조립은 app에 둔다.",
-    }))
-    .filter((entry) => entry.importNames.length > 0);
-const domainImports = (owner) => ({
+const webScreens = ["chat", "mailbox", "office", "squad", "match"];
+/**
+ * 엔진 도메인 — **아래에서 위로** 적는다. 한 도메인은 자기보다 앞에 적힌 것만 값으로
+ * 부른다. 여러 도메인을 함께 움직이는 흐름은 `app`이 조립한다 (docs/architecture.md §2).
+ */
+const engineLayers = ["core", "players", "match", "season", "team", "people"];
+const layerImports = (owner) => ({
   group: [
-    ...domains.filter((d) => d !== owner).map((d) => "**/" + d + "/**"),
+    ...engineLayers.slice(engineLayers.indexOf(owner) + 1).map((d) => "**/" + d + "/**"),
     "**/app/**",
-    "**/application/**",
   ],
   allowTypeImports: true,
   message:
-    "실행 의존성은 common → 각 도메인 → app이다. 다른 도메인을 실행하는 함수는 app에서 조립한다.",
+    "엔진 도메인은 아래 층만 값으로 부른다 (core → players → match → season → people → team → app). 여러 도메인을 함께 움직이는 흐름은 app/workflows에 둔다.",
+});
+/**
+ * 에이전트 폴더 — `config/llm.yml`의 호출 갈래다(Jev 평가 · 기억 · 장면을 쓰는 GM). 층은
+ * 아래에서 위로 적고, 같은 층의 폴더끼리는 서로 부르지 않는다. 턴을 엮는 일은 `app`이 한다.
+ */
+const agentLayers = [["shared"], ["evaluators", "memory"], ["gm"]];
+const agentImports = (owner) => {
+  const level = agentLayers.findIndex((layer) => layer.includes(owner));
+  return {
+    group: [
+      ...agentLayers[level].filter((d) => d !== owner).map((d) => "**/" + d + "/**"),
+      ...agentLayers
+        .slice(level + 1)
+        .flat()
+        .map((d) => "**/" + d + "/**"),
+      "**/app/**",
+    ],
+    allowTypeImports: true,
+    message:
+      "에이전트 호출은 아래 층만 값으로 부른다 (shared → evaluators·memory → gm → app). 턴을 엮는 일은 app에 둔다.",
+  };
+};
+const ownBarrel = (pkg) => ({
+  name: "@story-fm/" + pkg,
+  allowTypeImports: true,
+  message: "패키지 내부는 공개 배럴 대신 소유 모듈을 직접 참조한다.",
 });
 
 export default tseslint.config(
@@ -163,52 +151,98 @@ export default tseslint.config(
   {
     files: [
       "apps/web/app/api/**/*.ts",
-      "apps/web/application/lib/store.ts",
-      "apps/web/application/lib/turn-runner.ts",
-      "apps/web/application/lib/lorebook-jobs.ts",
-      "apps/web/application/lib/live-match-server.ts",
+      "apps/web/game/store.ts",
+      "apps/web/game/turn-runner.ts",
+      "apps/web/game/lorebook-jobs.ts",
+      "apps/web/game/live-match-server.ts",
       "apps/web/test/**/*.ts",
       "apps/web/next.config.ts",
     ],
     rules: { "@typescript-eslint/no-restricted-imports": "off" },
   },
-  ...["common", ...domains].flatMap((owner) => [
-    ...["engine", "domain", "agents"].map((pkg) => ({
-      files: ["packages/" + pkg + "/src/" + owner + "/**/*.ts"],
-      rules: {
-        "@typescript-eslint/no-restricted-imports": [
-          "error",
-          {
-            paths: [
-              ...publicImports(owner, pkg),
-              {
-                name: "@story-fm/" + pkg,
-                allowTypeImports: true,
-                message: "패키지 내부는 공개 배럴 대신 소유 모듈을 직접 참조한다.",
-              },
-            ],
-            patterns: [domainImports(owner)],
-          },
-        ],
-      },
-    })),
-    {
-      files: ["apps/web/domains/" + owner + "/**/*.{ts,tsx}"],
-      rules: {
-        "@typescript-eslint/no-restricted-imports": [
-          "error",
-          {
-            ...browserImports,
-            paths: [
-              ...browserImports.paths,
-              ...publicImports(owner).filter((entry) => entry.name === "@story-fm/domain"),
-            ],
-            patterns: [...browserImports.patterns, domainImports(owner)],
-          },
-        ],
-      },
+  /**
+   * 화면 — `screens/<화면>`은 공용 조각(`shared/`)만 부르고 다른 화면을 부르지 않는다.
+   * 화면을 엮는 일은 `game/`이 한다. 공용 조각과 개발 도구는 화면도 게임 껍데기도 모른다.
+   */
+  ...["shared", "dev", ...webScreens.map((d) => "screens/" + d)].map((owner) => ({
+    files: ["apps/web/" + owner + "/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          ...browserImports,
+          patterns: [
+            ...browserImports.patterns,
+            {
+              group: [
+                ...webScreens
+                  .filter((d) => "screens/" + d !== owner)
+                  .map((d) => "**/screens/" + d + "/**"),
+                "**/game/**",
+                ...(owner === "dev" ? [] : ["**/dev/**"]),
+              ],
+              allowTypeImports: true,
+              message:
+                "화면은 공용 조각(shared/)만 부른다. 다른 화면이나 게임 껍데기(game/)가 필요하면 game/이 콜백이나 콘텐츠로 넘긴다.",
+            },
+          ],
+        },
+      ],
     },
-  ]),
+  })),
+  ...engineLayers.map((owner) => ({
+    files: ["packages/engine/src/" + owner + "/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        { paths: [ownBarrel("engine")], patterns: [layerImports(owner)] },
+      ],
+    },
+  })),
+  {
+    files: ["packages/engine/src/app/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": ["error", { paths: [ownBarrel("engine")] }],
+    },
+  },
+  ...agentLayers.flat().map((owner) => ({
+    files: ["packages/agents/src/" + owner + "/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        { paths: [ownBarrel("agents")], patterns: [agentImports(owner)] },
+      ],
+    },
+  })),
+  {
+    files: ["packages/agents/src/gm/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": ["error", { paths: [ownBarrel("agents")] }],
+    },
+  },
+  /**
+   * domain은 모든 컨텍스트가 읽는 **공용 어휘**다 — 폴더는 소유 컨텍스트를 따르지만 서로를
+   * 읽는다. 화면 조작의 모양(`app/`)만은 모델이 읽지 않는다.
+   */
+  {
+    files: ["packages/domain/src/**/*.ts"],
+    ignores: ["packages/domain/src/kernel/**", "packages/domain/src/index.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          paths: [ownBarrel("domain")],
+          patterns: [
+            {
+              group: ["**/app/**"],
+              allowTypeImports: true,
+              message: "domain의 모델은 화면 조작의 모양(app/)을 읽지 않는다.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   /**
    * 실시간 경기 엔진(`packages/sim/src/live`)은 브라우저가 굴린 결과를 서버가 **같은 코드로
    * 다시 굴려** 검증한다 — 두 쪽이 비트까지 같아야 한다 (docs/match/live-match.md §8.2).
@@ -220,8 +254,8 @@ export default tseslint.config(
     files: [
       "packages/sim/src/live/**/*.ts",
       "packages/sim/src/load.ts",
-      "packages/domain/src/common/dmath.ts",
-      "packages/domain/src/common/log-curves.ts",
+      "packages/domain/src/core/dmath.ts",
+      "packages/domain/src/core/log-curves.ts",
     ],
     rules: {
       "no-restricted-properties": [

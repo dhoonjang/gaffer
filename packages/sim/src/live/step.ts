@@ -277,7 +277,7 @@ interface Ctx extends PreparedInput {
 
 // ── 상태 만들기 ─────────────────────────────────────────────────────────────
 
-export interface CreateLiveOptions {
+interface CreateLiveOptions {
   seconds: number;
   phase: PlayPhase;
   kickoffSide: MatchSide;

@@ -1,13 +1,22 @@
-# 전술과 실시간 경기
+# match — 경기 시뮬레이션
 
-경기 GM은 감독의 자유로운 지시를 해석한다. 공간 코어가 선수의 움직임과 승패를 결정하고, 서버가 체크포인트를 검증한다.
+경기 하나를 굴리는 일만 소유한다 — 라인업과 전술에서 시뮬레이터 입력을 조립하는 규칙
+(`selection`·`simulation`), 실시간 경기의 흐름(킥오프·체크포인트·마무리), 간이 시뮬, 평점,
+징계, 연장과 승부차기, 경기 전 상대 분석과 중계 뷰. 공간 시뮬레이터는 `packages/sim`에 있다.
 
-소유하는 책임: 선발·포지션·역할·전술, 공간 시뮬레이션·교체·개입, 경기 결산·징계·대회 일정·순위.
+감독이 짜는 판(라인업·전술·세트피스 지정)은 team이 소유한다.
 
-선수 능력·체력·폼은 common 정보를 사용한다. 계약이나 서사가 결과를 덮어쓰지 않는다. 훈련의 결과가 명단과 전술을 통해 경기에 닿는다.
+## 문서
 
-코드는 `packages/domain/src/match`, `packages/engine/src/match`,
-`packages/agents/src/match`, `apps/web/domains/match`에서 찾는다.
-경기 공간 코어는 `packages/sim`에 있다. 여러 경험을 연결하는 실행 흐름은 engine·agents의 `app/workflows/match`에 있다.
+- [경기 시뮬레이션](match.md)
+- [실시간 경기](live-match.md)
+- [축구 규칙 참고](football-reference.md)
 
-[전체 문서 지도](../README.md) · [아키텍처](../architecture.md)
+## 코드
+
+- `packages/domain/src/match/`
+- `packages/engine/src/match/`
+- `packages/sim/`
+- 경기 뒤 결산을 엮는 흐름은 `packages/engine/src/app/workflows/match-flow.ts`
+
+[문서 지도](../README.md) · [책임 구조](../architecture.md)

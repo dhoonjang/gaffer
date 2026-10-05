@@ -21,25 +21,25 @@ import { subLimitsOf } from "./match-ledger";
 /** 이 피로 위의 필드 선수는 벤치가 바꾼다 */
 export const SUB_FATIGUE = 62;
 /** 휴식 정지점(하프타임)의 낮은 문턱 */
-export const SUB_FATIGUE_HALFTIME = 55;
+const SUB_FATIGUE_HALFTIME = 55;
 /** 피로 갈래가 열리는 분 */
 const SUB_FATIGUE_MINUTE = 58;
 /** 정지점마다 교체를 검토할 확률 */
 const SUB_CHANCE = 0.9;
 /** 승부수와 굳히기가 열리는 시각 */
 export const SUB_CHASE_MINUTE = 60;
-export const SUB_CHASE_MINUTE_TWO = 50;
+const SUB_CHASE_MINUTE_TWO = 50;
 export const SUB_HOLD_MINUTE = 75;
 /** 한 경기에 쓰는 승부수·굳히기 장수 — 세는 자리는 장부의 `subCause`다 */
-export const SUB_CHASE_MAX = 2;
-export const SUB_HOLD_MAX = 1;
+const SUB_CHASE_MAX = 2;
+const SUB_HOLD_MAX = 1;
 /** 한 정지점(교체 창)에 쓰는 최대 장수 */
 export const SUB_WINDOW_MAX = 3;
 /** 그 줄이 무너지지 않는 최소 인원 — 승부수가 수비를 셋 밑으로 깎지 않는다 */
 const LINE_FLOOR: Record<"DF" | "MF" | "FW", number> = { DF: 3, MF: 2, FW: 1 };
 
 /** 벤치가 한 정지점에서 보는 판 — 두 시뮬이 같은 모양으로 만든다 */
-export interface BenchView {
+interface BenchView {
   minute: number;
   /** 휴식 정지점(하프타임·연장 개시·연장 하프타임) — 문턱이 낮아지고 창을 안 쓴다 */
   atBreak: boolean;
@@ -58,7 +58,7 @@ export interface BenchView {
   tiredness: (p: Player) => number;
 }
 
-export interface BenchSub {
+interface BenchSub {
   out: Player;
   in: Player;
   cause: SubCause;
@@ -179,9 +179,9 @@ const AI_SHIFT_EARLIEST_MINUTE = 55;
 /** 남은 시간이 없다고 보는 분 */
 const AI_SHIFT_URGENT_MINUTE = 72;
 /** 상대 벤치가 우리 전술을 읽고 맞서는 확률 — 정지점마다 한 번 */
-export const AI_COUNTER_CHANCE = 0.35;
+const AI_COUNTER_CHANCE = 0.35;
 /** 스코어 판단에 곁들이는 축이 붙을 확률 */
-export const AI_VARIANT_CHANCE = 0.5;
+const AI_VARIANT_CHANCE = 0.5;
 /**
  * **공을 돌리는 상대에게 압박으로 답하는 문턱** (경기 시간 분) — 비기거나 뒤진 채 점유가
  * 쏠리고 슈팅이 끊긴 시간이 이만큼 이어지면 압박·멘탈리티를 한 칸 올린다 (live-match.md §5.1).
@@ -207,7 +207,7 @@ function settleShift(
   return Object.keys(shift).length > 0 ? shift : null;
 }
 
-export type AiShiftKind = "chase" | "hold" | "counter" | "press";
+type AiShiftKind = "chase" | "hold" | "counter" | "press";
 
 const SHIFT_CAUSE: Record<AiShiftKind, EventCause["code"]> = {
   chase: "bench_chase",
@@ -239,13 +239,13 @@ function counterCandidates(
 }
 
 /** 벤치가 이 정지점에 옮기려는 축 */
-export interface AiBenchShift {
+interface AiBenchShift {
   axes: Partial<TacticsSpec>;
   /** `tactical_shift` 사건의 원인 — 갈래와 옮긴 뒤의 축 값 */
   cause: EventCause;
 }
 
-export interface AiShiftView {
+interface AiShiftView {
   minute: number;
   score: { home: number; away: number };
   /** 라커룸에서 강도를 다시 정하는 자리 */

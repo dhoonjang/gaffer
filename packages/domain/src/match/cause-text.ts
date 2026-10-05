@@ -1,5 +1,5 @@
-import type { EventCause, EventCauseCode, SubCause } from "../common/match-events";
-import { TACTIC_AXES } from "../common/team-tactics";
+import type { EventCause, EventCauseCode, SubCause } from "./match-events";
+import { TACTIC_AXES } from "../team/team-tactics";
 
 /**
  * **원인 코드 → 문장** — 렌더러는 이것 하나다 (match.md §4).

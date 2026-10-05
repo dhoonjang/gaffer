@@ -5,16 +5,16 @@ import {
   type LorebookContent,
   type Formation,
 } from "@story-fm/domain";
-import { catalogPath } from "../../common/core/paths";
+import { catalogPath } from "../../core/catalog/paths";
 import {
   CLUB_PROFILES_SEED,
   clubProfile,
   clubProfiles,
   type ClubProfile,
-} from "../../common/data/club-profile";
-import { cupCatalog } from "../../common/data/cup-catalog";
-import { domesticCupCatalog } from "../../common/data/domestic-cup-catalog";
-import { leagueCatalog, leagueName } from "../../common/data/league-catalog";
+} from "../../core/catalog/club-profile";
+import { cupCatalog } from "../../core/catalog/cup-catalog";
+import { domesticCupCatalog } from "../../core/catalog/domestic-cup-catalog";
+import { leagueCatalog, leagueName } from "../../core/catalog/league-catalog";
 import {
   TACTICAL_STYLE_SEED,
   TEAM_CATALOG_SEED,
@@ -26,13 +26,13 @@ import {
   type ClubHonour,
   type TacticalStyle,
   type TeamCatalogEntry,
-} from "../../common/data/team-catalog";
+} from "../../core/catalog/team-catalog";
 import {
   clearTeamOverride,
   readTeamOverride,
   writeTeamOverride,
-} from "../../common/data/team-override";
-import { buildTeamSquad, playerCatalog, saveCatalog } from "../../common/world/catalog";
+} from "../../core/catalog/team-override";
+import { buildTeamSquad, playerCatalog, saveCatalog } from "../../players/catalog/catalog";
 import {
   catalogWarnings,
   checkCatalogInvariants,
@@ -65,7 +65,7 @@ export interface AdminTeamRow extends TeamCatalogEntry {
   leagueName: string;
 }
 
-export interface AdminTeamInput {
+interface AdminTeamInput {
   lorebook?: LorebookContent;
   id: string;
   name: string;
@@ -81,7 +81,7 @@ export interface AdminTeamInput {
   honours?: readonly ClubHonour[];
 }
 
-export type AdminTeamPatch = Partial<Omit<AdminTeamInput, "id" | "formation">> & {
+type AdminTeamPatch = Partial<Omit<AdminTeamInput, "id" | "formation">> & {
   formation?: Formation | null;
 };
 

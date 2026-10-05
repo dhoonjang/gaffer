@@ -24,12 +24,8 @@ import {
   startingIdsOf,
 } from "@story-fm/engine";
 import { noteTurn, traceBoard } from "@story-fm/llm";
-import { toPayload } from "@/application/lib/store";
-import {
-  LOCK_WAIT_MS,
-  busyResponse,
-  withGameLock as withSaveLock,
-} from "@/application/lib/turn-runner";
+import { toPayload } from "@/game/store";
+import { LOCK_WAIT_MS, busyResponse, withGameLock as withSaveLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
 
 const withGameLock = <T>(id: string, wait: number, action: () => Promise<T>) =>
@@ -80,7 +76,7 @@ const SetPieceTakersSchema = z
  */
 const LineupSchema = z.object({
   starting: z.array(SlotSchema).length(11),
-  /** 정원의 원본은 도메인 하나다 (→ docs/common/team.md §6) — 화면도 같은 값을 읽는다 */
+  /** 정원의 원본은 도메인 하나다 (→ docs/team/team.md §6) — 화면도 같은 값을 읽는다 */
   bench: z.array(SlotSchema).max(MATCHDAY_BENCH).default([]),
   tactics: TacticsSchema.optional(),
   /**
@@ -114,7 +110,7 @@ const LineupSchema = z.object({
  * 게임 잠금을 턴과 공유해 진행 중인 GM 턴과 저장이 엉키지 않게 한다 — **그 잠금을
  * 기다리는 데는 상한이 있다.** 넘기면 409 + `retry`라, 그 편집은 화면의 대기열에 남아
  * 다음 자동 저장에 다시 실린다. 여기서 몇 분씩 기다리면 감독이 손을 놓고 기다리게 되고,
- * 기다린 끝에 저장되는 배치는 이미 지난 턴의 것이다 (docs/common/llm/models.md §1-1).
+ * 기다린 끝에 저장되는 배치는 이미 지난 턴의 것이다 (docs/agents/models.md §1-1).
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;

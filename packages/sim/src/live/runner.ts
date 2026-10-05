@@ -113,7 +113,7 @@ export interface LiveMatch {
   committedTick: number;
 }
 
-export interface LiveAdvanceResult {
+interface LiveAdvanceResult {
   events: MatchEvent[];
   /** 장부가 반려한 사건 — 시뮬레이터의 버그다. 비어 있어야 한다 */
   rejected: string[];
@@ -239,7 +239,7 @@ export function createLiveMatch(
 // ── 시간 ────────────────────────────────────────────────────────────────────
 
 /** 이 하프의 추가시간 (초) — 기본 + 중단, 분 단위로 올림 */
-export function addedTimeOf(phase: PlayPhase, stoppages: number): number {
+function addedTimeOf(phase: PlayPhase, stoppages: number): number {
   const raw = ADDED_TIME_BASE[phase] + stoppages;
   return Math.max(60, Math.ceil(raw / 60) * 60);
 }
@@ -316,7 +316,7 @@ function needsExtraTime(match: LiveMatch): boolean {
 // ── 교체 ────────────────────────────────────────────────────────────────────
 
 /** 교체를 실행한다 — 장부·자리·말을 함께 옮긴다. 장부가 반려하면 아무것도 바꾸지 않는다 */
-export function applySubstitution(
+function applySubstitution(
   match: LiveMatch,
   side: MatchSide,
   out: string,

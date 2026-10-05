@@ -1,176 +1,160 @@
-// @story-fm/engine 공개 API — 폴더가 도메인이다.
+// @story-fm/engine 공개 API — 폴더가 도메인이다 (docs/architecture.md §1).
 
-// core — 난수·경로·날짜·게임 상태·저장·시간 진행
-export * from "./common/core/rng";
-export * from "./common/core/paths";
-export * from "./common/core/dates";
-export * from "./common/core/name-match";
-export * from "./common/core/state";
-export * from "./common/core/history-window";
-export * from "./common/people/lorebook";
-export * from "./app/workflows/story/lorebook";
-export * from "./common/core/turn-facts";
-export * from "./common/core/journal";
-export * from "./common/core/player-ref";
-export * from "./common/core/team-ref";
-export * from "./common/core/league-shape";
-export * from "./common/core/club-tier";
-export * from "./app/persistence";
-export * from "./common/core/save-lock";
-export * from "./app/tick";
-export * from "./match/squad/simulation";
+// core — 게임 상태와 기본 조회·기록, 세계의 기준 표 (팀·리그·컵·징계 카탈로그)
+export * from "./core/calendar";
+export * from "./core/catalog/catalog-source";
+export * from "./core/catalog/club-profile";
+export * from "./core/catalog/cup-catalog";
+export * from "./core/catalog/cup-override";
+export * from "./core/catalog/discipline-catalog";
+export * from "./core/catalog/domestic-cup-catalog";
+export * from "./core/catalog/league-catalog";
+export * from "./core/catalog/league-economy";
+export * from "./core/catalog/names";
+export * from "./core/catalog/paths";
+export * from "./core/catalog/player-id";
+export * from "./core/catalog/pseudonym";
+export * from "./core/catalog/scope";
+export * from "./core/catalog/super-cup-catalog";
+export * from "./core/catalog/team-catalog";
+export * from "./core/catalog/team-override";
+export * from "./core/club-colours";
+export * from "./core/command-result";
+export * from "./core/dates";
+export * from "./core/history-window";
+export * from "./core/journal";
+export * from "./core/league-membership";
+export * from "./core/ledger";
+export * from "./core/name-match";
+export * from "./core/player-ref";
+export * from "./core/rng";
+export * from "./core/save-lock";
+export * from "./core/state";
+export * from "./core/team-ref";
+export * from "./core/turn-facts";
 
-// data — 카탈로그·시드 (불변 초기치)
-export * from "./common/data/names";
-export * from "./common/data/team-catalog";
-export * from "./common/data/coach-seeds";
-export * from "./common/data/owner-seeds";
-export * from "./common/data/league-catalog";
-export * from "./common/data/cup-catalog";
-export * from "./common/data/discipline-catalog";
-export * from "./common/data/domestic-cup-catalog";
-export * from "./common/data/super-cup-catalog";
-export * from "./common/data/club-profile";
-export * from "./common/data/pseudonym";
-export * from "./common/data/league-economy";
-export * from "./common/data/catalog-source";
-export * from "./common/data/team-override";
-export * from "./common/data/cup-override";
+// players — 선수 (카탈로그·능력·부상·폼·관측·훈련·성장·유스·경력)
+export * from "./players/attribute-growth";
+export * from "./players/career";
+export * from "./players/catalog/attributes";
+export * from "./players/catalog/catalog";
+export * from "./players/catalog/player-persona";
+export * from "./players/contract-status";
+export * from "./players/development";
+export * from "./players/form";
+export * from "./players/generate";
+export * from "./players/hierarchy";
+export * from "./players/injury";
+export * from "./players/international";
+export * from "./players/numbers";
+export * from "./players/observation";
+export * from "./players/observation-view";
+export * from "./players/retirement";
+export * from "./players/role-memory";
+export * from "./players/slump";
+export * from "./players/squad-depth";
+export * from "./players/training";
+export * from "./players/training-plan";
+export * from "./players/training-report";
+export * from "./players/youth";
 
-// world — 새 게임의 세계 구축 (능력치 파생·카탈로그 빌드·생성·주급·인물)
-export * from "./common/world/attributes";
-export * from "./common/world/player-id";
-export * from "./common/world/catalog";
-export * from "./common/people/persona";
-export * from "./common/people/player-persona";
-export * from "./common/world/generate";
-export * from "./common/finance/wages";
+// match — 경기 시뮬레이션 (입력 조립·경기 흐름·간이 시뮬·평점·징계·연장·승부차기)
+export * from "./match/extra-time";
+export * from "./match/live-view";
+export * from "./match/match-flow";
+export * from "./match/other-clubs";
+export * from "./match/preview";
+export * from "./match/quick-sim";
+export * from "./match/ratings";
+export * from "./match/selection";
+export * from "./match/shootout";
+export * from "./match/simulation";
+
+// season — 시즌 (편성·리그·컵·대항전·대표팀·순위·상금·시상·구단 역사)
+export * from "./season/awards";
+export * from "./season/calendar";
+export * from "./season/club-tier-recompute";
+export * from "./season/competition-view";
+export * from "./season/cup-entrants";
+export * from "./season/domestic-cup";
+export * from "./season/draw-schedule";
+export * from "./season/euro-knockout";
+export * from "./season/euro-prize";
+export * from "./season/europe";
+export * from "./season/fixtures";
+export * from "./season/friendly";
+export * from "./season/international";
+export * from "./season/leaderboard";
+export * from "./season/pairings";
+export * from "./season/prediction";
+export * from "./season/promotion";
+export * from "./season/records";
+export * from "./season/reschedule";
+export * from "./season/reserve";
+export * from "./season/standings";
+export * from "./season/super-cup";
+
+// team — 팀 (선수단·등록·라인업·전술·이적·계약·재정·이사회 요청)
+export * from "./team/board-request";
+export * from "./team/finance";
+export * from "./team/finance-outlook";
+export * from "./team/finance-view";
+export * from "./team/free-agency";
+export * from "./team/lineup";
+export * from "./team/negotiation";
+export { repairNegotiationSquads } from "./team/negotiation-squad";
+export * from "./team/player-pool";
+export * from "./team/registration";
+export * from "./team/request-board";
+export * from "./team/wages";
+export * from "./team/world-market";
+
+// people — 인물 (인물 카탈로그·로어북·스태프·메일·언론·감독 고용과 커리어)
+export * from "./people/achievements";
+export * from "./people/catalog/coach-seeds";
+export * from "./people/catalog/owner-seeds";
+export * from "./people/catalog/persona-catalog";
+export * from "./people/coach-cues";
+export * from "./people/interview";
+export * from "./people/lorebook";
+export * from "./people/mail";
+export * from "./people/manager-employment";
+export * from "./people/media";
+export * from "./people/persona";
+export * from "./people/recipient-search";
+export { deliverTrainingReportMail } from "./people/report-mail";
+export * from "./people/staff-employment";
+
+// app — 여러 도메인을 함께 움직이는 일 (시간 진행·시즌 전환·업무 흐름·조회·뷰·어드민)
 export * from "./app/admin/admin";
-export * from "./app/admin/admin-team";
-export * from "./app/admin/admin-persona";
-export * from "./common/people/persona-catalog";
 export * from "./app/admin/admin-competition";
+export * from "./app/admin/admin-persona";
+export * from "./app/admin/admin-team";
 export * from "./app/catalog-invariants";
-export * from "./common/world/scope";
-export * from "./common/players/player-pool";
-
-// competition — 시즌 달력·리그·컵·유럽 대항전
-export * from "./match/competition/calendar";
-export * from "./match/competition/pairings";
-export * from "./common/core/international-breaks";
-export * from "./common/core/calendar";
-export * from "./match/competition/fixtures";
-export * from "./match/competition/friendly";
-export * from "./common/core/match-kinds";
-export * from "./match/competition/reserve";
-export * from "./common/views/standings";
-export * from "./app/season";
-export * from "./common/players/career";
-export * from "./match/competition/leaderboard";
-export * from "./match/competition/records";
-export * from "./common/views/manager-career";
-export * from "./match/competition/europe";
-export * from "./common/views/europe";
-export * from "./match/competition/euro-knockout";
-export * from "./app/workflows/match/competition/euro-knockout";
-export * from "./app/workflows/match/competition/euro-prize";
-export * from "./match/competition/shootout";
-export * from "./match/competition/extra-time";
-export * from "./app/workflows/match/competition/extra-time";
-export * from "./match/competition/promotion";
-export * from "./app/workflows/match/competition/promotion";
-export * from "./common/core/league-membership";
-export * from "./match/competition/prediction";
-export * from "./common/views/prediction";
-export * from "./match/competition/international";
-export * from "./app/workflows/match/competition/international";
-export * from "./common/players/international";
-export * from "./match/competition/club-tier-recompute";
-export * from "./match/competition/domestic-cup";
-export * from "./app/workflows/match/competition/domestic-cup";
-export * from "./common/views/cup-entrants";
-export * from "./match/competition/super-cup";
-export * from "./app/workflows/match/competition/super-cup";
-export * from "./match/competition/draw-schedule";
-export * from "./match/competition/reschedule";
-
-// match — 경기 진행·간이 시뮬·평점·징계
-export * from "./match/flow/match-flow";
-export * from "./app/workflows/match/flow/match-flow";
-export * from "./match/flow/preview";
-export * from "./match/flow/quick-sim";
-export * from "./match/flow/ratings";
-
-// squad — 선수단 상태(폼·심경·부상)와 성장·훈련
-export * from "./common/players/squad-depth";
-export * from "./common/players/hierarchy";
-export * from "./common/players/form";
-export * from "./story/players/slump";
-export * from "./match/squad/other-clubs";
-export * from "./story/players/coach-cues";
-export * from "./app/workflows/story/players/coach-cues";
-export * from "./common/players/injury";
-export * from "./story/players/development";
-export * from "./common/players/registration";
-export * from "./common/players/contract-status";
-export * from "./common/players/observation";
-export * from "./common/players/observation-view";
-export * from "./story/players/training-plan";
-export * from "./story/players/training-report";
-export * from "./app/workflows/story/players/training-report";
-export * from "./common/players/attribute-growth";
-export * from "./common/players/numbers";
-export * from "./story/players/career";
-
-// market — 이적 시장·협상·메디컬·감독 시장
-
-// club — 구단 재정·기자회견
-export * from "./story/world/media";
-export * from "./app/workflows/story/world/board";
-
-// commands — 감독 지시(도구·해석기)가 닿는 코어 명령의 실행부
-export * from "./app/commands";
-
-// views — 오피스 뷰·읽기 전용 조회
-export * from "./app/calendar-view";
-export * from "./common/views/finance";
-export * from "./match/views/live";
-export * from "./app/views/squad";
-export * from "./app/views/career";
-export * from "./match/views/competition";
-export * from "./app/views";
-export * from "./common/views/observation";
-export * from "./common/views/colours";
-export * from "./match/views/report";
-export * from "./app/player-card";
-export * from "./app/lookup";
-export * from "./common/views/finance-outlook";
-
 export * from "./app/create-game";
-export * from "./match/squad/selection";
-
-export * from "./app/workflows/match/health/injury";
-
-export * from "./common/finance/finance";
-export * from "./common/finance/request-board";
-export * from "./common/finance/board-request";
-
-export * from "./story/world/manager-employment";
-export * from "./app/workflows/story/world/manager-employment";
-export * from "./story/people/staff-employment";
-
-export * from "./common/players/free-agency";
-
-export * from "./app/workflows/story/world/interview";
-
-export * from "./negotiation/negotiation";
-export { repairNegotiationSquads } from "./app/workflows/negotiation-squad";
-
-export * from "./common/mail/mail";
-
-export { deliverTrainingReportMail } from "./app/workflows/mail-reports";
-
-export * from "./common/mail/recipient-search";
-
-export * from "./negotiation/world-market";
+export * from "./app/lookup/career";
+export * from "./app/lookup/history";
+export * from "./app/lookup/league";
+export * from "./app/lookup/match-report";
+export * from "./app/lookup/player-card";
+export * from "./app/lookup/resolve";
+export * from "./app/lookup/schedule";
+export * from "./app/lookup/search-players";
+export * from "./app/lookup/squad";
+export * from "./app/lookup/team-profile";
+export * from "./app/persistence";
+export * from "./app/season";
+export * from "./app/tick";
+export * from "./app/views/attention";
+export * from "./app/views/calendar";
+export * from "./app/views/career";
+export * from "./app/views/match-report";
+export * from "./app/views/player-card";
+export * from "./app/views/squad";
+export * from "./app/workflows/board";
+export * from "./app/workflows/lorebook";
+export * from "./app/workflows/manager-employment";
+export * from "./app/workflows/match-flow";
+export * from "./app/workflows/promotion";
+export * from "./app/workflows/training-report";
 export * from "./app/workflows/world-market";

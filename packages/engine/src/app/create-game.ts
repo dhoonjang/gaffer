@@ -1,6 +1,6 @@
-import { storePersona } from "../common/people/lorebook";
-import { refreshStaffPool } from "../story/people/staff-employment";
-import { syncLorebook } from "./workflows/story/lorebook";
+import { storePersona } from "../people/lorebook";
+import { refreshStaffPool } from "../people/staff-employment";
+import { syncLorebook } from "./workflows/lorebook";
 import type {
   AxisValues,
   Contract,
@@ -25,18 +25,18 @@ import {
   positionGroupOfPlayer,
   initialCaptainOf,
 } from "@story-fm/domain";
-import { buildScheduleEntries } from "../match/competition/calendar";
-import { buildSeasonCalendar, FIRST_SEASON } from "../common/core/calendar";
-import { contractUntil, seasonYear } from "../common/core/dates";
-import { tierOfTeamIn } from "../common/core/club-tier";
-import { defaultXiIds, playerCatalog } from "../common/world/catalog";
+import { buildScheduleEntries } from "../season/calendar";
+import { buildSeasonCalendar, FIRST_SEASON } from "../core/calendar";
+import { contractUntil, seasonYear } from "../core/dates";
+import { tierOfTeamIn } from "../core/league-membership";
+import { defaultXiIds, playerCatalog } from "../players/catalog/catalog";
 import { assertCatalogValid } from "./catalog-invariants";
-import { estimateSquadWages, wageSubjectOf } from "../common/finance/wages";
-import { clubEconomyLevel } from "../common/data/league-economy";
-import { worldFigureManagerOf } from "../common/data/world-figures";
-import { generateYouthPlayer } from "../common/world/generate";
-import { ensureSquadNumbers } from "../common/players/numbers";
-import { hasCups, scopedTeams, type WorldScope } from "../common/world/scope";
+import { estimateSquadWages, wageSubjectOf } from "../team/wages";
+import { clubEconomyLevel } from "../core/catalog/league-economy";
+import { worldFigureManagerOf } from "../people/catalog/world-figures";
+import { generateYouthPlayer } from "../players/generate";
+import { ensureSquadNumbers } from "../players/numbers";
+import { hasCups, scopedTeams, type WorldScope } from "../core/catalog/scope";
 import {
   teamCatalog,
   type TeamCatalogEntry,
@@ -45,13 +45,13 @@ import {
   isTopFlight,
   tacticalStyleOf,
   isClubTeam,
-} from "../common/data/team-catalog";
-import { clubProfiles, type ClubProfile } from "../common/data/club-profile";
-import { advanceDomesticCups } from "./workflows/match/competition/domestic-cup";
-import { buildEuroEntrants } from "../match/competition/europe";
-import { buildSeasonFixtures, isUserFixture } from "../match/competition/fixtures";
-import { seedInjuryHistory } from "../common/players/injury";
-import { seedInternationalCaps } from "../match/competition/international";
+} from "../core/catalog/team-catalog";
+import { clubProfiles, type ClubProfile } from "../core/catalog/club-profile";
+import { advanceDomesticCups } from "../season/domestic-cup";
+import { buildEuroEntrants } from "../season/europe";
+import { buildSeasonFixtures, isUserFixture } from "../season/fixtures";
+import { seedInjuryHistory } from "../players/injury";
+import { seedInternationalCaps } from "../season/international";
 import {
   generateHeadCoach,
   generateOwner,
@@ -59,16 +59,11 @@ import {
   generateStaff,
   occupiedPersonNames,
   seededVirtualManagerName,
-} from "../common/people/persona";
-import { makeRng, randInt } from "../common/core/rng";
-import { installDefaultTraining } from "../story/players/training-plan";
-import {
-  ensurePotentialFloor,
-  type GameState,
-  proficiencyAt,
-  squadLevelOf,
-} from "../common/core/state";
-import { pickFormation, buildAssignments } from "../match/squad/selection";
+} from "../people/persona";
+import { makeRng, randInt } from "../core/rng";
+import { installDefaultTraining } from "../players/training-plan";
+import { ensurePotentialFloor, type GameState, proficiencyAt, squadLevelOf } from "../core/state";
+import { pickFormation, buildAssignments } from "../match/selection";
 
 /**
  * 카탈로그 팀을 새 게임의 사본 필드로 옮긴다. 프로필은 등재된 클럽만 싣는다.
@@ -98,12 +93,12 @@ function copiedTeamFields(
 
 // ── 게임 생성 ───────────────────────────────────────────
 
-export interface CreateGameInput {
+interface CreateGameInput {
   seed?: number;
   userTeamId: string;
   managerName: string;
   background: string;
-  /** 세계의 범위 — 없으면 카탈로그 전체 (`world/scope.ts`) */
+  /** 세계의 범위 — 없으면 카탈로그 전체 (`core/catalog/scope.ts`) */
   world?: WorldScope;
 }
 
@@ -441,7 +436,7 @@ function buildInitialSquads(
  * 같은 무게로 놓고 맞춘 표는 실제 리그에서 기운다. 지금 표의 96팀 가중 합은
  * 공격 +0.29% · 중원 +0.11% · 수비 −0.02% · 강도 +1.0%다. **빈칸은 필드를 쓰지 않는다**
  * — 프리셋은 자기 스타일이 실제로 말하는 갈래에만 선다. 갈래를 더하거나 옮길 때는 그
- * 가중 합을 다시 재라(`docs/common/team.md` §6).
+ * 가중 합을 다시 재라(`docs/team/team.md` §6).
  */
 function initialTactics(
   teamId: string,

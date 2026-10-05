@@ -132,7 +132,7 @@ const FATIGUE_DRIFT_DAYS = {
   /** 개인 휴식 · 재활 — 팀 훈련에서 떨어져 있는 날이 가장 빠르다 */
   rest: 7,
 } as const;
-export type FatigueDay = keyof typeof FATIGUE_DRIFT_DAYS;
+type FatigueDay = keyof typeof FATIGUE_DRIFT_DAYS;
 
 /**
  * 오늘 하루가 잔고를 끄는 자리 — **회복 눈금(`RecoveryKind`)과 같은 하루를 읽는다.**

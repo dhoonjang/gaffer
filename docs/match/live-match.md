@@ -73,7 +73,7 @@ flowchart TB
           × (1 + 시트 edge)        판독기가 준 이번 경기의 실행 품질 (§6)
 ```
 
-- 포지션 적응도·전술 적응도 계수의 곡선은 [player.md](../common/player.md) §7·§8의
+- 포지션 적응도·전술 적응도 계수의 곡선은 [player.md](../players/player.md) §7·§8의
   것을 그대로 쓴다. 간이 시뮬도 같은 함수를 쓴다(한 규칙, 한 정의).
 - **체력은 경기 중에 변한다.** 계수의 상태 항은 매 판단 시각의 체력을 읽는다. 지친
   말은 판단이 둔해지고(잡음 ↑) 느려진다(§7).
@@ -163,7 +163,7 @@ g     = exp(−½·(u_d² + u_l²))
 
 ## 4. 역할 임무 (`live/roles.ts`)
 
-역할(`roleId`, [player.md](../common/player.md)의 `ROLE_DEFS`)마다 성향표 한 줄이 있다.
+역할(`roleId`, [player.md](../players/player.md)의 `ROLE_DEFS`)마다 성향표 한 줄이 있다.
 자리 묶음(GK·CB·FB·DM·CM·AM·W·CF·ST)의 기본값에 역할의 차이를 얹는다 — 역할 가중치가
 `ROLE_DEFS`의 `delta`로 서는 것과 같은 모양이다.
 
@@ -399,8 +399,8 @@ P(x) ∝ exp(U(x) ÷ T)          T = 능력치(공격 중 오프더볼 · 수비
 **축은 3이 중립이고, 토글은 아무 갈래에도 서지 않은 상태가 중립이다.** 중립도 이름을
 갖는다 — `transition: none` · `offsideTrap: false` · `tackling: normal` ·
 `keeperDistribution: none`. 모델이 고를 수 있는 것은 열거 안의 값뿐이라 중립이 열거에 있어야
-「그만해」가 반대쪽 값으로 걸리지 않는다([prompts.md](../common/llm/prompts.md) §2). **프리셋의
-리그 평균은 3에 선다**(`initialTactics` — [team.md](../common/team.md) §6). 프리셋이 쏠리면
+「그만해」가 반대쪽 값으로 걸리지 않는다([prompts.md](../agents/prompts.md) §2). **프리셋의
+리그 평균은 3에 선다**(`initialTactics` — [team.md](../team/team.md) §6). 프리셋이 쏠리면
 리그 전체가 같은 방향으로 뛰고, 그 대가를 리그 전체가 문다.
 
 **지시 적용률(uptake)** 은 팀이 지시를 얼마나 몸에 익혔는가다
@@ -417,7 +417,7 @@ P(x) ∝ exp(U(x) ÷ T)          T = 능력치(공격 중 오프더볼 · 수비
 ### 6.2 지시 출처와 시트 — 타입 판독이 말에게 주는 것
 
 경기 `tactic_orders`가 부르는 Jev `match-reader`는 감독 원문·현재 선수 사실·최근 흐름을
-타입 명령과 **시트**로 옮긴다([agents.md](../common/llm/agents.md) §3). `Point`는
+타입 명령과 **시트**로 옮긴다([agents.md](../agents/agents.md) §3). `Point`는
 앱이 원문에서 만든 출처 메타데이터이며 분석 산문이 아니다. 시트의 각 줄은 그 출처를 가리킨다.
 
 | 시트 모양  | 표적      | 말의 규칙에서 바뀌는 것                                                |
@@ -474,7 +474,7 @@ LLM 호출 중 서버의 확정 tick은 멈춰 있다. 클라이언트가 x1로 
   관중·분위기가 게임 시스템으로 서는 자리는 아직 없다. 실측 홈 이점(득점 1.55 대 1.27,
   홈승 43%)에 얼마나 닿는지는 하네스가 잰다.
 - **연장전**은 같은 연료로 30분을 더 뛴다. 따로 채우지 않는다.
-- 경기 뒤의 체력 손실과 누적 피로는 이 부하에서 나온다([season.md](../common/season.md)의 회복이
+- 경기 뒤의 체력 손실과 누적 피로는 이 부하에서 나온다([season.md](../season/season.md)의 회복이
   그다음을 잇는다).
 - 간이 시뮬은 같은 부하→체력 함수를 쓴다. 입력만 다르다 — 실제로 뛴 부하 대신 자리·
   전술별 **기대 부하표**(`EXPECTED_LOAD` · `expectedLoadOf` — `packages/sim/src/load.ts`)를 넣는다.
@@ -528,7 +528,7 @@ flowchart LR
 - 시뮬 코드는 `packages/sim`에만 있고 클라이언트와 서버가 **같은 빌드**를 쓴다.
   `packages/sim`과 `packages/domain`은 Node 전용 모듈을 import하지 않는다.
 - 난수는 정수 연산(mulberry32)이다.
-- 실시간 경로는 사칙연산·`Math.sqrt`와 `packages/domain/src/common/dmath.ts`의 결정적 함수를 쓴다.
+- 실시간 경로는 사칙연산·`Math.sqrt`와 `packages/domain/src/core/dmath.ts`의 결정적 함수를 쓴다.
   선수 숙련도 로그 곡선과 슈팅 확률, 부하 감쇠도 같은 수학 구현을 사용한다.
 - 정렬은 안정 정렬이고, 같은 값은 id로 가른다.
 - 체크포인트는 경기 상태와 장부 전체를 객체 키 순서에 무관한 정규 직렬화로 해시한다.
@@ -613,7 +613,7 @@ flowchart LR
 | `marking`       | 시트의 `behavior`가 걸린 말이 관여했다 — 감독 지시 원문 출처 인용 |
 
 중계·경기 리포트·GM은 이 원인을 문장으로 옮긴다(렌더러 하나 — 코어는 사실만 낸다).
-감독의 전술 경험치가 시트 인용에서 서는 자리는 `marking`이 잇는다([career.md](../story/career.md)).
+감독의 전술 경험치가 시트 인용에서 서는 자리는 `marking`이 잇는다([career.md](../people/career.md)).
 
 ### 9.2 감독이 보는 것
 
@@ -640,7 +640,7 @@ flowchart LR
 코너 → 선수별 분포. 앞이 서지 않으면 뒤를 만지지 않는다.
 
 **등급이 있다.** 득점 분포·홈/무/원정·슈팅·xG·점유·뛴 거리는 `guard`(벗어나면
-하네스가 빨개진다), 나머지는 `reference`다([balance-harness.md](../common/balance-harness.md) §2).
+하네스가 빨개진다), 나머지는 `reference`다([balance-harness.md](../balance-harness.md) §2).
 
 **연속값으로 잰다.** 승·무·패 비율을 ±2%p로 재려면 1,500경기가 필요하다. 전술의
 방향성과 두 시뮬의 눈금은 승패가 아니라 **xG·기대 슈팅·점유** 같은 연속값의 차이로
@@ -680,7 +680,7 @@ flowchart LR
 ### 복합 효과의 타입과 강도
 
 경기 지시는 Jev가 대상·동작·강도를 읽고 코어가 시트 한도를 검증한다.
-기록 입력을 쓰는 별도 [비교 하네스](../common/llm/match-reader-evaluation.md)는 운영 호출과 분리되어 있다.
+기록 입력을 쓰는 별도 [비교 하네스](../agents/match-reader-evaluation.md)는 운영 호출과 분리되어 있다.
 
 운영 복합 효과는 대상·모양·동작을 타입으로 고른다. `behavior`는 코어가 부호·강도를
 사용하지 않아 `sign=1, step=1`로 정규화하며 수치 평가를 생략한다. 나머지 효과는

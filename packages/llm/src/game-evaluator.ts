@@ -13,7 +13,7 @@ export interface ChoiceQuestion {
   criteria: Record<string, string | null>;
 }
 
-export interface NoulQuestion {
+interface NoulQuestion {
   type: "noul";
   instructions: string;
   criteria?: { true?: string; false?: string };
@@ -28,7 +28,7 @@ export interface ChoiceAnswer {
   confidence: number;
 }
 
-export interface NoulAnswer {
+interface NoulAnswer {
   type: "noul";
   noul: number;
 }

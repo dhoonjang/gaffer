@@ -4,9 +4,9 @@ import type {
   PlayerAttributes,
   PositionGroup,
   TacticsSpec,
+  LiveSlot,
 } from "@story-fm/domain";
 import { ATTRIBUTE_AXES, DEFAULT_TACTICS } from "@story-fm/domain";
-import type { LiveSlot } from "@story-fm/domain";
 import {
   createLedger,
   createLiveMatch,

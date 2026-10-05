@@ -1,0 +1,185 @@
+/**
+ * 구단 체급 **재산정** — 시즌 롤오버에서 승강을 적용한 뒤 한 번 (team.md §2.1).
+ * 체급을 **읽는** 자리는 `core/league-membership.ts`다.
+ *
+ * 구단의 규모·선수단·최근 성적과 현재 리그에서의 상대 체급을 계산한다.
+ */
+import { savedClubProfile, teamNameIn, type GameState } from "../core/state";
+import { tierOfTeamIn, leagueOfTeamIn } from "../core/league-membership";
+import { isCupOnlyLeague, isTopLeague } from "../core/catalog/league-catalog";
+import { clubProfiles, type ClubProfile } from "../core/catalog/club-profile";
+import { squadRating } from "../players/squad-depth";
+
+// ── 눈금 ──────────────────────────────────────────────
+// 밸런스를 만지려면 이 블록만 읽으면 된다.
+
+/**
+ * 세 축의 가중치 — 합은 1. **성적이 아니라 클럽의 크기가 주다** (team.md §2).
+ * 성적이 0.20인 것은 의도다: 한 시즌 순위로는 컷을 넘지 못한다.
+ */
+const AXIS_WEIGHTS = { size: 0.5, squad: 0.3, recent: 0.2 } as const;
+
+/** 규모 축 안에서 구장과 브랜드를 반씩 — 둘 다 클럽의 크기를 재는 자다 */
+const SIZE_MIX = { capacity: 0.5, brand: 0.5 } as const;
+
+/**
+ * 최근 성적으로 세는 시즌 수 — **자르는 자리는 여기 하나다.** 결산 스냅샷
+ * (`state.history`)은 역사라 시즌을 버리지 않는다 (season.md §6).
+ */
+export const RECENT_SEASONS = 3;
+
+/** 기록도 자료도 없을 때의 값 — 위로도 아래로도 밀지 않는다 */
+const NEUTRAL = 0.5;
+
+/**
+ * 1부의 컷 — 리그 안 등수의 백분위 (team.md §2.1).
+ * 상위 20%가 tier 1, ~40%가 2, ~75%가 3, 나머지가 4.
+ */
+const TOP_LEAGUE_CUTS: readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[] = [
+  { upTo: 0.2, tier: 1 },
+  { upTo: 0.4, tier: 2 },
+  { upTo: 0.75, tier: 3 },
+  { upTo: 1, tier: 4 },
+];
+
+/**
+ * 2부의 컷 — **1·2가 없다.** 컵 인원인 2부 클럽이 1부 빅클럽과 같은 재정·보드
+ * 기대를 받을 자리는 없다 (team.md §2.1).
+ */
+const SECOND_TIER_CUTS: readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[] = [
+  { upTo: 0.3, tier: 3 },
+  { upTo: 1, tier: 4 },
+];
+
+/**
+ * 구단 프로필이 없는 클럽(2부·어드민 추가)의 규모.
+ *
+ * ⚠️ `clubProfile(teamId, tier)`의 tier 폴백을 쓰지 않는다 — 미등재 클럽은 그 길로
+ * **작년 체급이 올해 규모가 되어** 체급이 스스로를 재생산한다. 자료가 없으면
+ * 없다고 두고, 미등재 클럽끼리는 규모 축에서 동률로 둔 뒤 스쿼드·성적이 가른다.
+ * 진짜 구장을 가진 강등 클럽이 이 값 위로 올라서는 것이 이 축의 일이다.
+ */
+const UNLISTED_CLUB_SIZE: ClubProfile = {
+  stadium: "",
+  capacity: 0,
+  commercialTier: 4,
+};
+
+// ── 축 ────────────────────────────────────────────────
+
+/**
+ * 리그 안 백분위 — 같은 값은 같은 백분위를 받는다(중간 순위법).
+ * 한 팀짜리 리그도 0으로 나누지 않고 중립(0.5)이 된다.
+ */
+function percentileIn(values: readonly number[], value: number): number {
+  if (values.length === 0) return NEUTRAL;
+  let below = 0;
+  let equal = 0;
+  for (const v of values) {
+    if (v < value) below += 1;
+    else if (v === value) equal += 1;
+  }
+  return (below + equal / 2) / values.length;
+}
+
+/**
+ * 최근 성적 — 최근 `RECENT_SEASONS`시즌 리그 최종 순위의 **리그 크기 대비 백분위**
+ * 평균 (1위가 1.0, 꼴찌가 0.0). 기록이 없는 클럽(첫 시즌, 리그전을 돌지 않는 2부)은
+ * 중립이다.
+ *
+ * 원본은 시즌 결산 스냅샷(`state.history`)이다 — **전 클럽이 같은 표를 읽는다.**
+ * 감독의 `SEASON_RECORD`를 읽던 시절엔 그 표가 감독 팀만 쌓여서 나머지 96클럽이
+ * 언제나 중립이었고, 세 축 중 하나가 AI 구단에게는 없는 축이었다.
+ *
+ * ⚠️ **창을 자르는 것은 읽는 이 자리다.** 장부는 지나간 시즌을 다 들고 있으므로
+ * (역사다 — season.md §6), 여기서 자르지 않으면 열 시즌 전 순위가 오늘의 체급을 민다.
+ *
+ * 이 축만은 따로 정규화하지 않는다 — 순위를 리그 크기로 나눈 값이 이미 백분위다.
+ */
+function recentForm(state: GameState, teamId: string): number {
+  const scores: number[] = [];
+  for (const past of state.history) {
+    if (past.season <= state.season - RECENT_SEASONS) continue;
+    for (const league of past.leagues) {
+      const index = league.rows.findIndex((r) => r.teamId === teamId);
+      if (index < 0) continue;
+      const size = league.rows.length;
+      if (size <= 1) continue;
+      scores.push((size - (index + 1)) / (size - 1));
+    }
+  }
+  if (scores.length === 0) return NEUTRAL;
+  return scores.reduce((sum, s) => sum + s, 0) / scores.length;
+}
+
+// ── 재산정 ────────────────────────────────────────────
+
+function cutsFor(leagueId: string): readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[] | null {
+  if (isTopLeague(leagueId)) return TOP_LEAGUE_CUTS;
+  if (isCupOnlyLeague(leagueId)) return SECOND_TIER_CUTS;
+  // 명단 전용 리그(`market-only`)·무소속은 리그전을 돌지 않는다 — 줄 세울 표가 없다
+  return null;
+}
+
+function tierAt(fraction: number, cuts: readonly { upTo: number; tier: 1 | 2 | 3 | 4 }[]) {
+  return (cuts.find((c) => fraction < c.upTo) ?? cuts[cuts.length - 1]!).tier;
+}
+
+/** 이 리그의 클럽들을 점수순으로 — 동점은 teamId 오름차순으로 깬다(결정성) */
+function rankLeague(state: GameState, teamIds: readonly string[]) {
+  const profiles = clubProfiles();
+  // 세이브가 든 프로필이 먼저다 — 어드민의 수용인원 편집이 진행 중인 세이브의 체급을
+  // 다시 매기면 안 된다 (game-state.md §1)
+  const sizeOf = (id: string) => savedClubProfile(state, id) ?? profiles[id] ?? UNLISTED_CLUB_SIZE;
+
+  const capacities = teamIds.map((id) => sizeOf(id).capacity);
+  // 브랜드는 1등급이 가장 크다 — 부호를 뒤집어 "클수록 크다"로 맞춘다
+  const brands = teamIds.map((id) => -sizeOf(id).commercialTier);
+  const squads = teamIds.map((id) => squadRating(state, id));
+
+  return teamIds
+    .map((teamId, i) => {
+      const size =
+        SIZE_MIX.capacity * percentileIn(capacities, capacities[i]!) +
+        SIZE_MIX.brand * percentileIn(brands, brands[i]!);
+      const squad = percentileIn(squads, squads[i]!);
+      const recent = recentForm(state, teamId);
+      return {
+        teamId,
+        score: AXIS_WEIGHTS.size * size + AXIS_WEIGHTS.squad * squad + AXIS_WEIGHTS.recent * recent,
+      };
+    })
+    .sort((a, b) => b.score - a.score || (a.teamId < b.teamId ? -1 : a.teamId > b.teamId ? 1 : 0));
+}
+
+/**
+ * 리그마다 전 클럽을 다시 줄 세워 체급을 매긴다.
+ *
+ * @returns 유저 팀의 체급이 바뀌었으면 다이제스트 한 줄, 아니면 빈 배열
+ */
+export function recomputeClubTiers(state: GameState): string[] {
+  // 리그별 소속 — 승강 **뒤**에 부르므로 이게 새 리그다
+  const byLeague = new Map<string, string[]>();
+  for (const team of state.teams) {
+    const leagueId = leagueOfTeamIn(state, team.id);
+    const bucket = byLeague.get(leagueId);
+    if (bucket) bucket.push(team.id);
+    else byLeague.set(leagueId, [team.id]);
+  }
+
+  const before = tierOfTeamIn(state, state.userTeamId);
+
+  for (const [leagueId, teamIds] of byLeague) {
+    const cuts = cutsFor(leagueId);
+    if (!cuts) continue; // 시장 전용·무소속은 기존 체급을 그대로 둔다
+    const ranked = rankLeague(state, teamIds);
+    ranked.forEach((row, index) => {
+      const team = state.teams.find((t) => t.id === row.teamId);
+      if (team) team.tier = tierAt(index / ranked.length, cuts);
+    });
+  }
+
+  const after = tierOfTeamIn(state, state.userTeamId);
+  if (after === before) return [];
+  return [`${teamNameIn(state, state.userTeamId)} 구단 체급 ${before} → ${after}`];
+}

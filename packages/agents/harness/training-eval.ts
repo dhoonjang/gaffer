@@ -44,8 +44,8 @@ import {
   type GameEvaluator,
   type TurnUsage,
 } from "@story-fm/llm";
-import { buildTrainingRequest, evaluateTraining } from "../src/story/training-rater";
-import { ModelOutputError } from "../src/common/retry";
+import { buildTrainingRequest, evaluateTraining } from "../src/evaluators/training-rater";
+import { ModelOutputError } from "../src/shared/retry";
 import { stableJson } from "./match-reader-eval-metrics";
 
 const ROOT = resolve(import.meta.dirname, "../../..");

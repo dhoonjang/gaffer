@@ -16,7 +16,7 @@ story-fm은 자연어로 감독이 되어 구단의 일상과 축구 경기를 �
 매치 GM은 코어가 확정한 경기 사건을 중계하고 감독의 전술 지시를 전달한다.
 장면의 등장인물·갈등·관계·감정은 대화 맥락에서 판단한다.
 
-이야기는 [로어북과 대화 요약](story/lorebook.md)에 보존한다.
+이야기는 [로어북과 대화 요약](people/lorebook.md)에 보존한다.
 로어북은 이름·키워드·한 줄 설명·자유 정보를 갖는다. 관계·불만·감정과 사건의 의미는
 이 자유 정보에 기록하며 별도의 점수나 자동 서사 단계로 판정하지 않는다.
 
@@ -41,7 +41,7 @@ story-fm은 자연어로 감독이 되어 구단의 일상과 축구 경기를 �
 감독 발화, 인물 대사, 서술과 구조화된 호출 결과가 한 채팅에 놓인다.
 날짜·시간과 경기 사건은 코어의 기록에서 표시한다. 호출 결과는 `brief`의 항목을 읽으며
 요약 문장을 파싱해 상태를 만들지 않는다. 정확한 장면 문법은
-[프롬프트 규약](common/llm/prompts.md)이 소유한다.
+[프롬프트 규약](agents/prompts.md)이 소유한다.
 
 ## 4. 게임 루프
 
@@ -51,7 +51,7 @@ story-fm은 자연어로 감독이 되어 구단의 일상과 축구 경기를 �
 다른 경기와 간이 결산은 결정적 xG 시뮬레이션을 사용한다.
 
 선수 계약은 초기 시드와 유스 첫 계약으로 생성한다. 모든 구단의 만료 선수는 무소속으로
-이동한다. 선수 영입·매각·재계약은 [메인 대화와 메일함](negotiation/README.md)에서 자연어와 조건 확인으로 진행한다. 시즌 전환은 유스와
+이동한다. 선수 영입·매각·재계약은 [메인 대화와 메일함](team/transfers.md)에서 자연어와 조건 확인으로 진행한다. 시즌 전환은 유스와
 포지션별 최소 인원 보충으로 선수단을 구성한다.
 
 감독·스태프의 고용은 메인 GM의 명시적인 제안·합의·수락과 코어 검증으로 처리한다.
@@ -81,6 +81,7 @@ story-fm은 자연어로 감독이 되어 구단의 일상과 축구 경기를 �
 
 ## 문서 지도
 
-[책임 구조](architecture.md) · [스토리](story/README.md) · [협상](negotiation/README.md) · [경기](match/README.md) ·
-[공통 정보](common/README.md) · [선수](common/player.md) · [재정](common/finance.md) ·
-[시즌](common/season.md) · [저장](common/game-state.md) · [에이전트](common/llm/agents.md).
+[문서 지도](README.md) · [책임 구조](architecture.md) · [선수](players/player.md) ·
+[훈련](players/training.md) · [경기](match/match.md) · [시즌](season/season.md) ·
+[대회](season/competition.md) · [재정](team/finance.md) · [이적](team/transfers.md) ·
+[인물](people/people.md) · [저장](core/game-state.md) · [에이전트](agents/agents.md).

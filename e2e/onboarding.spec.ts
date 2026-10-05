@@ -18,7 +18,7 @@ test("새 게임 첫 메시지가 부임 장면과 수석코치 브리핑으로 
   const firstTurn = page.getByTestId("model-turn").first();
   await expect(firstTurn).toBeVisible({ timeout: COLD_MS });
   await expect(firstTurn).toContainText("온보딩테스트");
-  // 화자 태그는 사람 이름이고 직책은 세이브가 안다 (docs/story/people.md §3)
+  // 화자 태그는 사람 이름이고 직책은 세이브가 안다 (docs/people/people.md §3)
   await expect(firstTurn.locator(".speaker-role").first()).toHaveText("수석코치");
   // 환영 인사와 브리핑 사이에 인물 소개 지문이 있어 두 대사 묶음으로 나뉜다.
   // 같은 화자가 이어 말하는 브리핑 줄들은 하나의 이름·직책 머리 아래에 남는다.

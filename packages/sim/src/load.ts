@@ -1,4 +1,4 @@
-import type { LiveLoad, TacticsSpec } from "@story-fm/domain";
+import type { LiveLoad, TacticsSpec, WeightSlot } from "@story-fm/domain";
 import {
   dexp,
   CONDITION_MAX,
@@ -6,7 +6,6 @@ import {
   TACTIC_SCALE_NEUTRAL,
   weightSlotOf,
 } from "@story-fm/domain";
-import type { WeightSlot } from "@story-fm/domain";
 
 /**
  * 부하 → 체력 — **말이 실제로 뛴 것**으로 체력이 준다 (live-match.md §7 · match.md §6).
@@ -28,17 +27,17 @@ export const SPEED_BAND = {
  * 실측의 팀 간 총 거리 sd(약 2km, ±5%)는 좁고 고강도 주행의 폭(±30%)은 넓다 —
  * 그 둘 사이를 재려면 고강도가 거리보다 무거워야 한다.
  */
-export const LOAD_WEIGHT = { distance: 1, highSpeed: 4, sprint: 8 } as const;
+const LOAD_WEIGHT = { distance: 1, highSpeed: 4, sprint: 8 } as const;
 
 /** 지구력 99가 같은 부하에서 덜 무는 몫 */
-export const STAMINA_RELIEF = 0.35;
+const STAMINA_RELIEF = 0.35;
 
 /**
  * 부하 1km-상당이 남은 체력에서 걷어 가는 비율 — 지구력 0 기준.
  * 지구력 70 중앙 미드필더(11.7km · 고속 0.8km · 스프린트 0.25km)가 풀타임 뒤 약 30을
  * 남기도록 잡은 값이다 (`live-player-load`가 다시 잡는다).
  */
-export const LOAD_DECAY = 0.094;
+const LOAD_DECAY = 0.094;
 
 /** 원정 팀 말의 출발 경기 체력에서 빼는 값 — 홈 이점의 전부다 (live-match.md §7) */
 export const AWAY_CONDITION_PENALTY = 3;
@@ -55,7 +54,7 @@ export function emptyLoad(): LiveLoad {
 }
 
 /** 부하를 1km-상당의 한 수로 접는다 */
-export function loadUnits(load: LiveLoad): number {
+function loadUnits(load: LiveLoad): number {
   return (
     (load.distance * LOAD_WEIGHT.distance +
       load.highSpeed * LOAD_WEIGHT.highSpeed +
@@ -65,7 +64,7 @@ export function loadUnits(load: LiveLoad): number {
 }
 
 /** 지구력이 부하를 얼마나 덜 무는가 — 0.65~1 */
-export function staminaRelief(stamina: number): number {
+function staminaRelief(stamina: number): number {
   return 1 - (Math.max(0, Math.min(RATING_MAX, stamina)) / RATING_MAX) * STAMINA_RELIEF;
 }
 
@@ -111,7 +110,7 @@ export const EXPECTED_LOAD: Record<WeightSlot, LiveLoad> = {
  */
 const HIGH_INTENSITY_STEP = { pressing: 0.08, tempo: 0.04, defensiveLine: 0.02, width: 0.02 };
 
-export function tacticalLoadFactor(spec: TacticsSpec): { distance: number; intense: number } {
+function tacticalLoadFactor(spec: TacticsSpec): { distance: number; intense: number } {
   const step = (axis: keyof typeof HIGH_INTENSITY_STEP) =>
     (spec[axis] - TACTIC_SCALE_NEUTRAL) * HIGH_INTENSITY_STEP[axis];
   const intense = 1 + step("pressing") + step("tempo") + step("defensiveLine") + step("width");
@@ -119,7 +118,7 @@ export function tacticalLoadFactor(spec: TacticsSpec): { distance: number; inten
 }
 
 /** 공 없는 팀이 더 뛴다 — 점유 10%p마다 고강도 주행이 움직이는 몫 */
-export const POSSESSION_LOAD_STEP = 0.4;
+const POSSESSION_LOAD_STEP = 0.4;
 
 /**
  * 그 자리에서 그 전술로 `minutes`분을 뛴 기대 부하. `possession`은 이 팀의 점유(0~1) —

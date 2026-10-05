@@ -8,9 +8,9 @@ import {
   journal,
 } from "@story-fm/engine";
 import { traceBoard, withGameUsage } from "@story-fm/llm";
-import { toPayload } from "@/application/lib/store";
-import { processLorebookJobs } from "@/application/lib/lorebook-jobs";
-import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/application/lib/turn-runner";
+import { toPayload } from "@/game/store";
+import { processLorebookJobs } from "@/game/lorebook-jobs";
+import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {

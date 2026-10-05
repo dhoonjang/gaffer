@@ -1,8 +1,8 @@
-import { MAIL_REPLY_SYSTEM, MAIL_REPLY_OUTPUT } from "./workflows/mail/reply-prompt";
-import { LOREBOOK_EDITOR_SYSTEM, LOREBOOK_EDITOR_OUTPUT } from "../story/lorebook-editor";
+import { MAIL_REPLY_SYSTEM, MAIL_REPLY_OUTPUT } from "../gm/mail-reply-prompt";
+import { LOREBOOK_EDITOR_SYSTEM, LOREBOOK_EDITOR_OUTPUT } from "../memory/lorebook-editor";
 import type { GenerativeAgentName, JsonObjectSchema } from "@story-fm/llm";
-import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../story/history-compactor";
-import { ONBOARDING_JUDGE_SYSTEM, REPORT_ONBOARDING_INPUT } from "../story/onboarding-judge";
+import { HISTORY_COMPACTOR_SYSTEM, REPORT_DIGEST_INPUT } from "../memory/history-compactor";
+import { ONBOARDING_JUDGE_SYSTEM, REPORT_ONBOARDING_INPUT } from "../gm/onboarding-judge";
 
 /** 생성형 판정 호출의 실제 프롬프트·출력 스키마. 오프라인 검증과 실호출 하네스가 공유한다. */
 export interface OutputAgent {

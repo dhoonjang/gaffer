@@ -22,7 +22,7 @@ import {
  */
 
 /** 전술판 좌표 → 우리 골라인 기준 깊이(m)와 가로(m) */
-export function anchorDepthLateral(slot: Pick<LineupSlot, "position" | "point">): {
+function anchorDepthLateral(slot: Pick<LineupSlot, "position" | "point">): {
   depth: number;
   lateral: number;
 } {
@@ -34,7 +34,7 @@ export function anchorDepthLateral(slot: Pick<LineupSlot, "position" | "point">)
   return { depth, lateral };
 }
 
-export interface ShapeContext {
+interface ShapeContext {
   side: MatchSide;
   params: TeamParams;
   /** 우리 팀이 공을 가졌는가 */
@@ -115,7 +115,7 @@ export function shapePosition(
  * 수비의 바닥 깊이 (m) — 라인은 골문 앞까지 내려서지 않는다. 공이 골라인에 가까우면 공을
  * 따라서만 내려간다. 형태 자리와 수비 라인(센터백·풀백)의 후보점이 같은 바닥을 읽는다
  */
-export function defendFloorOf(ballDepth: number): number {
+function defendFloorOf(ballDepth: number): number {
   return Math.min(DEFEND_LINE_FLOOR, ballDepth - DEFEND_FLOOR_BEHIND_BALL);
 }
 

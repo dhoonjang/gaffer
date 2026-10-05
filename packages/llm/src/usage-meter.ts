@@ -45,7 +45,7 @@ const SKIPPABLE_AGENTS: ReadonlySet<AgentName> = new Set<AgentName>([
 const CACHE_ALERT_AFTER_CALLS = 3;
 
 /** 예산 상한을 읽는 환경 변수 */
-export const TOKEN_BUDGET_ENV = "LLM_TOKEN_BUDGET";
+const TOKEN_BUDGET_ENV = "LLM_TOKEN_BUDGET";
 
 export function emptyUsage(): TurnUsage {
   return { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
@@ -85,7 +85,7 @@ export function cacheHitRate(usage: TurnUsage): number {
   return usage.cacheReadTokens / usage.inputTokens;
 }
 
-export interface AgentLedger {
+interface AgentLedger {
   calls: number;
   /** 상한에 걸려 부르지 않은 횟수 */
   skipped: number;
@@ -156,7 +156,7 @@ export function parseTokenBudget(env: LlmEnv = process.env): number | null {
   return limit;
 }
 
-export interface BudgetVerdict {
+interface BudgetVerdict {
   limit: number | null;
   used: number;
   /** 상한을 넘겼는가 — 무제한이면 언제나 false */

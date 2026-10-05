@@ -41,8 +41,8 @@ import {
   type TurnUsage,
 } from "@story-fm/llm";
 import { liveFinished, LIVE_TICKS_PER_SECOND } from "@story-fm/sim";
-import { buildSettlementRequest, evaluateSettlement } from "../src/match/finalize-match";
-import { ModelOutputError } from "../src/common/retry";
+import { buildSettlementRequest, evaluateSettlement } from "../src/evaluators/finalize-match";
+import { ModelOutputError } from "../src/shared/retry";
 import { stableJson } from "./match-reader-eval-metrics";
 
 const ROOT = resolve(import.meta.dirname, "../../..");

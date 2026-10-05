@@ -13,11 +13,11 @@ import {
 } from "@story-fm/engine";
 import { josaOf } from "@story-fm/domain";
 import { ScriptedGameLLM, resolveLlmMode, type AgentConfig, type GameLLM } from "@story-fm/llm";
-import type { GmTurnResult } from "../common/gm-types";
-import { matchScript, peaceScript } from "./mock-script";
+import type { GmTurnResult } from "../shared/gm-types";
+import { matchScript, peaceScript } from "../gm/mock-script";
 
 /**
- * **mock 모드가 어느 어댑터를 세우는가** — 그것뿐인 층이다 (docs/common/llm/agents.md §8).
+ * **mock 모드가 어느 어댑터를 세우는가** — 그것뿐인 층이다 (docs/agents/agents.md §8).
  *
  * 턴을 도는 것은 실모드와 같은 코드다(`runGmTurn` → `gm-tools.ts`). 여기 있는 함수는
  * 모델 자리에 대본 어댑터를 끼워 넣고, 실모드면 `undefined`를 돌려 부르는 쪽이 실
@@ -25,7 +25,7 @@ import { matchScript, peaceScript } from "./mock-script";
  */
 
 /** 이 턴이 대본에게 알려야 할 것 — 국면과 감독의 말 */
-export interface MockTurnFacts {
+interface MockTurnFacts {
   /** 감독이 친 말 원문 — 표의 키와 맞춘다 */
   message: string;
   inMatch: boolean;

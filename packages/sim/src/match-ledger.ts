@@ -16,7 +16,7 @@ import {
  * LLM 방어가 아니라 **시뮬레이터의 계약 검사**이고, 반려는 시뮬레이터의 버그를 뜻한다.
  */
 
-export interface TeamLedger {
+interface TeamLedger {
   onPitch: string[];
   bench: string[];
   subsUsed: number;
@@ -79,7 +79,7 @@ export function emptyStatLine(): MatchStatLine {
 }
 
 /** 두 줄을 더한다 — 칸이 늘 때 한 곳만 고치면 된다 */
-export function addStatLine(a: MatchStatLine, b: MatchStatLine): MatchStatLine {
+function addStatLine(a: MatchStatLine, b: MatchStatLine): MatchStatLine {
   const out = emptyStatLine();
   for (const key of Object.keys(out) as (keyof MatchStatLine)[]) {
     out[key] = a[key] + b[key];
@@ -148,7 +148,7 @@ export const LEDGER_LIMITS = {
  * 창(window)도 함께 늘려야 뜻이 있다: 명수만 늘리면 이미 세 번을 쓴 팀은
  * 그 한 장을 쓸 자리가 없다.
  */
-export const EXTRA_TIME_SUBS = 1;
+const EXTRA_TIME_SUBS = 1;
 
 /**
  * **친선의 교체 한도 — 명단에 든 사람 전부** (match.md §5 · season.md §2).

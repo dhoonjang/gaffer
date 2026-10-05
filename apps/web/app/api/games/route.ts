@@ -12,8 +12,8 @@ import {
 } from "@story-fm/engine";
 import { runOnboarding } from "@story-fm/agents";
 import { withGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@story-fm/llm";
-import { toPayload } from "@/application/lib/store";
-import { errorDetail, turnErrorMessage } from "@/application/lib/turn-runner";
+import { toPayload } from "@/game/store";
+import { errorDetail, turnErrorMessage } from "@/game/turn-runner";
 
 const CreateSchema = z.object({
   teamId: z.string().min(1),
@@ -30,7 +30,7 @@ export function GET(request: Request) {
   const leagues = topLeagues();
   const ids = new Set(leagues.map((l) => l.id));
   const sizeOf = new Map(leagues.map((l) => [l.id, teamsOfLeague(l.id).length]));
-  // 리그 색은 다섯을 함께 봐야 나온다 (ui/design-system.md §2-1) — 한 번 세어 행마다 싣는다
+  // 리그 색은 다섯을 함께 봐야 나온다 (web/design-system.md §2-1) — 한 번 세어 행마다 싣는다
   const tones = leagueTones();
   return NextResponse.json({
     // 리그 행이 「20팀」을 세우는 그 수 — 화면이 팀 배열을 따로 세지 않는다

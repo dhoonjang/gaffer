@@ -1,6 +1,6 @@
 name: balance
 
-# 밸런스 하네스 — **PR 게이트가 아니다** (→ docs/common/balance-harness.md §5).
+# 밸런스 하네스 — **PR 게이트가 아니다** (→ docs/balance-harness.md §5).
 #
 # 하네스가 재는 것은 고정 기대값이 아니라 밴드다. 전부 도는 데 총 CPU 10분 안팎이고
 # (`ci.yml`의 초록까지 벽시계는 지금 4분대다) 여기 얹으면 PR마다 그만큼을 더 문다.

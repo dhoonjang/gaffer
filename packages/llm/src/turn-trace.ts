@@ -62,7 +62,7 @@ import {
  * 5,000이면 **한 플레이가 통째로 남는** 폭이고, 게임당 수백 MB에서 멈춘다 — 플레이 도중에
  * 앞부분이 밀려나면 되짚을 것이 절반이 된다.
  */
-export const MAX_TRACED_CALLS = 5_000;
+const MAX_TRACED_CALLS = 5_000;
 
 /**
  * 게임당 남는 **턴 타임라인** 수.
@@ -71,7 +71,7 @@ export const MAX_TRACED_CALLS = 5_000;
  * 10~50KB, 평시 턴은 몇 KB다. 20,000턴이면 스무 시즌이고 그래도 수백 MB에서 멈춘다.
  * 원문보다 넉넉한 이유는 되짚는 질문의 대부분이 원문이 아니라 여기에 답이 있기 때문이다.
  */
-export const MAX_TRACED_TURNS = 20_000;
+const MAX_TRACED_TURNS = 20_000;
 
 /**
  * 게임당 남는 **전술판 선반**의 타임라인 수 — 전술판 저장과 게임 삭제.
@@ -80,10 +80,10 @@ export const MAX_TRACED_TURNS = 20_000;
  * 짜는 한 번의 결정이 저장 한 건이다 — 채팅 턴보다 드물다. 상한이 따로인 것은 선반이
  * 따로이기 때문이지 양 때문이 아니다.
  */
-export const MAX_TRACED_BOARD = 5_000;
+const MAX_TRACED_BOARD = 5_000;
 
 /** 창고의 상한 — 테스트가 좁혀 쓴다. 게임은 언제나 위의 값으로 돈다 */
-export interface TraceLimits {
+interface TraceLimits {
   calls: number;
   turns: number;
   board: number;
@@ -107,14 +107,14 @@ export const TRACE_LIMITS: TraceLimits = {
  * 열지 안다. **목록은 하나다**(`index.jsonl`) — 두 선반이 일어난 순서 그대로 한 줄씩 서서,
  * 「전술판을 고친 뒤 무슨 말을 했나」가 목록에서 읽힌다.
  */
-export type TraceShelf = "turns" | "board";
+type TraceShelf = "turns" | "board";
 
 /* ------------------------------------------------------------------ *
  * 호출 원문 — `calls/<호출 id>.json` 하나의 모양
  * ------------------------------------------------------------------ */
 
 /** 도구 스펙 원문 — `handle`은 함수라 기록에 남기지 않는다 */
-export interface TurnTraceTool {
+interface TurnTraceTool {
   name: string;
   description: string;
   inputSchema: JsonObjectSchema;
@@ -128,7 +128,7 @@ export interface TurnTraceTool {
 }
 
 /** 이 호출이 모델에 보낸 것 — `TurnRequest`를 직렬화 가능한 모양으로만 옮긴다 */
-export interface TurnTraceRequest {
+interface TurnTraceRequest {
   evaluation?: { questions: import("./game-evaluator").EvaluationRequest["questions"] };
   /** 시스템 프롬프트 블록 — 문자열 하나로 온 것도 블록 하나로 적는다 */
   system: string[];
@@ -145,7 +145,7 @@ export interface TurnTraceRequest {
 }
 
 /** 이 호출이 받은 것 */
-export interface TurnTraceResponse {
+interface TurnTraceResponse {
   text: string;
   /**
    * 이 호출이 이력에 **새로 붙인** 메시지 — `tool_use`·thinking 블록이 여기 있다.
@@ -254,7 +254,7 @@ export interface LlmCallEntry {
 }
 
 /** 턴이 어떻게 끝났나 — 성공이면 저장됐고, 실패면 상태는 버려졌다 */
-export interface TurnOutcomeNote {
+interface TurnOutcomeNote {
   ok: boolean;
   /** 세이브에 앉았는가 — 실패한 턴은 메모리의 상태가 버려진다 */
   saved: boolean;
@@ -532,7 +532,7 @@ function indexFile(gameId: string): string {
 }
 
 /** 이름이 말하는 선반 — `board-…`만 전술판 선반이고 나머지는 채팅 턴이다 */
-export function shelfOf(id: string): TraceShelf {
+function shelfOf(id: string): TraceShelf {
   return id.startsWith("board-") ? "board" : "turns";
 }
 

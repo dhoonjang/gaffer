@@ -8,11 +8,9 @@ import type { Player } from "@story-fm/domain";
  */
 
 /** 팀·경기당 파울 — 실측 11.95 */
-export const FOULS_PER_MATCH = 12;
+const FOULS_PER_MATCH = 12;
 /** 팀·경기당 경고 — 실측 2.07 */
-export const YELLOWS_PER_MATCH = 2.07;
-/** 팀·경기당 퇴장 — 실측 0.10 */
-export const REDS_PER_MATCH = 0.1;
+const YELLOWS_PER_MATCH = 2.07;
 /** 파울 하나가 경고가 되는 비율 — 경고 ÷ 파울 */
 export const CARD_ON_FOUL = YELLOWS_PER_MATCH / FOULS_PER_MATCH;
 /**

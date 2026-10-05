@@ -17,12 +17,12 @@ import {
   dataDir,
   leagueCatalogPath,
   teamCatalogPath,
-} from "../common/core/paths";
+} from "../core/catalog/paths";
 import { SaveSchema } from "./save-schema";
-import type { GamePhase, GameState } from "../common/core/state";
+import type { GamePhase, GameState } from "../core/state";
 import type { ClubColours } from "@story-fm/domain";
-import { teamCatalogById } from "../common/data/team-catalog";
-import { ensurePotentialFloor, teamNameIn, teamShortNameIn } from "../common/core/state";
+import { teamCatalogById } from "../core/catalog/team-catalog";
+import { ensurePotentialFloor, teamNameIn, teamShortNameIn } from "../core/state";
 
 export { dataDir };
 
@@ -300,7 +300,7 @@ function attachShards(raw: unknown, id: string): unknown {
 }
 
 /**
- * 세이브 스키마 버전 (→ [docs/common/game-state.md](../../../../docs/common/game-state.md) §6).
+ * 세이브 스키마 버전 (→ [docs/core/game-state.md](../../../../docs/core/game-state.md) §6).
  *
  * 버전이 다른 세이브는 로드를 거부한다 — 마이그레이션은 없다. 다만 감추지는 않는다:
  * 목록에는 실패 사유와 함께 선다.
@@ -311,12 +311,12 @@ export const SAVE_VERSION = 25;
  * 세이브를 열지 못한 이유 — 문장은 화면이 쓴다, 코어는 사실만 싣는다.
  *
  * 셋은 **로드의 어느 걸음에서 멈췼는가**이고, 그래서 고칠 자리가 저마다 다르다
- * (→ [docs/common/game-state.md](../../../../docs/common/game-state.md) §6):
+ * (→ [docs/core/game-state.md](../../../../docs/core/game-state.md) §6):
  * `version`은 고칠 자리가 없고, `corrupt`는 파일이, `schema`는 **코드가** 문제다.
  */
 const UNREADABLE_REASONS = ["version", "corrupt", "schema"] as const;
 
-export type UnreadableReason = (typeof UNREADABLE_REASONS)[number];
+type UnreadableReason = (typeof UNREADABLE_REASONS)[number];
 
 /** 사이드카가 적어 둔 사유가 지금 코어가 아는 셋 중 하나인가 */
 function isUnreadableReason(value: unknown): value is UnreadableReason {
@@ -349,7 +349,7 @@ const REQUIRED_TABLES = [
 
 /**
  * 로드 — **두 걸음이고, 걸음마다 실패의 뜻이 다르다**
- * (→ [docs/common/game-state.md](../../../../docs/common/game-state.md) §6).
+ * (→ [docs/core/game-state.md](../../../../docs/core/game-state.md) §6).
  *
  * 1. 형태 — 버전과 필수 테이블. 걸리면 **파일**이 문제다(버전은 고칠 자리가 없다).
  * 2. 스키마 parse — 도메인 스키마가 곧 세이브 계약이다. 걸리면 **코드**가 문제다.
@@ -376,7 +376,7 @@ function validate(raw: unknown): LoadResult {
   /**
    * 검사를 통과한 결과를 **그대로 상태로 쓴다** — `.default()`가 붙은 축은 여기서
    * 채워지고, 스키마에 없는 찌꺼기 키는 여기서 떨어진다. 스키마가 없는 축은
-   * `passthrough`가 손대지 않고 넘긴다 (`core/save-schema.ts`).
+   * `passthrough`가 손대지 않고 넘긴다 (`app/save-schema.ts`).
    */
   const parsed = SaveSchema.safeParse(state);
   if (!parsed.success) {

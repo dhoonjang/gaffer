@@ -9,8 +9,8 @@ import {
 } from "@story-fm/domain";
 import type { JsonObjectSchema } from "@story-fm/llm";
 import { z } from "zod";
-import { toToolSchema } from "../src/common/tool-schema";
-import { SHEET_MAX, SHEET_LINES_PER_POINT } from "../src/match/jev-match-reader";
+import { toToolSchema } from "../src/shared/tool-schema";
+import { SHEET_MAX, SHEET_LINES_PER_POINT } from "../src/evaluators/jev-match-reader";
 
 const SHEET_SIGN_KO: Record<(typeof SHEET_SHAPES)[number], string> = {
   behavior: "그 선수에게 개인 지시가 걸린다",

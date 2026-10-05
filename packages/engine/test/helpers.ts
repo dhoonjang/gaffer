@@ -1,6 +1,5 @@
-import { acceptManagerOffer } from "@story-fm/engine";
-import { liveFinished } from "@story-fm/sim";
 import {
+  acceptManagerOffer,
   advanceLiveMatch,
   isReserveMatch,
   settleQuickMatch,
@@ -30,6 +29,7 @@ import {
   assignmentsOf as assignmentsOfTeam,
   eventTexts,
 } from "@story-fm/engine";
+import { liveFinished } from "@story-fm/sim";
 import { diffDays, type GamePlayer, type MatchResult } from "@story-fm/domain";
 
 /** 간이 시뮬 입력 조립 — 배치 선발에서 가용 선수를 뽑는다 (테스트용) */
@@ -155,7 +155,7 @@ export function keepSeat(state: GameState): void {
 }
 
 /**
- * 훈련하는 감독 — **결산 판정(LLM)의 대역**이다 (→ docs/common/balance-harness.md §4).
+ * 훈련하는 감독 — **결산 판정(LLM)의 대역**이다 (→ docs/balance-harness.md §4).
  *
  * 감독 팀의 전술 적응도를 움직이는 것은 훈련·경기 결산 판정 하나뿐이라(player.md §7)
  * 실제 플레이에서는 95·100까지 가지만, mock 모드에는 그 판정이 없다. 대역을 세우지

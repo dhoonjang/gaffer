@@ -39,16 +39,13 @@ import {
   type UsageLedger,
 } from "@story-fm/llm";
 import { LIVE_TICKS_PER_SECOND, recentFlowOf } from "@story-fm/sim";
-import { interpretInstructions } from "../src/common/instruction-compiler";
-import { instructionCommands, instructionCandidates } from "../src/app/workflows/instructions";
-import { buildToolSpecs } from "../src/app/gm-tools";
-import { buildTrainingSchedule } from "../src/app/gm-input";
-import { buildPeaceContext } from "../src/app/workflows/match/tactic-orders";
-import { buildTrainingContext } from "../src/app/workflows/story/training-orders";
-import { buildFinanceContext } from "../src/app/workflows/common/finance-orders";
-import { TACTIC_OPS } from "../src/match/tactic-orders";
-import { TRAINING_OPS } from "../src/story/training-orders";
-import { FINANCE_OPS } from "../src/common/finance-orders";
+import { interpretInstructions } from "../src/evaluators/instruction-compiler";
+import { instructionCommands, instructionCandidates } from "../src/gm/instructions";
+import { buildToolSpecs } from "../src/gm/gm-tools";
+import { buildTrainingSchedule } from "../src/gm/gm-input";
+import { buildPeaceContext, TACTIC_OPS } from "../src/evaluators/tactic-orders";
+import { buildTrainingContext, TRAINING_OPS } from "../src/evaluators/training-orders";
+import { buildFinanceContext, FINANCE_OPS } from "../src/evaluators/finance-orders";
 import { runGmTurn } from "../src/app/gm";
 import { costUsd, durationStats, stableJson, type Prices } from "./match-reader-eval-metrics";
 

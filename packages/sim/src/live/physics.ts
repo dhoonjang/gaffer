@@ -30,7 +30,7 @@ import {
 /** 서두르지 않는 행동 — 자리 잡기·지키기·지원 */
 const UNHURRIED: ReadonlySet<LiveAction> = new Set(["shape", "hold", "support", "cover"]);
 
-export function topSpeedOf(pace: number): number {
+function topSpeedOf(pace: number): number {
   return TOP_SPEED_FLOOR + (clamp(pace, 0, RATING_MAX) / RATING_MAX) * TOP_SPEED_SPAN;
 }
 
@@ -41,7 +41,7 @@ export function maxSpeedOf(p: LivePlayer, pace: number, injured: boolean): numbe
   return topSpeedOf(pace) * condition * fuel * (injured ? INJURED_SPEED : 1);
 }
 
-export interface MoveResult {
+interface MoveResult {
   /** 이 틱에 움직인 거리 (m) */
   moved: number;
   /** 이 틱의 속도 (m/s) */

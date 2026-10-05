@@ -1,0 +1,405 @@
+import {
+  playerOverall,
+  pairOfMatchId,
+  type MatchRecord,
+  type GamePlayer,
+  type ShotOrigin,
+  addToSeasonStat,
+  FULL_TIME_MINUTES,
+  positionGroupOfPlayer,
+  naturalPositionOf,
+  clampCondition,
+} from "@story-fm/domain";
+import {
+  type GameState,
+  playerById,
+  firstTeamPlayers,
+  ensureSeasonStat,
+  isInjured,
+  tacticsOf,
+  assignmentsOf,
+} from "../core/state";
+import { derbyForMatch } from "../core/derby";
+import { simulateExtraTime, EXTRA_TIME_MINUTES } from "./quick-sim";
+import { simSquadFor } from "./simulation";
+import { recordCard } from "./discipline";
+import { makeRng } from "../core/rng";
+import { openInjuryFor } from "../players/injury";
+import { conditionAfterLoad, expectedLoadOf } from "@story-fm/sim";
+
+/**
+ * 연장 30분 — 녹아웃에서 승부가 갈리지 않았을 때 **승부차기보다 먼저** 치른다.
+ *
+ * 유럽 대항전과 국내 컵이 같은 문을 쓴다 (승부차기와 같은 자리). 단판은 90분이
+ * 같을 때, 2차전제는 **합계가 같을 때만** — 1차전 무승부는 연장이 아니다.
+ * 그 판정은 이 파일의 `needsExtraTime` 하나가 갖는다: 대회마다 따로 판단하면
+ * 어느 하나만 고쳐도 두 대회의 규칙이 조용히 갈린다.
+ *
+ * **감독의 경기는 여기를 지나지 않는다.** 실시간 경기가 120분까지 가므로
+ * (`sim/live`의 `extra_first`·`extra_second`) 연장의 교체·카드·부상이 다 장부에 남고,
+ * 그 경기는 `MatchResult.aet` 표식이 붙어 이 함수를 통과한다 — 그게 **이중 적용의
+ * 문지기**다. 나머지 2,000여 경기는 여기서 한 번에 굴러간다: 우리 컵 8강도 남의 8강도
+ * 같은 규칙을 지난다.
+ */
+
+/** 한 팀이 그라운드에 세우는 인원 — 종료 시점 온필드가 없는 결과에서 명단을 자를 때 */
+const EXTRA_TIME_XI = 11;
+
+/**
+ * 대진 번호 — 녹아웃 경기 id에 박혀 있다 (`...-p{대진}-l{차수}`).
+ *
+ * 국내 컵과 대항전이 같은 규칙으로 id를 만들므로 여기 한 벌만 둔다.
+ */
+export function pairOf(match: MatchRecord): number {
+  return Number(pairOfMatchId(match.id));
+}
+
+/** 이 경기가 속한 대진의 모든 차전 — 차수 순. 녹아웃이 아니면 자기 자신뿐이다 */
+function tieLegs(state: GameState, match: MatchRecord): MatchRecord[] {
+  const pair = pairOf(match);
+  return state.matches
+    .filter(
+      (m) =>
+        m.season === match.season &&
+        m.competitionId === match.competitionId &&
+        m.stage === match.stage &&
+        pairOf(m) === pair,
+    )
+    .sort((a, b) => a.round - b.round);
+}
+
+/**
+ * **이 경기가 연장까지 갈 수 있는 자리인가** — 스코어를 보기 전의 절반.
+ *
+ * 리그·친선·대항전 리그 페이즈는 무승부로 끝나고, 2차전제의 1차전도 마찬가지다 —
+ * 승부는 마지막 다리가 가린다. 남은 절반(합계가 같은가)은 `needsExtraTime`이 얹는다.
+ *
+ * 경기 전에 묻는 자리가 있어서 갈라 둔다: 감독의 교체 계획은 킥오프 전에 서고, 그때는
+ * 아직 스코어가 없으므로 "연장에 들면 한 장 더"를 말할 수 있는 조건이 이것뿐이다
+ * (GM 스냅샷 `<now>`의 교체 한도 줄 — agents/agents.md §6).
+ */
+export function canReachExtraTime(state: GameState, match: MatchRecord): boolean {
+  if (match.stage === "league") return false;
+  const legs = tieLegs(state, match);
+  return legs.length === 0 || legs[legs.length - 1]!.id === match.id;
+}
+
+/**
+ * **이 경기 뒤에 연장이 붙는가** — 연장 판정의 단일 지점.
+ *
+ * 리그·친선·대항전 리그 페이즈는 무승부로 그냥 끝난다(`stage`가 없거나 `league`).
+ * 녹아웃은 **마지막 다리**(단판 또는 2차전)에서, 그리고 **합계가 같을 때만** 간다 —
+ * 1차전 무승부는 연장이 아니다.
+ *
+ * 진행 중인 경기(장부 스코어)와 이미 끝난 경기(`result`)를 같은 잣대로 재려고
+ * 스코어를 인자로 받는다. 없으면 저장된 결과를 읽는다.
+ */
+export function needsExtraTime(
+  state: GameState,
+  match: MatchRecord,
+  score?: { home: number; away: number },
+): boolean {
+  if (!canReachExtraTime(state, match)) return false;
+  const legs = tieLegs(state, match);
+
+  const now =
+    score ?? (match.result ? { home: match.result.homeGoals, away: match.result.awayGoals } : null);
+  if (!now) return false;
+
+  // 앞 차전에서 넘어온 합계 — 이 경기의 홈·원정 기준으로 뒤집어 더한다
+  const carry = tieAggregate(
+    legs.filter((m) => m.id !== match.id),
+    match,
+  );
+  return carry.home + now.home === carry.away + now.away;
+}
+
+/**
+ * **실시간 경기가 드는 연장 규칙** — 90분 뒤 (스코어 + 이 값)이 같으면 연장이다.
+ * 단판은 `{0,0}`, 2차전은 앞 차전의 합계(이 경기의 홈·원정 기준), 리그·친선은 `null`.
+ * 판정은 `needsExtraTime`과 같은 자리에서 나온다 — 시뮬은 대회를 모르고 이 답만 든다.
+ */
+export function extraTimeRuleOf(
+  state: GameState,
+  match: MatchRecord,
+): { home: number; away: number } | null {
+  if (!canReachExtraTime(state, match)) return null;
+  const legs = tieLegs(state, match);
+  return tieAggregate(
+    legs.filter((m) => m.id !== match.id),
+    match,
+  );
+}
+
+/**
+ * **이 경기 뒤에 승부차기가 붙는가** — 연장의 문 다음에 서는 문.
+ *
+ * 연장을 치르고도 합계가 같으면 승부차기다. 그래서 판정은 `needsExtraTime`과 같은
+ * 잣대에 **연장을 이미 치렀는가**를 더한 것이다. 진행 중인 경기는 그 시계가 아직
+ * 장부에 없으므로(`result`가 비어 있다) 넘겨받은 스코어를 믿는다 — 감독의 경기는
+ * 120분이 끝난 자리에서 이 함수를 스코어와 함께 묻는다.
+ */
+export function needsShootout(
+  state: GameState,
+  match: MatchRecord,
+  score?: { home: number; away: number },
+): boolean {
+  if (!score && match.result?.aet !== true) return false;
+  return needsExtraTime(state, match, score);
+}
+
+/**
+ * **이미 적힌 결과로 갈리는 승자** — 갈리지 않으면 null. 아무것도 굴리지 않는다.
+ *
+ * 국내 컵과 대항전이 같은 한 벌을 쓴다. 합계가 먼저고, 같으면 승부차기 합계다 —
+ * 연장·승부차기를 굴리는 것은 `resolveDomesticTie` · `resolveEuroTie`이고 승자를
+ * **묻는** 자리는 여기를 지난다 (competition.md §6).
+ */
+export function settledTieWinner(legs: readonly MatchRecord[]): string | null {
+  if (legs.length === 0 || legs.some((m) => !m.result)) return null;
+  const decider = legs[legs.length - 1]!;
+  const agg = tieAggregate(legs, decider);
+  if (agg.home !== agg.away) {
+    return agg.home > agg.away ? decider.homeTeamId : decider.awayTeamId;
+  }
+  const pens = decider.result!.penalties;
+  if (!pens || pens.home === pens.away) return null;
+  return pens.home > pens.away ? decider.homeTeamId : decider.awayTeamId;
+}
+
+/** 대진 합계 — 마지막 경기(단판·2차전)의 홈·원정 기준 */
+export function tieAggregate(
+  legs: readonly MatchRecord[],
+  decider: MatchRecord,
+): { home: number; away: number } {
+  const goals = new Map<string, number>();
+  for (const leg of legs) {
+    const r = leg.result;
+    if (!r) continue;
+    goals.set(leg.homeTeamId, (goals.get(leg.homeTeamId) ?? 0) + r.homeGoals);
+    goals.set(leg.awayTeamId, (goals.get(leg.awayTeamId) ?? 0) + r.awayGoals);
+  }
+  return {
+    home: goals.get(decider.homeTeamId) ?? 0,
+    away: goals.get(decider.awayTeamId) ?? 0,
+  };
+}
+
+/**
+ * **경기를 끝낸 사람들** — 연장을 뛰고 페널티를 차는 열한 명(퇴장이 있었으면 그보다 적다).
+ *
+ * 명단(`homeLineup`)은 **뛴 사람 전부**라 앞 열한 명을 자르면 교체로 나간 선수와
+ * 퇴장당한 선수가 연장을 뛴다. 그래서 두 시뮬 다 종료 시점 온필드를 따로 남기고
+ * (`homeOnPitch`) 여기가 그것을 읽는다. 결과도 장부도 없으면(아직 치르지 않은 경기)
+ * 1군 상위로 물러선다 (match.md §7).
+ */
+export function finishingXi(
+  state: GameState,
+  match: MatchRecord,
+  side: "home" | "away",
+): GamePlayer[] {
+  const result = match.result;
+  const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
+  /**
+   * **진행 중인 장부가 결과보다 앞선다.**
+   *
+   * 감독의 경기는 마감(`finalizeMatch`)이 승부차기 **뒤**에 온다 — 승부차기를 굴리는
+   * 동안 `match.result`는 아직 `null`이라 결과만 읽으면 1군 상위 열한 명까지 밀려나
+   * 벤치에 앉아 있던 에이스와 **퇴장당한 선수가 페널티를 찬다.** 살아 있는 장부의
+   * 온필드가 곧 경기를 끝낸 열한 명이고, 마감이 `homeOnPitch`로 적는 것도 이 목록이다.
+   */
+  const live =
+    state.pendingMatch?.matchId === match.id ? state.pendingMatch.live.ledger[side].onPitch : null;
+  const onPitch = live ?? (side === "home" ? result?.homeOnPitch : result?.awayOnPitch) ?? [];
+  /** 같은 id가 두 번 실린 장부가 있다 — 한 사람이 연달아 차지 않도록 접는다 */
+  const unique = [...new Set(onPitch)];
+  const listed = unique
+    .map((id) => playerById(state, id))
+    .filter((p): p is GamePlayer => p !== null && p.teamId === teamId);
+  if (listed.length > 0) return listed;
+  return [...firstTeamPlayers(state, teamId)]
+    .sort((a, b) => playerOverall(b) - playerOverall(a))
+    .slice(0, EXTRA_TIME_XI);
+}
+
+/** 골 목록에 연장 골을 이어 붙인다 — 세 배열의 길이는 언제나 같다 */
+export function appendGoals(
+  result: NonNullable<MatchRecord["result"]>,
+  added: {
+    scorers: string[];
+    assists: string[];
+    goalMinutes: number[];
+    goalOrigins: ShotOrigin[];
+  },
+): void {
+  result.scorers = [...result.scorers, ...added.scorers];
+  result.assists = [...result.assists, ...added.assists];
+  result.goalMinutes = [...result.goalMinutes, ...added.goalMinutes];
+  result.goalOrigins = [...result.goalOrigins, ...added.goalOrigins];
+}
+
+/**
+ * 연장 30분을 치른다 — 이미 치른 경기면 아무 일도 하지 않는다(`aet`).
+ *
+ * 대진 승자를 묻는 자리에서 호출되므로 **멱등**이어야 한다: 화면이 브래킷을
+ * 그릴 때마다 연장이 다시 굴러가면 스코어가 계속 자란다. 감독이 실시간 경기로
+ * 직접 치른 연장에도 `aet`가 붙어 있으므로 여기서 두 번 굴러가지 않는다.
+ *
+ * @returns 이번 호출에서 연장을 치렀으면 true
+ */
+export function resolveExtraTime(state: GameState, decider: MatchRecord, channel: string): boolean {
+  const result = decider.result;
+  if (!result || result.aet) return false;
+  // 연장이 필요한 경기인지도 같은 문에서 묻는다 — 호출부마다 따로 판단하지 않는다
+  if (!needsExtraTime(state, decider)) return false;
+  /**
+   * 연장 몫이 얹히는 **대회 행** (game-state.md §3.4). 연장은 녹아웃뿐이라 실제로
+   * 널이 오지 않지만, 널을 앞에서 끊어야 장부가 축 없는 행에 섞이지 않는다.
+   */
+  const competitionId = decider.competitionId;
+  if (competitionId === null) return false;
+
+  const xi = {
+    home: finishingXi(state, decider, "home"),
+    away: finishingXi(state, decider, "away"),
+  };
+  /**
+   * **전력 모델은 90분과 같은 원본에서 선다** — 전술판의 자리·좌표·역할, 팀 전술,
+   * 개인 적응도, 감독의 전술 눈금까지 `simSquadFor`가 한 벌로 세운다. 팀 id와
+   * 선수 목록만 넘기면 입력이 자연 포지션·기본 전술·적응도 60·감독 65로 서서
+   * 연장에서만 약팀이 살아나거나 죽는다 (match.md §7).
+   */
+  const extraDerby = derbyForMatch(decider);
+  const extra = simulateExtraTime(
+    simSquadFor(state, decider.homeTeamId, xi.home),
+    simSquadFor(state, decider.awayTeamId, xi.away),
+    state.seed,
+    channel,
+    {
+      neutral: decider.neutral === true,
+      // 연장도 같은 경기다 — 더비의 강도가 90분에서만 걸리면 장부가 두 말을 한다
+      ...(extraDerby ? { derby: { name: extraDerby.name, heat: extraDerby.heat } } : {}),
+      /**
+       * 90분의 경고가 연장으로 이어진다 — 이 목록이 없으면 90분에 경고를 받은
+       * 선수의 연장 경고가 첫 장으로 세어져 두 번째 경고 퇴장이 성립하지 않는다.
+       */
+      bookedIn90: state.bookings
+        .filter((b) => b.matchId === decider.id && b.card === "yellow")
+        .map((b) => b.gamePlayerId),
+    },
+  );
+
+  /** 90분의 스코어 — 아래 클린시트 판정이 마감이 세던 그 수를 다시 본다 */
+  const goals90 = { home: result.homeGoals, away: result.awayGoals };
+  result.aet = true;
+  result.homeGoals += extra.homeGoals;
+  result.awayGoals += extra.awayGoals;
+  result.homeShots += extra.homeShots;
+  result.awayShots += extra.awayShots;
+  result.homeXg += extra.homeXg;
+  result.awayXg += extra.awayXg;
+  result.homeExpectedGoals += extra.homeExpectedGoals;
+  result.awayExpectedGoals += extra.awayExpectedGoals;
+  appendGoals(result, extra);
+
+  /**
+   * 연장이 시즌 기록에 얹는 몫 — **출전은 90분에 이미 섰다**(`apps: 0`). 분·슛·xG·
+   * 선방·골·도움만 더하고, 얹는 문은 90분과 **같은 하나**다 (match.md §6).
+   * 카드는 아래 `recordCard`가 지나며 함께 센다.
+   */
+  for (const side of ["home", "away"] as const) {
+    const teamId = side === "home" ? decider.homeTeamId : decider.awayTeamId;
+    const idOf = (tag: string) => (tag.startsWith(`${side}:`) ? tag.slice(side.length + 1) : null);
+    const countIn = (tags: readonly string[], playerId: string) =>
+      tags.filter((tag) => idOf(tag) === playerId).length;
+    for (const player of xi[side]) {
+      const line = extra.playerStats[player.id];
+      // 연장의 퇴장은 그 분에서 시간을 끊는다 — 90분의 규칙 그대로다
+      const red = extra.cards.find((c) => c.playerId === player.id && c.card === "red");
+      addToSeasonStat(ensureSeasonStat(state, player.id, teamId, competitionId, player), {
+        goals: countIn(extra.scorers, player.id),
+        assists: countIn(extra.assists, player.id),
+        minutes: red ? Math.max(0, red.minute - FULL_TIME_MINUTES) : EXTRA_TIME_MINUTES,
+        shots: line?.shots ?? 0,
+        xg: line?.xg ?? 0,
+        saves: line?.saves ?? 0,
+      });
+    }
+  }
+
+  /**
+   * 연장의 실점은 90분에 적힌 클린시트를 **무른다** — 마감이 90분 스코어로 세고
+   * 연장은 그 뒤에 붙기 때문이다 (match.md §6). 실시간 경기는 120분을 한 장부로
+   * 마감하므로 애초에 이 자리가 없다.
+   *
+   * 무르는 대상은 **선발로 나와 90분을 지킨 골키퍼**뿐이다 — 그 사람만 문턱
+   * (`CLEAN_SHEET_MINUTES`)을 넘은 것이 확실하다. 중간에 바뀐 골키퍼는 90분에
+   * 받았는지 알 수 없어, 깎으면 다른 경기의 기록을 깎는다.
+   */
+  for (const side of ["home", "away"] as const) {
+    const concededIn90 = side === "home" ? goals90.away : goals90.home;
+    const concededInEt = side === "home" ? extra.awayGoals : extra.homeGoals;
+    if (concededIn90 > 0 || concededInEt === 0) continue;
+    const started = new Set(side === "home" ? result.homeStarters : result.awayStarters);
+    const keeper = xi[side].find((p) => positionGroupOfPlayer(p) === "GK" && started.has(p.id));
+    if (!keeper) continue;
+    const teamId = side === "home" ? decider.homeTeamId : decider.awayTeamId;
+    const stat = ensureSeasonStat(state, keeper.id, teamId, competitionId, keeper);
+    if (stat.cleanSheets) stat.cleanSheets -= 1;
+  }
+
+  /**
+   * 연장의 카드 → BOOKING·SUSPENSION — **90분과 같은 문**(`discipline.ts`).
+   * 같은 경기 id로 적히므로 90분의 경고와 이어져, 두 번째 경고 퇴장이 정지
+   * 한 건으로 남는다. 연장은 녹아웃뿐이라 친선 예외가 없다.
+   */
+  const sentOffInEt = new Map<string, number>();
+  for (const card of extra.cards) {
+    recordCard(state, {
+      playerId: card.playerId,
+      match: decider,
+      card: card.card,
+      minute: card.minute,
+    });
+    if (card.card === "red") sentOffInEt.set(card.playerId, card.minute);
+  }
+  /**
+   * 연장 퇴장자는 승부차기를 차지 못한다 — 종료 시점 온필드(`homeOnPitch`)가
+   * 승부차기 명단의 원본이므로(§8.6) 여기서 빼야 퇴장당한 발이 페널티를 차지 않는다.
+   */
+  if (sentOffInEt.size > 0) {
+    result.homeOnPitch = result.homeOnPitch.filter((id) => !sentOffInEt.has(id));
+    result.awayOnPitch = result.awayOnPitch.filter((id) => !sentOffInEt.has(id));
+  }
+
+  // 연장의 부상 — 심각도·기간은 90분과 같은 공식(`openInjuryFor`)으로 굴린다
+  const injuryRng = makeRng(state.seed, `et-injury:${decider.id}`);
+  for (const tag of extra.injuries) {
+    const [side, playerId] = tag.split(":") as ["home" | "away", string];
+    const player = xi[side].find((p) => p.id === playerId);
+    if (!player || isInjured(state, player.id)) continue;
+    openInjuryFor(state, player, "match", injuryRng);
+  }
+
+  // 30분치 부하 — 자리·전술·지구력은 90분과 같은 함수가 정한다 (match.md §6). 퇴장자는 그 분까지만
+  for (const side of ["home", "away"] as const) {
+    const teamId = side === "home" ? decider.homeTeamId : decider.awayTeamId;
+    const spec = tacticsOf(state, teamId).spec;
+    const slotOf = new Map(assignmentsOf(state, teamId).map((a) => [a.playerId, a.position]));
+    const possession = result.possession[side];
+    for (const player of xi[side]) {
+      const position = slotOf.get(player.id) ?? naturalPositionOf(player).position;
+      const off = sentOffInEt.get(player.id);
+      const minutes = off === undefined ? EXTRA_TIME_MINUTES : Math.max(0, off - 90);
+      player.state.condition = clampCondition(
+        conditionAfterLoad(
+          player.state.condition,
+          expectedLoadOf(position, spec, minutes, possession),
+          player.attributes.stamina,
+        ),
+      );
+    }
+  }
+
+  return true;
+}

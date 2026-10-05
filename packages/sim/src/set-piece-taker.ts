@@ -20,7 +20,7 @@ export type TakerSlot = Pick<LineupSlot, "player" | "position">;
  * 받는 것은 `LineupSlot`의 **두 칸뿐**이다 — 키커를 고르는 자리를 화면 쪽 뷰도
  * 부르는데, 거기에는 적응도·피로 같은 경기용 칸이 없다.
  */
-export function slotGroup(slot: TakerSlot): PositionGroup {
+function slotGroup(slot: TakerSlot): PositionGroup {
   return positionGroupOf(slot.position) ?? positionGroupOfPlayer(slot.player);
 }
 
@@ -31,7 +31,7 @@ export type SetPieceRole = "corner" | "freeKick" | "penalty";
  * 자리마다 읽는 능력 — 코너·프리킥은 배급(`kicking`), 페널티는 `penaltySkill`.
  * 기본값을 고르는 저울이자 태그가 싣는 수치다.
  */
-export const TAKER_SKILL: Record<SetPieceRole, (p: Player) => number> = {
+const TAKER_SKILL: Record<SetPieceRole, (p: Player) => number> = {
   corner: (p) => p.attributes.kicking,
   freeKick: (p) => p.attributes.kicking,
   penalty: penaltySkill,

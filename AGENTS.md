@@ -59,33 +59,31 @@ narrative; contracts, employment, finances and match records remain validated le
 - **Runtime** — Next.js (App Router) + Node.js
 - **Packages** — pnpm monorepo workspaces
 - **LLM** — multi-provider, configured **per agent**. `config/llm.yml` is the
-  single source for providers and model IDs (→ [docs/common/llm/models.md](docs/common/llm/models.md))
+  single source for providers and model IDs (→ [docs/agents/models.md](docs/agents/models.md))
 - **Validation** — Zod, enforcing structured LLM I/O
 - **Test** — Vitest + Playwright · **Lint** — ESLint + Prettier
 
 ### Layout
 
 ```
-docs/              # present service, grouped by experience
-  story/           # everyday life, training, people, press, board and career
-  negotiation/     # negotiation ledgers, transfers, renewals and the deterministic world market
-  match/           # live match, tactics and competitions
-  common/          # shared players, teams, contracts, finance, saves, AI infrastructure and UI
+docs/              # present service — one folder per domain, same names as the code
 config/            # providers, models and game version
 apps/
   web/
     app/           # Next routes and API transport
-    application/   # whole-game UI and turn orchestration
-    domains/       # story/ · match/ · common/ (ui, lib, styles)
+    game/          # game shell and server plumbing (turn runner, store, stream)
+    screens/       # chat · mailbox · office (calendar, finance, cups, career) · squad · match
+    shared/        # pieces and styles several screens use
+    dev/           # turn trace viewer
   match-cli/       # headless live match
 packages/
   domain/src/      # browser-safe Zod models and pure rules, by domain
-  engine/src/      # deterministic commands and read models, by domain
-  agents/src/      # model calls, by domain
-                   # app/ in each package composes domains; it owns no duplicate rules
+  engine/src/      # deterministic commands and read models, by domain, layered:
+                   #   core → players → match → season → team → people → app
+  agents/src/      # model calls — evaluators · memory · gm (scene writers), as in config/llm.yml
   sim/             # match-only deterministic spatial core
   llm/             # shared provider adapters and tracing
-packages/*/test/   # same domain ownership; app/ contains integration tests
+packages/*/test/   # same folders as src
 e2e/               # browser user journeys
 ```
 
@@ -119,10 +117,14 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
 - Functional and immutable by default; isolate side effects at the boundary
   (API/IO).
 - Domain types live in `packages/domain`; other packages import from there.
-- Runtime dependencies flow `common → {story, negotiation, match} → app`.
-  Domains never execute each other or import app values. Cross-domain workflows
-  live in `app/workflows`; shared player/team facts and pure queries live in
-  common. Type-only references may cross this boundary. ESLint enforces it.
+- **Code is split into five domains, not by experience** — players · match · season ·
+  team · people. `core` (game state, its basic reads and ledger writes, the world's
+  reference tables) is the floor; `app` moves several domains at once. An engine
+  domain value-imports only what sits below it (core → players → match → season →
+  team → people → app); a flow that moves several domains lives in `app/workflows`.
+  Type-only references may cross in any direction. `packages/domain` is the shared
+  vocabulary every domain reads; agents are split by call, the web by screen. ESLint
+  enforces all of it (→ [docs/architecture.md](docs/architecture.md) §2).
   Internal imports use the owning module, never the package's own public barrel.
 - **The screen imports `@story-fm/engine` for types only.** A value import pulls
   `node:fs` into the browser bundle and `next build` dies — `typecheck` passes, so
@@ -141,8 +143,8 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
   loudly; they diverge on the day someone tunes one of them.
 - **"Skill" names only what the LLM calls directly.** A tool in a GM's catalog is a
   skill; the JSON shape an agent returns is its **output schema**; the deterministic
-  function the core invokes from that JSON is a **core command**
-  (`packages/engine/src/{story,negotiation,match}/commands/`). Mixing the three makes the docs read as if an
+  function the core invokes from that JSON is a **core command** (it lives in the
+  domain that owns the ledger; `packages/engine/src/index.ts` re-exports them). Mixing the three makes the docs read as if an
   interpreter agent held tools of its own (→ [docs/overview.md](docs/overview.md) §0).
 - kebab-case files and directories, PascalCase types and components, camelCase
   values and functions.
@@ -165,7 +167,7 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
   `config/game-version.yml`. Prompts, tool specs, snapshot builders and
   `config/llm.yml` are where it lives; screens, tests and docs never move it.
   Every traced LLM call records the version, so it is what makes a log from
-  months ago comparable to today's (→ [docs/common/llm/models.md](docs/common/llm/models.md)
+  months ago comparable to today's (→ [docs/agents/models.md](docs/agents/models.md)
   §5-2; the digit rules and path map are the
   [game-version skill](.agents/skills/game-version/SKILL.md)).
 - Commit and push only when the user asks. When a unit of work is done, commit to
@@ -201,14 +203,14 @@ carries a descriptor (`packages/engine/harness/harness.ts`) that owns its band
 numbers; assertions, output and the listing all read from it, so a band is written
 in exactly one place. `pnpm balance --list` shows every harness and what it
 measures, `pnpm balance` runs them
-(→ [docs/common/balance-harness.md](docs/common/balance-harness.md)).
+(→ [docs/balance-harness.md](docs/balance-harness.md)).
 
 **A test timeout breaks what has stopped; it does not measure speed.**
 `vitest.config.ts` owns the one number and the reasoning behind it. Never repeat
 that number on a case — restating the global is not headroom, and a tighter one
 is a hidden speed assertion that goes red before the assertion does. Give a case
 its own limit only to make it **more** generous
-(→ [balance-harness.md](docs/common/balance-harness.md) §6).
+(→ [balance-harness.md](docs/balance-harness.md) §6).
 
 **Fixtures cost more than the logic they carry.** `createTestGame()` builds a
 whole world — a second per call. Call the pure function directly when the world
@@ -291,7 +293,7 @@ Agents without automatic skill discovery should read the relevant `SKILL.md`:
 
 1. **Never hard-code a model ID.** `config/llm.yml` owns provider and model per
    agent; `packages/llm` adapters absorb provider differences
-   (→ [docs/common/llm/models.md](docs/common/llm/models.md)).
+   (→ [docs/agents/models.md](docs/agents/models.md)).
 2. **Validate structured output with Zod** and retry on failure. A parse failure
    never reaches game state.
 3. **Context hygiene** — stack input in three layers by change frequency (fixed /
@@ -315,17 +317,22 @@ Agents without automatic skill discovery should read the relevant `SKILL.md`:
 ## 7. Doc map
 
 **[docs/](docs/README.md) is the single source for what the game does** — each
-folder is a layer. Read the design doc for the domain you are touching before you
+folder is a domain. Read the design doc for the domain you are touching before you
 start, and do not blur the boundary between the deterministic core and the
 non-deterministic LLM.
 
-| Folder         | What                                                                                      | Start here                                                          |
-| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| —              | Whole game and ownership                                                                  | [overview](docs/overview.md) · [architecture](docs/architecture.md) |
-| `story/`       | Main GM, people, daily life, training, press and board                                    | [story](docs/story/README.md)                                       |
-| `negotiation/` | Negotiation ledgers, conditions, medicals, contracts and the deterministic world market   | [negotiation](docs/negotiation/README.md)                           |
-| `match/`       | Match GM, tactics, live simulation and competitions                                       | [match](docs/match/README.md)                                       |
-| `common/`      | Shared state, players, teams, contracts, finance, season orchestration and infrastructure | [common](docs/common/README.md)                                     |
+| Folder     | What                                                                          | Start here                                                          |
+| ---------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| —          | Whole game, domains and their order                                           | [overview](docs/overview.md) · [architecture](docs/architecture.md) |
+| `core/`    | Game state, basic reads and ledger writes, the world's reference tables       | [core](docs/core/README.md)                                         |
+| `players/` | Players — abilities, condition, observation, training, growth, youth, career  | [players](docs/players/README.md)                                   |
+| `match/`   | Match simulation — live and quick                                             | [match](docs/match/README.md)                                       |
+| `season/`  | Season — fixtures, competitions, tables, prizes, awards                       | [season](docs/season/README.md)                                     |
+| `team/`    | Team — squad, lineup, tactics, transfers, contracts, finance, board requests  | [team](docs/team/README.md)                                         |
+| `people/`  | People — lorebook, staff, mailbox, press, manager career                      | [people](docs/people/README.md)                                     |
+| `app/`     | Time, season rollover, saves, GM lookups — what moves several domains at once | [app](docs/app/README.md)                                           |
+| `agents/`  | Model calls, prompts, models and tracing                                      | [agents](docs/agents/README.md)                                     |
+| `web/`     | Screens and the design system                                                 | [web](docs/web/README.md)                                           |
 
 ## Status
 
@@ -336,4 +343,4 @@ built and what is not is listed in [overview.md](docs/overview.md) §7.
 - **No save migrations.** A save of another version is refused; there is no code
   that adapts an old shape. New fields are required in the schema unless absence
   carries meaning. When a change moves the shape or the meaning of stored values,
-  bump `SAVE_VERSION` (docs/common/game-state.md §6).
+  bump `SAVE_VERSION` (docs/core/game-state.md §6).

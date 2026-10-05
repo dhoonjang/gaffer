@@ -22,10 +22,10 @@ import {
   seasonLabelOf,
   type GameState,
 } from "@story-fm/engine";
-import { competitionSeasonsOf } from "../../src/match/views/competition";
+import { competitionSeasonsOf } from "../../src/season/competition-view";
 import { playerOverall, FINANCE_CATEGORY_KO } from "@story-fm/domain";
 import { matchFatigueOf } from "@story-fm/sim";
-import { observationOf } from "../../src/common/players/observation";
+import { observationOf } from "../../src/players/observation";
 import {
   advanceAndPlay,
   advanceDays,

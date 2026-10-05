@@ -1,6 +1,6 @@
 /**
  * 가명 전환 파이프라인 — 라이선스 부채 원장의 **가명화 갈래를 실제로 수행한다**
- * (docs/common/sources.md §7).
+ * (docs/core/sources.md §7).
  *
  *   pnpm pseudonymize [--dry]             리포트만 낸다 (기본값 — 아무것도 쓰지 않는다)
  *   pnpm pseudonymize --out <dir>         가명본 시드를 그 디렉터리에 쓴다
@@ -24,21 +24,24 @@ import {
   pseudonymSquad,
   type ClubPseudonym,
   type PlayerPseudonym,
-} from "../packages/engine/src/common/data/pseudonym";
-import { slugifyName } from "../packages/engine/src/common/world/player-id";
-import { TEAM_CATALOG_SEED, DEFAULT_XI } from "../packages/engine/src/common/data/team-catalog";
-import { LEAGUE_CATALOG_SEED } from "../packages/engine/src/common/data/league-catalog";
-import { CLUB_PROFILES_SEED } from "../packages/engine/src/common/data/club-profile";
-import { REAL_SQUADS, type RealPlayerSeed } from "../packages/engine/src/common/data/epl-players";
-import { EU_SQUADS } from "../packages/engine/src/common/data/eu-squads";
-import { SAUDI_SQUADS, MLS_SQUADS } from "../packages/engine/src/common/data/market-leagues";
-import { HEAD_COACH_NAMES } from "../packages/engine/src/common/data/coach-seeds";
-import { OWNER_NAMES } from "../packages/engine/src/common/data/owner-seeds";
-import { WORLD_FIGURE_SEEDS } from "../packages/engine/src/common/data/world-figures";
-import { INJURY_HISTORY } from "../packages/engine/src/common/data/injury-history";
+} from "../packages/engine/src/core/catalog/pseudonym";
+import { slugifyName } from "../packages/engine/src/core/catalog/player-id";
+import { TEAM_CATALOG_SEED, DEFAULT_XI } from "../packages/engine/src/core/catalog/team-catalog";
+import { LEAGUE_CATALOG_SEED } from "../packages/engine/src/core/catalog/league-catalog";
+import { CLUB_PROFILES_SEED } from "../packages/engine/src/core/catalog/club-profile";
+import {
+  REAL_SQUADS,
+  type RealPlayerSeed,
+} from "../packages/engine/src/players/catalog/epl-players";
+import { EU_SQUADS } from "../packages/engine/src/players/catalog/eu-squads";
+import { SAUDI_SQUADS, MLS_SQUADS } from "../packages/engine/src/players/catalog/market-leagues";
+import { HEAD_COACH_NAMES } from "../packages/engine/src/people/catalog/coach-seeds";
+import { OWNER_NAMES } from "../packages/engine/src/people/catalog/owner-seeds";
+import { WORLD_FIGURE_SEEDS } from "../packages/engine/src/people/catalog/world-figures";
+import { INJURY_HISTORY } from "../packages/engine/src/players/catalog/injury-history";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../..");
-const SEED_DIR = path.join(REPO, "packages/engine/src/common/data");
+const SEED_DIR = path.join(REPO, "packages/engine/src/catalog/data");
 /** 저장소 안에서 유일하게 써도 되는 자리 — `.gitignore`에 올라 있다 */
 const DEFAULT_OUT = ".pseudonymized";
 
@@ -149,7 +152,7 @@ function teamCatalogLiteral(clubs: Map<string, ClubPseudonym>): string {
  * 기본 선발 — **슬러그를 새 이름으로 옮긴다.**
  *
  * `DEFAULT_XI`는 선수 id가 아니라 **로마자 이름 슬러그**로 적혀 있고, id는 그 이름에서
- * 파생된다(`world/player-id.ts`). 이름을 바꾸면 슬러그가 통째로 어긋나 96클럽의 기본
+ * 파생된다(`core/catalog/player-id.ts`). 이름을 바꾸면 슬러그가 통째로 어긋나 96클럽의 기본
  * 선발이 조용히 사라진다 — 에러 하나 없이. 그래서 이 표는 가명화의 대상이 아니라
  * **가명화가 끌고 가야 하는 파생값**이다.
  */
@@ -212,7 +215,7 @@ const BANNER = (source: string) =>
   [
     "// ⚠️ 자동 생성물 — `pnpm pseudonymize`가 시드에서 낸 가명본이다.",
     "// 손으로 고치지 말고 `scripts/pseudonymize.ts`를 고쳐 다시 낸다.",
-    `// 원본: packages/engine/src/common/data/${source}`,
+    `// 원본: packages/engine/src/catalog/data/${source}`,
     "",
   ].join("\n");
 
@@ -339,7 +342,7 @@ function generate(): { files: Generated[]; stats: Stats } {
 
 function report(stats: Stats, files: readonly Generated[], out: string | null): string {
   const lines: string[] = [
-    "가명 전환 파이프라인 (docs/common/sources.md §7 — 가명화 갈래)",
+    "가명 전환 파이프라인 (docs/core/sources.md §7 — 가명화 갈래)",
     "",
     "■ 바뀌는 것 — 표시 이름뿐. id는 하나도 손대지 않는다",
     `  선수      ${stats.players}명 (${SQUAD_TABLES.reduce((n, t) => n + Object.keys(t.squads).length, 0)}클럽) — nameKo·nameEn`,
@@ -357,7 +360,7 @@ function report(stats: Stats, files: readonly Generated[], out: string | null): 
     `  세계 인물     ${stats.emptied.figures}명 — 지어낸 인격이 붙은 실명. 명부를 비우면 끝난다`,
     "",
     "■ 이 파이프라인의 일이 아닌 것",
-    "  능력치·시장가·주급·키/체중 → 생성 갈래(world/synthesis.ts). 숫자는 여기서 한 줄도 바뀌지 않는다",
+    "  능력치·시장가·주급·키/체중 → 생성 갈래(players/catalog/synthesis.ts). 숫자는 여기서 한 줄도 바뀌지 않는다",
     "  엠블럼·킷·리그 로고·구장 비주얼 → 미탑재. 애초에 저장소에 없다",
     "  ⚠️ 이름만 바꾸는 것은 절반이다 — 능력치가 그대로면 '9번 노르웨이인 스트라이커'는 여전히 그 사람이다",
     "",

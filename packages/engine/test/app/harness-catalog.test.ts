@@ -15,7 +15,7 @@ import {
 
 /**
  * **`pnpm balance --list`에 서는 것과 돌릴 수 있는 것은 같아야 한다**
- * (→ `docs/common/balance-harness.md` §4).
+ * (→ `docs/balance-harness.md` §4).
  *
  * 둘이 갈리는 두 방향 다 조용하다. 목록에만 있는 서술자는 `--list`에 서고도 돌지
  * 않아 주간 리포트에 `missing`으로만 나타나고, 목록에 없는 하네스는 돌면서도
@@ -102,7 +102,7 @@ describe("밸런스 하네스 목록", () => {
 });
 
 /**
- * **건너뛴 것은 보고한 것이다** (→ `docs/common/balance-harness.md` §5).
+ * **건너뛴 것은 보고한 것이다** (→ `docs/balance-harness.md` §5).
  *
  * 돌 조건이 없어 건너뛴 하네스(키가 필요한 `live-schema`)가 리포트에 아무 줄도 남기지
  * 않으면 주간 판정이 그것을 `missing` 이탈로 세어 이슈를 연다 — 키 없는 CI에서 매주

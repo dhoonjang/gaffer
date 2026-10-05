@@ -3,31 +3,31 @@ import {
   TEAM_CATALOG_SEED,
   teamCatalog,
   type TeamCatalogEntry,
-} from "../common/data/team-catalog";
+} from "../core/catalog/team-catalog";
 import {
   LEAGUE_CATALOG_SEED,
   leagueCatalog,
   type LeagueCatalogEntry,
-} from "../common/data/league-catalog";
-import { cupCatalog, knockoutBracketSize, type CupCatalogEntry } from "../common/data/cup-catalog";
-import { disciplineOf } from "../common/data/discipline-catalog";
+} from "../core/catalog/league-catalog";
+import { cupCatalog, knockoutBracketSize, type CupCatalogEntry } from "../core/catalog/cup-catalog";
+import { disciplineOf } from "../core/catalog/discipline-catalog";
 import {
   DOMESTIC_CUP_SIZE,
   DOMESTIC_STAGES,
   domesticCupCatalog,
   type DomesticCupEntry,
-} from "../common/data/domestic-cup-catalog";
-import { catalogSource } from "../common/data/catalog-source";
-import { playerCatalog } from "../common/world/catalog";
-import { SQUAD_SEEDS } from "../common/data/squad-seeds";
-import { DERBIES } from "../common/data/derbies";
-import { HEAD_COACH_NAMES } from "../common/data/coach-seeds";
-import { OWNER_NAMES } from "../common/data/owner-seeds";
-import { CLUB_PROFILES_SEED } from "../common/data/club-profile";
-import { WORLD_FIGURE_SEEDS } from "../common/data/world-figures";
-import { EURO_MATCHDAYS } from "../match/competition/europe";
+} from "../core/catalog/domestic-cup-catalog";
+import { catalogSource } from "../core/catalog/catalog-source";
+import { playerCatalog } from "../players/catalog/catalog";
+import { SQUAD_SEEDS } from "../players/catalog/squad-seeds";
+import { DERBIES } from "../core/catalog/derbies";
+import { HEAD_COACH_NAMES } from "../people/catalog/coach-seeds";
+import { OWNER_NAMES } from "../people/catalog/owner-seeds";
+import { CLUB_PROFILES_SEED } from "../core/catalog/club-profile";
+import { WORLD_FIGURE_SEEDS } from "../people/catalog/world-figures";
+import { EURO_MATCHDAYS } from "../season/europe";
 import { isAssociation, type PlayerCatalogEntry, josa, josaOf } from "@story-fm/domain";
-import { slugifyName } from "../common/world/player-id";
+import { slugifyName } from "../core/catalog/player-id";
 
 /**
  * 카탈로그 불변식 — **새 게임이 시작할 수 있는가**를 저장 전에 묻는다.
@@ -58,10 +58,10 @@ import { slugifyName } from "../common/world/player-id";
  * 리그전을 도는 리그의 팀 수 상한 — 달력이 38라운드 골격이라
  * 20팀(38라운드)을 넘으면 배치할 매치위크가 모자란다 (`anchorsFor`).
  */
-export const MAX_LEAGUE_TEAMS = 20;
+const MAX_LEAGUE_TEAMS = 20;
 
 /** 리그전 최소 인원 — 둘이면 홈·원정 두 경기라도 성립한다 */
-export const MIN_LEAGUE_TEAMS = 2;
+const MIN_LEAGUE_TEAMS = 2;
 
 export function checkLeagueInvariants(
   leagues: readonly LeagueCatalogEntry[],
@@ -241,7 +241,7 @@ export function checkDomesticCupInvariants(cups: readonly DomesticCupEntry[]): s
  * 리그전을 도는 리그의 클럽이 시드로 가져야 하는 최소 인원 — **선발 11인.**
  * 그보다 적으면 명단의 절반 이상이 가명이라 "실선수 시드"라는 말이 거짓이 된다.
  */
-export const MIN_SEEDED_SQUAD = 11;
+const MIN_SEEDED_SQUAD = 11;
 
 /**
  * 부분 시드(명단 전용 리그)의 하한 — **한 명.**
@@ -251,7 +251,7 @@ export const MIN_SEEDED_SQUAD = 11;
  * (`MARKET_LEAGUE_TEMPLATE`의 앞머리가 골키퍼 둘이라 시드에 GK가 없어도 명단이
  * 선다). 그래도 한 명은 있어야 그 리그의 `realSquads`가 사실이다 (team.md §4).
  */
-export const MIN_PARTIAL_SEED = 1;
+const MIN_PARTIAL_SEED = 1;
 
 /** 선발 인원 — 지정 선발은 이만큼을 적는다 */
 const STARTING_ELEVEN = 11;
@@ -358,14 +358,14 @@ export function checkSeedInvariants(
 }
 
 /** 완장 검사가 시드 한 줄에서 읽는 것 — 이름과 표식 둘 */
-export interface ArmbandSeed {
+interface ArmbandSeed {
   nameEn: string;
   isCaptain?: boolean;
   isViceCaptain?: boolean;
 }
 
 /**
- * **완장은 구단당 하나씩이고, 한 사람이 둘을 차지 않는다** (→ ../../../../docs/story/people.md §5-1).
+ * **완장은 구단당 하나씩이고, 한 사람이 둘을 차지 않는다** (→ ../../../../docs/people/people.md §5-1).
  *
  * 어긋나도 새 게임은 터지지 않는다 — 앞사람을 조용히 고르고 만다. 그래서 라커룸
  * 서사의 축이 누구인지가 시드 갱신 한 번에 바뀌고, 바뀐 줄을 아무도 못 본다.
@@ -450,7 +450,7 @@ export function checkPlayerNationality(
  * (`recordCard`가 조용히 돌아선다). 크래시가 아니라 **없는 규칙**이라, 새 대회를
  * 더한 사람이 알아채는 자리는 여기뿐이다.
  */
-export function checkDisciplineCoverage(
+function checkDisciplineCoverage(
   leagues: readonly LeagueCatalogEntry[],
   euroCups: readonly CupCatalogEntry[],
   domesticCups: readonly DomesticCupEntry[],
@@ -463,7 +463,7 @@ export function checkDisciplineCoverage(
   ];
   return playing
     .filter((id) => disciplineOf(id) === null)
-    .map((id) => `${id}: 징계 규정 없음 (data/discipline-catalog.ts)`);
+    .map((id) => `${id}: 징계 규정 없음 (core/catalog/discipline-catalog.ts)`);
 }
 
 /** 네 층을 한 번에 — 팀·리그가 함께 바뀌는 편집(팀 이동·리그 삭제)의 관문 */

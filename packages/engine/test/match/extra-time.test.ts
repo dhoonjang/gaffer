@@ -37,6 +37,7 @@ import {
   userPlayers,
   userSide,
   type GameState,
+  groupOf,
 } from "@story-fm/engine";
 import type {
   GamePlayer,
@@ -52,7 +53,6 @@ import {
   shootoutSettled,
   shootoutTally,
 } from "@story-fm/domain";
-import { groupOf } from "@story-fm/engine";
 import { applyEvents, liveFinished, matchFatigueOf, setPieceTakersOf } from "@story-fm/sim";
 import { createTestGame, simSquad, resultOf } from "../helpers";
 

@@ -11,7 +11,7 @@ import { prepareReportDir, writeReport, SUMMARY_FILE } from "./report";
  * 고르는 자리라, 몇 분을 쓰기 전에 한 화면을 먼저 준다.
  *
  * `--report <디렉터리>`는 측정값을 파일로도 남긴다 — 주간 워크플로가 읽는 자리다
- * (→ `docs/common/balance-harness.md` §5).
+ * (→ `docs/balance-harness.md` §5).
  */
 const args = process.argv.slice(2);
 

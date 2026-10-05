@@ -1,4 +1,10 @@
-import { ATTRIBUTE_AXES, playerOverall } from "@story-fm/domain";
+import {
+  ATTRIBUTE_AXES,
+  playerOverall,
+  tacticsSignature,
+  weightSlotOf,
+  type MatchEvent,
+} from "@story-fm/domain";
 import { describe, expect, it } from "vitest";
 import {
   advanceLiveMatch,
@@ -49,7 +55,6 @@ import {
   playPreseason,
   resultOf,
 } from "../helpers";
-import { tacticsSignature, weightSlotOf, type MatchEvent } from "@story-fm/domain";
 import {
   advanceLive,
   applyEvents,

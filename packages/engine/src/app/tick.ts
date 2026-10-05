@@ -1,9 +1,9 @@
 import { processWorldMarket } from "./workflows/world-market";
-import { dueMailReplies } from "../common/mail/mail";
-import { deliverCoreReportMail } from "./workflows/mail-reports";
-import { settleNegotiations } from "../negotiation/negotiation";
-import { repairNegotiationSquads } from "./workflows/negotiation-squad";
-import { expireStaffContracts } from "../story/people/staff-employment";
+import { dueMailReplies } from "../people/mail";
+import { deliverMedicalReportMail } from "../people/report-mail";
+import { settleNegotiations } from "../team/negotiation";
+import { repairNegotiationSquads } from "../team/negotiation-squad";
+import { expireStaffContracts } from "../people/staff-employment";
 import {
   playerOverall,
   type TickEvent,
@@ -32,8 +32,7 @@ import {
   type TurnOperation,
   sessionLoad,
 } from "@story-fm/domain";
-import { type TrainedSession } from "../story/players/training-report";
-import { restingOn, trainsWithFirstTeam } from "../story/players/training-report";
+import { type TrainedSession, restingOn, trainsWithFirstTeam } from "../players/training-report";
 import {
   type GameState,
   playerById,
@@ -56,11 +55,12 @@ import {
   formatClock,
   DAY_START,
   activeSuspensionFor,
-} from "../common/core/state";
-import { diffDays, dayOfWeek, addDays, MONDAY } from "../common/core/dates";
-import { makeRng } from "../common/core/rng";
-import { matchesOn, nextMatchFor } from "../common/core/calendar";
-import { cancelTrainingOn, syncDefaultTraining } from "../story/players/training-plan";
+  isAwayFromClub,
+} from "../core/state";
+import { diffDays, dayOfWeek, addDays, MONDAY } from "../core/dates";
+import { makeRng } from "../core/rng";
+import { matchesOn, nextMatchFor, isFriendly } from "../core/calendar";
+import { cancelTrainingOn, syncDefaultTraining } from "../players/training-plan";
 import {
   type RecoveryKind,
   dailyRecovery,
@@ -76,41 +76,40 @@ import {
   resolveInjuries,
   injuryProneness,
   TRAINING_INJURY_PER_SESSION,
-} from "../common/players/injury";
+  openInjuryFor,
+} from "../players/injury";
 import {
-  isAwayFromClub,
   breakStartingOn,
   openCallUps,
   breakEndingOn,
-} from "../match/competition/international";
-import { decayedForm, clampForm, formDeltaFromMatch } from "../common/players/form";
-import { tickOtherClubs, driftFamiliarity } from "../match/squad/other-clubs";
-import { settleCallUps } from "./workflows/match/competition/international";
-import { settleTactics } from "../match/commands/lineup";
-import { openInjuryFor } from "./workflows/match/health/injury";
-import { youthIntakeDeadline, settleYouthIntake, allMatchesDone, endSeason } from "./season";
+  settleCallUps,
+} from "../season/international";
+import { decayedForm, clampForm, formDeltaFromMatch } from "../players/form";
+import { tickOtherClubs, driftFamiliarity } from "../match/other-clubs";
+import { settleTactics } from "../team/lineup";
+import { allMatchesDone, endSeason } from "./season";
+import { youthIntakeDeadline, settleYouthIntake } from "../players/youth";
 import {
   runMonthlyFinance,
   ensureMonthlyPosted,
   payWeeklyWages,
   applyAiMatchFinance,
-} from "../common/finance/finance";
-import { applyMonthlyDevelopment } from "../story/players/development";
-import { reviewManagerContract } from "./workflows/story/world/manager-employment";
-import { expireStaleOffers } from "../story/world/manager-employment";
-import { tickBoardRequests } from "../common/finance/board-request";
-import { simSquadOf, simSquadFor } from "../match/squad/simulation";
-import { quickSimulate, quickSimKeyOf, quickSimOptionsOf, playedIn } from "../match/flow/quick-sim";
-import { isFriendly } from "../common/core/match-kinds";
-import { journal } from "../common/core/journal";
-import { matchRating } from "../match/flow/ratings";
-import { predictionsDue, standPredictions } from "../match/competition/prediction";
-import { recordCard } from "../match/flow/discipline";
-import { hasCups } from "../common/world/scope";
-import { advanceEuroKnockouts } from "./workflows/match/competition/euro-knockout";
-import { advanceDomesticCups } from "./workflows/match/competition/domestic-cup";
-import { advanceSuperCups } from "./workflows/match/competition/super-cup";
-import { competitionLabel } from "../common/data/cup-catalog";
+} from "../team/finance";
+import { applyMonthlyDevelopment } from "../players/development";
+import { reviewManagerContract } from "./workflows/manager-employment";
+import { expireStaleOffers } from "../people/manager-employment";
+import { tickBoardRequests } from "../team/board-request";
+import { simSquadOf, simSquadFor } from "../match/simulation";
+import { quickSimulate, quickSimKeyOf, quickSimOptionsOf, playedIn } from "../match/quick-sim";
+import { journal } from "../core/journal";
+import { matchRating } from "../match/ratings";
+import { predictionsDue, standPredictions } from "../season/prediction";
+import { recordCard } from "../match/discipline";
+import { hasCups } from "../core/catalog/scope";
+import { advanceEuroKnockouts } from "../season/euro-knockout";
+import { advanceDomesticCups } from "../season/domestic-cup";
+import { advanceSuperCups } from "../season/super-cup";
+import { competitionLabel } from "../core/catalog/cup-catalog";
 
 /**
  * 사건 배열의 계약은 `packages/domain`이 갖는다 — 화면도 코어도 같은 것을 읽는다
@@ -158,7 +157,7 @@ export interface AdvanceOutcome {
   stopped: "matchday" | "reached" | "season_end" | "blocked" | "attention";
 }
 
-export function entriesOn(state: GameState, date: string): ScheduleEntry[] {
+function entriesOn(state: GameState, date: string): ScheduleEntry[] {
   return state.schedule
     .filter((e) => e.date === date)
     .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
@@ -275,7 +274,7 @@ function dailyTick(
   for (const player of players) {
     /**
      * **오늘 이 선수가 우리 훈련장에 있었나** — 감독이 기간을 정해 뺐거나, 재활
-     * 중이거나, **대표팀에 가 있으면** 아니다 (season.md §4 · player.md §5.5 ·
+     * 중이거나, **대표팀에 가 있으면** 아니다 (training.md · player.md §5.5 ·
      * competition.md §5-1). 셋은 이유가 다르되 하루의 성격은 같다: 우리가 깐 세션을
      * 그가 소화하지 않았다. 잔고가 가장 빨리 빠지는 하루이고, 그 대신 전술 적응도는
      * 훈련장을 떠난 자리 쪽으로 끌린다 (player.md §7.4).
@@ -499,7 +498,7 @@ export function dueExpiryStage(left: number, warned: number | undefined): number
  *
  * @param final 시즌이 끝나는 tick — 이 뒤로 그 계약에 닿는 날이 없으니 남은 문턱을 낸다
  */
-export function warnExpiringContracts(state: GameState, digest: TickSink, final = false): void {
+function warnExpiringContracts(state: GameState, digest: TickSink, final = false): void {
   const squad = new Map(userPlayers(state).map((p) => [p.id, p]));
   for (const contract of state.contracts) {
     if (contract.status !== "active") continue;
@@ -858,7 +857,7 @@ function reserveXI(state: GameState, teamId: string): GamePlayer[] {
  * 벤치 없이 열한 명으로 90분을 굴린다(`simSquadFor`) — 교체가 없으니 출전자가 곧
  * 선발이고, 라인업이 그대로 출전 기록의 원본이다.
  */
-export function simulateReserveMatch(state: GameState, match: MatchRecord, digest: TickSink): void {
+function simulateReserveMatch(state: GameState, match: MatchRecord, digest: TickSink): void {
   /**
    * 2군 리그의 대회 id — 편성이 언제나 붙여 주지만(`reserveCompetitionId`), 없으면
    * 얹을 행이 없다. 축 없는 행에 2군 기록을 섞으면 그 행이 무엇의 합인지 사라진다.
@@ -1052,7 +1051,7 @@ export function advanceTime(
     );
     // 새 날은 하루의 시작으로 연다 — 장면의 시각은 날짜를 넘을 수 없다
     state.clock = DAY_START;
-    deliverCoreReportMail(state);
+    deliverMedicalReportMail(state);
     /**
      * 하루의 사실 — 이 날에 쌓인 사건과 소화된 훈련, 시계가 선 이유 (models.md §5-3).
      * 이 아래의 어느 `return`도 이 문을 지난다 — 멈춘 날이 기록에 없으면 멈춘 이유도 없다.
@@ -1190,7 +1189,7 @@ export interface SceneAdvance extends AdvanceOutcome {
  *
  * 시계가 도는 자리가 셋이라 날짜를 미는 규칙도 셋인데, 그 셋이 부르는 쪽에 흩어져
  * 있으면 한 갈래를 고칠 때마다 나머지 둘을 다시 읽어야 한다. 출처를 이름으로 받아
- * 규칙은 코어가 갖는다 (docs/common/llm/agents.md §2 「시계」).
+ * 규칙은 코어가 갖는다 (docs/agents/agents.md §2 「시계」).
  */
 export type ClockSource =
   /** 평시의 보통 턴 — 모델의 시점 헤더가 날짜까지 민다 */

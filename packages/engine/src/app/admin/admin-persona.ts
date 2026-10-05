@@ -3,9 +3,9 @@ import {
   clearPersonaBooks,
   readPersonaBooks,
   writePersonaBooks,
-} from "../../common/data/persona-override";
-import { namedCatalogBook } from "../../common/data/catalog-lorebook";
-import { personaCatalog } from "../../common/people/persona-catalog";
+} from "../../people/catalog/persona-override";
+import { namedCatalogBook } from "../../core/catalog/catalog-lorebook";
+import { personaCatalog } from "../../people/catalog/persona-catalog";
 import type { AdminResult } from "./admin";
 
 export interface AdminPersonaRow {

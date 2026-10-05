@@ -644,7 +644,7 @@ describe("오버라이드 파일 로드", () => {
   });
 });
 
-describe("1부 리그의 띠 — 리그 안에서 서로 갈린다 (ui/design-system.md §2)", () => {
+describe("1부 리그의 띠 — 리그 안에서 서로 갈린다 (web/design-system.md §2)", () => {
   it("어느 두 구단의 띠도 최소 거리보다 가깝지 않고, 어느 띠든 바닥 위 3:1이다", () => {
     const byLeague = new Map<string, Array<{ id: string; band: string }>>();
     for (const team of adminTeamCatalog()) {

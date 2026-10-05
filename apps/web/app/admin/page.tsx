@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { IconArrowLeft } from "@/domains/common/ui/icons";
+import { IconArrowLeft } from "@/shared/icons";
 import { useAdminCatalog } from "./catalog-store";
 import { CupsPanel } from "./cups-panel";
 import { LeaguesPanel } from "./leagues-panel";

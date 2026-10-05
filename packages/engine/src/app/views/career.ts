@@ -1,6 +1,6 @@
-import { openManagerOffers } from "../../story/world/manager-employment";
-import { tierOfTeamIn } from "../../common/core/club-tier";
-import { personaBookOf } from "../../common/people/lorebook";
+import { openManagerOffers } from "../../people/manager-employment";
+import { tierOfTeamIn } from "../../core/league-membership";
+import { personaBookOf } from "../../people/lorebook";
 import {
   type ClubTier,
   type GrowthOutlook,
@@ -12,21 +12,21 @@ import {
   naturalPositionOf,
   type AchievementCode,
 } from "@story-fm/domain";
-import { type CareerTotals } from "../../story/players/career";
-import { type GameState, teamNameIn } from "../../common/core/state";
-import { headCoachOf, staffOf } from "../../common/people/persona";
-import { ourYouthCandidates, youthIntakeDeadline } from "../season";
-import { youthCandidateFog } from "../../common/players/observation";
-import { managerTenureOf, managerTrophiesOf } from "../../match/competition/records";
-import { competitionName } from "../../common/data/cup-catalog";
-import { leagueName } from "../../common/data/league-catalog";
+import { type CareerTotals } from "../../players/career";
+import { type GameState, teamNameIn } from "../../core/state";
+import { headCoachOf, staffOf } from "../../people/persona";
+import { ourYouthCandidates, youthIntakeDeadline } from "../../players/youth";
+import { youthCandidateFog } from "../../players/observation";
+import { managerTenureOf, managerTrophiesOf } from "../../season/records";
+import { competitionName } from "../../core/catalog/cup-catalog";
+import { leagueName } from "../../core/catalog/league-catalog";
 
 /**
  * 커리어 한 묶음 — 시즌 행과 통산 행이 **같은 모양**이다. 표의 마지막 줄이
  * 위의 행들과 같은 열을 쓰므로, 화면이 통산만 따로 그리지 않아도 된다.
  *
  * 저장하지 않는다 — `SEASON_STAT` 전 행을 `foldCareer`로 접은 값이다
- * (→ docs/common/game-state.md §5). 평점은 **합계가 아니라 평균**을 싣는다:
+ * (→ docs/core/game-state.md §5). 평점은 **합계가 아니라 평균**을 싣는다:
  * 화면이 나눗셈을 다시 하면 코어와 다른 자리에서 반올림한다.
  */
 export interface CareerTotalsView {
@@ -56,7 +56,7 @@ export interface CareerSeasonView extends CareerTotalsView {
  * **여름의 유스 후보 한 줄** — 아직 계약하지 않은 사람이라 `SquadViewRow`가 아니다
  * (season.md §6). 층도 배치도 등번호도 없고, 대신 첫 프로 계약의 조건이 붙는다.
  */
-export interface YouthCandidateView {
+interface YouthCandidateView {
   /** 후보의 선수 id — `sign_youth`가 받는 그 값이다 */
   id: string;
   name: string;

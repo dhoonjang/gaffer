@@ -1,26 +1,26 @@
 import { josa, MatchStageSchema } from "@story-fm/domain";
-import { CUP_CATALOG_SEED, cupCatalog, type CupCatalogEntry } from "../../common/data/cup-catalog";
-import { asRecord } from "../../common/data/catalog-source";
+import { CUP_CATALOG_SEED, cupCatalog, type CupCatalogEntry } from "../../core/catalog/cup-catalog";
+import { asRecord } from "../../core/catalog/catalog-source";
 import {
   DOMESTIC_CUP_CATALOG_SEED,
   domesticCupCatalog,
   type DomesticCupEntry,
-} from "../../common/data/domestic-cup-catalog";
+} from "../../core/catalog/domestic-cup-catalog";
 import {
   clearCupOverride,
   isMonthDay,
   missingCupWindows,
   readCupOverride,
   writeCupOverride,
-} from "../../common/data/cup-override";
+} from "../../core/catalog/cup-override";
 import {
   LEAGUE_KINDS,
   leagueCatalog,
   resetLeagueCatalog,
   saveLeagueCatalog,
   type LeagueCatalogEntry,
-} from "../../common/data/league-catalog";
-import { teamCatalog } from "../../common/data/team-catalog";
+} from "../../core/catalog/league-catalog";
+import { teamCatalog } from "../../core/catalog/team-catalog";
 import {
   catalogWarnings,
   checkCatalogInvariants,
@@ -45,7 +45,7 @@ export interface AdminLeagueRow extends LeagueCatalogEntry {
 }
 
 export type AdminLeaguePatch = Partial<Omit<LeagueCatalogEntry, "id">>;
-export type AdminLeagueInput = LeagueCatalogEntry;
+type AdminLeagueInput = LeagueCatalogEntry;
 export type AdminCupPatch = Partial<Omit<CupCatalogEntry, "id">>;
 export type AdminDomesticCupPatch = Partial<Omit<DomesticCupEntry, "id">>;
 

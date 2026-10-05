@@ -13,8 +13,8 @@ import {
   journal,
 } from "@story-fm/engine";
 import { traceBoard, withGameUsage } from "@story-fm/llm";
-import { toPayload } from "@/application/lib/store";
-import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/application/lib/turn-runner";
+import { toPayload } from "@/game/store";
+import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
 const RequestSchema = z.preprocess(
   (raw) => {
