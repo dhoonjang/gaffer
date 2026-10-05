@@ -139,6 +139,11 @@ function unionNode(
   return { type: first.type, enum: values };
 }
 
+/**
+ * 객체 합집합 — 합친 `properties` 한 벌과, 갈래마다 **판별값과 필수 목록만** 든 `anyOf`.
+ * 갈래가 필드 정의를 다시 실으면 같은 조건 객체가 갈래 수만큼 모델에게 간다. 갈래 안의
+ * 필드는 바깥 `properties`의 정의를 그대로 따르므로 다른 값을 가진 필드만 갈래에 선다.
+ */
 function objectUnionNode(options: readonly z.ZodTypeAny[], preserveNulls: boolean): JsonSchemaNode {
   const variants = options.map((option) => derive(option, preserveNulls));
   const fields = new Map<string, unknown[]>();
@@ -155,17 +160,38 @@ function objectUnionNode(options: readonly z.ZodTypeAny[], preserveNulls: boolea
       fields.set(key, values);
     }
   }
+  const varying = new Set([...fields].filter(([, values]) => values.length > 1).map(([k]) => k));
   return {
     type: "object",
     properties: Object.fromEntries(
       [...fields].map(([key, values]) => [
         key,
-        values.length === 1 ? values[0] : { anyOf: values },
+        values.length === 1 ? values[0] : (constEnum(values) ?? { anyOf: values }),
       ]),
     ),
     ...(required.size ? { required: [...required] } : {}),
-    anyOf: variants,
+    anyOf: variants.map((variant) => {
+      const own = Object.entries(variant.properties as Record<string, unknown>).filter(([key]) =>
+        varying.has(key),
+      );
+      return {
+        type: "object",
+        ...(own.length ? { properties: Object.fromEntries(own) } : {}),
+        ...(variant.required ? { required: variant.required } : {}),
+      };
+    }),
   };
+}
+
+/** 같은 형의 `const`만 모였으면 열거 하나다 — 판별자 `kind`가 그 자리다 */
+function constEnum(values: readonly unknown[]): JsonSchemaNode | null {
+  const nodes = values as JsonSchemaNode[];
+  const type = nodes[0]?.type;
+  if (
+    !nodes.every((node) => "const" in node && node.type === type && Object.keys(node).length === 2)
+  )
+    return null;
+  return { type, enum: nodes.map((node) => node.const) };
 }
 
 function literalNode(value: unknown): JsonSchemaNode {
