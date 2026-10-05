@@ -34,7 +34,7 @@ export function PlayerContactActions({
     <>
       <button
         type="button"
-        className="pc-primary"
+        className="pc-secondary"
         disabled={blocked}
         data-testid="player-card-talk"
         onClick={() => {
