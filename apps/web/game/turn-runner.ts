@@ -15,14 +15,14 @@ import {
   turnDigestOf,
   type GameState,
   type SaveLockHandle,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   GmTurnFailure,
   compactHistory,
   operationLabel,
   runGmTurn,
   type TurnOperation,
-} from "@story-fm/agents";
+} from "@gaffer/agents";
 import {
   withGameUsage,
   bindTurnTrace,
@@ -32,8 +32,8 @@ import {
   traceEnabled,
   traceTurn,
   type LlmErrorKind,
-} from "@story-fm/llm";
-import type { BoardMove } from "@story-fm/domain";
+} from "@gaffer/llm";
+import type { BoardMove } from "@gaffer/domain";
 import { NextResponse } from "next/server";
 import { toPayload, type GamePayload } from "./store";
 import type { MatchBoardOrder } from "../shared/match-orders";
@@ -109,7 +109,7 @@ function boardMoveOf(order: MatchBoardOrder, before: number | null): BoardMove {
  * 않게 **읽고 → 고치고 → 쓰는 구간 전체**를 하나로 묶는다. 두 겹이다:
  *
  * 1. **프로세스 안 뮤텍스** — 여기 도착한 요청을 도착 순서대로 줄 세운다.
- * 2. **세이브 파일 락** — `<id>.lock` (`@story-fm/engine`의 `acquireSaveLock`).
+ * 2. **세이브 파일 락** — `<id>.lock` (`@gaffer/engine`의 `acquireSaveLock`).
  *    `next start` 인스턴스가 둘이면 1번은 서로를 모른다.
  *
  * **기다림에는 상한이 있고, 잠금은 시간으로 풀리지 않는다.** 상한을 넘긴 요청은

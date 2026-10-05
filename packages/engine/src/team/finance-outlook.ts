@@ -1,4 +1,4 @@
-import { ageOf, formatMoney, FINANCE_CATEGORY_KO } from "@story-fm/domain";
+import { ageOf, formatMoney, FINANCE_CATEGORY_KO } from "@gaffer/domain";
 import { financeOf, playersOf, weeklyWagesOf, type GameState } from "../core/state";
 import { diffDays } from "../core/dates";
 import {

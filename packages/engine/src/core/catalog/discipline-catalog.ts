@@ -9,7 +9,7 @@
  *
  * 값은 실제 규정을 그대로 옮긴 것이다 — 근거는 match.md §6에 적혀 있다.
  */
-import { YELLOWS_PER_SUSPENSION, type DisciplineRule, type Suspension } from "@story-fm/domain";
+import { YELLOWS_PER_SUSPENSION, type DisciplineRule, type Suspension } from "@gaffer/domain";
 import { competitionShortName } from "./cup-catalog";
 
 /** 관할 — 이 키를 나눠 갖는 대회들이 퇴장 정지를 함께 진다 */

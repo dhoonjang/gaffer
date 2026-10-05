@@ -26,7 +26,7 @@ import {
   type TurnRequest,
   type TurnResult,
   type TurnUsage,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 
 /**
  * 계측은 **순수 함수의 누적**이라 장부를 손으로 굴려 검증한다 —

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MEMORY_FADE_DAYS, familiarityForSetup, tacticsSignature } from "@story-fm/domain";
+import { MEMORY_FADE_DAYS, familiarityForSetup, tacticsSignature } from "@gaffer/domain";
 import {
   playersOf,
   setLineup,
@@ -9,7 +9,7 @@ import {
   assignmentsOf,
   memoryRetention,
   playerById,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame } from "../helpers";
 
 /**

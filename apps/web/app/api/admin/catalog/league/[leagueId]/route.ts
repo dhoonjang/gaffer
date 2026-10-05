@@ -6,7 +6,7 @@ import {
   adminRemoveLeague,
   adminUpdateLeague,
   isLeagueCatalogEdited,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 /** 모든 필드 optional — 보낸 것만 갱신한다 */

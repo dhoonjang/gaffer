@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildPlayerCard, loadGame } from "@story-fm/engine";
+import { buildPlayerCard, loadGame } from "@gaffer/engine";
 import { invalidGameId } from "@/app/api/games/game-id";
 
 /**

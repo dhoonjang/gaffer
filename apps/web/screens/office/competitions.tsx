@@ -8,8 +8,8 @@ import {
   leaderboardTitle,
   outcomeLabel,
   tacticWord,
-} from "@story-fm/domain";
-import type { OfficeViews } from "@story-fm/engine";
+} from "@gaffer/domain";
+import type { OfficeViews } from "@gaffer/engine";
 import { humanDate } from "@/shared/dateline";
 import { ratingTone } from "@/shared/scout-report-display";
 import { IconArrowLeft, IconArrowRight, IconChevron, IconTrophy } from "../../shared/icons";

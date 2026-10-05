@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { CatalogPlayerEditSchema } from "@story-fm/domain";
+import { CatalogPlayerEditSchema } from "@gaffer/domain";
 import {
   adminCatalog,
   adminEditCatalogPlayer,
   adminRemoveCatalogPlayer,
   isCatalogEdited,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 /** 카탈로그 선수 편집 */

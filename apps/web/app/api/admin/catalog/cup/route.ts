@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminCupCatalog, adminResetCupCatalog, isCupCatalogEdited } from "@story-fm/engine";
+import { adminCupCatalog, adminResetCupCatalog, isCupCatalogEdited } from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 /**

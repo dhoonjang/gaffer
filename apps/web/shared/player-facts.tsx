@@ -7,9 +7,9 @@ import {
   footLabel,
   formatRating,
   milestoneTitle,
-} from "@story-fm/domain";
-import type { Foot } from "@story-fm/domain";
-import type { CareerSeasonView, CareerTotalsView, MilestoneView } from "@story-fm/engine";
+} from "@gaffer/domain";
+import type { Foot } from "@gaffer/domain";
+import type { CareerSeasonView, CareerTotalsView, MilestoneView } from "@gaffer/engine";
 import { humanDate } from "@/shared/dateline";
 
 /**

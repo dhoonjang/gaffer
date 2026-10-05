@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { GameState, NegotiationActor } from "@story-fm/engine";
-import type { ProposalTerms } from "@story-fm/domain";
+import type { GameState, NegotiationActor } from "@gaffer/engine";
+import type { ProposalTerms } from "@gaffer/domain";
 import { addDays } from "../../src/core/dates";
 import {
   processWorldMarket,
@@ -34,7 +34,7 @@ import {
   repairNegotiationSquads,
   settleNegotiations,
   summarise,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createMiniGame, resultOf } from "../helpers";
 let base: GameState;
 beforeAll(() => {

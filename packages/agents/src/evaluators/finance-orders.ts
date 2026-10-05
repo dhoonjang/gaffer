@@ -1,4 +1,4 @@
-import { type GameState, describeBoardRequests, financeLookup } from "@story-fm/engine";
+import { type GameState, describeBoardRequests, financeLookup } from "@gaffer/engine";
 import { tagged } from "./orders-ops";
 import { buildRecentTurnsBlock } from "../shared/context";
 

@@ -6,7 +6,7 @@ import {
   type LorebookContent,
   type LorebookEntry,
   type LorebookInjection,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState, savedClubProfile, teamNameIn } from "../../core/state";
 import { leagueName } from "../../core/catalog/league-catalog";
 import { isFreeAgent } from "../../team/free-agency";

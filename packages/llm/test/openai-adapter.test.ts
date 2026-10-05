@@ -7,7 +7,7 @@ import {
   type GameToolSpec,
   type LlmErrorKind,
   type StopReason,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 
 const testConfig = {
   agent: "history-compactor" as const,

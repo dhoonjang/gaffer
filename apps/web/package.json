@@ -1,5 +1,5 @@
 {
-  "name": "@story-fm/web",
+  "name": "@gaffer/web",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -8,11 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
-    "@story-fm/agents": "workspace:*",
-    "@story-fm/domain": "workspace:*",
-    "@story-fm/engine": "workspace:*",
-    "@story-fm/llm": "workspace:*",
-    "@story-fm/sim": "workspace:*",
+    "@gaffer/agents": "workspace:*",
+    "@gaffer/domain": "workspace:*",
+    "@gaffer/engine": "workspace:*",
+    "@gaffer/llm": "workspace:*",
+    "@gaffer/sim": "workspace:*",
     "next": "^15.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

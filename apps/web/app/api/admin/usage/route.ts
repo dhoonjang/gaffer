@@ -11,8 +11,8 @@ import {
   llmUsageGameId,
   parseTokenBudget,
   type AgentName,
-} from "@story-fm/llm";
-import { resolveLlmMode } from "@story-fm/agents";
+} from "@gaffer/llm";
+import { resolveLlmMode } from "@gaffer/agents";
 import type { UsageAgentRow, UsageResponse } from "@/app/admin/types";
 
 /**

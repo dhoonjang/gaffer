@@ -29,7 +29,7 @@ import {
   LEADERBOARD_KEYS,
   type MatchEvent,
   type BoardMove,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   applyForManagerJob,
   offerManagerJob,
@@ -90,11 +90,11 @@ import {
   type CardMark,
   userSide,
   playerName,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 
 import { z } from "zod";
 import { type GmToolCall, type CommandReturn, recordCall } from "../shared/gm-types";
-import { type GameToolSpec, type ToolCallContext } from "@story-fm/llm";
+import { type GameToolSpec, type ToolCallContext } from "@gaffer/llm";
 import { skillDescriptions } from "./skill-descriptions";
 import { toToolSchema, inputError } from "../shared/tool-schema";
 import { createInstructionTool } from "./instructions";

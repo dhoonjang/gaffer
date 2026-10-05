@@ -4,7 +4,7 @@ import {
   type MatchRecord,
   isReserveMatch,
   seasonStartOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 시즌 캘린더 — 게임은 7월 1일(여름 이적창 개장)에 시작해 프리시즌을 보내고
@@ -53,7 +53,7 @@ export function openerSaturday(year: number): string {
   return d;
 }
 
-export { FIRST_SEASON } from "@story-fm/domain";
+export { FIRST_SEASON } from "@gaffer/domain";
 
 export function buildSeasonCalendar(season: number): SeasonCalendar {
   const year = seasonYear(season);

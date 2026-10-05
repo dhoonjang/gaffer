@@ -1,4 +1,4 @@
-import { cupLegMatchId, type MatchStage, type MatchRecord, type TickSink } from "@story-fm/domain";
+import { cupLegMatchId, type MatchStage, type MatchRecord, type TickSink } from "@gaffer/domain";
 import { type GameState, teamNameIn, teamShortNameIn } from "../core/state";
 import { tieLegsOf, stageMatchesOf, reportOurTie, registerUserEntries } from "./knockout";
 import { settledTieWinner, pairOf, resolveExtraTime, needsShootout } from "../match/extra-time";

@@ -1,8 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { ConditionRead } from "@story-fm/engine";
-import { conditionBand, FATIGUE_BAND_FLOOR } from "@story-fm/domain";
+import type { ConditionRead } from "@gaffer/engine";
+import { conditionBand, FATIGUE_BAND_FLOOR } from "@gaffer/domain";
 
 /** 두 색 토큰을 `share`(0~1)만큼 섞는다 — 0이면 `from`, 1이면 `to` */
 function mix(from: string, to: string, share: number): string {

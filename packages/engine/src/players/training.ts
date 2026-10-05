@@ -13,7 +13,7 @@ import {
   attributeAxisOf,
   positionGroupOf,
   ATTRIBUTE_AXES,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { pickOurPlayer, pickPlayerAmong } from "../core/player-ref";
 import { DEVELOPMENT_FOCUS_LIMIT, pruneDevelopmentFocus } from "./development";
 import { squadReturnOf, sortEntries } from "../core/calendar";

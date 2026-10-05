@@ -1,6 +1,6 @@
-import type { MatchEvent, ShootoutKick, ShootoutOutcome, ShotOrigin } from "@story-fm/domain";
-import { eventCauseText, formatScore, subCauseText } from "@story-fm/domain";
-import { BIG_CHANCE_XG } from "@story-fm/engine";
+import type { MatchEvent, ShootoutKick, ShootoutOutcome, ShotOrigin } from "@gaffer/domain";
+import { eventCauseText, formatScore, subCauseText } from "@gaffer/domain";
+import { BIG_CHANCE_XG } from "@gaffer/engine";
 
 /**
  * 사건 대본 — 장부에 앉은 사건을 매치 GM이 읽는 문장으로 옮긴다 (agents.md §3).

@@ -1,4 +1,4 @@
-import type { Player } from "@story-fm/domain";
+import type { Player } from "@gaffer/domain";
 
 /**
  * 파울·카드의 총량과 수신자 — **두 시뮬이 같은 상수와 같은 저울을 쓴다** (match.md §4.1).

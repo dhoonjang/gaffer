@@ -15,8 +15,8 @@ import {
   buildRatingBrief,
   finalizeMatch,
   pushNews,
-} from "@story-fm/engine";
-import { ATTRIBUTE_AXES, AXIS_KO } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { ATTRIBUTE_AXES, AXIS_KO } from "@gaffer/domain";
 import { agingDeclineLine } from "../shared/aging-line";
 import { TURN_EXCERPT_CHARS } from "../shared/context";
 import { ModelOutputError, retryOnce, anchorStands } from "../shared/retry";
@@ -28,7 +28,7 @@ import {
   type GameEvaluator,
   resolveLlmMode,
   createGameEvaluator,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { type GmToolCall } from "../shared/gm-types";
 
 /** Score API indices map to evenly spaced values inside existing core bounds. */

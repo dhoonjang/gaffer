@@ -21,8 +21,8 @@ import {
   userPlayers,
   PERSONAL_TRAINING_AIM,
   monthlyGrowthMultiplier,
-} from "@story-fm/engine";
-import { isUnder21, ATTRIBUTE_AXES, isReserveMatch, type AttributeAxis } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { isUnder21, ATTRIBUTE_AXES, isReserveMatch, type AttributeAxis } from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
 import { createTestGame, advanceAndPlay } from "../helpers";
 

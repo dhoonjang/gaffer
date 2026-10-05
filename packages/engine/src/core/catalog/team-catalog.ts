@@ -4,13 +4,13 @@ import type {
   ClubHonour,
   ClubColours,
   Formation,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 /**
  * 구단 카탈로그는 새 게임의 리그·체급·표시 정보를 소유한다.
  * 실선수 시드 적용과 절차 생성 분기는 catalog.ts의 buildFromSeed가 결정한다.
  * shortName은 리그 간 표시 충돌을 피하는 약어다. 숫자를 포함하는 약어도 허용한다.
  */
-import { DEFAULT_FORMATION, leagueTonesOf, separatedBandsOf } from "@story-fm/domain";
+import { DEFAULT_FORMATION, leagueTonesOf, separatedBandsOf } from "@gaffer/domain";
 import { CLUB_COLOURS } from "./club-colours";
 import {
   leagueCatalog,
@@ -90,7 +90,7 @@ export interface TeamCatalogEntry {
   colours?: ClubColours;
 }
 
-export type { ClubHonour } from "@story-fm/domain";
+export type { ClubHonour } from "@gaffer/domain";
 
 export type TacticalStyle = CatalogTacticalStyle;
 

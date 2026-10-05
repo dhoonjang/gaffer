@@ -15,9 +15,9 @@ import {
   playerCatalog,
   slugifyName,
   transitionSeason,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { describe, expect, it } from "vitest";
-import { type GamePlayer } from "@story-fm/domain";
+import { type GamePlayer } from "@gaffer/domain";
 import { pickOurPlayer } from "../../src/core/player-ref";
 import { advanceToMatchday, createTestGame } from "../helpers";
 

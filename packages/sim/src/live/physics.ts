@@ -1,5 +1,5 @@
-import type { FieldPoint, LiveAction, LivePlayer, Player } from "@story-fm/domain";
-import { FIELD, LIVE_STEP, RATING_MAX } from "@story-fm/domain";
+import type { FieldPoint, LiveAction, LivePlayer, Player } from "@gaffer/domain";
+import { FIELD, LIVE_STEP, RATING_MAX } from "@gaffer/domain";
 import { SPEED_BAND, conditionAfterLoad } from "../load";
 import { clamp, distance } from "./geometry";
 import {

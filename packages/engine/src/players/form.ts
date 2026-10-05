@@ -1,5 +1,5 @@
-import type { GamePlayer } from "@story-fm/domain";
-import { RATING_MAX } from "@story-fm/domain";
+import type { GamePlayer } from "@gaffer/domain";
+import { RATING_MAX } from "@gaffer/domain";
 
 /**
  * 폼은 경기 평점에 따른 개인 성과, 침착성에 따른 변동 폭, 일일 중앙 회귀로 갱신한다.

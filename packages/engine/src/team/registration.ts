@@ -3,8 +3,8 @@ import type {
   RegistrablePlayer,
   SquadRegistration,
   RegistrationBlock,
-} from "@story-fm/domain";
-import { canRegister, isUnder21, positionGroupOfPlayer, squadRegistration } from "@story-fm/domain";
+} from "@gaffer/domain";
+import { canRegister, isUnder21, positionGroupOfPlayer, squadRegistration } from "@gaffer/domain";
 
 import { seasonYear } from "../core/dates";
 import { countryOfTeam } from "../core/catalog/team-catalog";

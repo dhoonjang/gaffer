@@ -4,7 +4,7 @@ import { buildSeasonCalendar } from "../core/calendar";
 import { cupCatalog } from "../core/catalog/cup-catalog";
 import { topLeagueOfCountry } from "../core/catalog/league-catalog";
 import { domesticCupsOfCountry } from "../core/catalog/domestic-cup-catalog";
-import { type MatchRecord, cupLegMatchId, type TickSink, pushEvent, josa } from "@story-fm/domain";
+import { type MatchRecord, cupLegMatchId, type TickSink, pushEvent, josa } from "@gaffer/domain";
 import { type GameState, teamNameIn } from "../core/state";
 import { settledTieWinner, needsShootout, resolveExtraTime } from "../match/extra-time";
 import { resolveShootout } from "../match/shootout";

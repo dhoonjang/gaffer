@@ -16,7 +16,7 @@ import {
   recordEmptyTrainingReport,
   trainingSettled,
   applyTrainingOutcomes,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   attributeAxisOf,
   TRAINING_MARKS,
@@ -24,14 +24,14 @@ import {
   AXIS_KO,
   type AttributeAxis,
   type TrainingReport,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type EvaluationAnswer,
   type EvaluationRequest,
   type GameEvaluator,
   resolveLlmMode,
   createGameEvaluator,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { agingDeclineLine } from "../shared/aging-line";
 import { validatedAnswer, majorityChoice } from "../shared/evaluation-answers";
 import { ModelOutputError, retryOnce, anchorStands } from "../shared/retry";

@@ -18,7 +18,7 @@ import type {
   Player,
   ShotOrigin,
   WeightSlot,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   FIELD,
   LIVE_STEP,
@@ -26,7 +26,7 @@ import {
   otherSide,
   setPieceRoutineCount,
   weightSlotOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { makeRng } from "../rng";
 import { emptyStatLine } from "../match-ledger";
 import { matchAttribute, matchFactor, type LineupSlot } from "../match-ability";

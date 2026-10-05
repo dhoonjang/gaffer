@@ -1,4 +1,4 @@
-import { playerOverall } from "@story-fm/domain";
+import { playerOverall } from "@gaffer/domain";
 import { type GameState } from "../core/state";
 import { teamsOfLeagueIn, tierOfTeamIn } from "../core/league-membership";
 import { squadRatingsOf } from "../players/squad-depth";

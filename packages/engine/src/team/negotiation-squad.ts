@@ -1,10 +1,4 @@
-import {
-  anchorOf,
-  DEFAULT_FORMATION,
-  openSeats,
-  positionAtPoint,
-  presetOf,
-} from "@story-fm/domain";
+import { anchorOf, DEFAULT_FORMATION, openSeats, positionAtPoint, presetOf } from "@gaffer/domain";
 import { FAMILIARITY_BASELINE, managedTeamId, type GameState } from "../core/state";
 import { buildAssignments } from "../match/selection";
 import {

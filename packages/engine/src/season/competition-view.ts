@@ -15,7 +15,7 @@ import {
   PHASE_END,
   outcomeFor,
   isReserveMatch,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type LeaderBoard, type TeamStatRow, leaderboardsOf, teamStatsOf } from "./leaderboard";
 import { type GameState, teamNameIn, teamShortNameIn } from "../core/state";
 import { domesticCupById, DOMESTIC_STAGES } from "../core/catalog/domestic-cup-catalog";

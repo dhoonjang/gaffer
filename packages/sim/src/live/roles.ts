@@ -1,4 +1,4 @@
-import { defaultRoleOf, findRole, weightSlotOf, type WeightSlot } from "@story-fm/domain";
+import { defaultRoleOf, findRole, weightSlotOf, type WeightSlot } from "@gaffer/domain";
 
 /**
  * 역할 성향표 (live-match.md §4).

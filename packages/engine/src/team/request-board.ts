@@ -7,7 +7,7 @@ import {
   boardConditionAmountText,
   type BoardRequest,
   type RequestBoardInput,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState, managedTeamId } from "../core/state";
 import { boardExecutionError, describeAsk, tickBoardRequests } from "./board-request";
 

@@ -4,7 +4,7 @@ import {
   type AxisValues,
   ageOf,
   isReserveMatch,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   AXIS_AGING,
   rollMonthlyAxes,
@@ -18,7 +18,7 @@ import {
   squadLevelOf,
   transitionSeason,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { describe, expect, it } from "vitest";
 import { createTestGame } from "../test/helpers";
 import { playSeason } from "./season";

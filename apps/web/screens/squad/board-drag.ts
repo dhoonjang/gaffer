@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
-import { CHIP_SIZE, clampToBoard, type BoardPoint } from "@story-fm/domain";
+import { CHIP_SIZE, clampToBoard, type BoardPoint } from "@gaffer/domain";
 
 /** 이만큼 못 움직였으면 드래그가 아니라 탭이다 */
 const DRAG_THRESHOLD_PX = 4;

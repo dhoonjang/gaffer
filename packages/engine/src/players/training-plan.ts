@@ -9,7 +9,7 @@ import {
   type Slot,
   type TrainingSession,
   ATTRIBUTE_AXES,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { addDays, diffDays, dayOfWeek } from "../core/dates";
 import { squadReturnOf, sortEntries } from "../core/calendar";
 

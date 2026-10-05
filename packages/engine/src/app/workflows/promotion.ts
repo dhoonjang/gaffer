@@ -1,5 +1,5 @@
 import { type GameState, teamShortNameIn, teamNameIn, playersOf, groupOf } from "../../core/state";
-import { type TickSink, josa, type PositionGroup, type Contract } from "@story-fm/domain";
+import { type TickSink, josa, type PositionGroup, type Contract } from "@gaffer/domain";
 import {
   leagueOfTeamIn,
   hasRelegation,

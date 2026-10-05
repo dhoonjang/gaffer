@@ -1,6 +1,6 @@
-import { playerOverall } from "@story-fm/domain";
+import { playerOverall } from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
-import { quickSimulate, simSquadOf } from "@story-fm/engine";
+import { quickSimulate, simSquadOf } from "@gaffer/engine";
 import { createTestGame } from "../test/helpers";
 import { SIM_PARITY } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

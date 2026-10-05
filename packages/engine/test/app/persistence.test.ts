@@ -33,7 +33,7 @@ import {
   type GameListEntry,
   type GameSummary,
   type UnreadableGame,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame } from "../helpers";
 
 /**
@@ -65,12 +65,12 @@ function unreadableOf(id: string): UnreadableGame {
 let dir: string;
 
 beforeAll(() => {
-  dir = mkdtempSync(path.join(tmpdir(), "story-fm-persist-"));
-  process.env.STORY_FM_DATA_DIR = dir;
+  dir = mkdtempSync(path.join(tmpdir(), "gaffer-persist-"));
+  process.env.GAFFER_DATA_DIR = dir;
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
-  delete process.env.STORY_FM_DATA_DIR;
+  delete process.env.GAFFER_DATA_DIR;
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -813,7 +813,7 @@ describe("세이브 파일 락 — 프로세스 경계", () => {
               process.execPath,
               ["--import", "tsx", "--input-type=module", "-e", code],
               {
-                env: { ...process.env, STORY_FM_DATA_DIR: dataDir() },
+                env: { ...process.env, GAFFER_DATA_DIR: dataDir() },
                 stdio: ["ignore", "ignore", "pipe"],
               },
             );

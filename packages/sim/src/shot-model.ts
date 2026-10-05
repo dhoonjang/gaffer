@@ -1,5 +1,5 @@
-import { dlog, dsigmoid } from "@story-fm/domain";
-import type { Player } from "@story-fm/domain";
+import { dlog, dsigmoid } from "@gaffer/domain";
+import type { Player } from "@gaffer/domain";
 
 /** 슈팅 가중 리그 평균 75가 기회 xG를 그대로 실현하는 기준점. */
 const FINISHING_PIVOT = 75;

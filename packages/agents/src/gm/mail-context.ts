@@ -1,5 +1,5 @@
-import type { MailMessage } from "@story-fm/domain";
-import { buildMailView, mailMessageForViewer, type GameState } from "@story-fm/engine";
+import type { MailMessage } from "@gaffer/domain";
+import { buildMailView, mailMessageForViewer, type GameState } from "@gaffer/engine";
 
 export function mailAttachmentsContext(messages: readonly MailMessage[]): string {
   if (!messages.length) return "";

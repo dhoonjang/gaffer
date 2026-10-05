@@ -8,7 +8,7 @@ import {
   clubTonesOf,
   contrastRatio,
   type ClubColours,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { Crest, cachedCrest, clubWash } from "@/shared/crest";
 import type { CatalogLayer } from "./catalog-store";
 import type { AdminTeamRow, TeamCatalogResponse } from "./types";

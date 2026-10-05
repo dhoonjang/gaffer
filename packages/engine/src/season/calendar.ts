@@ -3,7 +3,7 @@ import {
   type MatchStage,
   type MatchRecord,
   type ScheduleEntry,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type SeasonCalendar,
   squadReturnOf,

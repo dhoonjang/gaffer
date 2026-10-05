@@ -1,5 +1,5 @@
-import { observedFit } from "@story-fm/domain";
-import type { OfficeViews } from "@story-fm/engine";
+import { observedFit } from "@gaffer/domain";
+import type { OfficeViews } from "@gaffer/engine";
 
 type SquadRow = OfficeViews["squad"]["players"][number];
 

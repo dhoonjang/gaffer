@@ -590,7 +590,7 @@ flowchart LR
 | `apps/web`        | 실행기(시계·정지·제출) · 화면 · 임대                                        |
 | `apps/match-cli`  | 화면 없는 실행기 하나                                                       |
 
-화면은 `@story-fm/sim`을 값으로 import한다. `@story-fm/engine`은 타입만이다
+화면은 `@gaffer/sim`을 값으로 import한다. `@gaffer/engine`은 타입만이다
 (AGENTS.md §5).
 
 ## 9. 사건 · 원인 · 검증

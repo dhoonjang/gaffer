@@ -8,7 +8,7 @@ import {
   parseGameVersion,
   parseLlmConfig,
   resolveApiKey,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 
 const yamlWith = (agents: string): string => `version: 1\nagents:\n${agents}`;
 

@@ -52,12 +52,6 @@ export function humanDate(iso: string, opts: HumanDateOptions = {}): string {
   return `${head}${parts.month}월 ${parts.day}일${tail}`;
 }
 
-/** `2026-07-18` + `09:30` → 「7월 18일 토 09:30」 — 시각이 없으면 날짜만 */
-export function humanDateTime(iso: string, hhmm?: string): string {
-  const date = humanDate(iso);
-  return hhmm ? `${date} ${hhmm}` : date;
-}
-
 /** `2027-06-30`·`2027-06` → 「2027년 6월」 */
 export function humanMonthYear(iso: string): string {
   const parts = partsOf(iso);

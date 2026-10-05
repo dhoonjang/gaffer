@@ -27,8 +27,8 @@ vi.mock("../../game/store", async (importOriginal) => {
 const reject = vi.fn();
 const editBook = vi.fn();
 
-vi.mock("@story-fm/agents", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@story-fm/agents")>();
+vi.mock("@gaffer/agents", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@gaffer/agents")>();
   return {
     ...actual,
     runGmTurn: (...args: unknown[]) => reject(...args),
@@ -36,8 +36,8 @@ vi.mock("@story-fm/agents", async (importOriginal) => {
   };
 });
 
-const { GmTurnFailure } = await import("@story-fm/agents");
-const { LlmCallError, LlmTimeoutError } = await import("@story-fm/llm");
+const { GmTurnFailure } = await import("@gaffer/agents");
+const { LlmCallError, LlmTimeoutError } = await import("@gaffer/llm");
 const { POST: createGame } = await import("../../app/api/games/route");
 const { GET: getGame } = await import("../../app/api/games/[id]/route");
 const { POST: postTurn } = await import("../../app/api/games/[id]/turn/stream/route");
@@ -92,7 +92,7 @@ async function drain(res: Response): Promise<void> {
 
 beforeAll(() => {
   process.env.LLM_MODE = "mock";
-  process.env.STORY_FM_DATA_DIR = mkdtempSync(path.join(tmpdir(), "story-fm-turnerr-"));
+  process.env.GAFFER_DATA_DIR = mkdtempSync(path.join(tmpdir(), "gaffer-turnerr-"));
 });
 
 describe("LLM 응답 실패", () => {
@@ -168,7 +168,7 @@ describe("LLM 응답 실패", () => {
     const dateBefore = game.date;
     // 도구가 시간을 흘린 뒤 모델이 실패하는 상황 — 진행이 남으면 안 된다
     reject.mockImplementationOnce(async (state: { date: string }) => {
-      const { advanceTime } = await import("@story-fm/engine");
+      const { advanceTime } = await import("@gaffer/engine");
       advanceTime(state as never, { days: 3 });
       throw new Error("overloaded");
     });
@@ -349,7 +349,7 @@ describe("기다리기를 멈춘 턴", () => {
 
 describe("비동기 로어북 저장", () => {
   it("같은 인물을 순서대로 편집하며 모델 대기 중 저장된 다른 턴도 보존한다", async () => {
-    const { loadGame, saveGame, requestCharacterUpdate } = await import("@story-fm/engine");
+    const { loadGame, saveGame, requestCharacterUpdate } = await import("@gaffer/engine");
     const { processLorebookJobs } = await import("../../game/lorebook-jobs");
     const { withGameLock } = await import("../../game/turn-runner");
     const game = await newGame();
@@ -358,7 +358,7 @@ describe("비동기 로어북 저장", () => {
     requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "첫 기록" });
     requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "다음 기록" });
     saveGame(state);
-    let finishFirst: (value: import("@story-fm/domain").LorebookEdit) => void = () => {
+    let finishFirst: (value: import("@gaffer/domain").LorebookEdit) => void = () => {
       throw new Error("편집이 시작되지 않았습니다");
     };
     let signalStarted: () => void = () => {};
@@ -373,7 +373,7 @@ describe("비동기 로어북 저장", () => {
         }),
     );
     editBook.mockImplementationOnce(
-      (existing: import("@story-fm/domain").LorebookEntry, extra: string) => ({
+      (existing: import("@gaffer/domain").LorebookEntry, extra: string) => ({
         keywords: [],
         description: "두번째 소개",
         information: `${existing.information} / ${extra}`,
@@ -402,7 +402,7 @@ describe("비동기 로어북 저장", () => {
     });
   });
   it("실패한 작업과 이후 같은 인물의 작업을 보존하고 다음 실행에서 재시도한다", async () => {
-    const { loadGame, saveGame, requestCharacterUpdate } = await import("@story-fm/engine");
+    const { loadGame, saveGame, requestCharacterUpdate } = await import("@gaffer/engine");
     const { processLorebookJobs } = await import("../../game/lorebook-jobs");
     const game = await newGame();
     const state = loadGame(game.id)!;
@@ -417,7 +417,7 @@ describe("비동기 로어북 저장", () => {
     expect(failed.lorebookJobs[0]).toMatchObject({ status: "failed", attempts: 1 });
     expect(failed.lorebook[0]).toEqual(entry);
     editBook.mockImplementation(
-      (existing: import("@story-fm/domain").LorebookEntry, extra: string) => ({
+      (existing: import("@gaffer/domain").LorebookEntry, extra: string) => ({
         keywords: [],
         description: existing.description,
         information: `${existing.information} / ${extra}`,

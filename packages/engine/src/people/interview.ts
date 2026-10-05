@@ -1,4 +1,4 @@
-import { InterviewOutcomeSchema } from "@story-fm/domain";
+import { InterviewOutcomeSchema } from "@gaffer/domain";
 import { pendingManagerInterviews, teamNameIn, type GameState } from "../core/state";
 import { managerTeam, settleInterview } from "./manager-employment";
 import type { CommandResult } from "../core/command-result";

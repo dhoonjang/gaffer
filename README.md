@@ -1,4 +1,4 @@
-# story-fm
+# Gaffer
 
 자연어로 팀을 지휘하고, 매 시즌을 이야기로 만들어 가는 AI 풋볼 매니저 게임입니다.
 선수와 세계의 상태는 코어가 결정적으로 관리하고, LLM은 감독의 지시를 해석해
@@ -49,8 +49,8 @@ mock 모드로 실행되며, 실제 LLM을 사용하려면 [`config/llm.yml`](co
   지연 위에서는 첫 로드가 눈에 띄게 느립니다.
 
   ```bash
-  pnpm --filter @story-fm/web build
-  pnpm --filter @story-fm/web start -p 3000
+  pnpm --filter @gaffer/web build
+  pnpm --filter @gaffer/web start -p 3000
   ```
 
   `NODE_ENV=production`이 되므로 `/admin`의 쓰기 라우트는 닫힙니다 —

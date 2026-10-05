@@ -1,5 +1,5 @@
-import type { MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@story-fm/domain";
-import { otherSide, weightSlotOf } from "@story-fm/domain";
+import type { MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@gaffer/domain";
+import { otherSide, weightSlotOf } from "@gaffer/domain";
 import {
   depthOf,
   playLiveToEnd,
@@ -7,8 +7,8 @@ import {
   sideStatLine,
   type LiveMatch,
   type LiveTickObserver,
-} from "@story-fm/sim";
-import { buildAiLiveMatch, leagueOfTeamIn, type GameState } from "@story-fm/engine";
+} from "@gaffer/sim";
+import { buildAiLiveMatch, leagueOfTeamIn, type GameState } from "@gaffer/engine";
 
 /**
  * 실시간 경기 하네스들이 같이 쓰는 실행기 — 두 AI 팀의 경기를 화면 없이 끝까지 굴리고

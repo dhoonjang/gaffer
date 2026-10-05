@@ -7,7 +7,7 @@ import {
   STAFF_ROLES,
   normalizeSpeaker,
   type GamePlayer,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { hireStaff, releaseStaff, staffPoolOf } from "../../src/people/staff-employment";
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -21,7 +21,6 @@ import {
   speakerRoles,
   ownerOf,
   generateOwner,
-  reportersOf,
   generateReporters,
   teamCatalog,
   personaBookOf,
@@ -31,7 +30,8 @@ import {
   syncLorebook,
   staffViews,
   worldFigures,
-} from "@story-fm/engine";
+  readPersona,
+} from "@gaffer/engine";
 import {
   factSpeakerOf,
   generateStaff,
@@ -339,6 +339,9 @@ describe("스태프 — 고용 정보를 든 인물 (people.md §2-2)", () => {
  * 없으면 GM이 즉흥으로 지어내 매번 다른 기자가 묻는다.
  */
 describe("기자 페르소나", () => {
+  const reportersOf = (state: ReturnType<typeof createTestGame>) =>
+    state.personas.filter((p) => p.role === "reporter").map((p) => readPersona(state, p));
+
   it("새 게임에 셋이 함께 만들어진다 — 결이 서로 다르다", () => {
     const state = createTestGame(5);
     const reporters = reportersOf(state);
@@ -634,9 +637,9 @@ describe("페르소나 키워드", () => {
 
 describe("로어북이 인물 서사의 유일한 원본이다", () => {
   it("카탈로그 편집은 시드 서술 전체를 대체하고 고용 사실을 보존한다", () => {
-    const previous = process.env.STORY_FM_DATA_DIR;
+    const previous = process.env.GAFFER_DATA_DIR;
     const directory = mkdtempSync(join(tmpdir(), "story-persona-override-"));
-    process.env.STORY_FM_DATA_DIR = directory;
+    process.env.GAFFER_DATA_DIR = directory;
     try {
       const original = generateHeadCoach(42, "arsenal", "2026-07-01");
       const book = {
@@ -655,8 +658,8 @@ describe("로어북이 인물 서사의 유일한 원본이다", () => {
       edited.lorebook.keywords.push("세이브 안에서만 변경");
       expect(generateHeadCoach(42, "arsenal", "2026-07-01").lorebook.keywords).toEqual(["별칭"]);
     } finally {
-      if (previous === undefined) delete process.env.STORY_FM_DATA_DIR;
-      else process.env.STORY_FM_DATA_DIR = previous;
+      if (previous === undefined) delete process.env.GAFFER_DATA_DIR;
+      else process.env.GAFFER_DATA_DIR = previous;
       rmSync(directory, { recursive: true, force: true });
     }
   });

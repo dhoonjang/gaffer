@@ -1,8 +1,8 @@
 import { after } from "next/server";
 import { processLorebookJobs } from "@/game/lorebook-jobs";
 import { z } from "zod";
-import { TurnOperationSchema } from "@story-fm/agents";
-import { llmErrorKind } from "@story-fm/llm";
+import { TurnOperationSchema } from "@gaffer/agents";
+import { llmErrorKind } from "@gaffer/llm";
 import { errorDetail, runTurnLocked, turnErrorMessage, turnErrorRetry } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
 import { MatchBoardOrderSchema } from "@/shared/match-orders";

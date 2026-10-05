@@ -21,7 +21,7 @@ import {
   type AchievementCode,
   type Achievement,
   achievementTitle,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { isTopLeague, leagueName } from "../core/catalog/league-catalog";
 
 /** 골잡이 조련사가 서는 문턱 — 이만큼 넣은 최다 득점자가 우리 팀에 있어야 한다 */

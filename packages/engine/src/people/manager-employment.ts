@@ -18,7 +18,7 @@ import {
   ageOf,
   formatMoney,
   naturalPositionOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { item, type CommandResult } from "../core/command-result";
 import {
   type CommandBrief,

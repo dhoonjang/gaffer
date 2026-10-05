@@ -5,7 +5,7 @@ import {
   SET_PIECE_ROLES,
   SetPieceRoutineSchema,
   type SetPieceRole,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   turnDigestOf,
   journal,
@@ -22,8 +22,8 @@ import {
   setTactics,
   shapeOfTactics,
   startingIdsOf,
-} from "@story-fm/engine";
-import { noteTurn, traceBoard } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { noteTurn, traceBoard } from "@gaffer/llm";
 import { toPayload } from "@/game/store";
 import { LOCK_WAIT_MS, busyResponse, withGameLock as withSaveLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";

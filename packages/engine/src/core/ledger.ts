@@ -1,4 +1,4 @@
-import type { FinanceCategory, LedgerEntry } from "@story-fm/domain";
+import type { FinanceCategory, LedgerEntry } from "@gaffer/domain";
 import { type GameState, financeOf } from "./state";
 
 // ── 원장 기록 ───────────────────────────────────────────

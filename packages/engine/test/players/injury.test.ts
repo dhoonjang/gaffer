@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEvents } from "@story-fm/sim";
+import { applyEvents } from "@gaffer/sim";
 import {
   leagueOfTeamIn,
   PRONENESS_BASE,
@@ -22,7 +22,7 @@ import {
   simSquadOf,
   startMatch,
   userSide,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { INJURY_HISTORY } from "../../src/players/catalog/injury-history";
 import { advanceToMatchday, createTestGame, playToFullTime } from "../helpers";
 

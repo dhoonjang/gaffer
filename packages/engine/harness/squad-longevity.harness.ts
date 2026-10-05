@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { playerOverall, ageOf } from "@story-fm/domain";
+import { playerOverall, ageOf } from "@gaffer/domain";
 import {
   activeContract,
   addDays,
@@ -14,8 +14,8 @@ import {
   settleYouthIntake,
   squadLevelOf,
   transitionSeason,
-} from "@story-fm/engine";
-import type { GameState } from "@story-fm/engine";
+} from "@gaffer/engine";
+import type { GameState } from "@gaffer/engine";
 import { createTestGame } from "../test/helpers";
 import { SQUAD_LONGEVITY } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

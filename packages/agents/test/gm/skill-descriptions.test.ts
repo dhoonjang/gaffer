@@ -26,7 +26,7 @@ import {
   outputAgents,
   toToolSchema,
   type OutputAgent,
-} from "@story-fm/agents";
+} from "@gaffer/agents";
 import {
   AGENT_NAMES,
   AnthropicGameLLM,
@@ -37,15 +37,15 @@ import {
   providerTraits,
   type LlmProvider,
   type GameToolSpec,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import {
   ATTRIBUTE_AXES,
   AXIS_KO,
   SET_PIECE_ROUTINE_AXES,
   SET_PIECE_ROUTINE_NEUTRAL,
   TACTIC_TOGGLES,
-} from "@story-fm/domain";
-import { AXIS_AGING, agingDelta, createGame } from "@story-fm/engine";
+} from "@gaffer/domain";
+import { AXIS_AGING, agingDelta, createGame } from "@gaffer/engine";
 
 /** 세계는 한 번만 세운다 — 여기서는 아무도 상태를 고치지 않는다 (`createGame`은 판당 수 초) */
 const STATE = (() => {

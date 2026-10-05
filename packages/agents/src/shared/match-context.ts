@@ -8,7 +8,7 @@ import {
   buildMatchView,
   pointsSeenBy,
   subLimitsOf,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   type MatchEvent,
   TACTIC_TOGGLES,
@@ -25,7 +25,7 @@ import {
   SET_PIECE_ROLE_KO,
   shootoutTally,
   formatScore,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { buildEventsBlock, scoreBeforeEvents } from "./match-script";
 
 /** 이번 턴 층의 `<events>` — 지난 턴 뒤 장부에 앉은 사건을 대본으로 */

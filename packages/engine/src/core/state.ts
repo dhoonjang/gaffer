@@ -18,7 +18,7 @@ import type {
   TeamFinance,
   TeamTactics,
   TrainingReport,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   playerOverall,
   FAMILIARITY_BASELINE,
@@ -27,8 +27,8 @@ import {
   competitionRowsOf,
   positionGroupOfPlayer,
   sumSeasonStats,
-} from "@story-fm/domain";
-import type { LiveMatch } from "@story-fm/sim";
+} from "@gaffer/domain";
+import type { LiveMatch } from "@gaffer/sim";
 import type { SeasonCalendar } from "./calendar";
 import { rankByName } from "./name-match";
 import { suspensionApplies } from "./catalog/discipline-catalog";
@@ -172,7 +172,7 @@ export interface ChatTurn {
    */
   events?: TickEvent[];
   /** Exact book snapshots sent with this input; UI does not render prompt metadata. */
-  lorebook?: import("@story-fm/domain").LorebookInjection[];
+  lorebook?: import("@gaffer/domain").LorebookInjection[];
   /**
    * **경기 중에 오간 말인가** — 이력에서 중계와 평시를 가르는 표식.
    *
@@ -284,14 +284,14 @@ export interface PendingMatch {
    * 조정이 깎은 값을 그 경기 한 번의 대응으로 되돌리기 위해서다.
    */
   tacticsBefore: {
-    spec: import("@story-fm/domain").TacticsSpec;
+    spec: import("@gaffer/domain").TacticsSpec;
     assignments: Array<{
       playerId: string;
       position: string;
-      point?: import("@story-fm/domain").BoardPoint;
+      point?: import("@gaffer/domain").BoardPoint;
       roleId?: string;
       familiarity: number;
-      roleMemo?: import("@story-fm/domain").RoleMemo;
+      roleMemo?: import("@gaffer/domain").RoleMemo;
     }>;
   };
   /**
@@ -684,13 +684,13 @@ export function squadFamiliarity(state: GameState, teamId: string): number {
  * 계산해야 하는데, 웹은 엔진(`node:fs` 의존)을 값으로 import할 수 없다.
  * 여기서 다시 내보내 엔진 소비자는 경로를 바꾸지 않는다.
  */
-export { FAMILIARITY_BASELINE, adaptationOf } from "@story-fm/domain";
+export { FAMILIARITY_BASELINE, adaptationOf } from "@gaffer/domain";
 
 /**
  * 이 선수가 그 포지션에서 갖는 적응도. 규칙은 domain의 `positionProficiency` 하나뿐
  * — 엔진·웹 전술판이 같은 값을 봐야 한다.
  */
-export { proficiencyAt } from "@story-fm/domain";
+export { proficiencyAt } from "@gaffer/domain";
 
 // ── 부상·징계·계약 ──────────────────────────────────────
 

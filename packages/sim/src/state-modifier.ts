@@ -1,4 +1,4 @@
-import type { PlayerState } from "@story-fm/domain";
+import type { PlayerState } from "@gaffer/domain";
 
 /**
  * 유효 능력치 = base × (1 + formMod + conditionMod)

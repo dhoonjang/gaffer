@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LorebookContentSchema, personaRoleLabel, type LorebookContent } from "@story-fm/domain";
-import type { AdminPersonaRow } from "@story-fm/engine";
+import { LorebookContentSchema, personaRoleLabel, type LorebookContent } from "@gaffer/domain";
+import type { AdminPersonaRow } from "@gaffer/engine";
 import { LorebookFields, lorebookInput } from "./lorebook-fields";
 import { Modal } from "./modal";
 

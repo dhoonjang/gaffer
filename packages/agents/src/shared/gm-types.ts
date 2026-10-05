@@ -1,5 +1,5 @@
-import type { TickEvent } from "@story-fm/domain";
-import type { CardMark, GoalMark, CommandBrief } from "@story-fm/engine";
+import type { TickEvent } from "@gaffer/domain";
+import type { CardMark, GoalMark, CommandBrief } from "@gaffer/engine";
 
 /** GM 턴 결과 — mock/실모드 공통 계약 */
 export interface GmToolCall {
@@ -148,7 +148,7 @@ export {
   operationLabel,
   TurnOperationSchema,
   type TurnOperation,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 헤더를 못 읽은 평시 턴이 이만큼 연달으면 **화면이 알아야 한다.**

@@ -1,7 +1,7 @@
 import { conditionAfterLoad } from "../src/load";
 import { makeRng } from "../src/rng";
 import { describe, expect, it } from "vitest";
-import type { MatchEvent } from "@story-fm/domain";
+import type { MatchEvent } from "@gaffer/domain";
 import {
   applyEvents,
   createLedger,
@@ -11,7 +11,7 @@ import {
   sampleShotXg,
   type ApplyResult,
   type MatchLedgerState,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import { makeLedgerSide, makeSquad } from "./helpers";
 
 const homeSquad = makeSquad("hm", 80);

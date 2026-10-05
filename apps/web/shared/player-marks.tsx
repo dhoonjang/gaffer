@@ -5,9 +5,8 @@ import {
   SET_PIECE_ROLES,
   SET_PIECE_ROLE_KO,
   formatRating,
-  positionProficiency,
   type SetPieceRole,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   IconCaptain,
   IconCorner,
@@ -19,23 +18,6 @@ import {
 import { humanDate } from "@/shared/dateline";
 
 import type { SetPieceTakersView, SquadRow } from "../screens/squad/types";
-
-/**
- * ── 표식들 — 명단·상세·전술판 칩이 **같은 것을 같은 모양으로** 말한다 ──────────
- *
- * 같은 숫자가 세 자리에 서므로, 그 셋이 각자 그리기 시작하면 같은 선수의 OVR이
- * 왼쪽과 오른쪽에서 달라 보인다. 여기 있는 것만 쓴다.
- */
-
-/**
- * 그 자리의 포지션 적응도(표시용) — 규칙은 domain의 `positionProficiency` 하나뿐이다.
- * 엔진(`proficiencyAt`)도 같은 함수를 부르므로 화면 값과 서버 값이 갈리지 않는다
- * (복제하면 조용히 어긋난다). 보유 목록에 없는 자리도 도메인이 결정적으로 값을 내므로
- * "정확/추정"을 나눌 이유가 없다 — 어느 쪽이든 같은 규칙으로 나온 같은 값이다.
- */
-export function fitAt(p: SquadRow, code: string): { value: number } {
-  return { value: positionProficiency(p.positions, code, p.foot) };
-}
 
 /**
  * 적응도 게이지의 색 — **10 단위**로 조금씩 옮겨 간다.

@@ -3,7 +3,7 @@ import {
   FINANCE_CATEGORY_KO,
   BOARD_REQUEST_LABEL,
   boardRequestAmountText,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type WageRatioTone,
   userReports,

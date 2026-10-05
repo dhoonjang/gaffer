@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import type { OfficeViews } from "@story-fm/engine";
+import type { OfficeViews } from "@gaffer/engine";
 import { seedMailNegotiation, seedFinishedSeason, seedSellerAgreement } from "./seed";
 import { COLD_MS } from "./timeouts";
 

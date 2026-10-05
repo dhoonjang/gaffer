@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ageOf, bestOverall, naturalPositionOf } from "@story-fm/domain";
+import { ageOf, bestOverall, naturalPositionOf } from "@gaffer/domain";
 import {
   activeContract,
   annualRevenueEstimate,
@@ -13,15 +13,13 @@ import {
   monthlyFixedCostOf,
   playerCatalog,
   playersOf,
-  positionAt,
   recomputeClubTiers,
-  relegationLine,
   RELEGATION_SLOTS,
   safetyLine,
   tierOfTeamIn,
   type GameState,
   type WageSubject,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createMiniGame, createTestGame } from "../helpers";
 
 /**
@@ -43,23 +41,17 @@ describe("리그 크기가 문턱을 정한다", () => {
   it("20팀·강등 3칸은 예전 값 그대로다", () => {
     expect(RELEGATION_SLOTS).toBe(3);
     expect(safetyLine(20)).toBe(17);
-    expect(relegationLine(20)).toBe(18);
     expect(leagueRounds(20)).toBe(38);
-    expect([0.3, 0.5, 0.7, 0.75, 0.9].map((f) => positionAt(20, f))).toEqual([6, 10, 14, 15, 18]);
   });
 
   it("18팀 리그는 같은 뜻이 두 칸 위에 앉는다", () => {
     // 분데스리가·리그 1의 17위는 강등이다 — 예전엔 그 자리가 "잔류 충족"이었다
     expect(safetyLine(18)).toBe(15);
-    expect(relegationLine(18)).toBe(16);
     expect(leagueRounds(18)).toBe(34);
-    expect([0.3, 0.5, 0.7, 0.75, 0.9].map((f) => positionAt(18, f))).toEqual([5, 9, 13, 14, 16]);
   });
 
-  it("리그가 강등 칸보다 작아도 자리가 1위 밖으로 나가지 않는다", () => {
+  it("리그가 강등 칸보다 작아도 잔류선이 1위 밖으로 나가지 않는다", () => {
     expect(safetyLine(2)).toBe(1);
-    expect(relegationLine(2)).toBe(2);
-    expect(positionAt(1, 0.9)).toBe(1);
   });
 });
 

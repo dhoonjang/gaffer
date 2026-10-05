@@ -3,8 +3,8 @@ import type {
   TacklingLevel,
   TacticsSpec,
   TransitionMode,
-} from "@story-fm/domain";
-import { TACTIC_SCALE_NEUTRAL, tacticToggleValue } from "@story-fm/domain";
+} from "@gaffer/domain";
+import { TACTIC_SCALE_NEUTRAL, tacticToggleValue } from "@gaffer/domain";
 import {
   AMBITION_PER_MENTALITY_STEP,
   BLOCK_FOLLOW_PER_STEP,

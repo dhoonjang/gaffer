@@ -1,4 +1,4 @@
-import type { Persona } from "@story-fm/domain";
+import type { Persona } from "@gaffer/domain";
 import { buildSeasonCalendar, FIRST_SEASON } from "../../core/calendar";
 import { catalogCacheKey } from "../../core/catalog/catalog-source";
 import { teamCatalog } from "../../core/catalog/team-catalog";

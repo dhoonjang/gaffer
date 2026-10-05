@@ -8,7 +8,7 @@ import {
   FIELD,
   LIVE_STEP,
   type WeightSlot,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   applySheet,
   emptyStatLine,
@@ -34,7 +34,7 @@ import {
   possessionOf,
   recentFlowOf,
   LIVE_TICKS_PER_SECOND,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import { makeLiveMatch } from "./helpers";
 
 describe("최근 흐름 — 실제 실행 구간만 집계한다", () => {

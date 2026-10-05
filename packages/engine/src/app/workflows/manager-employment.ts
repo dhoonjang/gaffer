@@ -16,7 +16,7 @@ import {
   type Dismissal,
   formatMoney,
   type ManagerOffer,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   openInterview,
   INTERVIEW_FACT_KO,

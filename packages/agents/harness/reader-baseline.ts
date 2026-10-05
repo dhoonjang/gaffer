@@ -1,13 +1,13 @@
 /** Harness-only prose baseline for recorded comparisons; never a production agent. */
-import { POINTS_MAX } from "@story-fm/engine";
+import { POINTS_MAX } from "@gaffer/engine";
 import {
   SHEET_SHAPES,
   SHEET_SHAPE_KO,
   roleVocabularyText,
   PointSchema,
   SheetLineSchema,
-} from "@story-fm/domain";
-import type { JsonObjectSchema } from "@story-fm/llm";
+} from "@gaffer/domain";
+import type { JsonObjectSchema } from "@gaffer/llm";
 import { z } from "zod";
 import { toToolSchema } from "../src/shared/tool-schema";
 import { SHEET_MAX, SHEET_LINES_PER_POINT } from "../src/evaluators/jev-match-reader";

@@ -9,7 +9,7 @@ import {
   MILESTONE_APP_STEPS,
   MILESTONE_GOAL_STEPS,
   HAT_TRICK_GOALS,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /** 그 선수의 원장 행 — 시즌 오름차순, 같은 시즌 안에서는 팀 id 순 */
 function statsOf(state: GameState, playerId: string): SeasonStat[] {

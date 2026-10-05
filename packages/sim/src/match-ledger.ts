@@ -1,4 +1,4 @@
-import type { MatchEvent, MatchPhase, MatchSide, MatchStatLine } from "@story-fm/domain";
+import type { MatchEvent, MatchPhase, MatchSide, MatchStatLine } from "@gaffer/domain";
 import {
   MATCHDAY_BENCH,
   PHASE_END,
@@ -7,7 +7,7 @@ import {
   isExtraTime,
   josa,
   josaOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 경기 장부 — 사건을 검증해 기록하는 결정적 코어 (match.md §5).

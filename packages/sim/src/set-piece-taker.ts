@@ -1,5 +1,5 @@
-import type { Player, PositionGroup, SetPieceTakers } from "@story-fm/domain";
-import { positionGroupOf, positionGroupOfPlayer } from "@story-fm/domain";
+import type { Player, PositionGroup, SetPieceTakers } from "@gaffer/domain";
+import { positionGroupOf, positionGroupOfPlayer } from "@gaffer/domain";
 import { penaltySkill } from "./shot-model";
 import type { LineupSlot } from "./match-ability";
 

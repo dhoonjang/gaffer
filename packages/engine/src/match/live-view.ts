@@ -12,7 +12,7 @@ import {
   seasonRating,
   eventCausesText,
   shootoutTally,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type ConditionRead, observationOf } from "../players/observation";
 import {
   type MatchLedgerState,
@@ -24,7 +24,7 @@ import {
   subLimitsOf,
   possessionOf,
   liveDigest,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import {
   type GameState,
   playerName,
@@ -118,7 +118,7 @@ interface MatchPlayerView {
   seasonRating: number | null;
   position: string;
   /** 경기가 계산에 사용한 실제 전술판 좌표. */
-  point?: import("@story-fm/domain").BoardPoint;
+  point?: import("@gaffer/domain").BoardPoint;
   /**
    * 이 자리에서 지금 내는 전력 (상태·적응도 반영) — **정수로 반올림해 넘긴다.**
    * 코어는 소수로 셈하지만 감독이 89.7과 89.6을 견줄 일은 없고, 명단의 OVR·

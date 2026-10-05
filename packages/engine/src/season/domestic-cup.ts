@@ -4,7 +4,7 @@ import {
   type TickSink,
   isReserveMatch,
   type MatchRecord,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { seasonDate, snapToWeekday, firstCupRoundFloor, cupBlankWeekend } from "./calendar";
 import {
   type DomesticCupEntry,

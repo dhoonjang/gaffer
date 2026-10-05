@@ -12,7 +12,7 @@ import {
   crestOf,
   leagueTonesOf,
   separatedBandsOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 /**
  * 96팀의 공식 색 — 엔진의 데이터 파일이지만 domain 타입만 가져오는 잎 모듈이라 엔진
  * 그래프를 끌어오지 않는다. 불변식은 색이 어디 살든 문장이 지켜야 하므로 여기서 잰다

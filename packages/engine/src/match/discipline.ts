@@ -3,7 +3,7 @@ import {
   yellowBanMatches,
   type DisciplineRule,
   type MatchRecord,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { ensureSeasonStat, playerById, seasonYellowsOf, type GameState } from "../core/state";
 import { competitionShortName } from "../core/catalog/cup-catalog";
 import { disciplineOf, JURISDICTION_KO } from "../core/catalog/discipline-catalog";

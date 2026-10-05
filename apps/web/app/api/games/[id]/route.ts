@@ -1,7 +1,7 @@
 import { processLorebookJobs } from "@/game/lorebook-jobs";
 import { after, NextResponse } from "next/server";
-import { noteTurn, traceBoard } from "@story-fm/llm";
-import { deleteGame, loadGame } from "@story-fm/engine";
+import { noteTurn, traceBoard } from "@gaffer/llm";
+import { deleteGame, loadGame } from "@gaffer/engine";
 import { toPayload } from "@/game/store";
 import { LOCK_WAIT_MS, busyResponse, withGameLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";

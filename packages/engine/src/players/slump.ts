@@ -1,6 +1,6 @@
 import { type GameState } from "../core/state";
 import { isFriendly } from "../core/calendar";
-import { isReserveMatch } from "@story-fm/domain";
+import { isReserveMatch } from "@gaffer/domain";
 
 /** 이번 시즌 공식 1군 경기의 최근 결과. 조회와 재정이 읽으며 폼을 바꾸지 않는다. */
 export function recentOutcomes(state: GameState, teamId: string, limit: number): MatchOutcome[] {
@@ -25,13 +25,3 @@ export function recentOutcomes(state: GameState, teamId: string, limit: number):
 }
 
 type MatchOutcome = "win" | "draw" | "loss";
-
-/** 맨 앞부터 같은 결과가 몇 번 이어지나 */
-export function streakOf(outcomes: readonly MatchOutcome[], kind: MatchOutcome): number {
-  let n = 0;
-  for (const o of outcomes) {
-    if (o !== kind) break;
-    n++;
-  }
-  return n;
-}

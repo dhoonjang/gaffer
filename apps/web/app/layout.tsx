@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "story-fm",
+  title: "Gaffer",
   description: "말로 지휘하는 AI 풋볼 매니저",
   /** `translate="no"`를 못 읽는 번역기에도 같은 말을 한다 */
   other: { google: "notranslate" },

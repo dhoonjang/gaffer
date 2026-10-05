@@ -1,5 +1,5 @@
 import { processMailReplies } from "../gm/mail-reply";
-import { diffDays, type TurnOperation } from "@story-fm/domain";
+import { diffDays, type TurnOperation } from "@gaffer/domain";
 import {
   MAX_REQUESTED_DAYS,
   managedTeamId,
@@ -12,7 +12,7 @@ import {
   type GameState,
   type SceneAdvance,
   type ScenePoint,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 
 function combine(before: AdvanceOutcome, after: AdvanceOutcome): AdvanceOutcome {
   return {

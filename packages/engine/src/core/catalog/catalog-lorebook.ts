@@ -1,5 +1,5 @@
-import type { LorebookContent, Persona } from "@story-fm/domain";
-import { personaRoleLabel } from "@story-fm/domain";
+import type { LorebookContent, Persona } from "@gaffer/domain";
+import { personaRoleLabel } from "@gaffer/domain";
 
 /** The catalog identity owns the name; prose and matching terms remain editable. */
 export function namedCatalogBook(name: string, book: LorebookContent): LorebookContent {

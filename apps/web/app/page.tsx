@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { ClubColours } from "@story-fm/domain";
+import type { ClubColours } from "@gaffer/domain";
 import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/shared/icons";
 import { GameListSkeleton } from "@/shared/skeleton";
 import { Crest, clubStyle } from "@/shared/crest";
@@ -96,7 +96,7 @@ export default function HomePage() {
             <IconMark size={30} />
           </span>
           <div>
-            <h1>story-fm</h1>
+            <h1>Gaffer</h1>
             <p className="tagline">말로 지휘하는 AI 풋볼 매니저</p>
           </div>
         </div>

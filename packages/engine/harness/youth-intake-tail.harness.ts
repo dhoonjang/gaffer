@@ -1,8 +1,8 @@
 import { TIER_BASE } from "../src/core/catalog/team-catalog";
 import { describe, expect, it } from "vitest";
-import { playerOverall, ageOf } from "@story-fm/domain";
-import { generateYouthPlayer, isClubTeam, transitionSeason } from "@story-fm/engine";
-import type { GameState } from "@story-fm/engine";
+import { playerOverall, ageOf } from "@gaffer/domain";
+import { generateYouthPlayer, isClubTeam, transitionSeason } from "@gaffer/engine";
+import type { GameState } from "@gaffer/engine";
 import { createTestGame } from "../test/helpers";
 import { YOUTH_INTAKE_TAIL } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

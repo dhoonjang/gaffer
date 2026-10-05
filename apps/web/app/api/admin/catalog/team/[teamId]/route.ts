@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { CatalogTeamEditSchema } from "@story-fm/domain";
+import { CatalogTeamEditSchema } from "@gaffer/domain";
 import {
   adminRemoveTeam,
   adminTeamCatalog,
   adminUpdateTeam,
   isTeamCatalogEdited,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 function payload(message: string) {

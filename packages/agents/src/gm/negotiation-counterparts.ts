@@ -1,5 +1,5 @@
-import type { Negotiation } from "@story-fm/domain";
-import { agentForPlayer, directorOf, personaBookOf, type GameState } from "@story-fm/engine";
+import type { Negotiation } from "@gaffer/domain";
+import { agentForPlayer, directorOf, personaBookOf, type GameState } from "@gaffer/engine";
 
 export function negotiationCounterparts(state: GameState, n: Negotiation) {
   return [

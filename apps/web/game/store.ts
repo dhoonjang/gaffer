@@ -10,9 +10,9 @@ import {
   type GameState,
   type OfficeViews,
   type ChatTurn,
-} from "@story-fm/engine";
-import { STALLED_CLOCK_TURNS } from "@story-fm/agents";
-import { type ClubColours } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { STALLED_CLOCK_TURNS } from "@gaffer/agents";
+import { type ClubColours } from "@gaffer/domain";
 import { buildPlayerNameIndex, playerIdsIn } from "../shared/player-names";
 
 /** 응답에 실을 장부 — 라우트가 **자기가 바꾼 것만** 고른다 */

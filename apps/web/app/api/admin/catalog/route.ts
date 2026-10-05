@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { CatalogPlayerCreateSchema } from "@story-fm/domain";
+import { CatalogPlayerCreateSchema } from "@gaffer/domain";
 import {
   adminAddCatalogPlayer,
   adminCatalog,
   adminResetCatalog,
   isCatalogEdited,
   CATALOG_AGE_REF,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 /**

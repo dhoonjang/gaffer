@@ -13,7 +13,7 @@ import {
   type SetPieceRole,
   type SetPieceRoutineKey,
   type SetPieceRoutineLevel,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { IconChevron } from "@/shared/icons";
 import type { SetPieceRoutineView, SetPieceTakersView, TacticsView } from "./types";
 

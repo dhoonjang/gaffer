@@ -11,7 +11,7 @@ import {
   type StoredPersona,
   type StaffPoolEntry,
   type StaffRole,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { addDays } from "../core/dates";
 import { makeRng, randInt, shuffled } from "../core/rng";
 import { teamNameIn, managedTeamId, financeOf, type GameState, weeklyWagesOf } from "../core/state";

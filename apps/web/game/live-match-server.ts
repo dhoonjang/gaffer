@@ -1,4 +1,4 @@
-import { STOP_EVENT_TYPES } from "@story-fm/domain";
+import { STOP_EVENT_TYPES } from "@gaffer/domain";
 import {
   awaitingShootout,
   advanceShootout,
@@ -10,8 +10,8 @@ import {
   syncLiveTactics,
   unseenEvents,
   type GameState,
-} from "@story-fm/engine";
-import { traceBoard } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { traceBoard } from "@gaffer/llm";
 import { applyMatchBoardOrder, LOCK_WAIT_MS, withGameLock } from "./turn-runner";
 import type { LiveAction, LiveSnapshot } from "../screens/match/live-match-protocol";
 import { toPayload } from "./store";

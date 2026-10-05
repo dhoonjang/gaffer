@@ -1,4 +1,4 @@
-import { type GamePlayer, isReserveMatch, ageOf } from "@story-fm/domain";
+import { type GamePlayer, isReserveMatch, ageOf } from "@gaffer/domain";
 import { derbyRecordOf } from "../../core/derby";
 import { derbyOf } from "../../core/catalog/derbies";
 import { outcomeFor, outcomeLabel } from "../views/attention";

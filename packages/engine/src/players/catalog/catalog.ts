@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import type { PlayerCatalogEntry, PlayerPosition, PositionGroup } from "@story-fm/domain";
+import type { PlayerCatalogEntry, PlayerPosition, PositionGroup } from "@gaffer/domain";
 import {
   PlayerCatalogEntrySchema,
   ageOf,
@@ -11,7 +11,7 @@ import {
   sideOf,
   weightSlotOf,
   type Foot,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { deriveAxes } from "./attributes";
 import { hashOf } from "../../core/catalog/name-hash";
 import { catalogPath, dataDir } from "../../core/catalog/paths";
@@ -28,7 +28,7 @@ import {
 } from "../../core/catalog/team-catalog";
 import { isMarketOnlyLeague } from "../../core/catalog/league-catalog";
 import { claimSyntheticName, syntheticNamePoolOf } from "../../core/catalog/names";
-import { makeRng, randInt } from "@story-fm/sim";
+import { makeRng, randInt } from "@gaffer/sim";
 import { claimPlayerId, slugifyName } from "../../core/catalog/player-id";
 import { catalogPlayerBook } from "./player-persona";
 import { namedCatalogBook } from "../../core/catalog/catalog-lorebook";

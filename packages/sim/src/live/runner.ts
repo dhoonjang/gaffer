@@ -13,7 +13,7 @@ import type {
   SetPieceTakers,
   SheetLine,
   TacticsSpec,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   CHECKPOINT_TICKS,
   LIVE_STEP,
@@ -22,7 +22,7 @@ import {
   STOP_EVENT_TYPES,
   otherSide,
   positionGroupOfPlayer,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { makeRng } from "../rng";
 import {
   addStats,

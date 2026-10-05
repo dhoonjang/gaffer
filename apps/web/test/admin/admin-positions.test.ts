@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminCatalog, derivePositions, leagueCatalog } from "@story-fm/engine";
+import { adminCatalog, derivePositions, leagueCatalog } from "@gaffer/engine";
 import { groupTeamsByLeague, splitPositions, type CatalogTeam } from "../../app/admin/types";
 
 /** 어드민 화면이 카탈로그를 읽는 순수 파생 — `app/admin/types` 한 모듈이 원본이다 */

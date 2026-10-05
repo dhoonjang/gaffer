@@ -6,8 +6,8 @@ import {
   naturalPositionOf,
   weightSlotOf,
   type WeightSlot,
-} from "@story-fm/domain";
-import { activeContract, computeStandings, type GameState } from "@story-fm/engine";
+} from "@gaffer/domain";
+import { activeContract, computeStandings, type GameState } from "@gaffer/engine";
 import { createTestGame } from "../test/helpers";
 import { potentialGapBand } from "../src/players/catalog/synthesis";
 import { OVERALL_SCALE } from "./catalog";

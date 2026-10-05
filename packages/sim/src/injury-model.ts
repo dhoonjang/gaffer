@@ -1,5 +1,5 @@
-import type { Player } from "@story-fm/domain";
-import { fatigueOf } from "@story-fm/domain";
+import type { Player } from "@gaffer/domain";
+import { fatigueOf } from "@gaffer/domain";
 
 /**
  * 부상의 총량과 저울 — **두 시뮬이 같은 상수와 같은 저울을 쓴다** (match.md §4.1).

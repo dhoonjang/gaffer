@@ -1,5 +1,5 @@
 import { FRIENDLY_LABEL } from "../core/catalog/cup-catalog";
-import { type MatchRecord } from "@story-fm/domain";
+import { type MatchRecord } from "@gaffer/domain";
 import { buildSeasonCalendar, squadReturnOf } from "../core/calendar";
 import { addDays } from "../core/dates";
 import { type WorldScope, scopedTeams } from "../core/catalog/scope";

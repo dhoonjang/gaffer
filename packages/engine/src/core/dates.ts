@@ -1,7 +1,7 @@
 /** 날짜·시각 유틸 — ISO 문자열(YYYY-MM-DD), 시간대 이슈를 피해 UTC로만 계산한다. */
 
 /** 날짜 차의 원본은 `packages/domain/src/core/date-string.ts`다 — 여기서는 재수출만 한다 */
-export { diffDays, seasonYear } from "@story-fm/domain";
+export { diffDays, seasonYear } from "@gaffer/domain";
 
 export function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);

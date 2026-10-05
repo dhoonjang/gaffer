@@ -9,7 +9,7 @@
  * 레일의 톤은 여기 없다. 색은 토큰이고 토큰은 CSS의 것이라
  * `.tick-event[data-kind=…]`가 갖는다 — 화면 코드에 hex도 `var(--…)`도 남기지 않는다.
  */
-import type { TickEventKind } from "@story-fm/domain";
+import type { TickEventKind } from "@gaffer/domain";
 import {
   IconContract,
   IconMatch,

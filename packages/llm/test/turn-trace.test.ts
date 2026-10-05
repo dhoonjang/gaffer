@@ -28,7 +28,7 @@ import {
   type TurnRequest,
   type TurnResult,
   type TurnUsage,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 
 /**
  * 기록 (models.md §5) — 계측과 같은 자리에 붙지만 세는 것이 아니라 **남기는** 것이라
@@ -64,15 +64,15 @@ let logDir: string;
 let dataDir: string;
 
 beforeEach(() => {
-  logDir = mkdtempSync(path.join(tmpdir(), "story-fm-log-"));
-  dataDir = mkdtempSync(path.join(tmpdir(), "story-fm-data-"));
-  process.env.STORY_FM_LOG_DIR = logDir;
-  process.env.STORY_FM_DATA_DIR = dataDir;
+  logDir = mkdtempSync(path.join(tmpdir(), "gaffer-log-"));
+  dataDir = mkdtempSync(path.join(tmpdir(), "gaffer-data-"));
+  process.env.GAFFER_LOG_DIR = logDir;
+  process.env.GAFFER_DATA_DIR = dataDir;
 });
 
 afterEach(() => {
-  delete process.env.STORY_FM_LOG_DIR;
-  delete process.env.STORY_FM_DATA_DIR;
+  delete process.env.GAFFER_LOG_DIR;
+  delete process.env.GAFFER_DATA_DIR;
   rmSync(logDir, { recursive: true, force: true });
   rmSync(dataDir, { recursive: true, force: true });
   vi.restoreAllMocks();
@@ -519,7 +519,7 @@ describe("저장소 — `.log` 창고", () => {
     );
 
     vi.resetModules();
-    const reloaded = await import("@story-fm/llm");
+    const reloaded = await import("@gaffer/llm");
     const calls = reloaded.turnTrace("g1", 3);
     expect(calls).toHaveLength(1);
     expect(calls[0]!.request.user).toBe("재시작 전");

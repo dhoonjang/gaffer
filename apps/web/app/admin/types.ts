@@ -1,11 +1,11 @@
-import type { AgentName } from "@story-fm/llm";
+import type { AgentName } from "@gaffer/llm";
 import {
   ATTRIBUTE_AXES,
   mirrorBaseOf,
   type AttributeAxis,
   type LorebookContent,
   type MatchStage,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type {
   AdminLeagueRow,
   AdminTeamRow,
@@ -13,7 +13,7 @@ import type {
   DomesticCupEntry,
   LeagueCatalogEntry,
   TacticalStyle,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 
 /**
  * 어드민 공용 타입 — `/api/admin/catalog*`가 돌려주는 모양 그대로.

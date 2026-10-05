@@ -1,5 +1,5 @@
 import { validatedAnswer, majorityChoice } from "../shared/evaluation-answers";
-import type { ChoiceQuestion, EvaluationQuestion } from "@story-fm/llm";
+import type { ChoiceQuestion, EvaluationQuestion } from "@gaffer/llm";
 import type {
   InstructionCommand,
   InstructionRequest,

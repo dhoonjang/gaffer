@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import AnthropicSdk from "@anthropic-ai/sdk";
 import type Anthropic from "@anthropic-ai/sdk";
-import { AnthropicGameLLM, llmErrorKind } from "@story-fm/llm";
-import type { GameToolSpec, LlmErrorKind, StopReason } from "@story-fm/llm";
+import { AnthropicGameLLM, llmErrorKind } from "@gaffer/llm";
+import type { GameToolSpec, LlmErrorKind, StopReason } from "@gaffer/llm";
 
 /** 모킹된 API 응답 시퀀스로 어댑터의 tool 재시도 루프를 검증한다 (LLM 호출 없음) */
 

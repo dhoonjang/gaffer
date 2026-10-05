@@ -1,5 +1,5 @@
-import type { MatchRecord, MatchStage, TickSink } from "@story-fm/domain";
-import { pushEvent } from "@story-fm/domain";
+import type { MatchRecord, MatchStage, TickSink } from "@gaffer/domain";
+import { pushEvent } from "@gaffer/domain";
 import { sortEntries } from "../core/calendar";
 import { pairOf } from "../match/extra-time";
 import { type GameState } from "../core/state";

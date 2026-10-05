@@ -1,8 +1,8 @@
 import { TACTIC_OPS } from "../evaluators/tactic-orders";
 import { TRAINING_OPS } from "../evaluators/training-orders";
 import { FINANCE_OPS } from "../evaluators/finance-orders";
-import type { MatchEvent, ShootoutOutcome } from "@story-fm/domain";
-import { contractEndForYears, eventCauseText, formatScore, shootoutTally } from "@story-fm/domain";
+import type { MatchEvent, ShootoutOutcome } from "@gaffer/domain";
+import { contractEndForYears, eventCauseText, formatScore, shootoutTally } from "@gaffer/domain";
 import {
   addDays,
   BIG_CHANCE_XG,
@@ -16,8 +16,8 @@ import {
   teamName,
   unseenEvents,
   type GameState,
-} from "@story-fm/engine";
-import type { ScriptedCall, ScriptedTurn } from "@story-fm/llm";
+} from "@gaffer/engine";
+import type { ScriptedCall, ScriptedTurn } from "@gaffer/llm";
 import { eventMinuteText, scoreBeforeEvents } from "../shared/match-script";
 import type { OpsInput } from "../evaluators/orders-ops";
 import { SUGGEST_REPLY_TAG } from "../shared/suggest-reply";

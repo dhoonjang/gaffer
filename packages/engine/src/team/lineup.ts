@@ -48,7 +48,7 @@ import {
   withCurrentDrilled,
   josa,
   josaOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type {
   BoardPoint,
   GamePlayer,
@@ -62,7 +62,7 @@ import type {
   SetPieceRoutineLevel,
   SetPieceTakers,
   TeamTactics,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   settleRoleCost,
   shelveFamiliarity,

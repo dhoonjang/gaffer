@@ -3,7 +3,7 @@ import { teamsOfLeagueIn, RELEGATION_SLOTS } from "../core/league-membership";
 import { computeStandings } from "./standings";
 import { makeRng } from "../core/rng";
 import { squadRating } from "../players/squad-depth";
-import { type PositionGroup } from "@story-fm/domain";
+import { type PositionGroup } from "@gaffer/domain";
 
 /**
  * 승강 — 1부 하위 세 팀과 그 나라 2부 상위 세 팀이 자리를 바꾼다.

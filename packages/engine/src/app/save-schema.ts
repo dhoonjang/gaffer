@@ -48,7 +48,7 @@ import {
   TrainingReportSchema,
   TrainingSessionSchema,
   TrophySchema,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { z } from "zod";
 
 /**

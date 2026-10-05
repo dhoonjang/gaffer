@@ -5,7 +5,7 @@
  * 흔들려도 닿아야 하되 **엉뚱한 사람을 조용히 골라서는 안 된다**: 명령은 상태를
  * 바꾸는 자리다. 갈리면 후보를 돌려 GM이 되묻게 한다.
  */
-import { josa, josaOf, type GamePlayer } from "@story-fm/domain";
+import { josa, josaOf, type GamePlayer } from "@gaffer/domain";
 import { playerById, resolvePlayerRef, userPlayers, type GameState } from "./state";
 
 /** 되물을 때 늘어놓는 후보 수 — 그 이상은 감독이 고를 목록이 아니다 */

@@ -1,4 +1,4 @@
-import { type ScheduleEntry, slotOfTime } from "@story-fm/domain";
+import { type ScheduleEntry, slotOfTime } from "@gaffer/domain";
 import { outcomeFor, outcomeLabel } from "../views/attention";
 import { pushRecordJournal, type CalendarEventView } from "../views/calendar";
 import { squadReturnOf } from "../../core/calendar";

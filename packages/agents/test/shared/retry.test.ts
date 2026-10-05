@@ -22,8 +22,8 @@ import {
   userPlayers,
   type TrainingBrief,
   type GameState,
-} from "@story-fm/engine";
-import { CharacterCandidateSchema, CHARACTER_CANDIDATES_MAX } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { CharacterCandidateSchema, CHARACTER_CANDIDATES_MAX } from "@gaffer/domain";
 import type {
   EvaluationResult,
   EvaluationRequest,
@@ -31,8 +31,8 @@ import type {
   GameLLM,
   JsonObjectSchema,
   TurnResult,
-} from "@story-fm/llm";
-import { LlmCallError, LlmTimeoutError, TokenBudgetExceededError } from "@story-fm/llm";
+} from "@gaffer/llm";
+import { LlmCallError, LlmTimeoutError, TokenBudgetExceededError } from "@gaffer/llm";
 import { z } from "zod";
 import { retryOnce, anchorStands, ModelOutputError, readOutput } from "../../src/shared/retry";
 import { agreement, costUsd, durationStats } from "../../harness/match-reader-eval-metrics";

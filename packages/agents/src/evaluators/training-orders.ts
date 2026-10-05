@@ -1,4 +1,4 @@
-import { type GameState, playerName, squadView } from "@story-fm/engine";
+import { type GameState, playerName, squadView } from "@gaffer/engine";
 import { tagged } from "./orders-ops";
 import { buildRecentTurnsBlock } from "../shared/context";
 

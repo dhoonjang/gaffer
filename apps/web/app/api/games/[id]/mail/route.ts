@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { MailUiSendSchema, MailRecipientSearchSchema } from "@story-fm/domain";
+import { MailUiSendSchema, MailRecipientSearchSchema } from "@gaffer/domain";
 import {
   buildMailView,
   searchMailRecipients,
@@ -11,8 +11,8 @@ import {
   loadGame,
   saveGame,
   journal,
-} from "@story-fm/engine";
-import { traceBoard, withGameUsage } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { traceBoard, withGameUsage } from "@gaffer/llm";
 import { toPayload } from "@/game/store";
 import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";

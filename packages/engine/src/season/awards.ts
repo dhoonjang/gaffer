@@ -11,7 +11,7 @@ import {
   pickMotm,
   awardTitle,
   awardDetail,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { seasonEndDate } from "../core/calendar";
 import {
   type LeagueTally,

@@ -15,7 +15,7 @@ import {
   naturalPositionOf,
   rolesFor,
   seasonRating,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { formatMoney } from "../../team/finance";
 import { observedPlayerFacts, type Knowledge } from "../../players/observation";
 import { suspensionScopeName } from "../../core/catalog/discipline-catalog";

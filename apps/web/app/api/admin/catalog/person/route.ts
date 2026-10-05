@@ -3,7 +3,7 @@ import {
   adminPersonaCatalog,
   adminResetPersonaCatalog,
   adminUpdatePersonaBook,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 function seedOf(request: Request): number | null {

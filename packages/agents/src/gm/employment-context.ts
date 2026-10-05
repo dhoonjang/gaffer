@@ -1,5 +1,5 @@
-import { type ManagerOffer, formatMoney, CLUB_TIER_KO } from "@story-fm/domain";
-import { teamName, type GameState, openManagerOffers } from "@story-fm/engine";
+import { type ManagerOffer, formatMoney, CLUB_TIER_KO } from "@gaffer/domain";
+import { teamName, type GameState, openManagerOffers } from "@gaffer/engine";
 
 /**
  * 제안이 부른 자리 — 어느 구단이 어떤 자리로 부르는가 (career.md §5.1).

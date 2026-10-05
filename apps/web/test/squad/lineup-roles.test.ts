@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadGame } from "@story-fm/engine";
+import { loadGame } from "@gaffer/engine";
 import { POST as createGame } from "../../app/api/games/route";
 import { POST as postLineup } from "../../app/api/games/[id]/lineup/route";
 import type { GamePayload, GameSlice } from "../../game/store";
@@ -52,7 +52,7 @@ const editsOf = (id: string) => loadGame(id)?.pendingEdits ?? [];
 
 beforeAll(() => {
   process.env.LLM_MODE = "mock";
-  process.env.STORY_FM_DATA_DIR = mkdtempSync(path.join(tmpdir(), "story-fm-lineup-roles-"));
+  process.env.GAFFER_DATA_DIR = mkdtempSync(path.join(tmpdir(), "gaffer-lineup-roles-"));
 });
 
 describe("라인업 저장 — 역할 반려", () => {

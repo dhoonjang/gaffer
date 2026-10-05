@@ -3,7 +3,7 @@ import {
   CharacterCandidateSchema,
   CHARACTER_CANDIDATES_MAX,
   type CharacterCandidate,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   HISTORY_DIGEST_CHARS,
   HISTORY_OPEN_CHARS,
@@ -12,8 +12,8 @@ import {
   characterCandidates,
   type GameState,
   type HistoryFoldBrief,
-} from "@story-fm/engine";
-import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@gaffer/llm";
 import { ModelOutputError, readOutput, retryOnce } from "../shared/retry";
 import { toToolSchema } from "../shared/tool-schema";
 

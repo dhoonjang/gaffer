@@ -1,7 +1,7 @@
 ---
 name: simulation
 description: >-
-  Play one full story-fm season as the manager of a fixed scenario through the
+  Play one full Gaffer season as the manager of a fixed scenario through the
   local web API — strictly one turn at a time, reading every answer before the
   next, and managing lineups, substitutions, positions, contracts, the board and
   the press the way a real manager does, while keeping a journal and turning
@@ -56,7 +56,7 @@ description: >-
   시뮬레이션의 의미가 없다 — 첫 장면의 서사가 규칙 문장으로만 오면 멈추고
   유저에게 말한다.
 - 기록은 기본 자리(`apps/web/.log` · `apps/web/.data`)에 남긴다.
-  `STORY_FM_DATA_DIR` · `STORY_FM_LOG_DIR`를 옮기지 않는다. **`.log`는 절대
+  `GAFFER_DATA_DIR` · `GAFFER_LOG_DIR`를 옮기지 않는다. **`.log`는 절대
   비우지 않는다.**
 
 ### 2-2. 작업 폴더와 환경
@@ -65,7 +65,7 @@ description: >-
 후속 명령에도 `SIM_DIR` · `SIM_HOST` · `SIM_GAME`과 `B`를 같은 값으로 전달한다.
 
 ```bash
-export SIM_DIR=$(mktemp -d /tmp/story-fm-simulation.XXXXXX)      # 상태 · 저널 · 요청 원문
+export SIM_DIR=$(mktemp -d /tmp/gaffer-simulation.XXXXXX)      # 상태 · 저널 · 요청 원문
 export SIM_HOST=http://localhost:3000
 B=.agents/skills/simulation/bin              # 이 스킬의 스크립트 다섯
 ```

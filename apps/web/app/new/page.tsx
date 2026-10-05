@@ -6,7 +6,7 @@ import Link from "next/link";
 import { IconArrowLeft } from "@/shared/icons";
 import { LeagueListSkeleton } from "@/shared/skeleton";
 import { Loading } from "@/shared/loading";
-import { CLUB_TIER_KO, type ClubColours, type ClubTier } from "@story-fm/domain";
+import { CLUB_TIER_KO, type ClubColours, type ClubTier } from "@gaffer/domain";
 import { Crest, clubStyle } from "@/shared/crest";
 
 interface TeamEntry {

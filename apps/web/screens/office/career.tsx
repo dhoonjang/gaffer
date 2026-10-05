@@ -1,13 +1,13 @@
 "use client";
 
-import type { OfficeViews } from "@story-fm/engine";
+import type { OfficeViews } from "@gaffer/engine";
 import {
   achievementTitle,
   awardTitle,
   CLUB_TIER_KO,
   formatMoney,
   formatRating,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { IconTrophy } from "@/shared/icons";
 import { contractUntil, humanDate } from "@/shared/dateline";
 

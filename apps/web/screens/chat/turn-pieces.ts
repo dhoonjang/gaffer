@@ -1,4 +1,4 @@
-import type { CardMark, GoalMark, ToolCallRecord } from "@story-fm/engine";
+import type { CardMark, GoalMark, ToolCallRecord } from "@gaffer/engine";
 
 /**
  * **표시는 그 일이 벌어진 자리에 선다.**

@@ -7,7 +7,7 @@ import {
   isReserveMatch,
   type SeasonLeagueTable,
   type SeasonMatchRow,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { competitionShortName, cupCatalog } from "../core/catalog/cup-catalog";
 import { seasonYear } from "../core/dates";
 import { domesticCupCatalog } from "../core/catalog/domestic-cup-catalog";

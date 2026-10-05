@@ -1,6 +1,6 @@
 import { affordableWageBill } from "./finance";
 import { reservedTransferPayments } from "./transfer-accounting";
-import { ageOf, type Negotiation, type ProposalTerms, totalTransferFee } from "@story-fm/domain";
+import { ageOf, type Negotiation, type ProposalTerms, totalTransferFee } from "@gaffer/domain";
 import { activeContract, financeOf, type GameState } from "../core/state";
 import { observedPlayerFacts } from "../players/observation";
 const DAYS_PER_YEAR = 365.25;

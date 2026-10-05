@@ -21,10 +21,10 @@ import {
   playerById,
   seasonLabelOf,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { competitionSeasonsOf } from "../../src/season/competition-view";
-import { playerOverall, FINANCE_CATEGORY_KO } from "@story-fm/domain";
-import { matchFatigueOf } from "@story-fm/sim";
+import { playerOverall, FINANCE_CATEGORY_KO } from "@gaffer/domain";
+import { matchFatigueOf } from "@gaffer/sim";
 import { observationOf } from "../../src/players/observation";
 import {
   advanceAndPlay,

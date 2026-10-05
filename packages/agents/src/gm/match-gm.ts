@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { type JsonObjectSchema, type GameEvaluator, type GameToolSpec } from "@story-fm/llm";
+import { type JsonObjectSchema, type GameEvaluator, type GameToolSpec } from "@gaffer/llm";
 import { MatchClosingSchema } from "../evaluators/match-closing";
 import { toToolSchema } from "../shared/tool-schema";
 import { type GmToolCall } from "../shared/gm-types";
-import { type GoalMark, type CardMark, type GameState, awaitingShootout } from "@story-fm/engine";
-import { type BoardMove } from "@story-fm/domain";
+import { type GoalMark, type CardMark, type GameState, awaitingShootout } from "@gaffer/engine";
+import { type BoardMove } from "@gaffer/domain";
 import { buildToolSpecs, dismissed } from "./gm-tools";
 import { createInstructionTool } from "./instructions";
 import { finalizeMatchTurn } from "../evaluators/finalize-match";

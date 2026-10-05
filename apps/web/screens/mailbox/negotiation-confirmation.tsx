@@ -6,7 +6,7 @@ import {
   proposalAgreed,
   type NegotiationAction,
   type ProposalTerms,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type { GamePayload } from "@/game/store";
 const money = (n: number) => `£${n.toLocaleString("en-GB")}`;
 const duration = (terms: ProposalTerms) => {

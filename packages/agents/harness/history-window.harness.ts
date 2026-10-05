@@ -12,11 +12,11 @@ import {
   peaceTurns,
   planHistoryFold,
   type GameState,
-} from "@story-fm/engine";
-import { buildGmHistory, buildGmReference } from "@story-fm/agents";
+} from "@gaffer/engine";
+import { buildGmHistory, buildGmReference } from "@gaffer/agents";
 // 최소 캐시 프리픽스 — 눈금의 주인은 설정이다. 여기 숫자를 다시 적으면 둘이 갈린다.
 // 프리픽스를 읽는 것은 `gm`이므로 문턱도 그 자리의 제공자에게 묻는다 (models.md §4)
-import { agentMinCacheableInput } from "@story-fm/llm";
+import { agentMinCacheableInput } from "@gaffer/llm";
 import { gmFixedLayer } from "./gm-fixed-layer";
 import { HISTORY_WINDOW } from "../../engine/harness/catalog";
 import { outOfBand, reportOf, type Readings } from "../../engine/harness/harness";

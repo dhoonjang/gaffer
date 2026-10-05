@@ -19,13 +19,13 @@ import { useCallback, useEffect, useRef } from "react";
 
 const SPLIT_MODES = {
   office: {
-    storageKey: "story-fm:stage-split",
+    storageKey: "gaffer:stage-split",
     property: "--split-user",
     initial: 0.5,
     label: "채팅과 오른쪽 칸의 경계",
   },
   match: {
-    storageKey: "story-fm:match-split",
+    storageKey: "gaffer:match-split",
     property: "--match-split-user",
     initial: 0.34,
     label: "경기장과 터치라인의 경계",

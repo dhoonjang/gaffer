@@ -1,5 +1,5 @@
-import type { AttributeAxis, PositionGroup } from "@story-fm/domain";
-import { AXIS_KO, applyFamiliarityGain, tacticalUptake } from "@story-fm/domain";
+import type { AttributeAxis, PositionGroup } from "@gaffer/domain";
+import { AXIS_KO, applyFamiliarityGain, tacticalUptake } from "@gaffer/domain";
 import { ensureSeasonStat, playerById, type GameState } from "../core/state";
 import { journal } from "../core/journal";
 import { MATCH_ATTR_CAP, applyAttributeStep } from "../players/attribute-growth";

@@ -1,4 +1,4 @@
-import type { Contract } from "@story-fm/domain";
+import type { Contract } from "@gaffer/domain";
 import type { GameState } from "../core/state";
 import { diffDays } from "../core/dates";
 import { recordFinance } from "../core/ledger";

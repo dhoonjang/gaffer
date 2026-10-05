@@ -19,7 +19,7 @@ import {
   observedFit,
   observedOverall,
   type GrowthOutlook,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type RecentRatingView,
   type SquadViewRow,
@@ -60,7 +60,7 @@ import { formLabel, formAngle, formTone } from "../../players/form";
 import { conditionShown } from "../../players/observation-view";
 import { squadStatusOf } from "../../players/contract-status";
 import { isHomegrownFor } from "../../team/registration";
-import { matchFatigueOf } from "@story-fm/sim";
+import { matchFatigueOf } from "@gaffer/sim";
 
 // ── 선수 카드 — 이름을 눌러 여는 한 장 (player.md §9.5) ──────
 

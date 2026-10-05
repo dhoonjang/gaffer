@@ -5,7 +5,7 @@ import {
   type GrowthOrigin,
   RATING_MAX,
   ageOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { attributeGainScale, attributeDeclineScale } from "./catalog/attributes";
 
 /**

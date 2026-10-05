@@ -12,9 +12,9 @@ import {
   requestBoard,
   tickBoardRequests,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { RequestBoardInput } from "@story-fm/domain";
+import type { RequestBoardInput } from "@gaffer/domain";
 import { createTestGame } from "../helpers";
 
 describe("board construction decisions and execution", () => {

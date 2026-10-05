@@ -1,5 +1,5 @@
 import { buildMailView } from "../../people/mail";
-import type { MailView, NegotiationView } from "@story-fm/domain";
+import type { MailView, NegotiationView } from "@gaffer/domain";
 import { buildNegotiationView } from "../../team/negotiation";
 import { type MatchView, buildMatchView } from "../../match/live-view";
 import { type SquadView, buildSquadView } from "./squad";
@@ -66,7 +66,7 @@ export interface OfficeViews {
  * 나오는 규칙이라 화면·조회·코치의 눈이 같은 판정을 쓴다 (AGENTS.md §5 「한 규칙,
  * 한 정의」). 여기서 다시 내보내므로 코어 쪽 호출자는 자리를 옮기지 않는다.
  */
-export { outcomeFor, outcomeLabel } from "@story-fm/domain";
+export { outcomeFor, outcomeLabel } from "@gaffer/domain";
 
 export function buildOfficeViews(state: GameState): OfficeViews;
 export function buildOfficeViews<K extends keyof OfficeViews>(

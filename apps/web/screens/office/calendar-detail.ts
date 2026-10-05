@@ -1,4 +1,4 @@
-import type { OfficeViews } from "@story-fm/engine";
+import type { OfficeViews } from "@gaffer/engine";
 
 /**
  * 달력 상세의 일정 한 줄 — **뷰가 준 조각을 조각대로 놓는다.**

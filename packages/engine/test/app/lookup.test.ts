@@ -21,8 +21,8 @@ import {
   teamsOfLeagueIn,
   userPlayers,
   type GameState,
-} from "@story-fm/engine";
-import { playerOverall, isReserveMatch } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { playerOverall, isReserveMatch } from "@gaffer/domain";
 import { createTestGame, resultOf } from "../helpers";
 
 /**

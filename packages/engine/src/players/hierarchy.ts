@@ -1,4 +1,4 @@
-import { compareCaptainCandidates } from "@story-fm/domain";
+import { compareCaptainCandidates } from "@gaffer/domain";
 import { playersOf, squadLevelOf, type GameState } from "../core/state";
 
 /** 부주장이 먼저 승계하며 지정이 없으면 1군에서 결정적으로 배정한다. */

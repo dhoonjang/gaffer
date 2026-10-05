@@ -19,8 +19,8 @@ import {
   injuryHistoryBrief,
   injuryHistoryText,
   physiqueLabel,
-} from "@story-fm/domain";
-import type { PlayerCardView } from "@story-fm/engine";
+} from "@gaffer/domain";
+import type { PlayerCardView } from "@gaffer/engine";
 import { useDialog } from "@/shared/use-dialog";
 import { contractUntil, humanDate } from "@/shared/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/shared/player-facts";

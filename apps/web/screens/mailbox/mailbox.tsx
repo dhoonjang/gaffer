@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
-import type { MailRecipient, MailRecipientCandidate, MailView } from "@story-fm/domain";
+import type { MailRecipient, MailRecipientCandidate, MailView } from "@gaffer/domain";
 import type { GamePayload } from "@/game/store";
 import {
   IconArrowLeft,

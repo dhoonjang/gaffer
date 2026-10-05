@@ -17,7 +17,7 @@ import {
   squadStatusRank,
   type PositionGroup,
   type RegistrablePlayer,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /** 등록 명단 규칙 (squad-rules.ts · player.md와 별개의 운영 규칙) */
 

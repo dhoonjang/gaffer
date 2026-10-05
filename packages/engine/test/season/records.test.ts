@@ -9,7 +9,7 @@ import {
   yellowBanMatches,
   type MatchRecord,
   type MatchStage,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { sortByChain, TOP_SCORER_ORDER, type LeagueTally } from "../../src/season/leaderboard";
 import { describe, expect, it } from "vitest";
 import {
@@ -26,8 +26,8 @@ import {
   seasonYellowsOf,
   userPlayers,
   type GameState,
-} from "@story-fm/engine";
-import type { SeasonStat } from "@story-fm/domain";
+} from "@gaffer/engine";
+import type { SeasonStat } from "@gaffer/domain";
 import { recordCard } from "../../src/match/discipline";
 import { advanceToMatchday, createTestGame, playMockMatch, playPreseason } from "../helpers";
 

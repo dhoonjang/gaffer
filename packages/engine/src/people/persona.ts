@@ -1,5 +1,5 @@
 import { storePersona, readPersona } from "./lorebook";
-import type { StoredPersona, LorebookEntry } from "@story-fm/domain";
+import type { StoredPersona, LorebookEntry } from "@gaffer/domain";
 import {
   playerOverall,
   CAPTAIN_ROLE_LABEL,
@@ -17,7 +17,7 @@ import {
   type StaffPoolEntry,
   personaKeywords,
   KEYWORD_MIN_LENGTH,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { realCoachNameOf } from "./catalog/coach-seeds";
 import { realOwnerNameOf } from "./catalog/owner-seeds";
 import { WORLD_FIGURE_SEEDS, type WorldFigureSeed } from "./catalog/world-figures";
@@ -1267,16 +1267,6 @@ export function ownerOf(state: {
   return readPersona(state, found);
 }
 
-/** 이 세이브의 기자단 — `personas`의 기자들 */
-export function reportersOf(state: {
-  personas: readonly StoredPersona[];
-  lorebook: LorebookEntry[];
-}): Persona[] {
-  return state.personas
-    .filter((p) => p.role === "reporter")
-    .map((persona) => readPersona(state, persona));
-}
-
 /**
  * 기자 원형 — **감독에게 질문하는 사람들.** 회견장에 앉는 얼굴이 매번 달라지면
  * 회견은 그냥 질문 목록이 된다. 같은 사람이 시즌 내내 같은 자리에서 물어야
@@ -1472,25 +1462,6 @@ export function agentForPlayer(
   const agents = worldFigures(state).filter((f) => f.role === "agent");
   if (agents.length === 0) return null;
   return pick(makeRng(state.seed, `agent-of:${playerId}`), agents);
-}
-
-/**
- * 그 라운드의 평가를 낸 해설 — **(시드, 시즌, 라운드)에서 결정적으로 뽑는다**
- * (people.md §4-1). 같은 세이브의 같은 라운드는 언제나 같은 사람이 말한다.
- *
- * `agentForPlayer`와 **같은 자리, 같은 규약**이다: 명부에서 역할 하나로 한 사람을
- * 뽑는 규칙은 여기 하나에 산다 (AGENTS.md §5). 명부에 해설이 한 사람도 없으면
- * `null`이다 — 표를 비우는 것이 곧 라이선스 청산이라(§2-1), 코어는 화자를 지어내지
- * 않고 그 갈래가 세계에서 조용히 사라진다.
- */
-export function punditForRound(
-  state: WorldFigureScope & { seed: number },
-  season: number,
-  round: number,
-): Persona | null {
-  const pundits = worldFigures(state).filter((f) => f.role === "pundit");
-  if (pundits.length === 0) return null;
-  return pick(makeRng(state.seed, `pundit:${season}:${round}`), pundits);
 }
 
 /**

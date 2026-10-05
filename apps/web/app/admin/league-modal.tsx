@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { josa } from "@story-fm/domain";
+import { josa } from "@gaffer/domain";
 import { Modal } from "./modal";
 import {
   LEAGUE_KINDS,

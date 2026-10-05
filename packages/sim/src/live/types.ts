@@ -7,7 +7,7 @@ import type {
   SetPieceRoutine,
   SetPieceTakers,
   TacticsSpec,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type { LineupSlot } from "../match-ability";
 import type { LiveSheet } from "../sheet";
 

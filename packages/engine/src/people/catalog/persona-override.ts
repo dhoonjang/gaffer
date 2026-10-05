@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LorebookContentSchema, type LorebookContent, type Persona } from "@story-fm/domain";
+import { LorebookContentSchema, type LorebookContent, type Persona } from "@gaffer/domain";
 import { personaCatalogPath } from "../../core/catalog/paths";
 import {
   catalogSource,

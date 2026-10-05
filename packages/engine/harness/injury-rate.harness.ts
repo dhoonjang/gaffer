@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { CONDITION_MAX, DEFAULT_TACTICS } from "@story-fm/domain";
-import { injuryRiskOf, matchIntensity, teamCardRate, teamInjuryRate } from "@story-fm/sim";
-import { leagueOfTeamIn, quickSimulate, simSquadOf, type SimSquad } from "@story-fm/engine";
-import type { InjuryRiskGrade } from "@story-fm/domain";
+import { CONDITION_MAX, DEFAULT_TACTICS } from "@gaffer/domain";
+import { injuryRiskOf, matchIntensity, teamCardRate, teamInjuryRate } from "@gaffer/sim";
+import { leagueOfTeamIn, quickSimulate, simSquadOf, type SimSquad } from "@gaffer/engine";
+import type { InjuryRiskGrade } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
 import { INJURY_RATE } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

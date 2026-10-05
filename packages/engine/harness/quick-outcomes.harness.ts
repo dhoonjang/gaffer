@@ -5,8 +5,8 @@ import {
   simSquadOf,
   quickSimulate,
   simulateExtraTime,
-} from "@story-fm/engine";
-import { positionGroupOfPlayer } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { positionGroupOfPlayer } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
 import { QUICK_OUTCOMES } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

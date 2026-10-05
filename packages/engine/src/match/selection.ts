@@ -1,4 +1,4 @@
-import type { Formation, GamePlayer, TacticAssignment } from "@story-fm/domain";
+import type { Formation, GamePlayer, TacticAssignment } from "@gaffer/domain";
 import {
   playerOverall,
   DEFAULT_FORMATION,
@@ -12,8 +12,8 @@ import {
   roleFit,
   proficiencyAt,
   positionGroupOfPlayer as groupOf,
-} from "@story-fm/domain";
-import { profFactor } from "@story-fm/sim";
+} from "@gaffer/domain";
+import { profFactor } from "@gaffer/sim";
 
 /** 슬롯 전체의 적합도 합이 최대가 되게 선수를 배치한다 (직사각형 Hungarian). */
 function fillSlots(
@@ -259,7 +259,7 @@ export function buildAssignments(
   preferred?: readonly string[],
   customLayout?: {
     slots: readonly string[];
-    points: readonly import("@story-fm/domain").BoardPoint[];
+    points: readonly import("@gaffer/domain").BoardPoint[];
   },
 ): TacticAssignment[] {
   // 프리셋은 새 게임 초기화 전용이다. 시즌 중 재구성은 저장된 실제 좌표를 넘긴다.

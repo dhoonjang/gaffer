@@ -44,7 +44,7 @@ import {
   type TurnRecord,
   type TurnTraceCall,
   type TurnUsage,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 
 /* ── 창고와 세이브의 자리 ────────────────────────────────────────── *
  * 기록은 `.log`, 플레이 데이터는 `.data` — 다른 디렉터리다. dev 서버는 `apps/web`에서
@@ -63,12 +63,12 @@ function resolveDir(env: string | undefined, candidates: readonly string[]): str
 }
 
 function resolveLogDir(): string | null {
-  return resolveDir(process.env.STORY_FM_LOG_DIR, [".log", path.join("apps", "web", ".log")]);
+  return resolveDir(process.env.GAFFER_LOG_DIR, [".log", path.join("apps", "web", ".log")]);
 }
 
 /** 세이브가 사는 곳 — `--games`가 「그 게임이 아직 있나」를 묻는 데만 쓴다 */
 function resolveDataDir(): string | null {
-  return resolveDir(process.env.STORY_FM_DATA_DIR, [".data", path.join("apps", "web", ".data")]);
+  return resolveDir(process.env.GAFFER_DATA_DIR, [".data", path.join("apps", "web", ".data")]);
 }
 
 /* ── 인자 ────────────────────────────────────────────────────────── */
@@ -903,12 +903,12 @@ function main(): number {
   const dir = resolveLogDir();
   if (dir === null) {
     console.error(
-      "로그 창고를 찾지 못했습니다 — `.log`도 `apps/web/.log`도 없습니다.\n아직 기록된 턴이 없거나, 다른 자리를 보려면 STORY_FM_LOG_DIR을 주세요.",
+      "로그 창고를 찾지 못했습니다 — `.log`도 `apps/web/.log`도 없습니다.\n아직 기록된 턴이 없거나, 다른 자리를 보려면 GAFFER_LOG_DIR을 주세요.",
     );
     return 1;
   }
   // 찾은 자리를 라이브러리에 그대로 물려준다 — 규칙은 `logDir()` 하나다
-  process.env.STORY_FM_LOG_DIR = dir;
+  process.env.GAFFER_LOG_DIR = dir;
 
   if (options.games) return printGames(resolveDataDir());
   if (options.facts !== null) return streamFacts(options);

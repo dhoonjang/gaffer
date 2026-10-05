@@ -5,14 +5,14 @@ import {
   fatigueOf,
   isReserveMatch,
   type TacticAssignment,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   dailyRecovery,
   fatigueAfterDay,
   fatigueDayOf,
   fatigueFromTraining,
   type RecoveryKind,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import { managedTeamId, openInjuryIds, type GameState, awayFromClubIds } from "../core/state";
 import { addDays } from "../core/dates";
 import { isClubTeam } from "../core/catalog/team-catalog";

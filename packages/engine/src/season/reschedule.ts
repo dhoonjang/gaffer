@@ -1,5 +1,5 @@
-import type { MatchRecord, TickSink } from "@story-fm/domain";
-import { pushEvent, isReserveMatch, josa } from "@story-fm/domain";
+import type { MatchRecord, TickSink } from "@gaffer/domain";
+import { pushEvent, isReserveMatch, josa } from "@gaffer/domain";
 
 import { addDays, dayOfWeek, tooClose } from "../core/dates";
 import { competitionShortName, isCup } from "../core/catalog/cup-catalog";

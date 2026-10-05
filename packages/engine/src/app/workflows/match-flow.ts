@@ -24,14 +24,14 @@ import {
   fatigueOf,
   clampCondition,
   compareMilestones,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type LiveMatch,
   applyEvents,
   possessionOf,
   matchFatigueOf,
   fatigueFromMinutes,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import { simSquadOf } from "../../match/simulation";
 import { serveSuspensions, simulateOtherMatches } from "../tick";
 import {

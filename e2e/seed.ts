@@ -14,8 +14,8 @@ import {
   openNegotiation,
   actNegotiation,
   buildNegotiationConfirmation,
-} from "@story-fm/engine";
-import { buildOnboardingTurn } from "@story-fm/agents";
+} from "@gaffer/engine";
+import { buildOnboardingTurn } from "@gaffer/agents";
 
 import { DATA_DIR } from "./slot";
 
@@ -32,7 +32,7 @@ import { DATA_DIR } from "./slot";
  *
  * ⚠️ 세이브는 서버가 읽는 디렉터리에 쓴다 — 슬롯이 그것을 가른다(`e2e/slot.ts`).
  */
-process.env.STORY_FM_DATA_DIR = DATA_DIR;
+process.env.GAFFER_DATA_DIR = DATA_DIR;
 
 /**
  * 시즌 완주용 세계 — **한 리그 20팀, 컵 없음.**

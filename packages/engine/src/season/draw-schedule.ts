@@ -1,4 +1,4 @@
-import type { MatchStage, ScheduleEntry } from "@story-fm/domain";
+import type { MatchStage, ScheduleEntry } from "@gaffer/domain";
 import { sortEntries } from "../core/calendar";
 import { competitionShortName, competitionStageName } from "../core/catalog/cup-catalog";
 import type { GameState } from "../core/state";

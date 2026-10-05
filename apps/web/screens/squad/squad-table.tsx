@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
-import { formatRating, josaOf } from "@story-fm/domain";
+import { formatRating, josaOf } from "@gaffer/domain";
 import { PlayerName } from "@/shared/player-card";
 import { ConditionBar } from "@/shared/condition-bar";
 import { IconChevron, IconChevronUp } from "@/shared/icons";

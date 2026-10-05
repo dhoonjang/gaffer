@@ -7,7 +7,7 @@ import {
   clubHonoursLine,
   savedClubProfile,
   teamName,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 
 /**
  * 감독 — 이름과 화자 태그는 속성, 배경은 본문. 세이브당 고정인 것만이다.

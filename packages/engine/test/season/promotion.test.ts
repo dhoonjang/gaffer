@@ -9,8 +9,8 @@ import {
   teamsOfLeagueIn,
   transitionSeason,
   type GameState,
-} from "@story-fm/engine";
-import { playerOverall, positionGroupOfPlayer } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { playerOverall, positionGroupOfPlayer } from "@gaffer/domain";
 import { createMiniGame, createTestGame, resultOf } from "../helpers";
 
 /**

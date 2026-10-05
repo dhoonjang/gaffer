@@ -6,13 +6,13 @@ import {
   POINT_TEXT_MAX,
   type Point,
   type SheetLine,
-} from "@story-fm/domain";
-import type { GameEvaluator, JsonObjectSchema, ScoreQuestion } from "@story-fm/llm";
+} from "@gaffer/domain";
+import type { GameEvaluator, JsonObjectSchema, ScoreQuestion } from "@gaffer/llm";
 import { interpretInstructions } from "./instruction-compiler";
 import type { InstructionRequest } from "./instruction-contract";
 import type { OpsOrders } from "./orders-ops";
 import { toToolSchema } from "../shared/tool-schema";
-import { POINTS_MAX } from "@story-fm/engine";
+import { POINTS_MAX } from "@gaffer/engine";
 
 /** At most three effect rows per source point. */
 export const SHEET_LINES_PER_POINT = 3;

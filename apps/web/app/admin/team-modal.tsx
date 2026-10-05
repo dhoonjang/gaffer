@@ -9,7 +9,7 @@ import {
   josa,
   type Formation,
   type LorebookContent,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { Modal } from "./modal";
 import { LorebookFields, lorebookInput } from "./lorebook-fields";
 import {

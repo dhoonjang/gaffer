@@ -1,5 +1,5 @@
-import type { LeaderboardKey } from "@story-fm/domain";
-import { LEADERBOARD_KEYS, ageOf, disciplinePoints, seasonRating } from "@story-fm/domain";
+import type { LeaderboardKey } from "@gaffer/domain";
+import { LEADERBOARD_KEYS, ageOf, disciplinePoints, seasonRating } from "@gaffer/domain";
 import { computeStandings, countsInStandings } from "./standings";
 import { leagueTableOf } from "./records";
 import { teamShortNameIn, type GameState } from "../core/state";

@@ -45,8 +45,8 @@ import {
   finalWeekdays,
   postponeMatch,
   type GameState,
-} from "@story-fm/engine";
-import { type MatchRecord } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { type MatchRecord } from "@gaffer/domain";
 import { createTestGame, userFixtureCount, keepSeat, settleMatchdayQuick } from "../helpers";
 
 /**

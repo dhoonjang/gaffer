@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GamePlayer } from "@story-fm/domain";
+import type { GamePlayer } from "@gaffer/domain";
 import {
   leagueOfTeamIn,
   FAMILIARITY_DRIFT_CAP,
@@ -12,9 +12,9 @@ import {
   simSquadOf,
   tickOtherClubs,
   type GameState,
-} from "@story-fm/engine";
-import { playerOverall, applyFamiliarityGain } from "@story-fm/domain";
-import { dailyRecovery } from "@story-fm/sim";
+} from "@gaffer/engine";
+import { playerOverall, applyFamiliarityGain } from "@gaffer/domain";
+import { dailyRecovery } from "@gaffer/sim";
 import { createTestGame, playMockMatch } from "../helpers";
 
 /**

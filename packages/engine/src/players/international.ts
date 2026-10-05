@@ -1,7 +1,7 @@
 import { seasonYear, diffDays } from "../core/dates";
 import { INTERNATIONAL_BREAKS } from "../core/calendar";
 import { type GameState } from "../core/state";
-import { type CallUp } from "@story-fm/domain";
+import { type CallUp } from "@gaffer/domain";
 
 /**
  * **대표팀 소집 — 휴식기는 빈 주말이 아니라 사건이다**

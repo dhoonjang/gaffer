@@ -11,7 +11,7 @@ import {
   positionGroupOfPlayer,
   presetOf,
   naturalPositionOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   advanceTime,
   assembleUserLineup,

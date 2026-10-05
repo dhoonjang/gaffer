@@ -12,14 +12,14 @@ import {
   runGmTurn,
   sanitizeCasterText,
   sanitizeSceneText,
-} from "@story-fm/agents";
+} from "@gaffer/agents";
 import {
   advanceTime,
   buildTrainingBrief,
   createGame,
   userPlayers,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { gmFixedLayer } from "./gm-fixed-layer";
 import { PROMPT_REGRESSION } from "../../engine/harness/catalog";
 import { outOfBand, reportOf, type Readings } from "../../engine/harness/harness";

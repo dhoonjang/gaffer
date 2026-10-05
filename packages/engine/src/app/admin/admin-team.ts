@@ -4,7 +4,7 @@ import {
   CatalogTeamInputSchema,
   type LorebookContent,
   type Formation,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { catalogPath } from "../../core/catalog/paths";
 import {
   CLUB_PROFILES_SEED,

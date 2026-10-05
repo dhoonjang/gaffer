@@ -5,7 +5,7 @@ import {
   josaOf,
   competitionRowsOf,
   naturalPositionOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { rankByName } from "../../core/name-match";
 import { careerOf, type CareerTotals } from "../../players/career";
 import { competitionName, competitionShortName } from "../../core/catalog/cup-catalog";

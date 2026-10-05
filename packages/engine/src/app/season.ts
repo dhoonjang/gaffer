@@ -43,7 +43,7 @@ import {
   presetOf,
   DEFAULT_FORMATION,
   positionAtPoint,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { leagueName, isCupOnlyLeague } from "../core/catalog/league-catalog";
 import { buildSeasonCalendar, squadReturnOf } from "../core/calendar";
 import {

@@ -10,7 +10,7 @@ import type {
   TeamFinance,
   RegistrablePlayer,
   TeamTactics,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   playerOverall,
   freshPlayerState,
@@ -24,7 +24,7 @@ import {
   FORMATION_SLOTS,
   positionGroupOfPlayer,
   initialCaptainOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { buildScheduleEntries } from "../season/calendar";
 import { buildSeasonCalendar, FIRST_SEASON } from "../core/calendar";
 import { contractUntil, seasonYear } from "../core/dates";
@@ -441,7 +441,7 @@ function buildInitialSquads(
 function initialTactics(
   teamId: string,
   formation: Formation,
-): import("@story-fm/domain").TacticsSpec {
+): import("@gaffer/domain").TacticsSpec {
   switch (tacticalStyleOf(teamId)) {
     // 라인을 올려 압축하되 천천히 넓게 짧은 패스로 돌린다 — 공을 잃으면 자리부터
     // 잡고, 올린 라인은 트랩으로 지키며, 뒤에서 짧게 풀어 나간다

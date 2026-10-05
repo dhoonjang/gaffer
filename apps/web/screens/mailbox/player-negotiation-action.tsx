@@ -1,6 +1,6 @@
 "use client";
-import { FREE_AGENT_TEAM } from "@story-fm/domain";
-import type { PlayerCardView } from "@story-fm/engine";
+import { FREE_AGENT_TEAM } from "@gaffer/domain";
+import type { PlayerCardView } from "@gaffer/engine";
 import type { GamePayload } from "@/game/store";
 import type { MailDraft } from "./mailbox";
 export function PlayerNegotiationAction({

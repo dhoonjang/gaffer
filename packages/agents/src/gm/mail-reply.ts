@@ -5,7 +5,7 @@ import {
   type MailReplyJob,
   type MailThread,
   type Negotiation,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   actNegotiation,
   completeMailReply,
@@ -19,7 +19,7 @@ import {
   pickPlayerAmong,
   type GameState,
   type JournalEntry,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   agentConfig,
   createGameLLM,
@@ -27,7 +27,7 @@ import {
   ScriptedGameLLM,
   type GameLLM,
   type GameToolSpec,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { MailReplyOutputSchema, MAIL_REPLY_SYSTEM, MAIL_REPLY_OUTPUT } from "./mail-reply-prompt";
 import { toToolSchema, inputError } from "../shared/tool-schema";
 import { ModelOutputError, readOutput, retryOnce } from "../shared/retry";

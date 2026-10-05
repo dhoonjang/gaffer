@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { isReserveMatch, type FinanceCategory, type LedgerEntry } from "@story-fm/domain";
-import type { GameState } from "@story-fm/engine";
+import { isReserveMatch, type FinanceCategory, type LedgerEntry } from "@gaffer/domain";
+import type { GameState } from "@gaffer/engine";
 import {
   annualRevenueEstimate,
   clubEconomyLevel,
@@ -46,7 +46,7 @@ import {
   endSeason,
   closeSeasonBooks,
   skippedWageWeeks,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   advanceAndPlay,
   advanceDays,

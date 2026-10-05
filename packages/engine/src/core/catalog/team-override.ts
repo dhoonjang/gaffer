@@ -1,4 +1,4 @@
-import { LorebookContentSchema, FORMATIONS, TACTICAL_STYLES } from "@story-fm/domain";
+import { LorebookContentSchema, FORMATIONS, TACTICAL_STYLES } from "@gaffer/domain";
 import { teamCatalogPath } from "./paths";
 import {
   asRecord,
@@ -27,7 +27,7 @@ interface TeamOverride {
   clubProfiles: Record<string, ClubProfile>;
 }
 
-export { TACTICAL_STYLES } from "@story-fm/domain";
+export { TACTICAL_STYLES } from "@gaffer/domain";
 
 function isTeamEntry(value: unknown): value is TeamCatalogEntry {
   const o = asRecord(value);

@@ -1,5 +1,5 @@
-import type { GamePlayer } from "@story-fm/domain";
-import { ageOf, josaOf } from "@story-fm/domain";
+import type { GamePlayer } from "@gaffer/domain";
+import { ageOf, josaOf } from "@gaffer/domain";
 import { cupCatalog, isCup } from "../core/catalog/cup-catalog";
 import { domesticCupCatalog, isDomesticCup } from "../core/catalog/domestic-cup-catalog";
 import { marketLeagues, topLeagues } from "../core/catalog/league-catalog";

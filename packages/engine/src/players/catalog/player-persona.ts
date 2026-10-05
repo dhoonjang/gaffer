@@ -14,8 +14,8 @@ import {
   FIRST_SEASON,
   personaKeywords,
   seasonStartOf,
-} from "@story-fm/domain";
-import { makeRng, pickWeighted } from "@story-fm/sim";
+} from "@gaffer/domain";
+import { makeRng, pickWeighted } from "@gaffer/sim";
 import { personaSeedBook } from "../../core/catalog/catalog-lorebook";
 
 /** 선수 시드는 초기 책만 만든다. 진행 중 서사는 세이브의 로어북이 소유한다. */

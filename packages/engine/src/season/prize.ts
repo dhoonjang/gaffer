@@ -1,4 +1,4 @@
-import { type MatchStage, type TickSink, pushEvent, formatMoney } from "@story-fm/domain";
+import { type MatchStage, type TickSink, pushEvent, formatMoney } from "@gaffer/domain";
 import { type GameState } from "../core/state";
 import { payOnce } from "../core/ledger";
 

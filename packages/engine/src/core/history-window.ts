@@ -4,7 +4,7 @@ import {
   CHARACTER_CANDIDATES_MAX,
   type CharacterCandidate,
   type HistoryDigest,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type { ChatTurn } from "./state";
 import { turnFactLines } from "./turn-facts";
 

@@ -23,7 +23,7 @@ const memory = vi.hoisted(() => ({
   synced: 0,
 }));
 type TestState = typeof memory.db;
-vi.mock("@story-fm/engine", () => ({
+vi.mock("@gaffer/engine", () => ({
   loadGame: () => structuredClone(memory.db),
   saveGame: (s: TestState) => {
     if (memory.failSave) throw new Error("save failed");
@@ -58,7 +58,7 @@ vi.mock("@story-fm/engine", () => ({
   },
   buildMatchView: () => null,
 }));
-vi.mock("@story-fm/llm", () => ({
+vi.mock("@gaffer/llm", () => ({
   traceBoard: async (_id: string, action: () => Promise<unknown>) => action(),
 }));
 vi.mock("@/game/store", () => ({

@@ -1,5 +1,5 @@
-import { LorebookEditSchema, type LorebookEntry, type LorebookEdit } from "@story-fm/domain";
-import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@story-fm/llm";
+import { LorebookEditSchema, type LorebookEntry, type LorebookEdit } from "@gaffer/domain";
+import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@gaffer/llm";
 import { readOutput, retryOnce } from "../shared/retry";
 import { toToolSchema } from "../shared/tool-schema";
 

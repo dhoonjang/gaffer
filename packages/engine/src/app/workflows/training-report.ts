@@ -10,7 +10,7 @@ import {
   PROFICIENCY_MAX,
   positionGrowthTarget,
   naturalPositionOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { deliverTrainingReportMail } from "../../people/report-mail";
 import { setPlayerPosition } from "../../team/lineup";
 import { applyAttributeStep } from "../../players/attribute-growth";

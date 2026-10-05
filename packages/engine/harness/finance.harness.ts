@@ -6,7 +6,7 @@ import {
   isTopLeague,
   leagueOfTeam,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { advanceAndPlay, createTestGame, keepSeat } from "../test/helpers";
 import {
   FINANCE_LEAGUES,

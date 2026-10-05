@@ -1,11 +1,6 @@
-import type { GamePlayer, MatchRecord, MatchSide, TacticsSpec } from "@story-fm/domain";
-import {
-  playerOverall,
-  associationName,
-  isReserveMatch,
-  naturalPositionOf,
-} from "@story-fm/domain";
-import type { LineupSlot } from "@story-fm/sim";
+import type { GamePlayer, MatchRecord, MatchSide, TacticsSpec } from "@gaffer/domain";
+import { playerOverall, associationName, isReserveMatch, naturalPositionOf } from "@gaffer/domain";
+import type { LineupSlot } from "@gaffer/sim";
 import { competitionLabel } from "../core/catalog/cup-catalog";
 import { derbyForMatch } from "../core/derby";
 import { nextMatchFor } from "../core/calendar";

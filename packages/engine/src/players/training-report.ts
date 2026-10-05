@@ -18,7 +18,7 @@ import {
   type TrainAttr,
   type AttributeAxis,
   type TrainingMark,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { turnFactLines } from "../core/turn-facts";
 import { SESSIONS_PER_WEEK } from "./training-plan";
 

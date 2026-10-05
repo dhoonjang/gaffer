@@ -1,4 +1,4 @@
-import { type Outcome, type MatchRecord } from "@story-fm/domain";
+import { type Outcome, type MatchRecord } from "@gaffer/domain";
 import { type GameState, teamNameIn, teamShortNameIn } from "../core/state";
 import {
   leagueOfTeamIn,

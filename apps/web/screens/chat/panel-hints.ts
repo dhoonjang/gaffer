@@ -1,4 +1,4 @@
-import type { ChatTurn, ToolCallRecord } from "@story-fm/engine";
+import type { ChatTurn, ToolCallRecord } from "@gaffer/engine";
 
 /**
  * **어느 장부가 바뀌었나** — 오른쪽 아이콘 줄에 붙는 말풍선.

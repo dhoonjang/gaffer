@@ -4,7 +4,7 @@ import {
   type RetirementReason,
   type RetiredPlayer,
   naturalPositionOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState, playerById } from "../core/state";
 import type { CommandResult } from "../core/command-result";
 

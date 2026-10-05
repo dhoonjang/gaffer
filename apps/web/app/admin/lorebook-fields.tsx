@@ -1,6 +1,6 @@
 "use client";
 
-import { CHARACTER_INFORMATION_MAX, type LorebookContent } from "@story-fm/domain";
+import { CHARACTER_INFORMATION_MAX, type LorebookContent } from "@gaffer/domain";
 
 export function LorebookFields({
   name,

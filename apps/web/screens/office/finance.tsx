@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { OfficeViews } from "@story-fm/engine";
-import { formatMoney, formatPounds } from "@story-fm/domain";
+import type { OfficeViews } from "@gaffer/engine";
+import { formatMoney, formatPounds } from "@gaffer/domain";
 import { PlayerName } from "@/shared/player-card";
 import { IconChevron } from "@/shared/icons";
 import { humanDate, humanMonthYear } from "@/shared/dateline";

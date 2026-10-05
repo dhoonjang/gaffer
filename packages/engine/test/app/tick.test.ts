@@ -17,7 +17,7 @@ import {
   SESSION_LOAD_DEFAULT,
   sessionLoad,
   type TrainAttr,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   fatigueAfterDay,
   fatigueDayOf,
@@ -26,9 +26,9 @@ import {
   recoveryFactor,
   stateModifier,
   famFactor,
-} from "@story-fm/sim";
-import type { PlayerState } from "@story-fm/domain";
-import type { GameState } from "@story-fm/engine";
+} from "@gaffer/sim";
+import type { PlayerState } from "@gaffer/domain";
+import type { GameState } from "@gaffer/engine";
 import {
   bindJournal,
   familiarityOf,
@@ -56,7 +56,7 @@ import {
   weeklyWagesOf,
   eventTexts,
   type JournalEntry,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   advanceDays,
   advanceToMatchday,

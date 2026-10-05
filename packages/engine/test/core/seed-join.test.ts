@@ -5,14 +5,14 @@ import {
   positionGroupOfPlayer,
   isAssociation,
   type PositionGroup,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   checkPlayerNationality,
   deriveNationality,
   teamCatalog,
   isClubTeam,
   playerCatalog,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { REAL_SQUADS, type RealPlayerSeed } from "../../src/players/catalog/epl-players";
 import { INJURY_HISTORY } from "../../src/players/catalog/injury-history";
 import { EU_SQUADS } from "../../src/players/catalog/eu-squads";

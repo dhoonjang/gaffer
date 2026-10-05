@@ -20,7 +20,7 @@ import {
   subCauseText,
   type LiveSlot,
   type MatchEvent,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   createLedger,
   createLiveMatch,
@@ -32,7 +32,7 @@ import {
   sideStatLine,
   type LiveMatch,
   type LiveSetup,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 
 // ---- 인자 파싱 ----
 const argv = process.argv.slice(2);

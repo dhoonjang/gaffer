@@ -1,11 +1,11 @@
-import { PointSchema, SheetLineSchema } from "@story-fm/domain";
+import { PointSchema, SheetLineSchema } from "@gaffer/domain";
 import {
   type EvaluationResult,
   type GameEvaluator,
   type GameLLM,
   type JsonObjectSchema,
   type ScoreQuestion,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { z } from "zod";
 import { ModelOutputError, readOutput, retryOnce } from "../src/shared/retry";
 import { toToolSchema } from "../src/shared/tool-schema";

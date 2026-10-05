@@ -14,14 +14,13 @@ import {
   leagueOfTeamIn,
   HISTORY_CHAR_LIMIT,
   ownerOf,
-  reportersOf,
   speakerRoles,
   squadReturnOf,
   subLimitsOf,
   playersOf,
   userPlayers,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { describe, expect, it, vi } from "vitest";
 import {
   tacticAxisOf,
@@ -29,7 +28,7 @@ import {
   type MatchRecord,
   awardTitle,
   normalizeSpeaker,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   SKILL_CATALOG,
   TIME_PASSED,
@@ -62,14 +61,14 @@ import {
   runGmTurn,
   runOnboarding,
   type GmToolCall,
-} from "@story-fm/agents";
-import { agentConfig, ScriptedGameLLM } from "@story-fm/llm";
-import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@story-fm/llm";
+} from "@gaffer/agents";
+import { agentConfig, ScriptedGameLLM } from "@gaffer/llm";
+import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@gaffer/llm";
 
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
 const { stubRunTurn } = vi.hoisted(() => ({ stubRunTurn: vi.fn() }));
-vi.mock("@story-fm/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@story-fm/llm")>();
+vi.mock("@gaffer/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@gaffer/llm")>();
   return { ...actual, createGameLLM: () => ({ runTurn: stubRunTurn }) };
 });
 
@@ -1258,7 +1257,7 @@ describe("장면을 여는 사람은 그 일에 가장 가까운 사람이다", 
     const roleOf = (name: string) => roles[normalizeSpeaker(name)];
     expect(roleOf(ownerOf(state).characterId)?.kind).toBe("owner");
     // 기자는 직책 대신 매체가 붙는다 (어디 소속이 묻는지가 정보다)
-    for (const reporter of reportersOf(state)) {
+    for (const reporter of state.personas.filter((p) => p.role === "reporter")) {
       expect(roleOf(reporter.characterId)?.kind).toBe("reporter");
     }
     // 선수도 마찬가지 — 유니폼 아이콘이 서려면 사전에 있어야 한다

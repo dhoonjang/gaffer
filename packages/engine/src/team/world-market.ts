@@ -11,7 +11,7 @@ import {
   type Negotiation,
   type ProposalTerms,
   type PositionGroup,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { activeContract, openInjury, managedTeamId, type GameState } from "../core/state";
 import { addDays, diffDays } from "../core/dates";
 import { canRegisterFor } from "./registration";

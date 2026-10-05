@@ -1,4 +1,4 @@
-export const UA = "story-fm-seed/1.0 (https://github.com/dhoonjang/story-fm)";
+export const UA = "gaffer-seed/1.0 (https://github.com/dhoonjang/gaffer)";
 export type SparqlRow = Record<string, { value: string } | undefined>;
 function bindingsOf(body: unknown): SparqlRow[] {
   if (typeof body !== "object" || body === null || !("results" in body))

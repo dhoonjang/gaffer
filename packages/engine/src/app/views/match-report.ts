@@ -10,7 +10,7 @@ import {
   subCauseText,
   outcomeFor,
   shootoutTally,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type RatingTone, ratingTone } from "../../match/ratings";
 import { type MatchShootoutKickView, roundTo } from "../../match/live-view";
 import {

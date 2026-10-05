@@ -17,7 +17,7 @@ import {
   PROFICIENCY_MAX,
   PROFICIENCY_MIN,
   FAMILIARITY_MAX,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   addDays,
   advanceTime,
@@ -32,7 +32,7 @@ import {
   trainingSettled,
   type GameState,
   type TrainingBrief,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   addUsage,
   emptyUsage,
@@ -43,7 +43,7 @@ import {
   TypesafeGameEvaluator,
   type GameEvaluator,
   type TurnUsage,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { buildTrainingRequest, evaluateTraining } from "../src/evaluators/training-rater";
 import { ModelOutputError } from "../src/shared/retry";
 import { stableJson } from "./match-reader-eval-metrics";

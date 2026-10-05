@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rolesFor, type WeightSlot } from "@story-fm/domain";
+import { rolesFor, type WeightSlot } from "@gaffer/domain";
 import {
   ROLE_TENDENCY_DELTA,
   SLOT_TENDENCY,

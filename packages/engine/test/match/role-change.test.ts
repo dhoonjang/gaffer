@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultRoleOf, inheritedRole, roleAtSlot, rolesFor } from "@story-fm/domain";
+import { defaultRoleOf, inheritedRole, roleAtSlot, rolesFor } from "@gaffer/domain";
 import {
   markEntered,
   assignmentsOf,
@@ -11,7 +11,7 @@ import {
   startMatch,
   userTactics,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { advanceToMatchday, createTestGame, playToFullTime } from "../helpers";
 
 /**

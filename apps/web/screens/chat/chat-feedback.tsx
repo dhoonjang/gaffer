@@ -1,5 +1,5 @@
 "use client";
-import type { ChatTurn } from "@story-fm/engine";
+import type { ChatTurn } from "@gaffer/engine";
 import { ChatTurnView } from "./chat";
 import { IconClose } from "@/shared/icons";
 

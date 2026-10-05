@@ -9,9 +9,9 @@ import {
   teamsOfLeague,
   topLeagues,
   turnDigestOf,
-} from "@story-fm/engine";
-import { runOnboarding } from "@story-fm/agents";
-import { withGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { runOnboarding } from "@gaffer/agents";
+import { withGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@gaffer/llm";
 import { toPayload } from "@/game/store";
 import { errorDetail, turnErrorMessage } from "@/game/turn-runner";
 

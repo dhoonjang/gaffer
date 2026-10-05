@@ -6,7 +6,7 @@ import {
   adminLeagueCatalog,
   adminResetLeagueCatalog,
   isLeagueCatalogEdited,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 /**

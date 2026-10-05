@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChatTurn } from "@story-fm/engine";
+import type { ChatTurn } from "@gaffer/engine";
 import { hintsOfChip, panelHintsOf } from "../../screens/chat/panel-hints";
 
 /**

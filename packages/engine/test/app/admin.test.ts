@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ATTRIBUTE_AXES, ageOf, naturalPositionOf, roleFit } from "@story-fm/domain";
+import { ATTRIBUTE_AXES, ageOf, naturalPositionOf, roleFit } from "@gaffer/domain";
 import {
   leagueCatalog,
   teamCatalog,
@@ -30,7 +30,7 @@ import {
   teamNameIn,
   CATALOG_AGE_REF,
   type CatalogPlayerInput,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame, rebuildEveryFixture } from "../helpers";
 
 // 카탈로그를 고치는 파일 — 편집 뒤에 시작한 게임은 편집을 반영해야 하므로 보관본을 안 쓴다
@@ -44,14 +44,14 @@ rebuildEveryFixture();
 let dir: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(path.join(tmpdir(), "story-fm-catalog-"));
-  process.env.STORY_FM_DATA_DIR = dir;
+  dir = mkdtempSync(path.join(tmpdir(), "gaffer-catalog-"));
+  process.env.GAFFER_DATA_DIR = dir;
 });
 afterEach(() => {
   // 편집 파일을 지우고 시드 상태로 복귀 (다른 테스트에 새지 않게)
   adminResetCatalog();
   adminResetTeamCatalog();
-  delete process.env.STORY_FM_DATA_DIR;
+  delete process.env.GAFFER_DATA_DIR;
   rmSync(dir, { recursive: true, force: true });
 });
 

@@ -19,12 +19,12 @@ import {
   clampFatigue,
   fatigueOf,
   clampCondition,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState, isInjured, groupOf } from "../core/state";
 import { INJURY_CHANCE_PER_APPEARANCE, injuryProneness, openInjuryFor } from "../players/injury";
 import { makeRng } from "../core/rng";
 import { seasonYear, addDays } from "../core/dates";
-import { fatigueFromMinutes } from "@story-fm/sim";
+import { fatigueFromMinutes } from "@gaffer/sim";
 
 /** 오늘 소집이 서는 창 — 창의 **첫날**에만 답한다 */
 export function breakStartingOn(season: number, date: string): InternationalBreak | null {

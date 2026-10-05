@@ -34,7 +34,7 @@
  * (리그컵·코파·코파 이탈리아의 준결승만), **중립 결승**, **추첨 방식**(라운드별 /
  * 대진표 확정형), **홈 배정 규정**, 그리고 **우승팀의 유럽 진출권**.
  */
-import type { MatchStage } from "@story-fm/domain";
+import type { MatchStage } from "@gaffer/domain";
 import { catalogSource } from "./catalog-source";
 import { readCupOverride } from "./cup-override";
 
@@ -126,7 +126,7 @@ export interface DomesticCupEntry {
  * 국내 컵 단계 — 32강부터 결승까지 다섯 라운드. 전 대회가 같은 모양이다
  * (나라마다 1부 팀 수가 18~20으로 달라도 2부로 32를 맞췄다).
  */
-export { DOMESTIC_STAGES } from "@story-fm/domain";
+export { DOMESTIC_STAGES } from "@gaffer/domain";
 
 /** 국내 컵 참가 규모 — 브래킷이 2의 거듭제곱이어야 부전승이 없다 */
 export const DOMESTIC_CUP_SIZE = 32;

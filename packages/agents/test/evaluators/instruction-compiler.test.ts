@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EvaluationRequest, GameEvaluator } from "@story-fm/llm";
+import type { EvaluationRequest, GameEvaluator } from "@gaffer/llm";
 import { interpretInstructions } from "../../src/evaluators/instruction-compiler";
 import type {
   InstructionCommand,

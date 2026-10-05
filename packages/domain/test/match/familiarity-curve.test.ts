@@ -15,7 +15,7 @@ import {
   type AxisValues,
   type FamiliaritySource,
   type TacticsSpec,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 적응도가 오르는 **속도**의 계약.

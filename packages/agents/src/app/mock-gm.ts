@@ -10,9 +10,9 @@ import {
   pick,
   teamName,
   type GameState,
-} from "@story-fm/engine";
-import { josaOf } from "@story-fm/domain";
-import { ScriptedGameLLM, resolveLlmMode, type AgentConfig, type GameLLM } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { josaOf } from "@gaffer/domain";
+import { ScriptedGameLLM, resolveLlmMode, type AgentConfig, type GameLLM } from "@gaffer/llm";
 import type { GmTurnResult } from "../shared/gm-types";
 import { matchScript, peaceScript } from "../gm/mock-script";
 

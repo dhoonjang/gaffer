@@ -5,7 +5,7 @@ import {
   CLUB_TONE_SURFACE,
   bandDistance,
   contrastRatio,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -51,7 +51,7 @@ import {
   type AdminDomesticCupPatch,
   type AdminLeaguePatch,
   type LeagueCatalogEntry,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame, rebuildEveryFixture } from "../helpers";
 
 // 카탈로그를 고치는 파일 — 편집 뒤에 시작한 게임은 편집을 반영해야 하므로 보관본을 안 쓴다
@@ -65,15 +65,15 @@ rebuildEveryFixture();
 let dir: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(path.join(tmpdir(), "story-fm-catalog-admin-"));
-  process.env.STORY_FM_DATA_DIR = dir;
+  dir = mkdtempSync(path.join(tmpdir(), "gaffer-catalog-admin-"));
+  process.env.GAFFER_DATA_DIR = dir;
 });
 afterEach(() => {
   // 편집 파일을 지우고 시드 상태로 복귀 (다른 테스트에 새지 않게)
   adminResetTeamCatalog();
   adminResetLeagueCatalog();
   adminResetCupCatalog();
-  delete process.env.STORY_FM_DATA_DIR;
+  delete process.env.GAFFER_DATA_DIR;
   rmSync(dir, { recursive: true, force: true });
 });
 

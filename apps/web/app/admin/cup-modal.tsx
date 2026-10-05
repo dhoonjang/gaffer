@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { josa, josaOf } from "@story-fm/domain";
-import type { MatchStage } from "@story-fm/domain";
+import { josa, josaOf } from "@gaffer/domain";
+import type { MatchStage } from "@gaffer/domain";
 import { Modal } from "./modal";
 import {
   DOMESTIC_STAGES,

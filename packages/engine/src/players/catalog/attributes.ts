@@ -1,10 +1,10 @@
-import type { AttributeAxis, AxisValues, WeightSlot } from "@story-fm/domain";
+import type { AttributeAxis, AxisValues, WeightSlot } from "@gaffer/domain";
 import {
   normalizedLogCurve,
   SLOT_ATTACK_SHARE,
   splitPositioning,
   weightSlotOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { hashOf } from "../../core/catalog/name-hash";
 
 /**

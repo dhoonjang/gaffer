@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasFinalConsonant, josa, josaOf } from "@story-fm/domain";
+import { josa, josaOf } from "@gaffer/domain";
 
 /** 조사는 앞말이 고른다 — 받침 하나로 갈린다 (josa.ts) */
 
@@ -19,13 +19,6 @@ describe("josa — 한글 이름", () => {
     expect(josa("마누엘 우가르테", "은/는")).toBe("마누엘 우가르테는");
     expect(josa("RB 라이프치히", "이/가")).toBe("RB 라이프치히가");
     expect(josa("선더랜드", "이/가")).toBe("선더랜드가");
-  });
-
-  it("받침은 종성 번호가 0이 아닌 것 — 음절 블록의 끝과 처음", () => {
-    expect(hasFinalConsonant("가")).toBe(false); // 0xAC00, 종성 0
-    expect(hasFinalConsonant("각")).toBe(true); // 0xAC01, 종성 1
-    expect(hasFinalConsonant("힣")).toBe(true); // 0xD7A3, 종성 27
-    expect(hasFinalConsonant("히")).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
-import type { LiveAction, PlayPhase, WeightSlot } from "@story-fm/domain";
+import type { LiveAction, PlayPhase, WeightSlot } from "@gaffer/domain";
 import type { TendencyAxis } from "./roles";
-import { LIVE_STEP } from "@story-fm/domain";
+import { LIVE_STEP } from "@gaffer/domain";
 import type { ShotContext } from "./xg";
 
 /**

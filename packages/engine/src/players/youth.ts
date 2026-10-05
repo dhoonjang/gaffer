@@ -9,7 +9,7 @@ import {
   MATCHDAY_SQUAD,
   GOALKEEPER_MIN,
   type YouthCandidate,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { squadReturnOf } from "../core/calendar";
 import { assignSquadNumber } from "./numbers";
 import { contractUntil } from "../core/dates";

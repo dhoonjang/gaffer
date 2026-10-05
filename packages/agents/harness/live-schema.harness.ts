@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { outputAgents, type OutputAgent } from "@story-fm/agents";
+import { outputAgents, type OutputAgent } from "@gaffer/agents";
 import {
   agentConfig,
   countOptionalProperties,
@@ -11,7 +11,7 @@ import {
   type AgentConfig,
   type LlmErrorKind,
   type LlmProvider,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { LIVE_SCHEMA } from "../../engine/harness/catalog";
 import { outOfBand, reportOf, skipOf, type Readings } from "../../engine/harness/harness";
 

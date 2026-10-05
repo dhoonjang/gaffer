@@ -3,7 +3,7 @@ import type {
   LorebookContent,
   PlayerCatalogEntry,
   PlayerPosition,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   ATTRIBUTE_AXES,
   CatalogPlayerEditSchema,
@@ -12,7 +12,7 @@ import {
   bestOverall,
   josa,
   naturalPositionOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   CATALOG_AGE_REF,
   deriveNationality,

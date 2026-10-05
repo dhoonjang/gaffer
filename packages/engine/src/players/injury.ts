@@ -4,8 +4,8 @@ import {
   type InjurySeverity,
   type TickSink,
   INJURY_SEVERITY_KO,
-} from "@story-fm/domain";
-import { INJURY_PER_MATCH, injuryRiskOf, type InjuryRisk } from "@story-fm/sim";
+} from "@gaffer/domain";
+import { INJURY_PER_MATCH, injuryRiskOf, type InjuryRisk } from "@gaffer/sim";
 import { addDays, diffDays } from "../core/dates";
 import { playerCatalog } from "./catalog/catalog";
 import { INJURY_HISTORY } from "./catalog/injury-history";

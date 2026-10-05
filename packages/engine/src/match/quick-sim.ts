@@ -9,7 +9,7 @@ import type {
   SubCause,
   TacticsSpec,
   WeightSlot,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   setPieceRoutineCount,
   setPieceRoutineLevel,
@@ -26,7 +26,7 @@ import {
   positionProficiency,
   scorerEntry,
   weightSlotOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   ASSIST_RATE,
   CORNERS_PER_MATCH,
@@ -51,7 +51,7 @@ import {
   teamCardRate,
   teamInjuryRate,
   type LineupSlot,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import { makeRng } from "../core/rng";
 import { derbyForMatch } from "../core/derby";
 import { isFriendly } from "../core/calendar";

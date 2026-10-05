@@ -23,7 +23,7 @@
  * 쪽 갈래다 (§7.1 생성). 이름만 바꾸는 것은 절반이라는 것이 Keller 판례의 요지다.
  */
 import { hashOf } from "./name-hash";
-import { makeRng } from "@story-fm/sim";
+import { makeRng } from "@gaffer/sim";
 import { claimSyntheticName, syntheticNamePoolOf } from "./names";
 
 /** 지명 하나 — 한글은 화면이, 로마자는 shortName이 읽는다 */

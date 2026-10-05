@@ -13,7 +13,7 @@
 
 ```bash
 pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
-  --logs /Users/dhoonjang/local/story-fm/apps/web/.log \
+  --logs apps/web/.log \
   --out /tmp/reader-eval-offline
 ```
 
@@ -22,7 +22,7 @@ pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
 
 ```bash
 pnpm exec tsx packages/agents/harness/match-reader-eval.ts \
-  --logs /Users/dhoonjang/local/story-fm/apps/web/.log \
+  --logs apps/web/.log \
   --out /tmp/reader-eval-live \
   --live --baseline-agent history-compactor \
   --input-usd-per-million <현재-선택한-모델의-입력-단가> \

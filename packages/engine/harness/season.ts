@@ -1,5 +1,5 @@
-import { advanceTime, allMatchesDone, type GameState } from "@story-fm/engine";
-import { diffDays } from "@story-fm/domain";
+import { advanceTime, allMatchesDone, type GameState } from "@gaffer/engine";
+import { diffDays } from "@gaffer/domain";
 import { drillUserTactics, playMockMatch } from "../test/helpers";
 
 /**

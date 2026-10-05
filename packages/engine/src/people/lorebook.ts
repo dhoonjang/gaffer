@@ -10,7 +10,7 @@ import {
   type LorebookInjection,
   type LorebookJob,
   type CharacterCandidate,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type { GameState } from "../core/state";
 import type { CommandResult } from "../core/command-result";
 

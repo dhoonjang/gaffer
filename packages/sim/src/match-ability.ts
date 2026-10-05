@@ -4,7 +4,7 @@ import type {
   Player,
   PlayerAttributes,
   TacticsSpec,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   ADAPTATION_IMPACT,
   FAMILIARITY_MAX,
@@ -12,7 +12,7 @@ import {
   proficiencyReadiness,
   tacticToggleValue,
   tacticalSensitivityOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { stateModifier } from "./state-modifier";
 
 /**

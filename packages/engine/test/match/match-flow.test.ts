@@ -4,7 +4,7 @@ import {
   tacticsSignature,
   weightSlotOf,
   type MatchEvent,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
 import {
   advanceLiveMatch,
@@ -18,7 +18,6 @@ import {
   buildOpponentReport,
   buildRatingBrief,
   commitCheckpoint,
-  digestLines,
   finalizeMatch,
   firstTeamPlayers,
   groupOf,
@@ -46,7 +45,7 @@ import {
   userSide,
   type GameState,
   type JournalEntry,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   advanceToMatchday,
   createMiniGame,
@@ -63,7 +62,7 @@ import {
   liveDigest,
   liveFinished,
   type LiveMatch,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 
 /**
  * 킥오프 직전 상태 — 시드마다 **한 번만** 만들고 복제해 나눠 쓴다.
@@ -722,7 +721,6 @@ describe("결산 요약의 갈래 (match.md §7)", () => {
     expect(digest.others.some((d) => d.includes("최종 스코어"))).toBe(false);
     expect(digest.ours.join("\n")).not.toMatch(/관중|입장 수입/u);
     expect(digest.others.length).toBeGreaterThan(0);
-    expect(digestLines(digest)).toEqual([...digest.ours, ...digest.finance, ...digest.others]);
   });
 
   it("말풍선에 서는 갈래는 항목마다 한 줄에 든다", () => {
@@ -731,7 +729,9 @@ describe("결산 요약의 갈래 (match.md §7)", () => {
     const digest = closeByHand(state);
     for (const line of digest.ours) expect(line.length).toBeLessThanOrEqual(80);
     expect(digest.ours.length).toBeLessThanOrEqual(12);
-    expect(digest.ours.length).toBeLessThan(digestLines(digest).length);
+    expect(digest.ours.length).toBeLessThan(
+      digest.ours.length + digest.finance.length + digest.others.length,
+    );
   });
 });
 

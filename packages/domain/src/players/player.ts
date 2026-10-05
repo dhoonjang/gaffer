@@ -137,12 +137,6 @@ export function clusterOf(position: string): readonly string[] | null {
   return POSITION_CLUSTERS.find((c) => c.includes(code)) ?? null;
 }
 
-/** 두 포지션이 사실상 같은 자리인가 (같은 코드는 제외 — 호출부에서 정확 매칭이 우선) */
-export function sameCluster(a: string, b: string): boolean {
-  const cluster = clusterOf(a);
-  return cluster !== null && cluster.includes(b.toUpperCase());
-}
-
 /** 좌우가 있는 코드 전부 — 중앙(CB·CM·CDM·CAM·ST·CF)은 어느 쪽도 아니다 */
 const RIGHT_CODES = new Set(["RCB", "RB", "RWB", "RDM", "RCM", "RM", "RW", "RAM", "RF", "RST"]);
 const LEFT_CODES = new Set(["LCB", "LB", "LWB", "LDM", "LCM", "LM", "LW", "LAM", "LF", "LST"]);

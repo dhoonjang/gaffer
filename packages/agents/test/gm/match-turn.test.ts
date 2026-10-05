@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MatchEvent, Point, SheetLine } from "@story-fm/domain";
-import { formatScore } from "@story-fm/domain";
+import type { MatchEvent, Point, SheetLine } from "@gaffer/domain";
+import { formatScore } from "@gaffer/domain";
 import {
   addDays,
   advanceLiveMatch,
@@ -26,7 +26,7 @@ import {
   type GameState,
   type GoalMark,
   liveFinished,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   applyInstructionBatch,
   applyOps,
@@ -49,14 +49,14 @@ import {
   truncatedNote,
   type GmToolCall,
   type OpsOrders,
-} from "@story-fm/agents";
+} from "@gaffer/agents";
 import {
   LlmCallError,
   type EvaluationRequest,
   type EvaluationResult,
   type GameToolSpec,
   type TurnRequest,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { ModelOutputError } from "../../src/shared/retry";
 import type { MatchInstructionRequest } from "../../src/evaluators/jev-match-reader";
 
@@ -74,8 +74,8 @@ const { runTurn, interpretMatch, createEvaluator, evaluate, instructionState } =
 vi.mock("../../src/evaluators/jev-match-reader", () => ({
   interpretMatchInstructions: interpretMatch,
 }));
-vi.mock("@story-fm/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@story-fm/llm")>();
+vi.mock("@gaffer/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@gaffer/llm")>();
   return { ...actual, createGameLLM: () => ({ runTurn }), createGameEvaluator: createEvaluator };
 });
 

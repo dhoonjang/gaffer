@@ -1,7 +1,7 @@
 import { type GameState, catalogLeagueIn, clubProfileIn } from "./state";
 import { isTopLeague, leagueCatalog, leagueCatalogById } from "./catalog/league-catalog";
 import { clubEconomyLevel } from "./catalog/league-economy";
-import { type SeasonPrediction } from "@story-fm/domain";
+import { type SeasonPrediction } from "@gaffer/domain";
 import { teamCatalogById } from "./catalog/team-catalog";
 
 /**
@@ -153,19 +153,6 @@ export const RELEGATION_SLOTS = 3;
 /** 잔류가 확정되는 마지막 자리 — 20팀·3칸이면 17위, 18팀이면 15위 */
 export function safetyLine(leagueSize: number, slots: number = RELEGATION_SLOTS): number {
   return Math.max(1, leagueSize - slots);
-}
-
-/** 강등권의 첫 자리 — 20팀·3칸이면 18위, 18팀이면 16위 */
-export function relegationLine(leagueSize: number, slots: number = RELEGATION_SLOTS): number {
-  return Math.min(Math.max(1, leagueSize), safetyLine(leagueSize, slots) + 1);
-}
-
-/**
- * 리그 크기의 비율이 앉는 자리 — `round(팀 수 × 비율)`을 1위와 꼴찌 사이로 자른다.
- * 20팀에 0.3을 넣으면 6위, 18팀이면 5위다.
- */
-export function positionAt(leagueSize: number, fraction: number): number {
-  return Math.min(Math.max(1, leagueSize), Math.max(1, Math.round(leagueSize * fraction)));
 }
 
 /** 리그전 전 경기 수 — 더블 라운드로빈. 20팀 38, 18팀 34 */

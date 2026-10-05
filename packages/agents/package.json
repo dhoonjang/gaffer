@@ -1,5 +1,5 @@
 {
-  "name": "@story-fm/agents",
+  "name": "@gaffer/agents",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -7,10 +7,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@story-fm/domain": "workspace:*",
-    "@story-fm/engine": "workspace:*",
-    "@story-fm/llm": "workspace:*",
-    "@story-fm/sim": "workspace:^",
+    "@gaffer/domain": "workspace:*",
+    "@gaffer/engine": "workspace:*",
+    "@gaffer/llm": "workspace:*",
+    "@gaffer/sim": "workspace:^",
     "zod": "^3.24.1"
   }
 }

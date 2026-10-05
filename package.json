@@ -1,5 +1,5 @@
 {
-  "name": "story-fm",
+  "name": "gaffer",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -21,15 +21,15 @@
     "fill-nationality": "tsx scripts/fill-nationality.ts",
     "fill-squad-roles": "tsx scripts/fill-squad-roles.ts",
     "e2e": "playwright test",
-    "dev": "pnpm --filter @story-fm/web dev"
+    "dev": "pnpm --filter @gaffer/web dev"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^15.5.23",
     "@playwright/test": "^1.61.1",
-    "@story-fm/agents": "workspace:*",
-    "@story-fm/engine": "workspace:*",
-    "@story-fm/llm": "workspace:*",
+    "@gaffer/agents": "workspace:*",
+    "@gaffer/engine": "workspace:*",
+    "@gaffer/llm": "workspace:*",
     "@types/node": "^26.1.1",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -1,4 +1,4 @@
-import { MailReplySchema } from "@story-fm/domain";
+import { MailReplySchema } from "@gaffer/domain";
 import { GM_SYSTEM } from "./gm-prompt";
 import { toToolSchema } from "../shared/tool-schema";
 

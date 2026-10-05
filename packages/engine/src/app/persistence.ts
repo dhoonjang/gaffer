@@ -20,7 +20,7 @@ import {
 } from "../core/catalog/paths";
 import { SaveSchema } from "./save-schema";
 import type { GamePhase, GameState } from "../core/state";
-import type { ClubColours } from "@story-fm/domain";
+import type { ClubColours } from "@gaffer/domain";
 import { teamCatalogById } from "../core/catalog/team-catalog";
 import { ensurePotentialFloor, teamNameIn, teamShortNameIn } from "../core/state";
 

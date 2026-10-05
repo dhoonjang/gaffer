@@ -1,4 +1,4 @@
-import type { GameToolSpec } from "@story-fm/llm";
+import type { GameToolSpec } from "@gaffer/llm";
 
 /** 한 명령을 한 턴에 부를 수 있는 수 — 같은 명령을 셋 부를 일은 있어도 여덟은 없다 */
 export const OPS_PER_COMMAND = 4;

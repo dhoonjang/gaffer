@@ -13,8 +13,8 @@ import {
   type SetPieceRoutine,
   type SetPieceRoutineKey,
   type SetPieceRoutineLevel,
-} from "@story-fm/domain";
-import type { OfficeViews } from "@story-fm/engine";
+} from "@gaffer/domain";
+import type { OfficeViews } from "@gaffer/engine";
 
 /**
  * ── 전술판의 역할 규칙 ──────────────────────────────────

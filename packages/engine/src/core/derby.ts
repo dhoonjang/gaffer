@@ -7,7 +7,7 @@
  * 순위표와 다른 말을 한다.
  */
 
-import { isReserveMatch, type MatchRecord } from "@story-fm/domain";
+import { isReserveMatch, type MatchRecord } from "@gaffer/domain";
 import type { GameState } from "./state";
 import { isFriendly } from "./calendar";
 import { derbyOf, type Derby } from "./catalog/derbies";

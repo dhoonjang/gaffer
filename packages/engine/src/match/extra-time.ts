@@ -9,7 +9,7 @@ import {
   positionGroupOfPlayer,
   naturalPositionOf,
   clampCondition,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type GameState,
   playerById,
@@ -25,7 +25,7 @@ import { simSquadFor } from "./simulation";
 import { recordCard } from "./discipline";
 import { makeRng } from "../core/rng";
 import { openInjuryFor } from "../players/injury";
-import { conditionAfterLoad, expectedLoadOf } from "@story-fm/sim";
+import { conditionAfterLoad, expectedLoadOf } from "@gaffer/sim";
 
 /**
  * 연장 30분 — 녹아웃에서 승부가 갈리지 않았을 때 **승부차기보다 먼저** 치른다.

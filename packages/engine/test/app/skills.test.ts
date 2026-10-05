@@ -13,7 +13,7 @@ import {
   rolesFor,
   roleFit,
   weightSlotOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   MATCHDAY_BENCH,
   PENDING_EDIT_LIMIT,
@@ -55,7 +55,7 @@ import {
   type GameState,
   squadReturnOf,
   addDays,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame } from "../helpers";
 
 /**

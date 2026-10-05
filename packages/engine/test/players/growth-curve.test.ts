@@ -16,13 +16,13 @@ import {
   rollAxis,
   rollMonthlyAxes,
   type AgingCurve,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   ATTRIBUTE_AXES,
   type AttributeAxis,
   type AxisValues,
   type MatchRecord,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 능력치가 오르는 **속도**의 계약 — 잠재력 여유 · 나이 · 현재 수준.

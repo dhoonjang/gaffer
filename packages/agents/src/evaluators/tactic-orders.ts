@@ -1,7 +1,7 @@
 import { type OpsCaps } from "./orders-ops";
-import { MATCHDAY_BENCH } from "@story-fm/domain";
+import { MATCHDAY_BENCH } from "@gaffer/domain";
 import { buildStandingBlock } from "../shared/match-context";
-import { type GameState, squadView } from "@story-fm/engine";
+import { type GameState, squadView } from "@gaffer/engine";
 import { buildRecentTurnsBlock } from "../shared/context";
 
 /** Live-match commands in application order; lineup/captain are pre-match only. */

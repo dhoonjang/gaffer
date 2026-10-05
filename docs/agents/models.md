@@ -708,7 +708,7 @@ turn
 | 기록을 따는 자리 | 생성형 `createGameLLM`의 `tapLlm` · 평가형 `createGameEvaluator`의 `tapEvaluator`                                                                                                              |
 | 켜지는 조건      | `NODE_ENV !== "production"` — 라우트도 제스처도 CLI도 같은 기준으로 닫힌다                                                                                                                     |
 | 이름             | `<에이전트>-<36진 시각>-<넉 자>` — 호출 하나에 하나, 파일 이름이자 화면과 CLI가 부르는 말                                                                                                      |
-| 사는 곳          | **`.log/<gameId>/`** — 목록 `index.jsonl` · 채팅 턴 `turns/<턴 id>.jsonl` · 전술판 선반 `board/<id>.jsonl` · 원문 `calls/<호출 id>.json` (`STORY_FM_LOG_DIR`)                                  |
+| 사는 곳          | **`.log/<gameId>/`** — 목록 `index.jsonl` · 채팅 턴 `turns/<턴 id>.jsonl` · 전술판 선반 `board/<id>.jsonl` · 원문 `calls/<호출 id>.json` (`GAFFER_LOG_DIR`)                                    |
 | 관계             | `seq`(턴 안의 자리) · `parentId`(이 호출을 낳은 호출) · `viaTool`(경유한 도구) — 도구 핸들러가 도는 구간이 정한다                                                                              |
 | 쓰는 때          | **일어나는 즉시** — 항목은 타임라인에 한 줄씩, 원문은 호출이 끝나는 그 자리에서. 성공도 실패도. 채팅 자리(`index`)만 model 턴을 밀어 넣는 자리에서 적는다                                      |
 | 키               | **턴 id · 호출 id** — 타임라인의 `llm.call` 항목이 호출 id를 들고, 원문은 그 이름의 파일 하나가 갖는다                                                                                         |
@@ -733,7 +733,7 @@ turn
   고치는 재료라 **그 판이 사라진 뒤에 더 필요해진다.** 자리가 갈려 있으면 세이브를
   지우는 어떤 경로도 기록에 닿지 않고, 세이브 목록(`.json`을 세는 규칙)과 섞이지도
   않는다. dev 서버는 `apps/web`에서 도므로 실제 자리는 보통 `apps/web/.log/`이고,
-  CLI는 `.log`와 `apps/web/.log`를 차례로 찾는다(`STORY_FM_LOG_DIR`이 있으면 그쪽).
+  CLI는 `.log`와 `apps/web/.log`를 차례로 찾는다(`GAFFER_LOG_DIR`이 있으면 그쪽).
 - **게임을 지워도 남는다 — 기록을 지우는 함수는 없다.** 지워진 판에서 무엇이
   이상했는지가 그 판을 지우는 순간 사라지면 되짚어 고치는 일이 거기서 끝난다.
   디스크를 쥐는 것은 상한뿐이고, 창고를 비우는 것은 사람이 `.log`를 지우는 일이다 —

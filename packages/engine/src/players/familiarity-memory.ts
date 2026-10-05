@@ -6,7 +6,7 @@ import {
   type ShelvedFamiliarity,
   type TacticAssignment,
   type TeamTactics,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 적응도의 선반과 역할 대가의 정산 — **배치보다 오래 사는 값들**

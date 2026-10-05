@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ChoiceAnswer, EvaluationAnswer, EvaluationQuestion } from "@story-fm/llm";
+import type { ChoiceAnswer, EvaluationAnswer, EvaluationQuestion } from "@gaffer/llm";
 
 const probability = z.number().finite().min(0).max(1);
 const AnswerSchema = z.discriminatedUnion("type", [

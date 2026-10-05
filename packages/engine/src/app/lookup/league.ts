@@ -12,7 +12,7 @@ import {
   isReserveMatch,
   MatchStageSchema,
   parseScorerEntry,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { outcomeFor, outcomeLabel } from "../views/attention";
 import { dayOfWeek } from "../../core/dates";
 import {

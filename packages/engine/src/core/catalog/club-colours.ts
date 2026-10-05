@@ -23,7 +23,7 @@
  *
  * 문장의 도형(방패·분할)은 여전히 id 해시다 — 엠블럼은 미탑재다 (sources.md §7.1).
  */
-import type { ClubColours } from "@story-fm/domain";
+import type { ClubColours } from "@gaffer/domain";
 
 export const CLUB_COLOURS: Readonly<Record<string, ClubColours>> = {
   // ── 프리미어리그 ──

@@ -1,5 +1,5 @@
-import type { GamePlayer } from "@story-fm/domain";
-import { playerOverall, naturalPositionOf } from "@story-fm/domain";
+import type { GamePlayer } from "@gaffer/domain";
+import { playerOverall, naturalPositionOf } from "@gaffer/domain";
 import { playersOf, type GameState } from "../core/state";
 
 /**

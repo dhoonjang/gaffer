@@ -1,5 +1,5 @@
-import type { FieldPoint, MatchSide, WeightSlot } from "@story-fm/domain";
-import { FIELD } from "@story-fm/domain";
+import type { FieldPoint, MatchSide, WeightSlot } from "@gaffer/domain";
+import { FIELD } from "@gaffer/domain";
 import type { RoleTendency, TendencyAxis } from "./roles";
 import { dexp, dlog } from "./dmath";
 import { clamp, depthOf, lateralOf } from "./geometry";

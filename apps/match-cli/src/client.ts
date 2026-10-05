@@ -11,14 +11,14 @@
  * 종료 코드: 0 중계할 정지점 · 10 휴식(하프타임·연장 개시 — `--resume`으로 재개) ·
  * 20 종료 휘슬(마감 턴을 연다 — 승부차기가 남았으면 `--shootout`으로 한 발씩) · 1 오류
  */
-import { LIVE_STEP, STOP_EVENT_TYPES, type MatchEvent } from "@story-fm/domain";
+import { LIVE_STEP, STOP_EVENT_TYPES, type MatchEvent } from "@gaffer/domain";
 import {
   advanceLive,
   checkpointReason,
   liveDigest,
   liveFinished,
   type LiveMatch,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 
 const host = process.env.SIM_HOST ?? "http://localhost:3000";
 const game = process.env.SIM_GAME;

@@ -5,8 +5,8 @@
  * 앵커를 남긴다 — 결산 하나 때문에 경기 결과나 시간 진행이 막히면 안 된다.
  */
 
-import { journal } from "@story-fm/engine";
-import type { TurnResult } from "@story-fm/llm";
+import { journal } from "@gaffer/engine";
+import type { TurnResult } from "@gaffer/llm";
 import type { z } from "zod";
 import { inputError } from "./tool-schema";
 

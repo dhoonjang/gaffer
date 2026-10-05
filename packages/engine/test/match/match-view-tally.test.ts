@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampCondition } from "@story-fm/domain";
+import { clampCondition } from "@gaffer/domain";
 import {
   advanceLiveMatch,
   advanceTime,
@@ -12,8 +12,8 @@ import {
   type MatchView,
   type OfficeViews,
   eventTexts,
-} from "@story-fm/engine";
-import { LIVE_TICKS_PER_SECOND, matchFatigueOf } from "@story-fm/sim";
+} from "@gaffer/engine";
+import { LIVE_TICKS_PER_SECOND, matchFatigueOf } from "@gaffer/sim";
 import { createTestGame } from "../helpers";
 
 /**

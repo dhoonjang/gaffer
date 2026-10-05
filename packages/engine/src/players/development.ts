@@ -9,7 +9,7 @@ import {
   type AxisValues,
   type AttributeAxis,
   ATTRIBUTE_AXES,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { personalTrainingAxis, monthlyGrowthMultiplier } from "./training-plan";
 import { ageGrowthFactor, agingDelta, axisClockFactor } from "./catalog/attributes";
 import { makeRng } from "../core/rng";

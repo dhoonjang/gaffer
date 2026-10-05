@@ -17,13 +17,13 @@ importers:
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
-      '@story-fm/agents':
+      '@gaffer/agents':
         specifier: workspace:*
         version: link:packages/agents
-      '@story-fm/engine':
+      '@gaffer/engine':
         specifier: workspace:*
         version: link:packages/engine
-      '@story-fm/llm':
+      '@gaffer/llm':
         specifier: workspace:*
         version: link:packages/llm
       '@types/node':
@@ -53,16 +53,16 @@ importers:
 
   apps/match-cli:
     dependencies:
-      '@story-fm/agents':
+      '@gaffer/agents':
         specifier: workspace:*
         version: link:../../packages/agents
-      '@story-fm/domain':
+      '@gaffer/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@story-fm/llm':
+      '@gaffer/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@story-fm/sim':
+      '@gaffer/sim':
         specifier: workspace:*
         version: link:../../packages/sim
       zod:
@@ -71,19 +71,19 @@ importers:
 
   apps/web:
     dependencies:
-      '@story-fm/agents':
+      '@gaffer/agents':
         specifier: workspace:*
         version: link:../../packages/agents
-      '@story-fm/domain':
+      '@gaffer/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@story-fm/engine':
+      '@gaffer/engine':
         specifier: workspace:*
         version: link:../../packages/engine
-      '@story-fm/llm':
+      '@gaffer/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@story-fm/sim':
+      '@gaffer/sim':
         specifier: workspace:*
         version: link:../../packages/sim
       next:
@@ -108,16 +108,16 @@ importers:
 
   packages/agents:
     dependencies:
-      '@story-fm/domain':
+      '@gaffer/domain':
         specifier: workspace:*
         version: link:../domain
-      '@story-fm/engine':
+      '@gaffer/engine':
         specifier: workspace:*
         version: link:../engine
-      '@story-fm/llm':
+      '@gaffer/llm':
         specifier: workspace:*
         version: link:../llm
-      '@story-fm/sim':
+      '@gaffer/sim':
         specifier: workspace:^
         version: link:../sim
       zod:
@@ -132,10 +132,10 @@ importers:
 
   packages/engine:
     dependencies:
-      '@story-fm/domain':
+      '@gaffer/domain':
         specifier: workspace:*
         version: link:../domain
-      '@story-fm/sim':
+      '@gaffer/sim':
         specifier: workspace:*
         version: link:../sim
       zod:
@@ -162,7 +162,7 @@ importers:
 
   packages/sim:
     dependencies:
-      '@story-fm/domain':
+      '@gaffer/domain':
         specifier: workspace:*
         version: link:../domain
       zod:

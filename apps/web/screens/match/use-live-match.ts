@@ -6,7 +6,7 @@ import {
   STOP_EVENT_TYPES,
   type LiveMatchFrame,
   type MatchEvent,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   advanceLive,
   checkpointReason,
@@ -14,8 +14,8 @@ import {
   liveFinished,
   liveFrameOf,
   type LiveMatch,
-} from "@story-fm/sim";
-import type { MatchView } from "@story-fm/engine";
+} from "@gaffer/sim";
+import type { MatchView } from "@gaffer/engine";
 import type { MatchBoardOrder } from "../../shared/match-orders";
 import type { LiveAction, LiveSnapshot } from "./live-match-protocol";
 import type { GameSlice } from "../../game/store";

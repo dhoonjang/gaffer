@@ -29,9 +29,9 @@ import {
   type GameState,
   type TrainedSession,
   type TrainingBrief,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { AttributeAxis } from "@story-fm/domain";
+import type { AttributeAxis } from "@gaffer/domain";
 import { afterSquadReturn, createTestGame } from "../helpers";
 
 /** 구간의 훈련 날짜마다 같은 축 판정 — 한 주치 판정을 날짜마다 같은 말로 채운다 */

@@ -23,7 +23,7 @@ import {
   type GameState,
   type GoalMark,
   type TrainingBrief,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 /**
  * GM 오케스트레이터 — 장면 라우팅 (agents.md §1·§2). 국면은 `state.phase` 하나로 갈린다 —
  * `match`면 매치 GM, 아니면 평시 GM이고 둘 다 호출 하나다.
@@ -37,8 +37,8 @@ import {
  * `closeTurn`이 장면·시계·결산을 받아 적는다. 세 단계가 주고받는 것은 이번 턴의
  * 장부(`TurnLedger`)와 턴 앞이 남긴 것(`TurnOpening`)뿐이다.
  */
-import type { MailMessage, BoardMove, MatchEvent, MediaFact, TickEvent } from "@story-fm/domain";
-import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@story-fm/llm";
+import type { MailMessage, BoardMove, MatchEvent, MediaFact, TickEvent } from "@gaffer/domain";
+import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@gaffer/llm";
 import { reportTraining } from "../evaluators/training-rater";
 import {
   buildMatchTools,
@@ -157,7 +157,7 @@ function peaceSystem(state: GameState): string[] {
  * (models.md §2). 여기서 다시 내보내는 것은 화면·에이전트가 부르던 자리를
  * 그대로 두기 위해서다.
  */
-export { resolveLlmMode } from "@story-fm/llm";
+export { resolveLlmMode } from "@gaffer/llm";
 
 /** 이 턴이 어떤 턴인가 — 세 단계가 같은 것을 읽는다 */
 interface TurnShape {
@@ -302,7 +302,7 @@ async function openTurn(
 interface GmCall {
   result: TurnResult;
   /** 이번 턴에 세운 인물 카드 — 턴 뒤가 기록으로 남긴다 */
-  characters: import("@story-fm/domain").LorebookInjection[];
+  characters: import("@gaffer/domain").LorebookInjection[];
   /**
    * 이 호출의 스냅샷이 비운 소식·기사 — 넘김으로 장면 없이 끝난 턴은 아무도 전하지
    * 않았으므로 다음 평시 턴에 되돌린다 (agents.md §2).

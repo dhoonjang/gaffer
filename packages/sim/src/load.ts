@@ -1,11 +1,11 @@
-import type { LiveLoad, TacticsSpec, WeightSlot } from "@story-fm/domain";
+import type { LiveLoad, TacticsSpec, WeightSlot } from "@gaffer/domain";
 import {
   dexp,
   CONDITION_MAX,
   RATING_MAX,
   TACTIC_SCALE_NEUTRAL,
   weightSlotOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 부하 → 체력 — **말이 실제로 뛴 것**으로 체력이 준다 (live-match.md §7 · match.md §6).

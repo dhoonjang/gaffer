@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceTime, type GameState } from "@story-fm/engine";
+import { advanceTime, type GameState } from "@gaffer/engine";
 import { createMiniGame, playMockMatch, playPreseason } from "../test/helpers";
 import { ASSIST_RATE } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

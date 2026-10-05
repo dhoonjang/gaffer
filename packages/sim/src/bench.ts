@@ -5,8 +5,8 @@ import type {
   Player,
   SubCause,
   TacticsSpec,
-} from "@story-fm/domain";
-import { playerOverall, positionGroupOfPlayer } from "@story-fm/domain";
+} from "@gaffer/domain";
+import { playerOverall, positionGroupOfPlayer } from "@gaffer/domain";
 import { subLimitsOf } from "./match-ledger";
 
 /**

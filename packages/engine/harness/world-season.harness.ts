@@ -1,4 +1,4 @@
-import { playerOverall } from "@story-fm/domain";
+import { playerOverall } from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
 import {
   leagueOfTeamIn,
@@ -16,7 +16,7 @@ import {
   simSquadOf,
   type GameState,
   eventTexts,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame, drillUserTactics, playMockMatch } from "../test/helpers";
 import { AI_ROTATION, LEAGUE_SPREAD, WORLD_SEASON } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

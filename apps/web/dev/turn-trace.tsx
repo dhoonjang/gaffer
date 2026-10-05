@@ -2,7 +2,7 @@
 import { useDialog } from "../shared/use-dialog";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import type { TurnRecord, TurnTraceCall, TurnUsage } from "@story-fm/llm";
+import type { TurnRecord, TurnTraceCall, TurnUsage } from "@gaffer/llm";
 import { IconArrowLeft, IconArrowRight, IconClose } from "@/shared/icons";
 
 import {

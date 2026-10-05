@@ -1,5 +1,5 @@
-import type { OfficeViews } from "@story-fm/engine";
-import type { BoardPoint } from "@story-fm/domain";
+import type { OfficeViews } from "@gaffer/engine";
+import type { BoardPoint } from "@gaffer/domain";
 
 // ── 스쿼드 화면이 함께 쓰는 이름들 (전술판 · 전술 · 명단 · 상세) ─────────────
 

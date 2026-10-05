@@ -4,8 +4,8 @@ import {
   managerTacticsOf,
   playerName,
   playerById,
-} from "@story-fm/engine";
-import { ATTRIBUTE_AXES, AXIS_KO } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { ATTRIBUTE_AXES, AXIS_KO } from "@gaffer/domain";
 
 function attributeLine(state: GameState, id: string, position: string): string {
   const player = playerById(state, id);

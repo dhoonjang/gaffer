@@ -1,5 +1,5 @@
-import type { GamePlayer, NumberLineageEntry } from "@story-fm/domain";
-import { naturalPositionOf, SQUAD_NUMBER_MAX, SQUAD_NUMBER_MIN, josa } from "@story-fm/domain";
+import type { GamePlayer, NumberLineageEntry } from "@gaffer/domain";
+import { naturalPositionOf, SQUAD_NUMBER_MAX, SQUAD_NUMBER_MIN, josa } from "@gaffer/domain";
 import { playerName, type GameState } from "../core/state";
 
 const ALL_NUMBERS = Array.from({ length: 99 }, (_, index) => index + 1);

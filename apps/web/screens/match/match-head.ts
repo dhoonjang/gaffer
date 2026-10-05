@@ -1,5 +1,5 @@
-import { formatScore } from "@story-fm/domain";
-import type { ChatTurn } from "@story-fm/engine";
+import { formatScore } from "@gaffer/domain";
+import type { ChatTurn } from "@gaffer/engine";
 import type { MatchLogHead, MatchLogTeam } from "../../game/store";
 
 /**

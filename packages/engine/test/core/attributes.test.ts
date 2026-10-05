@@ -1,4 +1,4 @@
-import { makeRng } from "@story-fm/sim";
+import { makeRng } from "@gaffer/sim";
 import {
   type GameState,
   assignRequestedNumber,
@@ -12,7 +12,7 @@ import {
   playerCatalog,
   footOf,
   physiqueOf,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   type GamePlayer,
   freshPlayerState,
@@ -31,7 +31,7 @@ import {
   splitPositioning,
   weightSlotOf,
   type WeightSlot,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
 import {
   RETARGET_MAX_PASSES,

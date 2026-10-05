@@ -5,8 +5,8 @@ import type {
   Point,
   SheetLine,
   SheetShape,
-} from "@story-fm/domain";
-import { sheetLineBenefits } from "@story-fm/domain";
+} from "@gaffer/domain";
+import { sheetLineBenefits } from "@gaffer/domain";
 
 /**
  * 시트 — **판독의 수치 독해가 말의 규칙에 닿는 자리** (live-match.md §6.2).

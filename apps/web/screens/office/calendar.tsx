@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { OfficeViews } from "@story-fm/engine";
+import type { OfficeViews } from "@gaffer/engine";
 import {
   scheduleRowOf,
   type CalRowIcon,

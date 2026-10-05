@@ -1,6 +1,6 @@
 import { type GameState, teamNameIn, pushMedia } from "../core/state";
 import { diffDays } from "../core/dates";
-import type { Dismissal } from "@story-fm/domain";
+import type { Dismissal } from "@gaffer/domain";
 
 /**
  * 벤치가 비었다 — **우리 감독의 것과 남의 벤치의 것이 같은 카드를 쓴다** (people.md §4-1).

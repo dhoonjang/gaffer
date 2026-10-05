@@ -4,7 +4,7 @@ import {
   type StrongFoot,
   ageOf,
   strongFootOf,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { rankByName } from "../../core/name-match";
 import { isHomegrownFor } from "../../team/registration";
 import { competitionName } from "../../core/catalog/cup-catalog";

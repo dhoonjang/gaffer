@@ -9,7 +9,7 @@ import {
   cupCatalogById,
   FRIENDLY_ROUNDS,
   teamsOfLeague,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,8 +18,8 @@ import { GET as getGame, DELETE as deleteGameRoute } from "../../app/api/games/[
 import { POST as postTurn } from "../../app/api/games/[id]/turn/stream/route";
 import { POST as postLineup } from "../../app/api/games/[id]/lineup/route";
 import { GET as getLive, POST as postLive } from "../../app/api/games/[id]/match/live/route";
-import { CHECKPOINT_TICKS, STOP_EVENT_TYPES, FORMATION_LAYOUTS } from "@story-fm/domain";
-import { advanceLive, liveDigest, liveFinished, type LiveMatch } from "@story-fm/sim";
+import { CHECKPOINT_TICKS, STOP_EVENT_TYPES, FORMATION_LAYOUTS } from "@gaffer/domain";
+import { advanceLive, liveDigest, liveFinished, type LiveMatch } from "@gaffer/sim";
 import {
   GET as catalogGet,
   POST as catalogAdd,
@@ -50,10 +50,10 @@ import {
 import { GET as cupGet, DELETE as cupReset } from "../../app/api/admin/catalog/cup/route";
 import { adminWritesEnabled } from "../../app/api/admin/admin-guard";
 import { GET as usageGet } from "../../app/api/admin/usage/route";
-import { beginGameUsage, meterLlm, resetLlmUsage, type TurnResult } from "@story-fm/llm";
+import { beginGameUsage, meterLlm, resetLlmUsage, type TurnResult } from "@gaffer/llm";
 import type { UsageResponse } from "../../app/admin/types";
 import { PATCH as cupPatch } from "../../app/api/admin/catalog/cup/[cupId]/route";
-import type { ChatTurn } from "@story-fm/engine";
+import type { ChatTurn } from "@gaffer/engine";
 import { visibleChat } from "../../game/store";
 import { buildPlayerNameIndex, playerIdsIn } from "../../shared/player-names";
 import { LOCK_WAIT_MS, withGameLock } from "../../game/turn-runner";
@@ -114,7 +114,7 @@ async function turn(
 
 beforeAll(() => {
   process.env.LLM_MODE = "mock";
-  process.env.STORY_FM_DATA_DIR = mkdtempSync(path.join(tmpdir(), "story-fm-api-"));
+  process.env.GAFFER_DATA_DIR = mkdtempSync(path.join(tmpdir(), "gaffer-api-"));
 });
 
 describe("API — 온보딩부터 경기까지", () => {

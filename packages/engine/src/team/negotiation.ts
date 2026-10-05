@@ -17,7 +17,7 @@ import {
   type NegotiationAction,
   type NegotiationView,
   type ProposalTerms,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   activeContract,
   financeOf,

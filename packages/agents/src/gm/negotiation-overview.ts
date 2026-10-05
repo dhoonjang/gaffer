@@ -1,4 +1,4 @@
-import { currentProposal } from "@story-fm/domain";
+import { currentProposal } from "@gaffer/domain";
 import {
   agentForPlayer,
   personaBookOf,
@@ -7,7 +7,7 @@ import {
   playerName,
   teamNameIn,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 
 /** Exact ledgers plus a bounded, visible narrative excerpt; mail prose never grants execution authority. */
 export function managedNegotiationOverview(state: GameState) {

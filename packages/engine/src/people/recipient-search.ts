@@ -3,7 +3,7 @@ import {
   type MailRecipientCandidate,
   type MailRecipientResolution,
   personaKeywords,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { managedTeamId, teamNameIn, type GameState } from "../core/state";
 import { norm, pickTeam } from "../core/team-ref";
 import { rankByName } from "../core/name-match";

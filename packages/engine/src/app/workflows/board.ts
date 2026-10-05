@@ -1,5 +1,5 @@
 import { type GameState, managedTeamId, teamNameIn } from "../../core/state";
-import { BoardReviewSchema, formatMoney } from "@story-fm/domain";
+import { BoardReviewSchema, formatMoney } from "@gaffer/domain";
 import { type CommandResult, item } from "../../core/command-result";
 import { dismissUserManager } from "./manager-employment";
 import { managerTeam, vacateManagerPost } from "../../people/manager-employment";

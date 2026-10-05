@@ -1,6 +1,6 @@
-import type { GamePlayer, MatchRecord, MatchSide, ShootoutKick } from "@story-fm/domain";
-import { nextShootoutKick, shootoutSettled, shootoutTally } from "@story-fm/domain";
-import { keeperSkill, penaltyRate, penaltySkill } from "@story-fm/sim";
+import type { GamePlayer, MatchRecord, MatchSide, ShootoutKick } from "@gaffer/domain";
+import { nextShootoutKick, shootoutSettled, shootoutTally } from "@gaffer/domain";
+import { keeperSkill, penaltyRate, penaltySkill } from "@gaffer/sim";
 import { makeRng } from "../core/rng";
 import { finishingXi } from "./extra-time";
 import { groupOf, type GameState } from "../core/state";
@@ -23,7 +23,7 @@ import { groupOf, type GameState } from "../core/state";
  * 서로 다른 눈금으로 굴러간다. 대역(0.62~0.80)의 사상은
  * [../../../../docs/season/competition.md](competition.md) §6이 쥔다.
  */
-export { keeperSkill, penaltyRate, penaltySkill } from "@story-fm/sim";
+export { keeperSkill, penaltyRate, penaltySkill } from "@gaffer/sim";
 
 /** 실패한 킥이 **선방**일 비율 — 나머지는 골문을 벗어난다 */
 const SAVED_SHARE_BASE = 0.5;

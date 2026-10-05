@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
-import type { MatchView } from "@story-fm/engine";
+import type { MatchView } from "@gaffer/engine";
 import {
   TACTIC_AXES,
   TACTIC_SCALE_NEUTRAL,
@@ -9,7 +9,7 @@ import {
   tacticToggleValue,
   tacticToggleWord,
   tacticWord,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { Crest } from "@/shared/crest";
 import { humanDate } from "@/shared/dateline";
 

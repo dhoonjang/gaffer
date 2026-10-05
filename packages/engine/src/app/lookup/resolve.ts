@@ -15,7 +15,7 @@ import {
   naturalPositionOf,
   seasonRating,
   sumSeasonStats,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { pickTeam } from "../../core/team-ref";
 import { formatMoney } from "../../team/finance";
 import { diffDays } from "../../core/dates";

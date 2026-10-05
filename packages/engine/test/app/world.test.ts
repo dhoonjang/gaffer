@@ -15,8 +15,7 @@ import {
   isReserveMatch,
   naturalPositionOf,
   positionGroupOfPlayer,
-  sameCluster,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   adminCatalog,
   DEFAULT_XI,
@@ -59,7 +58,7 @@ import {
   pseudonymClubs,
   pseudonymSquad,
   type PlayerNameInput,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 
 import { createTestGame, userFixtureCount, createMiniGame, playFullSeason } from "../helpers";
 
@@ -244,7 +243,10 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
     const outside = catalog.flatMap((e) => {
       const nat = naturalPositionOf(e);
       return e.positions
-        .filter((p) => !p.isNatural && !sameCluster(nat.position, p.position))
+        .filter(
+          (p) =>
+            !p.isNatural && !(clusterOf(nat.position)?.includes(p.position.toUpperCase()) ?? false),
+        )
         .map((p) => nat.proficiency - p.proficiency);
     });
     expect(outside.length).toBeGreaterThan(1000);
@@ -257,7 +259,10 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
     const outside = catalog.flatMap((e) => {
       const nat = naturalPositionOf(e);
       return e.positions
-        .filter((p) => !p.isNatural && !sameCluster(nat.position, p.position))
+        .filter(
+          (p) =>
+            !p.isNatural && !(clusterOf(nat.position)?.includes(p.position.toUpperCase()) ?? false),
+        )
         .map((p) => p.proficiency);
     });
     expect(Math.min(...outside)).toBeGreaterThanOrEqual(70);

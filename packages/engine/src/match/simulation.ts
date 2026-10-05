@@ -8,7 +8,7 @@ import {
   FAMILIARITY_BASELINE,
   fatigueOf,
   rolesFor,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type GameState,
   assignmentFor,

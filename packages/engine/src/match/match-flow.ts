@@ -54,7 +54,7 @@ import {
   positionGrowthTarget,
   type MilestoneCode,
   milestonePhrase,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { recallRole } from "../players/role-memory";
 import {
   type LineupSlot,
@@ -71,7 +71,7 @@ import {
   POINTS_MAX,
   readPoints,
   liveFinished,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import { managerTacticsOf } from "./manager-tactics";
 import { isFriendly } from "../core/calendar";
 import { extraTimeRuleOf, needsShootout } from "./extra-time";
@@ -1007,11 +1007,6 @@ export interface MatchDigest {
   finance: string[];
   /** 같은 라운드의 다른 경기·유럽/컵 대진·회견 개설 */
   others: string[];
-}
-
-/** 갈래를 한 줄 목록으로 — 모델 입력·테스트처럼 전부를 읽는 자리에서 쓴다 */
-export function digestLines(digest: MatchDigest): string[] {
-  return [...digest.ours, ...digest.finance, ...digest.others];
 }
 
 export interface MilestoneNote {

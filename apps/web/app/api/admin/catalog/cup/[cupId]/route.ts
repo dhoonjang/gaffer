@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { MatchStageSchema, type MatchStage } from "@story-fm/domain";
+import { MatchStageSchema, type MatchStage } from "@gaffer/domain";
 import {
   DOMESTIC_STAGES,
   adminCupCatalog,
@@ -8,7 +8,7 @@ import {
   adminUpdateDomesticCup,
   isCupCatalogEdited,
   isDomesticCup,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 
 /**

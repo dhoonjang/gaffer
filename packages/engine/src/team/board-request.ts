@@ -3,10 +3,10 @@ import {
   boardRequestAmountText,
   type BoardRequest,
   type TickSink,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState, financeOf, clubProfileIn } from "../core/state";
 import { recordCapitalAsset, STADIUM_ASSET_MONTHS } from "./finance";
-export type { RequestBoardInput } from "@story-fm/domain";
+export type { RequestBoardInput } from "@gaffer/domain";
 
 export const BOARD_REQUEST = { SEAT_COST: 8_000 } as const;
 export function openBoardRequest(state: GameState): BoardRequest | null {

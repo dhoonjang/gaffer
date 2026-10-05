@@ -19,7 +19,7 @@ import {
   startMatch,
   tacticsOf,
   type JournalEntry,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   addUsage,
   agentConfig,
@@ -37,8 +37,8 @@ import {
   type GameEvaluator,
   type TurnUsage,
   type UsageLedger,
-} from "@story-fm/llm";
-import { LIVE_TICKS_PER_SECOND, recentFlowOf } from "@story-fm/sim";
+} from "@gaffer/llm";
+import { LIVE_TICKS_PER_SECOND, recentFlowOf } from "@gaffer/sim";
 import { interpretInstructions } from "../src/evaluators/instruction-compiler";
 import { instructionCommands, instructionCandidates } from "../src/gm/instructions";
 import { buildToolSpecs } from "../src/gm/gm-tools";

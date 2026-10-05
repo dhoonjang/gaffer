@@ -1,5 +1,5 @@
-import type { GameState } from "@story-fm/engine";
-import { GM_SYSTEM, buildGmTools } from "@story-fm/agents";
+import type { GameState } from "@gaffer/engine";
+import { GM_SYSTEM, buildGmTools } from "@gaffer/agents";
 
 /**
  * GM의 고정층 — **매 턴 캐시 프리픽스의 맨 앞으로 나가는 것 전부** (pipeline.md §2-2 ①).

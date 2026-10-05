@@ -1,4 +1,4 @@
-import { LorebookContentSchema, type LorebookContent, type PersonaRole } from "@story-fm/domain";
+import { LorebookContentSchema, type LorebookContent, type PersonaRole } from "@gaffer/domain";
 import {
   clearPersonaBooks,
   readPersonaBooks,

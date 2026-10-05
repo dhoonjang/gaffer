@@ -16,7 +16,7 @@
  * 스키마를 내는 대신 **던진다** — 검증만 하고 모델은 모르는 인자가 생기는 자리다.
  */
 import { z } from "zod";
-import type { JsonObjectSchema } from "@story-fm/llm";
+import type { JsonObjectSchema } from "@gaffer/llm";
 
 type JsonSchemaNode = Record<string, unknown>;
 

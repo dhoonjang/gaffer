@@ -29,7 +29,7 @@ import {
   type GameLLM,
   type JsonObjectSchema,
   type TurnUsage,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { ReaderReportSchema, type MatchReaderOutput } from "./reader-baseline";
 import {
   addUsage,

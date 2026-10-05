@@ -5,7 +5,7 @@ import { cupCatalog, cupCatalogById } from "../core/catalog/cup-catalog";
 import { catalogTierOf, type EuroEntry } from "../core/league-membership";
 import { leagueCatalogById } from "../core/catalog/league-catalog";
 import { firstHalfPairs } from "./pairings";
-import { type MatchRecord } from "@story-fm/domain";
+import { type MatchRecord } from "@gaffer/domain";
 
 /**
  * 유럽 대항전 — 참가 배정 · 리그 페이즈 편성 (2024-25 이후 포맷).

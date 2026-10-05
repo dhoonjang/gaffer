@@ -1,6 +1,6 @@
 import { writeOffPlayerContract } from "./transfer-accounting";
-import { FREE_AGENT_TEAM, type Contract, type GamePlayer } from "@story-fm/domain";
-export { FREE_AGENT_TEAM } from "@story-fm/domain";
+import { FREE_AGENT_TEAM, type Contract, type GamePlayer } from "@gaffer/domain";
+export { FREE_AGENT_TEAM } from "@gaffer/domain";
 import { activeContract, type GameState, releaseFromTactics } from "../core/state";
 import { forgetRoles } from "../players/role-memory";
 

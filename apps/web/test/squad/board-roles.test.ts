@@ -7,7 +7,7 @@ import {
   roleChangeCost,
   rolesFor,
   type BoardPoint,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   buildOfficeViews,
   createGame,
@@ -15,7 +15,7 @@ import {
   setPlayerRole,
   type GameState,
   type OfficeViews,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   familiarityForRole,
   lineupBody,

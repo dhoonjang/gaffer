@@ -1,4 +1,4 @@
-# story-fm
+# Gaffer
 
 > A next-generation football manager game built around an LLM core.
 > The player is an **AI manager** who directs the team in natural language, the
@@ -15,7 +15,7 @@ points here. **How the game actually behaves lives in
 ## 1. Vision
 
 Traditional football managers are games of sliders and probability tables.
-story-fm turns that into a **game of language**: you direct the team by talking,
+Gaffer turns that into a **game of language**: you direct the team by talking,
 players and owners and journalists react as characters with their own motives,
 and dressing-room conflict, a prospect's arc and a rivalry continue across matches.
 
@@ -126,7 +126,7 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
   vocabulary every domain reads; agents are split by call, the web by screen. ESLint
   enforces all of it (→ [docs/architecture.md](docs/architecture.md) §2).
   Internal imports use the owning module, never the package's own public barrel.
-- **The screen imports `@story-fm/engine` for types only.** A value import pulls
+- **The screen imports `@gaffer/engine` for types only.** A value import pulls
   `node:fs` into the browser bundle and `next build` dies — `typecheck` passes, so
   **`pnpm lint` is what catches it**: `eslint.config.js` bans the value import
   across `apps/web` — the server-only modules that would drag the engine in with
@@ -256,7 +256,7 @@ red change merged green. How the gate is sharded and what it runs on is
   the CI runner is already paying, and the suite you would run is the one CI
   runs. Run them locally only when the user asks, or when CI has failed and you
   need to reproduce the failure to fix it.
-- `pnpm e2e` uses port 3399, `.next-e2e` and `/tmp/story-fm-e2e`. Run **one e2e
+- `pnpm e2e` uses port 3399, `.next-e2e` and `/tmp/gaffer-e2e`. Run **one e2e
   at a time per worktree** — a second concurrent run attaches to the first
   server through `reuseExistingServer` and the two trample each other.
   (`E2E_SLOT=1`–`9` splits port, build output and save directory together if a
@@ -276,7 +276,7 @@ Agents without automatic skill discovery should read the relevant `SKILL.md`:
 ### Working alongside others
 
 - Ports 3000 and 3311 belong to the user's dev servers. Never kill them.
-- Isolate verification saves with `STORY_FM_DATA_DIR=<tmp>`; never touch
+- Isolate verification saves with `GAFFER_DATA_DIR=<tmp>`; never touch
   `apps/web/.data`. The LLM trace store is a separate directory (`apps/web/.log`)
   and it is the user's material for improving the game — read it
   (`pnpm log` — one timeline per turn: calls, commands, checkpoints, ticks), never clear it.

@@ -5,15 +5,15 @@ import type {
   PositionGroup,
   TacticsSpec,
   LiveSlot,
-} from "@story-fm/domain";
-import { ATTRIBUTE_AXES, DEFAULT_TACTICS } from "@story-fm/domain";
+} from "@gaffer/domain";
+import { ATTRIBUTE_AXES, DEFAULT_TACTICS } from "@gaffer/domain";
 import {
   createLedger,
   createLiveMatch,
   type LedgerSide,
   type LiveMatch,
   type LiveSetup,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 
 /** 테스트용 선수 — 16축 전부 보유, positions[], 부상은 상태에 없음 */
 export function makePlayer(

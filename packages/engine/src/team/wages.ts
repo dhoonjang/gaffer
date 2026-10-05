@@ -1,11 +1,11 @@
-import type { GamePlayer } from "@story-fm/domain";
+import type { GamePlayer } from "@gaffer/domain";
 import {
   playerOverall,
   ageOf,
   naturalPositionOf,
   weightSlotOf,
   type WeightSlot,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { affordableWageBill } from "./finance";
 // 타입만 가져온다 — 런타임에는 지워지므로 `core/state` → `team/wages` 순환이 아니다
 import type { GameState } from "../core/state";

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { FIELD, type LiveMatchFrame } from "@story-fm/domain";
-import type { MatchView } from "@story-fm/engine";
+import { FIELD, type LiveMatchFrame } from "@gaffer/domain";
+import type { MatchView } from "@gaffer/engine";
 
 const EVENT_LABEL: Record<string, string> = {
   goal: "골",

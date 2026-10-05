@@ -1,4 +1,4 @@
-import { rolesFor } from "@story-fm/domain";
+import { rolesFor } from "@gaffer/domain";
 import type { GameState } from "../core/state";
 
 /**

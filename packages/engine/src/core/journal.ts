@@ -7,7 +7,7 @@ import type {
   ShootoutKick,
   TacticsSpec,
   TickEvent,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { clockOf, type CommandBrief, type GameState } from "./state";
 
 /**
@@ -21,7 +21,7 @@ import { clockOf, type CommandBrief, type GameState } from "./state";
  * ## 쓰기 전용이고, 기본값은 아무것도 하지 않는다
  *
  * 엔진은 사실을 내기만 하고 어디에 앉는지 모른다. 앉히는 것은 창고
- * (`@story-fm/llm`의 `turn-trace.ts`)이고 잇는 자리는 웹의 `turn-runner`다(`bindJournal`).
+ * (`@gaffer/llm`의 `turn-trace.ts`)이고 잇는 자리는 웹의 `turn-runner`다(`bindJournal`).
  * 이 패키지는 창고를 모른다 — 알면 순환이고, 알 필요도 없다. **게임 로직이 여기서 값을
  * 읽는 일은 없다**: 기록이 꺼진 프로세스(production·CLI·하네스)와 켜진 프로세스가 같은
  * 세이브에서 같은 결과를 내야 한다.

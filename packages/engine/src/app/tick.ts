@@ -31,7 +31,7 @@ import {
   tickEvents,
   type TurnOperation,
   sessionLoad,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type TrainedSession, restingOn, trainsWithFirstTeam } from "../players/training-report";
 import {
   type GameState,
@@ -71,7 +71,7 @@ import {
   fatigueFromMinutes,
   conditionAfterLoad,
   expectedLoadOf,
-} from "@story-fm/sim";
+} from "@gaffer/sim";
 import {
   resolveInjuries,
   injuryProneness,
@@ -124,7 +124,7 @@ export {
   type TickEvent,
   type TickEventKind,
   type TickSink,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * advance_time — 캘린더 시계가 흐르는 유일한 경로 (season.md §5).

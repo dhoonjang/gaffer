@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CupCatalogEntry, GameState } from "@story-fm/engine";
+import type { CupCatalogEntry, GameState } from "@gaffer/engine";
 import {
   leagueOfTeamIn,
   cupCatalog,
@@ -34,7 +34,7 @@ import {
   playersOf,
   tieAggregate,
   eventTexts,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { createTestGame, keepSeat, playPreseason, resultOf, settleMatchdayQuick } from "../helpers";
 
 /**

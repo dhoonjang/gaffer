@@ -1,4 +1,4 @@
-import { CLUB_TIER_KO, interviewFactText, ageOf } from "@story-fm/domain";
+import { CLUB_TIER_KO, interviewFactText, ageOf } from "@gaffer/domain";
 import { openManagerOffers } from "../../people/manager-employment";
 import {
   pendingManagerInterviews,

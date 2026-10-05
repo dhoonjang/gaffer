@@ -1,4 +1,4 @@
-import type { MatchRecord } from "@story-fm/domain";
+import type { MatchRecord } from "@gaffer/domain";
 import { buildAllLeagueMatches, type LeagueMembership } from "./calendar";
 import { MIN_REST_HOURS, restHours } from "../core/dates";
 import { leagueOfTeam } from "../core/catalog/team-catalog";

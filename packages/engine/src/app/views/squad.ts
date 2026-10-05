@@ -31,7 +31,7 @@ import {
   setPieceRoutineLevel,
   type GrowthOutlook,
   observedFit,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   type Observation,
   type ConditionRead,
@@ -64,7 +64,7 @@ import {
   isAvailableFor,
   openCallUp,
 } from "../../core/state";
-import { type TakerSlot, setPieceTakersOf, matchFatigueOf } from "@story-fm/sim";
+import { type TakerSlot, setPieceTakersOf, matchFatigueOf } from "@gaffer/sim";
 import { internationalBreaksOf } from "../../players/international";
 import { type TacticsView } from "../../match/live-view";
 import { lineupSlotsOf } from "../../match/match-flow";

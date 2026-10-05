@@ -5,7 +5,7 @@ import {
   formatPounds,
   formatRating,
   formatScore,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /** 표기의 자 — 하나씩 (money.ts · web/design-system.md §3 「숫자와 표기」) */
 

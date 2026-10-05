@@ -28,7 +28,7 @@
  * 그 시즌 문서들과 같은 출처다 — 두 표의 구단이 어긋나면 한쪽이 낡은 것이다.
  */
 
-import { type LorebookContent, type PersonaRole } from "@story-fm/domain";
+import { type LorebookContent, type PersonaRole } from "@gaffer/domain";
 
 /** 명부 한 줄 — 페르소나가 되기 전의 사실 */
 export interface WorldFigureSeed {

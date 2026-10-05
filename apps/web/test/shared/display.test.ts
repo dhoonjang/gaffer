@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { playerOverall, defaultRoleOf, formatMoney } from "@story-fm/domain";
-import { buildOfficeViews, createGame, playersOf, type GameState } from "@story-fm/engine";
+import { playerOverall, defaultRoleOf, formatMoney } from "@gaffer/domain";
+import { buildOfficeViews, createGame, playersOf, type GameState } from "@gaffer/engine";
 import { slotOverallOf } from "../../screens/squad/slot-overall";
 import { ratingTone } from "../../shared/scout-report-display";
 

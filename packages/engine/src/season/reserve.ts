@@ -1,5 +1,5 @@
-import type { MatchRecord } from "@story-fm/domain";
-import { isReserveMatch, reserveCompetitionId } from "@story-fm/domain";
+import type { MatchRecord } from "@gaffer/domain";
+import { isReserveMatch, reserveCompetitionId } from "@gaffer/domain";
 import { buildSeasonCalendar } from "../core/calendar";
 import { type LeagueMembership } from "./calendar";
 import { addDays } from "../core/dates";

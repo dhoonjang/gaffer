@@ -1,5 +1,5 @@
-import type { Player } from "@story-fm/domain";
-import { CONDITION_MAX, FATIGUE_MAX, RATING_MAX, fatigueOf } from "@story-fm/domain";
+import type { Player } from "@gaffer/domain";
+import { CONDITION_MAX, FATIGUE_MAX, RATING_MAX, fatigueOf } from "@gaffer/domain";
 
 /**
  * 회복과 누적 피로 — 경기 **뒤**의 몸 (match.md §6.1 · player.md §5.5).

@@ -30,10 +30,10 @@ import {
   TRAINING_MARK_KO,
   type TacticsSpec,
   type TacticAxisKey,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { competitionLabel, competitionName } from "../core/catalog/cup-catalog";
 import { injuryHistoryOf, injuryProneness } from "../players/injury";
-import { injuryWeight } from "@story-fm/sim";
+import { injuryWeight } from "@gaffer/sim";
 import { leagueOfTeamIn, tierOfTeamIn } from "../core/league-membership";
 import { computeStandings } from "../season/standings";
 import { diffDays } from "../core/dates";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TacticsSpec } from "@story-fm/domain";
+import type { TacticsSpec } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
 import { LIVE_TACTICS } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

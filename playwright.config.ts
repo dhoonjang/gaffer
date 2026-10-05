@@ -95,8 +95,8 @@ export default defineConfig({
    */
   webServer: {
     command: process.env.CI
-      ? "pnpm --filter @story-fm/web build && pnpm --filter @story-fm/web start"
-      : "pnpm --filter @story-fm/web dev",
+      ? "pnpm --filter @gaffer/web build && pnpm --filter @gaffer/web start"
+      : "pnpm --filter @gaffer/web dev",
     url,
     reuseExistingServer: !process.env.CI,
     // 빌드가 앞에 붙는다 — dev 서버가 서기만 기다리던 2분으로는 모자란다
@@ -110,7 +110,7 @@ export default defineConfig({
       // 기본 문이 닫히는 자리다(game-state.md §2). 어드민 스펙이 카탈로그를 고쳐야
       // 하므로 여기서 명시적으로 연다.
       ADMIN_ENABLED: "1",
-      STORY_FM_DATA_DIR: DATA_DIR,
+      GAFFER_DATA_DIR: DATA_DIR,
       // 개발 서버(.next)와 빌드 산출물을 나눠 쓴다 — 공유하면 재컴파일 때
       // 서로의 청크를 지워 테스트가 무작위로 깨진다
       NEXT_DIST_DIR: `.next-e2e${SUFFIX}`,

@@ -1,5 +1,5 @@
 // 도메인에서 가져온다 — 엔진을 값으로 import하면 `node:fs`가 브라우저 번들에 딸려 온다
-import { ratingTier, type RatingTier } from "@story-fm/domain";
+import { ratingTier, type RatingTier } from "@gaffer/domain";
 
 /**
  * 숫자의 강약만 은은하게 구분하는 네 구간 — **경계는 코어의 등급표가 갖는다.**

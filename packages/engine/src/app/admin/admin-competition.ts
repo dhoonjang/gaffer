@@ -1,4 +1,4 @@
-import { josa, MatchStageSchema } from "@story-fm/domain";
+import { josa, MatchStageSchema } from "@gaffer/domain";
 import { CUP_CATALOG_SEED, cupCatalog, type CupCatalogEntry } from "../../core/catalog/cup-catalog";
 import { asRecord } from "../../core/catalog/catalog-source";
 import {

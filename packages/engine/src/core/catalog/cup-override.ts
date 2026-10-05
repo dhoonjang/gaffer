@@ -1,4 +1,4 @@
-import { DOMESTIC_STAGES } from "@story-fm/domain";
+import { DOMESTIC_STAGES } from "@gaffer/domain";
 import { cupCatalogPath } from "./paths";
 import {
   asRecord,

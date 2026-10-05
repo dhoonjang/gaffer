@@ -1,13 +1,13 @@
 import { after, NextResponse } from "next/server";
-import { NegotiationRequestSchema } from "@story-fm/domain";
+import { NegotiationRequestSchema } from "@gaffer/domain";
 import {
   applyNegotiationRequest,
   buildNegotiationView,
   loadGame,
   saveGame,
   journal,
-} from "@story-fm/engine";
-import { traceBoard, withGameUsage } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { traceBoard, withGameUsage } from "@gaffer/llm";
 import { toPayload } from "@/game/store";
 import { processLorebookJobs } from "@/game/lorebook-jobs";
 import { busyResponse, LOCK_WAIT_MS, withGameLock } from "@/game/turn-runner";

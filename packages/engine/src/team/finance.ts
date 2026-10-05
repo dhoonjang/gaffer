@@ -6,7 +6,7 @@ import type {
   LedgerEntry,
   MatchRecord,
   TickSink,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   FINANCE_CATEGORY_KO,
   FINANCE_EXPENSE_CATEGORIES,
@@ -14,7 +14,7 @@ import {
   formatMoney,
   isReserveMatch,
   josa,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { buildSeasonCalendar, isFriendly } from "../core/calendar";
 import { addDays, dayOfWeek, DEFAULT_KICKOFF, SATURDAY } from "../core/dates";
 import { clubProfile } from "../core/catalog/club-profile";

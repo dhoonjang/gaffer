@@ -501,12 +501,12 @@ function tapTools(tools: readonly GameToolSpec[], callerId: string): GameToolSpe
 /**
  * 로그 창고 — 게임별 디렉터리가 이 아래 나란히 선다.
  *
- * 자리를 옮기는 손잡이는 `STORY_FM_LOG_DIR`이다(검증·테스트가 쓴다). 기본값이
+ * 자리를 옮기는 손잡이는 `GAFFER_LOG_DIR`이다(검증·테스트가 쓴다). 기본값이
  * `.data`와 같은 규칙(실행 디렉터리 기준)인 이유는 dev 서버가 `apps/web`에서 돌기
  * 때문이다 — 세이브가 `apps/web/.data`면 기록은 `apps/web/.log`다.
  */
 export function logDir(): string {
-  return process.env.STORY_FM_LOG_DIR ?? path.join(process.cwd(), ".log");
+  return process.env.GAFFER_LOG_DIR ?? path.join(process.cwd(), ".log");
 }
 
 export function traceDir(gameId: string): string {

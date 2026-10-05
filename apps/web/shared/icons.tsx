@@ -8,7 +8,7 @@
  * 24 그리드에 stroke 1.7 — 12~20px 어디에 놓아도 획 굵기가 같아 보인다.
  */
 
-import type { SpeakerKind } from "@story-fm/engine";
+import type { SpeakerKind } from "@gaffer/engine";
 
 type IconProps = { size?: number };
 

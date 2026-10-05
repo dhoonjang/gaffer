@@ -1,4 +1,4 @@
-import type { BoardPoint, SetPieceRole } from "@story-fm/domain";
+import type { BoardPoint, SetPieceRole } from "@gaffer/domain";
 import { z } from "zod";
 
 export const MatchBoardOrderSchema = z.discriminatedUnion("kind", [

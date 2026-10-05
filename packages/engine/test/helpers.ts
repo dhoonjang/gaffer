@@ -13,7 +13,6 @@ import {
   createGame,
   cupCatalogById,
   euroCompetitionOf,
-  digestLines,
   finalizeMatch,
   isInjured,
   playerById,
@@ -28,9 +27,9 @@ import {
   driftTeamFamiliarity,
   assignmentsOf as assignmentsOfTeam,
   eventTexts,
-} from "@story-fm/engine";
-import { liveFinished } from "@story-fm/sim";
-import { diffDays, type GamePlayer, type MatchResult } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { liveFinished } from "@gaffer/sim";
+import { diffDays, type GamePlayer, type MatchResult } from "@gaffer/domain";
 
 /** 간이 시뮬 입력 조립 — 배치 선발에서 가용 선수를 뽑는다 (테스트용) */
 export function simSquad(state: GameState, teamId: string) {
@@ -225,7 +224,8 @@ export function playMockMatch(
   playToFullTime(state);
   onFullTime?.(state);
   // 갈래를 나눈 결산을 여기선 평탄화해 돌려준다 — 이 반환을 읽는 테스트가 여럿이다
-  return digestLines(finalizeMatch(state));
+  const digest = finalizeMatch(state);
+  return [...digest.ours, ...digest.finance, ...digest.others];
 }
 
 /**

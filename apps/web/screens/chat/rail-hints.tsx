@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ChatTurn, ToolCallRecord } from "@story-fm/engine";
+import type { ChatTurn, ToolCallRecord } from "@gaffer/engine";
 import { hintsOfChip, panelHintsOf } from "@/screens/chat/panel-hints";
 import type { HintLine, PanelHint, PanelKey } from "@/screens/chat/panel-hints";
 import {

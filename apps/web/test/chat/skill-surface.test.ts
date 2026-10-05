@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CORE_COMMANDS, SKILL_CATALOG } from "@story-fm/agents";
+import { CORE_COMMANDS, SKILL_CATALOG } from "@gaffer/agents";
 import { hasRailHint } from "../../screens/chat/panel-hints";
 import { CALL_LABEL } from "../../screens/chat/call-label";
 

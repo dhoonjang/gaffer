@@ -1,4 +1,4 @@
-// @story-fm/agents 공개 API — 폴더가 `config/llm.yml`의 호출 갈래다 (docs/agents/README.md).
+// @gaffer/agents 공개 API — 폴더가 `config/llm.yml`의 호출 갈래다 (docs/agents/README.md).
 
 // shared — 모든 호출이 함께 쓰는 재시도·도구 스키마·장면 문법·문맥 블록
 export * from "./shared/aging-line";

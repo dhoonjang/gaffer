@@ -1,5 +1,5 @@
-import type { FieldPoint, MatchSide } from "@story-fm/domain";
-import { FIELD } from "@story-fm/domain";
+import type { FieldPoint, MatchSide } from "@gaffer/domain";
+import { FIELD } from "@gaffer/domain";
 import { dhypot } from "./dmath";
 
 /** 이 편이 공격하는 방향 — 홈은 +x */

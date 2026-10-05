@@ -1,5 +1,5 @@
 import { managedNegotiationOverview } from "../../src/gm/negotiation-overview";
-import { contractEndForYears } from "@story-fm/domain";
+import { contractEndForYears } from "@gaffer/domain";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   MAX_REQUESTED_DAYS,
@@ -9,8 +9,8 @@ import {
   addDays,
   openNegotiation,
   type GameState,
-} from "@story-fm/engine";
-import { agentConfig, ScriptedGameLLM, type GameLLM } from "@story-fm/llm";
+} from "@gaffer/engine";
+import { agentConfig, ScriptedGameLLM, type GameLLM } from "@gaffer/llm";
 import {
   processMailReplies,
   replyToMail,
@@ -20,7 +20,7 @@ import {
   type GmToolCall,
   buildGmTools,
   advanceOperationWithWorld,
-} from "@story-fm/agents";
+} from "@gaffer/agents";
 import { createMiniGame } from "../../../engine/test/helpers";
 
 let base: GameState;

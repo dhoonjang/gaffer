@@ -2,13 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { CardMark, ChatTurn, GoalMark, ToolCallRecord, SpeakerRole } from "@story-fm/engine";
+import type { CardMark, ChatTurn, GoalMark, ToolCallRecord, SpeakerRole } from "@gaffer/engine";
 import { cutStamps } from "./scene-stamp";
 import { hasRailHint } from "./panel-hints";
 import { groupChips, groupPieces, splitStaging, weaveTurn } from "./turn-pieces";
 import type { Utterance } from "./turn-pieces";
-import { BROADCAST_SPEAKER, formatScore, normalizeSpeaker } from "@story-fm/domain";
-import type { TickEvent } from "@story-fm/domain";
+import { BROADCAST_SPEAKER, formatScore, normalizeSpeaker } from "@gaffer/domain";
+import type { TickEvent } from "@gaffer/domain";
 import { tickEventLook } from "@/screens/chat/tick-event-display";
 import { CALL_LABEL } from "@/screens/chat/call-label";
 import { IconBroadcast, IconMatch, IconPerson, SPEAKER_ICON } from "@/shared/icons";

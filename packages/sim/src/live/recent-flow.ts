@@ -7,11 +7,11 @@ import {
   type LiveMatchState,
   type MatchEvent,
   type MatchStatLine,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type { LiveMatch } from "./runner";
 
-export { RECENT_FLOW_SECONDS } from "@story-fm/domain";
-export type { FlowTotals, FlowBucket, FlowEvent, RecentFlow } from "@story-fm/domain";
+export { RECENT_FLOW_SECONDS } from "@gaffer/domain";
+export type { FlowTotals, FlowBucket, FlowEvent, RecentFlow } from "@gaffer/domain";
 const TICKS_PER_SECOND = FLOW_TICKS_PER_SECOND;
 const XG_SCALE = 1_000_000;
 

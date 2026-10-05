@@ -7,7 +7,7 @@ import {
   RED_CARD_POINTS,
   type Contract,
   type SeasonStat,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   setRetirement,
   toFreeAgency,
@@ -61,7 +61,7 @@ import {
   userTactics,
   weeklyWagesOf,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { describe, expect, it } from "vitest";
 import { createMiniGame, createTestGame, playFullSeason, keepSeat, resultOf } from "../helpers";
 

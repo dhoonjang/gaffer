@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SubCause } from "@story-fm/domain";
-import type { GameState } from "@story-fm/engine";
+import type { SubCause } from "@gaffer/domain";
+import type { GameState } from "@gaffer/engine";
 import { createTestGame, keepSeat } from "../test/helpers";
 import { AI_BENCH } from "./catalog";
 import { playSeason } from "./season";

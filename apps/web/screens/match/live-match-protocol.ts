@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { LiveCheckpointVerdict, MatchEvent } from "@story-fm/domain";
-import { LiveCheckpointSchema } from "@story-fm/domain";
-import type { LiveMatch } from "@story-fm/sim";
-import type { MatchView } from "@story-fm/engine";
+import type { LiveCheckpointVerdict, MatchEvent } from "@gaffer/domain";
+import { LiveCheckpointSchema } from "@gaffer/domain";
+import type { LiveMatch } from "@gaffer/sim";
+import type { MatchView } from "@gaffer/engine";
 import { MatchBoardOrderSchema } from "../../shared/match-orders";
 import type { GameSlice } from "../../game/store";
 

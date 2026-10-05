@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CardMark, ChatTurn, GoalMark, ToolCallRecord } from "@story-fm/engine";
+import type { CardMark, ChatTurn, GoalMark, ToolCallRecord } from "@gaffer/engine";
 import {
   groupPieces,
   groupUtterances,

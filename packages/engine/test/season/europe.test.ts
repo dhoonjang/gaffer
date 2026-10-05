@@ -21,7 +21,7 @@ import {
   relaxEuroAdjacency,
   teamsOfLeague,
   transitionSeason,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { advanceAndPlay, createTestGame, resultOf } from "../helpers";
 
 /**

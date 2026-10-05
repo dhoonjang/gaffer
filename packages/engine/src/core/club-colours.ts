@@ -1,4 +1,4 @@
-import { type ClubColours } from "@story-fm/domain";
+import { type ClubColours } from "@gaffer/domain";
 import { teamCatalogById } from "./catalog/team-catalog";
 
 /** 구단의 공식 색 — 카탈로그가 갖고 세이브는 갖지 않는다 (team.md §3.1) */

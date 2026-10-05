@@ -11,7 +11,7 @@ import {
   roleChoiceText,
   roleVocabularyText,
   rolesFor,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /**
  * 판정이 코어에만 있는 눈금은 LLM에 **어휘로** 실린다 (prompts.md §5-2).

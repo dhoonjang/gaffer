@@ -1,4 +1,4 @@
-import type { ChatTurn } from "@story-fm/engine";
+import type { ChatTurn } from "@gaffer/engine";
 
 /** 경기 화면에는 현재 중계 세션의 턴만 놓는다. 평시와 지난 경기 이력은 장부다. */
 export function chatForActiveMatch(

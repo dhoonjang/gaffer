@@ -2,7 +2,7 @@
 import { kickOutcome } from "./kick-outcome";
 
 import { Fragment } from "react";
-import type { OfficeViews } from "@story-fm/engine";
+import type { OfficeViews } from "@gaffer/engine";
 import {
   SET_PIECE_KO,
   TACTIC_AXES,
@@ -14,7 +14,7 @@ import {
   tacticToggleValue,
   tacticToggleWord,
   tacticWord,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { XG_BOX, xgRaceOf } from "@/screens/match/xg-race";
 import { IconBoard } from "@/shared/icons";
 import { ConditionBar } from "@/shared/condition-bar";

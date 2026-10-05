@@ -61,7 +61,7 @@ import {
   type ScenePoint,
   isPeaceTurn,
   historyStart,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { offerSeat, offerTerms, vacancyRows, managerSeatLines } from "./employment-context";
 import {
   buildGmReference,
@@ -97,7 +97,7 @@ import {
   type LorebookInjection,
   lorebookText,
   interviewFactText,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 
 /** 경기 다이제스트가 "방금 있었던 일"로 치는 기간 (일) */
 const MATCH_DIGEST_DAYS = 3;
@@ -1200,8 +1200,8 @@ export function renderTurnGroup(
   state: GameState,
   turns: ReadonlyArray<Pick<ChatTurn, "role" | "text"> & { mailMessageIds?: readonly string[] }>,
   cards: readonly LorebookInjection[],
-  attachments?: readonly import("@story-fm/domain").MailMessage[],
-  expandedMail?: Map<string, import("@story-fm/domain").MailMessage>,
+  attachments?: readonly import("@gaffer/domain").MailMessage[],
+  expandedMail?: Map<string, import("@gaffer/domain").MailMessage>,
 ): string {
   const ids = turns.flatMap((turn) => turn.mailMessageIds ?? []);
   const mail = attachments
@@ -1236,7 +1236,7 @@ export function renderTurnGroup(
 export function buildGmTurnMessage(
   state: GameState,
   cards: readonly LorebookInjection[],
-  attachments?: readonly import("@story-fm/domain").MailMessage[],
+  attachments?: readonly import("@gaffer/domain").MailMessage[],
 ): string {
   const chat = relevantTurns(state);
   return renderTurnGroup(state, chat.slice(historyEnd(chat)), cards, attachments);

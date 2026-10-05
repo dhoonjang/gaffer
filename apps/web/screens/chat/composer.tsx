@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { RefObject } from "react";
-import type { TurnOperation } from "@story-fm/agents";
+import type { TurnOperation } from "@gaffer/agents";
 import {
   IconDay,
   IconMatch,

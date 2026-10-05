@@ -13,10 +13,10 @@ import {
   conditionLabel,
   growthOutlookOf,
   type GrowthOutlook,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState, playerById, isOurPlayer } from "../core/state";
 import { hashChannel } from "../core/rng";
-import { GASSED_CONDITION } from "@story-fm/sim";
+import { GASSED_CONDITION } from "@gaffer/sim";
 
 /** 감독이 그 선수를 얼마나 아는가 — 우리 선수 · 직접 상대해 본 선수 · 평판 */
 export type Knowledge = "own" | "seen" | "rumoured";

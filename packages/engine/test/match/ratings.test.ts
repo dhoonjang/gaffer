@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seasonRating } from "@story-fm/domain";
+import { seasonRating } from "@gaffer/domain";
 import {
   leagueOfTeamIn,
   RATING_BAND,
@@ -21,7 +21,7 @@ import {
   seasonStatOf,
   type GameState,
   eventTexts,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { advanceToMatchday, createMiniGame, playMockMatch, playPreseason } from "../helpers";
 
 /**

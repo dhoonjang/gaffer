@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type {
-  EvaluationAnswer,
-  EvaluationRequest,
-  GameEvaluator,
-  ScoreAnswer,
-} from "@story-fm/llm";
-import { POINT_TEXT_MAX } from "@story-fm/domain";
+import type { EvaluationAnswer, EvaluationRequest, GameEvaluator, ScoreAnswer } from "@gaffer/llm";
+import { POINT_TEXT_MAX } from "@gaffer/domain";
 import {
   interpretMatchInstructions,
   type MatchInstructionRequest,

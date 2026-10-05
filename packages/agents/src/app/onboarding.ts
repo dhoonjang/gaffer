@@ -1,7 +1,7 @@
-import { type GameState, humanizePlayerIds, formatClock, clockOf } from "@story-fm/engine";
+import { type GameState, humanizePlayerIds, formatClock, clockOf } from "@gaffer/engine";
 import { normalizeSuggestion } from "../shared/suggest-reply";
 import { parseSceneHeader, sanitizeSceneText } from "../shared/context";
-import { type GameLLM, resolveLlmMode, createGameLLM, agentConfig } from "@story-fm/llm";
+import { type GameLLM, resolveLlmMode, createGameLLM, agentConfig } from "@gaffer/llm";
 import { type GmTurnResult } from "../shared/gm-types";
 import { buildOnboardingTurn } from "./mock-gm";
 import { retryOnce, ModelOutputError, readOutput } from "../shared/retry";

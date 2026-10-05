@@ -12,7 +12,7 @@ import {
   familiarityLabel,
   naturalPositionOf,
   roleFit,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { describeStaffPool } from "../../people/staff-employment";
 import { personaBookOf } from "../../people/lorebook";
 import { formatMoney } from "../../team/finance";

@@ -1,6 +1,6 @@
-import { completeCharacterUpdate, loadGame, saveGame } from "@story-fm/engine";
-import { editLorebook } from "@story-fm/agents";
-import { noteTurn, noteFact, traceBoard, withGameUsage } from "@story-fm/llm";
+import { completeCharacterUpdate, loadGame, saveGame } from "@gaffer/engine";
+import { editLorebook } from "@gaffer/agents";
+import { noteTurn, noteFact, traceBoard, withGameUsage } from "@gaffer/llm";
 import { withGameLock } from "./turn-runner";
 
 const running = new Map<string, Promise<void>>();

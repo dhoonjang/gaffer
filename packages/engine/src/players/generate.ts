@@ -1,5 +1,5 @@
-import type { GamePlayer, PositionGroup } from "@story-fm/domain";
-import { bestOverall, freshPlayerState } from "@story-fm/domain";
+import type { GamePlayer, PositionGroup } from "@gaffer/domain";
+import { bestOverall, freshPlayerState } from "@gaffer/domain";
 import { claimSyntheticName, syntheticNamePoolOf } from "../core/catalog/names";
 import { countryOfTeam, TIER_BASE } from "../core/catalog/team-catalog";
 import { deriveAxes } from "./catalog/attributes";

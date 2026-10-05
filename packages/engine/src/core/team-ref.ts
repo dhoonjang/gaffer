@@ -10,7 +10,7 @@
  */
 /** 표기 흔들림 흡수 — 공백·중점·하이픈 제거 + 소문자 */
 export const norm = (q: string) => q.replace(/[\s·・\-_.]/g, "").toLowerCase();
-import { josaOf } from "@story-fm/domain";
+import { josaOf } from "@gaffer/domain";
 import { teamNameIn, teamShortNameIn, type GameState } from "./state";
 
 /** 부분 일치로 닿지 않는 약칭만 둔다 ("맨유"는 "맨체스터 유나이티드"의 부분 문자열이 아니다) */

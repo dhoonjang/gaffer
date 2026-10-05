@@ -1,4 +1,4 @@
-import { CALL_LABELS } from "@story-fm/domain";
+import { CALL_LABELS } from "@gaffer/domain";
 
 type SkillGroup = "진행" | "전술·훈련" | "대화·서사" | "조회" | "재정";
 

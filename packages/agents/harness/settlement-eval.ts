@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import { ATTRIBUTE_AXES } from "@story-fm/domain";
+import { ATTRIBUTE_AXES } from "@gaffer/domain";
 import {
   advanceTime,
   advanceLiveMatch,
@@ -28,7 +28,7 @@ import {
   RATING_MIN,
   RATING_MAX,
   RATING_BAND,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   addUsage,
   emptyUsage,
@@ -39,8 +39,8 @@ import {
   TypesafeGameEvaluator,
   type GameEvaluator,
   type TurnUsage,
-} from "@story-fm/llm";
-import { liveFinished, LIVE_TICKS_PER_SECOND } from "@story-fm/sim";
+} from "@gaffer/llm";
+import { liveFinished, LIVE_TICKS_PER_SECOND } from "@gaffer/sim";
 import { buildSettlementRequest, evaluateSettlement } from "../src/evaluators/finalize-match";
 import { ModelOutputError } from "../src/shared/retry";
 import { stableJson } from "./match-reader-eval-metrics";

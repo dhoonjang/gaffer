@@ -26,7 +26,7 @@ import { OWNER_NAMES } from "../people/catalog/owner-seeds";
 import { CLUB_PROFILES_SEED } from "../core/catalog/club-profile";
 import { WORLD_FIGURE_SEEDS } from "../people/catalog/world-figures";
 import { EURO_MATCHDAYS } from "../season/europe";
-import { isAssociation, type PlayerCatalogEntry, josa, josaOf } from "@story-fm/domain";
+import { isAssociation, type PlayerCatalogEntry, josa, josaOf } from "@gaffer/domain";
 import { slugifyName } from "../core/catalog/player-id";
 
 /**

@@ -11,7 +11,7 @@ import {
   ageOf,
   naturalPositionOf,
   type AchievementCode,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type CareerTotals } from "../../players/career";
 import { type GameState, teamNameIn } from "../../core/state";
 import { headCoachOf, staffOf } from "../../people/persona";

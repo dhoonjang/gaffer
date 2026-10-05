@@ -5,8 +5,8 @@ import {
   buildOnboardingTurn,
   runGmTurn,
   takeSuggestion,
-} from "@story-fm/agents";
-import { STOP_EVENT_TYPES } from "@story-fm/domain";
+} from "@gaffer/agents";
+import { STOP_EVENT_TYPES } from "@gaffer/domain";
 import {
   advanceLiveMatch,
   advanceShootout,
@@ -18,7 +18,7 @@ import {
   tacticsOf,
   turnFactLines,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**

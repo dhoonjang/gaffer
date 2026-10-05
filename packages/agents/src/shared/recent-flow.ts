@@ -1,5 +1,5 @@
-import type { GameState } from "@story-fm/engine";
-import { recentFlowOf } from "@story-fm/sim";
+import type { GameState } from "@gaffer/engine";
+import { recentFlowOf } from "@gaffer/sim";
 
 /** Only the confirmed live state supplies observed flow; no cumulative-stat fallback. */
 export function buildRecentFlowBlock(state: GameState): string {

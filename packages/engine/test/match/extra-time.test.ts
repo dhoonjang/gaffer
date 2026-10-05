@@ -38,7 +38,7 @@ import {
   userSide,
   type GameState,
   groupOf,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import type {
   GamePlayer,
   MatchRecord,
@@ -46,14 +46,9 @@ import type {
   MatchStage,
   PlayerAttributes,
   ShootoutKick,
-} from "@story-fm/domain";
-import {
-  SHOOTOUT_ROUNDS,
-  nextShootoutKick,
-  shootoutSettled,
-  shootoutTally,
-} from "@story-fm/domain";
-import { applyEvents, liveFinished, matchFatigueOf, setPieceTakersOf } from "@story-fm/sim";
+} from "@gaffer/domain";
+import { SHOOTOUT_ROUNDS, nextShootoutKick, shootoutSettled, shootoutTally } from "@gaffer/domain";
+import { applyEvents, liveFinished, matchFatigueOf, setPieceTakersOf } from "@gaffer/sim";
 import { createTestGame, simSquad, resultOf } from "../helpers";
 
 /**

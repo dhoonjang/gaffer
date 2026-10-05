@@ -1,5 +1,5 @@
-import { ATTRIBUTE_AXES, AXIS_KO } from "@story-fm/domain";
-import { AXIS_AGING, agingDelta } from "@story-fm/engine";
+import { ATTRIBUTE_AXES, AXIS_KO } from "@gaffer/domain";
+import { AXIS_AGING, agingDelta } from "@gaffer/engine";
 
 /**
  * 결산 프롬프트 둘(경기 평점·훈련)이 함께 읽는 한 문장 — **어느 축이 몇 살부터

@@ -1,5 +1,5 @@
-import type { BoardPoint, FieldPoint, LivePhase, MatchSide } from "@story-fm/domain";
-import { FIELD, anchorOf, weightSlotOf } from "@story-fm/domain";
+import type { BoardPoint, FieldPoint, LivePhase, MatchSide } from "@gaffer/domain";
+import { FIELD, anchorOf, weightSlotOf } from "@gaffer/domain";
 import type { LineupSlot } from "../match-ability";
 import type { TeamParams } from "./params";
 import type { RoleTendency } from "./roles";

@@ -7,7 +7,7 @@ import {
   type MailView,
   type MailMessage,
   type Negotiation,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { clockOf, managedTeamId, teamNameIn, type GameState } from "../core/state";
 import { addDays } from "../core/dates";
 import { agentForPlayer, staffOf } from "./persona";

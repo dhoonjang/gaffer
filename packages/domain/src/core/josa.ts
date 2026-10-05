@@ -84,11 +84,6 @@ function finalSound(word: string): FinalSound {
   return letter === "l" ? "rieul" : TAILED_LETTERS.has(letter) ? "other" : "none";
 }
 
-/** 앞말이 받침으로 끝나는가 */
-export function hasFinalConsonant(word: string): boolean {
-  return finalSound(word) !== "none";
-}
-
 /**
  * 쓸 수 있는 조사 짝 — **받침이 있을 때가 앞**이다. 표기가 규칙과 같은 순서로 서야
  * 새 짝을 더할 때 어느 쪽이 어느 쪽인지 다시 묻지 않는다.

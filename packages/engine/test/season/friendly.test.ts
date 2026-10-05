@@ -26,9 +26,9 @@ import {
   strengthBase,
   teamCatalogById,
   MINI_WORLD,
-} from "@story-fm/engine";
-import type { MatchRecord } from "@story-fm/domain";
-import { isReserveMatch } from "@story-fm/domain";
+} from "@gaffer/engine";
+import type { MatchRecord } from "@gaffer/domain";
+import { isReserveMatch } from "@gaffer/domain";
 import { advanceAndPlay, createMiniGame, createTestGame, resultOf } from "../helpers";
 
 /**

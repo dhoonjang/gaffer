@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveLlmMode } from "@story-fm/agents";
-import { traceEnabled, turnRecord, turnTrace } from "@story-fm/llm";
+import { resolveLlmMode } from "@gaffer/agents";
+import { traceEnabled, turnRecord, turnTrace } from "@gaffer/llm";
 import { invalidGameId } from "@/app/api/games/game-id";
 
 /**

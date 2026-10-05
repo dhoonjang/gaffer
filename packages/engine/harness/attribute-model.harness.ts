@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ageOf, bestOverall, weightSlotOf, type WeightSlot } from "@story-fm/domain";
+import { ageOf, bestOverall, weightSlotOf, type WeightSlot } from "@gaffer/domain";
 import { deriveAxes, type SeedAxes } from "../src/players/catalog/attributes";
 import { CATALOG_AGE_REF, derivePositions } from "../src/players/catalog/catalog";
 import {

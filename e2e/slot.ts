@@ -31,4 +31,4 @@ export const SUFFIX = slot === 0 ? "" : `-${slot}`;
 /** 이 슬롯의 서버 포트 — 3399는 e2e 전용이라 개발 서버(3311)와 겹치지 않는다 */
 export const PORT = BASE_PORT + slot;
 /** 이 슬롯의 세이브 디렉터리 — 서버도 스펙도 여기만 본다 */
-export const DATA_DIR = `/tmp/story-fm-e2e${SUFFIX}`;
+export const DATA_DIR = `/tmp/gaffer-e2e${SUFFIX}`;

@@ -9,7 +9,7 @@ import {
   rolesFor,
   injuryHistoryBrief,
   injuryHistoryText,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { contractUntil } from "@/shared/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/shared/player-facts";
 import {

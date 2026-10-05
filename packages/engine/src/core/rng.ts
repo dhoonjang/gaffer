@@ -13,4 +13,4 @@ export {
   randInt,
   shuffleInPlace,
   shuffled,
-} from "@story-fm/sim";
+} from "@gaffer/sim";

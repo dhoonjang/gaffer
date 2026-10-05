@@ -5,7 +5,7 @@ import {
   syncLiveTactics,
   userSide,
   type GameState,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import {
   TACTIC_AXES,
   POSITION_CODES,
@@ -14,7 +14,7 @@ import {
   type Point,
   type SheetLine,
   type BoardMove,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   createGameEvaluator,
   resolveLlmMode,
@@ -22,7 +22,7 @@ import {
   type GameEvaluator,
   type GameToolSpec,
   type JsonObjectSchema,
-} from "@story-fm/llm";
+} from "@gaffer/llm";
 import { recordCall, type GmToolCall } from "../shared/gm-types";
 import { interpretInstructions } from "../evaluators/instruction-compiler";
 import type { InstructionCandidate, InstructionCommand } from "../evaluators/instruction-contract";
@@ -40,7 +40,7 @@ import { buildTrainingSchedule } from "./gm-input";
 import { ordersScript } from "./mock-script";
 import { buildBoardMovesBlock, buildLedgerNote } from "../shared/match-context";
 
-import { liveInputOf } from "@story-fm/sim";
+import { liveInputOf } from "@gaffer/sim";
 import { buildFactsBlock } from "../evaluators/match-facts";
 import { buildRecentFlowBlock } from "../shared/recent-flow";
 import { interpretMatchInstructions } from "../evaluators/jev-match-reader";

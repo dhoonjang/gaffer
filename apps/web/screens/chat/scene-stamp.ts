@@ -1,4 +1,4 @@
-import type { ChatTurn } from "@story-fm/engine";
+import type { ChatTurn } from "@gaffer/engine";
 import { humanDate } from "../../shared/dateline";
 
 /**

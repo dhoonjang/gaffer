@@ -18,7 +18,7 @@ import {
   outcomeLabel,
   parseScorerEntry,
   formatScore,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { formatMoney, monthOf, isJournalMoney, userReports } from "../../team/finance";
 import { drawParts, drawTitle } from "../../season/draw-schedule";
 import {

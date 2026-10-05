@@ -22,7 +22,7 @@ import {
   type SetPieceRole,
   type SetPieceRoutineKey,
   type SetPieceRoutineLevel,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import type { GamePayload, GameSlice } from "@/game/store";
 import type { MatchBoardOrder } from "@/shared/match-orders";
 import { slotOverallOf } from "@/screens/squad/slot-overall";

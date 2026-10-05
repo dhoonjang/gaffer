@@ -1,4 +1,4 @@
-// @story-fm/engine 공개 API — 폴더가 도메인이다 (docs/architecture.md §1).
+// @gaffer/engine 공개 API — 폴더가 도메인이다 (docs/architecture.md §1).
 
 // core — 게임 상태와 기본 조회·기록, 세계의 기준 표 (팀·리그·컵·징계 카탈로그)
 export * from "./core/calendar";

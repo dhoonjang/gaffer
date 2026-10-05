@@ -5,7 +5,7 @@ import path from "node:path";
  * persistence.ts·catalog.ts 양쪽에서 쓰므로 순환 참조를 피해 여기 둔다.
  */
 export function dataDir(): string {
-  return process.env.STORY_FM_DATA_DIR ?? path.join(process.cwd(), ".data");
+  return process.env.GAFFER_DATA_DIR ?? path.join(process.cwd(), ".data");
 }
 
 /** 카탈로그 오버라이드 파일 — 어드민 편집 결과 (없으면 시드에서 파생) */

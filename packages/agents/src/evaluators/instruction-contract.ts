@@ -1,4 +1,4 @@
-import type { GameEvaluator, JsonObjectSchema } from "@story-fm/llm";
+import type { GameEvaluator, JsonObjectSchema } from "@gaffer/llm";
 import type { OpsOrders } from "./orders-ops";
 
 /** Domain-owned commands; the evaluator never receives executable tools. */

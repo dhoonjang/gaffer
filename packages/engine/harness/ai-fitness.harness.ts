@@ -5,8 +5,8 @@ import {
   isFriendly,
   playersOf,
   type GameState,
-} from "@story-fm/engine";
-import { CONDITION_MAX, FATIGUE_BAND_FLOOR, fatigueOf } from "@story-fm/domain";
+} from "@gaffer/engine";
+import { CONDITION_MAX, FATIGUE_BAND_FLOOR, fatigueOf } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
 import { AI_FITNESS } from "./catalog";
 import { playSeason, playUntil } from "./season";

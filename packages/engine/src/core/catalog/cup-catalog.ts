@@ -11,7 +11,7 @@
  * 대회 규모가 실제와 같다는 사실보다 훨씬 크게 어긋나 보인다 (competition.md §4).
  * 그 나라들의 1부를 카탈로그에 올리면 정원이 실제 규모로 자란다.
  */
-import type { MatchStage } from "@story-fm/domain";
+import type { MatchStage } from "@gaffer/domain";
 import { domesticCupById, domesticStageLabel, isDomesticCup } from "./domestic-cup-catalog";
 import { isSuperCup, superCupById } from "./super-cup-catalog";
 import { leagueName } from "./league-catalog";

@@ -1,4 +1,4 @@
-import { playerOverall, positionGroupOf, type GamePlayer } from "@story-fm/domain";
+import { playerOverall, positionGroupOf, type GamePlayer } from "@gaffer/domain";
 import { groupOf, proficiencyAt } from "../core/state";
 
 /** 빈 전술 자리는 GK 여부·자리 숙련도·기량·id 순으로 채운다. */

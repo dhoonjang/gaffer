@@ -1,4 +1,4 @@
-import { TRAINING_MARK_KO, type TrainingReport, INJURY_SEVERITY_KO } from "@story-fm/domain";
+import { TRAINING_MARK_KO, type TrainingReport, INJURY_SEVERITY_KO } from "@gaffer/domain";
 import { managedTeamId, type GameState } from "../core/state";
 import { recordMailReport } from "./mail";
 import { staffOf } from "./persona";

@@ -1,4 +1,4 @@
-import type { GrowthOutlook as Outlook } from "@story-fm/domain";
+import type { GrowthOutlook as Outlook } from "@gaffer/domain";
 
 /** 막대 수 — 매우 낮음(0)이 한 칸, 매우 높음(4)이 다섯 칸. 탁월함(5)은 다섯 칸이 금으로 선다 */
 const GROWTH_BARS = 5;

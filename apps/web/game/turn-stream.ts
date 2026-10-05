@@ -1,4 +1,4 @@
-import type { TurnOperation } from "@story-fm/agents";
+import type { TurnOperation } from "@gaffer/agents";
 import type { GamePayload } from "@/game/store";
 import type { MatchBoardOrder } from "@/shared/match-orders";
 

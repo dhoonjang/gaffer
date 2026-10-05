@@ -2,8 +2,8 @@
 import { kickOutcome } from "./kick-outcome";
 
 import { Fragment, useEffect, useState } from "react";
-import type { MatchReportView } from "@story-fm/engine";
-import { formatRating, formatScore } from "@story-fm/domain";
+import type { MatchReportView } from "@gaffer/engine";
+import { formatRating, formatScore } from "@gaffer/domain";
 import { PlayerName } from "@/shared/player-card";
 import { Crest } from "@/shared/crest";
 import { IconArrowUp, IconChevron, IconChevronUp } from "@/shared/icons";

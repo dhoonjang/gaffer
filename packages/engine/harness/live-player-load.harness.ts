@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { weightSlotOf, type WeightSlot } from "@story-fm/domain";
-import { EXPECTED_LOAD } from "@story-fm/sim";
+import { weightSlotOf, type WeightSlot } from "@gaffer/domain";
+import { EXPECTED_LOAD } from "@gaffer/sim";
 import { createTestGame } from "../test/helpers";
 import { LIVE_PLAYER_LOAD } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";

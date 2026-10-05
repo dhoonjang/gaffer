@@ -1,5 +1,5 @@
 import { type GameState } from "../core/state";
-import { type TickSink, type MatchStage } from "@story-fm/domain";
+import { type TickSink, type MatchStage } from "@gaffer/domain";
 import { cupCatalogById, stageLabel, cupCatalog } from "../core/catalog/cup-catalog";
 import { payPrize } from "./prize";
 import { euroChampion } from "./euro-knockout";

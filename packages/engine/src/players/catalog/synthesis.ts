@@ -1,5 +1,5 @@
-import type { PlayerPosition, WeightSlot } from "@story-fm/domain";
-import { bestOverall, weightSlotOf } from "@story-fm/domain";
+import type { PlayerPosition, WeightSlot } from "@gaffer/domain";
+import { bestOverall, weightSlotOf } from "@gaffer/domain";
 import { deriveAxes, type SeedAxes } from "./attributes";
 import { hashOf } from "../../core/catalog/name-hash";
 import { SECOND_DIVISION_PENALTY } from "../../core/catalog/team-catalog";

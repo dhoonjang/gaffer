@@ -7,7 +7,7 @@ import {
   ratingLabel,
   clampCondition,
   conditionLabel,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { type GameState } from "../core/state";
 import {
   type Knowledge,

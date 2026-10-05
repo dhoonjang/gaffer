@@ -1,4 +1,4 @@
-import type { ChatTurn } from "@story-fm/engine";
+import type { ChatTurn } from "@gaffer/engine";
 
 /**
  * 채팅 턴 → 원문 기록의 자리 (`GET /api/games/[id]/trace/[index]`).

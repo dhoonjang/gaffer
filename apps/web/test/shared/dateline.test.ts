@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contractUntil, humanDate, humanDateTime, humanMonthYear } from "../../shared/dateline";
+import { contractUntil, humanDate, humanMonthYear } from "../../shared/dateline";
 
 /**
  * 날짜의 사람 표기 — 자는 하나다 (design-system.md §3).
@@ -34,13 +34,6 @@ describe("humanDate", () => {
   it("ISO가 아닌 값은 그대로 통과한다 — 그 칸의 말이 사실이다", () => {
     expect(humanDate("자유계약")).toBe("자유계약");
     expect(humanDate("")).toBe("");
-  });
-});
-
-describe("humanDateTime", () => {
-  it("시각이 있으면 날짜 뒤에, 없으면 날짜만", () => {
-    expect(humanDateTime("2026-07-18", "09:30")).toBe("7월 18일 토 09:30");
-    expect(humanDateTime("2026-07-18")).toBe("7월 18일 토");
   });
 });
 

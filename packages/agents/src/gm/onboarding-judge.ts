@@ -4,7 +4,7 @@ import {
   ageOf,
   naturalPositionOf,
   lorebookText,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import { z } from "zod";
 import {
   type GameState,
@@ -15,7 +15,7 @@ import {
   tierOfTeamIn,
   selectLorebook,
   stampLorebook,
-} from "@story-fm/engine";
+} from "@gaffer/engine";
 import { toToolSchema } from "../shared/tool-schema";
 import { SUGGESTION_MAX_CHARS } from "../shared/suggest-reply";
 import { parseSceneHeader } from "../shared/context";

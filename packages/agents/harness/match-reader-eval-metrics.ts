@@ -1,4 +1,4 @@
-import type { TurnUsage } from "@story-fm/llm";
+import type { TurnUsage } from "@gaffer/llm";
 import type { MatchReaderOutput } from "./reader-baseline";
 
 export const emptyUsage = (): TurnUsage => ({

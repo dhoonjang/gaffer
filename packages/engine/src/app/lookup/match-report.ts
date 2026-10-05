@@ -7,7 +7,7 @@ import {
   josaOf,
   isReserveMatch,
   tacticsBrief,
-} from "@story-fm/domain";
+} from "@gaffer/domain";
 import {
   buildMatchReport,
   type MatchReportEventView,
