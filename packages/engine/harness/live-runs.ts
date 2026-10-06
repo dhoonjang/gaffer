@@ -50,6 +50,10 @@ export interface TeamSample {
   possession: number;
   yellows: number;
   reds: number;
+  /** 퇴장 중 두 번째 경고로 나온 것 — 같은 선수의 경고 줄이 먼저 있다 */
+  secondYellows: number;
+  /** 이 팀 선수가 쓰러진 수 */
+  injuries: number;
 }
 
 export interface MatchSample {
@@ -76,6 +80,13 @@ export function sampleOf(match: LiveMatch): MatchSample {
     possession: possession[side],
     yellows: events.filter((e) => e.type === "yellow_card" && e.team === side).length,
     reds: events.filter((e) => e.type === "red_card" && e.team === side).length,
+    secondYellows: events.filter(
+      (e) =>
+        e.type === "red_card" &&
+        e.team === side &&
+        events.some((y) => y.type === "yellow_card" && y.actors[0] === e.actors[0]),
+    ).length,
+    injuries: events.filter((e) => e.type === "injury" && e.team === side).length,
   }));
   return {
     teams,

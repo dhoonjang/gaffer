@@ -385,7 +385,7 @@ EventCause { code, playerIds, values?, pointId? }
 ### 6.2 수적 열세
 
 실시간 경기에서 열 명은 실제로 한 자리가 빈다 — 블록이 그만큼 얇고 그 공간을 상대가 쓴다.
-간이 시뮬은 빠진 한 명마다 팀 평점을 `SHORTHANDED_PENALTY`(12%)씩 깎는다(최대 세 명). 실측
+간이 시뮬은 빠진 한 명마다 팀 평점을 `SHORTHANDED_PENALTY`(7%)씩 깎는다(최대 세 명). 실측
 기준은 열 명이 된 팀의 실점 +15\~30% · 득점 −20\~25%이고, `sim-parity`가 두 시뮬의 값을 나란히
 찍는다.
 
@@ -699,7 +699,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 |                 | `QUICK_POSSESSION_SLOPE` · `QUICK_POSSESSION_NOISE`                                                                               | §4 sd 11%p · 팀 간 8.5%p                             |
 |                 | `QUICK_FIRST_HALF_SHARE` 0.45 · `EXTRA_TIME_DENSITY` 0.84                                                                         | §2 시각 분포                                         |
 |                 | `QUICK_TACTIC_EFFECTS`                                                                                                            | 실시간 경기 측정(`live-tactics`)                     |
-|                 | `SHORTHANDED_PENALTY` 0.12                                                                                                        | 열 명의 실점 +15\~30%                                |
+|                 | `SHORTHANDED_PENALTY` 0.07                                                                                                        | 열 명의 실점 +15\~30%                                |
 | **실시간 경기** | 값은 전부 **`packages/sim/src/live/tuning.ts` 한 파일**에 있다 — 그 값을 읽는 파일 순서로 절이 나뉜다                             | —                                                    |
 |                 | `LIVE_STEP` 0.05 · `CHECKPOINT_MAX_MINUTES` 5 (도메인) · `DECIDE_INTERVAL` · `CARRIER_DECIDE_INTERVAL` · `FIRST_TOUCH_SECONDS`    | —                                                    |
 |                 | `TOP_SPEED_*` · `ACCELERATION` · `URGENCY` · `AMBLE_*` · `SHAPE_DRIFT` · `RECOVERY_*` · `OVERLAP_*`                               | §7 최고 속도 29\~35 km/h · 자리별 거리·고속          |
@@ -750,4 +750,4 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 
 간이 시뮬의 코너는 골로 잘린 구간의 실제 확정 시간만큼만 표집한다.
 
-연장의 득점·카드와 퇴장 효과의 분포 밴드는 `pnpm balance quick-outcomes`가 측정한다. 단위 테스트는 확정된 장부·시간·명단 불변식을 검증한다.
+연장의 득점·카드와 퇴장 효과의 분포 밴드는 `pnpm balance quick-sim`(`quick-outcomes`)가 측정한다. 단위 테스트는 확정된 장부·시간·명단 불변식을 검증한다.

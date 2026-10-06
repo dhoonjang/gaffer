@@ -50,6 +50,13 @@ export const WORLD_SEASON = defineHarness({
     { metric: "팀-경기 xG sd", role: "reference", min: 0.8, max: 1.05, why: "[US] 0.92 — 평균만 맞고 퍼짐이 좁으면 모든 경기가 비슷한 경기다" },
     { metric: "점유율 sd", role: "reference", min: 0.09, max: 0.13, unit: "ratio", why: "[SB] 11.0%p — `QUICK_POSSESSION_SLOPE`·`QUICK_POSSESSION_NOISE`가 정한다 (match.md §8.4)" },
     { metric: "전반 득점 비중", role: "reference", min: 0.42, max: 0.48, unit: "ratio", why: "[FD] 45.1% — `QUICK_FIRST_HALF_SHARE`. 여섯 시즌을 모으면 골이 6천을 넘어 잡음이 1%p 아래다" },
+    { metric: "득점 시각 1~15분", role: "reference", min: 0.09, max: 0.15, unit: "ratio", why: "[FD] §2 11.7% — 하프의 첫 구간이 가장 조용하다" },
+    { metric: "득점 시각 16~30분", role: "reference", min: 0.13, max: 0.19, unit: "ratio", why: "[FD] §2 15.9%" },
+    { metric: "득점 시각 31~45분", role: "reference", min: 0.13, max: 0.19, unit: "ratio", why: "[FD] §2 16.2% (45+ 포함)" },
+    { metric: "득점 시각 46~60분", role: "reference", min: 0.15, max: 0.21, unit: "ratio", why: "[FD] §2 18.0%" },
+    { metric: "득점 시각 61~75분", role: "reference", min: 0.15, max: 0.21, unit: "ratio", why: "[FD] §2 17.7%" },
+    { metric: "득점 시각 76~90분", role: "reference", min: 0.17, max: 0.24, unit: "ratio", why: "[FD] §2 17.9% + 90+ 2.6% — 간이 시뮬은 추가시간 골을 90분에 접는다" },
+    { metric: "평점 평균 − 폼 중립점", role: "guard", min: -0.15, max: 0.15, why: "폼은 출전당 평점을 중립점(`RATING_BASELINE`)과 견준다 — 리그의 평균 평점이 중립점에서 벗어나면 리그 전체의 폼이 경기마다 같은 쪽으로 기운다 (player.md §5)" },
     { metric: "도움 붙은 골 비중", role: "guard", min: 0.5, max: 0.85, unit: "ratio", why: "`ASSIST_RATE`(0.68)가 열린 플레이 골에, 세트피스 골에는 키커가 붙는다. 0에 붙으면 도움이 기록에서 사라진 것이다 — 시즌 기록·마일스톤이 이 칸을 읽는다. 실시간 경기의 같은 칸은 `live-goal-anatomy`" },
     { metric: "승점 1위", role: "measure", unit: "score", why: "**판정은 `league-spread`가 한다** — 한 리그 한 시즌의 순위별 승점은 시드마다 ±10점이 흔들려 밴드로 걸면 같은 빌드가 빨갛거나 초록이다. 여기서는 그 시즌의 모양을 읽기만 한다" },
     { metric: "승점 4위", role: "measure", unit: "score", why: "같은 이유" },
@@ -153,6 +160,8 @@ export const LIVE_MATCH_STATS = defineHarness({
     { metric: "파울", role: "reference", min: 8, max: 16, why: "[FD] 11.95" },
     { metric: "경고", role: "reference", min: 1.3, max: 2.8, why: "[FD] 2.07" },
     { metric: "퇴장", role: "reference", max: 0.25, why: "[FD] 0.10 — 36경기면 일곱 장쯤" },
+    { metric: "퇴장 중 두 번째 경고 몫", role: "measure", unit: "ratio", why: "실제 1부는 퇴장의 절반 남짓이 두 번째 경고다 — 간이 시뮬의 같은 칸은 `injury-rate`. 72경기면 퇴장이 열 몇 장이라 판정하지 않는다" },
+    { metric: "부상/팀", role: "reference", min: 0.02, max: 0.12, why: "`INJURY_PER_MATCH`(팀당 0.05~0.07) — 간이 시뮬과 같은 총량. 실시간 경기는 접촉·스프린트에 위험을 걸어 이 총량을 낸다 (match.md §4.1)" },
     { metric: "코너", role: "reference", min: 3.3, max: 6.5, why: "[FD] 4.86" },
     { metric: "크로스", role: "reference", min: 7, max: 17, why: "[SB] 12.0" },
     { metric: "오프사이드", role: "reference", min: 0.8, max: 4, why: "[SB] 2.3" },
@@ -502,6 +511,7 @@ export const AI_BENCH = defineHarness({
     { metric: "AI 교체 중앙 분", role: "measure", unit: "score", why: "football-reference §6 — 평균 66~70분 (추정). 실시간 경기의 벤치는 경기 중단에만 교체를 실행해 그보다 뒤로 밀릴 수 있다" },
     { metric: "판의 모양을 바꾼 경기 비율", role: "measure", unit: "ratio", why: "경기당 한 번 — 스코어가 벌어진 경기에서만 선다" },
     { metric: "잰 경기 수", role: "measure", unit: "count", why: "표본이 있는가" },
+    { metric: "감독 팀 교체/경기", role: "reference", min: 3, max: 5, unit: "count", why: "하네스의 감독 대역(`playMockMatch`의 `userBench`)이 실제로 교체하는가 — 0이면 감독 팀이 90분 내내 같은 열한 명으로 뛰어 체력·결과가 실제 플레이와 다르다" },
   ],
 });
 
@@ -641,8 +651,9 @@ export const OVERALL_SCALE = defineHarness({
     { metric: "자리별 평균 W", role: "measure", why: "" },
     { metric: "자리별 평균 CF", role: "measure", why: "" },
     { metric: "자리별 평균 ST", role: "measure", why: "" },
-    { metric: "축 범위 위로 벗어난 비율", role: "measure", unit: "ratio", why: "종합이 어느 축보다 높은 선수" },
-    { metric: "축 범위 아래로 벗어난 비율", role: "measure", unit: "ratio", why: "종합이 어느 축보다 낮은 선수" },
+    { metric: "자리별 평균 폭", role: "guard", max: 8, unit: "score", why: "자리별 평균 종합의 최대 − 최소 — 종합의 자리 가중표(`POSITION_WEIGHTS`)가 한 자리를 통째로 기울이면 그 자리 선수가 종합·주급·이적료에서 손해나 이득을 본다. 시드가 바뀌어도 서야 하는 불변식이라 수준이 아니라 폭에 건다" },
+    { metric: "축 범위 위로 벗어난 비율", role: "guard", max: 0, unit: "ratio", why: "종합이 어느 축보다 높은 선수 — 종합은 축의 가중 평균이라 0이어야 한다" },
+    { metric: "축 범위 아래로 벗어난 비율", role: "guard", max: 0, unit: "ratio", why: "종합이 어느 축보다 낮은 선수 — 같은 불변식" },
     { metric: "등급 top(85+) 비율", role: "measure", unit: "ratio", why: "화면의 등급 색이 읽는 문턱" },
     { metric: "등급 strong(75+) 비율", role: "measure", unit: "ratio", why: "" },
     { metric: "등급 solid(65+) 비율", role: "measure", unit: "ratio", why: "" },
@@ -788,15 +799,20 @@ export const LIVE_SCHEMA = defineHarness({
  */
 export const QUICK_OUTCOMES = defineHarness({
   id: "quick-outcomes",
-  what: "간이 시뮬의 연장 득점·카드 · 퇴장이 득실점에 닿는 폭",
+  what: "간이 시뮬의 가장자리 — 연장 득점·카드 · 퇴장이 득실점에 닿는 폭 · AI 교체의 수·시점 · 페널티 성공률",
   doc: `${QUICK_SIM}.6 · docs/match/match.md §6.2`,
-  cost: "시드 1 · 연장 200 · 퇴장 대조 900 경기 · 수 초",
+  cost: "시드 1 · 연장 200 · 퇴장 대조 900 · EPL 전 대진 380 경기 · 수 초",
   // prettier-ignore
   bands: [
     { metric: "연장 득점/경기", role: "reference", min: 0.5, max: 1.1, why: "90분의 2.82골을 30분으로 옮기고 지친 다리로 덜 붐빈다(`EXTRA_TIME_DENSITY` 0.84) — 0.8 안팎" },
     { metric: "연장 카드/경기", role: "reference", min: 0.5, max: 1.6, why: "90분의 경고 4.1장을 30분으로 — 1.4. 연장은 카드가 붐비는 구간이라 아래로 열어 둔다" },
     { metric: "열 명/열한 명 실점 비", role: "reference", min: 1.15, max: 1.45, unit: "ratio", why: "match.md §6.2 — 열 명이 된 팀의 실점 +15~30% (`SHORTHANDED_PENALTY`)" },
     { metric: "열 명/열한 명 득점 비", role: "reference", min: 0.7, max: 0.88, unit: "ratio", why: "match.md §6.2 — 득점 −20~25%" },
+    { metric: "간이 AI 교체/팀", role: "reference", min: 3.5, max: 5, unit: "count", why: "football-reference §6 — 5인 교체제에서 EPL 3.9 · 분데스 4.5. 실시간 경기의 같은 정책은 `ai-bench`가 잰다 — 두 시뮬이 같은 벤치 정책을 쓰므로 여기가 갈리면 간이 시뮬이 체력을 다르게 추정하는 것이다" },
+    { metric: "간이 교체 중앙 분", role: "reference", min: 60, max: 78, unit: "score", why: "football-reference §6 — 평균 66~70분 (추정)" },
+    { metric: "간이 교체 하프타임 몫", role: "measure", unit: "ratio", why: "하프타임 문턱(`SUB_FATIGUE_HALFTIME`)이 절벽처럼 걸리면 여기가 솟는다 — 실측은 소수다" },
+    { metric: "지정 키커 페널티 성공률 (기대)", role: "reference", min: 0.75, max: 0.83, unit: "ratio", why: "[US] 경기 중 페널티 79% — 팀의 지정 키커(`takerOnPitch`)와 상대 골키퍼로 `penaltyRate`를 낸 평균" },
+    { metric: "필드 상위 다섯 페널티 성공률 (기대)", role: "reference", min: 0.7, max: 0.8, unit: "ratio", why: "승부차기 실측 75% 안팎 — 승부차기의 기본 순서(기량 내림차순)로 앞 다섯이 차는 성공률. 지정 키커와 같은 식(`penaltyRate`)이라 한쪽을 옮기면 다른 쪽도 움직인다" },
   ],
 });
 

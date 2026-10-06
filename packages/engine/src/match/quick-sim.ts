@@ -238,8 +238,11 @@ export const QUICK_HOME_FACTOR = { home: 1.12, away: 0.89 } as const;
 /** 앞선 팀 골 차마다 xG에 곱해지는 e^-k · 뒤진 팀의 e^+k */
 const QUICK_LEAD_LOG_RATE = 0.1;
 const QUICK_TRAIL_LOG_RATE = 0.05;
-/** 빠진 한 명마다 팀 평점을 깎는 몫 — 최대 세 명 (match.md §6.2) */
-const SHORTHANDED_PENALTY = 0.12;
+/**
+ * 빠진 한 명마다 팀 평점을 깎는 몫 — 최대 세 명 (match.md §6.2). 평점 차는 `QUICK_RATING_SLOPE`를
+ * 타고 xG가 되므로 기울기를 옮기면 이 몫도 같은 비로 옮겨야 퇴장의 효과(실점 +15~30%)가 그대로다
+ */
+const SHORTHANDED_PENALTY = 0.07;
 const SHORTHANDED_MAX = 3;
 /**
  * 페널티를 뺀 슈팅당 xG — 슈팅 수의 분모 (실측 0.112, football-reference.md §2). 팀 xG

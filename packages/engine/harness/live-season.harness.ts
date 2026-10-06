@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { SubCause } from "@gaffer/domain";
+import { CONDITION_MAX, FATIGUE_BAND_FLOOR, fatigueOf } from "@gaffer/domain";
 import {
   familiarityOf,
   firstTeamPlayers,
@@ -6,19 +8,92 @@ import {
   playersOf,
   type GameState,
 } from "@gaffer/engine";
-import { CONDITION_MAX, FATIGUE_BAND_FLOOR, fatigueOf } from "@gaffer/domain";
-import { createTestGame } from "../test/helpers";
-import { AI_FITNESS } from "./catalog";
+import { createTestGame, keepSeat } from "../test/helpers";
+import { AI_BENCH, AI_FITNESS } from "./catalog";
 import { playSeason, playUntil } from "./season";
 import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
- * 한 시즌을 다 굴린 뒤의 **체력·출전 분포** — 리그가 우리와 같은 규칙으로 돌았는가.
- * 개막 아침에 한 번 멈춰 **프리시즌이 몸에 남긴 것**도 잰다 (player.md §5.5): 시즌 말
- * 스냅숏에는 남지 않는 값이라 그 자리에서만 보인다.
+ * **감독의 경기를 실시간으로 치르며 도는 시즌** — 같은 시즌을 두 서술자가 나눠 읽는다.
  *
- *   pnpm balance ai-fitness
+ * - `ai-bench` — 상대 벤치가 쓴 교체의 수·시점·갈래, 감독 대역의 교체 수 (match.md §3.3)
+ * - `ai-fitness` — 시즌을 돈 뒤의 체력·적응도·누적 피로, 개막이 남긴 피로 (match.md §8.6)
+ *
+ * 실시간 경기 한 판이 20초 남짓이라 시즌 하나가 20분을 넘는다. 서술자마다 제 시즌을 굴리면
+ * 같은 시드(7)를 두 번 돈다. 감독 팀에도 AI 벤치 정책이 걸린다(`playSeason`의 대역).
+ *
+ * 재는 것은 손잡이(`SUB_CHASE_MINUTE`·`SUB_HOLD_MINUTE`·장수 상한)가 실제 경기 분포로
+ * 번역됐는가다. 문턱을 여기에 다시 적지 않는다 — 갈래를 가르는 열쇠는 실시간 경기가 쥔
+ * `subCause`이고, 밴드는 서술자가 쥔다.
+ *
+ *   pnpm balance live-season
  */
+
+/** 벤치는 두 시드를 모아 읽고, 체력은 첫 시드의 시즌 하나로 읽는다 */
+const SEEDS = [7, 11];
+const FITNESS_SEED = 7;
+
+/** 후반 교체가 몰리는 구간의 시작 — 분포를 읽는 눈금이지 문턱이 아니다 */
+const LATE = 60;
+
+interface Tally {
+  matches: number;
+  /** 감독 팀이 쓴 교체 — 대역(`userBench`)이 실제로 교체하는가 */
+  userSubs: number;
+  subs: number[];
+  chase: number;
+  hold: number;
+  fatigue: number;
+  injury: number;
+  /** 끝까지 뒤진 경기 · 그중 승부수를 던진 경기 */
+  trailed: number;
+  trailedChased: number;
+  led: number;
+  ledHeld: number;
+  reshaped: number;
+}
+
+function collect(state: GameState, tally: Tally): void {
+  const pending = state.pendingMatch;
+  if (!pending) return;
+  const match = state.matches.find((m) => m.id === pending.matchId);
+  if (!match) return;
+  const aiSide = match.homeTeamId === state.userTeamId ? "away" : "home";
+  const score = pending.live.ledger.score;
+  const diff = aiSide === "home" ? score.home - score.away : score.away - score.home;
+
+  const subs = pending.live.ledger.events.filter(
+    (e) => e.type === "substitution" && e.team === aiSide,
+  );
+  tally.userSubs += pending.live.ledger.events.filter(
+    (e) => e.type === "substitution" && e.team !== aiSide,
+  ).length;
+  const of = (cause: SubCause) => subs.filter((e) => e.subCause === cause).length;
+
+  tally.matches += 1;
+  for (const sub of subs) tally.subs.push(sub.minute);
+  tally.chase += of("chase");
+  tally.hold += of("hold");
+  tally.fatigue += of("fatigue");
+  tally.injury += of("injury");
+  if (pending.live.ledger.events.some((e) => e.type === "tactical_shift" && e.team === aiSide))
+    tally.reshaped += 1;
+  if (diff < 0) {
+    tally.trailed += 1;
+    if (of("chase") > 0) tally.trailedChased += 1;
+  }
+  if (diff > 0) {
+    tally.led += 1;
+    if (of("hold") > 0) tally.ledHeld += 1;
+  }
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return Number.NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+}
 
 /** 상위 n명의 평균 체력 — 라인업에 설 만한 자원이 얼마나 신선한가 */
 function topCondition(state: GameState, teamId: string, n: number): number {
@@ -87,9 +162,26 @@ const XI = 11;
 /** "프리시즌을 치렀다"로 볼 친선 출전 수 — 넷 중 셋 */
 const PRESEASON_PLAYED = 3;
 
-describe("한 시즌을 돈 뒤의 체력·출전 분포", () => {
-  it("시드 7", () => {
-    const state = createTestGame(7);
+describe("감독의 경기를 실시간으로 치르는 시즌", () => {
+  const tally: Tally = {
+    matches: 0,
+    userSubs: 0,
+    subs: [],
+    chase: 0,
+    hold: 0,
+    fatigue: 0,
+    injury: 0,
+    trailed: 0,
+    trailedChased: 0,
+    led: 0,
+    ledHeld: 0,
+    reshaped: 0,
+  };
+
+  it(`시드 ${FITNESS_SEED} — 체력·출전 분포 (ai-fitness)`, () => {
+    const state = createTestGame(FITNESS_SEED);
+    // 경질은 시계를 멈춘다 — 한 시즌을 다 돌아야 분포가 선다
+    keepSeat(state);
 
     /**
      * ── 개막 아침 — **프리시즌이 몸에 무엇을 남겼는가** ──
@@ -98,7 +190,7 @@ describe("한 시즌을 돈 뒤의 체력·출전 분포", () => {
      * **누적 피로**다 (player.md §5.5). 적응도 쪽은 친선을 뛰었는지가 아니라 여름을
      * 클럽 밖에서 보냈는지가 가르므로(§7.4) 무리를 나눠 재지 않고 상위 14명으로 읽는다.
      */
-    playUntil(state, state.calendar.start);
+    playUntil(state, state.calendar.start, (s) => collect(s, tally));
     const friendlyApps = friendlyAppsOf(state);
     const ours = firstTeamPlayers(state, state.userTeamId);
     const played = ours.filter((p) => (friendlyApps.get(p.id) ?? 0) >= PRESEASON_PLAYED);
@@ -123,17 +215,21 @@ describe("한 시즌을 돈 뒤의 체력·출전 분포", () => {
      * 시즌의 **어느 날에도** 쓸 만해야 한다는 것이 위 첫 가드의 뜻이고, 시즌 말
      * 스냅숏은 그 어느 날이 아니다.
      *
-     * ⚠️ **감독 팀에는 대지 않는다.** 이 하네스의 감독 팀은 시즌 내내 같은 XI를
-     * 세우므로 나머지 열넷이 늘 신선하다 — 그 팀의 「상위 14명」은 무엇을 해도 100
+     * ⚠️ **감독 팀에는 대지 않는다.** 이 하네스의 감독 팀은 시즌 내내 같은 XI로
+     * 선발하므로(교체만 한다) 나머지가 늘 신선하다 — 그 팀의 「상위 14명」은 무엇을 해도 100
      * 근처라 아무것도 판정하지 못한다. 리그의 건강을 재는 자리는 로테이션하는 쪽이다.
      */
     let theirFloor = CONDITION_MAX;
-    playSeason(state, undefined, (day) => {
-      ourPeak = Math.max(ourPeak, topLoad(day, day.userTeamId, XI));
-      theirPeak = Math.max(theirPeak, mean(RIVALS.map((t) => topLoad(day, t, XI))));
-      overloadPeak = Math.max(overloadPeak, overloadedCount(day, day.userTeamId));
-      theirFloor = Math.min(theirFloor, ...RIVALS.map((t) => topCondition(day, t, LINEUP)));
-    });
+    playSeason(
+      state,
+      (s) => collect(s, tally),
+      (day) => {
+        ourPeak = Math.max(ourPeak, topLoad(day, day.userTeamId, XI));
+        theirPeak = Math.max(theirPeak, mean(RIVALS.map((t) => topLoad(day, t, XI))));
+        overloadPeak = Math.max(overloadPeak, overloadedCount(day, day.userTeamId));
+        theirFloor = Math.min(theirFloor, ...RIVALS.map((t) => topCondition(day, t, LINEUP)));
+      },
+    );
 
     const us = topCondition(state, state.userTeamId, LINEUP);
     const spread = [...RIVALS, "newcastle"].map((t) => topCondition(state, t, LINEUP));
@@ -177,10 +273,45 @@ describe("한 시즌을 돈 뒤의 체력·출전 분포", () => {
       reportOf(
         AI_FITNESS,
         readings,
-        `시드 7 · 우리 ${us.toFixed(1)} vs 상대 ${them.toFixed(1)} · ` +
+        `시드 ${FITNESS_SEED} · 우리 ${us.toFixed(1)} vs 상대 ${them.toFixed(1)} · ` +
           `개막 프리시즌 친선 ${played.length}명 / 미출전 ${rested.length}명`,
       ),
     );
     expect(outOfBand(AI_FITNESS, readings)).toEqual([]);
+  });
+
+  for (const seed of SEEDS.filter((s) => s !== FITNESS_SEED)) {
+    it(`시드 ${seed} — 벤치 표본`, () => {
+      const state = createTestGame(seed);
+      keepSeat(state);
+      playSeason(state, (s) => collect(s, tally));
+    });
+  }
+
+  it(`상대 벤치가 스코어와 남은 시간을 읽는가 — 시드 ${SEEDS.join("·")} (ai-bench)`, () => {
+    const per = (n: number) => n / (tally.matches || 1);
+    const readings: Readings<typeof AI_BENCH> = {
+      "AI 교체/경기": per(tally.subs.length),
+      "승부수 교체/경기": per(tally.chase),
+      "굳히기 교체/경기": per(tally.hold),
+      "체력 교체/경기": per(tally.fatigue),
+      "부상 교체/경기": per(tally.injury),
+      "끝까지 뒤진 경기에서 승부수를 던진 비율": tally.trailedChased / (tally.trailed || 1),
+      "끝까지 앞선 경기에서 굳힌 비율": tally.ledHeld / (tally.led || 1),
+      "AI 교체의 60′ 이후 비율":
+        tally.subs.filter((m) => m >= LATE).length / (tally.subs.length || 1),
+      "AI 교체 중앙 분": median(tally.subs),
+      "판의 모양을 바꾼 경기 비율": tally.reshaped / (tally.matches || 1),
+      "잰 경기 수": tally.matches,
+      "감독 팀 교체/경기": per(tally.userSubs),
+    };
+    console.log(
+      reportOf(
+        AI_BENCH,
+        readings,
+        `시드 ${SEEDS.join("·")} · 뒤진 경기 ${tally.trailed} · 앞선 경기 ${tally.led}`,
+      ),
+    );
+    expect(outOfBand(AI_BENCH, readings)).toEqual([]);
   });
 });

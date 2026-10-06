@@ -45,33 +45,33 @@ pnpm balance --report out --deadline 150  # 150분에 끊고 그때까지 온 �
 목록의 원본은 `pnpm balance --list`다. 여기 적는 것은 어느 문서가 그 밴드의 근거를
 쥐고 있는지뿐이다.
 
-| 하네스                 | 무엇을 재는가                                                                                        | 근거                                                                                          |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `world-season`         | 한 시즌 득점·슈팅 분포 · 도움 · 승점 곡선 · 카드                                                     | [match](match/match.md) §8 · [football-reference](match/football-reference.md)                |
-| `ai-rotation`          | AI 스쿼드 체력 분포 · 로테이션 문턱 발동률                                                           | [match](match/match.md) §8.6                                                                  |
-| `league-spread`        | 20팀 38경기 상위 리그 셋의 승점 곡선 — 평균과 표준편차                                               | [match](match/match.md) §8.2                                                                  |
-| `live-match-stats`     | 실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·코너·거리·볼 인플레이의 평균·중간값·sd | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md)    |
-| `live-goal-anatomy`    | 실시간 경기의 골·슛 해부 — 득점 시각 · 세트피스·페널티·헤더 몫 · 도움 · 자리별 슈팅·득점 몫          | [football-reference](match/football-reference.md) §2 · §8                                     |
-| `live-formations`      | 대표 포메이션 다섯(양 팀 같은 모양)마다 득점·슈팅·xG·패스·거리·크로스와 자리별 슈팅 몫               | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md) §8 |
-| `live-player-load`     | 풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표(`EXPECTED_LOAD`)에 서는가          | [live-match](match/live-match.md) §7 · [football-reference](match/football-reference.md) §7   |
-| `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                      | [live-match](match/live-match.md) §6 · §9.3                                                   |
-| `quick-outcomes`       | 간이 시뮬의 연장 득점·카드 · 퇴장 효과                                                               | [match](match/match.md) §6.2 · §8.6                                                           |
-| `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가             | [match](match/match.md) §8.5 · [live-match](match/live-match.md) §9.3                         |
-| `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                    | [match](match/match.md) §4.1                                                                  |
-| `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입 · 대항전 상금 비중                                 | [finance](team/finance.md) §10.1                                                              |
-| `finance-leagues`      | 리그별 잔고 — 어느 리그도 구조적 적자가 아니다                                                       | [finance](team/finance.md) §10.3                                                              |
-| `finance-second-tier`  | 리그전을 굴리지 않는 2부의 한 시즌 수지                                                              | [finance](team/finance.md) §9.1                                                               |
-| `finance-multi-season` | 세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다                                              | [finance](team/finance.md) §10.3                                                              |
-| `ai-fitness`           | 한 시즌 뒤 AI 스쿼드 체력 · 출전 분산 · 전술 적응도 · 누적 피로                                      | [match](match/match.md) §8.6                                                                  |
-| `ai-bench`             | 감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래                                                   | [match](match/match.md) §3.3                                                                  |
-| `squad-longevity`      | 15시즌 뒤의 선발 XI·계약 · 리그 체급과 그 천장의 드리프트(가드)                                      | [season](season/season.md) §6·§9                                                              |
-| `youth-development`    | 2군 경기 수 · 출전·집중 육성이 가르는 성장 격차 · 다음 여름의 인테이크                               | [season](season/season.md) §2·§6                                                              |
-| `youth-intake-tail`    | 한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히                              | [season](season/season.md) §6                                                                 |
-| `attribute-model`      | 자체 산정 모델이 낸 분포와 지금 시드 분포의 간격                                                     | [player](players/player.md) §13                                                               |
-| `overall-scale`        | 종합을 읽는 눈금 — 리그별·연령별 분포                                                                | [player](players/player.md) §4                                                                |
-| `history-window`       | 평시 이력의 창 — 몇 턴이 남는가 · 압축 주기 · 렌더 배율                                              | [agents](agents/agents.md) §5-1                                                               |
-| `prompt-regression`    | 프롬프트 층의 글자·프리픽스 안정성 · 장면 문법·도구                                                  | [prompts](agents/prompts.md) §7                                                               |
-| `live-schema`          | 출력 스키마로 나가는 산출 선언 열을 제공자가 실제로 받는가                                           | [prompts](agents/prompts.md) §2                                                               |
+| 하네스                 | 무엇을 재는가                                                                                             | 근거                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `world-season`         | 한 시즌 득점·슈팅 분포 · 득점 시각 · 도움 · 평점 평균 · 승점 곡선 · 카드                                  | [match](match/match.md) §8 · [football-reference](match/football-reference.md)                |
+| `ai-rotation`          | AI 스쿼드 체력 분포 · 로테이션 문턱 발동률                                                                | [match](match/match.md) §8.6                                                                  |
+| `league-spread`        | 20팀 38경기 상위 리그 셋의 승점 곡선 — 평균과 표준편차                                                    | [match](match/match.md) §8.2                                                                  |
+| `live-match-stats`     | 실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·부상·코너·거리·볼 인플레이의 평균·중간값·sd | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md)    |
+| `live-goal-anatomy`    | 실시간 경기의 골·슛 해부 — 득점 시각 · 세트피스·페널티·헤더 몫 · 도움 · 자리별 슈팅·득점 몫               | [football-reference](match/football-reference.md) §2 · §8                                     |
+| `live-formations`      | 대표 포메이션 다섯(양 팀 같은 모양)마다 득점·슈팅·xG·패스·거리·크로스와 자리별 슈팅 몫                    | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md) §8 |
+| `live-player-load`     | 풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표(`EXPECTED_LOAD`)에 서는가               | [live-match](match/live-match.md) §7 · [football-reference](match/football-reference.md) §7   |
+| `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                           | [live-match](match/live-match.md) §6 · §9.3                                                   |
+| `quick-outcomes`       | 간이 시뮬의 연장 득점·카드 · 퇴장 효과 · AI 교체 수·시점 · 페널티 성공률                                  | [match](match/match.md) §6.2 · §8.6                                                           |
+| `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가                  | [match](match/match.md) §8.5 · [live-match](match/live-match.md) §9.3                         |
+| `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                         | [match](match/match.md) §4.1                                                                  |
+| `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입 · 대항전 상금 비중                                      | [finance](team/finance.md) §10.1                                                              |
+| `finance-leagues`      | 리그별 잔고 — 어느 리그도 구조적 적자가 아니다                                                            | [finance](team/finance.md) §10.3                                                              |
+| `finance-second-tier`  | 리그전을 굴리지 않는 2부의 한 시즌 수지                                                                   | [finance](team/finance.md) §9.1                                                               |
+| `finance-multi-season` | 세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다                                                   | [finance](team/finance.md) §10.3                                                              |
+| `ai-fitness`           | 한 시즌 뒤 AI 스쿼드 체력 · 출전 분산 · 전술 적응도 · 누적 피로                                           | [match](match/match.md) §8.6                                                                  |
+| `ai-bench`             | 감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래 · 감독 대역의 교체 수                                  | [match](match/match.md) §3.3                                                                  |
+| `squad-longevity`      | 15시즌 뒤의 선발 XI·계약 · 리그 체급과 그 천장의 드리프트(가드)                                           | [season](season/season.md) §6·§9                                                              |
+| `youth-development`    | 2군 경기 수 · 출전·집중 육성이 가르는 성장 격차 · 다음 여름의 인테이크                                    | [season](season/season.md) §2·§6                                                              |
+| `youth-intake-tail`    | 한 여름 세계 전체 인테이크의 잠재력·종합 꼬리 — 시드 세계 분포와 나란히                                   | [season](season/season.md) §6                                                                 |
+| `attribute-model`      | 자체 산정 모델이 낸 분포와 지금 시드 분포의 간격                                                          | [player](players/player.md) §13                                                               |
+| `overall-scale`        | 종합을 읽는 눈금 — 리그별·연령별 분포 · 자리별 폭과 축 범위의 불변식                                      | [player](players/player.md) §4                                                                |
+| `history-window`       | 평시 이력의 창 — 몇 턴이 남는가 · 압축 주기 · 렌더 배율                                                   | [agents](agents/agents.md) §5-1                                                               |
+| `prompt-regression`    | 프롬프트 층의 글자·프리픽스 안정성 · 장면 문법·도구                                                       | [prompts](agents/prompts.md) §7                                                               |
+| `live-schema`          | 출력 스키마로 나가는 산출 선언 열을 제공자가 실제로 받는가                                                | [prompts](agents/prompts.md) §2                                                               |
 
 ### 같은 경기를 여러 서술자가 읽는다
 
@@ -83,6 +83,16 @@ pnpm balance --report out --deadline 150  # 150분에 끊고 그때까지 온 �
 
 `world-season`도 같은 이유로 표를 **시드를 모은 뒤 한 번** 세운다 — 한 리그-시즌의
 분포 칸은 시드마다 ±2%p씩 흔들려, 시드별 표 여섯 장은 그 흔들림을 신호처럼 보인다.
+
+**한 파일이 여러 서술자를 돌리는 자리** — 거르는 이름은 서술자 id가 아니라 파일 이름이다.
+
+| 파일 (`pnpm balance <이름>`) | 서술자                                                                               | 함께 쓰는 것                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `live-baseline`              | `live-match-stats` · `live-goal-anatomy` · `live-player-load` · `sim-parity`         | 전술을 건드리지 않은 실시간 경기 72경기                                  |
+| `live-season`                | `ai-bench` · `ai-fitness`                                                            | 감독 경기를 실시간으로 치르는 시즌 둘(시드 7 · 11)                       |
+| `world-season`               | `world-season` · `ai-rotation` · `league-spread`                                     | 간이 시뮬로 굴린 여섯 시즌                                               |
+| `quick-sim`                  | `injury-rate` · `quick-outcomes`                                                     | 고정 대진을 간이 시뮬로 수천~수만 번                                     |
+| `finance`                    | `finance-tier1` · `finance-leagues` · `finance-second-tier` · `finance-multi-season` | 시드 42의 세 시즌(시즌 1은 한 시즌 표본으로도 읽는다) · 시드 7의 한 시즌 |
 
 ### 평균을 보는 가드와 꼬리를 보는 가드는 따로 선다
 

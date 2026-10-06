@@ -16,6 +16,7 @@ import {
   simSquadOf,
   type GameState,
   eventTexts,
+  RATING_BASELINE,
 } from "@gaffer/engine";
 import { createTestGame, drillUserTactics, settleMatchdayQuick } from "../test/helpers";
 import { AI_ROTATION, LEAGUE_SPREAD, WORLD_SEASON } from "./catalog";
@@ -158,6 +159,26 @@ function ratio(n: number, total: number): number {
   return n / Math.max(1, total);
 }
 
+/**
+ * 득점 시각 한 구간의 몫 — 실측(football-reference.md §2)은 하프 안에서도 뒤로 갈수록 붐빈다.
+ * 간이 시뮬은 추가시간 축이 없어 90+ 골이 76~90에 접히므로 마지막 칸은 둘을 합쳐 읽는다.
+ */
+function goalShareBetween(minutes: readonly number[], from: number, to: number): number {
+  return ratio(minutes.filter((m) => m >= from && m <= to).length, minutes.length);
+}
+
+/**
+ * 출전당 평점 평균 — 시즌 기록의 `ratingSum ÷ apps`. 폼은 이 평균을 중립점(`RATING_BASELINE`)과
+ * 견주므로, 둘이 갈리면 리그 전체의 폼이 경기마다 한쪽으로 조용히 기운다 (player.md §5)
+ */
+function ratingMeanOf(state: GameState, competitionId: string): number {
+  const rows = state.seasonStats.filter(
+    (r) => r.season === state.season && r.competitionId === competitionId,
+  );
+  const apps = rows.reduce((a, r) => a + r.apps, 0);
+  return rows.reduce((a, r) => a + (r.ratingSum ?? 0), 0) / Math.max(1, apps);
+}
+
 function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
   const played = state.matches.filter(
     (m) => m.result && m.competitionId === LEAGUE && m.season === state.season,
@@ -185,6 +206,7 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
     ratio(origins.filter((o) => kinds.includes(o)).length, played.length);
 
   const draw = played.filter((m) => m.result!.homeGoals === m.result!.awayGoals).length;
+  const goalMinutes = played.flatMap((m) => m.result!.goalMinutes);
 
   return {
     "리그 평균 슈팅/경기": shotMean * 2,
@@ -222,6 +244,13 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
       played.flatMap((m) => m.result!.goalMinutes).filter((minute) => minute <= 45).length,
       played.reduce((a, m) => a + m.result!.goalMinutes.length, 0),
     ),
+    "득점 시각 1~15분": goalShareBetween(goalMinutes, 0, 15),
+    "득점 시각 16~30분": goalShareBetween(goalMinutes, 16, 30),
+    "득점 시각 31~45분": goalShareBetween(goalMinutes, 31, 45),
+    "득점 시각 46~60분": goalShareBetween(goalMinutes, 46, 60),
+    "득점 시각 61~75분": goalShareBetween(goalMinutes, 61, 75),
+    "득점 시각 76~90분": goalShareBetween(goalMinutes, 76, 90),
+    "평점 평균 − 폼 중립점": ratingMeanOf(state, LEAGUE) - RATING_BASELINE,
     "도움 붙은 골 비중": ratio(
       played.flatMap((m) => m.result!.assists).filter((a) => a !== "").length,
       played.reduce((a, m) => a + m.result!.assists.length, 0),

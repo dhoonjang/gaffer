@@ -21,7 +21,7 @@ const round3 = (x: number) => Math.round(x * 1000) / 1000;
  * 반대로 중앙보다 높이 두면 평균적인 경기가 폼을 깎아 리그 전체가 가라앉는다 — 실측
  * 득점 분포의 리그에서 앵커 평점의 평균이 6.1이다.
  */
-const RATING_BASELINE = 6.1;
+export const RATING_BASELINE = 6.1;
 /** 평점 1점당 폼 변화 — 평점 7.5면 +0.33, 5.0이면 −0.26 (침착성 보정 전) */
 const RATING_WEIGHT = 0.233;
 /** 팀 결과는 약하게 얹는다 — 폼의 주인은 개인 활약이다 */

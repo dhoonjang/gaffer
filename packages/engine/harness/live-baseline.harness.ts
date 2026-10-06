@@ -299,6 +299,13 @@ describe("실시간 경기 기준판", () => {
       파울: mean(of((t) => t.line.fouls)),
       경고: mean(of((t) => t.yellows)),
       퇴장: mean(of((t) => t.reds)),
+      "퇴장 중 두 번째 경고 몫":
+        sum((t) => t.secondYellows) /
+        Math.max(
+          1,
+          sum((t) => t.reds),
+        ),
+      "부상/팀": mean(of((t) => t.injuries)),
       코너: mean(of((t) => t.line.corners)),
       크로스: mean(of((t) => t.line.crosses)),
       오프사이드: mean(of((t) => t.line.offsides)),

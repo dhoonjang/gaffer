@@ -46,6 +46,11 @@ function scaleReadings(state: GameState): Readings<typeof OVERALL_SCALE> {
     bySlot.set(slot, [...(bySlot.get(slot) ?? []), playerOverall(p)]);
   }
   const slotMean = (slot: WeightSlot) => meanOf(bySlot.get(slot) ?? []);
+  /** 자리별 평균의 최대 − 최소 — 선수가 하나라도 선 자리만 */
+  const slotSpread = () => {
+    const means = [...bySlot.values()].filter((xs) => xs.length > 0).map(meanOf);
+    return Math.max(...means) - Math.min(...means);
+  };
 
   // 돈은 EPL만 — 전 세계 5,700명에 계약 조회를 걸면 몇 분이 된다
   const eplTeams = new Set(computeStandings(state, "epl").map((r) => r.teamId));
@@ -78,6 +83,7 @@ function scaleReadings(state: GameState): Readings<typeof OVERALL_SCALE> {
     "자리별 평균 W": slotMean("W"),
     "자리별 평균 CF": slotMean("CF"),
     "자리별 평균 ST": slotMean("ST"),
+    "자리별 평균 폭": slotSpread(),
     "축 범위 위로 벗어난 비율": share(above),
     "축 범위 아래로 벗어난 비율": share(below),
     // 화면의 등급 색이 읽는 문턱 그대로
