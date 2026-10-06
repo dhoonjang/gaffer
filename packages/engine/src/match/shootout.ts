@@ -118,13 +118,18 @@ export function rollShootoutKick(
   const next = nextShootoutKick(kicks, first);
   if (!next) return null;
 
-  const takers = shootoutOrder(state, match, next.team, order?.[next.team]);
+  const other = next.team === "home" ? "away" : "home";
+  // 인원이 다르면 많은 쪽이 적은 쪽 수에 맞춰 줄인다 — 순서의 뒤에서 (Laws of the Game 10.2)
+  const takers = shootoutOrder(state, match, next.team, order?.[next.team]).slice(
+    0,
+    shootoutOrder(state, match, other, order?.[other]).length,
+  );
   // 찰 사람이 아무도 없는 명단 — 빈 팀에서만 생기고, 그때는 굴릴 것이 없다
   if (takers.length === 0) return null;
   // 열한 발을 다 쓰면 처음으로 돌아간다
   const taken = kicks.filter((k) => k.team === next.team).length;
   const taker = takers[taken % takers.length]!;
-  const keeper = shootoutKeeper(state, match, next.team === "home" ? "away" : "home");
+  const keeper = shootoutKeeper(state, match, other);
   const probability = penaltyRate(taker, keeper);
 
   // 성공 판정 하나, 실패의 갈래 하나 — 같은 rng에서 순서대로 뽑는다

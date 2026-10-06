@@ -116,6 +116,11 @@ export interface BallFlight {
   receiver?: string;
   /** 찬 순간 받는 말이 오프사이드였나 */
   offside?: boolean;
+  /**
+   * 찬 순간 오프사이드 자리에 선 차는 편의 말 — 크로스·뜬 공은 받을 사람이 정해져 있지 않아,
+   * 공중볼을 따낸 말이 여기 있으면 오프사이드다. 스로인·골킥·코너에서는 비어 있다
+   */
+  offsideIds?: string[];
   speed: number;
   travelled: number;
   distance: number;

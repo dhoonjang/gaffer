@@ -127,12 +127,16 @@ export function sampleShot(
 
 /** 성공률의 바닥 — 아무리 약한 키커도 이 아래로 내려가지 않는다 */
 const PENALTY_FLOOR = 0.62;
-/** 성공률의 천장 — 아무리 강한 키커도 이 위로 올라가지 않는다 */
-const PENALTY_CEILING = 0.8;
-/** 키커와 골키퍼의 기량이 같을 때의 성공률 — 대역의 가운데 */
-const PENALTY_BASE = 0.71;
-/** 기량 차 1당 오르내리는 폭 — 26점 차가 대역의 끝에 닿는다 */
-const PENALTY_EDGE = 0.0035;
+/** 성공률의 천장 — 실측 최상위 전담 키커가 85~90% */
+const PENALTY_CEILING = 0.9;
+/**
+ * 키커와 골키퍼의 기량이 같을 때의 성공률. 시드 세계에서 팀의 지정 키커는 상대 골키퍼보다
+ * 기량이 6쯤 높아 경기 중 페널티가 실측 79%에 서고(football-reference.md §2), 필드 전원이
+ * 차는 승부차기는 그보다 몇 %p 낮게 선다
+ */
+const PENALTY_BASE = 0.765;
+/** 기량 차 1당 오르내리는 폭 */
+const PENALTY_EDGE = 0.004;
 
 /** 키커의 페널티 기량 — 결정력·침착성·킥력의 가중 평균 */
 const PENALTY_WEIGHTS = { finishing: 0.5, composure: 0.3, kicking: 0.2 } as const;
@@ -164,7 +168,7 @@ export function keeperSkill(p: Player | null): number {
 /**
  * 이 킥의 성공 확률 — 키커와 골키퍼의 기량 차가 정한다.
  *
- * ⚠️ **양쪽 다 막는다.** 대역(0.62~0.80)은 문서가 쥔 값이고, 페널티가 실력이 덜
+ * ⚠️ **양쪽 다 막는다.** 대역(0.62~0.90)은, 페널티가 실력이 덜
  * 갈리는 무대라는 설계가 거기 들어 있다 (→ docs/season/competition.md §6).
  *
  * 경기 중 페널티는 이 값이 곧 그 슛의 `xg`이자 `goalProbability`다 — 결정력을 한 번

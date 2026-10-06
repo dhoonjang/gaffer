@@ -180,13 +180,24 @@ export const SHOT_SPEED_SPAN = 12;
 export const HEADER_SHOT_HEIGHT = 1.6;
 
 /** 슈팅 오차(m, 골라인에서) — 결정력 0에서 */
-export const SHOT_ERROR_BASE = 5.4;
+export const SHOT_ERROR_BASE = 7.0;
 
 /** 결정력 99가 줄이는 몫 */
 export const SHOT_ERROR_SKILL = 0.6;
 
-/** 선방 — 골키핑 60이 정면의 중간 슛을 막는 확률의 로짓 */
-export const SAVE_LOGIT_BASE = 2;
+/**
+ * 슈팅 오차가 거리에 붙는 꼴 — 오차는 발끝의 **각도**라 골라인에서의 어긋남이 거리에 비례한다.
+ * 배율 = `SHOT_ERROR_NEAR` + 거리 ÷ `SHOT_ERROR_RANGE`: 5m 0.5 · 15m 1.2 · 25m 1.9
+ */
+export const SHOT_ERROR_NEAR = 0.16;
+
+export const SHOT_ERROR_RANGE = 14.7;
+
+/**
+ * 선방 — 골키핑 60이 정면의 중간 슛을 막는 확률의 로짓. 거리는 따로 얹지 않는다 — 먼 슛은
+ * 오차(`SHOT_ERROR_*`)가 이미 흩어 놓아, 거리 항을 더하면 박스 밖 슛이 거의 들어가지 않는다
+ */
+export const SAVE_LOGIT_BASE = 2.9;
 
 /** 골키퍼가 슛에 반응하는 시간 (초) */
 export const KEEPER_REACTION_SECONDS = 0.15;
@@ -201,9 +212,6 @@ export const SAVE_KEEPER_SCALE = 15;
 
 /** 골문 중심에서 벗어난 1m당 선방 로짓의 감소 */
 export const SAVE_PLACEMENT = 0.55;
-
-/** 슈팅 거리 1m당 선방 로짓의 증가 */
-export const SAVE_DISTANCE = 0.075;
 
 /** 첫 터치가 흘러 나가는 기본 확률 — 드리블 0·압박 없음에서 */
 export const TOUCH_ERROR_BASE = 0.22;
@@ -223,7 +231,7 @@ export const HEADER_SHOT_CHANCE = 0.6;
 export const TRANSITION_SECONDS = 5;
 
 /** 슈팅을 고르는 효용의 배율 — 패스의 위협 이득과 같은 저울에 올린다 */
-export const SHOT_VALUE = 1.0;
+export const SHOT_VALUE = 1.66;
 
 /** 패스·운반의 위협 이득에 곱하는 배율 */
 export const THREAT_VALUE = 3;
@@ -587,6 +595,17 @@ export const KEEPER_ATTACK_ADVANCE = 0.25;
 
 export const KEEPER_ATTACK_MAX_OUT = 25;
 
+/**
+ * 골키퍼의 1대1 — 공 가진 상대가 우리 박스 안에서 몸이 닿는 거리 (m) 안이면 틱마다 이 확률로
+ * 발밑에 몸을 던지고, 덮칠지는 골키핑 − 드리블에 이 값을 얹어 `DUEL_SCALE`로 잰다. 각을
+ * 좁히며 나가는 걸음은 아직 없다 — 공 물리가 나온 골키퍼의 몸이 가리는 각을 모른다
+ */
+export const KEEPER_SMOTHER_RANGE = 1.6;
+
+export const KEEPER_SMOTHER_ATTEMPT = 0.06;
+
+export const KEEPER_SMOTHER_EDGE = 5;
+
 // ── 이동과 순간 여력 (`physics.ts`) ──────────────────────────────────────────────
 
 /** 스피드 0의 최고 속도 (m/s) — 25 km/h */
@@ -656,6 +675,17 @@ export const GROUND_FRICTION = 0.9;
 
 /** 공격 중 공을 따라 나가는 흐름을 `hold`가 줄이는 몫 — 수비 라인도 하프라인까지는 따라 오른다 */
 export const ATTACK_FOLLOW_HOLD = 0.35;
+
+/**
+ * 공을 가졌을 때 블록이 공을 따라 오르는 몫 — 공 깊이가 하프라인 근처(45m)에서 1m 오를 때마다.
+ * 공이 상대 박스 앞에 가면 센터백은 하프라인 근처까지, 미드필더는 박스 모서리 근처까지 올라와
+ * 두 번째 공과 박스 밖 슈팅을 받는다. 위아래 끝이 블록이 움직이는 폭이다
+ */
+export const ATTACK_FOLLOW_RATE = 0.7;
+
+export const ATTACK_FOLLOW_MIN = -14;
+
+export const ATTACK_FOLLOW_MAX = 36;
 
 /** 수비 블록이 공을 따라 오르내리는 배율 — `cover` 0에서의 값과 `cover` 1이 더하는 값 */
 export const DEFEND_SHIFT_BASE = 0.7;
@@ -988,13 +1018,13 @@ export const BLOCK_SLIDE_PER_STEP = 0.05;
 export const AMBITION_PER_MENTALITY_STEP = 0.15;
 
 /** 멘탈리티 한 칸이 슈팅을 고르는 문턱 xG를 내리는 폭 — 공격적인 팀은 반 박자 먼저 찬다 */
-export const SHOT_THRESHOLD_PER_MENTALITY_STEP = 0.024;
+export const SHOT_THRESHOLD_PER_MENTALITY_STEP = 0.006;
 
 /**
  * 멘탈리티 중립에서 슈팅을 고르는 최소 xG — 실측은 팀 슈팅 12.6 · 슈팅당 xG 0.12다. 문턱이
  * 높으면 좋은 기회만 차서 슈팅이 적고 슈팅당 xG가 부푼다
  */
-export const SHOT_THRESHOLD_NEUTRAL = 0.118;
+export const SHOT_THRESHOLD_NEUTRAL = 0.03;
 
 /**
  * 거리의 문턱 — 골문에서 `SHOT_NEAR_RANGE` (m) 안이면 문턱의 `SHOT_NEAR_SHARE`만 넘어도 슈팅이
@@ -1007,6 +1037,22 @@ export const SHOT_FAR_RANGE = 22;
 
 export const SHOT_NEAR_SHARE = 0.85;
 
+/**
+ * 역할의 `shoot` 성향이 슈팅을 기울이는 폭 — 중립(0.5)에서 1만큼 벗어날 때 문턱이 줄어드는 몫과
+ * 효용이 커지는 몫. 슈팅 몫은 자리마다 실측이 있다(football-reference.md §8 — 스트라이커
+ * 27% · 측면 27% · 중앙 미드 22%) — 성향이 너무 크게 기울이면 최전방이 슈팅을 독차지한다
+ */
+export const SHOT_TENDENCY_THRESHOLD = 0.4;
+
+export const SHOT_TENDENCY_VALUE = 0.3;
+
+/**
+ * 슈팅이 내려놓는 지금 자리의 위협 몫 — 슛은 소유를 끝내므로, 패스가 위협의 **이득**으로 재는
+ * 것과 같은 저울에서 슛도 지금 자리의 위협(xT)을 치른다. 0이면 박스 안에서 공을 잡은 말은 더
+ * 나은 패스가 있어도 찬다
+ */
+export const SHOT_KEEP_SHARE = 0.5;
+
 /** 멘탈리티 한 칸이 공격 가담(형태의 전진·침투·박스 진입)에 더하는 배율 */
 export const COMMIT_PER_MENTALITY_STEP = 0.2;
 
@@ -1016,9 +1062,9 @@ export const COMMIT_PER_MENTALITY_STEP = 0.2;
  * 기준 — 페널티를 뺀 일반 플레이 슈팅이 실제로 들어가는 비율에 기록의 xG 합이 서는 값.
  * 이 눈금을 옮기면 `params.ts`의 `shotThreshold`도 같은 비로 옮겨야 선수의 슈팅 선택이 그대로다
  */
-export const XG_BASE = 0.407;
+export const XG_BASE = 0.25;
 
-export const XG_DISTANCE_SCALE = 7.5;
+export const XG_DISTANCE_SCALE = 12.6;
 
 export const XG_ANGLE_REFERENCE = 0.62;
 

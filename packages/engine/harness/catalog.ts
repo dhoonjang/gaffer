@@ -239,7 +239,7 @@ export const LIVE_GOAL_ANATOMY = defineHarness({
     { metric: "슛 짝이 어긋난 경기", role: "guard", max: 0, unit: "count", why: "장부의 슛·골 사건과 관찰자가 본 슛 비행을 순서로 짝짓는다 — 수가 갈리면 아래 헤더·거리 칸이 엉뚱한 슛을 읽는다" },
     { metric: "헤더 슈팅 비중", role: "measure", unit: "ratio", why: "아래 득점 비중과 함께 읽는다 — 헤더는 슛당 골이 낮다" },
     { metric: "헤더 득점 비중", role: "reference", min: 0.07, max: 0.22, unit: "ratio", why: "§2 신체 — 헤더 14.0%. 슛 비행의 높이(`HEADER_SHOT_HEIGHT`)로 가른다" },
-    { metric: "골 원인 header 비중", role: "measure", unit: "ratio", why: "장부가 골에 붙인 `header` 원인 — 위 값과 같아야 한다. 세트피스 헤더에는 `set_piece`가 먼저 서고, 높이 문턱(1.5)이 발 슛(0.3~1.7)과 겹친다" },
+    { metric: "골 원인 header 비중", role: "measure", unit: "ratio", why: "장부가 골에 붙인 `header` 원인 — 위 값과 같아야 한다. 갈리면 원인 표식이 몸의 부위를 잘못 읽고 있다" },
     { metric: "슈팅 거리 중간값 (m)", role: "measure", why: "목표 지점까지 — 실측은 박스 모서리 근처(약 15~17m)다. 근거 수치는 football-reference에 아직 없다" },
     { metric: "18m 밖 슈팅 비중", role: "measure", unit: "ratio", why: "박스 밖 슈팅 — 실제 1부는 슈팅의 3할 남짓이다. xG 거리 곡선(`XG_DISTANCE_SCALE`)과 슈팅 문턱이 함께 정한다" },
     { metric: "도움 붙은 골 비중", role: "measure", unit: "ratio", why: "간이 시뮬의 `ASSIST_RATE`(0.68)와 같은 눈금이어야 한다 — 실시간 경기는 마지막 패스가 정한다" },

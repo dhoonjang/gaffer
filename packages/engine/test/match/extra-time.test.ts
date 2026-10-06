@@ -250,8 +250,9 @@ describe("녹아웃 무승부 — 연장을 먼저 치르고 그래도 비기면
     const state = world();
     let sawCard = false;
     let sawRed = false;
-    // 대진 번호가 다르면 다른 연장이다 — 카드·퇴장이 나오는 대진을 찾는다
-    for (let pair = 40; pair < 90 && !(sawCard && sawRed); pair++) {
+    // 대진 번호가 다르면 다른 연장이다 — 카드·퇴장이 나오는 대진을 찾는다. 연장 30분의 퇴장은
+    // 실측 빈도로 스무 판에 한 장꼴이라 넉넉히 찾는다
+    for (let pair = 40; pair < 400 && !(sawCard && sawRed); pair++) {
       const legs = stageTie(state, "facup", "r32", pair, [
         { home: "fulham", away: "everton", homeGoals: 1, awayGoals: 1 },
       ]);
@@ -988,17 +989,17 @@ describe("연장·승부차기의 입력 (match.md §7)", () => {
     expect(keeperSkill(null)).toBeCloseTo(60, 10);
   });
 
-  it("승부차기 성공률은 0.62~0.80 밖으로 나가지 않는다", () => {
+  it("승부차기 성공률은 0.62~0.90 밖으로 나가지 않는다", () => {
     // 대역은 competition.md §6이 쥔다 — 여기서는 그 밖으로 새지 않는 것만 본다
     const level = penaltyKicker(60);
-    expect(penaltyRate(level, penaltyKeeper(60))).toBeCloseTo(0.71, 10); // 기량이 같으면 가운데
-    expect(penaltyRate(penaltyKicker(80), penaltyKeeper(60))).toBeCloseTo(0.78, 10);
-    expect(penaltyRate(penaltyKicker(60), penaltyKeeper(80))).toBeCloseTo(0.64, 10);
+    expect(penaltyRate(level, penaltyKeeper(60))).toBeCloseTo(0.765, 10); // 기량이 같으면 기준점
+    expect(penaltyRate(penaltyKicker(80), penaltyKeeper(60))).toBeCloseTo(0.845, 10);
+    expect(penaltyRate(penaltyKicker(60), penaltyKeeper(80))).toBeCloseTo(0.685, 10);
     // 양 끝 — 클램프가 한쪽만 있던 때는 대역 밖으로 떨어졌다
-    expect(penaltyRate(penaltyKicker(99), penaltyKeeper(1))).toBeCloseTo(0.8, 10);
+    expect(penaltyRate(penaltyKicker(99), penaltyKeeper(1))).toBeCloseTo(0.9, 10);
     expect(penaltyRate(penaltyKicker(1), penaltyKeeper(99))).toBeCloseTo(0.62, 10);
     // 골키퍼가 없어도 대역 안이다
-    expect(penaltyRate(level, null)).toBeCloseTo(0.71, 10);
+    expect(penaltyRate(level, null)).toBeCloseTo(0.765, 10);
   });
 });
 
@@ -1141,7 +1142,7 @@ describe("승부차기 (competition.md §6)", () => {
       expect(xi[kick.team].has(kick.taker)).toBe(true);
       expect(kick.keeper).toBe(keeperOf[kick.team === "home" ? "away" : "home"]);
       expect(kick.probability).toBeGreaterThanOrEqual(0.62);
-      expect(kick.probability).toBeLessThanOrEqual(0.8);
+      expect(kick.probability).toBeLessThanOrEqual(0.9);
       // 먼저 차는 쪽부터 한 발씩 번갈아 간다
       const other = first === "home" ? "away" : "home";
       expect(kick.team).toBe(i % 2 === 0 ? first : other);
