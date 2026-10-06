@@ -692,8 +692,8 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   await expect(page.locator('[data-testid="player-detail"] .pd-role')).toHaveCount(0);
   // 비선발을 고르면 **선발 행**에 화살표가 뜬다 (어느 쪽을 먼저 골라도 교체가 열린다)
   // 선발 11명은 내려가는 → , 예비·2군은 올라오는 ← (칸이 다르면 전부 열린다)
-  await expect(page.locator('.swap-btn:text("→")')).toHaveCount(11);
-  await expect(page.locator('.swap-btn:text("←")').first()).toBeVisible();
+  await expect(page.locator('.swap-btn[data-dir="down"]')).toHaveCount(11);
+  await expect(page.locator('.swap-btn[data-dir="up"]').first()).toBeVisible();
   // 선택을 풀면 화살표도 사라진다
   await benchRow.click();
   await expect(page.locator(".swap-btn")).toHaveCount(0);
@@ -714,8 +714,8 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
 
   // 선발을 고르면 반대로 비선발 행에 화살표가 뜬다
   await page.getByTestId("slot-10").click();
-  await expect(page.locator('.swap-btn:text("←")').first()).toBeVisible();
-  await expect(page.locator('.swap-btn:text("→")')).toHaveCount(0);
+  await expect(page.locator('.swap-btn[data-dir="up"]').first()).toBeVisible();
+  await expect(page.locator('.swap-btn[data-dir="down"]')).toHaveCount(0);
   const outName = ((await page.getByTestId("slot-10").locator(".slot-name").textContent()) ?? "")
     .replace("Ⓒ", "")
     .trim();

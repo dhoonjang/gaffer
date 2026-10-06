@@ -226,6 +226,7 @@ export function SquadTable({
                             onSwapIn(p.id);
                           }}
                           data-testid={`swapin-${p.id}`}
+                          data-dir={rowGoesUp ? "up" : "down"}
                           title={`${p.name}(${rowTier})${josaOf(rowTier, "과/와")} ${swapPair.name}(${swapPair.tier}) 맞바꾸기`}
                         >
                           {rowGoesUp ? <IconArrowLeft size={12} /> : <IconArrowRight size={12} />}

@@ -2791,7 +2791,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 20px 16px;
+  padding: 12px 20px;
   background: transparent;
 }
 
@@ -2862,7 +2862,7 @@ textarea {
    * 여백**이라 6px면 테두리와 고르게 뜬다. 여백과 버튼 높이가 어긋나면
    * 한쪽만 1px 더 붙어 보인다.
    */
-  /* 아래 6px + 컴포저 16px + 테두리 1px = 23px — e2e가 입력창이 바닥에 붙어 있는지(24px 미만) 잰다 */
+  /* 아래 8px + 테두리 1px + 컴포저 12px = 21px — e2e가 입력창이 바닥에 붙어 있는지(24px 미만) 잰다 */
   padding: 8px 8px 8px 16px;
   min-height: 52px;
   background: var(--panel-2);
@@ -2877,8 +2877,8 @@ textarea {
   box-shadow: var(--ring);
 }
 /**
- * 한 줄일 때 **버튼과 키가 같아야** 위아래 여백이 같다.
- * 21(line-height 1.5 × 14) + 7 + 7 = 35 ≒ 버튼 36(하한 36으로 맞춘다). 둘이 어긋나면
+ * 한 줄일 때 **버튼과 키가 같아야** 위아래 여백이 같다 — 위아래 여백이 (36 − 한 줄)/2라
+ * 한 줄이면 버튼 36과 꼭 같은 키다(하한도 36). 둘이 어긋나면
  * 한쪽만 더 떠 보인다(`align-items: flex-end`라 남는 자리가 위로 몰린다).
  *
  * 거기서부터 **쓴 만큼 자라고, 상한은 여기 한 번만 적는다.** `scrollHeight`를
@@ -2891,7 +2891,7 @@ textarea {
   flex: 1;
   background: none;
   border: none;
-  padding: 8px 0;
+  padding: calc((36px - 1lh) / 2) 0;
   color: var(--text);
   resize: none;
   overflow-y: auto;

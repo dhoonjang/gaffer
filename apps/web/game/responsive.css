@@ -446,13 +446,14 @@
     font-size: 16px !important;
   }
   /* 한 줄일 때 손잡이와 키가 같아야 한다(shell.css `.chat-input textarea`) —
-     글자가 커진 만큼 24(16 × 1.5) + 7 + 7 = 38로 다시 맞춘다 */
+     터치의 아이콘 칸 40으로 다시 맞춘다 (tokens.css 「표면·간격」 높이) */
   .chat-input textarea {
-    min-height: 38px;
+    min-height: 40px;
+    padding-block: calc((40px - 1lh) / 2);
   }
   .chat-input button {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
   }
 }
 
