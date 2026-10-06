@@ -197,7 +197,7 @@ export const SHOT_ERROR_RANGE = 14.7;
  * 선방 — 골키핑 60이 정면의 중간 슛을 막는 확률의 로짓. 거리는 따로 얹지 않는다 — 먼 슛은
  * 오차(`SHOT_ERROR_*`)가 이미 흩어 놓아, 거리 항을 더하면 박스 밖 슛이 거의 들어가지 않는다
  */
-export const SAVE_LOGIT_BASE = 2.9;
+export const SAVE_LOGIT_BASE = 2.5;
 
 /** 골키퍼가 슛에 반응하는 시간 (초) */
 export const KEEPER_REACTION_SECONDS = 0.15;
@@ -678,14 +678,14 @@ export const ATTACK_FOLLOW_HOLD = 0.35;
 
 /**
  * 공을 가졌을 때 블록이 공을 따라 오르는 몫 — 공 깊이가 하프라인 근처(45m)에서 1m 오를 때마다.
- * 공이 상대 박스 앞에 가면 센터백은 하프라인 근처까지, 미드필더는 박스 모서리 근처까지 올라와
- * 두 번째 공과 박스 밖 슈팅을 받는다. 위아래 끝이 블록이 움직이는 폭이다
+ * 위아래 끝이 블록이 움직이는 폭이다. ⚠️ 이 폭을 넓히면 미드필더가 박스 모서리에 서서 슈팅 몫이
+ * 최전방에서 조금 풀리지만, 팀 총 거리가 먼저 실측 위로 뜬다(`live-match-stats`)
  */
-export const ATTACK_FOLLOW_RATE = 0.7;
+export const ATTACK_FOLLOW_RATE = 0.35;
 
 export const ATTACK_FOLLOW_MIN = -14;
 
-export const ATTACK_FOLLOW_MAX = 36;
+export const ATTACK_FOLLOW_MAX = 16;
 
 /** 수비 블록이 공을 따라 오르내리는 배율 — `cover` 0에서의 값과 `cover` 1이 더하는 값 */
 export const DEFEND_SHIFT_BASE = 0.7;

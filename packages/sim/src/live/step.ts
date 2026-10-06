@@ -1866,9 +1866,14 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
       (SHOT_NEAR_SHARE + (1 - SHOT_NEAR_SHARE) * near);
     if (xg > threshold) {
       const util =
-        xg * SHOT_VALUE * (1 + ((tendency?.shoot ?? 0.5) - 0.5) * SHOT_TENDENCY_VALUE) -
+        // 패스의 위협 이득과 같은 저울 — 멘탈리티가 패스의 이득을 키우는 만큼(`ambition`) 슛의
+        // 값도 키우고, 내려놓는 자리의 위협은 위험 회피만큼 치른다
+        xg *
+          SHOT_VALUE *
+          params.ambition *
+          (1 + ((tendency?.shoot ?? 0.5) - 0.5) * SHOT_TENDENCY_VALUE) -
         KEEP_VALUE -
-        here * THREAT_VALUE * SHOT_KEEP_SHARE +
+        here * THREAT_VALUE * SHOT_KEEP_SHARE * params.riskAversion +
         (ctx.rng() - 0.5) * 0.05 * noiseScale;
       options.push({ kind: "shot", utility: util });
     }
