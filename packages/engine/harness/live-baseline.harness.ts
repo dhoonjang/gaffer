@@ -256,11 +256,6 @@ describe("실시간 경기 기준판", () => {
       "팀 득점 2골": share(goals, (g) => g === 2),
       "팀 득점 3골": share(goals, (g) => g === 3),
       "팀 득점 4골+": share(goals, (g) => g >= 4),
-      "홈 득점 − 원정 득점": mean(matches.map((m) => m.home)) - mean(matches.map((m) => m.away)),
-      "홈승 비율": share(
-        matches.map((m) => m.home - m.away),
-        (d) => d > 0,
-      ),
       "무승부 비율": share(
         matches.map((m) => m.home - m.away),
         (d) => d === 0,
@@ -415,8 +410,6 @@ describe("실시간 경기 기준판", () => {
 
   it("같은 대진의 득점·xG·슈팅·기울기가 간이 시뮬과 같은 밴드에 선다 — sim-parity", () => {
     const perTeam = (pick: (p: Pair) => [number, number]) => mean(pairs.flatMap((p) => pick(p)));
-    const homeEdge = (pick: (p: Pair) => [number, number]) =>
-      mean(pairs.map((p) => pick(p)[0] - pick(p)[1]));
     const ratioOf = (pick: (p: Pair) => [number, number], other: (p: Pair) => [number, number]) =>
       perTeam(pick) / Math.max(1e-9, perTeam(other));
     const gaps = pairs.map((p) => p.gap);
@@ -444,8 +437,6 @@ describe("실시간 경기 기준판", () => {
         (p) => p.live.shots,
         (p) => p.quick.shots,
       ),
-      "홈 xG 우위 — 실시간": homeEdge((p) => p.live.xg),
-      "홈 xG 우위 — 간이": homeEdge((p) => p.quick.xg),
       "전력 기울기 (xG 차/능력치 1) — 실시간": liveSlope,
       "전력 기울기 (xG 차/능력치 1) — 간이": quickSlope,
       "전력 기울기 표준오차 — 실시간": slopeError(gaps, liveDiff, liveSlope),

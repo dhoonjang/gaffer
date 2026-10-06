@@ -1,11 +1,5 @@
 import { it, expect } from "vitest";
-import {
-  cupCatalogById,
-  leagueOfTeamIn,
-  simSquadOf,
-  quickSimulate,
-  simulateExtraTime,
-} from "@gaffer/engine";
+import { leagueOfTeamIn, simSquadOf, quickSimulate, simulateExtraTime } from "@gaffer/engine";
 import { positionGroupOfPlayer } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
 import { QUICK_OUTCOMES } from "./catalog";
@@ -45,19 +39,11 @@ it("quick outcomes calibration", () => {
         total[key].conceded += r.awayGoals;
       }
   }
-  const cup = cupCatalogById("ucl")!;
-  const prize =
-    cup.prize.participation +
-    5 * cup.prize.win +
-    2 * cup.prize.draw +
-    Object.values(cup.prize.stage).reduce((a, b) => a + (b ?? 0), 0) +
-    cup.prize.winner;
   const readings: Readings<typeof QUICK_OUTCOMES> = {
     "연장 득점/경기": goals / 200,
     "연장 카드/경기": cards / 200,
     "열 명/열한 명 실점 비": total.ten.conceded / total.eleven.conceded,
     "열 명/열한 명 득점 비": total.ten.scored / total.eleven.scored,
-    "대항전 우승 상금/1부 기준 수입": prize / (12 * (13000000 + 6000000)),
   };
   console.log(reportOf(QUICK_OUTCOMES, readings, "fixed paired inputs"));
   expect(outOfBand(QUICK_OUTCOMES, readings)).toEqual([]);

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   annualRevenueEstimate,
+  cupCatalogById,
   financeOf,
   isMarketOnlyLeague,
   isTopLeague,
@@ -38,9 +39,25 @@ function playSeasonKeepingSeat(state: GameState): void {
   while (guard-- > 0) {
     const before = state.date;
     keepSeat(state);
-    advanceAndPlay(state);
+    advanceAndPlay(state, { userBench: true });
     if (state.date === before || state.season > 1) break;
   }
+}
+
+/** UCL 우승 경로의 상금 합 — 참가 · 리그 단계 5승 2무 · 단계 수당 · 우승 */
+function uclWinnerPrize(): number {
+  const prize = cupCatalogById("ucl")!.prize;
+  const stages = Object.values(prize.stage).reduce((a, b) => a + (b ?? 0), 0);
+  return prize.participation + 5 * prize.win + 2 * prize.draw + stages + prize.winner;
+}
+
+/** EPL 구단의 중간 연 매출 추정 */
+function eplMedianRevenue(state: GameState): number {
+  return medianOf(
+    state.teams
+      .filter((t) => leagueOfTeam(t.id) === "epl")
+      .map((t) => annualRevenueEstimate(state, t.id)),
+  );
 }
 
 function medianOf(values: number[]): number {
@@ -84,6 +101,7 @@ for (const seed of [42, 7]) {
         "경기 달 수": inSeason.length,
         "경기 달 급여 비중 (최저)": ratios.length ? Math.min(...ratios) : Number.NaN,
         "경기 달 급여 비중 (최고)": ratios.length ? Math.max(...ratios) : Number.NaN,
+        "대항전 우승 상금/1부 중간 연 매출": uclWinnerPrize() / eplMedianRevenue(state),
       };
       console.log(reportOf(FINANCE_TIER1, readings, `시드 ${seed} · 아스날 · 시즌 1`));
       expect(outOfBand(FINANCE_TIER1, readings)).toEqual([]);
@@ -138,7 +156,7 @@ describe("세 시즌", () => {
     while (guard-- > 0) {
       const before = state.date;
       keepSeat(state);
-      advanceAndPlay(state);
+      advanceAndPlay(state, { userBench: true });
       if (state.date === before || state.season > 3) break;
     }
 

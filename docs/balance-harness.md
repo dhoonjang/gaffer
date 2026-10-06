@@ -47,19 +47,18 @@ pnpm balance --report out --deadline 150  # 150분에 끊고 그때까지 온 �
 
 | 하네스                 | 무엇을 재는가                                                                                        | 근거                                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `world-season`         | 한 시즌 득점·슈팅 분포 · 승점 곡선 · 카드                                                            | [match](match/match.md) §8 · [football-reference](match/football-reference.md)                |
+| `world-season`         | 한 시즌 득점·슈팅 분포 · 도움 · 승점 곡선 · 카드                                                     | [match](match/match.md) §8 · [football-reference](match/football-reference.md)                |
 | `ai-rotation`          | AI 스쿼드 체력 분포 · 로테이션 문턱 발동률                                                           | [match](match/match.md) §8.6                                                                  |
 | `league-spread`        | 20팀 38경기 상위 리그 셋의 승점 곡선 — 평균과 표준편차                                               | [match](match/match.md) §8.2                                                                  |
-| `assist-rate`          | 골에 도움이 붙는 비율                                                                                | [match](match/match.md) §8.3                                                                  |
 | `live-match-stats`     | 실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·코너·거리·볼 인플레이의 평균·중간값·sd | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md)    |
 | `live-goal-anatomy`    | 실시간 경기의 골·슛 해부 — 득점 시각 · 세트피스·페널티·헤더 몫 · 도움 · 자리별 슈팅·득점 몫          | [football-reference](match/football-reference.md) §2 · §8                                     |
 | `live-formations`      | 대표 포메이션 다섯(양 팀 같은 모양)마다 득점·슈팅·xG·패스·거리·크로스와 자리별 슈팅 몫               | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md) §8 |
 | `live-player-load`     | 풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표(`EXPECTED_LOAD`)에 서는가          | [live-match](match/live-match.md) §7 · [football-reference](match/football-reference.md) §7   |
 | `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                      | [live-match](match/live-match.md) §6 · §9.3                                                   |
-| `quick-outcomes`       | 간이 시뮬의 연장 득점 · 퇴장 효과 · 상금 비중                                                        | [match](match/match.md) §6.2 · §8.6                                                           |
-| `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·홈 이점·전력 기울기가 같은 눈금인가     | [match](match/match.md) §8.5 · [live-match](match/live-match.md) §9.3                         |
+| `quick-outcomes`       | 간이 시뮬의 연장 득점·카드 · 퇴장 효과                                                               | [match](match/match.md) §6.2 · §8.6                                                           |
+| `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가             | [match](match/match.md) §8.5 · [live-match](match/live-match.md) §9.3                         |
 | `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                    | [match](match/match.md) §4.1                                                                  |
-| `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입                                                    | [finance](team/finance.md) §10.1                                                              |
+| `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입 · 대항전 상금 비중                                 | [finance](team/finance.md) §10.1                                                              |
 | `finance-leagues`      | 리그별 잔고 — 어느 리그도 구조적 적자가 아니다                                                       | [finance](team/finance.md) §10.3                                                              |
 | `finance-second-tier`  | 리그전을 굴리지 않는 2부의 한 시즌 수지                                                              | [finance](team/finance.md) §9.1                                                               |
 | `finance-multi-season` | 세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다                                              | [finance](team/finance.md) §10.3                                                              |

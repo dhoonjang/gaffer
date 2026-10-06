@@ -55,7 +55,8 @@ function playWhile(
     const before = state.date;
     const advanced = advanceTime(state, { days: 1 });
     if (state.phase === "matchday") {
-      if (userMatch === "live") playMockMatch(state, onFullTime);
+      // 감독 팀도 교체한다 — 대역 없이는 90분 내내 같은 열한 명이 뛰어 체력·결과가 실제 플레이와 다르다
+      if (userMatch === "live") playMockMatch(state, onFullTime, { userBench: true });
       else settleMatchdayQuick(state);
     }
     /**

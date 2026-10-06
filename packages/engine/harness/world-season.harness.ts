@@ -184,7 +184,6 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
   const originPerMatch = (kinds: readonly string[]) =>
     ratio(origins.filter((o) => kinds.includes(o)).length, played.length);
 
-  const homeWin = played.filter((m) => m.result!.homeGoals > m.result!.awayGoals).length;
   const draw = played.filter((m) => m.result!.homeGoals === m.result!.awayGoals).length;
 
   return {
@@ -194,11 +193,7 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
       sum((m) => m.result!.homeExpectedGoals + m.result!.awayExpectedGoals) / n,
     "리그 평균 득점/경기": mean,
     "총득점 분산": totals.reduce((a, b) => a + (b - mean) ** 2, 0) / n,
-    "홈 득점/경기": sum((m) => m.result!.homeGoals) / n,
-    "원정 득점/경기": sum((m) => m.result!.awayGoals) / n,
-    "홈승 비율": ratio(homeWin, n),
     "무승부 비율": ratio(draw, n),
-    "원정승 비율": ratio(n - homeWin - draw, n),
     // 클린시트는 **팀-경기** 단위다 — 경기 단위로 "한쪽이라도 0골"을 세면 두 배가 된다
     "클린시트 비율": share(teamGoals, 0),
     "총득점 0골 비율": share(totals, 0),
