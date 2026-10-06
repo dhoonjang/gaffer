@@ -351,8 +351,8 @@ EventCause { code, playerIds, values?, pointId? }
 체력 = 지수 감쇠 — log(남은 체력)이 부하에 선형으로 준다
 ```
 
-- **기대 부하표는 실시간 경기를 굴려 잰 값이다** — `pnpm balance live-player-load --report`가
-  자리 묶음 × 전술 배율의 표를 다시 만든다. 자리별 총 거리(센터백 10.2 → 중앙 미드 11.7km)와
+- **기대 부하표는 실시간 경기에 맞춰 둔 값이다** — `live-player-load`(`pnpm balance live-baseline`)가
+  포지션 묶음별 실측 거리·고속·스프린트와 표의 비를 찍고, 표는 그 값을 읽어 손으로 옮긴다. 자리별 총 거리(센터백 10.2 → 중앙 미드 11.7km)와
   고속·스프린트의 비가 [football-reference.md](football-reference.md) §7이다. 압박·템포·라인·폭이
   부하를 움직이는 폭은 실측 팀 간 총 거리 sd(약 2km, ±5%)와 고강도 주행의 폭(±30%) 사이다.
 - **원정은 조금 덜 채워 나온다**(`AWAY_CONDITION_PENALTY`) — 홈 이점의 전부다. 관중·분위기가

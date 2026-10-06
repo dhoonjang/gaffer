@@ -2,8 +2,9 @@ name: balance
 
 # 밸런스 하네스 — **PR 게이트가 아니다** (→ docs/balance-harness.md §5).
 #
-# 하네스가 재는 것은 고정 기대값이 아니라 밴드다. 전부 도는 데 총 CPU 10분 안팎이고
-# (`ci.yml`의 초록까지 벽시계는 지금 4분대다) 여기 얹으면 PR마다 그만큼을 더 문다.
+# 하네스가 재는 것은 고정 기대값이 아니라 밴드다. 실시간 경기 한 판이 수십 초라 전부
+# 도는 데 총 CPU가 시간 단위이고 (`ci.yml`의 초록까지 벽시계는 지금 4분대다) 여기 얹으면
+# PR마다 그만큼을 더 문다.
 # 정작 밴드를 움직이는 커밋은 드무니, 판정은 주 1회로 모아 한다.
 #
 # 일요일 18:00 UTC = 월요일 03:00 KST — 주말 머지분까지 담고, 사람이 읽는 시간
@@ -34,9 +35,11 @@ jobs:
     # 잡과 같은 손잡이를 쓴다(`gh variable list`가 지금 값을 답한다). 주 1회 몇 분이라
     # 어느 러너로 가든 무료분 안에 머문다.
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    # 12코어에서 벽시계 3분(총 CPU 9분 반) — 러너 코어가 적으면 그만큼 길어진다.
-    # 여유를 크게 두는 이유는 시한에 걸린 하네스가 「보고 없음」으로 이슈에 서기 때문이다.
-    timeout-minutes: 60
+    # 벽시계를 정하는 것은 가장 긴 파일 하나다 — 감독 경기를 실시간으로 치르는 시즌을
+    # 다섯 번 도는 `finance`가 한 시간 반, 전술 팔 다섯의 `live-tactics`가 40분 남짓이다.
+    # 잡 시한은 아래 `--deadline`보다 넉넉해야 한다: 잡이 먼저 죽으면 리포트도 이슈도
+    # 서지 않아, 「아무것도 보고하지 않았다」가 조용히 몇 주를 산다.
+    timeout-minutes: 170
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -58,7 +61,9 @@ jobs:
         continue-on-error: true
         env:
           LLM_MODE: mock
-        run: pnpm balance --report balance-report
+        # 시한에 끊겨도 그때까지 온 측정값으로 리포트를 세우고, 끊긴 하네스는 `missing`
+        # 이탈로 선다 (balance-harness.md §5)
+        run: pnpm balance --report balance-report --deadline 150
 
       # 잡 요약 — 하네스별 표가 실행 화면에 그대로 선다
       - name: 잡 요약

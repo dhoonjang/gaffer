@@ -11,8 +11,9 @@ import { outOfBand, reportOf, type Readings } from "./harness";
  *
  *   pnpm balance assist-rate
  *
- * **축소 세계(8팀·컵 없음)로 돈다.** 도움이 장부에 남는 길은 유저 경기의 구간
- * 시뮬과 AI 경기의 간이 시뮬 둘뿐이고, 둘 다 세계의 크기와 무관하게 같은 함수다.
+ * **축소 세계(8팀·컵 없음)로 돈다.** 도움이 장부에 남는 길은 감독 경기의 실시간
+ * 경기와 AI 경기의 간이 시뮬 둘뿐이고, 둘 다 세계의 크기와 무관하게 같은 함수다.
+ * 실시간 경기만의 도움 비중은 `live-goal-anatomy`가 따로 읽는다.
  */
 function playOne(seed: number): GameState | null {
   const state = createMiniGame(seed);

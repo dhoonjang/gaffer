@@ -176,6 +176,8 @@ export const PASS_SPEED_MAX = 22;
 export const SHOT_SPEED_MIN = 19;
 
 export const SHOT_SPEED_SPAN = 12;
+/** 헤더 슛 비행의 높이 (m) — 발 슛은 0.3~1.7에서 뽑는다. 장부 밖에서 헤더를 가르는 값이기도 하다 */
+export const HEADER_SHOT_HEIGHT = 1.6;
 
 /** 슈팅 오차(m, 골라인에서) — 결정력 0에서 */
 export const SHOT_ERROR_BASE = 5.4;

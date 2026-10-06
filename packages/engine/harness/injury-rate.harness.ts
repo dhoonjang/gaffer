@@ -42,6 +42,9 @@ const AWAY = "liverpool";
 
 interface Tally {
   cards: number;
+  /** 퇴장 줄 · 그중 두 번째 경고로 나온 것 */
+  reds: number;
+  secondYellows: number;
   injuries: number;
 }
 
@@ -57,10 +60,16 @@ function flat(squad: SimSquad): SimSquad {
 }
 
 function quickArm(home: SimSquad, away: SimSquad, runs: number, channel: string): Tally {
-  const tally: Tally = { cards: 0, injuries: 0 };
+  const tally: Tally = { cards: 0, reds: 0, secondYellows: 0, injuries: 0 };
   for (let i = 0; i < runs; i++) {
     const one = quickSimulate(home, away, 2000 + i, `${channel}:${i}`);
     tally.cards += one.cards.length;
+    for (const red of one.cards.filter((c) => c.card === "red")) {
+      tally.reds += 1;
+      // 두 번째 경고는 같은 분·같은 선수의 경고 한 줄 + 퇴장 한 줄이다 (match.md §5)
+      if (one.cards.some((c) => c.card === "yellow" && c.playerId === red.playerId))
+        tally.secondYellows += 1;
+    }
     tally.injuries += one.injuries.length;
   }
   return tally;
@@ -227,6 +236,8 @@ describe("간이 시뮬은 기대한 눈금으로 카드와 부상을 낸다", (
       "부상 기대 대비 배율 (간이)": per(quick.injuries) / expected.injuries,
       "경기당 카드 (간이)": per(quick.cards),
       "카드 기대 대비 배율 (간이)": per(quick.cards) / expected.cards,
+      "경기당 퇴장 (간이)": per(quick.reds),
+      "퇴장 중 두 번째 경고 몫 (간이)": quick.secondYellows / Math.max(1, quick.reds),
       "유리몸 팀 배율": fragile.injuries / Math.max(1, healthy.injuries),
       "유리몸 한 명의 부상 점유율": hisShare / Math.max(1, homeInjuries),
       "위험 낮음 인원": grades.players.low,

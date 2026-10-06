@@ -10,9 +10,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["packages/*/harness/**/*.harness.ts"],
-    // 한 케이스가 세계 하나로 한 시즌을 돈다 — 분 단위가 정상이다
-    testTimeout: 900_000,
-    hookTimeout: 900_000,
+    // 한 케이스가 세계 하나로 시즌을 돌고, 감독의 경기를 실시간으로 치르는 하네스는 한 판에
+    // 20초 남짓을 문다 — 실시간 경기 백여 판(전술 팔 다섯 · 두 시즌의 상대 벤치)이 다른
+    // 파일과 코어를 나누면 40분을 넘긴다. 멈춘 것을 끊는 자리지 속도를 재는 자리가 아니다
+    // (balance-harness.md §6). 주간 실행의 시한은 `--deadline`이 따로 쥔다.
+    testTimeout: 3_600_000,
+    hookTimeout: 3_600_000,
     reporters: ["verbose"],
   },
 });

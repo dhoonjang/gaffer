@@ -1,9 +1,19 @@
 import { advanceTime, allMatchesDone, type GameState } from "@gaffer/engine";
 import { diffDays } from "@gaffer/domain";
-import { drillUserTactics, playMockMatch } from "../test/helpers";
+import { drillUserTactics, playMockMatch, settleMatchdayQuick } from "../test/helpers";
 
 /**
- * 하루씩 밀어 한 시즌을 끝까지 돈다 — 유저 경기는 실시간 경기로 치른다.
+ * 감독의 경기를 무엇으로 치르는가.
+ *
+ * - `live` — 실시간 경기. 감독 경기 안에서만 생기는 것(상대 벤치·실제로 뛴 부하)을 재는 하네스.
+ * - `quick` — 남의 경기와 같은 간이 결산. 결과만 읽는 하네스(유스)의 자리다 — 실시간 경기는
+ *   한 판이 수십 초라 시즌 하나에 수십 분을 문다. 감독 팀의 경기 재정은 적지 않으므로
+ *   재정을 재는 자리는 쓰지 못한다.
+ */
+export type UserMatch = "live" | "quick";
+
+/**
+ * 하루씩 밀어 한 시즌을 끝까지 돈다.
  *
  * 하네스 여럿이 같은 진행을 쓴다. 각자 제 루프를 들고 있으면 한쪽만 고쳐진 날
  * 서로 다른 시즌을 재게 된다.
@@ -16,8 +26,9 @@ export function playSeason(
    * 하루가 끝난 자리에서 현재 원장을 관측한다. 일별 변화를 재는 하네스가 쓴다.
    */
   onDay?: (state: GameState) => void,
+  userMatch: UserMatch = "live",
 ): void {
-  playWhile(state, () => !allMatchesDone(state), onFullTime, onDay);
+  playWhile(state, () => !allMatchesDone(state), onFullTime, onDay, userMatch);
 }
 
 /**
@@ -37,12 +48,16 @@ function playWhile(
   keepGoing: () => boolean,
   onFullTime?: (state: GameState) => void,
   onDay?: (state: GameState) => void,
+  userMatch: UserMatch = "live",
 ): void {
   let guard = 420;
   while (guard-- > 0 && keepGoing()) {
     const before = state.date;
     const advanced = advanceTime(state, { days: 1 });
-    if (state.phase === "matchday") playMockMatch(state, onFullTime);
+    if (state.phase === "matchday") {
+      if (userMatch === "live") playMockMatch(state, onFullTime);
+      else settleMatchdayQuick(state);
+    }
     /**
      * **결산 판정(LLM)의 대역** — 흐른 날수만큼, 리그가 쓰는 그 규칙으로
      * (→ docs/balance-harness.md §4). 세우지 않으면 리그만 매일 판을 익히고

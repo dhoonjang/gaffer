@@ -176,5 +176,7 @@ describe("세 시즌", () => {
       reportOf(FINANCE_MULTI_SEASON, readings, `리그 ${byLeague.size}개 · 천장 ${tallest?.league}`),
     );
     expect(outOfBand(FINANCE_MULTI_SEASON, readings)).toEqual([]);
-  });
+    // 세 시즌 — 감독 경기 백오십 판을 실시간으로 치른다(재정은 그 경기의 장부를 읽는다).
+    // 전역 상한보다 넉넉하게만 준다
+  }, 5_400_000);
 });

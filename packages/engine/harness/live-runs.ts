@@ -1,6 +1,7 @@
 import type { MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@gaffer/domain";
 import { otherSide, weightSlotOf } from "@gaffer/domain";
 import {
+  HEADER_SHOT_HEIGHT,
   depthOf,
   playLiveToEnd,
   possessionOf,
@@ -119,6 +120,12 @@ export interface ShapeProbe {
   fullBackDepths: Map<string, number[]>;
   /** 풀백 id → 우리가 공을 가졌을 때 달리기(`run`)를 시작한 횟수 — 오버래핑·침투 */
   fullBackRuns: Map<string, number>;
+  /**
+   * 떠난 순서대로의 슛 — 헤더인가 · 목표까지의 거리(m). 장부의 슛 사건에는 몸의 부위도
+   * 거리도 없다. 공은 하나라 슛은 떠난 순서대로 끝나므로 장부의 `shot`·`goal` 사건과
+   * 순서로 짝지어진다.
+   */
+  shots: Array<{ header: boolean; distance: number }>;
 }
 
 export function shapeProbe(): ShapeProbe {
@@ -127,7 +134,9 @@ export function shapeProbe(): ShapeProbe {
     goalSide: [],
     fullBackDepths: new Map(),
     fullBackRuns: new Map(),
+    shots: [],
   };
+  let lastFlight = "";
   let lastShot: Record<MatchSide, number> | null = null;
   const running = new Set<string>();
   probe.onTick = (state, input) => {
@@ -151,6 +160,14 @@ export function shapeProbe(): ShapeProbe {
       }
     }
     lastShot = { ...state.lastShotAt };
+    const flight = state.ball.flight;
+    const key = flight?.kind === "shot" ? `${flight.from}:${flight.to.x}:${flight.to.y}` : "";
+    if (flight && key && key !== lastFlight) {
+      // 헤더 슛은 높이가 정확히 `HEADER_SHOT_HEIGHT`다 — 발 슛은 0.3~1.7에서 연속으로 뽑혀
+      // 높이 문턱으로는 가를 수 없다
+      probe.shots.push({ header: flight.height === HEADER_SHOT_HEIGHT, distance: flight.distance });
+    }
+    lastFlight = key;
     for (const p of state.players) {
       const run = p.action === "run" && p.side === state.possession;
       if (run && !running.has(p.id) && slotOf(p.id) === "FB") {

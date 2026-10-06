@@ -16,6 +16,7 @@ pnpm balance --list        # 어떤 하네스가 있고 무엇을 어느 밴드�
 pnpm balance               # 전부 돌린다 (수 분)
 pnpm balance finance       # 파일 이름으로 걸러 하나만
 pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (주간 워크플로가 쓴다 — §5)
+pnpm balance --report out --deadline 150  # 150분에 끊고 그때까지 온 값으로 리포트 (§5)
 ```
 
 `--list`는 세계를 세우지 않는다 — 서술자만 읽어 이름·무엇을 재는가·지표별 밴드·그
@@ -51,9 +52,10 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 | `league-spread`        | 20팀 38경기 상위 리그 셋의 승점 곡선 — 평균과 표준편차                                               | [match](match/match.md) §8.2                                                                |
 | `assist-rate`          | 골에 도움이 붙는 비율                                                                                | [match](match/match.md) §8.3                                                                |
 | `live-match-stats`     | 실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·코너·거리·볼 인플레이의 평균·중간값·sd | [live-match](match/live-match.md) §9.3 · [football-reference](match/football-reference.md)  |
+| `live-goal-anatomy`    | 실시간 경기의 골·슛 해부 — 득점 시각 · 세트피스·페널티·헤더 몫 · 도움 · 자리별 슈팅·득점 몫          | [football-reference](match/football-reference.md) §2 · §8                                   |
 | `live-player-load`     | 풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표(`EXPECTED_LOAD`)에 서는가          | [live-match](match/live-match.md) §7 · [football-reference](match/football-reference.md) §7 |
 | `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                      | [live-match](match/live-match.md) §6 · §9.3                                                 |
-| `quick-outcomes`       | 간이 시뮬의 연장 득점 · 퇴장 효과 · 상금 비중                                                        | [match](match/match.md)                                                                     |
+| `quick-outcomes`       | 간이 시뮬의 연장 득점 · 퇴장 효과 · 상금 비중                                                        | [match](match/match.md) §6.2 · §8.6                                                         |
 | `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·홈 이점·전력 기울기가 같은 눈금인가     | [match](match/match.md) §8.5 · [live-match](match/live-match.md) §9.3                       |
 | `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                    | [match](match/match.md) §4.1                                                                |
 | `finance-tier1`        | tier1 한 시즌 장부 손익 · 현금 · 급여 비중 · 수입                                                    | [finance](team/finance.md) §10.1                                                            |
@@ -70,6 +72,17 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 | `history-window`       | 평시 이력의 창 — 몇 턴이 남는가 · 압축 주기 · 렌더 배율                                              | [agents](agents/agents.md) §5-1                                                             |
 | `prompt-regression`    | 프롬프트 층의 글자·프리픽스 안정성 · 장면 문법·도구                                                  | [prompts](agents/prompts.md) §7                                                             |
 | `live-schema`          | 출력 스키마로 나가는 산출 선언 열을 제공자가 실제로 받는가                                           | [prompts](agents/prompts.md) §2                                                             |
+
+### 같은 경기를 여러 서술자가 읽는다
+
+실시간 경기는 결정적이라 전술을 건드리지 않은 판은 어느 하네스가 굴려도 같은 경기다.
+그래서 `live-match-stats` · `live-goal-anatomy` · `live-player-load` · `sim-parity`는
+**한 파일(`live-baseline.harness.ts`)이 한 번 굴린 72경기를 나눠 읽는다** — 거르는 이름도
+`pnpm balance live-baseline` 하나다. 서술자마다 따로 굴리면 같은 경기를 두세 번 다시 굴리고,
+표본이 작은 쪽은 잡음까지 떠안는다. 전술을 바꿔 굴리는 `live-tactics`만 제 판을 갖는다.
+
+`world-season`도 같은 이유로 표를 **시드를 모은 뒤 한 번** 세운다 — 한 리그-시즌의
+분포 칸은 시드마다 ±2%p씩 흔들려, 시드별 표 여섯 장은 그 흔들림을 신호처럼 보인다.
 
 ### 평균을 보는 가드와 꼬리를 보는 가드는 따로 선다
 
@@ -146,6 +159,13 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 `settleMatchdayQuick` 간이 결산을 사용한다. 실제 라이브 경기의 물리·체크포인트·결산은
 `playMockMatch`를 쓰는 별도 테스트가 검증한다. 두 경로의 역할을 섞지 않는다.
 
+**하네스도 감독의 경기를 무엇으로 치를지 고른다**(`harness/season.ts`의 `UserMatch`).
+결과만 읽는 하네스 — 간이 시뮬의 리그 분포(`world-season`)와 유스 — 는 간이 결산이다.
+실시간 경기 한 판이 수십 초라 시즌 하나에 수십 분을 물고, 리그 분포에 다른 시뮬의 38경기를
+섞는다. 실시간 경기는 감독 경기 안에서만 생기는 것을 재는 자리(상대 벤치 `ai-bench` · 실제로
+뛴 부하 `ai-fitness`)와 실시간 경기 자체를 재는 `live-*`·`sim-parity`, 그리고 재정에 쓴다 — 간이
+결산은 감독 팀의 경기 재정(`applyMatchFinance`)을 적지 않아 재정 하네스는 그 길을 쓸 수 없다.
+
 재정처럼 재임이 측정 조건인 하네스의 `keepSeat`는 보드 판단의 대역이다. 계약 만료
 90일 안에 들어오면 `offerManagerJob`으로 연봉·기간·예산·기한을 명시한 재계약을
 제안하고 수락한다. 열린 제안은 중복 생성하지 않는다. 이 시점과 조건은 하네스의
@@ -156,9 +176,9 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
 **하네스는 PR 게이트가 아니라 주 1회 일정으로 돈다** — 일요일 18:00 UTC(월요일
 03:00 KST), 그리고 손으로 부를 수 있게 `workflow_dispatch`가 함께 열려 있다.
 
-- **왜 게이트가 아닌가.** 전부 도는 데 총 CPU 십수 분을 쓰는데(가장 무거운 둘이 세
-  시즌짜리 하나와 여섯 시드짜리 `world-season`이다) `ci.yml`의 초록까지 벽시계는 지금 4분대다(그 파일의
-  측정 주석). 하네스를 거기 얹으면 PR마다 그만큼을 더 물고, 정작 밴드를 움직이는
+- **왜 게이트가 아닌가.** 실시간 경기 한 판이 수십 초라 전부 도는 데 총 CPU가 시간
+  단위인데(가장 무거운 것은 전술 팔 다섯의 `live-tactics`와 기준판 72경기의 `live-baseline`이다)
+  `ci.yml`의 초록까지 벽시계는 지금 4분대다(그 파일의 측정 주석). 하네스를 거기 얹으면 PR마다 그만큼을 더 물고, 정작 밴드를 움직이는
   커밋은 드물다. 게이트가 지키는 것은 **고정 기대값의 회귀**이고 (AGENTS.md §5)
   밴드는 그런 값이 아니다.
 - **왜 주 1회인가.** 밸런스 손잡이는 하루 단위로 움직이지 않는다. 주 1회면 이탈이
@@ -173,6 +193,10 @@ pnpm balance --report out  # 전부 돌리고 측정값을 out/에 남긴다 (�
   "밴드 안"이 아니다. 리포트는 그 자리를 `missing`으로 적는다. **건너뛴 것은 보고한
   것이다** — 돌 조건이 없어 건너뛴 하네스(§3 「키가 필요한 하네스」)는 그 사실을 한
   줄로 남기므로 `missing`이 아니고, 요약 표에도 「건너뜀」으로 선다.
+- **시한은 하네스가 먼저 끊는다.** 워크플로는 `--deadline`으로 잡의 시한보다 먼저 하네스를
+  끊고, 그때까지 온 측정값으로 리포트를 세운다 — 끊긴 하네스는 `missing`이다. 잡의 시한에
+  통째로 죽으면 리포트·요약·이슈 스텝이 전부 건너뛰어져, 아무것도 보고하지 않은 주가
+  조용히 쌓인다.
 
 ### 이탈이 사람 손 없이 보이는 길
 

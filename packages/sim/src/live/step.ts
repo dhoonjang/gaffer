@@ -35,6 +35,8 @@ import { INJURY_CONTACT_RISK, INJURY_SPRINT_RISK, injuryWeight } from "../injury
 import { AWAY_CONDITION_PENALTY, emptyLoad } from "../load";
 import { finishingGoalProbability, penaltyRate } from "../shot-model";
 import { takerOnPitch } from "../set-piece-taker";
+
+export { HEADER_SHOT_HEIGHT } from "./tuning";
 import { LN2, dexp, dlog, dsigmoid } from "./dmath";
 import {
   clamp,
@@ -238,6 +240,7 @@ import {
   TRANSITION_SECONDS,
   URGENCY,
   URGENCY_FULL,
+  HEADER_SHOT_HEIGHT,
 } from "./tuning";
 
 /**
@@ -2217,7 +2220,7 @@ function shoot(
     speed,
     travelled: 0,
     distance: distance(owner, to),
-    height: opts.header ? 1.6 : 0.3 + ctx.rng() * 1.4,
+    height: opts.header ? HEADER_SHOT_HEIGHT : 0.3 + ctx.rng() * 1.4,
     xg,
     probability,
     origin,
