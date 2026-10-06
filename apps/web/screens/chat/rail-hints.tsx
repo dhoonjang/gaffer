@@ -112,7 +112,7 @@ export function useRailHints({
   chat,
   panel,
 }: {
-  chat?: readonly ChatTurn[];
+  chat?: readonly ChatTurn[] | undefined;
   panel: string | null;
 }) {
   /** 읽은 장부 알림 — 그 화면을 연 순간부터 다시 세우지 않는다 (다음 턴에 풀린다) */

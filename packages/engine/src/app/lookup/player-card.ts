@@ -51,7 +51,7 @@ import {
   strengthsAndWeaknesses,
 } from "../../players/observation-view";
 import {
-  LookupResult,
+  type LookupResult,
   banWarningFor,
   competitionStatLine,
   pastCompetitionStatLine,

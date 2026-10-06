@@ -2,6 +2,9 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { LorebookEdit, LorebookEntry } from "@gaffer/domain";
+import type * as Agents from "@gaffer/agents";
+import type * as Store from "../../game/store";
 import type { GamePayload } from "../../game/store";
 
 /**
@@ -14,7 +17,7 @@ import type { GamePayload } from "../../game/store";
 
 const payloadFailure = vi.hoisted(() => ({ active: false }));
 vi.mock("../../game/store", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../game/store")>();
+  const actual = await importOriginal<typeof Store>();
   return {
     ...actual,
     toPayload: (...args: Parameters<typeof actual.toPayload>) => {
@@ -28,11 +31,11 @@ const reject = vi.fn();
 const editBook = vi.fn();
 
 vi.mock("@gaffer/agents", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@gaffer/agents")>();
+  const actual = await importOriginal<typeof Agents>();
   return {
     ...actual,
-    runGmTurn: (...args: unknown[]) => reject(...args),
-    editLorebook: (...args: unknown[]) => editBook(...args),
+    runGmTurn: (...args: unknown[]): unknown => reject(...args),
+    editLorebook: (...args: unknown[]): unknown => editBook(...args),
   };
 });
 
@@ -279,7 +282,9 @@ describe("LLM 응답 실패", () => {
  */
 describe("기다리기를 멈춘 턴", () => {
   it("첨부 메일 ID는 본문과 함께 직렬화하고 클라이언트 원문은 보내지 않는다", async () => {
-    const fetchMock = vi.fn(async () => new Response('{"type":"error","error":"stop"}\n'));
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response('{"type":"error","error":"stop"}\n')),
+    );
     vi.stubGlobal("fetch", fetchMock);
     try {
       await streamTurn(
@@ -302,7 +307,7 @@ describe("기다리기를 멈춘 턴", () => {
       new Response(body, { headers: { "Content-Type": "application/x-ndjson" } });
     const handlers = { onDelta: () => {}, onDone: () => {} };
     const call = async (res: Response) => {
-      vi.stubGlobal("fetch", async () => res);
+      vi.stubGlobal("fetch", () => Promise.resolve(res));
       try {
         return await streamTurn("g", { message: "훈련 잡아줘" }, handlers);
       } finally {
@@ -358,7 +363,7 @@ describe("비동기 로어북 저장", () => {
     requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "첫 기록" });
     requestCharacterUpdate(state, { characterId: entry.id, additionalInformation: "다음 기록" });
     saveGame(state);
-    let finishFirst: (value: import("@gaffer/domain").LorebookEdit) => void = () => {
+    let finishFirst: (value: LorebookEdit) => void = () => {
       throw new Error("편집이 시작되지 않았습니다");
     };
     let signalStarted: () => void = () => {};
@@ -372,16 +377,14 @@ describe("비동기 로어북 저장", () => {
           signalStarted();
         }),
     );
-    editBook.mockImplementationOnce(
-      (existing: import("@gaffer/domain").LorebookEntry, extra: string) => ({
-        keywords: [],
-        description: "두번째 소개",
-        information: `${existing.information} / ${extra}`,
-      }),
-    );
+    editBook.mockImplementationOnce((existing: LorebookEntry, extra: string) => ({
+      keywords: [],
+      description: "두번째 소개",
+      information: `${existing.information} / ${extra}`,
+    }));
     const work = processLorebookJobs(game.id);
     await started;
-    await withGameLock(game.id, 3000, async () => {
+    await withGameLock(game.id, 3000, () => {
       const current = loadGame(game.id)!;
       current.chat.push({ role: "model", text: "새로운 턴", toolCalls: [], at: current.date });
       saveGame(current);
@@ -416,13 +419,11 @@ describe("비동기 로어북 저장", () => {
     expect(failed.lorebookJobs).toHaveLength(2);
     expect(failed.lorebookJobs[0]).toMatchObject({ status: "failed", attempts: 1 });
     expect(failed.lorebook[0]).toEqual(entry);
-    editBook.mockImplementation(
-      (existing: import("@gaffer/domain").LorebookEntry, extra: string) => ({
-        keywords: [],
-        description: existing.description,
-        information: `${existing.information} / ${extra}`,
-      }),
-    );
+    editBook.mockImplementation((existing: LorebookEntry, extra: string) => ({
+      keywords: [],
+      description: existing.description,
+      information: `${existing.information} / ${extra}`,
+    }));
     await processLorebookJobs(game.id);
     const done = loadGame(game.id)!;
     expect(done.lorebookJobs).toEqual([]);

@@ -1,10 +1,15 @@
 import type { GrowthOutlook as Outlook } from "@gaffer/domain";
 
+/**
+ * 성장 가능성 — 단계는 코어가 매겨 내려보내고(`growthOutlook` — player.md §9.1) 화면은
+ * 문턱을 들지 않는다. 잠재력 숫자와 범위는 화면에 내놓지 않고, 단계 이름은 접근성 이름과
+ * 툴팁에만 남는다.
+ */
 /** 막대 수 — 매우 낮음(0)이 한 칸, 매우 높음(4)이 다섯 칸. 탁월함(5)은 다섯 칸이 금으로 선다 */
 const GROWTH_BARS = 5;
 
 export function GrowthOutlook({ growth }: { growth: Outlook | null }) {
-  // 빈 막대는 최저 단계로 읽힌다 — 판단 보류는 글자로 둔다 (design-system.md)
+  // 빈 막대는 최저 단계로 읽힌다 — 판단 보류는 글자로 둔다
   if (growth === null) return <span title="성장 가능성을 판단할 정보가 부족합니다">판단 보류</span>;
   const { tier, label } = growth;
   const exceptional = growth.key === "exceptional";

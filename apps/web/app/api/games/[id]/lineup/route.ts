@@ -134,7 +134,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
    * 달라졌는가. 선발이 언제 누구 손으로 바뀌었는지는 세이브에 없다.
    */
   return withGameLock(id, LOCK_WAIT_MS.lineup, () =>
-    traceBoard(id, async () => {
+    traceBoard(id, () => {
       const state = loadGame(id);
       if (!state) return NextResponse.json({ error: "게임을 찾을 수 없습니다" }, { status: 404 });
       noteTurn({

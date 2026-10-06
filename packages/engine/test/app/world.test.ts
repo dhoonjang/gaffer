@@ -387,7 +387,7 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
  * 되는데, 그 어긋남은 열다섯 시즌을 굴려야 보인다(`squad-longevity`) — 공식 자체는
  * 여기서 표본으로 잰다.
  */
-describe("리그 색 — 카탈로그가 내는 다섯 (web/design-system.md §2-1)", () => {
+describe("리그 색 — 카탈로그가 내는 다섯 (tokens.css 「리그 색」)", () => {
   const tones = leagueTones();
 
   it("플레이 가능 리그마다 하나씩, 다섯이 서로 다른 색을 받는다", () => {

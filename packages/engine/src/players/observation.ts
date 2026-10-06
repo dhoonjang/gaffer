@@ -69,7 +69,8 @@ export const OBSERVATION_MARGIN: Record<Observability, Record<Knowledge, number>
  * 종합 평가가 실행 계열보다 정확할 수는 없다.
  */
 function marginFor(axis: string, knowledge: Knowledge): number {
-  const layer = AXIS_OBSERVABILITY[axis as AttributeAxis] ?? "analytical";
+  const layer =
+    (AXIS_OBSERVABILITY as Readonly<Record<string, Observability>>)[axis] ?? "analytical";
   return OBSERVATION_MARGIN[layer][knowledge];
 }
 

@@ -109,7 +109,8 @@ describe("TypesafeGameEvaluator", () => {
       intent: choiceAnswer,
       confirmed: { type: "noul", noul: 0.7 },
     });
-    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).questions).toEqual(questions);
+    const sent = JSON.parse(fetch.mock.calls[0]?.[1]?.body as string) as { questions: unknown };
+    expect(sent.questions).toEqual(questions);
   });
 
   it.each([1, 255])("accepts a nonempty Choice with %i options", async (count) => {
@@ -311,7 +312,7 @@ describe("TypesafeGameEvaluator", () => {
       Authorization: "Bearer test-secret",
       "Content-Type": "application/json",
     });
-    expect(JSON.parse(String(init?.body))).toEqual({
+    expect(JSON.parse(init?.body as string)).toEqual({
       state: request.state,
       questions: request.questions,
       model: config.model,
@@ -367,7 +368,7 @@ describe("TypesafeGameEvaluator", () => {
       ...request,
       questions: {
         intensity: {
-          ...request.questions.intensity!,
+          ...request.questions.intensity,
           criteria: Array.from({ length: count }, () => "level"),
         },
       },

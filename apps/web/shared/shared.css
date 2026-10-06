@@ -1,7 +1,7 @@
 /* ── 여러 뷰가 함께 쓰는 낱개 규칙 — 어느 뷰의 것도 아니다 ─────────────────────────── */
 
 /**
- * ── 조작 대상의 공용 규칙 (design-system.md §1 조작 · §5 모션) ────────────
+ * ── 조작 대상의 공용 규칙 (tokens.css 「조작」 · §5 모션) ────────────
  *
  * 포커스는 링 하나 — 테두리도 발광도 없다. 눌림은 scale(.97) 120ms. 꺼짐은 .45.
  * 링은 `:focus-visible`에만 — 마우스로 누른 자리에 링이 서면 조작마다 깜빡인다.
@@ -16,12 +16,9 @@ summary:focus-visible,
   outline: none;
   box-shadow: var(--ring);
 }
-.primary-btn,
-.ghost-btn,
-.mini-btn,
+.btn,
 .admin-tab,
 .side-tab,
-.tt-tab,
 .tt-close,
 .tt-toggle,
 .tt-copy,
@@ -36,14 +33,12 @@ summary:focus-visible,
 .chat-input button,
 .rail button {
   transition-property: background, color, opacity, box-shadow, transform;
-  transition-duration: 0.16s, 0.16s, 0.16s, 0.16s, 0.12s;
+  transition-duration:
+    var(--dur-ease), var(--dur-ease), var(--dur-ease), var(--dur-ease), var(--dur-press);
 }
-.primary-btn:active:not(:disabled),
-.ghost-btn:active:not(:disabled),
-.mini-btn:active:not(:disabled),
+.btn:active:not(:disabled),
 .admin-tab:active:not(:disabled),
 .side-tab:active:not(:disabled),
-.tt-tab:active:not(:disabled),
 .tt-close:active:not(:disabled),
 .tt-toggle:active:not(:disabled),
 .tt-copy:active:not(:disabled),
@@ -60,19 +55,14 @@ summary:focus-visible,
   transform: scale(0.97);
 }
 button:disabled,
-.primary-btn:disabled,
-.mini-btn:disabled,
 .chat-input button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 @media (prefers-reduced-motion: reduce) {
-  .primary-btn:active,
-  .ghost-btn:active,
-  .mini-btn:active,
+  .btn:active,
   .admin-tab:active,
   .side-tab:active,
-  .tt-tab:active,
   .tool-chip:active,
   .league-row:active,
   .team-card:active,
@@ -85,10 +75,80 @@ button:disabled,
   }
 }
 
+/**
+ * ── 버튼 — `shared/button.tsx`의 `<Button>`이 붙인다 (tokens.css 「조작」 · §4 높이) ──
+ *
+ * 높이 36(480 아래 44) · 글자 13 · 600. 조작 대상은 테두리가 아니라 면의 밝기와 키 컬러로
+ * 갈린다 — 넷 다 테두리가 없다. 화면이 덮는 것은 자리(폭·여백)뿐이고 생김새는 덮지 않는다.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 36px;
+  padding: 0 var(--sp-4);
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: var(--lh-table);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn svg {
+  flex-shrink: 0;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-secondary {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--pop);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--loss);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--loss) 12%, var(--panel));
+}
+.btn-sm {
+  height: 28px;
+  padding: 0 var(--sp-2);
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+}
+.btn-icon {
+  width: 36px;
+  padding: 0;
+}
+@media (max-width: 479px) {
+  .btn:not(.btn-sm) {
+    height: 44px;
+  }
+  .btn-icon {
+    width: 44px;
+  }
+}
+
 .hint {
   color: var(--text-2);
   font-size: var(--fs-sm);
-  margin-top: 10px;
+  margin-top: 8px;
   line-height: var(--lh-ui);
 }
 /* 어드민 안내 — 한 줄이 너무 길어지지 않게 폭을 제한한다 */
@@ -100,39 +160,13 @@ button:disabled,
   display: inline-block;
   font-size: var(--fs-xs);
   border-radius: var(--r-xs);
-  padding: 1px 6px;
+  padding: 0 8px;
   background: var(--panel-2);
   color: var(--text-2);
 }
 .badge.warn {
   background: color-mix(in srgb, var(--loss) 12%, var(--panel));
   color: var(--loss);
-}
-
-.attr-row {
-  display: grid;
-  grid-template-columns: 48px 1fr 26px;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-.attr-row > span:last-child {
-  color: var(--text);
-  font-weight: 500;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.attr-bar {
-  height: 6px;
-  border-radius: var(--r-xs);
-  background: var(--border);
-  overflow: hidden;
-}
-.attr-bar > div {
-  height: 100%;
-  background: var(--accent-2);
 }
 /* 빈 상태는 해당 섹션의 본문이며 제목보다 낮은 강조를 갖는다. */
 .empty {
@@ -144,7 +178,7 @@ button:disabled,
   margin: 0 0 var(--sp-2);
   font-size: var(--fs-xl);
   font-weight: 700;
-  line-height: 1.3;
+  line-height: var(--lh-table);
   letter-spacing: -0.02em;
   color: var(--text);
 }
@@ -170,7 +204,7 @@ button:disabled,
 .tt-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-menu);
   background: var(--scrim);
   display: flex;
   align-items: center;
@@ -203,7 +237,7 @@ button:disabled,
 }
 .tt-sub {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--text-2);
   font-size: var(--fs-sm);
 }
@@ -220,7 +254,7 @@ button:disabled,
   border: none;
   border-radius: var(--r-sm);
   color: var(--text-2);
-  padding: 2px 8px;
+  padding: 4px 8px;
   cursor: pointer;
 }
 .tt-close:hover,
@@ -375,7 +409,7 @@ button:disabled,
 .tt-arrow {
   color: var(--tt-dir);
   font-size: var(--fs-base);
-  line-height: 1;
+  line-height: var(--lh-fig);
 }
 .tt-side-facts {
   color: var(--text-2);
@@ -410,7 +444,7 @@ button:disabled,
   border-radius: var(--r-xs);
   color: var(--dim);
   font-size: var(--fs-2xs);
-  padding: 0 6px;
+  padding: 0 8px;
   cursor: pointer;
   opacity: 0;
 }
@@ -464,7 +498,7 @@ button:disabled,
   align-items: baseline;
   gap: var(--sp-2);
   cursor: pointer;
-  padding: 3px var(--sp-2);
+  padding: 4px var(--sp-2);
   font-size: var(--fs-xs);
   min-width: 0;
 }
@@ -547,67 +581,6 @@ button:disabled,
 }
 
 /**
- * 호출 탭 — **돈 순서 그대로.**
- *
- * 한 턴에 에이전트가 셋까지 돌고 그중 하나의 프롬프트가 수만 자다. 세로로 이으면
- * 뒤의 rater까지 스크롤로만 닿아, 정작 비교하려던 두 호출을 나란히 못 본다.
- * 탭은 본문 밖에 서서 스크롤을 따라가지 않는다 — 지금 어느 호출인지가 어디서든
- * 화면에 남는다.
- */
-.tt-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1);
-  padding: var(--sp-2) var(--sp-4) 0;
-  border-bottom: 1px solid var(--line);
-}
-.tt-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-2);
-  font-size: var(--fs-xs);
-  padding: 4px 10px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--sp-1);
-  /* 밑줄이 탭 줄의 헤어라인 위에 겹친다 */
-  margin-bottom: -1px;
-}
-.tt-tab:hover {
-  color: var(--text);
-}
-/* 활성 탭 — 글자 600 + 키 컬러 밑줄 */
-.tt-tab.on {
-  color: var(--text);
-  font-weight: 600;
-  border-bottom-color: var(--accent);
-}
-/* 호출 순서 — 무엇이 먼저 돌았는지가 곧 그 턴의 경로다 (`.tt-agent > i`와 같은 결) */
-.tt-tab > i {
-  font-size: var(--fs-2xs);
-  color: var(--dim);
-}
-/* 부모의 도구 뒤에서 돈 호출 — 탭 줄에서도 계층이 보인다 (models.md §5) */
-.tt-tab-nest {
-  font-style: normal;
-  font-size: var(--fs-2xs);
-  color: var(--dim);
-}
-/* 이 호출에서 도구가 돌았다 — 탭에서 고를 이유가 되는 사실 하나 */
-.tt-tab-facts {
-  font-size: var(--fs-2xs);
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-/* 실패한 호출은 열어 봐야 아는 것이 아니라 탭에서 보인다 */
-.tt-tab-bad {
-  font-size: var(--fs-2xs);
-  color: var(--loss);
-}
-
-/**
  * 도구 흐름 — **이 호출이 무엇을 부르고 무엇이 돌아왔나.**
  *
  * 꼬리의 JSON 스무 덩어리에 흩어져 있던 것을 한 줄씩 편다. 원문보다 위에 서는
@@ -638,14 +611,14 @@ button:disabled,
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-hair);
 }
 .tt-step > details > summary {
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
   cursor: pointer;
-  padding: 3px 4px;
+  padding: 4px 4px;
   border-radius: var(--r-xs);
   font-size: var(--fs-xs);
   min-width: 0;
@@ -668,7 +641,7 @@ button:disabled,
   font-size: var(--fs-2xs);
   background: var(--panel-2);
   border-radius: var(--r-xs);
-  padding: 0 5px;
+  padding: 0 4px;
   color: var(--text-2);
 }
 .tt-kind.skill {
@@ -755,18 +728,18 @@ button:disabled,
   background: var(--cond-tone);
 }
 
-/* 성장 가능성 — 올라가는 막대 다섯 개 (design-system.md). 읽는 값이라 키 컬러를 쓰지 않는다 */
+/* 성장 가능성 — 올라가는 막대 다섯 개 (`growth-outlook.tsx`). 읽는 값이라 키 컬러를 쓰지 않는다 */
 .growth-bars {
   display: inline-flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--sp-hair);
   height: 12px;
   vertical-align: middle;
 }
 .growth-bars i {
   display: block;
   width: 3px;
-  border-radius: 1px;
+  border-radius: var(--r-xs);
   background: var(--border);
 }
 .growth-bars i:nth-child(1) {

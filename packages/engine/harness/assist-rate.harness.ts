@@ -38,7 +38,7 @@ describe("도움이 붙는 비율", () => {
         if (!m.result) continue;
         goals += m.result.scorers.length;
         assisted += m.result.assists.filter((a) => a !== "").length;
-        expect(m.result.assists!.length, `${m.id} 길이`).toBe(m.result.scorers.length);
+        expect(m.result.assists.length, `${m.id} 길이`).toBe(m.result.scorers.length);
       }
     }
     const readings: Readings<typeof ASSIST_RATE> = {

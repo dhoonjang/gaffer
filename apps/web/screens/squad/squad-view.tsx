@@ -54,6 +54,7 @@ import type {
   TacticsView,
   Tier,
 } from "./types";
+import { Button } from "@/shared/button";
 
 /**
  * 신원이 고정된 콜백 — 항상 **최신 클로저**를 부른다.
@@ -99,7 +100,7 @@ export function SquadView({
    * 경기 중 판 조작을 오퍼레이터 지시로 GM에 전달한다.
    * 교체 횟수와 적응도 검증은 코어가 담당한다.
    */
-  onOrder?: (order: MatchBoardOrder) => void;
+  onOrder?: ((order: MatchBoardOrder) => void) | undefined;
   /**
    * 자동 저장 대기열 — **화면이 쥐고 있으면 턴이 나가기 전에 비워진다.**
    *
@@ -233,19 +234,20 @@ export function SquadView({
       setSaveError(null);
       try {
         const res = await post(snapshot);
-        const data = await res.json();
         if (!res.ok) {
+          const data = (await res.json()) as { error?: string; retry?: boolean };
           /**
            * 턴이 잠금을 쥐고 있다(`retry`) — 이 편집은 **대기열에 남는다.** 판은
            * 그대로 두고 다음 자동 저장이 같은 배치를 다시 보낸다 (models.md §1-1).
            */
           if (data.retry === true) {
-            const busy = (data.error as string | undefined) ?? "저장 실패";
+            const busy = data.error ?? "저장 실패";
             setSaveError(busy);
             return { ok: false, error: busy, keep: true };
           }
           throw new Error(data.error ?? "저장 실패");
         }
+        const data = (await res.json()) as GameSlice;
         savedRevRef.current = rev;
         onUpdate(data);
         return { ok: true };
@@ -437,7 +439,8 @@ export function SquadView({
       if (!axis || typeof value !== "number") return;
       setBoard({ ...board, tactics: { ...board.tactics, [axis.key]: value } });
       setAdvisoryPending(true);
-      return onOrder?.({ kind: "tactic", axis: axis.key, value });
+      onOrder({ kind: "tactic", axis: axis.key, value });
+      return;
     }
     if (!live) return;
     commit({ ...board, tactics: { ...board.tactics, ...patch } });
@@ -454,11 +457,17 @@ export function SquadView({
     if (a.kind === "bench" && b.kind === "bench") return;
     if (a.kind === "bench") {
       const already = board.occupants.indexOf(a.id);
-      if (already >= 0) return applySwap({ kind: "slot", index: already }, b);
+      if (already >= 0) {
+        applySwap({ kind: "slot", index: already }, b);
+        return;
+      }
     }
     if (b.kind === "bench") {
       const already = board.occupants.indexOf(b.id);
-      if (already >= 0) return applySwap(a, { kind: "slot", index: already });
+      if (already >= 0) {
+        applySwap(a, { kind: "slot", index: already });
+        return;
+      }
     }
 
     const occupants = [...board.occupants];
@@ -473,7 +482,8 @@ export function SquadView({
       // 2군 선수는 승격 전에는 라인업에 넣을 수 없다 (서버도 반려한다)
       const incomingRow = byId.get(incoming.id);
       if (incomingRow && incomingRow.squadLevel === "reserve") {
-        return setSelection(null);
+        setSelection(null);
+        return;
       }
       const outgoing = occupants[slot.index]!;
       occupants[slot.index] = incoming.id;
@@ -501,12 +511,13 @@ export function SquadView({
       if (!playerId || !target) return;
       setBoard(next);
       setAdvisoryPending(true);
-      return onOrder?.({
+      onOrder({
         kind: "position",
         playerId,
         position: positionAtPoint(target),
         point: target,
       });
+      return;
     }
     if (live) commit(next);
   }
@@ -518,7 +529,10 @@ export function SquadView({
    */
   function clickSlot(index: number) {
     const here: Selection = { kind: "slot", index };
-    if (!usable) return setSelection(board.occupants[index] ? here : null);
+    if (!usable) {
+      setSelection(board.occupants[index] ? here : null);
+      return;
+    }
     const same = selection?.kind === "slot" && selection.index === index;
     setSelection(same ? null : here);
   }
@@ -569,7 +583,8 @@ export function SquadView({
       setBoard(resetRolesForMovedPlayers({ ...board, occupants, bench }, byId));
       setAdvisoryPending(true);
       setSelection(null);
-      return onOrder?.({ kind: "substitution", out: outId, in: inId });
+      onOrder({ kind: "substitution", out: outId, in: inId });
+      return;
     }
     if (!live || !selection) return;
     const aId = selection.kind === "slot" ? board.occupants[selection.index] : selection.id;
@@ -667,17 +682,17 @@ export function SquadView({
       if (!ourIds.has(playerId) || !live || onPitch.has(playerId)) return null;
       const reserve = localReserve.has(playerId);
       return (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           data-testid={`squadmove-${playerId}`}
           onClick={() => onMoveSquadRow(playerId, reserve ? "first" : "reserve")}
         >
           {reserve ? "1군 승격" : "2군 강등"}
-        </button>
+        </Button>
       );
     },
-    // 집합은 문자열 열쇠로 싣는다 — 아래 명단 메모와 같은 이유다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 집합은 문자열 열쇠로 싣는다 — 아래 명단 메모와 같은 이유다
     [ourIds, localReserveKey, onPitchKey, live, onMoveSquadRow],
   );
   usePlayerCardActions(cardActions);
@@ -709,7 +724,8 @@ export function SquadView({
     if (advisory) {
       setBoard({ ...board, roles: { ...board.roles, [playerId]: role } });
       setAdvisoryPending(true);
-      return onOrder?.({ kind: "role", playerId, role });
+      onOrder({ kind: "role", playerId, role });
+      return;
     }
     if (!live) return;
     // 상세를 열어 둔 채 고른다 — 역할은 비교하며 바꾸는 값이다
@@ -726,7 +742,8 @@ export function SquadView({
     if (advisory) {
       setBoard(next);
       setAdvisoryPending(true);
-      return onOrder?.({ kind: "setPiece", role, playerId });
+      onOrder({ kind: "setPiece", role, playerId });
+      return;
     }
     if (!live) return;
     // 상세를 열어 둔 채 고른다 — 판 아래 줄에서 고르는 값이라 명단이 접힐 이유가 없다
@@ -759,7 +776,7 @@ export function SquadView({
   const chipClass = (p: SquadRow | undefined, selected: boolean, code: string | null) => {
     const group = code ? (positionGroupOf(code) ?? null) : null;
     return (
-      `${group ? `g-${group.toLowerCase()}` : ""}` +
+      (group ? `g-${group.toLowerCase()}` : "") +
       `${selected ? " selected" : ""}${p && !p.available ? " unavailable" : ""}`
     );
   };
@@ -796,8 +813,8 @@ export function SquadView({
               /* 벤치 지정 — 비선발 1군에게만 뜻이 있다 (선발은 이미 나가고, 2군은 승격이
                  먼저). 그 밖의 선수에게는 조작 칸 자체가 서지 않는다 */
               live && !onPitch.has(p.id) && !localReserve.has(p.id) ? (
-                <button
-                  className="ghost-btn"
+                <Button
+                  variant="secondary"
                   /* 정원이 차면 넣는 길만 잠긴다 — **빼는 길은 늘 열려 있다** */
                   disabled={saving || (benchFull && !benchSet.has(p.id))}
                   /* 잠긴 이유는 **사실로만** — 선수 카드의 1·2군 이동과 같은 결이다 */
@@ -810,7 +827,7 @@ export function SquadView({
                   onClick={() => onToggleBenchRow(p.id)}
                 >
                   {benchSet.has(p.id) ? "벤치에서 빼기" : "매치데이 벤치로"}
-                </button>
+                </Button>
               ) : undefined
             }
           />
@@ -823,7 +840,7 @@ export function SquadView({
      * 그것을 그대로 실으면 메모가 매번 깨져 아무것도 아끼지 못한다. 규칙은 열쇠가
      * 무엇을 대신하는지 볼 수 없어 원본이 빠졌다고 읽는다.
      */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 집합·표는 문자열 열쇠가 대신한다(위 ⚠️)
     [
       localRows,
       roster,
@@ -911,7 +928,8 @@ export function SquadView({
             <b>{squad.registration.homegrown}</b>/{squad.registration.homegrownMin}
           </span>
           {onToggleBoard && (
-            <button
+            <Button
+              variant="bare"
               className={`board-toggle${boardOpen ? " on" : ""}`}
               onClick={onToggleBoard}
               aria-pressed={boardOpen}
@@ -919,14 +937,14 @@ export function SquadView({
             >
               <IconBoard />
               전술판
-            </button>
+            </Button>
           )}
         </div>
         {/* 커리어 종료 잠금은 버튼이 아니다 — 돌아갈 경기가 없고, 판의 잠긴 모양이 이미 말한다 */}
         {!live && !advisory && !dismissed && (
-          <button className="ghost-btn" onClick={onGoToChat}>
+          <Button variant="secondary" onClick={onGoToChat}>
             경기 중 — 채팅으로
-          </button>
+          </Button>
         )}
       </div>
 
@@ -1043,7 +1061,7 @@ export function SquadView({
                         ? // 명단 OVR 칸의 툴팁과 **같은 두 줄**이다 — 같은 숫자를
                           // 두 화면에서 다른 말로 설명하면 규칙이 없어 보인다
                           [
-                            `${p.name}`,
+                            p.name,
                             `${code} 자리 기준 ${liveOverall ?? p.overall} — 경기에서 쓰이는 값입니다`,
                             liveOverall !== null && liveOverall !== p.overall
                               ? `주 포지션(${p.position}) 기준 ${p.overall}`
@@ -1107,7 +1125,8 @@ export function SquadView({
                   ["reserve", "2군", localReserve.size],
                 ] as const
               ).map(([key, label, count]) => (
-                <button
+                <Button
+                  variant="bare"
                   key={key}
                   role="tab"
                   aria-selected={roster === key}
@@ -1116,12 +1135,12 @@ export function SquadView({
                 >
                   {label}
                   <span className="roster-tab-n">{count}</span>
-                </button>
+                </Button>
               ))}
             </div>
             {/* 조작법 대신 숫자만 — 벤치 정원이 몇 자리 남았는지가 유일하게 필요한 정보다.
               찬 자리는 글자 한 층 올라선다 — 그 순간 명단의 「매치데이 벤치로」가
-              잠기므로, 이 숫자가 잠긴 이유다 (design-system.md §1 조작) */}
+              잠기므로, 이 숫자가 잠긴 이유다 (tokens.css 「조작」) */}
             <span className="roster-counts" data-testid="bench-count">
               <span className={`roster-count-bench${benchFull ? " full" : ""}`}>
                 벤치 {benchDesignated.length}/{MATCHDAY_BENCH}

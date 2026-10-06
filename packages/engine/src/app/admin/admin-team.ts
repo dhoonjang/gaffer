@@ -66,23 +66,25 @@ export interface AdminTeamRow extends TeamCatalogEntry {
 }
 
 interface AdminTeamInput {
-  lorebook?: LorebookContent;
+  lorebook?: LorebookContent | undefined;
   id: string;
   name: string;
   shortName: string;
   leagueId: string;
   tier: 1 | 2 | 3 | 4;
-  formation?: Formation;
-  tacticalStyle?: TacticalStyle;
-  stadium?: string;
-  capacity?: number;
-  commercialTier?: 1 | 2 | 3 | 4;
+  formation?: Formation | undefined;
+  tacticalStyle?: TacticalStyle | undefined;
+  stadium?: string | undefined;
+  capacity?: number | undefined;
+  commercialTier?: 1 | 2 | 3 | 4 | undefined;
   /** 게임 시작 전의 우승 — 대회 id별 횟수 (team.md §1). 빈 배열이면 표를 지운다 */
-  honours?: readonly ClubHonour[];
+  honours?: readonly ClubHonour[] | undefined;
 }
 
-type AdminTeamPatch = Partial<Omit<AdminTeamInput, "id" | "formation">> & {
-  formation?: Formation | null;
+type AdminTeamPatch = {
+  [K in keyof Omit<AdminTeamInput, "id" | "formation">]?: AdminTeamInput[K] | undefined;
+} & {
+  formation?: Formation | null | undefined;
 };
 
 function rowOf(team: TeamCatalogEntry, squadSize: number): AdminTeamRow {
@@ -255,7 +257,9 @@ export function adminRemoveTeam(teamId: string): AdminResult {
   if (!team) return { ok: false, message: `카탈로그에 없는 팀입니다: ${teamId}` };
 
   next.teams = next.teams.filter((t) => t.id !== teamId);
+
   delete next.tacticalStyle[teamId];
+
   delete next.clubProfiles[teamId];
 
   const problems = violations(next.teams);

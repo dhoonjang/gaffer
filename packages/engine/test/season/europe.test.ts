@@ -344,7 +344,7 @@ describe("게임 연결", () => {
     expect(cups.length).toBe(
       cupCatalog().reduce((sum, c) => sum + (c.size * c.matchesPerTeam) / 2, 0),
     );
-    expect(state.matches.every((m) => m.time !== undefined)).toBe(true);
+    expect(state.matches.every((m) => /^\d{2}:\d{2}$/.test(m.time))).toBe(true);
   });
 
   it("감독의 달력에는 우리 리그 전체 + 우리 팀 대항전만 오른다", () => {
@@ -405,7 +405,7 @@ describe("게임 연결", () => {
     );
     expect(sameDay.every((m) => m.result !== null)).toBe(true);
     // 대항전 출전도 시즌 스탯에 쌓인다
-    const lineup = played[0]!.result!.homeLineup ?? played[0]!.result!.awayLineup ?? [];
+    const lineup = played[0]!.result!.homeLineup;
     expect(lineup.length).toBeGreaterThan(0);
   });
 

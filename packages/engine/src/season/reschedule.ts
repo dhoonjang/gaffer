@@ -109,7 +109,7 @@ const REARRANGED_KICKOFF = "19:45";
 export function postponeMatch(
   state: GameState,
   match: MatchRecord,
-  avoid?: { date: string; time?: string },
+  avoid?: { date: string; time?: string | undefined },
 ): boolean {
   if (!isPostponable(state, match)) return false;
   // 이 경기를 뺀 상태에서 빈 날을 찾는다 — 자기 자신 때문에 막히면 안 된다

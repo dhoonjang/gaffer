@@ -20,6 +20,7 @@ import {
   StatusBadges,
 } from "../../shared/player-marks";
 import type { SetPieceTakersView, SquadRow } from "./types";
+import { Button } from "@/shared/button";
 
 /** 선택한 선수 상세 — 그 자리 적응도와 능력치 16축 */
 export function PlayerDetail({
@@ -35,9 +36,9 @@ export function PlayerDetail({
   setPieces?: SetPieceTakersView;
   slotCode: string | null;
   /** 이 선수에게 거는 조작 — 1·2군 이동. **선수 옆에 둔다** */
-  action?: React.ReactNode;
+  action?: React.ReactNode | undefined;
   /** 세부 역할 선택 (배치가 없거나 경기 중이면 없다) */
-  onRole?: (roleId: string) => void;
+  onRole?: ((roleId: string) => void) | undefined;
   /**
    * 지금 켜져 있는 역할 — **아직 저장되지 않은 선택까지 포함한다.**
    * `p.roleId`만 보면 서버 왕복이 끝나기 전까지 방금 고른 역할이 안 켜져서,
@@ -184,7 +185,7 @@ export function PlayerDetail({
             ))}
             {/* 폼의 시간 축 — 최근 경기가 오른쪽 */}
             {p.recentRatings.length > 0 && (
-              <span className="pd-trend">
+              <span>
                 최근 <RatingTrend ratings={p.recentRatings} />
               </span>
             )}
@@ -258,10 +259,10 @@ export function PlayerDetail({
                  * 가장 싼 역할 고르기로 바뀐다 — 적응도는 하루면 기준이 다시 잡힌다.
                  */}
                 {roleOptions.map((r) => (
-                  <button
+                  <Button
+                    variant="bare"
                     className={`pd-role${r.id === activeRole ? " on" : ""}`}
                     key={r.id}
-                    type="button"
                     title={r.desc}
                     disabled={!onRole}
                     aria-pressed={r.id === activeRole}
@@ -272,7 +273,7 @@ export function PlayerDetail({
                     }}
                   >
                     {r.ko}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

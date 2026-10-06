@@ -465,7 +465,7 @@ describe("스태프 급여", () => {
     );
 
     // 대상별로 이름과 직책을 달고 선다
-    const people = (state.personas ?? []).filter((p) => p.employment?.teamId === teamId);
+    const people = state.personas.filter((p) => p.employment?.teamId === teamId);
     expect(people.length).toBeGreaterThanOrEqual(5);
     for (const person of people) {
       const job = person.employment!;
@@ -696,7 +696,7 @@ describe("리그 순위 상금", () => {
     // 남아 있는 팀도 그대로 받는다
     expect(financeOf(state, "arsenal").prizesPaid).toContain(key(state.season));
     // 내려간 팀은 리그전을 하지 않는 리그로 갔으므로 순위 상금이 없다
-    expect(financeOf(state, "coventry").prizesPaid ?? []).not.toContain(key(state.season));
+    expect(financeOf(state, "coventry").prizesPaid).not.toContain(key(state.season));
   });
 
   it("리그전을 하지 않는 2부는 순위 상금을 받지 않는다", () => {
@@ -705,8 +705,7 @@ describe("리그 순위 상금", () => {
 
     const paidIn = (league: string) =>
       state.finances.filter(
-        (f) =>
-          leagueOfTeam(f.teamId) === league && (f.prizesPaid ?? []).includes(key(state.season)),
+        (f) => leagueOfTeam(f.teamId) === league && f.prizesPaid.includes(key(state.season)),
       ).length;
 
     // 0경기 0승점 순위표는 카탈로그 등재 순서를 그대로 순위로 만든다 — 상금을 줄 수 없다

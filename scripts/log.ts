@@ -272,12 +272,14 @@ function hitRate(usage: TurnUsage | null): string {
 
 function firstLine(text: string, width = 60): string {
   const line = text.split("\n").find((l) => l.trim() !== "") ?? "";
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- 코드 포인트 단위가 의도다 — 이니셜·글자 폭은 결합 문자가 없는 이름과 표 칸을 잰다
   return cells(line) > width ? `${[...line].slice(0, width - 1).join("")}…` : line;
 }
 
 function countChars(value: unknown): number {
   try {
-    return JSON.stringify(value)?.length ?? 0;
+    // undefined·함수는 문자열이 아니라 undefined가 된다
+    return (JSON.stringify(value) as string | undefined)?.length ?? 0;
   } catch {
     return 0;
   }
@@ -286,7 +288,8 @@ function countChars(value: unknown): number {
 function compact(value: unknown, max = 120): string {
   let text: string;
   try {
-    text = JSON.stringify(value) ?? String(value);
+    // undefined·함수는 문자열이 아니라 undefined가 된다
+    text = JSON.stringify(value) || String(value);
   } catch {
     text = String(value);
   }

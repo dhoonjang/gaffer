@@ -332,7 +332,7 @@ non-deterministic LLM.
 | `people/`  | People — lorebook, staff, mailbox, press, manager career                      | [people](docs/people/README.md)                                     |
 | `app/`     | Time, season rollover, saves, GM lookups — what moves several domains at once | [app](docs/app/README.md)                                           |
 | `agents/`  | Model calls, prompts, models and tracing                                      | [agents](docs/agents/README.md)                                     |
-| `web/`     | Screens and the design system                                                 | [web](docs/web/README.md)                                           |
+| —          | Screens and the design system — owned by code, not docs                       | [tokens.css](apps/web/shared/tokens.css)                            |
 
 ## Status
 

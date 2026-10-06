@@ -123,7 +123,10 @@ export function useBoardDrag({
     const up = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
       cancel(ev);
-      if (!dragging) return onTap(slot);
+      if (!dragging) {
+        onTap(slot);
+        return;
+      }
       const p = pointFromClient(ev.clientX, ev.clientY);
       if (!p) return;
       const dropPoint = clampToBoard({ x: p.x + grabOffset.x, y: p.y + grabOffset.y });

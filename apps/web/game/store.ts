@@ -49,9 +49,9 @@ export interface GamePayload {
   teamName: string;
   /**
    * 우리 구단의 id·약칭·공식 색 — 화면이 문장과 `--club*` 토큰을 세우는 열쇠
-   * (web/design-system.md §2). 색은 카탈로그의 것이라 세이브에 없다 — 여기서 실어 보낸다.
+   * (tokens.css 「구단 색」). 색은 카탈로그의 것이라 세이브에 없다 — 여기서 실어 보낸다.
    */
-  team: { id: string; shortName: string; colours?: ClubColours };
+  team: { id: string; shortName: string; colours?: ClubColours | undefined };
   managerName: string;
   chat: ChatTurn[];
   views: OfficeViews;
@@ -80,13 +80,13 @@ export interface GamePayload {
   matchLogs: Record<string, MatchLogHead>;
 }
 
-/** 접힌 경기 머리가 아는 한 팀 — 문장과 구단 색의 열쇠까지 (design-system.md §2) */
+/** 접힌 경기 머리가 아는 한 팀 — 문장과 구단 색의 열쇠까지 (tokens.css 「구단 색」) */
 export interface MatchLogTeam {
   id: string;
   name: string;
   short: string;
   ours: boolean;
-  colours?: ClubColours;
+  colours?: ClubColours | undefined;
 }
 
 /**
@@ -146,7 +146,7 @@ function namesForConversations(
   const fingerprint = JSON.stringify(names);
   if (chatNames?.fingerprint !== fingerprint)
     chatNames = { fingerprint, index: buildPlayerNameIndex(names, false), mentions: new Map() };
-  const mentioned = new Set(Object.keys(state.pendingMatch?.live?.setup.players ?? {}));
+  const mentioned = new Set(Object.keys(state.pendingMatch?.live.setup.players ?? {}));
   for (const n of negotiation.cases) mentioned.add(n.playerId);
   const texts = state.chat;
   for (const turn of texts) {

@@ -198,6 +198,7 @@ export function saveGame(state: GameState): void {
     // 이름도 크기도 맞으면 같은 내용이다 — 손대지 않은 5,743명을 다시 쓰지 않는다
     writeShard(dir, state.id, hash, json);
     shards[table] = hash;
+
     delete body[table];
   }
   body.shards = shards;
@@ -482,7 +483,7 @@ export interface GameSummary {
    * 공식 색 — 카탈로그에서 팀 id로 읽는다 (사이드카에 쓰지 않는다: 세이브가 아니라
    * 카탈로그의 것이다). 없으면(어드민이 만든 클럽) 문장이 id 해시로 색을 낸다.
    */
-  colours?: ClubColours;
+  colours?: ClubColours | undefined;
   teamName: string;
   managerName: string;
   season: number;

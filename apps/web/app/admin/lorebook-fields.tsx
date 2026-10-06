@@ -1,6 +1,7 @@
 "use client";
 
 import { CHARACTER_INFORMATION_MAX, type LorebookContent } from "@gaffer/domain";
+import { Button } from "../../shared/button";
 
 export function LorebookFields({
   name,
@@ -8,7 +9,7 @@ export function LorebookFields({
   onChange,
 }: {
   name: string;
-  book?: LorebookContent;
+  book?: LorebookContent | undefined;
   onChange: (book: LorebookContent) => void;
 }) {
   return (
@@ -44,12 +45,12 @@ export function LorebookFields({
           </label>
         </>
       ) : (
-        <button
-          className="ghost-btn"
+        <Button
+          variant="secondary"
           onClick={() => onChange({ name, keywords: [], description: "", information: "" })}
         >
           로어북 직접 작성
-        </button>
+        </Button>
       )}
     </section>
   );

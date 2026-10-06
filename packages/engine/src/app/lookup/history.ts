@@ -20,7 +20,7 @@ import {
 } from "../../season/records";
 import { teamNameIn, teamShortNameIn, type GameState } from "../../core/state";
 import {
-  LookupResult,
+  type LookupResult,
   DEFAULT_LIMIT,
   MAX_LIMIT,
   resolveTeam,
@@ -47,15 +47,15 @@ import {
  */
 interface HistoryViewInput {
   /** 시즌 번호 — 주면 그 시즌 하나를 본다 */
-  season?: number;
+  season?: number | undefined;
   /** 대회 이름·약어·id — `season`과 함께면 그 시즌 그 대회의 결과다 */
-  competition?: string;
+  competition?: string | undefined;
   /** 구단 이름·약칭·id — `season` 없이 주면 그 구단의 역대 기록이다 */
-  team?: string;
+  team?: string | undefined;
   /** 선수 이름 또는 id — 은퇴한 선수도 찾는다 */
-  player?: string;
+  player?: string | undefined;
   /** 목록의 최대 행 수 (기본 8) — 순위표는 자르지 않는다 */
-  count?: number;
+  count?: number | undefined;
 }
 
 /** 그 시즌 감독 팀의 성적 한 줄 — 그 팀이 리그 표에 없으면 서지 않는다 */

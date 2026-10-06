@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { contractUntil, humanDate, humanMonthYear } from "../../shared/dateline";
 
 /**
- * 날짜의 사람 표기 — 자는 하나다 (design-system.md §3).
+ * 날짜의 사람 표기 — 자는 하나다 (tokens.css 「숫자와 표기」).
  * 요일 계산과 연도 경계처럼 조용히 틀리는 자리만 잰다.
  */
 

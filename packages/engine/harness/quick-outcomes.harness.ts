@@ -50,7 +50,7 @@ it("quick outcomes calibration", () => {
     cup.prize.participation +
     5 * cup.prize.win +
     2 * cup.prize.draw +
-    Object.values(cup.prize.stage).reduce((a, b) => a + (b ?? 0), 0) +
+    Object.values(cup.prize.stage).reduce((a, b) => a + b, 0) +
     cup.prize.winner;
   const readings: Readings<typeof QUICK_OUTCOMES> = {
     extraGoals: goals / 200,

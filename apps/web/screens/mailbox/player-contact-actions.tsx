@@ -4,6 +4,7 @@ import type { PlayerCardView } from "@gaffer/engine";
 import type { GamePayload } from "@/game/store";
 import { IconChat, IconMail } from "@/shared/icons";
 import type { MailDraft } from "./mailbox";
+import { Button } from "@/shared/button";
 
 /**
  * 선수 카드의 연락 손잡이 — 말 걸기와 메일.
@@ -32,9 +33,8 @@ export function PlayerContactActions({
   const viaAgent = own || card.teamId === FREE_AGENT_TEAM;
   return (
     <>
-      <button
-        type="button"
-        className="pc-secondary"
+      <Button
+        variant="ghost"
         disabled={blocked}
         data-testid="player-card-talk"
         onClick={() => {
@@ -43,10 +43,9 @@ export function PlayerContactActions({
         }}
       >
         <IconChat size={15} />말 걸기
-      </button>
-      <button
-        type="button"
-        className="pc-secondary"
+      </Button>
+      <Button
+        variant="ghost"
         disabled={blocked}
         data-testid="player-card-mail"
         onClick={() => {
@@ -63,7 +62,7 @@ export function PlayerContactActions({
       >
         <IconMail size={15} />
         {viaAgent ? "에이전트에 메일" : "구단에 메일"}
-      </button>
+      </Button>
     </>
   );
 }

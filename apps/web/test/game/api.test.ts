@@ -119,14 +119,22 @@ beforeAll(() => {
 
 describe("API — 온보딩부터 경기까지", () => {
   it("팀 카탈로그는 물었을 때만 온다 — 랜딩은 게임 목록만 받는다", async () => {
-    const data = await getCatalog(new Request("http://test.local/api/games?catalog=1")).json();
-    const teams = data.teams as Array<{ id: string; tier: number }>;
+    const data = (await getCatalog(
+      new Request("http://test.local/api/games?catalog=1"),
+    ).json()) as {
+      teams: Array<{ id: string; tier: number }>;
+      leagues: Array<{ id: string; size: number }>;
+    };
+    const teams = data.teams;
     expect(teams.find((team) => team.id === "arsenal")?.tier).toBe(catalogTierOf("arsenal"));
-    const leagues = data.leagues as Array<{ id: string; size: number }>;
+    const leagues = data.leagues;
     expect(leagues.find((l) => l.id === "epl")?.size).toBe(teamsOfLeague("epl").length);
 
     // 랜딩이 받는 것 — 카탈로그는 한 조각도 실리지 않는다
-    const landing = await getCatalog(new Request("http://test.local/api/games")).json();
+    const landing = (await getCatalog(new Request("http://test.local/api/games")).json()) as {
+      teams?: unknown;
+      leagues?: unknown;
+    };
     expect(landing.teams).toBeUndefined();
     expect(landing.leagues).toBeUndefined();
   });
@@ -409,7 +417,7 @@ describe("API — 온보딩부터 경기까지", () => {
     const unchanged = after2.players.filter((p) => p.role === "선발" && p.id !== pivot.id);
     for (const p of unchanged) {
       const before = startersAfter.find((q) => q.id === p.id)!;
-      expect(p.assignedPosition, `${p.name}`).toBe(before.assignedPosition);
+      expect(p.assignedPosition, p.name).toBe(before.assignedPosition);
     }
   });
 
@@ -1096,7 +1104,7 @@ describe("게임 잠금 — 겹친 요청", () => {
       json({ teamId: "everton", managerName: "잠금테스트", background: "분석가", seed: 71 }),
     );
     const game = (await created.json()) as GamePayload;
-    const squad = game.views.squad!;
+    const squad = game.views.squad;
     // 지금 서 있는 판을 그대로 되보낸다 — 반려당하지 않는 가장 짧은 본문이다
     const starting = squad.players
       .filter((p) => p.role === "선발")
@@ -1153,15 +1161,15 @@ describe("계측 라우트 — 히트율의 문턱", () => {
   function call(agent: "gm" | "history-compactor", usage: TurnResult["usage"]) {
     const llm = meterLlm(
       {
-        async runTurn(): Promise<TurnResult> {
-          return {
+        runTurn(): Promise<TurnResult> {
+          return Promise.resolve({
             text: "",
             history: { version: 1, provider: "google", model: "x", messages: [] },
             historyBase: 0,
             usage,
             toolCallCount: 0,
             stopReason: null,
-          };
+          });
         },
       },
       agent,
@@ -1187,7 +1195,7 @@ describe("계측 라우트 — 히트율의 문턱", () => {
       cacheWriteTokens: 0,
     });
 
-    const body = (await (await usageGet()).json()) as UsageResponse;
+    const body = (await usageGet().json()) as UsageResponse;
     expect(body.gameId).toBe("usage-test");
     const gm = body.agents.find((a) => a.agent === "gm")!;
     const compactor = body.agents.find((a) => a.agent === "history-compactor")!;

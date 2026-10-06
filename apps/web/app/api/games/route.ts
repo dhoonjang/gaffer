@@ -30,7 +30,7 @@ export function GET(request: Request) {
   const leagues = topLeagues();
   const ids = new Set(leagues.map((l) => l.id));
   const sizeOf = new Map(leagues.map((l) => [l.id, teamsOfLeague(l.id).length]));
-  // 리그 색은 다섯을 함께 봐야 나온다 (web/design-system.md §2-1) — 한 번 세어 행마다 싣는다
+  // 리그 색은 다섯을 함께 봐야 나온다 (tokens.css 「리그 색」) — 한 번 세어 행마다 싣는다
   const tones = leagueTones();
   return NextResponse.json({
     // 리그 행이 「20팀」을 세우는 그 수 — 화면이 팀 배열을 따로 세지 않는다
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   }
 
   const state = createGame({
-    seed,
+    ...(seed === undefined ? {} : { seed }),
     userTeamId: teamId,
     managerName,
     background,

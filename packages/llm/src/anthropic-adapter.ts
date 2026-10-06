@@ -150,6 +150,7 @@ function toStopReason(reason: Anthropic.StopReason | null): StopReason | null {
     case "refusal":
       return "filtered";
     // pause_turn — 서버 도구 턴의 중간 정지. 서버 도구를 주지 않으므로 여기 오지 않는다
+    case "pause_turn":
     default:
       return "other";
   }
@@ -223,7 +224,7 @@ function withBreakpoint(
     copy[i] = {
       ...target,
       content: [...blocks.slice(0, -1), { ...last, cache_control: CACHE }],
-    } as Anthropic.MessageParam;
+    };
     break;
   }
   return copy;
@@ -277,8 +278,13 @@ function classifyAnthropic(error: unknown): LlmErrorKind {
         return "auth";
       case "timeout_error":
         return "timeout";
+      case null:
+      case "invalid_request_error":
+      case "not_found_error":
+      case "api_error":
+      case "billing_error":
       default:
-        return kindOfStatus(error.status);
+        return kindOfStatus(error.status as number | undefined);
     }
   }
   return "unknown";
@@ -320,7 +326,7 @@ export class AnthropicGameLLM implements GameLLM {
     const toolDefs: Anthropic.Tool[] = tools.map((t) => ({
       name: t.name,
       description: t.description,
-      input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+      input_schema: t.inputSchema,
     }));
     /**
      * 출력 스키마는 `output_config.format`으로 간다 (models.md §3-2) — 사고 깊이(`effort`)와

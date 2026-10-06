@@ -15,6 +15,7 @@ import { ratingTone } from "@/shared/scout-report-display";
 import { IconArrowLeft, IconArrowRight, IconChevron, IconTrophy } from "../../shared/icons";
 import { PlayerName } from "../../shared/player-card";
 import { Crest } from "../../shared/crest";
+import { Button } from "@/shared/button";
 
 // ── 대회 — 대회별 탭 · 순위표 · 라운드별 일정 ──────────────
 type Competition = OfficeViews["competitions"]["list"][number];
@@ -53,7 +54,8 @@ function PillPicker<T extends string>({
   return (
     <div className="pill-picker" role="radiogroup" aria-label={label} data-testid={testId}>
       {options.map((o) => (
-        <button
+        <Button
+          variant="bare"
           key={o.value}
           role="radio"
           aria-checked={o.value === value}
@@ -62,7 +64,7 @@ function PillPicker<T extends string>({
           data-testid={`${testId}-${o.value}`}
         >
           {o.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -119,7 +121,7 @@ function StandingsTable({ competition }: { competition: Competition }) {
                 data-testid={zone ? `standing-zone-${zone.kind}` : undefined}
               >
                 {/* 순위 앞의 색 띠가 구역이다 — 무슨 구역인지는 툴팁과 표 아래 범례에 있다.
-                    팀 칸은 문장이다 — 한 행에 띠는 하나 (web/design-system.md §2 규칙 6) */}
+                    팀 칸은 문장이다 — 한 행에 띠는 하나 (tokens.css 「구단 색」 충돌 규칙 6) */}
                 <td title={zone?.label}>{i + 1}</td>
                 <td className="team-cell">
                   <span>
@@ -369,13 +371,14 @@ function RoundFixtures({ competition }: { competition: Competition }) {
   return (
     <div data-testid="round-fixtures">
       <div className="round-nav">
-        <button
+        <Button
+          variant="bare"
           onClick={() => setPicked(Math.max(0, index - 1))}
           disabled={index === 0}
           aria-label="이전 라운드"
         >
           <IconArrowLeft size={14} />
-        </button>
+        </Button>
         <select
           value={index}
           onChange={(e) => setPicked(Number(e.target.value))}
@@ -389,13 +392,14 @@ function RoundFixtures({ competition }: { competition: Competition }) {
             </option>
           ))}
         </select>
-        <button
+        <Button
+          variant="bare"
           onClick={() => setPicked(Math.min(rounds.length - 1, index + 1))}
           disabled={index === rounds.length - 1}
           aria-label="다음 라운드"
         >
           <IconArrowRight size={14} />
-        </button>
+        </Button>
       </div>
       <div className="fixture-list">
         {round.matches.map((m) => (
@@ -457,7 +461,7 @@ function NextFixture({ next }: { next: NextMatch }) {
   const venue = venueLabel(next.venue);
   return (
     <div className="next-fixture" data-testid="next-fixture">
-      <span className="nf-when">
+      <span>
         <b>{next.inDays === 0 ? "오늘" : `${next.inDays}일 뒤`}</b>
         <i>
           {humanDate(next.date)} {next.time}
@@ -489,9 +493,9 @@ function MatchPreviewPanel({ preview }: { preview: MatchPreview }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="mp-wrap">
-      <button
+      <Button
+        variant="bare"
         className={`mp-btn${open ? " open" : ""}`}
-        type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         data-testid="match-preview-toggle"
@@ -500,7 +504,7 @@ function MatchPreviewPanel({ preview }: { preview: MatchPreview }) {
         {preview.absent.length > 0 && <i className="mp-chip">결장 {preview.absent.length}</i>}
         {preview.keyPoints.length > 0 && <i className="mp-chip">상성 {preview.keyPoints.length}</i>}
         <IconChevron size={12} />
-      </button>
+      </Button>
       {open && (
         <div className="mp-body" data-testid="match-preview">
           <div className="mp-section">
@@ -597,7 +601,7 @@ function RecentResultLine({ r }: { r: RecentResult }) {
       <b className="recent-score">
         <span className="fig">{formatScore(r.homeGoals, r.awayGoals)}</span>
       </b>
-      <span className={`recent-team recent-away ${side("away") ?? ""}`}>{r.away}</span>
+      <span className={`recent-team ${side("away") ?? ""}`}>{r.away}</span>
       {/* 승부차기가 없어도 **칸은 낸다** — 줄이 격자를 나눠 쓰는 구조라 한 줄이
           네 칸만 채우면 다음 줄이 한 칸씩 밀려 스코어가 어긋난다 */}
       <i className="recent-pens">
@@ -773,14 +777,15 @@ export function CompetitionsView({
       {list.length > 1 && (
         <div className="comp-tabs" data-testid="comp-tabs">
           {list.map((c) => (
-            <button
+            <Button
+              variant="bare"
               key={c.id}
               className={active?.id === c.id ? "active" : ""}
               onClick={() => setActiveId(c.id)}
               data-testid={`comp-tab-${c.id}`}
             >
               {c.name}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -889,7 +894,7 @@ function BracketSection({ bracket }: { bracket: Competition["bracket"] }) {
   return (
     <div data-testid="europe">
       {bracket.map((stage) => (
-        <div key={stage.stage} className="euro-stage">
+        <div key={stage.stage}>
           <h2 className="section-title">{stage.label}</h2>
           {stage.ties.map((tie, i) => (
             <div
@@ -898,13 +903,13 @@ function BracketSection({ bracket }: { bracket: Competition["bracket"] }) {
               data-testid={tie.ours ? "euro-tie-ours" : undefined}
             >
               <span className="euro-when">{humanDate(tie.date, { weekday: false })}</span>
-              <span className="euro-teams">
+              <span>
                 {tie.home} vs {tie.away}
               </span>
               <span className="euro-score">
                 {tie.score ?? "예정"}
-                {tie.won === true && " ✓"}
-                {tie.won === false && " ✕"}
+                {tie.won === true && " · 진출"}
+                {tie.won === false && " · 탈락"}
               </span>
             </div>
           ))}

@@ -143,7 +143,7 @@ describe("수석코치 페르소나 — 데이터로 다루는 인물 (people.md
   it("우리 선수는 직책 없이 자리만 갖는다 — 대화마다 (선수)는 시끄럽다", () => {
     const state = createTestGame(42, "manutd");
     const roles = speakerRoles(state);
-    const squad = state.players.filter((p) => p.teamId === "manutd" && p.isCaptain !== true);
+    const squad = state.players.filter((p) => p.teamId === "manutd" && !p.isCaptain);
     const known = squad.filter((p) => roles[normalizeSpeaker(p.name)] !== undefined);
     // 동명이인으로 빠지는 몇을 빼면 선수단 대부분이 사전에 있다
     expect(known.length).toBeGreaterThan(squad.length - 3);
@@ -293,7 +293,7 @@ describe("스태프 — 고용 정보를 든 인물 (people.md §2-2)", () => {
 
   it("이름은 수석코치·구단주·기자와 겹치지 않는다 — 태그는 전역 유일이다", () => {
     const state = createTestGame(42);
-    const names = (state.personas ?? []).map((p) => p.name);
+    const names = state.personas.map((p) => p.name);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -329,7 +329,7 @@ describe("스태프 — 고용 정보를 든 인물 (people.md §2-2)", () => {
     expect(factSpeakerOf(state, "training").role).toBe("coach");
     expect(factSpeakerOf(state, "coach_eye").role).toBe("head_coach");
     // 의료진을 자른 세이브 — 부상 줄은 여전히 서야 하므로 수석코치가 대신 선다
-    state.personas = (state.personas ?? []).filter((p) => p.role !== "medic");
+    state.personas = state.personas.filter((p) => p.role !== "medic");
     expect(factSpeakerOf(state, "medical").role).toBe("head_coach");
   });
 });
@@ -412,7 +412,7 @@ describe("인물 이름의 유일성", () => {
     for (const seed of [3, 11]) {
       const state = createTestGame(seed);
       const roles = speakerRoles(state);
-      for (const persona of state.personas ?? []) {
+      for (const persona of state.personas) {
         expect(roles[normalizeSpeaker(persona.characterId)]?.kind, persona.name).toBe(persona.role);
       }
     }
@@ -560,7 +560,7 @@ describe("가상 감독 — 명부 밖 벤치의 사람 (people.md §2)", () => 
     expect(state.teams.find((t) => t.id === "mancity")?.managerName).toBe("펩 과르디올라");
     // 이름이 곧 characterId(전역 유일) — 벤치끼리도, 우리 구단 인물·유저와도 겹치지 않는다
     const names = clubs.map((t) => t.managerName!);
-    const occupied = new Set([...state.personas!.map((p) => p.name), state.manager.name]);
+    const occupied = new Set([...state.personas.map((p) => p.name), state.manager.name]);
     expect(new Set(names).size).toBe(names.length);
     for (const name of names) expect(occupied.has(name), name).toBe(false);
   });

@@ -240,9 +240,7 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
                 n.sellerId === p.teamId &&
                 n.buyerId !== p.teamId &&
                 (n.status === "signed" ||
-                  (n.status === "open" &&
-                    currentProposal(n, "club") !== null &&
-                    proposalAgreed(n, currentProposal(n, "club")!))),
+                  (n.status === "open" && proposalAgreed(n, currentProposal(n, "club")))),
             ),
         ).length > SELLING_MINIMUM[needed]
       );

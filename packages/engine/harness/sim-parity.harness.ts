@@ -70,7 +70,7 @@ describe("두 시뮬의 눈금", () => {
         playToEnd(live);
         const sample = sampleOf(live);
         const [h, a] = sample.teams as [(typeof sample.teams)[0], (typeof sample.teams)[0]];
-        const quick = { goals: [0, 0], xg: [0, 0], shots: [0, 0] } as Pair["quick"];
+        const quick: Pair["quick"] = { goals: [0, 0], xg: [0, 0], shots: [0, 0] };
         for (let i = 0; i < QUICK_DRAWS; i++) {
           const r = quickSimulate(home, away, seed * 1000 + i, `parity:${fixture.id}:${i}`);
           quick.goals[0] += r.homeGoals / QUICK_DRAWS;

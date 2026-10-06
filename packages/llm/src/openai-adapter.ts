@@ -70,7 +70,7 @@ function classifyOpenAi(error: unknown): LlmErrorKind {
   if (error instanceof OpenAI.APIUserAbortError) return "timeout";
   if (error instanceof OpenAI.APIConnectionTimeoutError) return "timeout";
   if (isAbortError(error)) return "timeout";
-  if (error instanceof OpenAI.APIError) return kindOfStatus(error.status);
+  if (error instanceof OpenAI.APIError) return kindOfStatus(error.status as number | undefined);
   return "unknown";
 }
 
@@ -85,6 +85,7 @@ function kindOfFailure(code: string | undefined): LlmErrorKind {
       return "overloaded";
     case "rate_limit_exceeded":
       return "rate_limit";
+    case undefined:
     default:
       return "unknown";
   }
@@ -160,7 +161,7 @@ function openaiHistory(history: TurnHistory, config: OpenAiAgentConfig): InputIt
   if (isStoredLlmHistory(history)) {
     if (history.provider !== config.provider || history.model !== config.model) return [];
     if (!history.messages.every(isResponseInputItem)) return [];
-    return history.messages as InputItem[];
+    return history.messages;
   }
   return history.map((m) => ({ role: m.role, content: m.content }));
 }
@@ -171,14 +172,17 @@ function openaiHistory(history: TurnHistory, config: OpenAiAgentConfig): InputIt
  * (models.md §4).
  */
 function addUsage(total: TurnUsage, usage: OpenAI.Responses.ResponseUsage | undefined): TurnUsage {
+  // 호환 엔드포인트는 세부 칸을 통째로 비우기도 한다 — SDK 타입보다 느슨하게 읽는다
+  const details = usage?.input_tokens_details as
+    Partial<OpenAI.Responses.ResponseUsage["input_tokens_details"]> | undefined;
   const delta: TurnUsage = {
     // input_tokens는 캐시분(cached_tokens)을 이미 품고 있다 — 계약이 요구하는
     // "입력 전부"와 같은 값이라 그대로 더한다.
     inputTokens: usage?.input_tokens ?? 0,
     outputTokens: usage?.output_tokens ?? 0,
-    cacheReadTokens: usage?.input_tokens_details?.cached_tokens ?? 0,
+    cacheReadTokens: details?.cached_tokens ?? 0,
     // 캐시에 새로 쓴 몫 — 보고하지 않는 모델에서는 없는 칸이다
-    cacheWriteTokens: usage?.input_tokens_details?.cache_write_tokens ?? 0,
+    cacheWriteTokens: details?.cache_write_tokens ?? 0,
   };
   total.inputTokens += delta.inputTokens;
   total.outputTokens += delta.outputTokens;
@@ -237,6 +241,7 @@ async function collectStream(
   let final: ResponseBody | undefined;
 
   for await (const event of stream) {
+    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- 스트림 사건은 조립에 쓰는 것만 고르고 나머지는 흘려보내는 것이 계약이다
     switch (event.type) {
       case "response.output_text.delta":
         if (event.delta.length > 0) onText(event.delta);
@@ -282,6 +287,11 @@ function toStopReason(turn: Assistant): StopReason | null {
       return null;
     case "completed":
       return "completed";
+    case "failed":
+    case "in_progress":
+    case "cancelled":
+    case "queued":
+    case "incomplete":
     default:
       return "other";
   }
@@ -352,7 +362,7 @@ export class OpenAiGameLLM implements GameLLM {
       type: "function",
       name: tool.name,
       description: tool.description,
-      parameters: tool.inputSchema as Record<string, unknown>,
+      parameters: tool.inputSchema,
       /**
        * ⚠️ **생략하면 Responses가 strict 모드를 시도한다.** 게임의 도구 스키마는
        * `additionalProperties: false`도 아니고 전 필드가 `required`도 아니라(제공자

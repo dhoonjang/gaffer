@@ -46,7 +46,7 @@
     display: contents;
   }
   .squad-board-col {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .squad-summary {
     order: 1;
@@ -62,7 +62,7 @@
   }
   .lineup-status {
     order: 0;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .pitch-wrap {
     container-type: normal;
@@ -165,13 +165,13 @@
 
 @media (min-width: 1024px) and (max-height: 900px) {
   .tactics-panel {
-    padding: 8px 10px;
+    padding: 8px 8px;
   }
   .tactics-panel.open .tactics-head {
-    margin-bottom: 5px;
+    margin-bottom: 4px;
   }
   .tactics-grid {
-    gap: 3px;
+    gap: 4px;
   }
   .tactic-row {
     font-size: var(--fs-sm);
@@ -184,7 +184,7 @@
   /* 세로가 짧으면 촘촘히 — 다만 **책갈피와 표 사이는 건드리지 않는다**.
      여기에 간격을 주면 탭이 명단 위에 떠 있는 것처럼 보인다 */
   .squad-summary {
-    padding-bottom: 6px;
+    padding-bottom: 8px;
   }
 }
 
@@ -197,25 +197,16 @@
  */
 @media (max-width: 699px) {
   .hide-sm {
+    /* stylelint-disable-next-line declaration-no-important -- 숨김 유틸리티는 붙은 요소의 어떤 display도 이겨야 한다 */
     display: none !important;
   }
   .topbar {
     gap: 8px;
-    padding: 0 10px;
-  }
-  .rail .rail-panel {
-    flex: 1;
-    min-width: 0;
-    height: auto;
-    min-height: 40px;
-    padding: 4px;
-    flex-direction: column;
-    gap: 2px;
-    white-space: normal;
+    padding: 0 8px;
   }
   .rail-label {
-    font-size: 11px;
-    line-height: 1.2;
+    font-size: var(--fs-xs);
+    line-height: var(--lh-table);
   }
   .topbar .brand {
     font-size: var(--fs-base);
@@ -289,14 +280,14 @@
   .rail .rail-panels button.hinted::after {
     top: 50%;
     right: var(--sp-3);
-    margin-top: -3.5px;
+    translate: 0 -50%;
   }
   .rail-label {
     display: inline;
   }
   /* 서랍이 무대 위 모든 것을 덮도록 — 띠가 쌓임 맥락이라 띠째 올린다 */
   .topbar.menu-open {
-    z-index: 60;
+    z-index: var(--z-menu);
   }
   /* 알림의 꼬리는 메뉴 버튼을 짚는다 — 접힌 줄에선 칸을 셀 자리가 없다 */
   .rail-dock .rail-hints {
@@ -322,8 +313,8 @@
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     column-gap: 8px;
-    row-gap: 1px;
-    line-height: 1.3;
+    row-gap: 0;
+    line-height: var(--lh-table);
   }
   .topbar-club-line {
     display: contents;
@@ -343,10 +334,10 @@
     display: none;
   }
   .chat-scroll {
-    padding: 14px;
+    padding: 16px;
   }
   .chat-input {
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
   .turn-user,
   .turn-model {
@@ -379,7 +370,7 @@
   /* 일정은 날짜를 줄이고 팀명 폭을 양보한다 (킥오프 시각은 .hide-sm로 숨는다) */
   .fixture {
     grid-template-columns: 44px 1fr 78px 1fr auto;
-    gap: 6px;
+    gap: 8px;
   }
   .fixture .when {
     font-size: var(--fs-xs);
@@ -426,7 +417,7 @@
 @media (max-width: 479px) {
   .topbar {
     min-height: 0;
-    padding: 5px 10px 3px;
+    padding: 4px 8px 4px;
   }
 }
 /**
@@ -442,7 +433,7 @@
  *
  * 폭이 아니라 **포인터**로 가른다 — 확대하는 것은 좁은 창이 아니라 터치
  * 브라우저다(아이패드 가로는 1024를 넘고도 확대한다). 화면 단계 넷
- * (`breakpoints.css`)은 폭의 눈금이고, 이 질의는 그 축 밖에 있다.
+ * (tokens.css `--bp-*`)은 폭의 눈금이고, 이 질의는 그 축 밖에 있다.
  *
  * `!important`는 바닥이라서 붙는다 — 칸마다 제 크기(`--fs-sm` 따위)를 따로
  * 적고 있고, 그중 무엇도 이 바닥을 뚫으면 안 된다.
@@ -451,16 +442,18 @@
   input,
   textarea,
   select {
+    /* stylelint-disable-next-line declaration-property-value-allowed-list, declaration-no-important -- 터치 브라우저의 확대 문턱이 16px이다. 칸마다 제 크기를 적고 있어 바닥이 이겨야 한다 */
     font-size: 16px !important;
   }
   /* 한 줄일 때 손잡이와 키가 같아야 한다(shell.css `.chat-input textarea`) —
-     글자가 커진 만큼 24(16 × 1.5) + 7 + 7 = 38로 다시 맞춘다 */
+     터치의 아이콘 칸 40으로 다시 맞춘다 (tokens.css 「표면·간격」 높이) */
   .chat-input textarea {
-    min-height: 38px;
+    min-height: 40px;
+    padding-block: calc((40px - 1lh) / 2);
   }
   .chat-input button {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -475,20 +468,20 @@
 .est {
   color: var(--text-3);
   font-size: var(--fs-2xs);
-  margin-left: 2px;
-  /* 위첨자가 아니다 — 숫자 옆에 같은 줄로 앉는다 (design-system.md §3) */
+  margin-left: 4px;
+  /* 위첨자가 아니다 — 숫자 옆에 같은 줄로 앉는다 (tokens.css 「숫자와 표기」) */
   vertical-align: baseline;
   white-space: nowrap;
 }
 
 /* 칩은 자리가 좁다 — 숫자에 더 붙인다 */
 .slot-meta .est {
-  margin-left: 1px;
+  margin-left: 0;
 }
 
 /* 등록 명단 — 스쿼드 헤더의 상시 표시. 위반이면 색으로 알린다 */
 .reg-chip {
-  padding: 1px 8px;
+  padding: 0 8px;
   background: var(--panel-2);
   border-radius: var(--r-pill);
   color: var(--text-2);
@@ -510,7 +503,7 @@
    읽혀 "국적에 해당한다"가 된다. 배경 없이 코드만 두고, 등번호와 같은 회색 층에
    세운다 — 이름 뒤에서 조용히 읽히는 값이다. */
 .squad-table .nat {
-  margin-left: 6px;
+  margin-left: 8px;
   color: var(--text-3);
   font-size: var(--fs-2xs);
   font-weight: 500;
@@ -522,7 +515,7 @@
    강조색을 그대로 쓰면 이름보다 먼저 눈에 들어와, 명단을 훑는 눈이 선수가 아니라
    태그를 따라간다. 채도를 낮추고 굵기를 줄여 "있는 줄은 알되 읽지는 않는" 층에 둔다. */
 .squad-table .tag {
-  margin-left: 5px;
+  margin-left: 4px;
   padding: 0 4px;
   border-radius: var(--r-xs);
   font-size: var(--fs-2xs);
@@ -569,7 +562,7 @@
 .foot-marks {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 .foot-pair {
   display: inline-flex;
@@ -590,25 +583,25 @@
  * 화면 어디서든 "빨간 건 약점, 초록은 강점"이 같은 뜻이어야 색이 언어가 된다.
  * 주발만 초록으로 칠하면 5/4와 5/1이 똑같아 보여 약발의 정도가 사라진다.
  *
- * 5는 게이지 f9(142°), 4는 f8(104°), 3은 f6(52°), 2는 f4(28°), 1은 f1(0°)에 맞췄다.
+ * 5는 게이지 f9, 4는 f8, 3은 f6, 2는 f4, 1은 f1과 같은 색이다(squad.css `.fit-gauge`).
  */
 .foot-num.w5,
 .foot-mark.w5 {
-  color: hsl(142 62% 45%);
+  color: var(--win);
 }
 .foot-num.w4,
 .foot-mark.w4 {
-  color: hsl(104 56% 46%);
+  color: color-mix(in oklab, var(--warn), var(--win) 75%);
 }
 .foot-num.w3,
 .foot-mark.w3 {
-  color: hsl(52 80% 52%);
+  color: color-mix(in oklab, var(--warn), var(--win) 25%);
 }
 .foot-num.w2,
 .foot-mark.w2 {
-  color: hsl(28 78% 56%);
+  color: color-mix(in oklab, var(--loss), var(--warn) 67%);
 }
 .foot-num.w1,
 .foot-mark.w1 {
-  color: hsl(0 72% 58%);
+  color: var(--loss);
 }

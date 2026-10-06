@@ -551,7 +551,7 @@ export function applyTransition(state: GameState): string[] {
     const successorId = successorCaptainOf(state, state.userTeamId);
     const next = userSquad.find((p) => p.id === successorId);
     if (next) {
-      const wasVice = next.isViceCaptain === true;
+      const wasVice = next.isViceCaptain;
       next.isCaptain = true;
       next.isViceCaptain = false;
       digest.push(

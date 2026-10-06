@@ -163,7 +163,7 @@ function expectNoDoubleBooking(state: GameState): void {
  * 지켜지는지는 시즌을 한 바퀴 돌려 봐야 안다.
  */
 function minRestHours(state: GameState): { hours: number; where: string } {
-  const at = (m: MatchRecord) => Date.parse(`${m.date}T${m.time ?? "15:00"}:00Z`);
+  const at = (m: MatchRecord) => Date.parse(`${m.date}T${m.time}:00Z`);
   const byTeam = new Map<string, MatchRecord[]>();
   for (const m of state.matches) {
     if (m.season !== state.season) continue;
@@ -763,7 +763,7 @@ describe("컵 우승 → 트로피와 유럽 티켓", () => {
 
     transitionSeason(state);
     for (const [leagueId, slots] of Object.entries(winners)) {
-      for (const teamId of Object.values(slots ?? {})) {
+      for (const teamId of Object.values(slots)) {
         if (!teamId) continue;
         const inEurope = state.euroEntrants.some((e) => e.teams.includes(teamId));
         expect(inEurope, `${leagueId} 컵 우승 ${teamId}가 유럽에 없다`).toBe(true);
@@ -801,9 +801,7 @@ describe("상금 멱등 키 — 표시 라벨이 아니라 안정 키다", () =>
     // 지급 사실은 prizesPaid 키가 갖는다 — AI 팀은 상세 원장을 쌓지 않는다
     const paidFor = (cupId: string, stage: MatchStage) =>
       played.finances.filter((f) =>
-        (f.prizesPaid ?? []).includes(
-          `prize:competition:${cupId}:stage:${stage}:S${played.season}`,
-        ),
+        f.prizesPaid.includes(`prize:competition:${cupId}:stage:${stage}:S${played.season}`),
       ).length;
     for (const cup of domesticCupCatalog()) {
       expect(paidFor(cup.id, "r16"), cup.id).toBe(DOMESTIC_CUP_SIZE / 2);

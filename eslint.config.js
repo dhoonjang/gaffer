@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import next from "@next/eslint-plugin-next";
+import comments from "@eslint-community/eslint-plugin-eslint-comments/configs";
 
 const browserImports = {
   paths: [
@@ -73,6 +74,41 @@ const agentImports = (owner) => {
       "에이전트 호출은 아래 층만 값으로 부른다 (shared → evaluators·memory → gm → app). 턴을 엮는 일은 app에 둔다.",
   };
 };
+/**
+ * 화면 코드의 디자인 시스템 — 버튼은 `<Button>` 하나, 글리프 아이콘 없음, 산문 부호는 곡선,
+ * 색과 글자와 간격은 CSS가 갖는다(인라인 `style`은 좌표와 `--` 변수만).
+ */
+const GLYPH =
+  "[\\u2190-\\u21ff\\u2300-\\u23ff\\u25a0-\\u25ff\\u2600-\\u27bf\\u2b00-\\u2bff\\u00d7]";
+const glyphMessage =
+  "글리프 아이콘 — 아이콘은 shared/icons.tsx의 24그리드 픽토그램뿐이다 (tokens.css 「숫자와 표기」)";
+const LOOK_PROPS =
+  "color|background|backgroundColor|border|borderColor|borderWidth|borderRadius|boxShadow|outline|font|fontSize|fontWeight|fontFamily|fontStyle|lineHeight|letterSpacing|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom|paddingLeft|paddingRight|gap|zIndex|opacity|filter";
+const designSystemSyntax = [
+  {
+    selector: "JSXOpeningElement[name.name='button']",
+    message:
+      '맨 <button> — 버튼은 shared/button.tsx의 <Button>으로 선다(type 기본값 "button" · 생김새는 variant). 탭·행·칩처럼 부르는 쪽 클래스가 생김새를 다 가지면 variant="bare".',
+  },
+  { selector: `JSXText[value=/${GLYPH}/u]`, message: glyphMessage },
+  { selector: `Literal[value=/${GLYPH}/u]`, message: glyphMessage },
+  { selector: `TemplateElement[value.raw=/${GLYPH}/u]`, message: glyphMessage },
+  {
+    selector: "JSXText[value=/[\"']/]",
+    message:
+      "직선 따옴표 — 화면의 인용·대사는 “ ”, 속마음은 ‘ ’, 매체 이름은 『 』다 (tokens.css 「숫자와 표기」)",
+  },
+  {
+    selector: "Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
+    message:
+      "색 리터럴 — 색은 tokens.css의 토큰이고, 화면 코드는 var(--…)나 클래스로 부른다 (tokens.css 「팔레트」)",
+  },
+  {
+    selector: `JSXAttribute[name.name='style'] Property[key.name=/^(${LOOK_PROPS})$/]`,
+    message:
+      "인라인 style의 생김새 — 색·글자·간격·모서리는 CSS 클래스가 갖는다. 인라인은 좌표·크기와 `--` 변수(데이터가 정하는 값)만 (tokens.css 「팔레트」)",
+  },
+];
 const ownBarrel = (pkg) => ({
   name: "@gaffer/" + pkg,
   allowTypeImports: true,
@@ -95,11 +131,56 @@ export default tseslint.config(
     ],
   },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
   {
+    // 쓰이지 않는 disable 주석도 에러다 — 고친 뒤 남은 예외가 다음 위반을 숨긴다
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+  },
+  /**
+   * 타입 정보를 읽는 규칙군. 버려진 promise · 이벤트에 물린 async · 갈래가 빠진 switch는
+   * 타입 없이는 보이지 않고, 실패해도 조용하다.
+   */
+  ...tseslint.configs.strictTypeChecked,
+  {
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
     rules: {
       // AGENTS.md 5장: any 금지 (불가피하면 unknown + 좁히기)
       "@typescript-eslint/no-explicit-any": "error",
+      // `noUncheckedIndexedAccess` 아래에서 `!`는 "이 인덱스는 있다"는 단언이다 — 막으면
+      // 같은 단언이 `as`나 쓸모없는 분기로 옮겨 갈 뿐이다
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
+      "@typescript-eslint/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      // 화면이 엔진을 타입으로만 부르는 경계(아래 browserImports)가 import 줄에서 보이게 한다
+      "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "inline-type-imports" }],
+      // 세이브·카탈로그는 JSON 장부다 — 비운 칸은 키를 지워야 저장 모양이 맞고, Map으로 바꿀 수 없다
+      "@typescript-eslint/no-dynamic-delete": "off",
+    },
+  },
+  {
+    // async 대역은 던지면 reject가 되어야 실제 구현과 같다
+    files: ["**/test/**/*.ts", "e2e/**/*.ts"],
+    rules: { "@typescript-eslint/require-await": "off" },
+  },
+  {
+    // 스펙은 이름이 tsconfig.json이 아닌 프로젝트에 산다 — 프로젝트 서비스가 찾지 못한다
+    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    languageOptions: {
+      parserOptions: { projectService: false, project: "./tsconfig.e2e.json" },
+    },
+  },
+  {
+    files: ["**/*.{js,mjs,cjs}"],
+    extends: [tseslint.configs.disableTypeChecked],
+  },
+  comments.recommended,
+  {
+    rules: {
+      // 예외는 이유를 적고 끈다 — `-- 이유`가 없는 disable 주석은 에러다
+      "@eslint-community/eslint-comments/require-description": "error",
+      "@eslint-community/eslint-comments/disable-enable-pair": ["error", { allowWholeFile: true }],
     },
   },
   /**
@@ -123,6 +204,27 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "error",
       // App Router 앱이라 `pages/`가 없다 — 규칙이 매번 못 찾겠다고 말한다
       "@next/next/no-html-link-for-pages": "off",
+    },
+  },
+  /**
+   * 디자인 시스템 중 화면 코드에 서는 것 (apps/web/shared/tokens.css). CSS 쪽은
+   * `stylelint.config.js`가, 클래스 장부는 `scripts/css-classes.ts`가 갖는다.
+   */
+  {
+    files: ["apps/web/**/*.tsx"],
+    ignores: ["apps/web/test/**"],
+    rules: {
+      "no-restricted-syntax": ["error", ...designSystemSyntax],
+    },
+  },
+  {
+    // `<Button>` 자신만 맨 `<button>`을 쓴다
+    files: ["apps/web/shared/button.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...designSystemSyntax.filter((r) => !r.selector.startsWith("JSXOpeningElement")),
+      ],
     },
   },
   /**

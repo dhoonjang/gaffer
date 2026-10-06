@@ -15,7 +15,7 @@ import { achievementLine } from "../../people/achievements";
 import { awardLine } from "../../season/awards";
 import { computeStandings } from "../../season/standings";
 import { managerTenureOf, managerTrophiesOf, seasonLabelOf } from "../../season/records";
-import { LookupResult } from "./resolve";
+import { type LookupResult } from "./resolve";
 import { seasonLabel } from "./league";
 
 // ── 감독 커리어 (지난 시즌·트로피·업적·시상) ────────────
@@ -140,7 +140,7 @@ export function careerView(state: GameState): LookupResult {
       on: d.on,
       text:
         `  시즌 ${d.season} (${seasonLabelOf(d.season)}) ${teamNameIn(state, d.teamId)} — ${d.on} ` +
-        `${d.kind === "expired" ? "계약 만료" : "경질"}` +
+        (d.kind === "expired" ? "계약 만료" : "경질") +
         ` (${CLUB_TIER_KO[d.tier]}` +
         (d.position === undefined ? ")" : ` · 당시 ${d.position}위)`),
     })),

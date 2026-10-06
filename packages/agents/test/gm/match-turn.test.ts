@@ -59,23 +59,25 @@ import {
 } from "@gaffer/llm";
 import { ModelOutputError } from "../../src/shared/retry";
 import type { MatchInstructionRequest } from "../../src/evaluators/jev-match-reader";
+import type * as LlmModule from "@gaffer/llm";
 
 /** Model boundaries stay behind the GM's selected skills. */
 const { runTurn, interpretMatch, createEvaluator, evaluate, instructionState } = vi.hoisted(() => {
   const evaluate = vi.fn();
+  const instructionState: { orders: OpsOrders } = { orders: { ops: {} } };
   return {
     runTurn: vi.fn(),
     interpretMatch: vi.fn(),
     evaluate,
     createEvaluator: vi.fn(() => ({ evaluate })),
-    instructionState: { orders: { ops: {} } as OpsOrders },
+    instructionState,
   };
 });
 vi.mock("../../src/evaluators/jev-match-reader", () => ({
   interpretMatchInstructions: interpretMatch,
 }));
 vi.mock("@gaffer/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@gaffer/llm")>();
+  const actual = await importOriginal<typeof LlmModule>();
   return { ...actual, createGameLLM: () => ({ runTurn }), createGameEvaluator: createEvaluator };
 });
 
@@ -601,7 +603,7 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     expect(result.toolCalls.filter((call) => call.name === "substitute")).toHaveLength(1);
     expect(runTurn).toHaveBeenCalledTimes(2);
     expect(interpretMatch).toHaveBeenCalledTimes(1);
-    expect(interpretMatch.mock.calls[0]![0].said).toBe(said);
+    expect((interpretMatch.mock.calls[0]![0] as MatchInstructionRequest).said).toBe(said);
     expect(createEvaluator).toHaveBeenCalledExactlyOnceWith("match-reader");
   });
 
@@ -899,7 +901,7 @@ describe("중계 위생 — 꺾쇠 블록은 화면에도 저장에도 서지 �
       kind: "match_stop",
     });
 
-    for (const text of [result.text ?? "", streamed.join("")]) {
+    for (const text of [result.text, streamed.join("")]) {
       expect(text).not.toContain("<points");
       expect(text).not.toContain("</points>");
       expect(text).not.toContain("왼쪽으로 몰리는");

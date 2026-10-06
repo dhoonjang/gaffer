@@ -2,6 +2,8 @@
 import { useDialog } from "@/shared/use-dialog";
 
 import { useId, useRef, type ReactNode } from "react";
+import { IconClose } from "@/shared/icons";
+import { Button } from "@/shared/button";
 
 /**
  * 어드민 공용 모달 — 목록에서 항목을 클릭했을 때 그 항목만 담는 창.
@@ -59,14 +61,15 @@ export function Modal({
             </b>
             {subtitle && <span className="admin-modal-sub">{subtitle}</span>}
           </div>
-          <button
-            className="mini-btn"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
             aria-label="닫기"
             data-testid={testId ? `${testId}-close` : undefined}
           >
-            ✕
-          </button>
+            <IconClose size={14} />
+          </Button>
         </header>
         <div className="admin-modal-body">{children}</div>
         {footer && <footer className="admin-modal-foot">{footer}</footer>}

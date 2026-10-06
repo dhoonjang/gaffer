@@ -124,7 +124,7 @@ Choice 인자는 유일한 최대 선택지가 과반 확률을 얻어야 채택
   대부분이 `cacheRead 0`이다 ([models.md](models.md) §4). 코어가 위생 **앞에서** 값을
   꺼내(`takeSuggestion`) `GmTurnResult.suggestion`으로 올리고, 태그 줄은 꺾쇠 블록이라
   위생이 화면과 저장에서 함께 걷는다. 화면은 그것을 입력창의 placeholder로 세우고 Tab·→가
-  입력으로 받는다 ([../web/design-system.md](../web/design-system.md) §6). 감독이 한 말이
+  입력으로 받는다 (`apps/web/screens/chat/composer.tsx` `suggestion`). 감독이 한 말이
   아니므로 세이브의 턴(`ChatTurn.suggestion`)에만 남고 이력·압축 브리프·해석기 입력 어디에도
   실리지 않는다 — 다음 턴의 모델은 지난 턴의 제안을 모르고, 감독이 보낸 것만 감독의 말이다.
   태그가 없거나 값이 1\~80자 밖이면 그 턴엔 제안이 없고 장면은 그대로다. 장면 안에 선택지를

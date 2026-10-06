@@ -4,7 +4,7 @@ import { pushEvent, scopeEvents, tickEvents, eventTexts } from "../../src/core/t
 /**
  * 사건을 쌓는 자리 — **종류가 조용히 무너지면 아무도 모른다.**
  *
- * 화면은 종류로 꼬리표와 픽토그램을 고르는데(web/design-system.md §6), 자리가 종류를
+ * 화면은 종류로 꼬리표와 픽토그램을 고르는데(`tick-event-display.ts`), 자리가 종류를
  * 잃으면 카드는 그대로 서고 얼굴만 전부 「소식」이 된다. 화면이 깨지는 것이 아니라
  * 흐려지는 종류의 실패라 여기서 잰다.
  */

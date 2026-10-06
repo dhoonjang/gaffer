@@ -14,8 +14,8 @@ export function processLorebookJobs(id: string): Promise<void> {
     traceBoard(id, async () => {
       noteTurn({ input: { kind: "lorebook-editor" } });
       const attempted = new Set<string>();
-      while (true) {
-        const next = await withGameLock(id, EDIT_LOCK_WAIT_MS, async () => {
+      for (;;) {
+        const next = await withGameLock(id, EDIT_LOCK_WAIT_MS, () => {
           const state = loadGame(id);
           if (!state) return null;
           const blocked = new Set<string>();
@@ -33,7 +33,7 @@ export function processLorebookJobs(id: string): Promise<void> {
         attempted.add(next.job.id);
         try {
           const result = await editLorebook(next.entry, next.job.additionalInformation);
-          await withGameLock(id, EDIT_LOCK_WAIT_MS, async () => {
+          await withGameLock(id, EDIT_LOCK_WAIT_MS, () => {
             const state = loadGame(id);
             if (!state) return;
             if (completeCharacterUpdate(state, next.job.id, next.entry.version, result)) {
@@ -46,7 +46,7 @@ export function processLorebookJobs(id: string): Promise<void> {
             }
           });
         } catch (error: unknown) {
-          await withGameLock(id, EDIT_LOCK_WAIT_MS, async () => {
+          await withGameLock(id, EDIT_LOCK_WAIT_MS, () => {
             const state = loadGame(id);
             const job = state?.lorebookJobs.find((row) => row.id === next.job.id);
             if (!state || !job) return;

@@ -11,6 +11,7 @@ import { PlayersPanel } from "./players-panel";
 import { PeoplePanel } from "./people-panel";
 import { TeamsPanel } from "./teams-panel";
 import { UsagePanel } from "./usage-panel";
+import { Button } from "@/shared/button";
 
 /**
  * Database — 게임과 무관한 **초기치 DB(카탈로그)**를 편집하고, LLM 계측을 읽는다.
@@ -21,7 +22,7 @@ import { UsagePanel } from "./usage-panel";
  * 남아 있어 다시 받지 않는다 (`catalog-store.ts`).
  *
  * 「팔레트」는 층이 아니라 **팀 층을 읽기만 하는 시트**다 — 구단 색 규칙을 전체
- * 팔레트를 상대로 검수하는 자리라 편집 손잡이를 갖지 않는다 (design-system.md §2).
+ * 팔레트를 상대로 검수하는 자리라 편집 손잡이를 갖지 않는다 (tokens.css 「구단 색」).
  *
  * ⚠️ **계측 탭만 카탈로그를 쓰지 않는다** — 세션 장부는 서버 쪽에서 저 혼자
  * 움직이므로(턴을 돌 때마다) 그 패널이 제 손으로 받는다 (models.md §5-1).
@@ -66,7 +67,8 @@ export default function AdminPage() {
 
       <nav className="admin-tabs" role="tablist" aria-label="카탈로그 층">
         {TABS.map((t) => (
-          <button
+          <Button
+            variant="bare"
             key={t.key}
             role="tab"
             id={`admin-tab-${t.key}`}
@@ -77,7 +79,7 @@ export default function AdminPage() {
             data-testid={`admin-tab-${t.key}`}
           >
             {t.label}
-          </button>
+          </Button>
         ))}
       </nav>
 

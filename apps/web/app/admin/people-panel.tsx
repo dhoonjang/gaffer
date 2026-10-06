@@ -5,6 +5,7 @@ import { LorebookContentSchema, personaRoleLabel, type LorebookContent } from "@
 import type { AdminPersonaRow } from "@gaffer/engine";
 import { LorebookFields, lorebookInput } from "./lorebook-fields";
 import { Modal } from "./modal";
+import { Button } from "../../shared/button";
 
 interface PeopleResponse {
   people?: AdminPersonaRow[];
@@ -31,7 +32,7 @@ export function PeoplePanel({
     const controller = new AbortController();
     void fetch(`/api/admin/catalog/person?seed=${seed}`, { signal: controller.signal })
       .then(async (response) => {
-        const data: PeopleResponse = await response.json();
+        const data = (await response.json()) as PeopleResponse;
         if (!response.ok) throw new Error(data.error ?? "조회 실패");
         setPeople(data.people ?? []);
       })
@@ -57,7 +58,7 @@ export function PeoplePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ characterId: person.characterId, lorebook: parsed.data }),
       });
-      const data: PeopleResponse = await response.json();
+      const data = (await response.json()) as PeopleResponse;
       if (!response.ok) throw new Error(data.error ?? "저장 실패");
       setPeople(data.people ?? []);
       onMessage(data.message ?? "저장 완료");
@@ -91,7 +92,7 @@ export function PeoplePanel({
         </label>
       </div>
       <p>새 게임의 인물 로어북을 편집합니다. 생성 인물은 게임 시드에 맞춰 조회합니다.</p>
-      <table className="admin-table">
+      <table>
         <thead>
           <tr>
             <th>이름</th>
@@ -109,8 +110,8 @@ export function PeoplePanel({
                 <td>{personaRoleLabel(row.role)}</td>
                 <td>{row.lorebook.description}</td>
                 <td>
-                  <button
-                    className="ghost-btn"
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       setPerson(row);
                       setBook(row.lorebook);
@@ -118,7 +119,7 @@ export function PeoplePanel({
                     }}
                   >
                     {row.edited ? "편집됨 · 편집" : "편집"}
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -129,9 +130,9 @@ export function PeoplePanel({
           title={`${person.name} 편집`}
           onClose={() => setPerson(null)}
           footer={
-            <button className="primary-btn" disabled={saving} onClick={() => void save()}>
+            <Button variant="primary" disabled={saving} onClick={() => void save()}>
               {saving ? "저장 중…" : "저장"}
-            </button>
+            </Button>
           }
         >
           {error && <div className="admin-msg err">{error}</div>}

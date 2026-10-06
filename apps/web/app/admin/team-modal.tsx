@@ -23,6 +23,7 @@ import {
   type TacticalStyle,
   type TeamCatalogResponse,
 } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 팀 편집 창 — 목록의 요약 행에서 열린다. 추가와 편집이 같은 창을 쓴다.
@@ -38,7 +39,7 @@ type Mode = "create" | "edit";
 
 /** 서버로 보내는 모양 — 폼 상태를 이 꼴로 접어 놓고 원본과 비교한다 */
 interface TeamFields {
-  lorebook?: LorebookContent;
+  lorebook?: LorebookContent | undefined;
   name: string;
   shortName: string;
   leagueId: string;
@@ -60,7 +61,7 @@ export function TeamModal({
 }: {
   mode: Mode;
   /** 편집 모드에서만 있다 */
-  team?: AdminTeamRow;
+  team?: AdminTeamRow | undefined;
   leagues: Array<{ id: string; name: string }>;
   defaultLeagueId: string;
   onSaved: (data: TeamCatalogResponse) => void;
@@ -146,7 +147,7 @@ export function TeamModal({
           body: JSON.stringify(parsed.data),
         },
       );
-      const data: TeamCatalogResponse = await res.json();
+      const data = (await res.json()) as TeamCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "요청 실패");
       onSaved(data);
     } catch (e) {
@@ -165,7 +166,7 @@ export function TeamModal({
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/catalog/team/${team.id}`, { method: "DELETE" });
-      const data: TeamCatalogResponse = await res.json();
+      const data = (await res.json()) as TeamCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "삭제 실패");
       onSaved(data);
     } catch (e) {
@@ -188,26 +189,27 @@ export function TeamModal({
       onClose={onClose}
       footer={
         <>
-          <button
-            className="primary-btn"
+          <Button
+            variant="primary"
             onClick={() => void save()}
             disabled={saving}
             data-testid="team-modal-save"
           >
             {saving ? "저장 중…" : mode === "create" ? "카탈로그에 추가" : "저장"}
-          </button>
-          <button className="ghost-btn" onClick={onClose} disabled={saving}>
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
             취소
-          </button>
+          </Button>
           {mode === "edit" && (
-            <button
-              className="ghost-btn admin-modal-danger"
+            <Button
+              variant="danger"
+              className="admin-modal-danger"
               onClick={() => void remove()}
               disabled={saving}
               data-testid="team-modal-delete"
             >
               삭제
-            </button>
+            </Button>
           )}
         </>
       }

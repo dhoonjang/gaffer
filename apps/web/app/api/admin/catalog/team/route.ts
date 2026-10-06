@@ -53,7 +53,7 @@ export const POST = adminWrite(async function (request: Request) {
 });
 
 /** 팀 카탈로그를 시드 기본값으로 되돌린다 (전술 성향·구단 프로필 포함) */
-export const DELETE = adminWrite(async function () {
+export const DELETE = adminWrite(function () {
   const res = adminResetTeamCatalog();
   return NextResponse.json(payload(res.message));
 });

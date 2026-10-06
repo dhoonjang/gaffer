@@ -12,6 +12,7 @@ import {
   type LeagueCatalogResponse,
   type LeagueKind,
 } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 리그 편집 창 — 추가와 편집이 같은 창을 쓴다.
@@ -46,7 +47,7 @@ export function LeagueModal({
 }: {
   mode: Mode;
   /** 편집 모드에서만 있다 */
-  league?: AdminLeagueRow;
+  league?: AdminLeagueRow | undefined;
   onSaved: (data: LeagueCatalogResponse) => void;
   onClose: () => void;
 }) {
@@ -129,7 +130,7 @@ export function LeagueModal({
           body: JSON.stringify(body),
         },
       );
-      const data: LeagueCatalogResponse = await res.json();
+      const data = (await res.json()) as LeagueCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "요청 실패");
       onSaved(data);
     } catch (e) {
@@ -157,7 +158,7 @@ export function LeagueModal({
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/catalog/league/${league.id}`, { method: "DELETE" });
-      const data: LeagueCatalogResponse = await res.json();
+      const data = (await res.json()) as LeagueCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "삭제 실패");
       onSaved(data);
     } catch (e) {
@@ -179,26 +180,27 @@ export function LeagueModal({
       onClose={onClose}
       footer={
         <>
-          <button
-            className="primary-btn"
+          <Button
+            variant="primary"
             onClick={() => void save()}
             disabled={saving}
             data-testid="league-modal-save"
           >
             {saving ? "저장 중…" : mode === "create" ? "카탈로그에 추가" : "저장"}
-          </button>
-          <button className="ghost-btn" onClick={onClose} disabled={saving}>
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
             취소
-          </button>
+          </Button>
           {mode === "edit" && (
-            <button
-              className="ghost-btn admin-modal-danger"
+            <Button
+              variant="danger"
+              className="admin-modal-danger"
               onClick={() => void remove()}
               disabled={saving}
               data-testid="league-modal-delete"
             >
               삭제
-            </button>
+            </Button>
           )}
         </>
       }

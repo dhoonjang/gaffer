@@ -81,7 +81,7 @@ export function reviewBoard(state: GameState, raw: unknown): CommandResult {
       archiveEmployment(persona, addDays(persona.employment.contract.until, 1), "expired");
     persona.role = "manager";
   }
-  if (state.staffPool) state.staffPool = state.staffPool.filter((entry) => entry.name !== name);
+  state.staffPool = state.staffPool.filter((entry) => entry.name !== name);
   team.managerName = name;
   team.managerSince = state.date;
   team.aiManagerTacticsRating = rating;

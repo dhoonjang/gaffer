@@ -16,7 +16,7 @@ export interface ChoiceQuestion {
 interface NoulQuestion {
   type: "noul";
   instructions: string;
-  criteria?: { true?: string; false?: string };
+  criteria?: { true?: string | undefined; false?: string | undefined } | undefined;
 }
 
 export type EvaluationQuestion = ScoreQuestion | ChoiceQuestion | NoulQuestion;

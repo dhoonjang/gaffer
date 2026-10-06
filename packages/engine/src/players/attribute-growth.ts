@@ -77,7 +77,7 @@ export function applyAttributeStep(
   const move = Math.max(ATTR_STEP_MIN, Math.min(ATTR_STEP_MAX, raw));
   if (move === 0) return null;
 
-  const value = player.attributes[axis] ?? 0;
+  const value = player.attributes[axis];
   if (move > 0 && (value >= player.attributes.potential || value >= RATING_MAX)) return null;
   if (move < 0 && value <= ATTR_DECLINE_FLOOR) return null;
 

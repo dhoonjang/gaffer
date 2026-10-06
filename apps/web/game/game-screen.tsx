@@ -51,12 +51,14 @@ import {
   IconChat,
   IconMail,
   IconChevron,
+  IconClose,
   IconFinance,
   IconMark,
   IconMenu,
   IconSquad,
   IconTrophy,
 } from "../shared/icons";
+import { Button } from "@/shared/button";
 
 /**
  * ── 화면 구조 ─────────────────────────────────────────────
@@ -88,7 +90,7 @@ const PANEL_ANIM_MS = 260;
 /**
  * 킥오프 의식 — **스코어보드가 위에서 내려오고, 확인 한 번에 도로 걷힌다.**
  * `match.css`의 `kickoff-drop`·`kickoff-lift`와 같은 값이어야 한다
- * (web/design-system.md §5 모션 5). 90분이 열리고 닫힌 것이 화면의 움직임으로 남는
+ * (tokens.css 「모션」 5). 90분이 열리고 닫힌 것이 화면의 움직임으로 남는
  * 자리는 여기 하나다.
  */
 const KICKOFF_SLIDE_MS = 280;
@@ -97,7 +99,7 @@ const KICKOFF_SLIDE_MS = 280;
  * 게이트가 물러나는 시간 — **`match-gate.css`의 `kickoff-gate-out`과 같은 값이어야
  * 한다.** 문은 누르는 순간 열리므로 무대는 이미 경기지만, 게이트를 그 프레임에
  * 흐름에서 빼면 한 장이 툭 사라진다. 이만큼 더 그려 두고 그동안 걷힌다
- * (web/design-system.md §5 모션 5 — 스코어보드가 내려오는 100ms와 겹친다).
+ * (tokens.css 「모션」 5 — 스코어보드가 내려오는 100ms와 겹친다).
  */
 const GATE_LEAVE_MS = 160;
 
@@ -226,7 +228,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const [negotiationBusy, setNegotiationBusy] = useState(false);
   const liveMatch =
     pendingMatch === null ||
-    (pendingMatch.beforeKickoff === true && !(busy && entering === pendingMatch.matchId))
+    (pendingMatch.beforeKickoff && !(busy && entering === pendingMatch.matchId))
       ? null
       : pendingMatch;
   /** 열린 장부 뷰 — null이면 무대(채팅 / 경기+채팅)가 보인다 */
@@ -293,7 +295,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
     });
   }, []);
   useEffect(
-    () => () => void (boardCloseTimer.current && clearTimeout(boardCloseTimer.current)),
+    () => () => {
+      if (boardCloseTimer.current) clearTimeout(boardCloseTimer.current);
+    },
     [],
   );
   /**
@@ -342,7 +346,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
    *
    * 판이 사라지는 것은 마감이 끝난 순간이지만, 그때 스코어보드까지 함께 꺼지면
    * 킥오프에 내려온 것이 아무 일 없이 증발한다. 마지막으로 선 판을 쥐고 있다가
-   * 「확인」의 280ms 동안 도로 올려 보낸다 (design-system.md §5 모션 5).
+   * 「확인」의 280ms 동안 도로 올려 보낸다 (tokens.css 「모션」 5).
    */
   const lastLive = useRef<NonNullable<GamePayload["views"]["match"]> | null>(null);
   /** 스코어보드가 걷히는 중 — 이 동안만 판이 화면에 남는다 */
@@ -422,8 +426,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
     ((panel === null && matchTab === "팀" && squadSide === "ours") || panel === "스쿼드");
   const liveBlocked = editingMatch || error !== null;
   /** 실행기가 정지점에서 여는 턴 — `send`는 이 훅보다 뒤에 서므로 ref로 건넨다 */
-  const sendRef = useRef<(text?: string, operation?: TurnOperation) => Promise<unknown>>(
-    async () => null,
+  const sendRef = useRef<(text?: string, operation?: TurnOperation) => Promise<unknown>>(() =>
+    Promise.resolve(null),
   );
   const live = useLiveMatch({
     gameId,
@@ -469,9 +473,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
 
   useEffect(() => {
     fetch(`/api/games/${gameId}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<GamePayload | { error: string }>)
       .then((data) => {
-        if (data.error) setError(data.error);
+        if ("error" in data) setError(data.error);
         else setGame(data);
       })
       .catch(() => setError("게임을 불러오지 못했습니다"));
@@ -753,7 +757,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
         // 서버가 그 턴을 마저 돌려 저장했을 수 있다 — 화면을 서버에 맞춘다
         if (!failure.settled) void resync();
       }
-      if (!pendingPayloadRef.current) commit(null);
+      // `onDone`이 기다리는 동안 채운다 — 흐름 분석은 콜백 안의 대입을 보지 못해 위의
+      // `null` 대입에 묶어 둔다
+      if (!(pendingPayloadRef.current as GamePayload | null)) commit(null);
       return failure ?? null;
     },
     [
@@ -781,12 +787,17 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const gateLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [gateLeaving, setGateLeaving] = useState(false);
-  useEffect(() => () => void (gateLeaveTimer.current && clearTimeout(gateLeaveTimer.current)), []);
+  useEffect(
+    () => () => {
+      if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
+    },
+    [],
+  );
   const enterMatch = useCallback(() => {
     const id = pendingMatch?.matchId;
     if (id === undefined) return;
     setEntering(id);
-    // 움직임을 줄여 달라고 했으면 타이머도 0이다 (design-system.md §5.8)
+    // 움직임을 줄여 달라고 했으면 타이머도 0이다 (tokens.css 「모션」 8)
     if (!reducedMotion()) {
       setGateLeaving(true);
       if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
@@ -869,9 +880,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
    * 다음 경기 날짜 — 시간 이동 버튼이 목표 시점을 **그대로 적어 보내려고** 쓴다.
    * 달력 뷰가 이미 표시해 둔 값이라(`isNext`) 따로 계산하지 않는다.
    */
-  const nextMatchDate = game?.views.calendar.entries.find((e) => e.isNext)?.date ?? null;
+  const nextMatchDate = game.views.calendar.entries.find((e) => e.isNext)?.date ?? null;
   /** 경기 중에는 시간을 경기가 민다 — 손잡이를 쥐어 주지 않는다 */
-  const canSkip = game?.phase !== "match";
+  const canSkip = game.phase !== "match";
 
   /**
    * 경기 중인가 — **채팅의 주인이 바뀐다.**
@@ -1050,17 +1061,18 @@ export function GameScreen({ gameId }: { gameId: string }) {
             return (
               <div className="match-log" key={`m${bi}`} data-testid={`match-log-${block.id}`}>
                 {done && (
-                  <button
+                  <Button
+                    variant="bare"
                     className={`match-log-head${open ? " open" : ""}`}
                     onClick={() => toggleLog(block.id)}
                     aria-expanded={open}
                   >
                     <IconBroadcast size={14} />
-                    <b className="fig">{log ? matchScoreOf(log) : null}</b>
-                    <span className="match-log-title">{log ? matchTitleOf(log) : null}</span>
-                    <span className="match-log-date">{log ? humanDate(log.date) : null}</span>
+                    <b className="fig">{matchScoreOf(log)}</b>
+                    <span className="match-log-title">{matchTitleOf(log)}</span>
+                    <span className="match-log-date">{humanDate(log.date)}</span>
                     <IconChevron size={14} />
-                  </button>
+                  </Button>
                 )}
                 {open && (
                   <div className="match-log-body">
@@ -1117,13 +1129,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
             <div className="mail-attachment" data-testid="addressee">
               <IconChat size={13} />
               <span>{addressee.name}</span>
-              <button
+              <Button
+                variant="bare"
                 aria-label="말 걸기 취소"
                 disabled={busy || negotiationBusy}
                 onClick={() => setAddressee(null)}
               >
-                ×
-              </button>
+                <IconClose size={12} />
+              </Button>
             </div>
           )}
           {mailAttachments.map((id) => {
@@ -1138,13 +1151,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 key={id}
               >
                 <span>{message?.subject ?? "첨부 메일"}</span>
-                <button
+                <Button
+                  variant="bare"
                   aria-label="첨부 제거"
                   disabled={busy || negotiationBusy}
                   onClick={() => setMailAttachments((ids) => ids.filter((value) => value !== id))}
                 >
-                  ×
-                </button>
+                  <IconClose size={12} />
+                </Button>
               </div>
             );
           })}
@@ -1153,7 +1167,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
       <Composer
         input={input}
         onInput={setInput}
-        onSend={send}
+        onSend={(text) => void send(text)}
         onOperate={(operation) => void send(undefined, operation)}
         busy={busy || negotiationBusy}
         inMatch={inMatch}
@@ -1197,8 +1211,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
     >
       {/* `data-phase` — 화면에 단계를 적지 않는 대신 e2e가 읽는 자리. 감독에게는
           달력·채팅이 이미 말해 주므로 배지가 자리를 차지할 이유가 없었다 */}
-      {/* 구단 색은 여기서 선다 — 세이브 팀의 `--club*` 한 벌이다 (web/design-system.md
-          §2 「주입」). 아래 어디서든 `var(--club-wash)`가 이 값이다 */}
+      {/* 구단 색은 여기서 선다 — 세이브 팀의 `--club*` 한 벌이다 (tokens.css
+          「구단 색」 주입). 아래 어디서든 `var(--club-wash)`가 이 값이다 */}
       <div
         className={`app${liveMatch ? " in-match in-live-match" : ""}${matchViewport.focused ? " match-input-focus" : ""}`}
         data-phase={game.phase}
@@ -1266,7 +1280,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
           {liveMatch !== null && (
             <nav className="rail match-rail" aria-label="경기 화면 이동">
               {MATCH_PANELS.map(({ key, label, Icon }) => (
-                <button
+                <Button
+                  variant="bare"
                   key={key}
                   className={matchTab === key ? "active" : ""}
                   onClick={() => setMatchTab(key)}
@@ -1276,7 +1291,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                   aria-pressed={matchTab === key}
                 >
                   <Icon />
-                </button>
+                </Button>
               ))}
             </nav>
           )}
@@ -1288,7 +1303,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
            */}
           {liveMatch === null && (
             <nav className="rail rail-dock" aria-label="화면 이동">
-              <button
+              <Button
+                variant="bare"
                 className={panel === null ? "active" : ""}
                 disabled={negotiationBusy}
                 onClick={() => {
@@ -1301,12 +1317,13 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 aria-pressed={panel === null}
               >
                 <IconChat />
-              </button>
+              </Button>
               <span className="rail-sep" />
               {menuOpen && <div className="rail-scrim" onClick={() => setMenuOpen(false)} />}
               <div className={`rail-panels${menuOpen ? " open" : ""}`}>
                 {PANELS.map(({ key, label, Icon }) => (
-                  <button
+                  <Button
+                    variant="bare"
                     key={key}
                     className={`${panel === key ? "active" : ""}${rail.hints.some((h) => h.panel === key) ? " hinted" : ""}`}
                     disabled={
@@ -1333,10 +1350,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
                         {game.views.mail.unread}
                       </span>
                     )}
-                  </button>
+                  </Button>
                 ))}
               </div>
-              <button
+              <Button
+                variant="bare"
                 className={`rail-toggle${panel !== null ? " active" : ""}${rail.hints.length > 0 ? " hinted" : ""}`}
                 onClick={() => setMenuOpen(true)}
                 data-testid="rail-toggle"
@@ -1345,7 +1363,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 aria-expanded={menuOpen}
               >
                 <IconMenu />
-              </button>
+              </Button>
 
               {/**
                * 바뀐 장부를 알리는 말풍선 — **다음 클릭에 닫히고, 칩으로 다시 부른다.**
@@ -1405,9 +1423,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
                 matchId={finished}
                 head={matchHeadFacts(game.matchLogs[finished], game.chat, finished)}
               />
-              <button className="primary-btn" onClick={closeFulltime} data-testid="fulltime-close">
+              <Button variant="primary" onClick={closeFulltime} data-testid="fulltime-close">
                 확인
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -1422,7 +1440,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
             {/* 스코어보드는 경기장 칸 위에 붙는다 — 대화 칸은 무대 높이를 통째로 쓴다 */}
             {liveMatch && <MatchHeadline match={liveMatch} clock={liveClock} />}
             {chatPane}
-            {matchPanelOpen && liveMatch && (
+            {matchPanelOpen && (
               <section className="match-side-panel" aria-labelledby="match-panel-title">
                 <header className="match-detail-heading">
                   <div>
@@ -1439,7 +1457,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
                         : "터치라인"}
                     </span>
                   </div>
-                  <button onClick={() => setMatchTab("판세")}>대화로</button>
+                  <Button variant="secondary" size="sm" onClick={() => setMatchTab("판세")}>
+                    대화로
+                  </Button>
                 </header>
                 <div className="match-panel-scroll ledger-body" key={matchTab}>
                   {matchTab === "팀" && (
@@ -1451,7 +1471,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
                        */}
                       <div className="side-tabs" role="tablist">
                         {(["ours", "theirs"] as const).map((s2) => (
-                          <button
+                          <Button
+                            variant="bare"
                             key={s2}
                             role="tab"
                             aria-selected={squadSide === s2}
@@ -1460,7 +1481,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                             data-testid={`side-${s2}`}
                           >
                             {s2 === "ours" ? "우리 팀" : "상대 팀"}
-                          </button>
+                          </Button>
                         ))}
                       </div>
                       {squadSide === "ours" ? (
@@ -1487,7 +1508,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
             {/* 가라앉은 대화를 덮는 판 — 누르면 서랍이 닫힌다. 서랍이 설 수 없는
               폭에서는 CSS가 걷어 낸다(`--drawer`) — 채팅을 가로막을 뿐이므로 */}
             {boardTakesStage && !boardClosing && (
-              <button
+              <Button
+                variant="bare"
                 className="board-scrim"
                 onClick={toggleBoard}
                 aria-label="전술판 닫기"
@@ -1500,7 +1522,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
               /* 접힌 칸은 화면에도 손에도 없다 — 폭 0짜리 표에 탭 포커스가 빠지지 않게 */
               inert={!rightOpen}
             >
-              {showBoard && liveMatch ? (
+              {showBoard ? (
                 <div className="stage-board" data-testid="stage-board">
                   <LivePitch
                     frame={live.frame}

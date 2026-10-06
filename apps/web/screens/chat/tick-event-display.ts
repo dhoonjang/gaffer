@@ -1,6 +1,5 @@
 /**
- * 사건 카드의 **어휘** — 종류 하나에 꼬리표 글자와 픽토그램 하나
- * (web/design-system.md §6 「사건 카드」).
+ * 사건 카드의 **어휘** — 종류 하나에 꼬리표 글자와 픽토그램 하나.
  *
  * 코어가 내는 것은 `kind`와 문장뿐이다(`TickEvent`). 「부상」이라는 낱말도 의료
  * 픽토그램도 화면의 것이라 여기 있다 — 코어가 그것을 알면 종류가 두 벌로 서고,
@@ -44,5 +43,6 @@ const LOOK: Record<TickEventKind, TickEventLook> = {
  * 사라진다 — 문장은 종류를 몰라도 읽힌다.
  */
 export function tickEventLook(kind: TickEventKind): TickEventLook {
-  return LOOK[kind] ?? LOOK.news;
+  // 타입은 아는 종류만 말하지만 값은 옛 세이브에서 온다
+  return (LOOK as Partial<Record<string, TickEventLook>>)[kind] ?? LOOK.news;
 }

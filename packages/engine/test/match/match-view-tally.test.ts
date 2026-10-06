@@ -208,7 +208,7 @@ describe("흐름의 양 — 사건이 아닌 기록", () => {
       return [...view.onPitch.home, ...view.onPitch.away].filter((p) => p.tally.saves > 0);
     });
     expect(keepers.length, "선방이 한 번도 없었다").toBeGreaterThan(0);
-    for (const p of keepers) expect(p.position, `${p.name}`).toBe("GK");
+    for (const p of keepers) expect(p.position, p.name).toBe("GK");
   });
 
   /**

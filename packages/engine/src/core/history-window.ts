@@ -50,7 +50,7 @@ export interface HistorySource {
   chat: readonly ChatTurn[];
   /** 요약에 적히는 날 (`state.date`) */
   date: string;
-  historyDigest?: HistoryDigest;
+  historyDigest?: HistoryDigest | undefined;
 }
 
 /** 접을 구간의 브리프 — 코어가 내고, 모델이 문장을 쓰고, 코어가 검사해 적는다 */
@@ -74,8 +74,8 @@ export interface HistoryFoldBrief {
 /** 요약 두 칸 — 지난 일은 짧게, 열린 일은 끝나지 않은 대화와 의도 (§5-1) */
 interface HistoryDigestDraft {
   past: string;
-  open?: string;
-  candidates?: CharacterCandidate[];
+  open?: string | undefined;
+  candidates?: CharacterCandidate[] | undefined;
 }
 
 /**

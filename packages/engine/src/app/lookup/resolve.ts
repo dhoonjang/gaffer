@@ -45,7 +45,7 @@ import {
   teamShortNameIn,
   type GameState,
 } from "../../core/state";
-import { SearchPlayersInput } from "./search-players";
+import { type SearchPlayersInput } from "./search-players";
 
 // ── 이름 해석 (팀·대회) ─────────────────────────────────
 //
@@ -72,7 +72,7 @@ export function resolveTeam(state: GameState, team?: string): Resolved {
 
 /** 이름 뒤에 실제 주장·부주장 지정을 표시한다. */
 export function armband(p: GamePlayer): string {
-  return p.isCaptain ? " (주장)" : p.isViceCaptain === true ? " (부주장)" : "";
+  return p.isCaptain ? " (주장)" : p.isViceCaptain ? " (부주장)" : "";
 }
 
 /** 징계를 재는 기준 경기 — 어느 대회의 몇 라운드·어느 단계에서 묻는가 */
@@ -239,10 +239,10 @@ export function statLine(
   stat: {
     apps: number;
     goals: number;
-    assists?: number;
-    ratingSum?: number;
-    reserveApps?: number;
-    reserveGoals?: number;
+    assists?: number | undefined;
+    ratingSum?: number | undefined;
+    reserveApps?: number | undefined;
+    reserveGoals?: number | undefined;
   } | null,
 ): string {
   const rating = seasonRating(stat);
@@ -390,7 +390,7 @@ export function sortKeyOf(
     // 출전이 없으면 평점이 없다 — 0으로 두어 뛴 선수 뒤에 선다
     case "seasonRating":
       return (p) => seasonRating(of(p)) ?? 0;
-    default:
+    case "apps":
       return (p) => of(p)?.apps ?? 0;
   }
 }
@@ -407,7 +407,7 @@ function foggedKeyOf(
     case "fatigue":
       return sortCondition(state, p);
     // 판단 보류는 맨 뒤에 선다
-    default:
+    case "growth":
       return growthOutlook(state, p)?.tier ?? -1;
   }
 }

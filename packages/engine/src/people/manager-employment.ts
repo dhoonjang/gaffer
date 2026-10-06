@@ -170,7 +170,7 @@ export function validateManagerTerms(
 function managerTermsBrief(
   state: GameState,
   teamId: string,
-  terms: ManagerOfferTerms & { compensation?: number },
+  terms: ManagerOfferTerms & { compensation?: number | undefined },
   head: string,
 ): CommandBrief {
   return {
@@ -281,9 +281,12 @@ export function counterManagerOffer(state: GameState, ref: string, raw: unknown)
   )
     return { ok: false, message: "이 제안의 고용 조건이 바뀌었습니다" };
   const revised = parsed.data;
+  // 고친 칸만 덮는다 — 비어 있는 칸이 제안의 값을 지우지 않게
   const terms = {
     ...offer,
-    ...revised,
+    salary: revised.salary ?? offer.salary,
+    years: revised.years ?? offer.years,
+    expiresOn: revised.expiresOn ?? offer.expiresOn,
   };
   const invalid = validateManagerTerms(state, offer.teamId, terms, offer.compensation);
   if (invalid) return { ok: false, message: invalid };

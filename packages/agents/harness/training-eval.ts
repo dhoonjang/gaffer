@@ -238,9 +238,9 @@ async function main() {
           stages.push({
             ...stage,
             durationMs: performance.now() - began,
-            attempts: result.attempts ?? 1,
+            attempts: result.attempts,
             usage: result.usage,
-            usageComplete: result.usageComplete !== false,
+            usageComplete: result.usageComplete,
           });
           return result;
         } catch (error) {

@@ -74,7 +74,7 @@ describe("편성 — 소집일과 개막 사이, 주 1회 토요일", () => {
   it("전부 토요일 15:00이고 소집일 이후·개막 전이다", () => {
     const squadReturn = squadReturnOf(calendar);
     for (const m of friendlies) {
-      expect(dayOfWeek(m.date), `${m.date}`).toBe(6);
+      expect(dayOfWeek(m.date), m.date).toBe(6);
       expect(m.time).toBe("15:00");
       expect(m.date >= squadReturn, `${m.date} < 소집일 ${squadReturn}`).toBe(true);
       expect(m.date < calendar.start, `${m.date} >= 개막 ${calendar.start}`).toBe(true);
@@ -461,7 +461,7 @@ describe("2군 리그 — 감독 팀만, 장부에만, 출전·성장에만 (sea
 
     expect(match.result).not.toBeNull();
     const ourSide = match.homeTeamId === state.userTeamId ? "homeLineup" : "awayLineup";
-    const lineup = match.result![ourSide] ?? [];
+    const lineup = match.result![ourSide];
     expect(lineup.length).toBe(11);
     for (const id of lineup) {
       const stat = seasonStatOf(state, id);

@@ -11,7 +11,24 @@ import {
   IconSend,
 } from "@/shared/icons";
 import { humanDate } from "@/shared/dateline";
+import { Button } from "@/shared/button";
 export type MailDraft = { recipient: MailRecipient; subject: string; body: string; label?: string };
+/**
+ * ── 메일함 — 상대별 연락 스레드 ────────
+ *
+ * 위계와 흐름은 Gmail의 도구 모음·작성 흐름을 따르되 값은 게임의 토큰이다
+ * (https://support.google.com/mail/answer/2473038 · /answer/9259768). 새 메일 버튼은 목록 위에만
+ * 서고, 상세·작성 화면은 「메일함」 제목을 되풀이하지 않는다.
+ *
+ * - 작성은 받는 사람 · 제목 · 본문 순서이고 닫아도 초안이 남는다. 받는 사람은 자유 입력과
+ *   키보드로 고르는 자동완성 — 입력한 이름 그대로도 보낼 수 있고, 모호하면 후보가 소속과
+ *   종류로 갈린다. 발송 중에는 다시 보낼 수 없고 실패하면 쓴 것이 그대로 남는다.
+ * - 「대화에 첨부」는 메인 입력창 위에 지울 수 있는 참조 카드를 세울 뿐이다. 읽음·새로고침은
+ *   시간을 넘기지도 상대의 회신을 만들지도 않는다.
+ * - 1024 이상에서는 메인 채팅과 함께 서고, 좁은 화면은 첨부한 뒤 메인 입력을 보여 준다.
+ * - 협상은 메인 채팅의 만남·통화·메일 지시로 나아간다 — 별도의 협상 대화방도, 저절로
+ *   화면이 넘어가는 일도 없다.
+ */
 export function Mailbox({
   gameId,
   mail,
@@ -172,7 +189,7 @@ export function Mailbox({
           if (!response.ok) throw new Error(data.error ?? "연락 상대를 찾지 못했습니다.");
           if (!abort.signal.aborted) setCandidates(data.candidates ?? []);
         })
-        .catch((cause) => {
+        .catch((cause: unknown) => {
           if (!abort.signal.aborted)
             setLookupError(cause instanceof Error ? cause.message : "연락 상대를 찾지 못했습니다.");
         })
@@ -248,8 +265,7 @@ export function Mailbox({
       })
       .catch(() => {});
     return () => readController.abort();
-    // Read acknowledgements never lock the main conversation or clear send errors.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 읽음 표시는 대화를 잠그지 않고 발송 오류도 지우지 않는다
   }, [thread?.id, thread?.messages.length, thread?.lastReadMessage, disabled]);
   const send = async () => {
     if (
@@ -310,8 +326,9 @@ export function Mailbox({
     >
       <header className="mail-compose-head">
         <h3>{replying ? "답장" : "새 메일"}</h3>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon"
           className="mail-icon-button"
           disabled={pending}
           aria-label="초안 닫기"
@@ -319,7 +336,7 @@ export function Mailbox({
           onClick={() => setCompose(false)}
         >
           <IconClose size={18} />
-        </button>
+        </Button>
       </header>
       <label className="mail-field">
         <span>받는 사람</span>
@@ -372,7 +389,7 @@ export function Mailbox({
                 candidates[candidateIndex]
               ) {
                 e.preventDefault();
-                chooseRecipient(candidates[candidateIndex]!);
+                chooseRecipient(candidates[candidateIndex]);
               }
             }}
           />
@@ -380,8 +397,8 @@ export function Mailbox({
             <div className="mail-recipient-results">
               <div id={lookupId} role="listbox" aria-label="연락 상대 후보">
                 {candidates.map((contact, index) => (
-                  <button
-                    type="button"
+                  <Button
+                    variant="bare"
                     disabled={disabled || pending}
                     role="option"
                     aria-selected={candidateIndex === index}
@@ -392,7 +409,7 @@ export function Mailbox({
                   >
                     <strong>{contact.label}</strong>
                     {contact.description && <small>{contact.description}</small>}
-                  </button>
+                  </Button>
                 ))}
               </div>
               {lookupPending ? (
@@ -435,7 +452,8 @@ export function Mailbox({
         </div>
       )}
       <footer>
-        <button
+        <Button
+          variant="primary"
           type="submit"
           disabled={
             disabled ||
@@ -447,7 +465,7 @@ export function Mailbox({
           data-testid="mail-send"
         >
           <IconSend size={17} /> {pending ? "발송 중…" : "메일 발송"}
-        </button>
+        </Button>
       </footer>
     </form>
   );
@@ -461,20 +479,19 @@ export function Mailbox({
               <small aria-label={`${mail.unread}개 읽지 않은 메일`}>{mail.unread}</small>
             )}
           </h2>
-          {!compose && (
-            <button
-              disabled={disabled || pending}
-              onClick={() => {
-                setCompose(true);
-                setReplying(false);
-                replyThreadId.current = null;
-                setError(null);
-              }}
-              data-testid="mail-compose"
-            >
-              <IconCompose /> 메일 작성
-            </button>
-          )}
+          <Button
+            variant="secondary"
+            disabled={disabled || pending}
+            onClick={() => {
+              setCompose(true);
+              setReplying(false);
+              replyThreadId.current = null;
+              setError(null);
+            }}
+            data-testid="mail-compose"
+          >
+            <IconCompose /> 메일 작성
+          </Button>
         </header>
       )}
       {compose && !replying ? (
@@ -482,7 +499,9 @@ export function Mailbox({
       ) : thread ? (
         <section className="mail-thread">
           <header className="mail-thread-toolbar">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               className="mail-icon-button"
               aria-label="메일 목록"
               title="메일 목록"
@@ -492,7 +511,7 @@ export function Mailbox({
               }}
             >
               <IconArrowLeft size={18} />
-            </button>
+            </Button>
             <div>
               <h3>{thread.label}</h3>
               <span>주고받은 메일 {thread.messages.length}개</span>
@@ -517,22 +536,24 @@ export function Mailbox({
                 </time>
               </header>
               <p>{message.body}</p>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 disabled={disabled || pending}
                 onClick={() => onAttach(message.id)}
-                className="mail-attach-action"
                 title="대화에 첨부"
                 aria-label={`${message.subject} 대화에 첨부`}
                 data-testid="mail-attach"
               >
                 <IconPaperclip size={16} /> 대화에 첨부
-              </button>
+              </Button>
             </article>
           ))}
           {compose && replying ? (
             composeForm
           ) : (
-            <button
+            <Button
+              variant="secondary"
               className="mail-reply"
               disabled={disabled || pending}
               onClick={() => {
@@ -554,7 +575,7 @@ export function Mailbox({
               }}
             >
               <IconReply size={17} /> 답장
-            </button>
+            </Button>
           )}
         </section>
       ) : (
@@ -566,7 +587,8 @@ export function Mailbox({
               .slice(row.lastReadMessage)
               .some((message) => message.direction !== "outbound");
             return (
-              <button
+              <Button
+                variant="bare"
                 key={row.id}
                 onClick={() => {
                   attemptedReads.current.clear();
@@ -587,7 +609,7 @@ export function Mailbox({
                 <time>{humanDate(latest?.on ?? "")}</time>
                 <span className="mail-row-subject">{latest?.subject}</span>
                 <span className="mail-row-preview">{latest?.body.replace(/\s+/g, " ")}</span>
-              </button>
+              </Button>
             );
           })}
         </div>

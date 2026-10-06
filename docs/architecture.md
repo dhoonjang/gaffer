@@ -38,8 +38,15 @@ AI는 의미를 해석하고 인물의 반응과 이야기를 판단한다. 코�
 - **`app`** — 여러 도메인을 함께 움직이는 일. 새 게임·하루와 시즌의 진행·저장·GM 조회·통합
   화면·도메인을 가로지르는 업무 흐름·어드민 ([app](app/README.md)).
 
-호출의 갈래(`config/llm.yml`의 에이전트)는 [agents](agents/README.md), 화면은
-[web](web/README.md)이 소유한다.
+호출의 갈래(`config/llm.yml`의 에이전트)는 [agents](agents/README.md)가 소유한다.
+
+화면은 문서가 아니라 코드가 소유한다. `apps/web`은 화면 단위로 나뉜다 — `game/`(게임 화면의
+껍데기와 서버 배관: 턴 실행·저장·스트림·실시간 경기 확정), `screens/<화면>`(채팅 · 메일함과 협상
+확인 · 장부 뷰 `office`(일정·대회·재정·커리어) · 선수단 · 경기), `shared/`(여러 화면이 쓰는 조각과
+스타일), `dev/`(턴 원문 뷰어). 화면은 `shared/`만 부르고 서로를 부르지 않는다. Next 라우트
+(`app/`)는 URL과 API의 경계다. 디자인 시스템의 단일 소스는
+[`apps/web/shared/tokens.css`](../apps/web/shared/tokens.css)이고, 화면별 규약은 그 화면의 CSS·TSX
+머리 주석이 갖는다.
 
 ## 2. 의존 방향
 

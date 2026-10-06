@@ -319,12 +319,11 @@ function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView {
   const assignment = assignmentFor(state, p.id);
   const slotted = assignment?.role === "starting";
   /** 자리가 있어야 역할이 있다 — 벤치 배치의 `position`은 주 포지션이 채운 값이다 */
-  const role =
-    slotted && assignment
-      ? (rolesFor(assignment.position).find(
-          (r) => r.id === (assignment.roleId ?? defaultRoleOf(assignment.position)),
-        ) ?? null)
-      : null;
+  const role = slotted
+    ? (rolesFor(assignment.position).find(
+        (r) => r.id === (assignment.roleId ?? defaultRoleOf(assignment.position)),
+      ) ?? null)
+    : null;
   return {
     squadNumber: p.squadNumber ?? null,
     form: Math.round(p.state.form * 100) / 100,
@@ -336,7 +335,7 @@ function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView {
     fatigue: Math.round(fatigueOf(p.state)),
     squadStatus: squadStatusOf(state, p),
     isCaptain: p.isCaptain,
-    isViceCaptain: p.isViceCaptain === true,
+    isViceCaptain: p.isViceCaptain,
     homegrown: isHomegrownFor(p, state.userTeamId),
     assignment: assignment
       ? {

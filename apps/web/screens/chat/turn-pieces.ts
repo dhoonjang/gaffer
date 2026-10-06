@@ -105,8 +105,8 @@ export function groupChips(calls: readonly ToolCallRecord[]): ToolCallRecord[][]
 export function weaveTurn(
   lines: string[],
   parts: {
-    goals?: readonly GoalMark[];
-    cards?: readonly CardMark[];
+    goals?: readonly GoalMark[] | undefined;
+    cards?: readonly CardMark[] | undefined;
     calls?: readonly ToolCallRecord[];
     /** 시각 표시 — 걷어낸 헤더가 서 있던 자리 (`cutStamps`) */
     stamps?: readonly { after: number; stamp: string }[];

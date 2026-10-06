@@ -353,7 +353,7 @@ describe("세이브 내구성 — 업데이트·크래시에도 게임이 살아
     delete raw.schedule; // 일정 축 누락
     writeMonolith(state.id, raw);
     // .bak이 없으면 null
-    expect(loadGame(`${state.id}`)).toBeNull();
+    expect(loadGame(state.id)).toBeNull();
   });
 
   it("목록은 손상된 파일도 멀쩡한 게임과 같은 배열에 세운다", () => {
@@ -740,7 +740,7 @@ describe("세이브 파일 락 — 프로세스 경계", () => {
     expect(await acquireSaveLock(id, 60)).toBeNull();
     expect(Date.now() - started).toBeGreaterThanOrEqual(50);
     // 빼앗지 않는다 — 파일도 그 안의 토큰도 그대로다
-    expect(JSON.parse(readFileSync(file, "utf8")).token).toBe("남의-것");
+    expect((JSON.parse(readFileSync(file, "utf8")) as { token: string }).token).toBe("남의-것");
     rmSync(file, { force: true });
   });
 
@@ -771,7 +771,7 @@ describe("세이브 파일 락 — 프로세스 경계", () => {
       token: "뒤에-온-것",
     });
     lock!.release();
-    expect(JSON.parse(readFileSync(other, "utf8")).token).toBe("뒤에-온-것");
+    expect((JSON.parse(readFileSync(other, "utf8")) as { token: string }).token).toBe("뒤에-온-것");
     rmSync(other, { force: true });
   });
 

@@ -46,8 +46,7 @@ const AXIS_LOAD = Object.fromEntries(
 export function sessionLoad(focus: readonly TrainAttr[]): number {
   if (focus.length === 0) return SESSION_LOAD_DEFAULT;
   const sum = focus.reduce(
-    (n, f) =>
-      n + (f === "tactical" || f === "recovery" ? SESSION_LOAD[f] : AXIS_LOAD[f as AttributeAxis]),
+    (n, f) => n + (f === "tactical" || f === "recovery" ? SESSION_LOAD[f] : AXIS_LOAD[f]),
     0,
   );
   return sum / focus.length;

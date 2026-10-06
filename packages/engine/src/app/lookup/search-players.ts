@@ -25,7 +25,7 @@ import {
   type GameState,
 } from "../../core/state";
 import {
-  LookupResult,
+  type LookupResult,
   DEFAULT_LIMIT,
   MAX_LIMIT,
   resolveTeam,
@@ -40,37 +40,37 @@ import {
 
 export interface SearchPlayersInput {
   /** "mine" | 팀 id | 팀 이름 — 생략하면 competition(그것도 없으면 1·2부 전 클럽) */
-  team?: string;
+  team?: string | undefined;
   /**
    * 대회로 좁히기 — 리그면 소속 팀, 대항전이면 참가 팀.
    * 없으면 풀이 **5대 리그 1·2부 전체**라 "우리 리그 최고 스트라이커"의 답이 조용히 어긋난다.
    */
-  competition?: string;
+  competition?: string | undefined;
   /** 포지션 코드 (주 포지션 또는 소화 가능 포지션) */
-  position?: string;
+  position?: string | undefined;
   /** 이름·id 부분 일치 */
-  name?: string;
-  minAge?: number;
-  maxAge?: number;
+  name?: string | undefined;
+  minAge?: number | undefined;
+  maxAge?: number | undefined;
   /** 1군·2군 — 우리 팀에서 유망주만 보기 */
-  squadLevel?: "first" | "reserve";
+  squadLevel?: "first" | "reserve" | undefined;
   /** 부상·정지 제외 */
-  availableOnly?: boolean;
+  availableOnly?: boolean | undefined;
   /**
    * 계약이 이 일수 안에 끝나는 선수 — 만료되면 무소속으로 떠나는 사람들.
    * 무계약(무소속)은 잔여 0일이라 언제나 걸린다.
    */
-  contractEndsWithinDays?: number;
+  contractEndsWithinDays?: number | undefined;
   /** 주급 상한 (£/주) — 계약서의 값 그대로, 흐리지 않는다 */
-  maxWage?: number;
+  maxWage?: number | undefined;
   /** 우리 협회 기준 홈그로운 — 등록 명단 8명 규칙(team.md §5)의 그 자격 */
-  homegrown?: boolean;
+  homegrown?: boolean | undefined;
   /** 성장 가능성이 이 단계 이상. 판단 보류인 선수는 통과하지 못한다 */
-  minGrowth?: GrowthOutlookKey;
+  minGrowth?: GrowthOutlookKey | undefined;
   /** 최소 지식 수준 — `"seen"`이면 직접 상대해 봤거나 그보다 잘 아는 선수만 */
-  knowledge?: Knowledge;
+  knowledge?: Knowledge | undefined;
   /** 주발 — 행이 찍는 그 세 갈래 (`footLabel`과 같은 자) */
-  foot?: StrongFoot;
+  foot?: StrongFoot | undefined;
   sortBy?:
     | "rating"
     | "age"
@@ -81,8 +81,9 @@ export interface SearchPlayersInput {
     | "contract"
     | "assists"
     | "seasonRating"
-    | "growth";
-  limit?: number;
+    | "growth"
+    | undefined;
+  limit?: number | undefined;
 }
 
 export function searchPlayers(state: GameState, input: SearchPlayersInput): LookupResult {
@@ -183,7 +184,13 @@ export function searchPlayers(state: GameState, input: SearchPlayersInput): Look
       case "contract":
         // 지친 순·계약이 먼저 끝나는 순 — 낮은 쪽이 앞
         return key(a) - key(b);
-      default:
+      case "rating":
+      case "goals":
+      case "apps":
+      case "wage":
+      case "assists":
+      case "seasonRating":
+      case "growth":
         return key(b) - key(a);
     }
   });
