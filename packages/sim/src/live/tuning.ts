@@ -824,12 +824,13 @@ export const HEATMAP: Record<WeightSlot, { attack: HeatComponent[]; defend: Heat
     attack: [
       { depth: 0, lateral: 0, back: 8, ahead: 10, side: 10, weight: 1 },
       {
-        depth: 14,
+        depth: 16,
         lateral: 0,
         back: 8,
         ahead: 10,
         side: 10,
-        weight: 0.2,
+        weight: 0.3,
+        ball: 0.4,
         tendency: { advance: 3 },
         commit: true,
       },
@@ -852,13 +853,13 @@ export const HEATMAP: Record<WeightSlot, { attack: HeatComponent[]; defend: Heat
     attack: [
       { depth: 0, lateral: 0, back: 10, ahead: 10, side: 11, weight: 1 },
       {
-        depth: 16,
+        depth: 20,
         lateral: 0,
         back: 8,
-        ahead: 12,
+        ahead: 10,
         side: 12,
-        weight: 0.35,
-        ball: 0.3,
+        weight: 0.7,
+        ball: 0.6,
         tendency: { advance: 3, boxPresence: 2 },
         commit: true,
       },
@@ -913,13 +914,13 @@ export const HEATMAP: Record<WeightSlot, { attack: HeatComponent[]; defend: Heat
       { depth: 0, lateral: 4, back: 10, ahead: 12, side: 7, weight: 1, tendency: { width: 3 } },
       // 안쪽 — 하프 스페이스에서 박스로
       {
-        depth: 8,
+        depth: 14,
         lateral: -14,
         back: 8,
-        ahead: 12,
+        ahead: 10,
         side: 8,
-        weight: 0.4,
-        ball: 0.3,
+        weight: 0.8,
+        ball: 0.6,
         tendency: { inside: 5, boxPresence: 2 },
         commit: true,
       },
@@ -1083,6 +1084,23 @@ export const XG_ORIGIN: Record<ShotContext["origin"], number> = {
   rebound: 1.15,
   counter: 1.15,
 };
+
+/**
+ * 운반이 골문 쪽으로 꺾이는 몫 — 공의 깊이가 경기장의 `DRIBBLE_CUT_IN_FROM`에서 시작해 상대 골라인
+ * 쪽 4분의 1을 지나며 차오르고, 역할의 `inside`가 0.5~1.5배로 곱해진다. 측면 공격수가 박스
+ * 모서리로 파고들어 슈팅 몫을 나눠 갖는 자리다(football-reference.md §8 — 측면 27%)
+ */
+export const DRIBBLE_CUT_IN = 0.35;
+
+export const DRIBBLE_CUT_IN_FROM = 0.62;
+
+/**
+ * 패스를 고를 때 받는 말 둘레의 상대가 성공 확률을 깎는 몫 — 상대마다 exp(−(거리/σ)²)를 더한
+ * 붐빔을 `1 + RECEIVE_CROWD × 붐빔`으로 나눈다. 한 명이 2m에 붙으면 0.74배, 둘이면 0.58배
+ */
+export const RECEIVE_CROWD = 2;
+
+export const RECEIVE_CROWD_SIGMA = 3.5;
 
 /** 슈팅 사거리 (m) — 이보다 멀면 슈팅을 선택지에 넣지 않는다 */
 export const SHOT_RANGE = 30;

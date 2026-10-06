@@ -1,5 +1,5 @@
 import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
-import { defineHarness, type Harness } from "./harness";
+import { defineHarness, type Band, type Harness } from "./harness";
 
 /**
  * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/balance-harness.md`).
@@ -254,11 +254,100 @@ export const LIVE_GOAL_ANATOMY = defineHarness({
   ],
 });
 
+/**
+ * **포메이션마다 축구가 서는가** — `live-baseline`은 시드 세계가 고른 모양(대개 4-3-3·4-2-3-1)만
+ * 굴린다. 백3·백5나 투톱에서만 무너지는 규칙은 거기서 보이지 않는다. 양 팀을 같은 모양으로 세워
+ * 모양마다 같은 가드를 건다 — 지표 이름은 `"<모양> — <지표>"`다.
+ */
+export const LIVE_FORMATION_ARMS = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "5-4-1"] as const;
+
+export const LIVE_FORMATIONS = defineHarness({
+  id: "live-formations",
+  what: "대표 포메이션 다섯(양 팀 같은 모양)마다 득점·슈팅·xG·패스·거리·크로스와 자리별 슈팅 몫",
+  doc: "docs/match/live-match.md §9.3 · docs/match/football-reference.md §8",
+  cost: "시드 둘 × 리그 6경기 × 모양 다섯 = 60경기 · 25분",
+  bands: [
+    ...LIVE_FORMATION_ARMS.flatMap((f): Band[] => [
+      {
+        metric: `${f} — 팀 득점`,
+        role: "guard",
+        min: 0.9,
+        max: 2,
+        why: "[FD] 1.41 — 팀-경기 24라 표준오차 0.25를 연다. 어느 모양에서도 경기가 서야 한다",
+      },
+      {
+        metric: `${f} — 슈팅`,
+        role: "guard",
+        min: 8,
+        max: 18,
+        why: "[FD] 12.6 — 모양이 슈팅 수를 바꾸되 축구 밖으로 밀지 않는다",
+      },
+      { metric: `${f} — xG`, role: "guard", min: 0.9, max: 2.1, why: "[US] 1.49" },
+      {
+        metric: `${f} — 팀 총 거리 (km)`,
+        role: "guard",
+        min: 100,
+        max: 124,
+        why: "football-reference §7 110~117 km — 교체 몫 · 모양마다의 흔들림",
+      },
+      {
+        metric: `${f} — 패스 시도`,
+        role: "reference",
+        min: 330,
+        max: 600,
+        why: "[SB]·[FM] 467~471",
+      },
+      {
+        metric: `${f} — 크로스`,
+        role: "reference",
+        min: 6,
+        max: 20,
+        why: "[SB] 12.0 — 측면이 넓은 모양(백3·백5의 윙백)일수록 늘어야 한다",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 최전방`,
+        role: "reference",
+        max: 0.5,
+        unit: "ratio",
+        why: "§8 스트라이커 26.8% — 투톱이면 몫이 커지지만 절반을 넘으면 나머지 자리가 슈팅 자리에 서지 않는 것이다",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 측면`,
+        role: "measure",
+        unit: "ratio",
+        why: "§8 26.8% — 윙어가 없는 모양(4-4-2·3-5-2·5-4-1)은 측면 미드·윙백이 이 몫을 나눈다",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 미드`,
+        role: "measure",
+        unit: "ratio",
+        why: "§8 중앙·수비형 21.5% + 공격형 9.4%",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 수비`,
+        role: "measure",
+        unit: "ratio",
+        why: "§8 풀백 8.1% + 센터백 7.4%",
+      },
+    ]),
+    {
+      metric: "모양 사이 팀 득점 폭",
+      role: "measure",
+      why: "다섯 모양의 팀 득점 최대 − 최소 — 모양 하나가 득점을 통째로 옮기면 그 모양의 규칙을 본다",
+    },
+    {
+      metric: "모양 사이 거리 폭 (km)",
+      role: "measure",
+      why: "같은 이유 — 백5가 덜 뛰고 4-3-3이 더 뛰는 정도면 정상이다",
+    },
+  ],
+});
+
 export const LIVE_TACTICS = defineHarness({
   id: "live-tactics",
   what: "홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가",
   doc: "docs/match/live-match.md §6",
-  cost: "시드 둘 × 리그 12경기 × 팔 다섯 = 120경기 · 40분 남짓 — 하네스 중 가장 길다",
+  cost: "시드 둘 × 리그 12경기 × 팔 다섯 = 120경기 · 40분 남짓",
   // prettier-ignore
   bands: [
     { metric: "기준 — 우리 슈팅", role: "measure", why: "아래 변화들의 눈금 — 전술을 건드리지 않은 판" },
@@ -334,7 +423,7 @@ export const FINANCE_TIER1 = defineHarness({
   id: "finance-tier1",
   what: "tier1 유저 구단의 한 시즌 살림 — 장부 손익 · 현금 · 급여 비중 · 수입",
   doc: `${FINANCE}.1`,
-  cost: "전체 세계 한 시즌 · 수 분",
+  cost: "전체 세계 한 시즌 × 2시드 · 감독 경기는 실시간 · 30분 남짓",
   // prettier-ignore
   bands: [
     { metric: "시즌 1 보고서 수", role: "guard", min: 10, unit: "count", why: "한 시즌을 다 돌지 못하면 나머지가 전부 헛값이다" },
@@ -364,7 +453,7 @@ export const FINANCE_MULTI_SEASON = defineHarness({
   id: "finance-multi-season",
   what: "세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다",
   doc: `${FINANCE}.3`,
-  cost: "전체 세계 세 시즌 · 십수 분",
+  cost: "전체 세계 세 시즌 · 감독 경기는 실시간 · 1시간 남짓 — 하네스 중 가장 길다",
   // prettier-ignore
   bands: [
     { metric: "도달한 시즌", role: "guard", min: 4, unit: "count", why: "세 시즌은 리그가 가라앉는지 보이는 가장 짧은 창이다" },
@@ -379,7 +468,7 @@ export const FINANCE_SECOND_TIER = defineHarness({
   id: "finance-second-tier",
   what: "리그전을 굴리지 않는 2부의 한 시즌 수지",
   doc: "docs/team/finance.md §5.1",
-  cost: "전체 세계 한 시즌 · 수 분",
+  cost: "finance-tier1과 같은 시즌을 나눠 쓴다",
   // prettier-ignore
   bands: [
     { metric: "2부 구단 수", role: "guard", min: 10, unit: "count", why: "표본이 없으면 중간값이 뜻을 잃는다" },
@@ -391,7 +480,7 @@ export const AI_FITNESS = defineHarness({
   id: "ai-fitness",
   what: "한 시즌을 돈 뒤의 AI 스쿼드 체력·출전 분포",
   doc: `${QUICK_SIM}.6`,
-  cost: "전체 세계 한 시즌 · 수 분",
+  cost: "전체 세계 한 시즌 · 감독 경기는 실시간 · 25분 남짓",
   // prettier-ignore
   bands: [
     { metric: "상대 상위 14명 체력 (최저 팀)", role: "guard", min: 70, why: "라인업에 설 14명이 어느 시점에도 쓸 만해야 한다" },
@@ -419,7 +508,7 @@ export const AI_BENCH = defineHarness({
   id: "ai-bench",
   what: "감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래",
   doc: "docs/match/match.md §3.3",
-  cost: "시드당 수십 초 × 2시드",
+  cost: "두 시드 × 한 시즌 · 감독 경기는 실시간 · 40분 남짓",
   // prettier-ignore
   bands: [
     { metric: "AI 교체/경기", role: "guard", min: 3.5, max: 5, unit: "count", why: "football-reference §6 — 5인 교체제에서 EPL 3.9 · 분데스 4.5 — 정지점을 창으로 세는 정책(SUB_WINDOW_MAX·SUB_CHANCE·SUB_FATIGUE)이 그 부근에 세운다. 한도(5)는 장부가 막는다" },
@@ -748,6 +837,7 @@ export const HARNESSES: readonly Harness[] = [
   ASSIST_RATE,
   LIVE_MATCH_STATS,
   LIVE_GOAL_ANATOMY,
+  LIVE_FORMATIONS,
   LIVE_PLAYER_LOAD,
   LIVE_TACTICS,
   SIM_PARITY,

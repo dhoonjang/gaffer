@@ -243,6 +243,10 @@ import {
   KEEPER_SMOTHER_ATTEMPT,
   KEEPER_SMOTHER_EDGE,
   KEEPER_SMOTHER_RANGE,
+  DRIBBLE_CUT_IN,
+  RECEIVE_CROWD,
+  RECEIVE_CROWD_SIGMA,
+  DRIBBLE_CUT_IN_FROM,
   SHOT_ERROR_NEAR,
   SHOT_ERROR_RANGE,
   SHOT_KEEP_SHARE,
@@ -1907,7 +1911,16 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
 
   // 드리블·운반 — 앞 공간
   if (!keeper) {
-    const ahead = inside({ x: owner.x + d * 9, y: owner.y + (FIELD.width / 2 - owner.y) * 0.1 });
+    // 마무리 지역에 가까울수록 골문 쪽으로 꺾는다 — 안으로 파고드는 역할(`inside`)일수록 더.
+    // 앞으로만 몰면 측면의 공은 골라인까지 내려가 크로스로만 끝난다
+    const cutIn =
+      clamp((ownerDepth - FIELD.length * DRIBBLE_CUT_IN_FROM) / (FIELD.length * 0.25), 0, 1) *
+      DRIBBLE_CUT_IN *
+      (0.5 + (tendency?.inside ?? 0.5));
+    const ahead = inside({
+      x: owner.x + d * 9 * (1 - cutIn * 0.5),
+      y: owner.y + (FIELD.width / 2 - owner.y) * (0.1 + cutIn),
+    });
     const onPath = opponents
       .map((q) => ({ q, s: segmentDistance(q, owner, ahead) }))
       .filter(({ s }) => s.distance < 4.5)
@@ -2088,9 +2101,14 @@ function passSuccess(
     if (dd < reach) blockers += 1;
   }
   p *= blockers === 0 ? 1 : blockers === 1 ? 0.42 : 0.15;
-  const nearest = Math.min(...opponents.map((q) => distance(q, receiver)), 99);
-  if (nearest < 2) p *= 0.7;
-  else if (nearest < 4) p *= 0.87;
+  // 받는 말 둘레의 상대 — 붙은 수비가 많을수록 받기 어렵다. 한 명이 아니라 둘레 전체를 센다:
+  // 박스 안에서 센터백 둘에게 둘러싸인 공격수는 한 명이 붙은 공격수보다 받기 어렵다
+  let crowd = 0;
+  for (const q of opponents) {
+    const r = distance(q, receiver) / RECEIVE_CROWD_SIGMA;
+    crowd += dexp(-r * r);
+  }
+  p /= 1 + RECEIVE_CROWD * crowd;
   return clamp(p, 0.02, 0.98);
 }
 

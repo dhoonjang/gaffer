@@ -1,5 +1,5 @@
-import type { MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@gaffer/domain";
-import { otherSide, weightSlotOf } from "@gaffer/domain";
+import type { Formation, MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@gaffer/domain";
+import { FAMILIARITY_BASELINE, otherSide, weightSlotOf } from "@gaffer/domain";
 import {
   HEADER_SHOT_HEIGHT,
   depthOf,
@@ -9,7 +9,14 @@ import {
   type LiveMatch,
   type LiveTickObserver,
 } from "@gaffer/sim";
-import { buildAiLiveMatch, leagueOfTeamIn, type GameState } from "@gaffer/engine";
+import {
+  buildAiLiveMatch,
+  buildAssignments,
+  firstTeamPlayers,
+  leagueOfTeamIn,
+  tacticsOf,
+  type GameState,
+} from "@gaffer/engine";
 
 /**
  * 실시간 경기 하네스들이 같이 쓰는 실행기 — 두 AI 팀의 경기를 화면 없이 끝까지 굴리고
@@ -77,6 +84,20 @@ export function sampleOf(match: LiveMatch): MatchSample {
     length,
     inPlay: played / (length * 60),
   };
+}
+
+/**
+ * 그 팀을 프리셋 포메이션으로 다시 세운다 — 선발·벤치를 그 모양의 자리에 맞춰 새로 짠다.
+ * 전술 적응도는 기준선이다: 팔마다 같은 출발선이라야 포메이션의 차이만 남는다.
+ */
+export function withFormation(state: GameState, teamId: string, formation: Formation): void {
+  const tactics = tacticsOf(state, teamId);
+  tactics.spec = { ...tactics.spec, formation };
+  tactics.assignments = buildAssignments(
+    firstTeamPlayers(state, teamId),
+    formation,
+    FAMILIARITY_BASELINE,
+  );
 }
 
 /** 감독 리그의 대진 앞에서부터 `count`경기 */
