@@ -392,8 +392,7 @@ export function buildCalendarView(
           title: s?.rest === true ? `${slotKo} 휴식` : `${slotKo} 훈련 — ${s?.label ?? "훈련"}`,
           rest: s?.rest === true,
           // 축은 감독이 읽는 이름으로 — `tactical·aggression`은 장부의 id지 표기가 아니다
-          detail:
-            s && s.focus.length > 0 ? s.focus.map((f) => TRAIN_ATTR_KO[f] ?? f).join("·") : null,
+          detail: s && s.focus.length > 0 ? s.focus.map((f) => TRAIN_ATTR_KO[f]).join("·") : null,
           /**
            * 소화한 훈련은 **무엇이 남았는지**를 함께 보여준다 — 그날 결산이 매긴
            * 성장 로그를 그대로 읽는다. 훈련이 달력에서 점 하나로만 지나가면
@@ -406,81 +405,79 @@ export function buildCalendarView(
           cup: null,
         };
       }
-      if (e.type === "match") {
-        const m = matchById.get(e.refId);
-        if (!m) return null;
-        const home = m.homeTeamId === userTeamId;
-        const opponent = teamNameIn(state, home ? m.awayTeamId : m.homeTeamId);
-        let result: string | null = null;
-        let win: CalendarEntryView["win"] = null;
-        let detail: string | null = null;
-        if (m.result) {
-          const my = home ? m.result.homeGoals : m.result.awayGoals;
-          const their = home ? m.result.awayGoals : m.result.homeGoals;
-          win = outcomeFor(m, userTeamId);
-          const pens = m.result.penalties;
-          const pensLabel = pens
-            ? ` (승부차기 ${home ? pens.home : pens.away}-${home ? pens.away : pens.home})`
-            : "";
-          result = `${my}-${their}${pensLabel} ${outcomeLabel(win)}`;
-          const mySide = home ? "home" : "away";
-          /**
-           * 득점자 — **도움까지 함께 읽는다.** 장부는 골 대부분에 도움을 붙이므로
-           * 여기서 빠뜨리면 화면에는 "어시스트가 기록되지 않는다"로 보인다
-           * (`MatchResult.assists` — 득점자와 같은 순서, 없는 골은 빈 칸).
-           */
-          const assistIds = m.result.assists;
-          const minutes = m.result.goalMinutes;
-          const scorers = m.result.scorers.map((entry, i) => {
-            const goal = parseScorerEntry(entry);
-            const name = playerName(state, goal.playerId);
-            const assist = parseScorerEntry(assistIds[i] ?? "");
-            const withAssist = assist.playerId
-              ? `${name} (${playerName(state, assist.playerId)})`
-              : name;
-            // 분이 붙으면 스코어가 이야기가 된다 — 87분 동점골과 5분 선제골은 다르다
-            const at = minutes[i] !== undefined ? `${withAssist} ${minutes[i]}′` : withAssist;
-            // 편이 붙지 않은 옛 칸은 기준 팀의 골로 읽는다
-            return goal.side === null || goal.side === mySide ? at : `${at} (상대)`;
-          });
-          detail = scorers.length > 0 ? `득점: ${scorers.join(", ")}` : null;
-        }
-        const cup = isCup(m.competitionId);
-        const stage = competitionStageLabel(m.competitionId, m.stage, m.round);
-        return {
-          id: e.id,
-          date: e.date,
-          time: e.time,
-          type: e.type,
-          status: e.status,
-          title: `${fixtureLabel(m.competitionId, m.stage, m.round)} ${m.neutral ? "중립" : home ? "홈" : "원정"} vs ${opponent}`,
-          detail,
-          result,
-          win,
-          isNext: next !== null && m.id === next.id,
-          match: {
-            matchId: m.id,
-            // 리그 경기는 이름을 생략한다(감독은 자기 리그를 안다). 컵과 친선은
-            // 어느 경기인지가 곧 정보다
-            competition: cup || isFriendly(m) ? competitionShortName(m.competitionId) : null,
-            // 친선은 단계가 없어 빈 문자열이다 — 화면이 빈 칩을 그리지 않는다
-            stage,
-            opponentId: home ? m.awayTeamId : m.homeTeamId,
-            opponent: teamShortNameIn(state, home ? m.awayTeamId : m.homeTeamId),
-            opponentName: opponent,
-            venue: m.neutral ? "neutral" : home ? "home" : "away",
-            // 칸이 좁아 정규시간 스코어만 — 승부차기 여부는 색(승/패)과 툴팁에 있다
-            score: m.result
-              ? formatScore(
-                  home ? m.result.homeGoals : m.result.awayGoals,
-                  home ? m.result.awayGoals : m.result.homeGoals,
-                )
-              : null,
-            opponentStrength: strengthOf(squadRatings, home ? m.awayTeamId : m.homeTeamId),
-          },
-          cup: null,
-        };
+      const m = matchById.get(e.refId);
+      if (!m) return null;
+      const home = m.homeTeamId === userTeamId;
+      const opponent = teamNameIn(state, home ? m.awayTeamId : m.homeTeamId);
+      let result: string | null = null;
+      let win: CalendarEntryView["win"] = null;
+      let detail: string | null = null;
+      if (m.result) {
+        const my = home ? m.result.homeGoals : m.result.awayGoals;
+        const their = home ? m.result.awayGoals : m.result.homeGoals;
+        win = outcomeFor(m, userTeamId);
+        const pens = m.result.penalties;
+        const pensLabel = pens
+          ? ` (승부차기 ${home ? pens.home : pens.away}-${home ? pens.away : pens.home})`
+          : "";
+        result = `${my}-${their}${pensLabel} ${outcomeLabel(win)}`;
+        const mySide = home ? "home" : "away";
+        /**
+         * 득점자 — **도움까지 함께 읽는다.** 장부는 골 대부분에 도움을 붙이므로
+         * 여기서 빠뜨리면 화면에는 "어시스트가 기록되지 않는다"로 보인다
+         * (`MatchResult.assists` — 득점자와 같은 순서, 없는 골은 빈 칸).
+         */
+        const assistIds = m.result.assists;
+        const minutes = m.result.goalMinutes;
+        const scorers = m.result.scorers.map((entry, i) => {
+          const goal = parseScorerEntry(entry);
+          const name = playerName(state, goal.playerId);
+          const assist = parseScorerEntry(assistIds[i] ?? "");
+          const withAssist = assist.playerId
+            ? `${name} (${playerName(state, assist.playerId)})`
+            : name;
+          // 분이 붙으면 스코어가 이야기가 된다 — 87분 동점골과 5분 선제골은 다르다
+          const at = minutes[i] !== undefined ? `${withAssist} ${minutes[i]}′` : withAssist;
+          // 편이 붙지 않은 옛 칸은 기준 팀의 골로 읽는다
+          return goal.side === null || goal.side === mySide ? at : `${at} (상대)`;
+        });
+        detail = scorers.length > 0 ? `득점: ${scorers.join(", ")}` : null;
       }
+      const cup = isCup(m.competitionId);
+      const stage = competitionStageLabel(m.competitionId, m.stage, m.round);
+      return {
+        id: e.id,
+        date: e.date,
+        time: e.time,
+        type: e.type,
+        status: e.status,
+        title: `${fixtureLabel(m.competitionId, m.stage, m.round)} ${m.neutral ? "중립" : home ? "홈" : "원정"} vs ${opponent}`,
+        detail,
+        result,
+        win,
+        isNext: next !== null && m.id === next.id,
+        match: {
+          matchId: m.id,
+          // 리그 경기는 이름을 생략한다(감독은 자기 리그를 안다). 컵과 친선은
+          // 어느 경기인지가 곧 정보다
+          competition: cup || isFriendly(m) ? competitionShortName(m.competitionId) : null,
+          // 친선은 단계가 없어 빈 문자열이다 — 화면이 빈 칩을 그리지 않는다
+          stage,
+          opponentId: home ? m.awayTeamId : m.homeTeamId,
+          opponent: teamShortNameIn(state, home ? m.awayTeamId : m.homeTeamId),
+          opponentName: opponent,
+          venue: m.neutral ? "neutral" : home ? "home" : "away",
+          // 칸이 좁아 정규시간 스코어만 — 승부차기 여부는 색(승/패)과 툴팁에 있다
+          score: m.result
+            ? formatScore(
+                home ? m.result.homeGoals : m.result.awayGoals,
+                home ? m.result.awayGoals : m.result.homeGoals,
+              )
+            : null,
+          opponentStrength: strengthOf(squadRatings, home ? m.awayTeamId : m.homeTeamId),
+        },
+        cup: null,
+      };
       return null;
     })
     .filter((x): x is CalendarEntryView => x !== null);

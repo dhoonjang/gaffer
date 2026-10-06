@@ -24,7 +24,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (bad) return bad;
   const settled = new URL(request.url).searchParams.get("settled") === "1";
   const state = settled
-    ? await withGameLock(id, LOCK_WAIT_MS.settled, async () => loadGame(id)).catch(busyResponse)
+    ? await withGameLock(id, LOCK_WAIT_MS.settled, () => loadGame(id)).catch(busyResponse)
     : loadGame(id);
   if (state instanceof Response) return state;
   if (!state) return NextResponse.json({ error: "게임을 찾을 수 없습니다" }, { status: 404 });
@@ -44,7 +44,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
    * `.log/`에 그대로 남고 상한이 알아서 오래된 것부터 민다.
    */
   const ok = await withGameLock(id, LOCK_WAIT_MS.turn, () =>
-    traceBoard(id, async () => {
+    traceBoard(id, () => {
       noteTurn({ input: { kind: "delete" } });
       const deleted = deleteGame(id);
       noteTurn({ outcome: { ok: deleted, saved: deleted } });

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { UsageAgentRow, UsageResponse } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 계측 패널 — LLM 세션 장부를 세운다 (docs/agents/models.md §5-1).
@@ -36,13 +37,10 @@ function seconds(ms: number): string {
 function CacheCell({ row }: { row: UsageAgentRow }) {
   if (row.calls === 0) return <span className="muted">—</span>;
   if (row.cacheHitRate === null) {
-    return <span className="muted">문턱 아래 ({tokens(row.minCacheableInput)}↑)</span>;
+    return <span className="muted">문턱 아래 ({tokens(row.minCacheableInput)} 이상부터)</span>;
   }
   return (
-    <span className={row.cacheAlert ? "usage-alert" : undefined}>
-      {percent(row.cacheHitRate)}
-      {row.cacheAlert ? " ⚠️" : ""}
-    </span>
+    <span className={row.cacheAlert ? "usage-alert" : undefined}>{percent(row.cacheHitRate)}</span>
   );
 }
 
@@ -89,9 +87,9 @@ export function UsagePanel({ onError }: { onError: (e: string | null) => void })
           </span>
         </div>
         <div className="admin-toolbar-right">
-          <button className="mini-btn" onClick={() => void load()} disabled={busy}>
+          <Button variant="secondary" size="sm" onClick={() => void load()} disabled={busy}>
             다시 받기
-          </button>
+          </Button>
         </div>
       </div>
 

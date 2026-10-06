@@ -24,7 +24,7 @@ import {
 import { competitionName } from "../../core/catalog/cup-catalog";
 import { competitionHint, resolveCompetitionId } from "../../team/player-pool";
 import { teamNameIn, teamShortNameIn, type GameState } from "../../core/state";
-import { LookupResult, DEFAULT_LIMIT, resolveTeam } from "./resolve";
+import { type LookupResult, DEFAULT_LIMIT, resolveTeam } from "./resolve";
 import { dateLabel, competitionTag } from "./league";
 
 // ── 끝난 경기 리포트 (match.md §8) ──────────────────────
@@ -35,13 +35,13 @@ import { dateLabel, competitionTag } from "./league";
  */
 interface MatchReportInput {
   /** 경기 id — 주면 나머지 조건은 보지 않는다 */
-  matchId?: string;
+  matchId?: string | undefined;
   /** 상대 팀 이름·약칭 */
-  opponent?: string;
+  opponent?: string | undefined;
   /** 대회 이름·약칭·id */
-  competition?: string;
+  competition?: string | undefined;
   /** 그날 치른 경기 — YYYY-MM-DD */
-  date?: string;
+  date?: string | undefined;
 }
 
 /**
@@ -113,7 +113,7 @@ function reportCandidates(state: GameState): string[] {
     (m) =>
       `  ${m.id} · ${dateLabel(m.date)} ${competitionTag(m)} ` +
       `${teamShortNameIn(state, m.homeTeamId)} ${m.result?.homeGoals}-${m.result?.awayGoals} ` +
-      `${teamShortNameIn(state, m.awayTeamId)}`,
+      teamShortNameIn(state, m.awayTeamId),
   );
 }
 
@@ -208,7 +208,7 @@ function timelineLine(e: MatchReportEventView, report: MatchReportView): string 
   ].filter((x): x is string => x !== null && x !== "");
   return (
     `  ${e.minute}′ ${REPORT_EVENT_KO[e.type]}${team}${who}` +
-    `${tail.length > 0 ? ` · ${tail.join(" · ")}` : ""}`
+    (tail.length > 0 ? ` · ${tail.join(" · ")}` : "")
   );
 }
 
@@ -230,8 +230,8 @@ function playerReportRow(p: MatchReportPlayerView, teamShort: string): string {
     `  ${p.rating === null ? "" : `평점 ${p.rating.toFixed(1)} · `}` +
     `${p.squadNumber === null ? "" : `${p.squadNumber} `}${p.name}` +
     `${teamShort === "" ? "" : `(${teamShort})`} ${p.minutes}′ ${p.started ? "선발" : "교체 투입"}` +
-    `${stats.length > 0 ? ` · ${stats.join(" · ")}` : ""}` +
-    `${p.note === null ? "" : ` — ${p.note}`}`
+    (stats.length > 0 ? ` · ${stats.join(" · ")}` : "") +
+    (p.note === null ? "" : ` — ${p.note}`)
   );
 }
 
@@ -254,15 +254,15 @@ export function matchReport(state: GameState, input: MatchReportInput = {}): Loo
   const lines: string[] = [
     `[경기 리포트] ${dateLabel(report.date)} ${report.label} — ` +
       `${report.home.name} ${report.home.goals}-${report.away.goals} ${report.away.name}` +
-      `${report.aet ? " (연장)" : ""}` +
-      `${shootout ? ` (승부차기 ${shootout.home}-${shootout.away})` : ""}`,
+      (report.aet ? " (연장)" : "") +
+      (shootout ? ` (승부차기 ${shootout.home}-${shootout.away})` : ""),
   ];
 
   const ourTeam = report.home.ours ? report.home : report.away.ours ? report.away : null;
   lines.push(
     ourTeam
       ? `우리 ${ourTeam.name}(${ourTeam.short}) · ${VENUE_KO[report.venue ?? "neutral"]} · ` +
-          `${outcomeLabel(report.outcome)}`
+          outcomeLabel(report.outcome)
       : "우리 경기가 아니다 — 평점과 MOTM은 우리 경기에만 남는다",
   );
   if (!report.hasDetail) {
@@ -313,7 +313,7 @@ export function matchReport(state: GameState, input: MatchReportInput = {}): Loo
       ...shootout.kicks.map(
         (k) =>
           `  ${k.round} ${k.team} ${k.taker} ${SHOOTOUT_KO[k.outcome]}` +
-          `${k.keeper === null ? "" : ` (GK ${k.keeper})`}`,
+          (k.keeper === null ? "" : ` (GK ${k.keeper})`),
       ),
     );
   }
@@ -355,13 +355,13 @@ export function matchReport(state: GameState, input: MatchReportInput = {}): Loo
 
 interface OpponentReportInput {
   /** 경기 id — 주면 나머지 조건은 보지 않는다 */
-  matchId?: string;
+  matchId?: string | undefined;
   /** 상대 팀 이름·약칭 */
-  opponent?: string;
+  opponent?: string | undefined;
   /** 대회 이름·약칭·id */
-  competition?: string;
+  competition?: string | undefined;
   /** 그날 치를 경기 — YYYY-MM-DD */
-  date?: string;
+  date?: string | undefined;
 }
 
 /** 아직 치르지 않은 우리 경기 — 가까운 것부터. 2군 경기는 서지 않는다 */

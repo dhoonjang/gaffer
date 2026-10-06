@@ -1,4 +1,4 @@
-import type { PositionGroup, SquadStatus } from "@gaffer/domain";
+import type { PositionGroup, SquadStatus, LorebookContent } from "@gaffer/domain";
 
 /**
  * EPL 실선수 스냅샷 — 팀당 23~43인, **2026-27 시즌 개막 시점**
@@ -39,7 +39,7 @@ import type { PositionGroup, SquadStatus } from "@gaffer/domain";
  * 구성이 아니라 이 게임의 1부 명단이다.
  */
 export interface RealPlayerSeed {
-  lorebook?: import("@gaffer/domain").LorebookContent;
+  lorebook?: LorebookContent;
   /** 로마자 통용 표기 — id 슬러그·외부 데이터 매핑용 */
   nameEn: string;
   /** 한국 축구 언론 통용 한글 표기 — 게임 내 표시명 */

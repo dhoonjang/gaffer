@@ -1651,7 +1651,7 @@ function aerialContest(ctx: Ctx, intended?: LivePlayer): void {
     }
   }
   if (!winner) return;
-  const others = around.filter((p) => p.side !== winner!.side);
+  const others = around.filter((p) => p.side !== winner.side);
   if (others.length > 0) {
     for (const p of around) stat(ctx, p.id);
     stat(ctx, winner.id).aerialsWon += 1;

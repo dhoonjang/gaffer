@@ -21,6 +21,7 @@ import { ConditionBar } from "@/shared/condition-bar";
 import { PitchChip, PitchGround, useRovingMarkers } from "../../shared/pitch";
 import { usePlayerCard } from "../../shared/player-card";
 import { Crest } from "../../shared/crest";
+import { Button } from "@/shared/button";
 
 type Match = NonNullable<OfficeViews["match"]>;
 type MatchPlayer = Match["onPitch"]["home"][number];
@@ -92,7 +93,8 @@ export function MatchOpponent({
             {match.subs.limit.windows}
           </span>
           {onToggleBoard && (
-            <button
+            <Button
+              variant="bare"
               className={`board-toggle${boardOpen ? " on" : ""}`}
               onClick={onToggleBoard}
               aria-pressed={boardOpen}
@@ -101,7 +103,7 @@ export function MatchOpponent({
             >
               <IconBoard />
               전술판
-            </button>
+            </Button>
           )}
         </div>
         <div className="roster-head">
@@ -138,11 +140,7 @@ export function MatchOpponent({
  * 무슨 경기인가 — 상단 띠의 날짜 자리에 대회·라운드가 선다. 시계는 스코어보드가 갖는다.
  */
 export function MatchTitle({ match }: { match: Match }) {
-  return (
-    <span className="meta match-title">
-      {[match.competition, match.stage].filter(Boolean).join(" ")}
-    </span>
-  );
+  return <span className="meta">{[match.competition, match.stage].filter(Boolean).join(" ")}</span>;
 }
 
 /**
@@ -154,7 +152,7 @@ export function MatchTitle({ match }: { match: Match }) {
 /**
  * 경기 머리 — 상단 띠 아래에 붙는 스코어보드.
  *
- * `closing`은 **휘슬 뒤 걷히는 280ms**다 (design-system.md §5 모션 5). 종료 카드의
+ * `closing`은 **휘슬 뒤 걷히는 280ms**다 (tokens.css 「모션」 5). 종료 카드의
  * 「확인」이 켜고, 그동안 판은 화면에 남아 위로 올라간다 — 킥오프에 내려온 길의 역순.
  */
 export function MatchHeadline({
@@ -163,7 +161,7 @@ export function MatchHeadline({
   closing = false,
 }: {
   match: Match;
-  clock?: { seconds: number; status: string; running: boolean };
+  clock?: { seconds: number; status: string; running: boolean } | undefined;
   closing?: boolean;
 }) {
   return (
@@ -189,7 +187,7 @@ function Scoreboard({
   clock,
 }: {
   match: Match;
-  clock?: { seconds: number; status: string; running: boolean };
+  clock?: { seconds: number; status: string; running: boolean } | undefined;
 }) {
   return (
     <div className="mv-score" data-testid="match-score">
@@ -310,7 +308,7 @@ function TeamStats({ match }: { match: Match }) {
     { key: "뛴 거리", of: (s) => `${s.distanceKm.toFixed(1)}km` },
   ];
   return (
-    <table className="mv-stats" data-testid="match-stats">
+    <table data-testid="match-stats">
       <thead>
         <tr>
           <th className={weAreHome ? "ours" : "theirs"}>{match.home.short}</th>

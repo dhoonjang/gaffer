@@ -159,7 +159,8 @@ function foldFinanceFeed(ledger: readonly LedgerEntry[]): FinanceFeedRow[] {
   return order.slice(0, FINANCE_FEED_ROWS).map(({ key, row, head, items, refType }) => {
     if (items.length < 2) return row;
     // 접힌 줄은 여러 사람의 합이라 머리줄이 한 사람을 가리키지 않는다 — 손잡이는 명세에만
-    const rest = { ...row, playerId: undefined };
+    const rest: FinanceFeedRow = { ...row };
+    delete rest.playerId;
     // 접힌 줄은 항목명만 남기고 원래 라벨은 명세로 내려간다 — 큰 금액이 위로
     return {
       ...rest,
@@ -240,7 +241,7 @@ export function buildFinanceView(state: GameState): FinanceView {
   // ── 재정 (유저 팀) ──
   const line = (l: { category: string; amount: number }) => ({
     category: l.category,
-    label: FINANCE_CATEGORY_KO[l.category as keyof typeof FINANCE_CATEGORY_KO] ?? l.category,
+    label: (FINANCE_CATEGORY_KO as Readonly<Record<string, string>>)[l.category] ?? l.category,
     amount: l.amount,
   });
   const monthView = (

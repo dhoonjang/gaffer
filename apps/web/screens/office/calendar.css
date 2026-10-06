@@ -20,10 +20,11 @@
 .cal-months {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
-/* 월 최소 폭 360px 두 개와 열 간격 14px를 확보할 때만 2열로 편다. */
-@container (min-width: 734px) {
+/* 창이 아니라 **패널의 폭**에 맞춰 편다 — 월 최소 폭 360px 두 개와 열 간격(16)을 확보할 때만
+   2열이고, 넓어도 3열로 늘지 않는다. */
+@container (min-width: 736px) {
   .cal-months {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -31,17 +32,17 @@
 .cal-month {
   background: var(--panel);
   border-radius: var(--r-sm);
-  padding: 12px 12px 10px;
+  padding: 12px 12px 8px;
 }
 @container (max-width: 400px) {
   .cal-month {
     padding-inline: 8px;
   }
   .cal-cell {
-    padding-inline: 2px;
+    padding-inline: 4px;
   }
   .cal-fx {
-    padding-inline: 2px;
+    padding-inline: 4px;
     border-left-width: 2px;
   }
 }
@@ -54,7 +55,7 @@
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 4px;
 }
 .cal-dow {
   text-align: center;
@@ -72,7 +73,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-hair);
   text-align: left;
   color: var(--text);
   transition: background var(--ease);
@@ -91,13 +92,14 @@
 /* 고른 칸 — 분필 선 하나와 한 단 밝은 면. 테두리색으로 조작을 말하지 않는다 */
 .cal-cell.selected {
   background: var(--panel-2);
+  /* stylelint-disable-next-line gaffer/no-container-border -- 고른 날은 분필 선 하나로 선다(tokens.css 「표면·간격」) — 밝기 한 단만으로는 오늘 표식과 갈리지 않는다 */
   outline: 1px solid var(--pitch-line);
   outline-offset: -1px;
 }
 .cal-day {
   font-size: var(--fs-2xs);
   color: var(--text-2);
-  line-height: 1.2;
+  line-height: var(--lh-table);
 }
 /* 주말도 같은 잉크다 — 일요일이 붉으면 패의 색과 겹쳐 읽힌다 */
 .cal-day.sun,
@@ -107,22 +109,24 @@
 /* 오늘 — 날짜 밑의 키 컬러 선 하나 */
 .cal-cell.today .cal-day {
   align-self: flex-start;
-  padding-bottom: 1px;
+  padding-bottom: 0;
   color: var(--text);
   font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* 경기 칩 — 대회(컵만) / 홈·원정 + 상대 약칭 / 스코어.
-   **미진행 경기엔 "예정"을 쓰지 않는다** — 스코어 자리가 비어 있는 게 곧 예정이다 */
+   **미진행 경기엔 "예정"을 쓰지 않는다** — 스코어 자리가 비어 있는 게 곧 예정이다.
+   약칭과 스코어는 중간에서 줄을 나누지 않는다 — 좁은 칸에서는 홈·원정 표식과 약칭이 각각
+   한 줄로 서고, 달력 제목은 자리에 맞춰 줄을 바꾼다 */
 .cal-fx {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   border-radius: var(--r-xs);
-  padding: 2px 4px;
+  padding: 4px 4px;
   font-size: var(--fs-2xs);
-  line-height: 1.25;
+  line-height: var(--lh-table);
   background: var(--panel);
   /* 레일은 결과의 자리다 — 안 치른 경기는 비워 둔다 (폭은 지켜 칩이 밀리지 않게) */
   border-left: 3px solid transparent;
@@ -136,7 +140,7 @@
 .cal-fx-opp {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 3px;
+  gap: 0 4px;
   font-weight: 500;
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -189,7 +193,7 @@
 .cal-fx.pending .cal-fx-opp {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 3px;
+  gap: 0 4px;
   font-weight: 500;
 }
 
@@ -214,9 +218,9 @@
 .ev-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
-  padding: 1px 0;
+  padding: 0 0;
   border: none;
   background: none;
   color: inherit;
@@ -265,8 +269,8 @@
 /* 접힌 줄 수 — 펼칠 게 있다는 걸 숫자로만 알린다 */
 .ev-count {
   flex: 0 0 auto;
-  padding: 0 5px;
-  border-radius: 999px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
   background: var(--panel-2);
   color: var(--text-2);
   font-size: var(--fs-2xs);
@@ -277,12 +281,12 @@
   color: var(--accent-ink);
 }
 .ev-details {
-  margin: 2px 0 4px 19px;
+  margin: 4px 0 4px 20px;
   padding-left: 8px;
   border-left: 1px solid var(--border);
   color: var(--text-2);
   font-size: var(--fs-xs);
-  line-height: 1.7;
+  line-height: var(--lh-prose);
 }
 
 /* 표식 — 훈련(회색)·추첨(보라)·소식(회색)을 점으로만 알린다.
@@ -290,7 +294,7 @@
 /* 표식은 날짜 바로 아래에 붙인다 — 칸 바닥으로 밀면 빈 칸에서 홀로 떠 보인다 */
 .cal-marks {
   display: flex;
-  gap: 3px;
+  gap: 4px;
 }
 .cal-marks:empty {
   display: none;
@@ -333,8 +337,8 @@
   background: var(--panel-2);
   border-left: 2px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 10px 12px;
-  margin-top: 10px;
+  padding: 8px 12px;
+  margin-top: 8px;
 }
 .cal-detail-head {
   display: flex;
@@ -359,8 +363,8 @@
   display: grid;
   grid-template-columns: 34px 13px minmax(0, 1fr);
   align-items: baseline;
-  gap: 2px 6px;
-  padding: 2px 0;
+  gap: var(--sp-hair) 8px;
+  padding: 4px 0;
   font-size: var(--fs-sm);
 }
 .cal-sched-time {
@@ -375,7 +379,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 .cal-sched-name {
@@ -438,9 +442,9 @@
 .cal-detail-sub {
   color: var(--text-2);
   font-size: var(--fs-sm);
-  padding: 1px 0;
+  padding: 0 0;
 }
 .cal-detail-line {
   font-size: var(--fs-sm);
-  padding: 2px 0;
+  padding: 4px 0;
 }

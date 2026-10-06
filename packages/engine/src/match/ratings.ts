@@ -74,10 +74,10 @@ const NOTE_MAX = 120;
 /** 경기 평점 — 소수 첫째 자리까지 (3.0~10.0) */
 export function matchRating(f: MatchRatingFacts): number {
   let r = RATING_BASE + OUTCOME_DELTA[f.outcome];
-  r += f.goals * (GOAL_CREDIT[f.group] ?? 1);
+  r += f.goals * GOAL_CREDIT[f.group];
   r += f.assists * ASSIST_CREDIT;
-  if (f.conceded === 0) r += CLEAN_SHEET[f.group] ?? 0;
-  else r -= Math.max(0, f.conceded - FREE_CONCEDE) * (CONCEDE_PENALTY[f.group] ?? 0);
+  if (f.conceded === 0) r += CLEAN_SHEET[f.group];
+  else r -= Math.max(0, f.conceded - FREE_CONCEDE) * CONCEDE_PENALTY[f.group];
   r -= f.yellows * YELLOW_PENALTY;
   r -= f.reds * RED_PENALTY;
   return roundRating(Math.min(RATING_MAX, Math.max(RATING_MIN, r)));

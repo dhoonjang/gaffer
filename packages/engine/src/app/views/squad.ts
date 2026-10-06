@@ -780,13 +780,13 @@ export function buildSquadView(state: GameState): SquadView {
         fatigue: Math.round(fatigueOf(p.state)),
         injuryHistory: injuryHistoryOf(state, p.id),
 
-        role: (liveMatchId
+        role: liveMatchId
           ? liveSlot
             ? ROLE_KO[liveSlot.role]
             : "스쿼드"
           : assignment
             ? ROLE_KO[assignment.role]
-            : "스쿼드") as SquadViewRow["role"],
+            : "스쿼드",
         assignedPosition: assignedSlot,
         roleId: slotted && assignedSlot ? (assignedRoleId ?? defaultRoleOf(assignedSlot)) : null,
         roleOptions:
@@ -824,7 +824,7 @@ export function buildSquadView(state: GameState): SquadView {
           assignedSlot ?? facts.position,
         ),
         isCaptain: p.isCaptain,
-        isViceCaptain: p.isViceCaptain === true,
+        isViceCaptain: p.isViceCaptain,
         seasonGoals: stat?.goals ?? 0,
         seasonApps: stat?.apps ?? 0,
         seasonByCompetition: byCompetition.length < 2 ? [] : byCompetition,

@@ -40,7 +40,14 @@ import {
  * `closeTurn`이 장면·시계·결산을 받아 적는다. 세 단계가 주고받는 것은 이번 턴의
  * 장부(`TurnLedger`)와 턴 앞이 남긴 것(`TurnOpening`)뿐이다.
  */
-import type { MailMessage, BoardMove, MatchEvent, MediaFact, TickEvent } from "@gaffer/domain";
+import type {
+  MailMessage,
+  BoardMove,
+  MatchEvent,
+  MediaFact,
+  TickEvent,
+  LorebookInjection,
+} from "@gaffer/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@gaffer/llm";
 import { reportTraining } from "../evaluators/training-rater";
 import {
@@ -305,7 +312,7 @@ async function openTurn(
 interface GmCall {
   result: TurnResult;
   /** 이번 턴에 세운 인물 카드 — 턴 뒤가 기록으로 남긴다 */
-  characters: import("@gaffer/domain").LorebookInjection[];
+  characters: LorebookInjection[];
   /**
    * 이 호출의 스냅샷이 비운 소식·기사 — 넘김으로 장면 없이 끝난 턴은 아무도 전하지
    * 않았으므로 다음 평시 턴에 되돌린다 (agents.md §2).

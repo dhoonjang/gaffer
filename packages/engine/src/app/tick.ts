@@ -737,7 +737,7 @@ export function settleQuickMatch(
     }
   }
   // 결승의 평점은 두 팀을 다 센 뒤에 한 번 적는다 — 결승 MOM이 읽을 유일한 재료다
-  if (finalRatings && match.result) match.result = { ...match.result, ratings: finalRatings };
+  if (finalRatings) match.result = { ...match.result, ratings: finalRatings };
   /**
    * 피로 — **뛴 시간만큼, 그리고 자리와 전술이 정한 만큼.**
    *

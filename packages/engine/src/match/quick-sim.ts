@@ -17,7 +17,7 @@ import {
   DEFAULT_TACTICS,
   FAMILIARITY_BASELINE,
   PHASE_END,
-  POSITION_WEIGHTS,
+  type POSITION_WEIGHTS,
   RATING_MAX,
   TACTIC_SCALE_NEUTRAL,
   naturalPositionOf,
@@ -78,22 +78,22 @@ export interface SimSquad {
   /** 선발 11명 (이미 부상·정지 필터를 거친 상태) */
   starters: GamePlayer[];
   /** 전술판 자리·역할·적응도. 없으면 주 포지션의 자연스러운 슬롯으로 조립한다. */
-  slots?: LineupSlot[];
-  tactics?: TacticsSpec;
-  managerTactics?: number;
+  slots?: LineupSlot[] | undefined;
+  tactics?: TacticsSpec | undefined;
+  managerTactics?: number | undefined;
   /** 벤치 — 교체 자원. 없으면 교체가 일어나지 않는다 */
-  bench?: GamePlayer[];
+  bench?: GamePlayer[] | undefined;
   /**
    * 선수 id → 전술 적응도. **교체로 들어온 선수가 자기 값으로 서게 한다** —
    * 벤치 선수는 `slots`에 없어서, 이 지도가 없으면 나간 선수의 값을 물려받는다.
    */
-  familiarity?: Record<string, number>;
+  familiarity?: Record<string, number> | undefined;
   /** 선수 id → 부상 성향 배수 (`injury.ts`의 `pronenessOf`). 없으면 1 */
-  proneness?: Record<string, number>;
+  proneness?: Record<string, number> | undefined;
   /** 감독이 지정한 죽은 공 키커 — 없으면 능력 최고가 찬다 (match.md §3.5) */
-  setPieceTakers?: SetPieceTakers;
+  setPieceTakers?: SetPieceTakers | undefined;
   /** 세트피스 지시 — 가담·수비 두 축. 없으면 둘 다 중립이다 */
-  setPieceRoutine?: SetPieceRoutine;
+  setPieceRoutine?: SetPieceRoutine | undefined;
 }
 
 /**
@@ -747,13 +747,16 @@ function runTimeline(input: TimelineInput): TimelineResult {
       player.attributes.stamina,
     );
 
-  /** 이 구간의 판 — 온필드·전술·스코어가 바뀌면 다시 세운다 */
-  let board: {
+  /**
+   * 이 구간의 판 — 온필드·전술·스코어가 바뀌면 다시 세운다. `buildBoard`가 클로저 안에서
+   * 채우므로 흐름 분석에 맡기지 않고 타입을 넓혀 둔다
+   */
+  let board = null as {
     ratings: Record<MatchSide, TeamRatings>;
     xg: Record<MatchSide, number>;
     possession: { home: number; away: number };
     shooters: Record<MatchSide, Array<{ player: GamePlayer; weight: number }>>;
-  } | null = null;
+  } | null;
   const buildBoard = () => {
     const active = { home: activeAt("home", t), away: activeAt("away", t) };
     const possession = possessionOf(

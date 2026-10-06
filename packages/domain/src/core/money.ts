@@ -19,7 +19,7 @@ export const formatMoney = (amount: number): string =>
 
 /** 천 단위 구분 — `toLocaleString`은 런타임 로케일을 타므로 직접 찍는다 */
 const THOUSANDS = /\B(?=(\d{3})+(?!\d))/g;
-/** 음수 부호는 하이픈이 아니라 U+2212 — 하이픈은 구간·스코어와 헷갈린다 (design-system.md §3) */
+/** 음수 부호는 하이픈이 아니라 U+2212 — 하이픈은 구간·스코어와 헷갈린다 (tokens.css 「숫자와 표기」) */
 const MINUS = "\u2212";
 
 /**
@@ -31,7 +31,7 @@ export const formatPounds = (amount: number): string => {
   return `${amount < 0 && whole > 0 ? MINUS : ""}£${String(whole).replace(THOUSANDS, ",")}`;
 };
 
-/** 스코어 구분자 — en dash 양옆 hair space (design-system.md §3 「숫자와 표기」) */
+/** 스코어 구분자 — en dash 양옆 hair space (tokens.css 「숫자와 표기」) */
 const SCORE_DASH = "\u200A\u2013\u200A";
 /** 승부차기 괄호 안은 hair space 없이 en dash만 — 본 스코어와 무게가 갈린다 */
 const PENALTY_DASH = "\u2013";
@@ -52,6 +52,6 @@ export const formatScore = (
 /** 평점 자릿수 — 경기 평점은 한 자리(`7.3`), 시즌 평균은 두 자리(`7.28`) */
 const RATING_DECIMALS: Record<"match" | "season", number> = { match: 1, season: 2 };
 
-/** 평점 표기 — 경기와 시즌이 자릿수로 갈린다 (match.md 평점 · design-system.md §3) */
+/** 평점 표기 — 경기와 시즌이 자릿수로 갈린다 (match.md 평점 · tokens.css 「숫자와 표기」) */
 export const formatRating = (value: number, kind: "match" | "season"): string =>
   value.toFixed(RATING_DECIMALS[kind]);

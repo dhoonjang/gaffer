@@ -37,9 +37,11 @@ function fatigueTone(fatigue: number): string {
  * 두 색으로 선다 — 색의 경계도 여기서 정하지 않고 코어가 정한다.
  *
  * **누적 피로를 알면 색은 피로다** (player.md §5.5) — 길이가 오늘 남은 다리,
- * 색이 시즌이 쌓은 잔고다. 피로를 모르는 막대(경기 판세·상대)는 체력 밴드로 칠한다.
+ * 색이 시즌이 쌓은 잔고다. 피로를 모르는 막대(경기 판세·상대)와 경기 중의 명단 막대는
+ * 체력 밴드로 칠한다 — 그 자리의 색은 오늘 남은 다리다. 피로는 색으로만 서고 숫자·낱말로
+ * 적지 않는다 — 막대 옆과 툴팁에는 체력만 선다.
  */
-export function ConditionBar({ c, fatigue }: { c: ConditionRead; fatigue?: number }) {
+export function ConditionBar({ c, fatigue }: { c: ConditionRead; fatigue?: number | undefined }) {
   const known = c.low === c.high;
   const condition = `체력 ${known ? c.value : `${c.low}~${c.high}`}`;
   const style =

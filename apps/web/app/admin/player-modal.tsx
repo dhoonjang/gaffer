@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconClose } from "@/shared/icons";
 import {
   ASSOCIATIONS,
   CatalogPlayerCreateSchema,
@@ -24,6 +25,7 @@ import {
   type PlayerRow,
   type TeamGroup,
 } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 선수 편집 창 — 목록의 요약 행에서 열린다. 추가와 편집이 같은 창을 쓴다.
@@ -63,7 +65,7 @@ export function PlayerModal({
 }: {
   mode: Mode;
   /** 편집 모드에서만 있다 */
-  player?: PlayerRow;
+  player?: PlayerRow | undefined;
   /** 리그로 묶은 팀 — 셀렉트의 `optgroup` 순서 그대로다 */
   teamGroups: TeamGroup[];
   defaultTeamId: string;
@@ -163,7 +165,7 @@ export function PlayerModal({
           body: JSON.stringify(parsed.data),
         },
       );
-      const data: CatalogResponse = await res.json();
+      const data = (await res.json()) as CatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "요청 실패");
       onSaved(data);
     } catch (e) {
@@ -182,7 +184,7 @@ export function PlayerModal({
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/catalog/player/${player.id}`, { method: "DELETE" });
-      const data: CatalogResponse = await res.json();
+      const data = (await res.json()) as CatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "삭제 실패");
       onSaved(data);
     } catch (e) {
@@ -205,26 +207,27 @@ export function PlayerModal({
       onClose={onClose}
       footer={
         <>
-          <button
-            className="primary-btn"
+          <Button
+            variant="primary"
             onClick={() => void save()}
             disabled={saving || !nameKo.trim()}
             data-testid="player-modal-save"
           >
             {saving ? "저장 중…" : mode === "create" ? "카탈로그에 추가" : "저장"}
-          </button>
-          <button className="ghost-btn" onClick={onClose} disabled={saving}>
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
             취소
-          </button>
+          </Button>
           {mode === "edit" && (
-            <button
-              className="ghost-btn admin-modal-danger"
+            <Button
+              variant="danger"
+              className="admin-modal-danger"
               onClick={() => void remove()}
               disabled={saving}
               data-testid="player-modal-delete"
             >
               삭제
-            </button>
+            </Button>
           )}
         </>
       }
@@ -328,9 +331,14 @@ export function PlayerModal({
         <section>
           <div className="admin-section-head">
             <b className="admin-section-title">포지션</b>
-            <button className="mini-btn" onClick={addPos} data-testid="player-modal-pos-add">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={addPos}
+              data-testid="player-modal-pos-add"
+            >
               + 포지션
-            </button>
+            </Button>
           </div>
           <div className="admin-pos-rows">
             <div className="admin-pos-row admin-pos-head">
@@ -383,13 +391,14 @@ export function PlayerModal({
                     aria-label={`${p.position} 적응도 값`}
                   />
                 </span>
-                <button
-                  className="mini-btn del"
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() => setPositions((cur) => cur.filter((_, j) => j !== i))}
                   aria-label={`${p.position} 삭제`}
                 >
-                  ✕
-                </button>
+                  <IconClose size={12} />
+                </Button>
               </div>
             ))}
           </div>
@@ -411,7 +420,7 @@ export function PlayerModal({
         </div>
         <div className="admin-axis-groups">
           {AXIS_GROUP_KEYS.map((group) => (
-            <div className="admin-axis-group" key={group}>
+            <div key={group}>
               <span className="admin-axis-group-name">{AXIS_GROUP_KO[group]}</span>
               <div className="admin-axes">
                 {AXIS_GROUPS[group].map((axis: AttributeAxis) => (

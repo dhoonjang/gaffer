@@ -40,7 +40,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-import { agentMinCacheableInput, type AgentName, type LlmEnv } from "./config";
+import { agentMinCacheableInput, type AgentName, type LlmEnv, type EvaluatorName } from "./config";
 import { TypesafeEvaluationError } from "./typesafe-adapter";
 import { gameVersion } from "./game-version";
 import {
@@ -54,6 +54,7 @@ import {
   type TurnResult,
   type TurnUsage,
 } from "./game-llm";
+import type { EvaluationRequest, GameEvaluator } from "./game-evaluator";
 
 /**
  * 게임당 남는 **호출 원문** 수 — 넘치면 오래된 파일부터 지운다.
@@ -129,7 +130,7 @@ interface TurnTraceTool {
 
 /** 이 호출이 모델에 보낸 것 — `TurnRequest`를 직렬화 가능한 모양으로만 옮긴다 */
 interface TurnTraceRequest {
-  evaluation?: { questions: import("./game-evaluator").EvaluationRequest["questions"] };
+  evaluation?: { questions: EvaluationRequest["questions"] };
   /** 시스템 프롬프트 블록 — 문자열 하나로 온 것도 블록 하나로 적는다 */
   system: string[];
   /** 넘긴 이력 원문 (제공자 원형 메시지 또는 텍스트 이력) */
@@ -379,7 +380,8 @@ function appendedMessages(result: TurnResult): unknown[] {
 function charsOf(value: unknown): number {
   if (typeof value === "string") return value.length;
   try {
-    return JSON.stringify(value)?.length ?? 0;
+    // undefined·함수는 문자열이 아니라 undefined가 된다
+    return (JSON.stringify(value) as string | undefined)?.length ?? 0;
   } catch {
     return 0;
   }
@@ -624,7 +626,7 @@ export async function traceTurn<T>(
  */
 export async function traceBoard<T>(
   gameId: string,
-  run: () => Promise<T>,
+  run: () => T | Promise<T>,
   env: LlmEnv = process.env,
   limits: TraceLimits = TRACE_LIMITS,
 ): Promise<T> {
@@ -634,7 +636,7 @@ export async function traceBoard<T>(
 async function traceScope<T>(
   shelf: TraceShelf,
   gameId: string,
-  run: () => Promise<T>,
+  run: () => T | Promise<T>,
   env: LlmEnv,
   limits: TraceLimits,
 ): Promise<T> {
@@ -1124,10 +1126,10 @@ function pruneTraces(gameId: string, limits: TraceLimits): void {
 
 /** Typed evaluations occupy the same timeline without pretending to generate prose. */
 export function tapEvaluator(
-  evaluator: import("./game-evaluator").GameEvaluator,
-  agent: import("./config").EvaluatorName,
+  evaluator: GameEvaluator,
+  agent: EvaluatorName,
   env: LlmEnv = process.env,
-): import("./game-evaluator").GameEvaluator {
+): GameEvaluator {
   if (!traceEnabled(env)) return evaluator;
   return {
     async evaluate(request) {

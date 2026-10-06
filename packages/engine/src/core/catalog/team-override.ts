@@ -89,10 +89,10 @@ const load = catalogSource<TeamOverride | null>(() => {
   const o = asRecord(readOverride(teamCatalogPath()));
   if (o === null) return null;
   if (!Array.isArray(o.teams) || o.teams.length === 0 || !o.teams.every(isTeamEntry)) return null;
-  if (hasDuplicateIds(o.teams as TeamCatalogEntry[])) return null;
+  if (hasDuplicateIds(o.teams)) return null;
   if (!isStyleMap(o.tacticalStyle) || !isProfileMap(o.clubProfiles)) return null;
   return {
-    teams: o.teams as TeamCatalogEntry[],
+    teams: o.teams,
     tacticalStyle: o.tacticalStyle,
     clubProfiles: o.clubProfiles,
   };

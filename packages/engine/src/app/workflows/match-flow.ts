@@ -51,7 +51,6 @@ import {
   milestoneNote,
   restoreTactics,
 } from "../../match/match-flow";
-import { DEFAULT_KICKOFF } from "../../core/dates";
 import { matchesOn, isFriendly } from "../../core/calendar";
 import { quickSimulate, quickSimKeyOf, quickSimOptionsOf } from "../../match/quick-sim";
 import { derbyForMatch } from "../../core/derby";
@@ -92,14 +91,14 @@ export function buildAiLiveMatch(state: GameState, match: MatchRecord): LiveMatc
  */
 function rollConcurrentMatches(state: GameState, ours: MatchRecord): PendingMatch["otherScores"] {
   if (ours.competitionId === null) return [];
-  const kickoff = ours.time ?? DEFAULT_KICKOFF;
+  const kickoff = ours.time;
   const rows: PendingMatch["otherScores"] = [];
   for (const match of matchesOn(state.matches, state.date)) {
     if (match.result || match.id === ours.id) continue;
     if (match.competitionId !== ours.competitionId) continue;
     // 2군 리그는 조용히 돈다 — 옆 구장의 스코어가 아니다
     if (isReserveMatch(match)) continue;
-    if ((match.time ?? DEFAULT_KICKOFF) !== kickoff) continue;
+    if (match.time !== kickoff) continue;
     const result = quickSimulate(
       simSquadOf(state, match.homeTeamId, match.competitionId),
       simSquadOf(state, match.awayTeamId, match.competitionId),
@@ -111,7 +110,7 @@ function rollConcurrentMatches(state: GameState, ours: MatchRecord): PendingMatc
     const goals = result.scorers
       .map((entry, i) => ({
         minute: minutes[i] ?? 0,
-        side: parseScorerEntry(entry).side ?? ("home" as MatchSide),
+        side: parseScorerEntry(entry).side ?? "home",
       }))
       .sort((a, b) => a.minute - b.minute);
     rows.push({ matchId: match.id, goals });
@@ -190,7 +189,7 @@ export function startMatch(state: GameState): FlowResult {
       matchId: match.id,
       competitionId: match.competitionId,
       stage: match.stage,
-      round: match.round ?? null,
+      round: match.round,
       neutral: match.neutral === true,
       derby: derby ? { name: derby.name, heat: derby.heat } : null,
       userSide: userIsHome ? "home" : "away",
@@ -445,7 +444,7 @@ export function finalizeMatch(state: GameState): MatchDigest {
   // 재정 — 매치데이(관중)·생중계 수당·승리 수당·원정 비용 (finance.ts)
   applyMatchFinance(state, match, outcome, financeLines);
 
-  const pens = match.result?.penalties;
+  const pens = match.result.penalties;
   const scoreline =
     `${ledger.score.home}:${ledger.score.away}` +
     (wentToExtraTime(ledger) ? " (연장)" : "") +
@@ -478,15 +477,15 @@ export function finalizeMatch(state: GameState): MatchDigest {
       competitionId: match.competitionId,
       score: { home: ledger.score.home, away: ledger.score.away },
       outcome,
-      shots: { home: result?.homeShots ?? 0, away: result?.awayShots ?? 0 },
-      xg: { home: result?.homeXg ?? 0, away: result?.awayXg ?? 0 },
-      expectedGoals: { home: result?.homeExpectedGoals ?? 0, away: result?.awayExpectedGoals ?? 0 },
+      shots: { home: result.homeShots, away: result.awayShots },
+      xg: { home: result.homeXg, away: result.awayXg },
+      expectedGoals: { home: result.homeExpectedGoals, away: result.awayExpectedGoals },
       possession,
-      aet: result?.aet === true,
-      penalties: result?.penalties
+      aet: result.aet === true,
+      penalties: result.penalties
         ? { home: result.penalties.home, away: result.penalties.away }
         : null,
-      ratings: { ...(result?.ratings ?? {}) },
+      ratings: { ...(result.ratings ?? {}) },
       fatigue: { ...drained },
       digest: { ours: [...digest], finance: [...financeLines], others: [...otherLines] },
     });

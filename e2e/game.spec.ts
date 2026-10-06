@@ -94,14 +94,14 @@ async function expectOvrConsistent(page: Page) {
       if (!el) return "";
       const clone = el.cloneNode(true) as Element;
       clone.querySelector(".shirt-no")?.remove();
-      return (clone.textContent ?? "").replace("Ⓒ", "").trim();
+      return clone.textContent.replace("Ⓒ", "").trim();
     };
     const chips = [...document.querySelectorAll(".pitch-slot")].map((el) => ({
       name: nameIn(el.querySelector(".slot-name")),
       ovr: (el.querySelector(".slot-meta b")?.textContent ?? "").trim(),
     }));
     const heads = [...document.querySelectorAll(".squad-table thead th")];
-    const col = heads.findIndex((h) => (h.textContent ?? "").includes("OVR"));
+    const col = heads.findIndex((h) => h.textContent.includes("OVR"));
     const rows = [...document.querySelectorAll(".squad-table tbody tr")];
     const out: string[] = [];
     let compared = 0;
@@ -177,7 +177,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   await expect(page.getByTestId("chat-input")).toBeFocused();
   /**
    * GM의 제안이 placeholder로 서고, 빈 입력에서 Tab이 그것을 채운다 — 안내 문구는 없다
-   * (design-system.md §6). 채워지는 순간 손잡이는 보내기다. mock의 제안은 표의 키라
+   * (composer.tsx `suggestion`). 채워지는 순간 손잡이는 보내기다. mock의 제안은 표의 키라
    * 그대로 보내도 한 줄이 걸린다 (agents.md §8).
    */
   await expect(input).toHaveAttribute("placeholder", /.+/);
@@ -211,7 +211,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   await expect(page.getByTestId("tool-시간 경과")).toHaveCount(0);
   /*
    * 칩으로 서지 않는 대신 **사건 카드**로 선다 — 넘긴 시간이 남긴 사실 하나에
-   * 카드 하나다(overview.md §2 · design-system.md §6). 이 턴들은 본문이 비어 있다
+   * 카드 하나다(overview.md §2 · chat.tsx `TickEvents`). 이 턴들은 본문이 비어 있다
    * (대본이 시점 헤더만 낸다) — 그래도 카드는 서야 하고, 그것이 이 자리에서 재는
    * 것이다. 카드가 없다면 코어→에이전트→화면 어딘가에서 배열이 한 문자열로 접혔다는
    * 뜻이다. 경기일에 닿은 턴은 적어도 「경기일 — …」 하나를 싣는다
@@ -677,7 +677,7 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   const inName = await benchRow.locator(".row-name").evaluate((el) => {
     const clone = el.cloneNode(true) as Element;
     clone.querySelector(".shirt-no")?.remove();
-    return (clone.textContent ?? "").replace("Ⓒ", "").trim();
+    return clone.textContent.replace("Ⓒ", "").trim();
   });
   const beforeXI = await page.locator(".pitch-slot .slot-name").allTextContents();
   await benchRow.click();

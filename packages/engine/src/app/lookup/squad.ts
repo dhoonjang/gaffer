@@ -42,9 +42,9 @@ import {
 } from "../../core/state";
 import { headCoachOf, staffOf } from "../../people/persona";
 import {
-  LookupResult,
+  type LookupResult,
   armband,
-  DisciplineFixture,
+  type DisciplineFixture,
   disciplineFixtureOf,
   statLine,
   contractLabel,
@@ -57,9 +57,9 @@ interface SquadViewInput {
   /**
    * 1군 / 2군 / 전체 — 기본 1군 (2군 18명까지 매번 읽을 이유가 없다).
    */
-  level?: "first" | "reserve" | "all";
+  level?: "first" | "reserve" | "all" | undefined;
   /** 배치 역할로 좁히기 — starting(선발 11) / bench / unassigned(예비) */
-  role?: "starting" | "bench" | "unassigned";
+  role?: "starting" | "bench" | "unassigned" | undefined;
 }
 
 /**
@@ -103,9 +103,7 @@ function assignedRow(
     suspension
       ? `정지 ${suspension.lengthMatches - suspension.served}경기(${suspensionScopeName(suspension)})`
       : null,
-    banNext && next !== null
-      ? `${competitionShortName(next.competitionId)} 경고 ${yellows}장(정지 임박)`
-      : null,
+    banNext ? `${competitionShortName(next.competitionId)} 경고 ${yellows}장(정지 임박)` : null,
     /**
      * **다치기 전에 서는 유일한 줄이다** (player.md §5.3) — 부상 플래그는 이미
      * 쓰러진 뒤의 사실이라, 이 줄이 없으면 라인업을 세우는 자리에서 감독이 몸의

@@ -90,7 +90,7 @@ export function MatchReportPanel({
     return (
       <div className="mr">
         {head && <ReportHead facts={head} rows={goalIndexOf(head.goals)} />}
-        {/* 아직 안 온 표 자리에만 분필 점 셋이 돈다 — 스켈레톤 펄스는 없다 (design-system §5) */}
+        {/* 아직 안 온 표 자리에만 분필 점 셋이 돈다 — 스켈레톤 펄스는 없다 (tokens.css 「모션」) */}
         <div className="thinking" role="status" aria-label="경기 리포트 불러오는 중">
           <i />
           <i />
@@ -194,7 +194,7 @@ function headFactsOf(report: MatchReportView): HeadFacts {
 }
 
 /**
- * 이 쪽 이름이 받을 잉크의 층 — **우리 1층, 상대 3층** (design-system §2 충돌 규칙 7).
+ * 이 쪽 이름이 받을 잉크의 층 — **우리 1층, 상대 3층** (tokens.css 「구단 색」 충돌 규칙 7).
  * 달력 상세는 우리가 뛰지 않은 경기도 여는데, 그때는 가릴 편이 없으므로 한쪽을 흐리지
  * 않는다 — 편을 가르는 것은 자리와 문장뿐이다.
  */
@@ -207,7 +207,7 @@ function sideClass(ours: boolean, otherOurs: boolean): string {
  * 머리와 「주요 사건」 — **경기 화면의 스코어보드와 같은 해부**(match.md §8):
  * 문장 · 팀 이름 · 가운데 스코어 · 결과어.
  *
- * **구단 토큰을 하나도 읽지 않는다** (design-system §2 「주입」). 종료 카드는 경기가
+ * **구단 토큰을 하나도 읽지 않는다** (tokens.css 「구단 색」 주입). 종료 카드는 경기가
  * 끝난 뒤 `.app`이 우리 구단을 세운 채로 서고 달력 상세는 남의 경기도 여는데, 편을
  * 가르는 셋 — 자리 · 문장 · 잉크 — 은 전부 카드가 받은 사실에서 나오므로 어느 자리에
  * 서든 같은 답이 된다.
@@ -423,7 +423,7 @@ const COLS: StatCol[] = [
 const COL_SPAN = COLS.length + 5;
 
 /** 0은 숫자로 세우지 않는다 — 열한 행 × 아홉 칸이 0으로 덮이면 골이 안 보인다 */
-function Cell({ value, decimals }: { value: number; decimals?: number }) {
+function Cell({ value, decimals }: { value: number; decimals?: number | undefined }) {
   if (value === 0) return <span className="mr-zero">·</span>;
   return <>{decimals === undefined ? value : value.toFixed(decimals)}</>;
 }
@@ -514,7 +514,7 @@ function PlayerTable({
  * 이 경기가 표를 옮긴 몫 — 「12위 → 9위」 (match.md §8). 리그전이 아니거나 우리
  * 경기가 아니면 리포트에 실리지 않으므로(`null`) 절도 서지 않는다.
  *
- * 방향은 화살표 글리프가 아니라 꺾쇠 픽토그램과 색이 낸다 (design-system §3).
+ * 방향은 화살표 글리프가 아니라 꺾쇠 픽토그램과 색이 낸다 (tokens.css 「숫자와 표기」).
  * 제자리면 두 값이 같으므로 한 번만 선다.
  */
 function Standings({ standings }: { standings: MatchReportView["standings"] }) {

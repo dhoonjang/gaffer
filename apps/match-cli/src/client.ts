@@ -39,7 +39,7 @@ interface Snapshot {
   shootout?: { message: string; done: boolean };
 }
 
-async function call(body: unknown | null): Promise<Snapshot> {
+async function call(body: unknown): Promise<Snapshot> {
   const res = await fetch(`${host}/api/games/${game}/match/live`, {
     method: body ? "POST" : "GET",
     ...(body

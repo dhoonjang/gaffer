@@ -186,7 +186,7 @@ export interface TurnRequest {
    * 텍스트 델타 콜백 — 지정하면 어댑터가 스트리밍 모드로 응답을 받아
    * 서사 텍스트 조각을 도착 즉시 흘려보낸다 (채팅 스트리밍용).
    */
-  onText?: (delta: string) => void;
+  onText?: ((delta: string) => void) | undefined;
   /**
    * 이 호출의 중단 신호 — **시한 래퍼가 넣는다**(`withDeadline`). 어댑터는 자기
    * SDK가 아는 자리로 옮기기만 한다. 넘기지 않으면 시한이 지나도 소켓이 그대로

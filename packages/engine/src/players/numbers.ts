@@ -223,7 +223,7 @@ export function assignRequestedNumber(
   state: GameState,
   player: GamePlayer,
   number: number,
-  options: { take?: boolean } = {},
+  options: { take?: boolean | undefined } = {},
 ): { ok: true; assignment: NumberAssignment } | { ok: false; block: SquadNumberBlock } {
   if (!Number.isInteger(number) || number < SQUAD_NUMBER_MIN || number > SQUAD_NUMBER_MAX) {
     return { ok: false, block: { code: "out-of-range", number } };

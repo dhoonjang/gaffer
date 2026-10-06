@@ -15,9 +15,9 @@ import { isNegotiationParty, proposalVisibleTo } from "../team/negotiation";
 interface MailResult {
   ok: boolean;
   message: string;
-  threadId?: string;
-  messageId?: string;
-  replayed?: boolean;
+  threadId?: string | undefined;
+  messageId?: string | undefined;
+  replayed?: boolean | undefined;
 }
 const fail = (message: string): MailResult => ({ ok: false, message });
 export function resolveMailRecipient(state: GameState, raw: unknown): MailContact | null {
@@ -258,8 +258,8 @@ export function recordMailReport(
     recipient: MailRecipient;
     subject: string;
     body: string;
-    negotiationId?: string;
-    references?: { playerIds: string[]; proposalIds: string[]; reportIds: string[] };
+    negotiationId?: string | undefined;
+    references?: { playerIds: string[]; proposalIds: string[]; reportIds: string[] } | undefined;
   },
 ): MailResult {
   const { key, ...raw } = input;

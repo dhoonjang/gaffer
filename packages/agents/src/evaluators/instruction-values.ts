@@ -31,7 +31,7 @@ function koreanNumber(text: string): number | undefined {
       if (pending !== undefined) return undefined;
       pending = Number(piece);
     } else if (SMALL_UNITS[piece]) {
-      const unit = SMALL_UNITS[piece]!;
+      const unit = SMALL_UNITS[piece];
       if (unit >= lastSmall) return undefined;
       group += (pending ?? 1) * unit;
       groupSpecified = true;

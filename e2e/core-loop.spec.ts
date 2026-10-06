@@ -134,7 +134,8 @@ test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 �
       request.url().endsWith(`/api/games/${fixture.gameId}/turn/stream`),
   );
   await page.getByTestId("chat-send").click();
-  expect((await sent).postDataJSON().mailMessageIds).toEqual([incoming.id]);
+  const body = (await sent).postDataJSON() as { mailMessageIds: unknown };
+  expect(body.mailMessageIds).toEqual([incoming.id]);
   await expect(input).toBeEnabled();
   await expect(page.getByTestId("mail-attachment")).toHaveCount(0);
   expect(

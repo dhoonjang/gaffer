@@ -41,7 +41,7 @@ import {
 import { leagueTableOf, pastSeasonsOf, seasonHistoryOf, seasonLabelOf } from "../../season/records";
 import { playerName, teamNameIn, teamShortNameIn, type GameState } from "../../core/state";
 import { VENUE_KO } from "./match-report";
-import { LookupResult, EVERY_TEAM, resolveTeam } from "./resolve";
+import { type LookupResult, EVERY_TEAM, resolveTeam } from "./resolve";
 
 // ── 리그 (순위·일정) ────────────────────────────────────
 
@@ -51,34 +51,34 @@ interface LeagueViewInput {
    * 기준 팀 — 생략하면 우리 팀. "all"이면 대회 전체 경기를 본다.
    * standings에서는 그 팀이 속한 리그의 순위표를 뜻한다.
    */
-  team?: string;
+  team?: string | undefined;
   /** fixtures 전용 — 상대 팀. 주면 그 팀과의 맞대결만 (전적 요약 포함) */
-  opponent?: string;
+  opponent?: string | undefined;
   /** 대회 이름·약어·id — 생략하면 모든 대회 (team이 "all"이면 우리 리그) */
-  competition?: string;
+  competition?: string | undefined;
   /**
    * 지나간 시즌 — 생략하면 지금 시즌이다. 순위표는 그 시즌의 **최종 표**를, 일정은
    * 결산 스냅샷에 남은 **감독 팀의 경기**를, 개인 순위는 그 시즌의 표를 낸다
    * (game-state.md §3.3: 지난 시즌은 경기가 아니라 표로 남고, 경기는 감독 팀의 것만
    * 남는다 — 그래서 개인 순위의 팀 열은 지나간 시즌에 서지 않는다).
    */
-  season?: number;
+  season?: number | undefined;
   /** 지난 경기만 / 예정만 / 둘 다 (기본 both) */
-  when?: "past" | "upcoming" | "both";
+  when?: "past" | "upcoming" | "both" | undefined;
   /** 날짜 범위 (YYYY-MM-DD, 포함) */
-  from?: string;
-  to?: string;
+  from?: string | undefined;
+  to?: string | undefined;
   /** 라운드 (리그는 R번호, 녹아웃은 차수) */
-  round?: number;
+  round?: number | undefined;
   /** 방향별 최대 경기 수 (기본 5, 맞대결·대회 전체는 10) · leaders에서는 표당 줄 수 */
-  count?: number;
+  count?: number | undefined;
   /**
    * standings 전용 — 합계 표인가 홈 표인가 원정 표인가 (기본 `all`).
    * 행은 같고 **순서만 다르다** (competition.md §2).
    */
-  split?: StandingSplitKey;
+  split?: StandingSplitKey | undefined;
   /** leaders 전용 — 한 축만 보기. 생략하면 다섯 축 전부 */
-  key?: LeaderboardKey;
+  key?: LeaderboardKey | undefined;
 }
 
 const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
@@ -155,7 +155,7 @@ function matchLine(
   const mark = teamId === null ? "" : ` ${outcomeLabel(outcomeFor(m, teamId))}`;
   return (
     `  지난 ${when} ${tag}${side} ${score}${mark}` +
-    `${detail ? `${shotNote(m)}${scorerNote(state, m)}` : ""}`
+    (detail ? `${shotNote(m)}${scorerNote(state, m)}` : "")
   );
 }
 
@@ -177,7 +177,7 @@ function cupBracketView(state: GameState, cupId: string): LookupResult {
         : "예정";
       lines.push(
         `  ${m.date} ${teamShortNameIn(state, m.homeTeamId)} ${score} ${teamShortNameIn(state, m.awayTeamId)}` +
-          `${ours ? " ←우리" : ""}`,
+          (ours ? " ←우리" : ""),
       );
     }
   }
@@ -366,7 +366,7 @@ function leaderValueLine(key: LeaderboardKey, row: LeaderRow): string {
       return `평점 ${(row.rating ?? 0).toFixed(2)}`;
     case "cleanSheets":
       return `무실점 ${row.cleanSheets}경기`;
-    default:
+    case "cards":
       return `징계 ${row.value}점 (경고 ${row.yellows} 퇴장 ${row.reds})`;
   }
 }
@@ -675,7 +675,7 @@ function fixturesView(state: GameState, input: LeagueViewInput): LookupResult {
 
   const scopeName = teamId
     ? teamNameIn(state, teamId)
-    : `${competitionName(competitionId!)} 전체 (모든 팀)`;
+    : `${competitionName(competitionId)} 전체 (모든 팀)`;
   const filters = [
     opponentId ? `vs ${teamNameIn(state, opponentId)}` : null,
     competitionId && teamId ? competitionName(competitionId) : null,

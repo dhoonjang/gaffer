@@ -1,4 +1,4 @@
-import { LorebookContentSchema } from "../people/lorebook";
+import { LorebookContentSchema, type LorebookContent } from "../people/lorebook";
 import { z } from "zod";
 import { DateString } from "../core/date-string";
 import { SQUAD_STATUSES, type SquadStatus } from "./squad-rules";
@@ -1453,8 +1453,8 @@ const roleWeightCache = new Map<string, AxisValues>();
 export function roleDistance(position: string, from: string, to: string): number {
   if (from === to) return 0;
   const defs = ROLE_DEFS[weightSlotOf(position)];
-  const a = (defs.find((r) => r.id === from) ?? defs[0]!).delta as Partial<AxisValues>;
-  const b = (defs.find((r) => r.id === to) ?? defs[0]!).delta as Partial<AxisValues>;
+  const a = (defs.find((r) => r.id === from) ?? defs[0]!).delta;
+  const b = (defs.find((r) => r.id === to) ?? defs[0]!).delta;
   let d = 0;
   for (const axis of ATTRIBUTE_AXES) d += Math.abs((a[axis] ?? 0) - (b[axis] ?? 0));
   return d;
@@ -1988,7 +1988,7 @@ export type Player = GamePlayer;
  * 16축을 평면 필드로 갖는다 (overall은 파생이라 저장하지 않는다).
  */
 interface PlayerCatalogMeta {
-  lorebook?: import("../people/lorebook").LorebookContent;
+  lorebook?: LorebookContent | undefined;
   id: string;
   /** 시드 시점 소속 팀 (TEAM_CATALOG) */
   teamId: string;
@@ -2001,30 +2001,30 @@ interface PlayerCatalogMeta {
    * 게임 선수와 시드 사이의 유일한 다리다.
    * 위키 문서가 없는 선수(합성·아카데미)는 QID가 없다.
    */
-  wikidataId?: string;
+  wikidataId?: string | undefined;
   /**
    * 실존 시드가 아니라 절차 생성으로 채운 사람 — 아카데미·2부 스쿼드가 그렇다.
    * id에는 아무 표시가 없으므로(선수 id는 출신도 소속도 담지 않는다) 여기서 안다.
    */
-  synthetic?: boolean;
+  synthetic?: boolean | undefined;
   /** 시드 시점 소속팀의 등번호. 번호가 공식 배정되지 않았으면 생략 */
-  squadNumber?: number;
+  squadNumber?: number | undefined;
   birthdate: string;
   /** 가능 포지션 + 적응도 초기치 → 게임 시작 시 그대로 복사 */
   positions: PlayerPosition[];
   /** 성장 상한 */
   potential: number;
   /** 홈그로운 자격 협회 (나라) — 없으면 어느 리그에서도 홈그로운이 아니다 */
-  homegrownCountry?: string;
+  homegrownCountry?: string | undefined;
   /** 국적 — 대표하는 협회의 FIFA 3자 코드 (`nationality.ts`) */
-  nationality?: string;
+  nationality?: string | undefined;
   /** 둘째 국적 — 하나만 담는다 (EU 자격을 가르는 자리다) */
-  secondNationality?: string;
+  secondNationality?: string | undefined;
   /** 주발 */
-  foot?: Foot;
+  foot?: Foot | undefined;
   /** 키(cm) · 체중(kg) */
-  height?: number;
-  weight?: number;
+  height?: number | undefined;
+  weight?: number | undefined;
   /**
    * 실제 주급 (£/주) — 새 게임의 초기 계약에 그대로 쓰인다.
    * 없으면(합성 선수·시드 미상) `wages.ts`의 모델이 계산한다 —
@@ -2032,21 +2032,21 @@ interface PlayerCatalogMeta {
    * 카탈로그는 불변 초기치이므로 여기 값은 "부임 시점의 계약"일 뿐,
    * 이후 계약은 `CONTRACT` 원장이 갖는다.
    */
-  weeklyWage?: number;
+  weeklyWage?: number | undefined;
   /**
    * **주장 완장** — 그 구단이 공표한 주장(`RealPlayerSeed.isCaptain`).
    * 구단당 한 명까지이고, 같은 사람이 부주장일 수 없다
    * (`engine/world/catalog-invariants.ts`). 없으면 새 게임이 배치에서
    * 파생한다 (`initialCaptainOf` — people/people.md §5-1).
    */
-  isCaptain?: boolean;
+  isCaptain?: boolean | undefined;
   /** 부주장 완장 — 같은 규칙. **파생으로 세우지 않는다**: 없으면 비운 채로 둔다 */
-  isViceCaptain?: boolean;
+  isViceCaptain?: boolean | undefined;
   /**
    * **계약 지위** — 새 게임의 초기 계약에 그대로 적힌다 (people/people.md §5-2).
    * 없으면 계약에 칸을 두지 않아 `squadStatusOf`가 서열에서 파생한다.
    */
-  squadStatus?: SquadStatus;
+  squadStatus?: SquadStatus | undefined;
 }
 export type PlayerCatalogEntry = PlayerCatalogMeta & AxisValues;
 

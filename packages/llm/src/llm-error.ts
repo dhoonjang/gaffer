@@ -79,6 +79,7 @@ export function kindOfStatus(status: number | undefined): LlmErrorKind {
     case 503:
     case 529:
       return "overloaded";
+    case undefined:
     default:
       return "unknown";
   }

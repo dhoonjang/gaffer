@@ -124,7 +124,10 @@ interface SeasonStatDelta {
  *
  * **0인 칸은 적지 않는다** — 없는 칸이 0이라는 `SeasonStat`의 규약이 여기서 선다.
  */
-export function addToSeasonStat(stat: SeasonStatTotal, delta: Partial<SeasonStatDelta>): void {
+export function addToSeasonStat(
+  stat: SeasonStatTotal,
+  delta: { [K in keyof SeasonStatDelta]?: SeasonStatDelta[K] | undefined },
+): void {
   stat.apps += delta.apps ?? 0;
   stat.goals += delta.goals ?? 0;
   if (delta.assists) stat.assists = (stat.assists ?? 0) + delta.assists;

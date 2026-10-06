@@ -7,8 +7,8 @@
  */
 /* 서체 선언이 맨 앞이다 — 토큰이 서체를 부르기 전에 @font-face가 먼저 서 있어야 한다 */
 @import "../shared/fonts.css";
-/* 화면 단계 토큰이 그다음이다 — 뒤의 모든 파일이 이 넷 중에서 고른다 */
-@import "../shared/breakpoints.css";
+/* 토큰이 그다음이다 — 뒤의 모든 파일이 이 목록에서 고른다 */
+@import "../shared/tokens.css";
 @import "../game/shell.css";
 @import "../shared/shared.css";
 @import "../screens/squad/squad.css";

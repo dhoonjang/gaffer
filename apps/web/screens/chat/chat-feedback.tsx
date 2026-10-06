@@ -2,6 +2,7 @@
 import type { ChatTurn } from "@gaffer/engine";
 import { ChatTurnView } from "./chat";
 import { IconClose } from "@/shared/icons";
+import { Button } from "@/shared/button";
 
 /** Transport owns pending state; both conversations present it in the same flow. */
 export function ChatTurnFeedback({
@@ -17,7 +18,7 @@ export function ChatTurnFeedback({
   date: string;
   playerNames?: Record<string, string>;
   userTurn?: ChatTurn;
-  onLongPress?: () => void;
+  onLongPress?: (() => void) | undefined;
 }) {
   return (
     <>
@@ -47,7 +48,7 @@ export function ChatTurnError({
 }: {
   error: string | null;
   detail?: string | null;
-  onRetry?: () => void;
+  onRetry?: (() => void) | undefined;
   onDismiss: () => void;
   disabled?: boolean;
 }) {
@@ -57,13 +58,13 @@ export function ChatTurnError({
       <span>{error}</span>
       <div className="turn-error-actions">
         {onRetry && (
-          <button onClick={onRetry} disabled={disabled}>
+          <Button variant="bare" onClick={onRetry} disabled={disabled}>
             다시 시도
-          </button>
+          </Button>
         )}
-        <button className="ghost" onClick={onDismiss} aria-label="알림 닫기">
+        <Button variant="bare" className="ghost" onClick={onDismiss} aria-label="알림 닫기">
           <IconClose size={14} />
-        </button>
+        </Button>
       </div>
     </div>
   );

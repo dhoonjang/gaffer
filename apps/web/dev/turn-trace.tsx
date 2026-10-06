@@ -14,6 +14,7 @@ import {
   traceToolFlow,
   type TraceToolStep,
 } from "./turn-trace-view";
+import { Button } from "@/shared/button";
 
 /**
  * 턴 원문 뷰어 — **개발 도구다.** 게임의 화자가 아니라 우리가 읽는 창이라
@@ -57,10 +58,10 @@ function TraceBlock({
   children,
 }: {
   label: string;
-  meta?: string;
+  meta?: string | undefined;
   open?: boolean;
   json?: boolean;
-  tone?: "in" | "out";
+  tone?: "in" | "out" | undefined;
   children: string;
 }) {
   return (
@@ -100,7 +101,8 @@ function useCopy() {
 function BlockCopy({ value }: { value: string }) {
   const { done, copy } = useCopy();
   return (
-    <button
+    <Button
+      variant="bare"
       className="tt-block-copy"
       title="이 블록만 복사"
       onClick={(e) => {
@@ -110,7 +112,7 @@ function BlockCopy({ value }: { value: string }) {
       }}
     >
       {done ? "복사됨" : "복사"}
-    </button>
+    </Button>
   );
 }
 
@@ -124,9 +126,14 @@ function BlockCopy({ value }: { value: string }) {
 function CallId({ id }: { id: string }) {
   const { done, copy } = useCopy();
   return (
-    <button className="tt-call-id" title={`복사 — pnpm log ${id}`} onClick={() => void copy(id)}>
+    <Button
+      variant="bare"
+      className="tt-call-id"
+      title={`복사 — pnpm log ${id}`}
+      onClick={() => void copy(id)}
+    >
       {done ? "복사됨" : id}
-    </button>
+    </Button>
   );
 }
 
@@ -384,7 +391,7 @@ function TraceTimeline({
   const bad = record.entries.filter((entry) => badFact(entry.kind, entry.data)).length;
   const originals = new Map(calls.map((call) => [call.id, call] as const));
   return (
-    <section className="tt-call tt-record">
+    <section className="tt-call">
       <header className="tt-call-head">
         <b className="tt-agent">
           <i>{record.index ?? "—"}</i>턴
@@ -691,14 +698,15 @@ function TraceCallView({
 function CopyButton({ value }: { value: string }) {
   const { done, copy } = useCopy();
   return (
-    <button
+    <Button
+      variant="bare"
       className="tt-copy"
       onClick={() => {
         void copy(value);
       }}
     >
       {done ? "복사됨" : "전문 복사"}
-    </button>
+    </Button>
   );
 }
 
@@ -785,17 +793,18 @@ export function TurnTracePopup({
           </div>
           <div className="tt-head-tools">
             {trace && (trace.calls.length > 0 || trace.turn !== null) && (
-              <button
+              <Button
+                variant="bare"
                 className="tt-toggle"
                 onClick={() => setExpandAll((on) => !on)}
                 aria-pressed={expandAll}
               >
                 {expandAll ? "모두 접기" : "모두 펼치기"}
-              </button>
+              </Button>
             )}
-            <button className="tt-close" onClick={onClose} aria-label="닫기">
+            <Button variant="bare" className="tt-close" onClick={onClose} aria-label="닫기">
               <IconClose size={14} />
-            </button>
+            </Button>
           </div>
         </header>
         {/**

@@ -157,7 +157,7 @@ export function splitPlayerNames(text: string, index: PlayerNameIndex): ProsePie
   for (let i = 0; i < text.length;) {
     const id = index.heads.has(text[i]!) ? matchAt(text, i, index) : null;
     if (id === null) {
-      plain += text[i];
+      plain += text[i]!;
       i += 1;
       continue;
     }

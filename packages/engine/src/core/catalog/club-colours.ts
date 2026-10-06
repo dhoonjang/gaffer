@@ -7,7 +7,7 @@
  * 각 줄의 꼬리 주석이 색 이름과 대조 출처 하나를 든다.
  *
  * ⚠️ **값은 공식 값 그대로다.** 어두운 화면에서 안 보이는 남색·검정은 여기서 밝히지
- * 않는다 — 화면이 `clubTonesOf`로 명도만 올린 사본을 쓴다 (web/design-system.md §2).
+ * 않는다 — 화면이 `clubTonesOf`로 명도만 올린 사본을 쓴다 (tokens.css 「구단 색」).
  * `accent`가 빈 문자열인 구단은 유채색이 없다(흑백).
  *
  * **`primary`·`secondary`는 구단이 스스로 드는 구단색 두 가지, 그 순서다.** 킷은 해마다
@@ -19,7 +19,7 @@
  * 값으로 갈린다.
  *
  * 띠(`band`)는 여기 없다 — 카탈로그가 리그 안에서 서로 갈리게 재어 붙인다
- * (`team-catalog.ts` `withBands` · web/design-system.md §2).
+ * (`team-catalog.ts` `withBands` · tokens.css 「구단 색」).
  *
  * 문장의 도형(방패·분할)은 여전히 id 해시다 — 엠블럼은 미탑재다 (sources.md §7.1).
  */

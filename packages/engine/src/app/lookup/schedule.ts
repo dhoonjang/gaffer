@@ -5,7 +5,7 @@ import { squadReturnOf } from "../../core/calendar";
 import { addDays } from "../../core/dates";
 import { drawParts, drawTitle } from "../../season/draw-schedule";
 import { teamNameIn, type GameState } from "../../core/state";
-import { LookupResult } from "./resolve";
+import { type LookupResult } from "./resolve";
 import { dateLabel, competitionTag } from "./league";
 
 // ── 감독의 달력 (경기 + 훈련) ────────────────────────
@@ -171,11 +171,9 @@ export function scheduleView(state: GameState, input: ScheduleViewInput = {}): L
       lines.push(`${when} ${drawTitle(e.refId)}${e.status === "done" ? " [완료]" : ""}`);
       continue;
     }
-    if (e.type === "cup-round") {
-      // 상대는 추첨에서 정해진다 — 날짜만 공표된 자리다
-      const { competition, stage } = drawParts(e.refId);
-      lines.push(`${when} ${competition} ${stage} 예정 (상대 미정)`);
-    }
+    // 상대는 추첨에서 정해진다 — 날짜만 공표된 자리다
+    const { competition, stage } = drawParts(e.refId);
+    lines.push(`${when} ${competition} ${stage} 예정 (상대 미정)`);
   }
   if (entries.length > shown.length) {
     lines.push(`  …그 외 ${entries.length - shown.length}건 — 범위를 좁히거나 limit을 올려라`);

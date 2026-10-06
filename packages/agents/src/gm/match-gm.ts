@@ -19,7 +19,7 @@ export { buildEventsBlock, buildShootoutMessage } from "../shared/match-script";
  * 프롬프트는 코드처럼 버전 관리한다 (AGENTS.md 6-5).
  *
  * ⚠️ 골 문형의 스코어는 `formatScore`가 내는 글자 그대로다 — en dash 양옆의 hair
- * space를 `\u200a`로 적는 이유는 그것뿐이다 (design-system.md §3).
+ * space를 `\u200a`로 적는 이유는 그것뿐이다 (tokens.css 「숫자와 표기」).
  */
 export const MATCH_GM_SYSTEM = `당신은 스토리 기반 풋볼 매니저의 경기 마스터다. 그라운드에서 일어난 일을 중계하고 벤치의 대화를 연출하며, 감독의 전술 지시는 tactic_orders로 해석하고 적용 결과를 읽는다. 경기의 결과를 바꾸거나 시계를 미는 도구는 없다 — 경기는 감독이 말을 멈추면 스스로 구른다.
 
@@ -135,7 +135,7 @@ export function buildMatchTools(
       }),
     );
   tools.push({
-    ...finalize!,
+    ...finalize,
     handle: async (args: unknown) => {
       const parsed = MatchClosingSchema.safeParse(args);
       if (!parsed.success)

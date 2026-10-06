@@ -16,7 +16,7 @@ import {
 /**
  * 96팀의 공식 색 — 엔진의 데이터 파일이지만 domain 타입만 가져오는 잎 모듈이라 엔진
  * 그래프를 끌어오지 않는다. 불변식은 색이 어디 살든 문장이 지켜야 하므로 여기서 잰다
- * (web/design-system.md ⚠️ 불변식).
+ * (tokens.css 불변식).
  */
 import { CLUB_COLOURS } from "../../../engine/src/core/catalog/club-colours";
 
@@ -108,6 +108,7 @@ describe("글자 — 약칭이 클럽을 가리킨다", () => {
   });
 
   it("세 글자를 넘지 않는다", () => {
+    // eslint-disable-next-line @typescript-eslint/no-misused-spread -- 코드 포인트 단위가 의도다 — 이니셜·글자 폭은 결합 문자가 없는 이름과 표 칸을 잰다
     expect([...crestOf({ id: "x", shortName: "A B C D E" }).initials]).toHaveLength(3);
   });
 
@@ -121,7 +122,7 @@ describe("글자 — 약칭이 클럽을 가리킨다", () => {
   });
 });
 
-// ── 공식 색 (team.md §3.1 · web/design-system.md §2) ──────────────────────────
+// ── 공식 색 (team.md §3.1 · tokens.css 「구단 색」) ──────────────────────────
 
 const { panel2: PANEL_2, bg: BG } = CLUB_TONE_SURFACE;
 const INK_LIGHT = CREST_INKS.light;
@@ -140,7 +141,7 @@ const CLARET: ClubColours = { primary: "#480024", secondary: "#94bee5", accent: 
 const MONO: ClubColours = { primary: "#000000", secondary: "#ffffff", accent: "" };
 /** 흰·검에 엠블럼 빨강 — 띠는 흰이다 */
 const WHITE_BLACK: ClubColours = { primary: "#ffffff", secondary: "#000000", accent: "#e5231b" };
-/** 리그 색이 셀 계열 — 붉은 쪽·초록·호박 (web/design-system.md §2-1) */
+/** 리그 색이 셀 계열 — 붉은 쪽·초록·호박 (tokens.css 「리그 색」) */
 const RED: ClubColours = { primary: "#e30613", secondary: "#ffffff", accent: "#e30613" };
 const GREEN: ClubColours = { primary: "#008835", secondary: "#ffffff", accent: "#008835" };
 const AMBER: ClubColours = { primary: "#f18a01", secondary: "#000000", accent: "#f18a01" };
@@ -224,7 +225,7 @@ describe("96팀 불변식 — 공식 색 위에서 글자가 읽히고 가는 �
   });
 });
 
-describe("clubTonesOf — 후보 순서 (web/design-system.md §2 「--club-hi의 규칙」)", () => {
+describe("clubTonesOf — 후보 순서 (tokens.css 「구단 색」)", () => {
   it("첫 색이 그대로 3:1을 넘으면 그 값이다", () => {
     const tones = clubTonesOf(crestOf({ id: "x", colours: SKY }), SKY);
     expect(tones).toEqual({ hi: SKY.primary, hiInk: BG, lifted: false });
@@ -275,7 +276,7 @@ describe("clubTonesOf — 후보 순서 (web/design-system.md §2 「--club-hi�
   });
 });
 
-describe("separatedBandsOf — 리그 안에서 띠는 서로 갈린다 (web/design-system.md §2)", () => {
+describe("separatedBandsOf — 리그 안에서 띠는 서로 갈린다 (tokens.css 「구단 색」)", () => {
   const WHITE_NAVY: ClubColours = { primary: "#ffffff", secondary: "#000a3c", accent: "#000a3c" };
   const league = [
     ...Array.from({ length: 6 }, (_, i) => ({ id: `red${i}`, colours: RED })),
@@ -339,7 +340,7 @@ describe("separatedBandsOf — 리그 안에서 띠는 서로 갈린다 (web/des
   });
 });
 
-describe("leagueTonesOf — 리그 색 (web/design-system.md §2-1)", () => {
+describe("leagueTonesOf — 리그 색 (tokens.css 「리그 색」)", () => {
   /** 붉은 쪽에 몰린 리그 넷 — 최빈 계열로는 넷이 같은 답을 내는 모양이다 */
   const RED_HEAVY = [NAVY, SKY, CLARET, MONO, ...Array<ClubColours>(6).fill(RED)];
   const leagues = [

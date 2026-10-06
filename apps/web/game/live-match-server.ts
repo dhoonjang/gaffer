@@ -47,7 +47,7 @@ function snapshotOf(state: GameState): LiveSnapshot {
 
 /** 확정 상태를 읽는다 — 화면이 이어받는 출발점 */
 export async function readLiveMatch(id: string): Promise<LiveSnapshot> {
-  return withGameLock(id, LOCK_WAIT_MS.turn, async () => {
+  return withGameLock(id, LOCK_WAIT_MS.turn, () => {
     const state = loadGame(id);
     if (!state) throw new Error("게임을 찾을 수 없습니다");
     return snapshotOf(state);
@@ -57,7 +57,7 @@ export async function readLiveMatch(id: string): Promise<LiveSnapshot> {
 /** 클라이언트의 요청 하나를 확정 상태에 적용한다 — 잠금 안에서 읽고 고치고 쓴다 */
 export async function handleLiveAction(id: string, action: LiveAction): Promise<LiveSnapshot> {
   return withGameLock(id, LOCK_WAIT_MS.turn, () =>
-    traceBoard(id, async () => {
+    traceBoard(id, () => {
       const state = loadGame(id);
       if (!state) throw new Error("게임을 찾을 수 없습니다");
       if (!state.pendingMatch || state.phase !== "match")

@@ -363,7 +363,7 @@ function sanitizeEvent(state: MatchLedgerState, ev: MatchEvent): MatchEvent {
     assist !== scorer &&
     side.onPitch.includes(assist) &&
     !state.sentOff.includes(assist);
-  return { ...ev, actors: credible && assist !== undefined ? [scorer, assist] : [scorer] };
+  return { ...ev, actors: credible ? [scorer, assist] : [scorer] };
 }
 
 function applyOne(
@@ -555,6 +555,10 @@ function applyOne(
       state.phase = "finished";
       break;
     }
+
+    // 벤치의 판단 기록 — 스코어·국면·명단 어느 것도 옮기지 않는다
+    case "tactical_shift":
+      break;
   }
   return null;
 }
@@ -573,7 +577,7 @@ export function describeLedger(
   state: MatchLedgerState,
   names: { home: string; away: string },
 ): string {
-  const phaseKo = PHASE_KO[state.phase] ?? "경기 종료";
+  const phaseKo = PHASE_KO[state.phase];
   const limits = subLimitsOf(state.phase, state.friendly);
   const lines = [
     `[경기 장부] ${names.home} ${state.score.home} : ${state.score.away} ${names.away} — ${state.minute}${state.added ? `+${state.added}` : ""}′ (${phaseKo})`,

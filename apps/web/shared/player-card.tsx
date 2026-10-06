@@ -31,6 +31,7 @@ import {
   splitPlayerNames,
   type PlayerNameIndex,
 } from "@/shared/player-names";
+import { Button } from "./button";
 
 /**
  * ── 선수 카드 — 이름을 눌러 여는 한 장 (player.md §9.5) ────────
@@ -42,6 +43,11 @@ import {
  *
  * 카드는 **열 때 하나씩** 온다 — 매 턴 오는 짐에 실으면 이야기에 설 수 있는 리그
  * 전체가 따라온다. 경기 리포트와 같은 길이다 (match.md §8).
+ *
+ * 긴 내용은 본문 안에서 스크롤되고 아래 조작 줄은 늘 보인다. 조작 줄은 왼쪽부터 화면이
+ * 맡긴 조작(말 걸기·메일, 우리 선수면 1·2군 이동 — 지금 옮길 수 없으면 서지 않는다)이
+ * 서고 닫기만 오른쪽 끝에 떨어진다. 재계약도 외부 선수 문의도 카드에서 끝나지 않는다 —
+ * 메인 대화나 메일 작성으로 이어진다. Tab은 카드 안에서 돌고 Esc로 닫힌다.
  */
 
 /** 지금 화면이 이 선수에게 걸 수 있는 조작 — 없으면 `null` */
@@ -98,7 +104,7 @@ export function PlayerCardProvider({
   /** 경기가 굴러가는 중인가 — 심경 한 줄은 지난 경기까지의 것이라 그동안 서지 않는다 */
   inMatch: boolean;
   children: ReactNode;
-  defaultActions?: PlayerCardDefaultActions;
+  defaultActions?: PlayerCardDefaultActions | undefined;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [actions, setActionsState] = useState<PlayerCardActions | null>(null);
@@ -175,8 +181,8 @@ export function PlayerName({
   const card = usePlayerCard();
   if (!card || !id) return <span className={className}>{name}</span>;
   return (
-    <button
-      type="button"
+    <Button
+      variant="bare"
       className={`player-name${className ? ` ${className}` : ""}`}
       onClick={(e) => {
         // 행 전체가 접히거나 펼쳐지는 자리 안에 서므로, 이 눌림은 여기서 끝난다
@@ -186,7 +192,7 @@ export function PlayerName({
       title={`${name} — 선수 카드`}
     >
       {name}
-    </button>
+    </Button>
   );
 }
 
@@ -231,7 +237,7 @@ function PlayerCardOverlay({
   inMatch: boolean;
   /** 지금 화면이 맡긴 이 선수의 조작 — 닫기 왼쪽에 선다 */
   actions: ReactNode;
-  defaultActions?: PlayerCardDefaultActions;
+  defaultActions?: PlayerCardDefaultActions | undefined;
   onClose: () => void;
 }) {
   const [card, setCard] = useState<PlayerCardView | null>(() =>
@@ -293,15 +299,15 @@ function PlayerCardOverlay({
         <div className="pc-actions">
           {card && defaultActions?.(card, onClose)}
           {actions && <span className="pc-side">{actions}</span>}
-          <button
+          <Button
+            variant="ghost"
             className="pc-close"
-            type="button"
             onClick={onClose}
             data-testid="player-card-close"
           >
             <IconClose size={14} />
             닫기
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -309,7 +315,15 @@ function PlayerCardOverlay({
 }
 
 /** 사실 한 칸 — 이름표와 값. 값이 없으면 칸 자체가 서지 않는다 */
-function Fact({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
+function Fact({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  title?: string | undefined;
+  children: ReactNode;
+}) {
   return (
     <span className="pc-fact" title={title}>
       <em>{label}</em>

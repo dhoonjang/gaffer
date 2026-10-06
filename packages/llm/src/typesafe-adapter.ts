@@ -261,6 +261,7 @@ function waitForRetry(delay: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const onAbort = () => {
       clearTimeout(timer);
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- 중단 사유를 그대로 올린다 — 시한 래퍼가 같은 값으로 시한 실패를 가른다
       reject(signal.reason);
     };
     const timer = setTimeout(() => {
@@ -327,7 +328,7 @@ export class TypesafeGameEvaluator implements GameEvaluator {
       let transportRetries = 0;
       let outputRetried = false;
       for (;;) {
-        if (signal.aborted) throw signal.reason;
+        signal.throwIfAborted();
         if (Date.now() >= deadline) throw timeoutError;
         attempts++;
         let failure = new LlmCallError("unknown", "TypeSafe evaluation request failed");
@@ -345,9 +346,9 @@ export class TypesafeGameEvaluator implements GameEvaluator {
             }),
             signal,
           });
-          if (signal.aborted) throw signal.reason;
+          signal.throwIfAborted();
           const body: unknown = await response.json().catch(() => null);
-          if (signal.aborted) throw signal.reason;
+          signal.throwIfAborted();
           const reported = z.object({ usage: usageSchema }).safeParse(body);
           if (reported.success) {
             usage.inputTokens += reported.data.usage.input_tokens;
@@ -366,7 +367,7 @@ export class TypesafeGameEvaluator implements GameEvaluator {
           retryable = isRetryableStatus(response.status);
           delay = retryDelay(response.headers.get("Retry-After"), transportRetries);
         } catch (error) {
-          if (signal.aborted) throw signal.reason;
+          signal.throwIfAborted();
           if (error instanceof LlmCallError) failure = error;
         }
         if (invalidOutput) {

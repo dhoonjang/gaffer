@@ -607,9 +607,9 @@ describe("주장·전술·개인 지시", () => {
 
     // 팀당 하나 — 새로 세우면 앞사람이 벗는다
     expect(setCaptain(state, { vice: a!.id }).ok).toBe(true);
-    expect(userPlayers(state).filter((p) => p.isViceCaptain === true)).toHaveLength(1);
+    expect(userPlayers(state).filter((p) => p.isViceCaptain)).toHaveLength(1);
     expect(setCaptain(state, { vice: null }).ok).toBe(true);
-    expect(userPlayers(state).filter((p) => p.isViceCaptain === true)).toHaveLength(0);
+    expect(userPlayers(state).filter((p) => p.isViceCaptain)).toHaveLength(0);
   });
 
   it("경기 완장은 실제 명단 전체에서 주장·부주장을 우선한다", () => {
@@ -640,7 +640,7 @@ describe("주장·전술·개인 지시", () => {
     expect(setTactics(state, { formation: "4-4-2", mentality: 5 }).ok).toBe(true);
     expect(userTactics(state).spec.formation).not.toBe("4-4-2");
     expect(userTactics(state).spec.mentality).toBe(5);
-    expect(setTactics(state, { mentality: 9 as never }).ok).toBe(false);
+    expect(setTactics(state, { mentality: 9 }).ok).toBe(false);
   });
 
   it("전술을 바꾸면 배치 적응도가 변경 폭만큼 떨어진다", () => {

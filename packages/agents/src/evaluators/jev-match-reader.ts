@@ -140,6 +140,7 @@ export async function interpretMatchInstructions(
   if (interpreted.unresolved) return interpreted;
   const ops = { ...interpreted.ops };
   const raw = ops[PLAN_COMMAND];
+
   delete ops[PLAN_COMMAND];
   if (!raw) return { ...interpreted, ops };
   if (raw.length !== 1) return unresolved();

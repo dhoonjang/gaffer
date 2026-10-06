@@ -40,7 +40,7 @@ export function GameListSkeleton() {
  *
  * 리그가 몇인지는 카탈로그가 정한다(어드민이 더하거나 뺀다). 그래서 행 뼈대를
  * 다섯 개 세우면 도착하는 순간 개수가 어긋나 줄이 튄다 — 헤어라인은 행 높이만큼
- * 띄워 **행이 갈릴 자리**만 잡고, 개수는 말하지 않는다 (web/design-system.md §7).
+ * 띄워 **행이 갈릴 자리**만 잡고, 개수는 말하지 않는다 (shell.css의 온보딩 머리).
  */
 export function LeagueListSkeleton() {
   return (

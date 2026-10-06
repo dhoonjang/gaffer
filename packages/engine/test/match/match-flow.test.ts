@@ -225,13 +225,13 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
     const result = state.matches.find((m) => m.id === matchId)!.result!;
     expect(result.events).toHaveLength(ledger.events.length);
     expect(result.playerStats).toEqual(ledger.stats);
-    expect(result.possession!.home + result.possession!.away).toBeCloseTo(1, 6);
+    expect(result.possession.home + result.possession.away).toBeCloseTo(1, 6);
     // 팀 슛·xG는 선수별 기록의 합이다 — 두 벌로 두면 갈린다
     const sum = (ids: readonly string[], read: (l: (typeof ledger.stats)[string]) => number) =>
-      ids.reduce((acc, id) => acc + (ledger.stats[id] ? read(ledger.stats[id]!) : 0), 0);
-    expect(result.homeShots).toBe(sum(result.homeLineup!, (l) => l.shots));
+      ids.reduce((acc, id) => acc + (ledger.stats[id] ? read(ledger.stats[id]) : 0), 0);
+    expect(result.homeShots).toBe(sum(result.homeLineup, (l) => l.shots));
     expect(result.awayXg).toBeCloseTo(
-      sum(result.awayLineup!, (l) => l.xg),
+      sum(result.awayLineup, (l) => l.xg),
       6,
     );
     // 뛴 거리가 결과의 선수별 기록에 남는다 — 체력 정산의 원본이다
@@ -257,7 +257,7 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
     );
     finalizeMatch(state);
     const match = state.matches.find((m) => m.id === matchId)!;
-    const lineup = side === "home" ? match.result!.homeLineup! : match.result!.awayLineup!;
+    const lineup = side === "home" ? match.result!.homeLineup : match.result!.awayLineup;
     let shots = 0;
     let saves = 0;
     for (const id of lineup) {
@@ -272,7 +272,7 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
       saves += (row.saves ?? 0) - was.saves;
     }
     const total = (read: (l: (typeof ledger.stats)[string]) => number) =>
-      lineup.reduce((acc, id) => acc + (ledger.stats[id] ? read(ledger.stats[id]!) : 0), 0);
+      lineup.reduce((acc, id) => acc + (ledger.stats[id] ? read(ledger.stats[id]) : 0), 0);
     expect(shots).toBe(total((l) => l.shots));
     expect(saves).toBe(total((l) => l.saves));
   });
@@ -961,7 +961,7 @@ describe("감독 경기 마감의 대칭 (match.md §7)", () => {
     ]);
     expect(inject(state, goals).ok).toBe(true);
     const digest = closeByHand(state);
-    const rows = state.milestones ?? [];
+    const rows = state.milestones;
     const mineRows = rows.filter((m) => m.gamePlayerId === ours && m.matchId === matchId);
     expect(mineRows.map((m) => `${m.code}:${m.value}`).sort()).toEqual([
       "apps:100",
@@ -1202,7 +1202,7 @@ describe("같은 시각 타 경기의 라이브 스코어 (match.md §8.6)", () 
       const goalsOf = (side: "home" | "away") => row.goals.filter((g) => g.side === side).length;
       expect([goalsOf("home"), goalsOf("away")]).toEqual([result.homeGoals, result.awayGoals]);
       expect([...row.goals.map((g) => g.minute)].sort((a, b) => a - b)).toEqual(
-        [...(result.goalMinutes ?? [])].sort((a, b) => a - b),
+        [...result.goalMinutes].sort((a, b) => a - b),
       );
     }
   });

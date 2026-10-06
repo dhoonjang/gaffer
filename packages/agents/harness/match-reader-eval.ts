@@ -181,14 +181,7 @@ function inventory(root: string) {
     calls.push({ source, call });
     const { user, outputSchema } = call.request ?? {};
     const output = ReaderReportSchema.safeParse(call.response?.output);
-    if (
-      !user ||
-      !outputSchema ||
-      !output.success ||
-      !output.data.points ||
-      !output.data.sheet ||
-      call.error
-    ) {
+    if (!user || !outputSchema || !output.success || call.error) {
       skipped.push({
         source,
         reason:
@@ -226,11 +219,11 @@ interface RunMeasurement {
   evaluatorAttempts: number;
   usageComplete: boolean;
   costUsd: number | null;
-  reading?: MatchReaderOutput;
-  evaluations?: unknown[];
-  failure?: string;
-  failureKind?: LlmErrorKind;
-  evaluatorFailure?: string;
+  reading?: MatchReaderOutput | undefined;
+  evaluations?: unknown[] | undefined;
+  failure?: string | undefined;
+  failureKind?: LlmErrorKind | undefined;
+  evaluatorFailure?: string | undefined;
 }
 
 async function replay(
@@ -242,7 +235,8 @@ async function replay(
   const { runReaderPipeline } = await import("./reader-pipeline");
   let proseUsage = emptyUsage();
   let evaluatorUsage = emptyUsage();
-  let usageComplete = true;
+  // 사용량 콜백 안에서 꺼진다 — 흐름 분석이 콜백 속 대입을 보지 못한다
+  let usageComplete = true as boolean;
   let evaluatorAttempts = 0;
   let evaluatorFailure: string | undefined;
   const proseCallDurationsMs: number[] = [];
@@ -253,7 +247,7 @@ async function replay(
         system: createHash("sha256").update(JSON.stringify(request.system)).digest("hex"),
         schema: createHash("sha256").update(JSON.stringify(request.outputSchema)).digest("hex"),
       });
-      let observed = false;
+      let observed = false as boolean;
       const began = performance.now();
       try {
         const result = await client.runTurn({
@@ -486,11 +480,11 @@ async function main() {
         pairs.push({
           source: input.source,
           hasSaid: input.hasSaid,
-          baseline: baseline!,
-          candidate: candidate!,
+          baseline: baseline,
+          candidate: candidate,
           agreement:
-            baseline!.reading && candidate!.reading
-              ? agreement(baseline!.reading, candidate!.reading)
+            baseline.reading && candidate.reading
+              ? agreement(baseline.reading, candidate.reading)
               : null,
         });
       }

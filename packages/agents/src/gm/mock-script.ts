@@ -333,7 +333,7 @@ const MATCH_SUGGESTION = "계속 가자";
 // 그것을 문장으로 옮기는 자가 없으면 경기 화면이 빈 채로 돈다. 실모드에서 이 자리를
 // 맡는 것이 캐스터 LLM이다.
 
-/** 스코어 한 줄 — 자는 `formatScore` 하나다 (design-system.md §3) */
+/** 스코어 한 줄 — 자는 `formatScore` 하나다 (tokens.css 「숫자와 표기」) */
 function scoreLine(state: GameState, score: { home: number; away: number }): string {
   const match = state.pendingMatch;
   if (!match) return "";

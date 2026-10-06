@@ -37,7 +37,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "협상 요청 형식이 올바르지 않습니다" }, { status: 400 });
   return withGameLock(id, LOCK_WAIT_MS.turn, () =>
     withGameUsage(id, () =>
-      traceBoard(id, async () => {
+      traceBoard(id, () => {
         const state = loadGame(id);
         if (!state) return NextResponse.json({ error: "게임을 찾을 수 없습니다" }, { status: 404 });
         const result = applyNegotiationRequest(state, parsed.data);

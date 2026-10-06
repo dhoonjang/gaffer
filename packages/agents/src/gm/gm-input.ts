@@ -98,6 +98,7 @@ import {
   type LorebookInjection,
   lorebookText,
   interviewFactText,
+  type MailMessage,
 } from "@gaffer/domain";
 
 /** 경기 다이제스트가 "방금 있었던 일"로 치는 기간 (일) */
@@ -152,7 +153,7 @@ function addresseeLine(state: GameState, addressee: ChatTurn["addressee"]): stri
  */
 export function buildMatchReference(state: GameState): string {
   return [buildGmReference(state), buildMatchBrief(state)]
-    .filter((block): block is string => block !== null && block.length > 0)
+    .filter((block) => block.length > 0)
     .join("\n\n");
 }
 
@@ -414,12 +415,12 @@ function opponentBlock(state: GameState): string | null {
     "opponent",
     lines(
       `${report.date} ${report.time} ${report.label} · ${venue} vs ${report.opponent.name}` +
-        `${report.inDays === 0 ? " (오늘)" : " (내일)"}`,
+        (report.inDays === 0 ? " (오늘)" : " (내일)"),
       `예상 XI: ${report.expectedXI.map((p) => `${p.name}(${p.position})`).join(" · ")}`,
       report.basis === null
         ? "예상의 근거: 상대의 직전 경기가 없다 — 배치에서 세운 추정이다"
         : `예상의 근거: 상대의 직전 경기(${report.basis.date} ${report.basis.label}) 선발` +
-            `${guessed > 0 ? ` · ${guessed}명은 추정으로 메웠다` : ""}`,
+            (guessed > 0 ? ` · ${guessed}명은 추정으로 메웠다` : ""),
       report.absent.length === 0
         ? "상대 결장: 없다"
         : `상대 결장: ${report.absent
@@ -1211,8 +1212,8 @@ export function renderTurnGroup(
     Pick<ChatTurn, "role" | "text" | "addressee"> & { mailMessageIds?: readonly string[] }
   >,
   cards: readonly LorebookInjection[],
-  attachments?: readonly import("@gaffer/domain").MailMessage[],
-  expandedMail?: Map<string, import("@gaffer/domain").MailMessage>,
+  attachments?: readonly MailMessage[],
+  expandedMail?: Map<string, MailMessage>,
 ): string {
   const ids = turns.flatMap((turn) => turn.mailMessageIds ?? []);
   const mail = attachments
@@ -1247,7 +1248,7 @@ export function renderTurnGroup(
 export function buildGmTurnMessage(
   state: GameState,
   cards: readonly LorebookInjection[],
-  attachments?: readonly import("@gaffer/domain").MailMessage[],
+  attachments?: readonly MailMessage[],
 ): string {
   const chat = relevantTurns(state);
   return renderTurnGroup(state, chat.slice(historyEnd(chat)), cards, attachments);

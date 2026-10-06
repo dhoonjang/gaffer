@@ -271,7 +271,7 @@ export interface OutcomeBasis {
   result: {
     homeGoals: number;
     awayGoals: number;
-    penalties?: { home: number; away: number };
+    penalties?: { home: number; away: number } | undefined;
   } | null;
 }
 

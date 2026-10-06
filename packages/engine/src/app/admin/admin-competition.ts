@@ -44,10 +44,14 @@ export interface AdminLeagueRow extends LeagueCatalogEntry {
   teamCount: number;
 }
 
-export type AdminLeaguePatch = Partial<Omit<LeagueCatalogEntry, "id">>;
+export type AdminLeaguePatch = PatchOf<Omit<LeagueCatalogEntry, "id">>;
 type AdminLeagueInput = LeagueCatalogEntry;
-export type AdminCupPatch = Partial<Omit<CupCatalogEntry, "id">>;
-export type AdminDomesticCupPatch = Partial<Omit<DomesticCupEntry, "id">>;
+export type AdminCupPatch = PatchOf<Omit<CupCatalogEntry, "id">>;
+export type AdminDomesticCupPatch = PatchOf<Omit<DomesticCupEntry, "id">>;
+/** 편집 패치 — 실리지 않았거나 `undefined`인 칸은 손대지 않는다 */
+type PatchOf<T> = { [K in keyof T]?: T[K] | undefined };
+/** 패치를 얹은 엔트리 — 검사를 지나기 전까지 칸마다 무엇이든 올 수 있다 */
+type Unchecked<T> = { readonly [K in keyof T]?: unknown };
 
 export function adminLeagueCatalog(): AdminLeagueRow[] {
   const counts = new Map<string, number>();
@@ -140,12 +144,12 @@ function validateStageMoney(value: unknown, label: string): string | null {
  * 모르는 키는 저장 파일에 들어가지 않는다. 값이 온전한지는 얹은 **뒤에** 엔트리
  * 전체를 검사해 본다 (실패하면 이 사본은 그대로 버려진다).
  */
-function applyPatch<T extends object>(entry: T, patch: object, fields: readonly string[]): void {
+function applyPatch(entry: object, patch: object, fields: readonly string[]): void {
   const source = patch as Record<string, unknown>;
-  const target = entry as unknown as Record<string, unknown>;
+  const target = entry as Record<string, unknown>;
   for (const key of fields) {
-    if (!(key in source)) continue;
     const value = source[key];
+    if (value === undefined) continue;
     target[key] = typeof value === "string" ? value.trim() : value;
   }
 }
@@ -168,10 +172,10 @@ const LEAGUE_PATCH_FIELDS = [
   "avgTicketPrice",
 ] as const;
 
-function validateLeague(entry: LeagueCatalogEntry): string | null {
+function validateLeague(entry: Unchecked<LeagueCatalogEntry>): string | null {
   if (textOf(entry.name) === null) return "리그 이름이 필요합니다";
   if (textOf(entry.country) === null) return "나라가 필요합니다";
-  if (!(LEAGUE_KINDS as readonly string[]).includes(entry.kind)) {
+  if (!(LEAGUE_KINDS as readonly unknown[]).includes(entry.kind)) {
     return `알 수 없는 리그 종류: ${String(entry.kind)}`;
   }
   if (numberAtLeast(entry.coefficient, MIN_COEFFICIENT) === null) {
@@ -272,7 +276,7 @@ const CUP_COUNT_FIELDS = [
   ["playoffSlots", "플레이오프 팀 수"],
 ] as const;
 
-function validateCup(entry: CupCatalogEntry): string | null {
+function validateCup(entry: Unchecked<CupCatalogEntry>): string | null {
   if (textOf(entry.name) === null) return "대회 이름이 필요합니다";
   if (textOf(entry.short) === null) return "짧은 표기가 필요합니다";
   for (const [key, label] of CUP_COUNT_FIELDS) {
@@ -344,7 +348,7 @@ function validateWindows(value: unknown): string | null {
   return null;
 }
 
-function validateDomesticCup(entry: DomesticCupEntry): string | null {
+function validateDomesticCup(entry: Unchecked<DomesticCupEntry>): string | null {
   if (textOf(entry.name) === null) return "대회 이름이 필요합니다";
   if (textOf(entry.short) === null) return "짧은 표기가 필요합니다";
   if (textOf(entry.country) === null) return "나라가 필요합니다";
@@ -359,7 +363,7 @@ function validateDomesticCup(entry: DomesticCupEntry): string | null {
   if (intAtLeast(entry.drawDelayDays, 0) === null) {
     return "추첨 지연 일수는 0 이상의 정수여야 합니다";
   }
-  if (!["underdog", "seeded", "draw"].includes(entry.homeRule)) {
+  if (!(["underdog", "seeded", "draw"] as readonly unknown[]).includes(entry.homeRule)) {
     return `알 수 없는 홈 배정 규정: ${String(entry.homeRule)}`;
   }
   const badWindows = validateWindows(entry.windows);

@@ -30,7 +30,7 @@ import { ourYouthCandidates, youthIntakeDeadline, signYouthCandidates } from "./
  */
 export function setDevelopmentFocus(
   state: GameState,
-  input: { playerIds?: string[] },
+  input: { playerIds?: string[] | undefined },
 ): CommandResult {
   const players: GamePlayer[] = [];
   for (const id of input.playerIds ?? []) {
@@ -170,7 +170,7 @@ export function setTraining(state: GameState, input: TrainingPlanInput): Command
         message: `${josa(s.date, "은/는")} 이미 지난 날입니다 — 훈련은 오늘(${state.date})부터 잡을 수 있습니다`,
       };
     }
-    if (!s.label?.trim()) return { ok: false, message: "훈련 설명(label)이 필요합니다" };
+    if (!s.label.trim()) return { ok: false, message: "훈련 설명(label)이 필요합니다" };
     const err = validFocus(s.focus);
     if (err) return { ok: false, message: err };
   }
@@ -178,7 +178,7 @@ export function setTraining(state: GameState, input: TrainingPlanInput): Command
     if (!Number.isInteger(r.dow) || r.dow < 0 || r.dow > 6) {
       return { ok: false, message: `요일이 잘못됨: ${r.dow} (0~6)` };
     }
-    if (!r.label?.trim()) return { ok: false, message: "훈련 설명(label)이 필요합니다" };
+    if (!r.label.trim()) return { ok: false, message: "훈련 설명(label)이 필요합니다" };
     const err = validFocus(r.focus);
     if (err) return { ok: false, message: err };
   }
@@ -394,10 +394,10 @@ export function setPlayerTraining(
   state: GameState,
   input: {
     playerId: string;
-    axis?: string;
-    position?: string;
-    rest?: { until: string };
-    clear?: boolean;
+    axis?: string | undefined;
+    position?: string | undefined;
+    rest?: { until: string } | undefined;
+    clear?: boolean | undefined;
   },
 ): CommandResult {
   const pick = pickOurPlayer(state, input.playerId);
@@ -504,18 +504,27 @@ const TRAIN_ATTR_KO: Record<string, string> = {
 
 interface TrainingPlanInput {
   /** 특정 날짜 세션 */
-  sessions?: Array<{ date: string; slot: Slot; label: string; focus: TrainAttr[] }>;
+  sessions?: Array<{ date: string; slot: Slot; label: string; focus: TrainAttr[] }> | undefined;
   /** 요일 반복 — 지정 주 수만큼 엔트리를 펼쳐서 만든다 (기본 6주) */
-  repeatWeekly?: Array<{ dow: number; slot: Slot; label: string; focus: TrainAttr[] }>;
+  repeatWeekly?: Array<{ dow: number; slot: Slot; label: string; focus: TrainAttr[] }> | undefined;
   /** 반복 생성 주 수 (기본 6) */
-  weeks?: number;
+  weeks?: number | undefined;
   /** 미래 훈련 비우기 — 날짜/요일 지정 시 그 대상만, 없으면 전부 */
-  clear?: { from?: string; to?: string; dow?: number; slot?: Slot; rest?: boolean } | true;
+  clear?:
+    | {
+        from?: string | undefined;
+        to?: string | undefined;
+        dow?: number | undefined;
+        slot?: Slot | undefined;
+        rest?: boolean | undefined;
+      }
+    | true
+    | undefined;
   /**
    * **휴가를 접고 선수단을 조기 소집한다.** 감독이 명시적으로 그러겠다고 했을 때만.
    * 소집일 자체가 앞당겨지고, 선수단은 체력을 잃고 일부는 불만을 품는다.
    */
-  recallSquad?: boolean;
+  recallSquad?: boolean | undefined;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -598,15 +607,15 @@ const REPEAT_WEEKS_MAX = 20;
  */
 interface ClearTrainingInput {
   /** 시작일 (기본 오늘) */
-  from?: string;
+  from?: string | undefined;
   /** 종료일 (기본 from과 같은 날 — 하루만) */
-  to?: string;
+  to?: string | undefined;
   /** 이 요일만 (0=일 ~ 6=토) */
-  dow?: number;
+  dow?: number | undefined;
   /** 이 슬롯만 — 없으면 그날 전부 */
-  slot?: Slot;
+  slot?: Slot | undefined;
   /** 쉬는 날로 못 박을 것인가 (기본 true). false면 기본 훈련이 다시 들어온다 */
-  rest?: boolean;
+  rest?: boolean | undefined;
 }
 
 /**
@@ -633,7 +642,10 @@ export const PLAYER_REST_MAX_DAYS = 28;
  * ⚠️ **소프트락 방지는 감독의 결정 밖이다** — 고른 뒤에도 포지션군이 최소 인원
  * 아래면 코어가 남은 후보에서 그 자리를 채우고, 무엇을 채웠는지 답에 적는다.
  */
-export function signYouth(state: GameState, input: { playerIds?: string[] }): CommandResult {
+export function signYouth(
+  state: GameState,
+  input: { playerIds?: string[] | undefined },
+): CommandResult {
   const rows = ourYouthCandidates(state);
   if (rows.length === 0) {
     return {

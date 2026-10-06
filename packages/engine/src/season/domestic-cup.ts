@@ -612,7 +612,7 @@ function withSeedEntrants(
   const seeds = domesticCupField(state, cup).seeds;
   if (cup.drawStyle !== "fixed-bracket") return [...seeds, ...winners];
   const pairCount = (seeds.length + winners.length) / 2;
-  const order: Array<string | null> = new Array(pairCount * 2).fill(null);
+  const order = new Array<string | null>(pairCount * 2).fill(null);
   bracketSeedOrder(pairCount).forEach((rank, tie) => {
     if (rank < seeds.length) order[tie * 2] = seeds[rank]!;
   });

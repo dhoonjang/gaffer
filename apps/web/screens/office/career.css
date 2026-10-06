@@ -11,7 +11,7 @@
   justify-content: space-between;
   gap: 28px;
   flex-wrap: wrap;
-  padding-bottom: 18px;
+  padding-bottom: 16px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--line);
 }
@@ -29,80 +29,14 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  margin-top: 14px;
-}
-/**
- * 눈금 묶음 — 감독에게 딸린 **견주는 수치**가 서는 면이다. 지금 담기는 것은 평판
- * 하나이고, 한 단 밝은 면이 그 경계를 말하면 충분하다.
- *
- * ⚠️ `inline-flex`라 **내용 폭만큼만** 넓어진다. 블록으로 두면 왼쪽 열 끝까지
- * 늘어나 상자 오른쪽이 통째로 비고, 그게 이 화면에서 카드를 걷어냈던 이유였다.
- */
-.mgr-gauges {
-  display: inline-flex;
-  align-items: flex-start;
-  padding: 10px 14px 11px;
-  background: var(--panel-2);
-  border-radius: var(--r-sm);
-}
-/**
- * 담긴 항목이 하나라 **제 내용 폭만** 갖는다 — 기준 폭(`200px`)을 주면 그보다 좁은
- * 알맹이 옆이 비고, 그 폭은 옆에 설 것이 있을 때나 뜻이 있었다. 좁아지면 접히는 것은
- * 상자가 아니라 안의 막대 줄이고(`.mgr-rep-items`), `min-width: 0`이 그것을 허락한다.
- */
-.mgr-rep {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.mgr-rep-title {
-  font-size: var(--fs-base);
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-.mgr-rep-items {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px 18px;
-  font-size: var(--fs-xs);
-}
-.rep-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-/* 라벨 폭을 맞춰 막대의 시작점이 항목마다 어긋나지 않게 (보드 2자 · 선수단 3자) */
-.rep-label {
-  min-width: 3.2em;
-  color: var(--text-2);
-}
-.rep-bar {
-  width: 48px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--border);
-  overflow: hidden;
-}
-/* 채움은 분필 — 평판은 **감독이 쌓은 값**이라 구단이 바뀌어도 같은 자로 읽혀야 한다
-   (web/design-system.md §2 충돌 규칙 1) */
-.rep-bar i {
-  display: block;
-  height: 100%;
-  background: var(--text);
-}
-.rep-item b {
-  min-width: 1.6em;
-  color: var(--text);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  gap: 8px;
+  margin-top: 16px;
 }
 /* 지표 라벨과 값은 색과 굵기로 구분하며 좁은 화면에서 값만 줄바꿈한다. */
 .mgr-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 22px;
+  gap: 4px 24px;
 }
 .mgr-fact {
   display: flex;
@@ -120,10 +54,6 @@
   font-size: var(--fs-md);
   overflow-wrap: anywhere;
 }
-/* 비갱신 통보는 만료일이 곧 끝이라는 뜻이다 — 같은 줄에서 색으로 갈린다 */
-.mgr-nonrenewal {
-  color: var(--loss);
-}
 .trophy-list {
   display: flex;
   flex-direction: column;
@@ -137,7 +67,7 @@
   background: var(--panel-2);
   border-left: 3px solid var(--gold);
   border-radius: var(--r-sm);
-  padding: 10px 14px;
+  padding: 8px 16px;
 }
 /* 트로피 아이콘 — 레일과 같은 금색이라 카드 하나가 한 색으로 읽힌다 */
 .trophy > svg {
@@ -147,7 +77,7 @@
 .achv {
   background: var(--panel-2);
   border-radius: var(--r-sm);
-  padding: 10px 14px;
+  padding: 8px 16px;
 }
 .achv .desc {
   color: var(--text-2);
@@ -163,13 +93,13 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 .dismissed {
   background: var(--panel-2);
   border-left: 3px solid var(--loss);
   border-radius: var(--r-sm);
-  padding: 10px 14px;
+  padding: 8px 16px;
 }
 .dismissed-head {
   display: flex;
@@ -180,7 +110,54 @@
   color: var(--loss);
   font-size: var(--fs-sm);
 }
-.dismissed-why {
+.dismissed-why,
+.offer-why {
   color: var(--text-2);
   font-size: var(--fs-sm);
+}
+/**
+ * 열린 제안 — 경질은 붉게, 제안은 정보색 레일로 갈라 둔다: 하나는 끝난 일이고 하나는
+ * 아직 답할 수 있는 일이다. 제안은 **읽는 값이라** 버튼 모양을 하지 않는다 — 수락은
+ * 감독이 말로 한다.
+ */
+.offer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.offer {
+  background: var(--panel-2);
+  box-shadow: inset 3px 0 0 var(--accent-2);
+  border-radius: var(--r-sm);
+  padding: 12px 16px;
+}
+/* 공석 — 제안이 아니라 문이다: 답을 기다리는 레일을 물려받지 않는다 */
+.offer.vacant {
+  box-shadow: none;
+}
+.offer-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.offer-head .tier,
+.offer-head .until {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+/* 기한은 답이 사라지는 날이다 — 등급보다 앞으로 읽히게 오른쪽 끝에 세운다 */
+.offer-head .until {
+  margin-left: auto;
+  color: var(--accent-2);
+}
+.offer.vacant .offer-head .until {
+  color: var(--text-2);
+}
+.career-sacked {
+  color: var(--loss);
+  font-size: var(--fs-sm);
+}
+/* 이직은 자리를 잃은 것이 아니다 (career.md §5.1) — 경고색이면 데려간 해가 잘린 해로 읽힌다 */
+.career-sacked.career-moved {
+  color: var(--text-2);
 }

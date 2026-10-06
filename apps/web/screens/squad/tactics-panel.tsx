@@ -14,8 +14,9 @@ import {
   type SetPieceRoutineKey,
   type SetPieceRoutineLevel,
 } from "@gaffer/domain";
-import { IconChevron } from "@/shared/icons";
+import { IconArrowRight, IconChevron } from "@/shared/icons";
 import type { SetPieceRoutineView, SetPieceTakersView, TacticsView } from "./types";
+import { Button } from "@/shared/button";
 
 /**
  * 전술 패널 — **접히면 지금 값, 펼치면 눈금.**
@@ -47,7 +48,8 @@ export function TacticsPanel({
       {/* 팀 총합 적응도는 두지 않는다 — 그런 값은 없다. 적응도는 **선수마다** 다르고
           여기 있던 숫자는 선발 11인의 평균일 뿐이었다. 누가 이 전술을 아직 못 따라오는지는
           오른쪽 명단이 선수별로 말한다 */}
-      <button
+      <Button
+        variant="bare"
         className="tactics-head"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -67,7 +69,7 @@ export function TacticsPanel({
           </span>
         )}
         <IconChevron size={13} />
-      </button>
+      </Button>
       {open && (
         <div className="tactics-grid">
           {TACTIC_AXES.map((axis) => {
@@ -82,19 +84,19 @@ export function TacticsPanel({
                      위치일 뿐이라 이름은 낱말(`aria-label`) 쪽이 갖는다 */
                   <div className="tactic-steps" role="radiogroup" aria-label={axis.label}>
                     {axis.words.map((label, i) => (
-                      <button
+                      <Button
+                        variant="bare"
                         key={label}
-                        type="button"
                         role="radio"
                         aria-checked={value === i + 1}
                         aria-label={label}
                         className={`tactic-step${value === i + 1 ? " on" : ""}`}
-                        onClick={() => onChange({ [axis.key]: i + 1 } as Partial<TacticsView>)}
+                        onClick={() => onChange({ [axis.key]: i + 1 })}
                         title={label}
                         data-testid={`tactic-${axis.key}-${i + 1}`}
                       >
                         {i + 1}
-                      </button>
+                      </Button>
                     ))}
                     <span className="tactic-value">{tacticWord(axis.key, value)}</span>
                   </div>
@@ -228,6 +230,7 @@ export function SetPiecePanel({
                     : "지정이 없어 이 선수가 찹니다"
                 }
               >
+                {swapped && <IconArrowRight size={12} />}
                 {nameOf(stand)}
               </em>
             )}
@@ -247,9 +250,9 @@ export function SetPiecePanel({
                  `aria-checked`가 같은 사실을 따로 말한다 */
               <span className="sp-steps" role="radiogroup" aria-label={axis.hint}>
                 {SET_PIECE_ROUTINE_LEVELS.map((step) => (
-                  <button
+                  <Button
+                    variant="bare"
                     key={step}
-                    type="button"
                     role="radio"
                     aria-checked={level === step}
                     aria-label={`${axis.words[step]} — ${axis.counts[step]}명`}
@@ -262,7 +265,7 @@ export function SetPiecePanel({
                         많은지를 낱말은 말하지 못해, 세 칸이 이름만 다른 셋으로 보였다.
                         표는 코어와 한 벌이다 (`SetPieceRoutineAxis.counts`) */}
                     <b>{axis.counts[step]}</b>
-                  </button>
+                  </Button>
                 ))}
               </span>
             ) : (

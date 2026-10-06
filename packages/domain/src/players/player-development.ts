@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateString } from "../core/date-string";
-import { AXIS_KO, type AttributeAxis, ratingTier, type RatingTier } from "./player";
+import { AXIS_KO, ratingTier, type RatingTier } from "./player";
 
 // ── 성장 로그 ─────────────────────────────────────────
 /**
@@ -68,7 +68,7 @@ export function growthLabel(target: string): string {
     return `${target.slice(GROWTH_POSITION_PREFIX.length)} 적응도`;
   }
   if (target === "tactical") return "전술 적응도";
-  return AXIS_KO[target as AttributeAxis] ?? target;
+  return (AXIS_KO as Readonly<Record<string, string>>)[target] ?? target;
 }
 
 // ── 훈련 결산 카드 ────────────────────────────────────

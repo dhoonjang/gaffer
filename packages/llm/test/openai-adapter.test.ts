@@ -177,7 +177,7 @@ describe("OpenAI 어댑터", () => {
     const controller = new AbortController();
     await llm.runTurn({ system: "시스템", history: [], user: "안녕", signal: controller.signal });
 
-    const options = create.mock.calls[0]![1] as unknown as {
+    const options = create.mock.calls[0]![1] as {
       timeout?: number;
       signal?: AbortSignal;
     };

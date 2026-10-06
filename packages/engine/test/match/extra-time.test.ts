@@ -242,7 +242,7 @@ describe("녹아웃 무승부 — 연장을 먼저 치르고 그래도 비기면
     expect(decider.result!.assists).toHaveLength(total);
     expect(decider.result!.goalMinutes).toHaveLength(total);
     expect(total).toBeGreaterThanOrEqual(2); // 정규시간 1-1은 그대로 남는다
-    const extraMinutes = decider.result!.goalMinutes!.filter((m) => m > 90);
+    const extraMinutes = decider.result!.goalMinutes.filter((m) => m > 90);
     expect(extraMinutes.length).toBe(total - 2);
   });
 
@@ -356,7 +356,7 @@ describe("녹아웃 무승부 — 연장을 먼저 치르고 그래도 비기면
     const before = new Map(playersOf(state, "arsenal").map((p) => [p.id, p.state.condition]));
     expect(resolveExtraTime(state, decider, "facup:r16:1")).toBe(true);
 
-    const xi = decider.result!.homeLineup!.slice(0, 11);
+    const xi = decider.result!.homeLineup.slice(0, 11);
     for (const id of xi) {
       const player = playersOf(state, "arsenal").find((p) => p.id === id)!;
       expect(player.state.condition).toBeLessThan(before.get(id)!);
@@ -380,7 +380,7 @@ describe("녹아웃 무승부 — 연장을 먼저 치르고 그래도 비기면
       const decider = legs[0]!;
       resolveDomesticTie(state, "facup", "r16", pair);
       const extra = decider
-        .result!.scorers.filter((_, i) => (decider.result!.goalMinutes?.[i] ?? 0) > 90)
+        .result!.scorers.filter((_, i) => (decider.result!.goalMinutes[i] ?? 0) > 90)
         .find((tag) => tag.startsWith("home:"));
       if (extra) scored = extra.slice("home:".length);
     }
@@ -400,7 +400,7 @@ describe("녹아웃 무승부 — 연장을 먼저 치르고 그래도 비기면
 describe("연장이 필요한 경기인가 — 단일 판정", () => {
   it("리그 경기는 비겨도 그냥 끝난다", () => {
     const state = world();
-    const league = state.matches.find((m) => (m.stage ?? "league") === "league");
+    const league = state.matches.find((m) => m.stage === "league");
     expect(league).toBeDefined();
     expect(needsExtraTime(state, league!, { home: 1, away: 1 })).toBe(false);
     expect(needsExtraTime(state, league!, { home: 0, away: 0 })).toBe(false);
@@ -625,7 +625,7 @@ describe("유저 경기의 연장 (competition.md §6)", () => {
       // 연장을 치른 표식 — 무득점이어도 남는다
       expect(run.match.result!.aet).toBe(true);
       // 연장 골은 91′~120′(+추가시간)에 찍힌다
-      for (const minute of run.match.result!.goalMinutes ?? []) {
+      for (const minute of run.match.result!.goalMinutes) {
         expect(minute).toBeLessThanOrEqual(125);
       }
       // 그 30분에 감독이 손을 댈 수 있었다 — 코어가 조용히 굴리던 자리다
@@ -786,7 +786,7 @@ describe("유저 경기의 연장 (competition.md §6)", () => {
     playUserMatch(state, { at90: "level" });
     expect(match.result!.homeGoals).toBe(match.result!.awayGoals);
     expect(match.result!.aet).toBeUndefined();
-    for (const minute of match.result!.goalMinutes ?? []) expect(minute).toBeLessThan(100);
+    for (const minute of match.result!.goalMinutes) expect(minute).toBeLessThan(100);
   });
 });
 
@@ -805,7 +805,7 @@ describe("연장·승부차기의 입력 (match.md §7)", () => {
       { home: "arsenal", away: "chelsea", homeGoals: 1, awayGoals: 1 },
     ])[0]!;
     const squad = playersOf(state, "arsenal");
-    const lineup = decider.result!.homeLineup!;
+    const lineup = decider.result!.homeLineup;
     // 70분에 한 명을 빼고 벤치 자원을 넣은 경기 — 명단에는 둘 다 남는다
     const wentOff = lineup[0]!;
     const cameOn = squad[15]!.id;
@@ -852,7 +852,7 @@ describe("연장·승부차기의 입력 (match.md §7)", () => {
       );
       expect(resolveExtraTime(state, decider, channel)).toBe(true);
       bareXg += bare.homeXg + bare.awayXg;
-      boardXg += decider.result!.homeXg! + decider.result!.awayXg!;
+      boardXg += decider.result!.homeXg + decider.result!.awayXg;
     }
     expect(boardXg).toBeGreaterThan(0);
     expect(boardXg).not.toBe(bareXg);
@@ -962,7 +962,7 @@ describe("연장·승부차기의 입력 (match.md §7)", () => {
      */
     const total = (neutral: boolean) =>
       Array.from({ length: 8 }, (_, i) => playFinal(neutral, i + 1)).reduce(
-        (sum, r) => sum + (r.homeXg ?? 0) + (r.awayXg ?? 0),
+        (sum, r) => sum + r.homeXg + r.awayXg,
         0,
       );
     expect(total(true)).not.toBe(total(false));
@@ -1018,7 +1018,7 @@ describe("승부차기 (competition.md §6)", () => {
       { home: "arsenal", away: "chelsea", homeGoals: 0, awayGoals: 0 },
     ])[0]!;
     resolveShootout(state, decider);
-    return { decider, kicks: decider.result!.penalties!.kicks ?? [], state };
+    return { decider, kicks: decider.result!.penalties!.kicks, state };
   }
 
   /** 앞선 표본 — 한 번 굴려 여러 검증이 나눠 쓴다 (세계 생성이 이 파일 시간의 대부분) */

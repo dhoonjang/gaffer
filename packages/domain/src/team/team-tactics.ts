@@ -568,7 +568,7 @@ export function snapToBoard(p: BoardPoint): BoardPoint {
  * 화면이 판을 이 비율보다 눕히면 측면이 실제보다 멀고 앞뒤가 가까워져, 감독이
  * 눈으로 재는 간격이 코어가 계산한 간격과 달라진다.
  * 화면 쪽 짝은 `--pitch-ratio`·`--pitch-ratio-portrait`
- * (`apps/web/game/shell.css` `:root`).
+ * (`apps/web/shared/tokens.css` `:root`).
  */
 const PITCH_METRES = { length: 105, width: 68 } as const;
 
@@ -786,7 +786,10 @@ const MOVE_BAND_Y: Record<"defense" | "midfield" | "attack", number> = PITCH_BAN
 
 export function movePoint(
   from: BoardPoint,
-  move: { lane?: "left" | "center" | "right"; band?: "defense" | "midfield" | "attack" },
+  move: {
+    lane?: "left" | "center" | "right" | undefined;
+    band?: "defense" | "midfield" | "attack" | undefined;
+  },
 ): BoardPoint {
   return clampToBoard({
     x: move.lane ? MOVE_LANE_X[move.lane] : from.x,

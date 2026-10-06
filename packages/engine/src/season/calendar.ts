@@ -591,7 +591,7 @@ function slotFor(week: Matchweek, indexInRound: number): { date: string; time: s
  */
 export interface LeagueMembership {
   /** 팀 → 지금 속한 리그 */
-  leagueOf?: Record<string, string>;
+  leagueOf?: Record<string, string> | undefined;
   /**
    * 리그전을 도는 리그를 더 넣는다 — **강등된 감독의 2부**.
    * 2부는 원래 컵 참가 인원일 뿐이라 일정이 없다. 감독이 거기로 내려가면 그

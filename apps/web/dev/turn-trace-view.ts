@@ -389,12 +389,14 @@ export function traceToolFlow(messages: readonly unknown[]): TraceToolStep[] {
 /** 한 줄로 줄인 JSON — 인자·결과를 흐름에서 미리 보는 자리 */
 export function compactJson(value: unknown, max = 120): string {
   if (value === undefined) return "";
-  let text: string;
+  let json: string | undefined;
   try {
-    text = JSON.stringify(value) ?? String(value);
+    json = JSON.stringify(value);
   } catch {
-    text = String(value);
+    json = undefined;
   }
+  // 함수·심벌은 `undefined`, 순환·BigInt는 예외다 — 그때는 종류만 적는다
+  const text = json ?? `[${typeof value}]`;
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
@@ -422,8 +424,7 @@ export function previewLine(text: string, max = 90): string {
  */
 export function factPeek(kind: string, data: unknown, max = 110): string {
   const value = (data ?? {}) as Record<string, unknown>;
-  const text = (key: string): string =>
-    typeof value[key] === "string" ? (value[key] as string) : "";
+  const text = (key: string): string => (typeof value[key] === "string" ? value[key] : "");
   const count = (key: string): number =>
     Array.isArray(value[key]) ? (value[key] as unknown[]).length : 0;
   let line: string;

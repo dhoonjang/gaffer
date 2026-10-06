@@ -17,7 +17,7 @@ type TurnStreamEvent = {
   payload?: GamePayload;
   error?: string;
   retry?: boolean;
-  detail?: string;
+  detail?: string | undefined;
 };
 
 /** 턴 하나가 실어 보내는 것 — 감독의 말이나 손잡이, 그리고 전술판에서 쌓인 지시 */
@@ -50,7 +50,7 @@ type TurnStreamBody = {
  */
 export type TurnStreamFailure = {
   reason: string;
-  detail?: string;
+  detail?: string | undefined;
   settled: boolean;
   retry: boolean;
 };
@@ -122,7 +122,7 @@ export async function streamTurn(
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         retry?: boolean;
-        detail?: string;
+        detail?: string | undefined;
       };
       // 라우트가 턴을 돌리기 전에 반려했다 — 저장된 것이 없다
       return {
@@ -150,7 +150,7 @@ export async function streamTurn(
         if (!line.trim()) continue;
         let evt: TurnStreamEvent;
         try {
-          evt = JSON.parse(line);
+          evt = JSON.parse(line) as TurnStreamEvent;
         } catch {
           continue; // 불완전한 조각은 건너뛴다 — 다음 줄에서 회복
         }

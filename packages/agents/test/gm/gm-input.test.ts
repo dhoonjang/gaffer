@@ -65,11 +65,12 @@ import {
 } from "@gaffer/agents";
 import { agentConfig, ScriptedGameLLM } from "@gaffer/llm";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@gaffer/llm";
+import type * as LlmModule from "@gaffer/llm";
 
 /** 실모드 평시 턴이 부르는 모델 — `llm`을 따로 받지 않는 `runGmTurn`의 길이다 */
 const { stubRunTurn } = vi.hoisted(() => ({ stubRunTurn: vi.fn() }));
 vi.mock("@gaffer/llm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@gaffer/llm")>();
+  const actual = await importOriginal<typeof LlmModule>();
   return { ...actual, createGameLLM: () => ({ runTurn: stubRunTurn }) };
 });
 
@@ -328,7 +329,7 @@ describe("상태 스냅샷 (매 턴 갱신되는 휘발성 블록)", () => {
      * 한가운데에 묻혀 GM이 장부 대신 축구 상식의 주장을 세운다 (agents.md §6).
      */
     const captain = squad.find((p) => p.isCaptain)!;
-    const vice = squad.find((p) => p.isViceCaptain === true);
+    const vice = squad.find((p) => p.isViceCaptain);
     expect(note).toContain(`완장: 주장 ${captain.name} · 부주장 ${vice?.name ?? "없음"}`);
     expect(note).not.toContain(`${captain.name}(주장)`);
     // 완장 줄이 선수단 줄 위다 — 이름을 읽기 전에 누가 완장을 찼는지가 선다
@@ -383,7 +384,7 @@ describe("상태 스냅샷 (매 턴 갱신되는 휘발성 블록)", () => {
 
     // 이번 시즌의 상은 아직 없다 — 시즌을 한 칸 잘못 세면 여기서 걸린다
     state.date = state.calendar.preseasonStart;
-    state.awards![0]!.season = state.season;
+    state.awards[0]!.season = state.season;
     expect(buildGmStateNote(state)).not.toContain("<offseason>");
   });
 
@@ -956,7 +957,9 @@ describe("도구 구성", () => {
     const state = game();
     const calls: GmToolCall[] = [];
     const tools = buildToolSpecs(state, calls);
-    tools.find((t) => t.name === "set_captain")!.handle({ playerId: userPlayers(state)[0]!.id });
+    await tools
+      .find((t) => t.name === "set_captain")!
+      .handle({ playerId: userPlayers(state)[0]!.id });
     expect(calls[0]!.line).toBeUndefined();
   });
 });

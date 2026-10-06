@@ -239,7 +239,7 @@ function isLeagueEntry(value: unknown): value is LeagueCatalogEntry {
 const load = catalogSource<readonly LeagueCatalogEntry[]>(() => {
   const raw = readOverride(leagueCatalogPath());
   return Array.isArray(raw) && raw.length > 0 && raw.every(isLeagueEntry)
-    ? (raw as LeagueCatalogEntry[])
+    ? raw
     : LEAGUE_CATALOG_SEED;
 });
 

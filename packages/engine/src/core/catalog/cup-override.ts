@@ -147,7 +147,7 @@ const load = catalogSource<CupOverride | null>(() => {
   if (o === null) return null;
   if (!Array.isArray(o.europe) || !o.europe.every(isEuroEntry)) return null;
   if (!Array.isArray(o.domestic) || !o.domestic.every(isDomesticEntry)) return null;
-  return { europe: o.europe as CupCatalogEntry[], domestic: o.domestic as DomesticCupEntry[] };
+  return { europe: o.europe, domestic: o.domestic };
 });
 
 /** 컵 오버라이드 — 없거나 손상됐으면 null (시드로 폴백) */

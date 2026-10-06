@@ -240,12 +240,12 @@ export type CareerView = {
   achievements: Array<{
     code: AchievementCode;
     season: number;
-    position?: number;
-    leagueName?: string;
-    competitionName?: string;
-    playerName?: string;
-    goals?: number;
-    matches?: number;
+    position?: number | undefined;
+    leagueName?: string | undefined;
+    competitionName?: string | undefined;
+    playerName?: string | undefined;
+    goals?: number | undefined;
+    matches?: number | undefined;
   }>;
   /**
    * 시상 — 업적과 같은 규약이다: **코드와 근거 수치**만 내려가고 상의 이름은
@@ -265,9 +265,9 @@ export type CareerView = {
     goals: number;
     assists: number;
     /** 출전이 없으면 없다 (`seasonRating`) */
-    rating?: number;
+    rating?: number | undefined;
     /** `young-player`가 센 나이 — 시즌 종료일 기준 */
-    age?: number;
+    age?: number | undefined;
   }>;
   seasons: Array<{
     season: number;

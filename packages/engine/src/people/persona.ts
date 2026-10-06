@@ -208,11 +208,11 @@ export function inventPersonName(rng: () => number, teamId: string, taken?: Set<
  * 사람이 한 사람으로 읽히고, 그가 다시 부임하는 날 같은 이름이 벤치 둘에 앉는다.
  */
 export function occupiedPersonNames(state: {
-  teams: Array<{ managerName?: string }>;
-  personas?: StoredPersona[];
-  manager?: { name: string };
-  managerPool?: ReadonlyArray<{ name: string }>;
-  staffPool?: ReadonlyArray<{ name: string }>;
+  teams: Array<{ managerName?: string | undefined }>;
+  personas?: StoredPersona[] | undefined;
+  manager?: { name: string } | undefined;
+  managerPool?: ReadonlyArray<{ name: string }> | undefined;
+  staffPool?: ReadonlyArray<{ name: string }> | undefined;
 }): Set<string> {
   return new Set([
     ...state.teams.map((t) => t.managerName).filter((n): n is string => n !== undefined),
@@ -1033,19 +1033,19 @@ interface SpeakerSource {
   userTeamId: string;
   personas: readonly StoredPersona[];
   players?: Array<{
-    id?: string;
+    id?: string | undefined;
     name: string;
     teamId: string;
-    isCaptain?: boolean;
-    isViceCaptain?: boolean;
+    isCaptain?: boolean | undefined;
+    isViceCaptain?: boolean | undefined;
     /** 이름난 현역 판정용 — 없으면(축약 픽스처) 이름난 현역으로 서지 않는다 */
-    attributes?: GamePlayer["attributes"];
-    positions?: GamePlayer["positions"];
+    attributes?: GamePlayer["attributes"] | undefined;
+    positions?: GamePlayer["positions"] | undefined;
   }>;
   /** 가상 감독 판정용 — 없으면(축약 픽스처) 타 팀 벤치가 사전에 서지 않는다 */
-  teams?: Array<{ id: string; managerName?: string }>;
+  teams?: Array<{ id: string; managerName?: string | undefined }>;
   /** 명부 감독이 지금 세계에 서 있는지 — 잘려서 풀에 앉은 사람도 이름을 갖는다 */
-  managerPool?: ReadonlyArray<{ name: string }>;
+  managerPool?: ReadonlyArray<{ name: string }> | undefined;
 }
 
 /**
@@ -1059,7 +1059,7 @@ export type SpeakerKind = PersonaRole | "captain";
 export interface SpeakerRole {
   kind: SpeakerKind;
   /** 이름 옆에 글자로 붙는 직책 — 없으면 아이콘만 선다 */
-  label?: string;
+  label?: string | undefined;
 }
 
 /**
@@ -1408,8 +1408,8 @@ function worldFigurePersonaOf(seed: WorldFigureSeed): Persona {
  */
 interface WorldFigureScope {
   userTeamId: string;
-  teams?: readonly { id: string; managerName?: string }[];
-  managerPool?: readonly { name: string }[];
+  teams?: readonly { id: string; managerName?: string | undefined }[];
+  managerPool?: readonly { name: string }[] | undefined;
 }
 
 /**

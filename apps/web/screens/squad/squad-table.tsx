@@ -4,7 +4,7 @@ import { Fragment, useMemo } from "react";
 import { formatRating, josaOf } from "@gaffer/domain";
 import { PlayerName } from "@/shared/player-card";
 import { ConditionBar } from "@/shared/condition-bar";
-import { IconChevron, IconChevronUp } from "@/shared/icons";
+import { IconArrowLeft, IconArrowRight, IconChevron, IconChevronUp } from "@/shared/icons";
 import { humanDate } from "@/shared/dateline";
 import {
   Armband,
@@ -15,6 +15,7 @@ import {
   ovrTitle,
 } from "../../shared/player-marks";
 import { TIER_SLUG, type SquadRow, type Tier } from "./types";
+import { Button } from "@/shared/button";
 
 /** 기본 정렬은 칸 → 라인 → OVR 순서다. 선수 열 머리를 누르면 기본 정렬로 돌아간다. */
 export type SortKey =
@@ -89,7 +90,7 @@ export function SquadTable({
         case "rating":
           // 기록 없는 선수는 정렬 맨 아래로 — 0.00과 "아직 없음"은 다르다
           return p.seasonRating ?? -1;
-        default:
+        case "role":
           return (
             (tierOf ? TIER_ORDER[tierOf(p.id)] : (ROLE_ORDER[p.role] ?? 9)) * 1000 +
             (GROUP_ORDER[p.positionGroup] ?? 9) * 100 -
@@ -106,7 +107,7 @@ export function SquadTable({
     });
     // `tierKey`는 `tierOf`가 **무엇을 답하는지**를 대신하는 문자열이다 — 함수는
     // 같은 것이 계속 오므로 이게 없으면 자리 이동이 정렬에 반영되지 않는다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 위의 `tierKey`
   }, [players, sort, tierOf, tierKey]);
 
   /**
@@ -121,14 +122,14 @@ export function SquadTable({
       className={`sortable ${className ?? ""}${sort.key === key ? " sorted" : ""}`}
       aria-sort={sort.key === key ? (sort.desc ? "descending" : "ascending") : "none"}
     >
-      <button type="button" className="sort-btn" onClick={() => onSort(key)} title={title}>
+      <Button variant="bare" className="sort-btn" onClick={() => onSort(key)} title={title}>
         {label}
         {sort.key === key && (
           <span className="sort-mark" aria-hidden>
             {sort.desc ? <IconChevron size={10} /> : <IconChevronUp size={10} />}
           </span>
         )}
-      </button>
+      </Button>
     </th>
   );
 
@@ -217,7 +218,8 @@ export function SquadTable({
                       };
                       const rowGoesUp = RANK[swapPair.tier] > RANK[rowTier];
                       return (
-                        <button
+                        <Button
+                          variant="bare"
                           className="swap-btn"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -226,8 +228,8 @@ export function SquadTable({
                           data-testid={`swapin-${p.id}`}
                           title={`${p.name}(${rowTier})${josaOf(rowTier, "과/와")} ${swapPair.name}(${swapPair.tier}) 맞바꾸기`}
                         >
-                          {rowGoesUp ? "←" : "→"}
-                        </button>
+                          {rowGoesUp ? <IconArrowLeft size={12} /> : <IconArrowRight size={12} />}
+                        </Button>
                       );
                     })()}
                   </span>

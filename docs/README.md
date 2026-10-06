@@ -17,7 +17,8 @@ Gaffer는 자연어로 감독이 되어 서사·협상·경기를 즐기는 게�
 | [app](app/README.md)         | 도메인을 함께 움직이는 일 — 시간 진행·시즌 전환·저장·조회 | [시즌](season/season.md) §5·§6                                                                                     |
 
 호출과 화면: [agents](agents/README.md) — [에이전트](agents/agents.md) · [파이프라인](agents/pipeline.md) ·
-[프롬프트](agents/prompts.md) · [모델 설정](agents/models.md) · [web](web/README.md) —
-[화면 규약](web/design-system.md). 밸런스 관측은 [하네스](balance-harness.md)다.
+[프롬프트](agents/prompts.md) · [모델 설정](agents/models.md). 화면과 디자인 시스템은 코드가
+갖는다 — [`apps/web/shared/tokens.css`](../apps/web/shared/tokens.css). 밸런스 관측은
+[하네스](balance-harness.md)다.
 
 문서는 현재 동작과 소유권을 설명한다.

@@ -1,7 +1,7 @@
 import {
   type MatchSide,
   type MatchEventType,
-  ShootoutOutcomeSchema,
+  type ShootoutOutcomeSchema,
   type ShootoutKick,
   type MatchEvent,
 } from "./match-events";

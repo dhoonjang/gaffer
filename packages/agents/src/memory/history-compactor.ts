@@ -33,7 +33,10 @@ const ReportInputSchema = z.object({
 export const REPORT_DIGEST_INPUT = toToolSchema(ReportInputSchema);
 
 function buildCompactionPrompt(
-  state: { historyDigest?: { open?: string; candidates?: CharacterCandidate[] } },
+  state: {
+    historyDigest?:
+      { open?: string | undefined; candidates?: CharacterCandidate[] | undefined } | undefined;
+  },
   brief: HistoryFoldBrief,
   candidates: readonly CharacterCandidate[] = [],
 ): string {

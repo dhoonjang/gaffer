@@ -1375,7 +1375,7 @@ function withColours(team: TeamCatalogEntry): TeamCatalogEntry {
 
 /**
  * 띠를 붙인다 — 리그마다 색 있는 팀을 목록 순서로 한 번에 재어, 한 리그 안에서 띠가
- * 서로 갈리게 한다 (`separatedBandsOf` · web/design-system.md §2). 오버라이드 파일에
+ * 서로 갈리게 한다 (`separatedBandsOf` · tokens.css 「구단 색」). 오버라이드 파일에
  * 옛 띠가 실려 있어도 다시 잰다 — 띠는 편집 대상이 아니라 파생값이다.
  */
 function withBands(teams: readonly TeamCatalogEntry[]): TeamCatalogEntry[] {
@@ -1447,7 +1447,7 @@ export function teamsOfLeague(leagueId: string): TeamCatalogEntry[] {
 }
 
 /**
- * 플레이 가능 리그의 정체성 색 — id → #rrggbb (web/design-system.md §2-1).
+ * 플레이 가능 리그의 정체성 색 — id → #rrggbb (tokens.css 「리그 색」).
  *
  * 규칙은 domain이 갖고(`leagueTonesOf`) 여기는 **어느 구단이 어느 리그에 있는가**만
  * 답한다. 답이 리그 집합의 함수라 리그 하나씩 물을 수 없다 — 한 번에 다섯을 낸다.

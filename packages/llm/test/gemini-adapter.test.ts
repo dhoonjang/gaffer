@@ -516,7 +516,7 @@ describe("GeminiGameLLM 재시도", () => {
     llm.runTurn({ system: "sys", history: [], user: "@김감독: 계속." });
 
   /** 대기가 실제로 흐르지 않게 — 재는 것은 횟수이지 시계가 아니다 */
-  async function settle<T>(run: () => Promise<T>): Promise<T | unknown> {
+  async function settle(run: () => Promise<unknown>): Promise<unknown> {
     vi.useFakeTimers();
     try {
       const promise = run().catch((error: unknown) => error);

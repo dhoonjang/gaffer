@@ -12,7 +12,7 @@
  * 사건의 종류 — **코어가 정하고 화면이 읽는다.**
  *
  * 꼬리표 글자("부상")도 픽토그램도 여기 없다. 그건 화면의 어휘이고
- * (web/design-system.md §6), 코어가 그걸 알면 종류가 두 벌로 선다.
+ * (`apps/web/screens/chat/tick-event-display.ts`), 코어가 그걸 알면 종류가 두 벌로 선다.
  */
 export const TICK_EVENT_KINDS = [
   "injury",

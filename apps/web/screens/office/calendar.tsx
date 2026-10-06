@@ -11,6 +11,7 @@ import { ratingTone } from "@/shared/scout-report-display";
 import { humanDate } from "@/shared/dateline";
 import { MatchReportPanel } from "../match/match-report";
 import { IconChevron } from "../../shared/icons";
+import { Button } from "@/shared/button";
 
 // ── 달력 (일정 축: 경기·훈련·추첨 + 일자 상세) ─────────────
 function isoOf(d: Date): string {
@@ -138,16 +139,16 @@ function ScheduleRow({ row, gameId }: { row: CalScheduleRow; gameId: string }) {
       </div>
       {row.matchId !== null && (
         <>
-          <button
+          <Button
+            variant="bare"
             className={`cal-report-btn${open ? " open" : ""}`}
-            type="button"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             data-testid={`cal-report-${row.matchId}`}
           >
             <span>경기 리포트</span>
             <IconChevron size={12} />
-          </button>
+          </Button>
           {open && <MatchReportPanel gameId={gameId} matchId={row.matchId} />}
         </>
       )}
@@ -161,16 +162,16 @@ function EventLine({ event }: { event: CalEvent }) {
   const details = event.details ?? [];
   return (
     <div className="cal-detail-line">
-      <button
+      <Button
+        variant="bare"
         className={`ev-row${details.length > 0 ? " expandable" : ""}${open ? " open" : ""}`}
-        type="button"
         disabled={details.length === 0}
         onClick={() => setOpen((v) => !v)}
       >
         <EventIcon kind={event.kind} />
         <span className="ev-text">{event.text}</span>
         {details.length > 0 && <span className="ev-count">{details.length}</span>}
-      </button>
+      </Button>
       {open && (
         <div className="ev-details">
           {details.map((d, i) => (
@@ -239,9 +240,9 @@ export function CalendarView({
     <div className="cal-detail" data-testid="cal-detail">
       <div className="cal-detail-head">
         <b>{humanDate(detail.iso)}</b>
-        <button className="ghost-btn" onClick={() => setSelected(null)}>
+        <Button variant="secondary" onClick={() => setSelected(null)}>
           닫기
-        </button>
+        </Button>
       </div>
 
       {detail.entries.length > 0 && (
@@ -316,7 +317,8 @@ export function CalendarView({
                   const pending = pendingRoundOf(cell.iso);
                   const dow = dowOf(cell.iso);
                   return (
-                    <button
+                    <Button
+                      variant="bare"
                       className={[
                         "cal-cell",
                         isToday ? "today" : "",
@@ -413,7 +415,7 @@ export function CalendarView({
                           />
                         ))}
                       </div>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

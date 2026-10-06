@@ -17,7 +17,7 @@ import {
   type GameState,
 } from "../../core/state";
 import { dateLabel, competitionTag } from "./league";
-import { LookupResult, resolveTeam, ourRow, theirRow, sortRating } from "./resolve";
+import { type LookupResult, resolveTeam, ourRow, theirRow, sortRating } from "./resolve";
 import { managerLine } from "./squad";
 
 // ── 팀 프로필 (상대 전력) ───────────────────────────
@@ -141,7 +141,7 @@ export function teamProfile(state: GameState, team: string): LookupResult {
     lines.push(
       nextH2h
         ? `다음 맞대결: ${competitionTag(nextH2h)} ${dateLabel(nextH2h.date)}${nextH2h.time ? ` ${nextH2h.time}` : ""} ` +
-            `${nextH2h.neutral ? "중립" : nextH2h.homeTeamId === state.userTeamId ? "홈" : "원정"}`
+            (nextH2h.neutral ? "중립" : nextH2h.homeTeamId === state.userTeamId ? "홈" : "원정")
         : "다음 맞대결: 남은 일정에 없음",
     );
     lines.push(`주력 선수 (안개 적용):`, ...keyPlayers.map((p) => `  ${theirRow(state, p)}`));

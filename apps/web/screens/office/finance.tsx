@@ -6,6 +6,7 @@ import { formatMoney, formatPounds } from "@gaffer/domain";
 import { PlayerName } from "@/shared/player-card";
 import { IconChevron } from "@/shared/icons";
 import { humanDate, humanMonthYear } from "@/shared/dateline";
+import { Button } from "@/shared/button";
 
 // ── 재정 (요약 카드 + 실시간 활동 + 월간 보고서) ─────────────
 type FinanceMonth = OfficeViews["finance"]["current"];
@@ -105,13 +106,13 @@ function FinanceFeedLine({ entry }: { entry: FinanceFeedRow }) {
       {items.length === 0 ? (
         <div className="fin-feed-row">{cells}</div>
       ) : (
-        <button
+        <Button
+          variant="bare"
           className={`fin-feed-row expandable${open ? " open" : ""}`}
-          type="button"
           onClick={() => setOpen((v) => !v)}
         >
           {cells}
-        </button>
+        </Button>
       )}
       {open && (
         <div className="fin-feed-items">
@@ -151,8 +152,8 @@ function FinanceMonthCard({ month }: { month: FinanceMonth }) {
         급여 비중 <b className={WAGE_TONE_CLASS[month.wageTone]}>{percent(month.wageRatio)}</b>
       </div>
       <div className="fin-cols">
-        <div className="fin-col">
-          <div className="fin-col-title income">수입 {formatMoney(month.incomeTotal)}</div>
+        <div>
+          <div className="fin-col-title">수입 {formatMoney(month.incomeTotal)}</div>
           {month.income.map((item) => (
             <div className="fin-line" key={item.category}>
               <span>{item.label}</span>
@@ -160,8 +161,8 @@ function FinanceMonthCard({ month }: { month: FinanceMonth }) {
             </div>
           ))}
         </div>
-        <div className="fin-col">
-          <div className="fin-col-title expense">지출 {formatMoney(month.expenseTotal)}</div>
+        <div>
+          <div className="fin-col-title">지출 {formatMoney(month.expenseTotal)}</div>
           {month.expense.map((item) => (
             <div className="fin-line" key={item.category}>
               <span>

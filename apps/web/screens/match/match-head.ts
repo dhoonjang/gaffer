@@ -18,7 +18,7 @@ export interface MatchHeadFacts {
   home: MatchLogTeam;
   away: MatchLogTeam;
   date: string;
-  score: { home: number; away: number; penalties?: { home: number; away: number } };
+  score: { home: number; away: number; penalties?: { home: number; away: number } | undefined };
   /** 우리 시점의 결과 — 우리 경기가 아니면 null */
   outcome: "W" | "D" | "L" | null;
   /** 이 경기의 골 — 분 순서. 리포트가 닿기 전의 「주요 사건」이 읽는다 */
@@ -40,7 +40,7 @@ export function matchTitleOf(log: MatchLogHead): string {
   return `${log.home.name} – ${log.away.name}`;
 }
 
-/** 스코어 표기 — 자는 `formatScore` 하나다 (design-system.md §3). 결과 전이면 null */
+/** 스코어 표기 — 자는 `formatScore` 하나다 (tokens.css 「숫자와 표기」). 결과 전이면 null */
 export function matchScoreOf(log: MatchLogHead): string | null {
   return log.score === null
     ? null

@@ -504,7 +504,7 @@ describe("같은 날 경기는 킥오프 순서대로 굴러간다", () => {
           (m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId),
       );
       const later = state.matches.filter(
-        (m) => m.date === state.date && m !== ours && (m.time ?? "") >= (ours?.time ?? ""),
+        (m) => m.date === state.date && m !== ours && m.time >= (ours?.time ?? ""),
       );
       if (ours && later.length > 0) return state;
       settleMatchdayQuick(state);
@@ -522,8 +522,8 @@ describe("같은 날 경기는 킥오프 순서대로 굴러간다", () => {
         (m.homeTeamId === state!.userTeamId || m.awayTeamId === state!.userTeamId),
     )!;
     const today = state!.matches.filter((m) => m.date === state!.date && m.id !== ours.id);
-    const earlier = today.filter((m) => (m.time ?? "15:00") < (ours.time ?? "15:00"));
-    const later = today.filter((m) => (m.time ?? "15:00") >= (ours.time ?? "15:00"));
+    const earlier = today.filter((m) => m.time < ours.time);
+    const later = today.filter((m) => m.time >= ours.time);
     expect(later.length).toBeGreaterThan(0);
     for (const m of earlier) expect(m.result, `${m.id} 먼저 끝났어야 한다`).not.toBeNull();
     for (const m of later) expect(m.result, `${m.id} 아직 안 끝났어야 한다`).toBeNull();
@@ -569,13 +569,13 @@ describe("교체", () => {
         m.result &&
         m.homeTeamId !== state.userTeamId &&
         m.awayTeamId !== state.userTeamId &&
-        (m.result.homeLineup ?? []).length > 11,
+        m.result.homeLineup.length > 11,
     );
     expect(match, "교체가 있는 타 팀 경기").toBeTruthy();
     // 라인업이 11명을 넘는다 = 교체 투입 선수가 함께 적혔다
-    expect(match!.result!.homeLineup!.length).toBeGreaterThan(11);
+    expect(match!.result!.homeLineup.length).toBeGreaterThan(11);
     // 그 선수들의 시즌 출전도 0이 아니다
-    const subbed = match!.result!.homeLineup!.slice(11);
+    const subbed = match!.result!.homeLineup.slice(11);
     for (const id of subbed) {
       const stat = state.seasonStats.find((s) => s.gamePlayerId === id);
       expect(stat?.apps ?? 0, id).toBeGreaterThan(0);
