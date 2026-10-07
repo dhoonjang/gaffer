@@ -1679,6 +1679,20 @@
   border-collapse: separate;
   border-spacing: 0;
 }
+/**
+ * 명단 칸이 표의 최소 폭(560 + 여백)보다 좁으면 **나이와 국적을 접는다** — 1024에서 채팅과
+ * 나란히 선 명단이 511px라 체력·평점이 칸 밖으로 잘렸다. 둘 다 선수 카드에 그대로 있다.
+ */
+@container (max-width: 591px) {
+  .view-scroll .squad-view,
+  .roster-scroll .squad-table {
+    min-width: 0;
+  }
+  .squad-table .col-age,
+  .squad-table .nat {
+    display: none;
+  }
+}
 .roster-scroll .squad-table td,
 .roster-scroll .squad-table th {
   white-space: nowrap;

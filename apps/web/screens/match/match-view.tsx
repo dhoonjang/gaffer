@@ -308,7 +308,7 @@ function TeamStats({ match }: { match: Match }) {
     { key: "뛴 거리", of: (s) => `${s.distanceKm.toFixed(1)}km` },
   ];
   return (
-    <table data-testid="match-stats">
+    <table className="match-stats" data-testid="match-stats">
       <thead>
         <tr>
           <th className={weAreHome ? "ours" : "theirs"}>{match.home.short}</th>

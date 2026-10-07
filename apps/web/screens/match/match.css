@@ -1032,6 +1032,14 @@ button.pitch-slot.theirs {
 .match-side-panel .squad-table .squad-name {
   white-space: normal;
 }
+/* 접혀도 등번호·완장·이름은 한 덩어리다 — 번호만 윗줄에 남지 않게 */
+.match-side-panel .squad-table .row-name {
+  white-space: nowrap;
+}
+/* 빈 교체 자리는 접는다 — 비워 둔 폭에 긴 이름이 밀려 둘째 줄로 떨어진다 (responsive.css와 같은 규칙) */
+.match-side-panel .squad-table .swap-slot:empty {
+  display: none;
+}
 .match-side-panel .squad-name .nat,
 .match-side-panel .squad-name .hg,
 .match-side-panel .squad-name .u21 {
@@ -1049,6 +1057,15 @@ button.pitch-slot.theirs {
   white-space: nowrap;
 }
 
+/* 팀 통계 — 이름표를 가운데 두고 두 팀이 **마주 본다**. 오른쪽 팀 값이 왼쪽에 붙으면
+   좁은 칸에서 어느 값이 어느 팀의 것인지 이름표를 건너 읽어야 한다 */
+.match-stats th:nth-child(2) {
+  text-align: center;
+}
+.match-stats th:last-child,
+.match-stats td:last-child {
+  text-align: right;
+}
 .match-log {
   display: flex;
   flex-direction: column;

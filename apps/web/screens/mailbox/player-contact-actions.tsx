@@ -48,6 +48,7 @@ export function PlayerContactActions({
         variant="ghost"
         disabled={blocked}
         data-testid="player-card-mail"
+        title={viaAgent ? "에이전트에 메일" : "구단에 메일"}
         onClick={() => {
           onMail({
             label: viaAgent ? `${card.name} 에이전트` : card.team,
@@ -61,7 +62,10 @@ export function PlayerContactActions({
         }}
       >
         <IconMail size={15} />
-        {viaAgent ? "에이전트에 메일" : "구단에 메일"}
+        {/* 좁은 카드에선 받는 쪽을 접고 「메일」만 남는다 — 누구에게 가는지는 `title`이 갖는다 */}
+        <span>
+          <span className="pc-long">{viaAgent ? "에이전트에 " : "구단에 "}</span>메일
+        </span>
       </Button>
     </>
   );

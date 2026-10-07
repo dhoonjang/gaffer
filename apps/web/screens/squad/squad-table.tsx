@@ -142,7 +142,7 @@ export function SquadTable({
           {th("position", "포지션")}
           {/* 계약 지위는 여기 서지 않는다 — 계약의 한 칸이라 선수 카드의 계약 무리가 든다
               (people.md §5-2). 명단은 지금 뛰는 자리와 전력을 읽는 표다 */}
-          {th("age", "나이", "hide-sm")}
+          {th("age", "나이", "hide-sm col-age")}
           {th("overall", "OVR")}
           {th("adaptation", "적응", "hide-sm", "지금 맡은 자리에서 이 전술을 얼마나 소화하는가")}
           {th("form", "폼")}
@@ -306,7 +306,7 @@ export function SquadTable({
               {/* 지금 맡고 있는 자리를 그대로 보여준다 — 전술판에 RWB로 저장돼 있으면 RWB.
                 "주 포지션과 다르다"는 표시는 하지 않는다 (적합도는 전술판의 적응도 숫자로 읽는다) */}
               <td>{p.assignedPosition ?? p.position}</td>
-              <td className="hide-sm">{p.age}</td>
+              <td className="hide-sm col-age">{p.age}</td>
               {/**
                * OVR은 **지금 맡은 자리·역할에서 내는 전력**이다 — 경기에서 실제로
                * 쓰이는 값이 그것이기 때문이다. 주 포지션 기준값으로 두면 자리를

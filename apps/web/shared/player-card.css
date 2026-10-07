@@ -237,11 +237,30 @@
   .player-card-veil {
     --pc-padding: 16px;
   }
+}
+/**
+ * 좁은 카드 — **조작은 한 줄을 지킨다.** 두 줄로 접으면 본문보다 조작 줄이 무거워진다.
+ * 여백과 글자를 한 단 줄이고, 받는 쪽(「에이전트에」)과 「닫기」 글자를 접는다 —
+ * 닫기는 ✕ 하나로 읽히고, 카드 밖을 눌러도·Esc로도 닫힌다.
+ */
+@media (max-width: 479px) {
+  .pc-actions {
+    gap: 4px;
+  }
   .pc-actions .btn {
-    flex: 1;
     min-width: 0;
+    padding-inline: 8px;
+    gap: 4px;
+    font-size: var(--fs-sm);
   }
   .pc-actions .pc-close {
-    flex: 0 0 auto;
+    width: 36px;
+    padding: 0;
+  }
+  .pc-side {
+    gap: 4px;
+  }
+  .pc-long {
+    display: none;
   }
 }

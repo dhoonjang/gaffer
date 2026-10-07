@@ -8,12 +8,29 @@
  * 실제로 그랬다. 여기서는 한 열로 쌓고 스크롤을 페이지에 돌려준다.
  */
 @media (max-width: 1023px) {
-  .app:not(.in-match) .topbar {
-    flex-wrap: wrap;
+  /**
+   * 구단 · 감독 · 지금은 **문장 옆 두 줄**로 선다 — 한 줄에 다 들어가는 폭과 못 들어가는
+   * 폭이 기기마다 갈려, 접히는 대로 두면 각주가 문장 밑으로 기어들어 이름과 어긋난다.
+   * 문장이 두 줄의 가운데에 서고, 이름과 각주는 같은 왼쪽 선에서 시작한다.
+   */
+  .topbar-meta {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 0;
+    line-height: var(--lh-table);
   }
-  .rail:not(.match-rail) {
-    flex-basis: 100%;
-    margin-left: 0;
+  .topbar-club-line {
+    display: contents;
+  }
+  .topbar-club-line .crest {
+    grid-row: span 2;
+  }
+  .topbar-club,
+  .topbar-sub,
+  .topbar-agenda {
+    grid-column: 2;
   }
   .squad-view,
   .squad-layout {
@@ -270,12 +287,15 @@
   }
   .rail .rail-panels button.active {
     background: var(--panel-2);
-    box-shadow: inset 3px 0 0 var(--accent);
   }
-  .rail .rail-panels button.active:focus-visible {
-    box-shadow:
-      var(--ring),
-      inset 3px 0 0 var(--accent);
+  /* 서랍에선 밑줄이 왼쪽 세로 선이 된다 */
+  .rail .rail-panels button.active::before {
+    top: var(--sp-2);
+    bottom: var(--sp-2);
+    left: 0;
+    right: auto;
+    width: 3px;
+    height: auto;
   }
   .rail .rail-panels button.hinted::after {
     top: 50%;
@@ -303,30 +323,6 @@
    * 날짜와 분은 그대로 남는다. 이만큼 줄이면 각주가 제목 옆 한 줄에 그대로 서고,
    * 그래도 모자라면 `flex-wrap`이 아래로 접는다.
    */
-  /**
-   * 구단 · 감독 · 지금은 **문장 옆 두 줄**로 선다 — 한 줄에 다 들어가는 폭과 못 들어가는
-   * 폭이 기기마다 갈려, 접히는 대로 두면 각주가 문장 밑으로 기어들어 이름과 어긋난다.
-   * 문장이 두 줄의 가운데에 서고, 이름과 각주는 같은 왼쪽 선에서 시작한다.
-   */
-  .topbar-meta {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: 8px;
-    row-gap: 0;
-    line-height: var(--lh-table);
-  }
-  .topbar-club-line {
-    display: contents;
-  }
-  .topbar-club-line .crest {
-    grid-row: span 2;
-  }
-  .topbar-club,
-  .topbar-sub,
-  .topbar-agenda {
-    grid-column: 2;
-  }
   .topbar-sub {
     font-size: var(--fs-xs);
   }

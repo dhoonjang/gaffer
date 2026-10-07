@@ -684,7 +684,6 @@ export function SquadView({
       return (
         <Button
           variant="secondary"
-          size="sm"
           data-testid={`squadmove-${playerId}`}
           onClick={() => onMoveSquadRow(playerId, reserve ? "first" : "reserve")}
         >

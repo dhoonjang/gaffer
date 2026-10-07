@@ -304,9 +304,11 @@ function PlayerCardOverlay({
             className="pc-close"
             onClick={onClose}
             data-testid="player-card-close"
+            aria-label="닫기"
+            title="닫기"
           >
             <IconClose size={14} />
-            닫기
+            <span className="pc-long">닫기</span>
           </Button>
         </div>
       </div>

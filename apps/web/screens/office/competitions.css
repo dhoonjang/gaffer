@@ -560,6 +560,11 @@
 
 /* 좁은 대회 패널 — 날짜는 대진 윗줄로 올라가 팀명·스코어가 가로를 갖는다. 전력 숫자는 한 덩어리다 */
 @container (max-width: 480px) {
+  /* 숫자 여섯 칸이 팀 이름의 폭을 다 먹지 않게 칸 옆 여백을 줄인다 */
+  .competitions-view th,
+  .competitions-view td {
+    padding-inline: 4px;
+  }
   .competitions-view .fixture {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: 4px 8px;
