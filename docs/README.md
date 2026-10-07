@@ -14,7 +14,7 @@ Gaffer는 자연어로 감독이 되어 서사·협상·경기를 즐기는 게�
 | [season](season/README.md)   | 시즌 — 일정·대회·순위·상금·시상                           | [시즌](season/season.md) · [대회](season/competition.md)                                                           |
 | [team](team/README.md)       | 팀 — 선수단·라인업·전술·이적·재정·이사회                  | [구단](team/team.md) · [재정](team/finance.md) · [보드와 고용](team/board.md) · [이적과 재계약](team/transfers.md) |
 | [people](people/README.md)   | 인물 — 로어북·스태프·메일함·언론·감독 커리어              | [인물](people/people.md) · [로어북](people/lorebook.md) · [메일함](people/mail.md) · [커리어](people/career.md)    |
-| [app](app/README.md)         | 도메인을 함께 움직이는 일 — 시간 진행·시즌 전환·저장·조회 | [시즌](season/season.md) §5·§6                                                                                     |
+| app                          | 도메인을 함께 움직이는 일 — 시간 진행·시즌 전환·저장·조회 | [책임 구조](architecture.md) · [시즌](season/season.md) §5·§6                                                      |
 
 호출과 화면: [agents](agents/README.md) — [에이전트](agents/agents.md) · [파이프라인](agents/pipeline.md) ·
 [프롬프트](agents/prompts.md) · [모델 설정](agents/models.md). 화면과 디자인 시스템은 코드가
