@@ -252,6 +252,7 @@ import {
   SHOT_KEEP_SHARE,
   SHOT_TENDENCY_THRESHOLD,
   SHOT_TENDENCY_VALUE,
+  SET_PIECE_PRESENCE_WEIGHT,
 } from "./tuning";
 
 /**
@@ -3033,14 +3034,14 @@ function restartPosition(
     const routine = sideInputOf(ctx.input, r.side).setPieceRoutine;
     // 가담 — 박스에 올라가는 사람 수는 세트피스 지시가 정한다 (`SET_PIECE_ROUTINE_AXES.commit`)
     const attackersInBox = setPieceRoutineCount("commit", routine?.commit ?? "normal");
+    // 올라가는 사람은 공중볼로 고른다 — 박스 성향은 동점을 가르는 몫이다. 성향을 앞에 두면
+    // 코너마다 공격수만 올라가고 헤더의 주인인 센터백이 하프라인에 남는다
+    const presence = (q: LivePlayer) =>
+      attr(ctx, q, "aerial") / 100 +
+      (ctx.tendency.get(q.id)?.boxPresence ?? 0.5) * SET_PIECE_PRESENCE_WEIGHT;
     const groupRank = state.players
       .filter((q) => q.side === p.side && !isKeeper(ctx, q))
-      .sort(
-        (a, b) =>
-          (ctx.tendency.get(b.id)?.boxPresence ?? 0.5) +
-          attr(ctx, b, "aerial") / 200 -
-          ((ctx.tendency.get(a.id)?.boxPresence ?? 0.5) + attr(ctx, a, "aerial") / 200),
-      )
+      .sort((a, b) => presence(b) - presence(a))
       .findIndex((q) => q.id === p.id);
     if (attacking) {
       if (groupRank < attackersInBox) {

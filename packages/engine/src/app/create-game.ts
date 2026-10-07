@@ -439,7 +439,7 @@ function buildInitialSquads(
  * — 프리셋은 자기 스타일이 실제로 말하는 갈래에만 선다. 갈래를 더하거나 옮길 때는 그
  * 가중 합을 다시 재라(`docs/team/team.md` §6).
  */
-function initialTactics(teamId: string, formation: Formation): TacticsSpec {
+export function initialTactics(teamId: string, formation: Formation): TacticsSpec {
   switch (tacticalStyleOf(teamId)) {
     // 라인을 올려 압축하되 천천히 넓게 짧은 패스로 돌린다 — 공을 잃으면 자리부터
     // 잡고, 올린 라인은 트랩으로 지키며, 뒤에서 짧게 풀어 나간다

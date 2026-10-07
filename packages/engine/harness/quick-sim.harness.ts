@@ -17,6 +17,7 @@ import {
 } from "@gaffer/engine";
 import { positionGroupOfPlayer, type InjuryRiskGrade } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
+import { FORMATION_ARMS, assignLeagueFormations, withFormation } from "./live-runs";
 import { INJURY_RATE, QUICK_OUTCOMES } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
 
@@ -156,6 +157,42 @@ function loadArm(runs: number): { fresh: number; loaded: number; injuries: [numb
   };
 }
 
+/** 모양 팔 하나의 판 수 — 모양마다 상대 모양 일곱을 고르게 돈다 */
+const FORMATION_RUNS = 4200;
+
+/**
+ * **모양마다 같은 눈금인가** — 홈 팀을 프리셋 각각으로, 상대는 일곱 모양을 돌려 세운다.
+ * 기대치는 같은 손잡이(`teamInjuryRate`·`teamCardRate`)에서 그 판의 강도로 유도한다.
+ */
+function formationArms(): Record<string, number> {
+  const state = createTestGame(11);
+  const squadIn = (teamId: string, formation: (typeof FORMATION_ARMS)[number]) => {
+    withFormation(state, teamId, formation);
+    return flat(simSquadOf(state, teamId, leagueOfTeamIn(state, teamId)));
+  };
+  const aways = FORMATION_ARMS.map((f) => squadIn(AWAY, f));
+  const out: Record<string, number> = {};
+  for (const f of FORMATION_ARMS) {
+    const home = squadIn(HOME, f);
+    let injuries = 0;
+    let cards = 0;
+    let expectedInjuries = 0;
+    let expectedCards = 0;
+    for (let i = 0; i < FORMATION_RUNS; i++) {
+      const away = aways[i % aways.length]!;
+      const r = quickSimulate(home, away, 9000 + i, `shape:${f}:${i}`);
+      injuries += r.injuries.length;
+      cards += r.cards.length;
+      const intensity = [home, away].map((s) => matchIntensity(s.tactics ?? DEFAULT_TACTICS));
+      expectedInjuries += intensity.reduce((sum, x) => sum + teamInjuryRate(x), 0);
+      expectedCards += intensity.reduce((sum, x) => sum + teamCardRate(x), 0);
+    }
+    out[`${f} — 부상 기대 대비 배율 (간이)`] = injuries / Math.max(1e-9, expectedInjuries);
+    out[`${f} — 카드 기대 대비 배율 (간이)`] = cards / Math.max(1e-9, expectedCards);
+  }
+  return out;
+}
+
 /** 등급별 노출(선수 × 경기)과 실제 부상 건수 */
 interface GradeTally {
   exposure: Record<InjuryRiskGrade, number>;
@@ -273,6 +310,7 @@ describe("간이 시뮬은 기대한 눈금으로 카드와 부상을 낸다", (
       "1인당 부상률 — 잔고 0": freshRate,
       [`1인당 부상률 — 잔고 ${LOADED}`]: loadedRate,
       [`부상률 — 잔고 ${LOADED}/0`]: loadedRate / Math.max(1e-9, freshRate),
+      ...formationArms(),
     };
     console.log(
       reportOf(
@@ -291,6 +329,8 @@ const SEASON_STARTER_CONDITION = 95;
 describe("간이 시뮬의 연장 · 퇴장 · 교체 · 페널티", () => {
   it("quick-outcomes", () => {
     const state = createTestGame(3);
+    // 리그마다 팀에 프리셋 일곱을 돌려 준다 — EPL 전 대진이 4-2-3-1의 거울 경기만 되지 않게
+    const given = assignLeagueFormations(state);
     const squad = (id: string) => simSquadOf(state, id, leagueOfTeamIn(state, id));
 
     // 연장 — 같은 두 팀의 30분을 200번
@@ -341,6 +381,13 @@ describe("간이 시뮬의 연장 · 퇴장 · 교체 · 페널티", () => {
     const squads = new Map(epl.map((id) => [id, inSeason(squad(id))] as const));
     const subMinutes: number[] = [];
     let teamGames = 0;
+    /** 모양마다 — 그 모양으로 선 팀-경기와 그 팀의 교체 */
+    const shapeSubs = new Map(
+      FORMATION_ARMS.map((f): [string, { games: number; subs: number }] => [
+        f,
+        { games: 0, subs: 0 },
+      ]),
+    );
     const designated: number[] = [];
     const topFive: number[] = [];
     const keeperOf = (s: SimSquad) =>
@@ -351,6 +398,14 @@ describe("간이 시뮬의 연장 · 퇴장 · 교체 · 페널티", () => {
         const r = quickSimulate(squads.get(h)!, squads.get(a)!, 20000, `subs:${h}:${a}`);
         teamGames += 2;
         for (const sub of r.subs) subMinutes.push(sub.minute);
+        for (const [teamId, side] of [
+          [h, "home"],
+          [a, "away"],
+        ] as const) {
+          const shape = shapeSubs.get(given.get(teamId)!)!;
+          shape.games += 1;
+          shape.subs += r.subs.filter((sub) => sub.side === side).length;
+        }
         const ours = squads.get(h)!;
         const theirKeeper = keeperOf(squads.get(a)!);
         const taker = takerOnPitch(ours.setPieceTakers?.penalty, "penalty", ours.starters);
@@ -378,6 +433,8 @@ describe("간이 시뮬의 연장 · 퇴장 · 교체 · 페널티", () => {
       "지정 키커 페널티 성공률 (기대)": avg(designated),
       "필드 상위 다섯 페널티 성공률 (기대)": avg(topFive),
     };
+    for (const [f, shape] of shapeSubs)
+      readings[`${f} — 간이 AI 교체/팀`] = shape.subs / Math.max(1, shape.games);
     console.log(
       reportOf(
         QUICK_OUTCOMES,

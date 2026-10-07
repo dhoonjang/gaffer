@@ -6,6 +6,7 @@ import type {
   SetPieceRoutine,
   SetPieceTakers,
   ShotOrigin,
+  Formation,
   SubCause,
   TacticsSpec,
   WeightSlot,
@@ -286,6 +287,37 @@ function tacticTerm(spec: TacticsSpec, read: "xg" | "xgAgainst" | "possession"):
   return total;
 }
 
+/**
+ * 모양이 거는 거친 항 (§8.5) — 프리셋 일곱에만 서고, 자유 배치의 이름(4-1-4-1 등)은 중립이다.
+ * `xg`·`xgAgainst`·`shotsAgainst`는 `ln`에, `possession`은 점유 로짓에 더한다.
+ *
+ * 값은 **실측**에서 온다(football-reference.md §9 R7·R8) — 백5는 덜 차고, 더 많이 맞되 붐빈
+ * 박스 앞이라 맞는 슛의 질이 낮고(`shotsAgainst`는 슈팅 수만 늘리고 슛당 xG를 같은 비로
+ * 낮춘다), 공을 내준다. 4-3-3·4-2-3-1·3-4-3은 공을 조금 더 갖는다. 득실의 순효과는 경기당
+ * 0.2골 안쪽이다 — 모양이 공짜로 이기거나 지지 않는다(`world-season`의 전력 보정 잔차).
+ */
+const QUICK_FORMATION_EFFECTS: Record<
+  Formation,
+  { xg: number; xgAgainst: number; shotsAgainst: number; possession: number }
+> = {
+  "4-4-2": { xg: 0, xgAgainst: 0, shotsAgainst: 0, possession: -0.03 },
+  "4-3-3": { xg: 0.03, xgAgainst: 0, shotsAgainst: 0, possession: 0.1 },
+  "4-2-3-1": { xg: 0, xgAgainst: 0, shotsAgainst: 0, possession: 0.1 },
+  "3-5-2": { xg: 0, xgAgainst: 0, shotsAgainst: 0, possession: 0.07 },
+  "3-4-3": { xg: 0.03, xgAgainst: 0, shotsAgainst: 0, possession: 0.12 },
+  "5-3-2": { xg: -0.09, xgAgainst: 0, shotsAgainst: 0.09, possession: -0.22 },
+  "5-4-1": { xg: -0.12, xgAgainst: 0.03, shotsAgainst: 0.12, possession: -0.14 },
+};
+
+function formationTerm(
+  spec: TacticsSpec,
+  read: keyof (typeof QUICK_FORMATION_EFFECTS)[Formation],
+): number {
+  const effects: Partial<Record<string, (typeof QUICK_FORMATION_EFFECTS)[Formation]>> =
+    QUICK_FORMATION_EFFECTS;
+  return effects[spec.formation]?.[read] ?? 0;
+}
+
 /** 수적 열세의 배율 — 빠진 사람 수에 선형, 셋에서 멈춘다 */
 function shorthandedFactor(missing: number): number {
   return 1 - SHORTHANDED_PENALTY * Math.min(SHORTHANDED_MAX, Math.max(0, missing));
@@ -322,6 +354,8 @@ function quickTeamXg(input: {
     Math.log(home) +
     tacticTerm(input.tactics, "xg") +
     tacticTerm(input.opponentTactics, "xgAgainst") +
+    formationTerm(input.tactics, "xg") +
+    formationTerm(input.opponentTactics, "xgAgainst") +
     scoreTerm;
   return Math.exp(ln);
 }
@@ -348,6 +382,8 @@ function possessionOf(
     QUICK_POSSESSION_SLOPE * (home.midfield - away.midfield) +
     tacticTerm(homeTactics, "possession") -
     tacticTerm(awayTactics, "possession") +
+    formationTerm(homeTactics, "possession") -
+    formationTerm(awayTactics, "possession") +
     noise;
   const h = Math.min(0.8, Math.max(0.2, sigmoid(z)));
   return { home: h, away: 1 - h };
@@ -943,11 +979,13 @@ function runTimeline(input: TimelineInput): TimelineResult {
           window *
           (current.xg[side] / QUICK_XG_BASE) *
           intensityOf(squads[other(side)]);
+        // 상대의 모양이 맞는 슛을 늘리면 같은 xG를 더 많은, 더 옅은 슛으로 나눈다
+        const volume = Math.exp(formationTerm(tactics[other(side)], "shotsAgainst"));
         const shotCount = samplePoisson(
           rng,
-          Math.max(0, xg - penaltyRateOf * PENALTY_SCORE_RATE) / QUICK_XG_PER_SHOT,
+          (Math.max(0, xg - penaltyRateOf * PENALTY_SCORE_RATE) / QUICK_XG_PER_SHOT) * volume,
         );
-        const meanXg = OPEN_SHOT_XG;
+        const meanXg = OPEN_SHOT_XG / volume;
         const routine = quickRoutineFactors(
           squads[side].setPieceRoutine,
           squads[other(side)].setPieceRoutine,

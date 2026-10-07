@@ -1,4 +1,4 @@
-import { playerOverall } from "@gaffer/domain";
+import { playerOverall, type Formation } from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
 import {
   leagueOfTeamIn,
@@ -21,6 +21,7 @@ import {
 import { createTestGame, drillUserTactics, settleMatchdayQuick } from "../test/helpers";
 import { AI_ROTATION, LEAGUE_SPREAD, WORLD_SEASON } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
+import { FORMATION_ARMS, addShapeEffects, assignLeagueFormations, byFormation } from "./live-runs";
 
 /**
  * 전체 세계에서 한 시즌을 굴려 **분포**를 잰다 — 평균만으로는 닮았는지 알 수 없다.
@@ -365,6 +366,101 @@ function rotationReadings(tally: RotationTally): Readings<typeof AI_ROTATION> {
   };
 }
 
+/** 한 팀-경기 — 모양별 판정의 표본 */
+interface FormationRow {
+  goals: number;
+  conceded: number;
+  shots: number;
+  shotsAgainst: number;
+  xg: number;
+  possession: number;
+  /** 우리 − 상대 선발 평균 종합 능력치 (시즌 개막 전) */
+  gap: number;
+}
+
+/**
+ * 시즌 1의 리그 경기 전부를 모양별 팀-경기로 접는다 — **세계 전체의 리그**다. 감독 리그만
+ * 읽으면 모양마다 팀이 셋이라 전력이 모양을 가린다.
+ */
+function formationRows(
+  state: GameState,
+  given: ReadonlyMap<string, Formation>,
+  strength: ReadonlyMap<string, number>,
+): Record<Formation, FormationRow[]> {
+  const rows = byFormation<FormationRow>();
+  for (const m of state.matches) {
+    if (!m.result || m.season !== 1 || m.stage !== "league") continue;
+    const r = m.result;
+    const sides = [
+      [
+        m.homeTeamId,
+        m.awayTeamId,
+        r.homeGoals,
+        r.awayGoals,
+        r.homeShots,
+        r.awayShots,
+        r.homeXg,
+        r.possession.home,
+      ],
+      [
+        m.awayTeamId,
+        m.homeTeamId,
+        r.awayGoals,
+        r.homeGoals,
+        r.awayShots,
+        r.homeShots,
+        r.awayXg,
+        r.possession.away,
+      ],
+    ] as const;
+    for (const [us, them, goals, conceded, shots, shotsAgainst, xg, possession] of sides) {
+      const f = given.get(us);
+      const a = strength.get(us);
+      const b = strength.get(them);
+      if (!f || a === undefined || b === undefined) continue;
+      rows[f].push({ goals, conceded, shots, shotsAgainst, xg, possession, gap: a - b });
+    }
+  }
+  return rows;
+}
+
+/** 전력 차로 설명되지 않는 득실 — 모은 표본의 최소제곱 직선에서 모양마다의 평균 잔차 */
+function formationReadings(rows: Record<Formation, FormationRow[]>): Record<string, number> {
+  const all = Object.values(rows).flat();
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+  const mx = avg(all.map((r) => r.gap));
+  const my = avg(all.map((r) => r.goals - r.conceded));
+  const sxx = all.reduce((sum, r) => sum + (r.gap - mx) ** 2, 0);
+  const sxy = all.reduce((sum, r) => sum + (r.gap - mx) * (r.goals - r.conceded - my), 0);
+  const b = sxx > 0 ? sxy / sxx : 0;
+  const out: Record<string, number> = {};
+  for (const f of FORMATION_ARMS) {
+    const mine = rows[f];
+    out[`${f} — 팀-경기 표본`] = mine.length;
+    out[`${f} — 팀 득점`] = avg(mine.map((r) => r.goals));
+    out[`${f} — 실점`] = avg(mine.map((r) => r.conceded));
+    out[`${f} — 슈팅`] = avg(mine.map((r) => r.shots));
+    out[`${f} — xG`] = avg(mine.map((r) => r.xg));
+    out[`${f} — 상대 슈팅`] = avg(mine.map((r) => r.shotsAgainst));
+    out[`${f} — 점유`] = avg(mine.map((r) => r.possession));
+    out[`${f} — 전력 보정 득실 잔차`] = avg(
+      mine.map((r) => r.goals - r.conceded - my - b * (r.gap - mx)),
+    );
+  }
+  addShapeEffects(out, {
+    ratio: ["팀 득점", "실점", "슈팅", "상대 슈팅", "xG"],
+    difference: ["점유"],
+  });
+  const group = (fs: readonly Formation[], metric: string) =>
+    avg(fs.map((f) => out[`${f} — ${metric}`]!));
+  const backFive: Formation[] = ["5-4-1", "5-3-2"];
+  const backFour: Formation[] = ["4-4-2", "4-3-3", "4-2-3-1"];
+  out["백5 − 백4 슈팅"] = group(backFive, "슈팅") - group(backFour, "슈팅");
+  out["백5 − 백4 상대 슈팅"] = group(backFive, "상대 슈팅") - group(backFour, "상대 슈팅");
+  out["백5 − 백4 점유"] = group(backFive, "점유") - group(backFour, "점유");
+  return out;
+}
+
 describe("전체 세계 한 시즌", () => {
   /**
    * 시드마다 `CURVE_LEAGUES` 셋의 순위표가 여기 쌓이고, 마지막 케이스가 그것을 모아
@@ -380,12 +476,26 @@ describe("전체 세계 한 시즌", () => {
   const seasons: Array<Readings<typeof WORLD_SEASON>> = [];
   const rotation = newTally();
   const notes: string[] = [];
+  const rows = byFormation<FormationRow>();
 
-  for (const seed of SEEDS) {
+  for (const [seedIndex, seed] of SEEDS.entries()) {
     it(`시드 ${seed}`, () => {
       const state = createTestGame(seed);
+      // 리그마다 팀에 프리셋 일곱을 돌려 준다 — 세계가 고른 모양에 맡기면 감독 리그는 4-2-3-1뿐이다
+      const given = assignLeagueFormations(state, seedIndex);
+      const strength = new Map(
+        [...given.keys()].map((teamId) => [
+          teamId,
+          (() => {
+            const xi = simSquadOf(state, teamId, leagueOfTeamIn(state, teamId)).starters;
+            return xi.reduce((sum, p) => sum + playerOverall(p), 0) / Math.max(1, xi.length);
+          })(),
+        ]),
+      );
       const tally = rotation;
       let season: Readings<typeof WORLD_SEASON> | null = null;
+      // 시즌이 넘어가면 그 시즌의 경기가 장부에서 빠진다 — 시즌 1 안에서 읽어 둔다
+      let seasonRows = byFormation<FormationRow>();
       let note = "";
       for (let i = 0; i < 600; i++) {
         const advanced = advanceTime(state, "next_match");
@@ -393,28 +503,38 @@ describe("전체 세계 한 시즌", () => {
           note = ` ⚠️ ${eventTexts(advanced.events).join(" / ")}`;
           break;
         }
-        if (state.season === 1) season = seasonReadings(state);
+        if (state.season === 1) {
+          season = seasonReadings(state);
+          seasonRows = formationRows(state, given, strength);
+        }
         if (advanced.stopped === "season_end") break;
         if (advanced.stopped === "matchday") {
           if (state.season === 1) sampleRotation(state, tally);
           drillUserTactics(state, 7);
           rotate(state);
           settleMatchdayQuick(state);
-          if (state.season === 1) season = seasonReadings(state);
+          if (state.season === 1) {
+            season = seasonReadings(state);
+            seasonRows = formationRows(state, given, strength);
+          }
         }
       }
       expect(season, `시즌 1의 리그 경기가 하나도 없다${note}`).not.toBeNull();
       curves.push(...CURVE_LEAGUES.map((league) => curveOf(state, 1, league)));
+      for (const f of FORMATION_ARMS) rows[f].push(...seasonRows[f]);
       seasons.push(season!);
       if (note) notes.push(`시드 ${seed}${note}`);
     });
   }
 
   it(`시즌 분포 — 시드 ${SEEDS.length}개를 모아`, () => {
-    const metrics = Object.keys(seasons[0] ?? {}) as Array<keyof Readings<typeof WORLD_SEASON>>;
-    const pooled = Object.fromEntries(
-      metrics.map((metric) => [metric, average(seasons.map((r) => r[metric]))]),
-    ) as Readings<typeof WORLD_SEASON>;
+    const metrics = Object.keys(seasons[0] ?? {});
+    const pooled = {
+      ...Object.fromEntries(
+        metrics.map((metric) => [metric, average(seasons.map((r) => r[metric]!))]),
+      ),
+      ...formationReadings(rows),
+    } as Readings<typeof WORLD_SEASON>;
     const label = `시드 ${SEEDS.join("·")} 평균 (리그-시즌 ${seasons.length}개)${notes.length ? ` ⚠️ ${notes.join(" / ")}` : ""}`;
     console.log(
       [

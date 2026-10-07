@@ -36,10 +36,11 @@ jobs:
     # 어느 러너로 가든 무료분 안에 머문다.
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # 벽시계를 정하는 것은 가장 긴 파일 하나다 — 감독 경기를 실시간으로 치르는 시즌을
-    # 다섯 번 도는 `finance`가 한 시간 반, 전술 팔 다섯의 `live-tactics`가 40분 남짓이다.
+    # 다섯 번 도는 `finance`와, 모양 일곱 × 전술 팔 다섯의 `live-tactics`가 각각 한 시간 반
+    # 남짓이다. 경기 하네스가 프리셋 일곱 위에서 돌며 실시간 경기의 총량이 세 배가 됐다.
     # 잡 시한은 아래 `--deadline`보다 넉넉해야 한다: 잡이 먼저 죽으면 리포트도 이슈도
     # 서지 않아, 「아무것도 보고하지 않았다」가 조용히 몇 주를 산다.
-    timeout-minutes: 170
+    timeout-minutes: 220
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -63,7 +64,7 @@ jobs:
           LLM_MODE: mock
         # 시한에 끊겨도 그때까지 온 측정값으로 리포트를 세우고, 끊긴 하네스는 `missing`
         # 이탈로 선다 (balance-harness.md §5)
-        run: pnpm balance --report balance-report --deadline 150
+        run: pnpm balance --report balance-report --deadline 200
 
       # 잡 요약 — 하네스별 표가 실행 화면에 그대로 선다
       - name: 잡 요약

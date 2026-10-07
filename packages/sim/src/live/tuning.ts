@@ -1104,3 +1104,9 @@ export const RECEIVE_CROWD_SIGMA = 3.5;
 
 /** 슈팅 사거리 (m) — 이보다 멀면 슈팅을 선택지에 넣지 않는다 */
 export const SHOT_RANGE = 30;
+
+/**
+ * 세트피스에 박스로 올라갈 사람을 고를 때 박스 성향(`boxPresence`)의 무게 — 공중볼(÷100)
+ * 위에 얹는다. 실측 센터백 슈팅 몫 7.4%는 거의 전부 세트피스 헤더다 (football-reference §8)
+ */
+export const SET_PIECE_PRESENCE_WEIGHT = 0.3;

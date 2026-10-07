@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SubCause } from "@gaffer/domain";
+import type { Formation, SubCause } from "@gaffer/domain";
 import { CONDITION_MAX, FATIGUE_BAND_FLOOR, fatigueOf } from "@gaffer/domain";
 import {
   familiarityOf,
@@ -12,6 +12,7 @@ import { createTestGame, keepSeat } from "../test/helpers";
 import { AI_BENCH, AI_FITNESS } from "./catalog";
 import { playSeason, playUntil } from "./season";
 import { outOfBand, reportOf, type Readings } from "./harness";
+import { FORMATION_ARMS, assignLeagueFormations } from "./live-runs";
 
 /**
  * **감독의 경기를 실시간으로 치르며 도는 시즌** — 같은 시즌을 두 서술자가 나눠 읽는다.
@@ -51,13 +52,16 @@ interface Tally {
   led: number;
   ledHeld: number;
   reshaped: number;
+  /** 상대(AI)의 킥오프 모양마다 — 잰 경기와 그 경기의 AI 교체 */
+  byFormation: Record<Formation, { matches: number; subs: number }>;
 }
 
 function collect(state: GameState, tally: Tally): void {
   const pending = state.pendingMatch;
   if (!pending) return;
   const match = state.matches.find((m) => m.id === pending.matchId);
-  if (!match) return;
+  // 친선은 교체 한도가 벤치 정원이다(`FRIENDLY_SUBS`) — 공식전의 벤치 정책을 재는 자리에 섞지 않는다
+  if (!match || isFriendly(match)) return;
   const aiSide = match.homeTeamId === state.userTeamId ? "away" : "home";
   const score = pending.live.ledger.score;
   const diff = aiSide === "home" ? score.home - score.away : score.away - score.home;
@@ -71,6 +75,12 @@ function collect(state: GameState, tally: Tally): void {
   const of = (cause: SubCause) => subs.filter((e) => e.subCause === cause).length;
 
   tally.matches += 1;
+  const shapes: Partial<Record<string, Tally["byFormation"][Formation]>> = tally.byFormation;
+  const shape = shapes[pending.live.setup.sides[aiSide].kickoffTactics.formation];
+  if (shape) {
+    shape.matches += 1;
+    shape.subs += subs.length;
+  }
   for (const sub of subs) tally.subs.push(sub.minute);
   tally.chase += of("chase");
   tally.hold += of("hold");
@@ -176,12 +186,17 @@ describe("감독의 경기를 실시간으로 치르는 시즌", () => {
     led: 0,
     ledHeld: 0,
     reshaped: 0,
+    byFormation: Object.fromEntries(
+      FORMATION_ARMS.map((f) => [f, { matches: 0, subs: 0 }]),
+    ) as Tally["byFormation"],
   };
 
   it(`시드 ${FITNESS_SEED} — 체력·출전 분포 (ai-fitness)`, () => {
     const state = createTestGame(FITNESS_SEED);
     // 경질은 시계를 멈춘다 — 한 시즌을 다 돌아야 분포가 선다
     keepSeat(state);
+    // 리그마다 팀에 프리셋 일곱을 돌려 준다 — 감독 리그가 4-2-3-1의 거울 경기만 치르지 않게
+    assignLeagueFormations(state, SEEDS.indexOf(FITNESS_SEED));
 
     /**
      * ── 개막 아침 — **프리시즌이 몸에 무엇을 남겼는가** ──
@@ -284,6 +299,7 @@ describe("감독의 경기를 실시간으로 치르는 시즌", () => {
     it(`시드 ${seed} — 벤치 표본`, () => {
       const state = createTestGame(seed);
       keepSeat(state);
+      assignLeagueFormations(state, SEEDS.indexOf(seed));
       playSeason(state, (s) => collect(s, tally));
     });
   }
@@ -305,6 +321,11 @@ describe("감독의 경기를 실시간으로 치르는 시즌", () => {
       "잰 경기 수": tally.matches,
       "감독 팀 교체/경기": per(tally.userSubs),
     };
+    for (const f of FORMATION_ARMS) {
+      const shape = tally.byFormation[f];
+      readings[`${f} — 상대 경기 수`] = shape.matches;
+      readings[`${f} — AI 교체/경기`] = shape.subs / (shape.matches || 1);
+    }
     console.log(
       reportOf(
         AI_BENCH,

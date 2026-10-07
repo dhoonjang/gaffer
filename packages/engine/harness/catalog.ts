@@ -1,5 +1,6 @@
+import { FORMATIONS, type Formation } from "@gaffer/domain";
 import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
-import { defineHarness, type Band, type Harness } from "./harness";
+import { defineHarness, type Band, type BandRole, type Harness } from "./harness";
 
 /**
  * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/balance-harness.md`).
@@ -14,9 +15,231 @@ const HISTORY = "docs/agents/agents.md §5-1";
 const PROMPTS = "docs/agents/prompts.md §7";
 const TOOL_CONTRACT = "docs/agents/prompts.md §2";
 
+// ── 포메이션 ──
+//
+// 경기 하네스는 전부 프리셋 일곱 위에서 돈다. 모양마다 같은 지표를 재되, 밴드는 **모양의
+// 효과**에 건다 — 그 모양의 값을 일곱 모양의 평균과 견준 비(몫·점유는 차)다. 수준은 모은
+// 칸의 밴드가 지키므로, 모양의 칸이 그 이탈을 일곱 번 되풀이하지 않는다. 모양 칸의 역할은
+// 같은 지표의 모은 칸 역할을 따른다. 지표 이름은 `"<모양> — <지표>"`이고 근거는
+// football-reference.md §9다.
+
+type Range = readonly [number, number];
+
+/** 실측 중심 — 질 보정 [SB15]를 게임 눈금(득점 ×1.07 · xG ×1.20)으로 옮긴 팀-경기 값 */
+interface FormationProfile {
+  /** 그 모양의 근거 한 줄 — 긴 근거는 football-reference.md §9 */
+  readonly why: string;
+  readonly goals: number;
+  readonly conceded: number;
+  readonly shots: number;
+  readonly shotsAgainst: number;
+  readonly xg: number;
+  readonly possession: number;
+  readonly passes: number;
+  readonly crosses: number;
+  /** 슈팅 몫 — 최전방(ST·CF) · 측면(W와 윙백) · 미드(DM·CM·AM) · 수비(FB·CB). 실측표(§9-B)가 윙백을 측면에 센다 */
+  readonly shotShare: {
+    readonly front: number;
+    readonly wide: number;
+    readonly mid: number;
+    readonly back: number;
+  };
+  readonly frontGoalShare: number;
+  /** 풀타임 선수의 90분 거리 (km) — 자리마다 절대 밴드다. 그 모양에 없는 자리는 `null` */
+  readonly load: {
+    readonly CB: Range;
+    readonly FB: Range | null;
+    readonly CM: Range;
+    readonly W: Range | null;
+    readonly ST: Range;
+  };
+}
+
+/**
+ * 백4의 몸 — §7-A 분데스 2019/20 (풀백 10.75 · 센터백 10.21 · 미드 11.66 · 측면 11.07 · 공격수 10.86).
+ * 윙백이 서는 모양은 풀백 칸을 윙백(10.96~11.05, §9-C)으로 올려 잡는다.
+ */
+const BACK_FOUR_LOAD = {
+  CB: [9.2, 11.4],
+  FB: [9.8, 12],
+  CM: [10.5, 12.9],
+  W: [10, 12.2],
+  ST: [9.6, 12],
+} as const satisfies FormationProfile["load"];
+
+const WING_BACK_LOAD = { ...BACK_FOUR_LOAD, FB: [10.1, 12.4] } as const;
+
+// prettier-ignore
+export const FORMATION_PROFILE: Record<Formation, FormationProfile> = {
+  "4-4-2": {
+    why: "[SB15] 질 보정 xG·득점은 평균, 점유 −2.2%p·패스 −35 — 투톱이 슈팅의 35%",
+    goals: 1.4, conceded: 1.41, shots: 12.2, shotsAgainst: 12.6, xg: 1.49, possession: 0.478, passes: 430, crosses: 12.1,
+    shotShare: { front: 0.35, wide: 0.29, mid: 0.2, back: 0.15 }, frontGoalShare: 0.5,
+    load: BACK_FOUR_LOAD,
+  },
+  "4-3-3": {
+    why: "[SB15] 질 보정 득점 +0.08·점유 +1.3%p·패스 +26 — 윙어가 슈팅의 37%",
+    goals: 1.5, conceded: 1.41, shots: 12.8, shotsAgainst: 12.4, xg: 1.55, possession: 0.513, passes: 490, crosses: 12.7,
+    shotShare: { front: 0.24, wide: 0.37, mid: 0.25, back: 0.14 }, frontGoalShare: 0.35,
+    load: BACK_FOUR_LOAD,
+  },
+  "4-2-3-1": {
+    why: "[SB15] n=993 — 실측 평균의 자리, 10번이 미드 몫을 31%로 올린다",
+    goals: 1.4, conceded: 1.41, shots: 12.6, shotsAgainst: 12.3, xg: 1.51, possession: 0.512, passes: 471, crosses: 13,
+    shotShare: { front: 0.23, wide: 0.32, mid: 0.31, back: 0.15 }, frontGoalShare: 0.33,
+    load: BACK_FOUR_LOAD,
+  },
+  "3-5-2": {
+    why: "[SB15] xG 질 보정 −0.07·크로스 +1.0 — 투톱 37%, 윙백이 측면 몫을 진다",
+    goals: 1.35, conceded: 1.41, shots: 12.9, shotsAgainst: 12.2, xg: 1.4, possession: 0.504, passes: 462, crosses: 13.4,
+    shotShare: { front: 0.37, wide: 0.175, mid: 0.35, back: 0.105 }, frontGoalShare: 0.55,
+    load: { ...WING_BACK_LOAD, W: null },
+  },
+  "3-4-3": {
+    why: "[SB15] 질 보정 득점 +0.14·점유 +1.6%p — 앞 셋과 윙백이 슈팅의 44%를 나눈다",
+    goals: 1.48, conceded: 1.35, shots: 13, shotsAgainst: 12.1, xg: 1.56, possession: 0.516, passes: 482, crosses: 12.3,
+    shotShare: { front: 0.25, wide: 0.44, mid: 0.2, back: 0.11 }, frontGoalShare: 0.32,
+    load: WING_BACK_LOAD,
+  },
+  "5-3-2": {
+    why: "[SB15] 깊은 윙백 프록시 — 질 보정 슈팅 −1.7·피슈팅 +1.3·점유 −7%p·크로스 −3.5",
+    goals: 1.25, conceded: 1.35, shots: 10.8, shotsAgainst: 14, xg: 1.3, possession: 0.43, passes: 406, crosses: 8.9,
+    shotShare: { front: 0.4, wide: 0.16, mid: 0.33, back: 0.12 }, frontGoalShare: 0.6,
+    load: { ...WING_BACK_LOAD, W: null },
+  },
+  "5-4-1": {
+    why: "[SB15] 프록시(n=14)와 4-5-1 유사체 — 가장 적게 차고 가장 많이 맞는다 (Tokul 2026 승점 0.95)",
+    goals: 1.15, conceded: 1.5, shots: 10.2, shotsAgainst: 14.4, xg: 1.15, possession: 0.45, passes: 411, crosses: 8.3,
+    shotShare: { front: 0.27, wide: 0.37, mid: 0.22, back: 0.14 }, frontGoalShare: 0.38,
+    load: WING_BACK_LOAD,
+  },
+};
+
+/** 비로 견주는 지표 */
+type RatioKey = "goals" | "conceded" | "shots" | "shotsAgainst" | "xg" | "passes" | "crosses";
+
+/**
+ * 모양 효과의 허용폭 — 모양마다 팀-경기 56개의 평균을 일곱 평균과 견준 비의 표준오차 두 배에
+ * 정의 차이(제공자·시대)의 여유를 얹는다. 득점 sd 1.25 → 12%, 슈팅 sd 5.2 → 5%, xG sd 0.92 → 9%,
+ * 패스 sd 120 → 4%, 크로스 sd 5.7 → 7%
+ */
+const RATIO_TOLERANCE: Record<RatioKey, number> = {
+  goals: 0.3,
+  conceded: 0.3,
+  shots: 0.15,
+  shotsAgainst: 0.15,
+  xg: 0.22,
+  passes: 0.12,
+  crosses: 0.23,
+};
+
+/** 점유 차의 허용폭 — 점유 sd 11%p의 표준오차 1.5%p 두 배에 1%p */
+const POSSESSION_TOLERANCE = 0.04;
+
+/** 슈팅 몫 차의 허용폭 — 모양마다 슛 700개 남짓, 경기 안의 군집과 자리 판정의 차이를 얹는다 */
+const SHARE_TOLERANCE = 0.09;
+
+/** 최전방 득점 몫 차의 허용폭 — 모양마다 골 80개 남짓 */
+const GOAL_SHARE_TOLERANCE = 0.15;
+
+const meanOf = (pick: (p: FormationProfile) => number) =>
+  FORMATIONS.reduce((sum, f) => sum + pick(FORMATION_PROFILE[f]), 0) / FORMATIONS.length;
+
+/** 모양 효과 밴드 — 비 */
+function effectBand(f: Formation, key: RatioKey, label: string, role: BandRole, why: string): Band {
+  const effect = FORMATION_PROFILE[f][key] / meanOf((p) => p[key]);
+  const tolerance = RATIO_TOLERANCE[key];
+  return {
+    metric: `${f} — ${label} (모양 효과)`,
+    role,
+    min: Math.round((effect - tolerance) * 1000) / 1000,
+    max: Math.round((effect + tolerance) * 1000) / 1000,
+    unit: "ratio",
+    why: `§9 일곱 모양 평균 대비 ${(effect * 100).toFixed(0)}% — ${why}`,
+  };
+}
+
+/** 모양 효과 밴드 — 차 (점유·몫) */
+function differenceBand(
+  f: Formation,
+  label: string,
+  pick: (p: FormationProfile) => number,
+  tolerance: number,
+  role: BandRole,
+  why: string,
+): Band {
+  const effect = pick(FORMATION_PROFILE[f]) - meanOf(pick);
+  return {
+    metric: `${f} — ${label} (모양 효과)`,
+    role,
+    min: Math.round((effect - tolerance) * 1000) / 1000,
+    max: Math.round((effect + tolerance) * 1000) / 1000,
+    unit: "ratio",
+    why: `§9 일곱 모양 평균과의 차 ${effect >= 0 ? "+" : ""}${(effect * 100).toFixed(1)}%p — ${why}`,
+  };
+}
+
+/** 모양 하나의 거리 밴드 — 그 모양에 없는 자리는 읽기만 한다 */
+function loadBand(
+  f: Formation,
+  label: string,
+  range: Range | null,
+  role: BandRole,
+  why: string,
+): Band {
+  if (!range) return { metric: `${f} — ${label}`, role: "measure", why: `${f}에는 이 자리가 없다` };
+  return { metric: `${f} — ${label}`, role, min: range[0], max: range[1], why };
+}
+
+/** 모든 모양에 같은 밴드 한 줄 */
+function everyShape(metric: string, band: Omit<Band, "metric">): Band[] {
+  return FORMATIONS.map((f) => ({ ...band, metric: `${f} — ${metric}` }));
+}
+
+/** 팀 통계의 모양 효과 — 실시간 기준판과 간이 시즌이 같은 줄을 건다 */
+function teamEffectBands(f: Formation, withPasses: boolean): Band[] {
+  const why = FORMATION_PROFILE[f].why;
+  return [
+    effectBand(f, "goals", "팀 득점", "guard", why),
+    effectBand(f, "conceded", "실점", "guard", "내려앉는 모양일수록 낮다"),
+    effectBand(f, "shots", "슈팅", "guard", "백5는 덜 찬다"),
+    effectBand(f, "shotsAgainst", "상대 슈팅", "reference", "백5는 블록 앞에서 더 맞는다"),
+    effectBand(f, "xg", "xG", "guard", "모양의 공격성"),
+    differenceBand(
+      f,
+      "점유",
+      (p) => p.possession,
+      POSSESSION_TOLERANCE,
+      "guard",
+      "백5와 4-4-2는 공을 내준다",
+    ),
+    ...(withPasses
+      ? [
+          effectBand(f, "passes", "패스 시도", "reference", "점유를 따라간다"),
+          effectBand(
+            f,
+            "crosses",
+            "크로스",
+            "reference",
+            "백5의 팀 크로스는 준다 — 늘어나는 것은 윙백의 몫이다",
+          ),
+        ]
+      : []),
+  ];
+}
+
+/** 모양마다 재기만 하는 절대값 줄 — 효과 밴드의 원값이다 */
+function rawLines(f: Formation, labels: readonly string[]): Band[] {
+  return labels.map((label) => ({
+    metric: `${f} — ${label}`,
+    role: "measure",
+    why: "아래 모양 효과의 원값",
+  }));
+}
+
 export const WORLD_SEASON = defineHarness({
   id: "world-season",
-  what: "간이 시뮬로 굴린 전체 세계 EPL 한 시즌 — 득점·슈팅 분포 · 승점 곡선 · 카드",
+  what: "간이 시뮬로 굴린 전체 세계 EPL 한 시즌 — 득점·슈팅 분포 · 승점 곡선 · 카드 · 모양마다의 득실 (리그마다 팀에 프리셋 일곱을 돌려 준다)",
   doc: QUICK_SIM,
   cost: "시드당 수십 초 × 6시드 — 감독 경기도 간이 결산이다",
   // prettier-ignore
@@ -69,6 +292,15 @@ export const WORLD_SEASON = defineHarness({
     { metric: "감독 팀 순위", role: "measure", unit: "score", why: "지시하지 않는 감독의 성적 — 목표값을 두지 않는다" },
     { metric: "감독 팀 승점", role: "measure", unit: "score", why: "지시하지 않는 감독의 성적 — 목표값을 두지 않는다" },
     { metric: "리그 경기 수", role: "measure", unit: "count", why: "시즌을 끝까지 돌았는지 — 380이어야 한다" },
+    ...FORMATIONS.flatMap((f): Band[] => [
+        { metric: `${f} — 팀-경기 표본`, role: "measure", unit: "count", why: "세계 전체 리그에서 그 모양으로 선 팀-경기 — 리그마다 팀에 모양을 돌려 줬다" },
+        ...rawLines(f, ["팀 득점", "실점", "슈팅", "상대 슈팅", "xG", "점유"]),
+        ...teamEffectBands(f, false),
+        { metric: `${f} — 전력 보정 득실 잔차`, role: "guard", min: -0.25, max: 0.25, why: "**같은 전력에서 모양이 공짜로 이기지 않는다** — 선발 평균 능력치 차로 설명되지 않는 득실차의 모양별 평균. 표본이 수천이라 잡음은 0.05 안쪽이고, 실측 모양 효과(§9)는 경기당 0.2골을 넘지 않는다" },
+    ]),
+    { metric: "백5 − 백4 슈팅", role: "guard", max: -0.5, why: "§9 R7 — 같은 질의 백5는 1.7~2.3개 덜 찬다. 남의 경기 2천여 판이 이 모양들로 돈다" },
+    { metric: "백5 − 백4 상대 슈팅", role: "guard", min: 0.5, why: "§9 R7 — 질 보정 +1.3~+2.0" },
+    { metric: "백5 − 백4 점유", role: "guard", max: -0.02, unit: "ratio", why: "§9 R7 — 질 보정 −5~−7%p" },
   ],
 });
 
@@ -127,10 +359,10 @@ export const LIVE_MATCH_STATS = defineHarness({
   id: "live-match-stats",
   what: "실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·거리의 평균·중간값·sd",
   doc: "docs/match/football-reference.md",
-  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
+  cost: "시드 넷 × 모양 쌍 49 = 196경기 · 45분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
   // prettier-ignore
   bands: [
-    { metric: "팀-경기 표본", role: "measure", unit: "count", why: "팀-경기 144 — 팀 득점 평균의 표준오차가 0.1이다. 아래 밴드의 폭은 표본이 절반(72)이던 때의 잡음으로 잡아 넉넉하다" },
+    { metric: "팀-경기 표본", role: "measure", unit: "count", why: "팀-경기 392 — 일곱 모양이 고르게 섞인 표본이고, 팀 득점 평균의 표준오차가 0.06이다. 아래 밴드의 폭은 표본이 72이던 때의 잡음으로 잡아 넉넉하다" },
     { metric: "팀 득점 평균", role: "guard", min: 1.1, max: 1.75, why: "[FD] 1.41 — 표준오차 0.15의 두 배를 연다" },
     { metric: "팀 득점 sd", role: "reference", min: 0.95, max: 1.55, why: "[FD] 1.25 — 분산 ≈ 평균(푸아송)의 꼴" },
     { metric: "팀 득점 0골", role: "reference", min: 0.16, max: 0.36, unit: "ratio", why: "[FD] 25.8%" },
@@ -176,6 +408,18 @@ export const LIVE_MATCH_STATS = defineHarness({
     { metric: "풀백 앞 끝 (p90 깊이, m)", role: "reference", min: 55, why: "히트맵 이전 52.2m — 공이 전진하면 가담 성분이 무거워진다" },
     { metric: "풀백 오버래핑·침투 (회/90분)", role: "measure", why: "공을 가졌을 때 풀백이 달리기를 시작한 수 — 히트맵 이전 오버래핑은 판단당 확률 분기였다" },
     { metric: "풀백 오버래핑·침투 sd", role: "measure", why: "풀백마다의 퍼짐 — 윙백은 자주, 노-넌센스 풀백은 드물게" },
+    ...FORMATIONS.flatMap((f): Band[] => [
+      ...rawLines(f, ["팀 득점", "실점", "슈팅", "상대 슈팅", "xG", "상대 xG", "점유", "패스 시도", "크로스"]),
+      ...teamEffectBands(f, true),
+      { metric: `${f} — 팀 총 거리 (km)`, role: "guard", min: 104, max: 122, why: "§7 팀 합계 110~117 km — 모양이 바꾸는 것은 누가 뛰느냐다(§9 R4)" },
+    ]),
+    { metric: "모양 사이 팀 득점 폭", role: "measure", why: "일곱 모양의 팀 득점 최대 − 최소 — 표준오차 0.17짜리 일곱의 폭은 효과가 없어도 0.45쯤이다" },
+    { metric: "모양 사이 xG 차 폭", role: "reference", max: 0.9, why: "§9 — 같은 선수로 모양만 바꾼 xG 득실차는 0.5를 넘게 갈리지 않는다(잡음 0.35를 얹는다). 넘으면 한 모양이 공짜로 이기는 것이다" },
+    { metric: "백5 − 백4 슈팅", role: "guard", max: -0.5, why: "§9 R7 — 질 보정 −1.7~−2.3. 내려앉은 백5는 덜 찬다" },
+    { metric: "백5 − 백4 상대 슈팅", role: "guard", min: 0.5, why: "§9 R7 — 질 보정 +1.3~+2.0. 블록 앞에서 맞는 슈팅이 는다" },
+    { metric: "백5 − 백4 점유", role: "guard", max: -0.02, unit: "ratio", why: "§9 R7 — 질 보정 −5~−7%p" },
+    { metric: "백4 셋 사이 xG 폭", role: "guard", max: 0.4, why: "§9 R10 — 질을 보정한 백4 세 모양의 xG 차는 ±0.1 안쪽. 모양마다 표준오차 0.12의 폭을 얹는다" },
+    { metric: "모양 사이 팀 거리 폭 (km)", role: "guard", max: 4, why: "§9 R4 — 팀 총 거리의 모양 차는 2~3%, 3km 안쪽이다. 모양이 바꾸는 것은 누가 뛰느냐다" },
   ],
 });
 
@@ -183,7 +427,7 @@ export const LIVE_PLAYER_LOAD = defineHarness({
   id: "live-player-load",
   what: "풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표에 서는가",
   doc: "docs/match/football-reference.md §7",
-  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
+  cost: "시드 넷 × 모양 쌍 49 = 196경기 · 45분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
   // prettier-ignore
   bands: [
     { metric: "풀타임 표본", role: "measure", unit: "count", why: "교체·퇴장·부상으로 나간 선수는 뺀다 — 90분을 다 뛴 몸만 잰다" },
@@ -203,6 +447,22 @@ export const LIVE_PLAYER_LOAD = defineHarness({
     { metric: "측면 스프린트 (m)", role: "reference", min: 220, max: 600, why: "§7-B 350~450 — 센터백의 두 배를 넘어야 한다" },
     { metric: "공격수 스프린트 (m)", role: "reference", min: 160, max: 520, why: "§7-B 280~350 — 침투의 몫" },
     { metric: "실측/기대 부하표 — 거리", role: "guard", min: 0.88, max: 1.12, unit: "ratio", why: "간이 시뮬과 정산이 읽는 `EXPECTED_LOAD`가 실시간 경기가 실제로 뛴 것과 같은 눈금인가 — 갈리면 감독의 선수만 다른 몸으로 시즌을 난다" },
+    { metric: "윙백/풀백 거리", role: "guard", min: 1, unit: "ratio", why: "§9 R1 — 윙백은 백4 풀백보다 2~9% 더 뛴다 (다섯 연구가 모두 같은 방향)" },
+    { metric: "윙백/풀백 고속", role: "reference", min: 1.05, unit: "ratio", why: "§9 R1 — 고강도 +5~35%" },
+    { metric: "백3 센터백/백4 센터백 스프린트", role: "reference", min: 1.05, unit: "ratio", why: "§9 R2 — 백3의 센터백은 넓은 폭을 덮느라 스프린트가 25~35% 많다" },
+    { metric: "백4 측면/백3 측면 스프린트", role: "reference", min: 1, unit: "ratio", why: "§9 R3 — 백4의 측면 미드·윙어는 백3 시스템의 측면 선수보다 더 스프린트한다" },
+    ...FORMATIONS.flatMap((f): Band[] => {
+      const load = FORMATION_PROFILE[f].load;
+      return [
+        loadBand(f, "센터백 거리 (km)", load.CB, "guard", "§9 — 백3의 바깥 센터백도 센터백의 거리에 선다"),
+        loadBand(f, "풀백·윙백 거리 (km)", load.FB, "reference", "§7-A 풀백 10.75 · 윙백 10.96 — 윙백은 측면 전부를 맡는다"),
+        loadBand(f, "중앙 미드 거리 (km)", load.CM, "guard", "§7-A 11.66 — 가장 많이 뛰는 자리"),
+        loadBand(f, "측면 거리 (km)", load.W, "reference", "§7-A 11.07"),
+        loadBand(f, "공격수 거리 (km)", load.ST, "reference", "§7-A 10.86"),
+        { metric: `${f} — 풀백·윙백 스프린트 (m)`, role: "measure", why: "§7-B 300~380 — 윙백은 그 위다" },
+        { metric: `${f} — 측면 스프린트 (m)`, role: "measure", why: "§7-B 350~450" },
+      ];
+    }),
   ],
 });
 
@@ -214,10 +474,10 @@ export const LIVE_GOAL_ANATOMY = defineHarness({
   id: "live-goal-anatomy",
   what: "실시간 경기의 골·슛 해부 — 시각 · 세트피스 몫 · 페널티 · 헤더 · 도움 · 자리별 슈팅·득점 몫",
   doc: "docs/match/football-reference.md §2 · §8",
-  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
+  cost: "시드 넷 × 모양 쌍 49 = 196경기 · 45분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
   // prettier-ignore
   bands: [
-    { metric: "골 표본", role: "measure", unit: "count", why: "72경기면 200골 안팎 — 비중 하나의 표준오차가 3%p쯤이다" },
+    { metric: "골 표본", role: "measure", unit: "count", why: "196경기면 550골 안팎 — 비중 하나의 표준오차가 2%p쯤이다" },
     { metric: "전반 득점 비중", role: "reference", min: 0.36, max: 0.54, unit: "ratio", why: "[FD] 45.1% — 후반이 조금 붐빈다 (체력이 떨어진 수비·교체·추격)" },
     { metric: "90+ 득점 비중", role: "reference", min: 0.01, max: 0.08, unit: "ratio", why: "§2 득점 시각 2.6% — 0이면 추가시간이 시계에만 있고 경기에는 없다" },
     { metric: "세트피스 득점 비중", role: "reference", min: 0.18, max: 0.4, unit: "ratio", why: "§2 좁게 센 세트피스(코너·프리킥 전달·페널티)가 득점의 약 30%" },
@@ -241,95 +501,17 @@ export const LIVE_GOAL_ANATOMY = defineHarness({
     { metric: "슈팅 몫 — 센터백", role: "reference", min: 0.03, max: 0.13, unit: "ratio", why: "§8 [SB] 7.4% — 거의 전부 세트피스 헤더다" },
     { metric: "득점 몫 — 스트라이커", role: "reference", min: 0.26, max: 0.52, unit: "ratio", why: "§8 [SB] 38.5% — 슈팅 몫보다 커야 한다 (좋은 자리에서 찬다)" },
     { metric: "득점 몫 — 수비수", role: "reference", min: 0.04, max: 0.18, unit: "ratio", why: "§8 [SB] 풀백 5.5% + 센터백 5.6%" },
-  ],
-});
-
-/**
- * **포메이션마다 축구가 서는가** — `live-baseline`은 시드 세계가 고른 모양(대개 4-3-3·4-2-3-1)만
- * 굴린다. 백3·백5나 투톱에서만 무너지는 규칙은 거기서 보이지 않는다. 양 팀을 같은 모양으로 세워
- * 모양마다 같은 가드를 건다 — 지표 이름은 `"<모양> — <지표>"`다.
- */
-export const LIVE_FORMATION_ARMS = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "5-4-1"] as const;
-
-export const LIVE_FORMATIONS = defineHarness({
-  id: "live-formations",
-  what: "대표 포메이션 다섯(양 팀 같은 모양)마다 득점·슈팅·xG·패스·거리·크로스와 자리별 슈팅 몫",
-  doc: "docs/match/live-match.md §9.3 · docs/match/football-reference.md §8",
-  cost: "시드 둘 × 리그 6경기 × 모양 다섯 = 60경기 · 25분",
-  bands: [
-    ...LIVE_FORMATION_ARMS.flatMap((f): Band[] => [
-      {
-        metric: `${f} — 팀 득점`,
-        role: "guard",
-        min: 0.9,
-        max: 2,
-        why: "[FD] 1.41 — 팀-경기 24라 표준오차 0.25를 연다. 어느 모양에서도 경기가 서야 한다",
-      },
-      {
-        metric: `${f} — 슈팅`,
-        role: "guard",
-        min: 8,
-        max: 18,
-        why: "[FD] 12.6 — 모양이 슈팅 수를 바꾸되 축구 밖으로 밀지 않는다",
-      },
-      { metric: `${f} — xG`, role: "guard", min: 0.9, max: 2.1, why: "[US] 1.49" },
-      {
-        metric: `${f} — 팀 총 거리 (km)`,
-        role: "guard",
-        min: 100,
-        max: 124,
-        why: "football-reference §7 110~117 km — 교체 몫 · 모양마다의 흔들림",
-      },
-      {
-        metric: `${f} — 패스 시도`,
-        role: "reference",
-        min: 330,
-        max: 600,
-        why: "[SB]·[FM] 467~471",
-      },
-      {
-        metric: `${f} — 크로스`,
-        role: "reference",
-        min: 6,
-        max: 20,
-        why: "[SB] 12.0 — 측면이 넓은 모양(백3·백5의 윙백)일수록 늘어야 한다",
-      },
-      {
-        metric: `${f} — 슈팅 몫 · 최전방`,
-        role: "reference",
-        max: 0.5,
-        unit: "ratio",
-        why: "§8 스트라이커 26.8% — 투톱이면 몫이 커지지만 절반을 넘으면 나머지 자리가 슈팅 자리에 서지 않는 것이다",
-      },
-      {
-        metric: `${f} — 슈팅 몫 · 측면`,
-        role: "measure",
-        unit: "ratio",
-        why: "§8 26.8% — 윙어가 없는 모양(4-4-2·3-5-2·5-4-1)은 측면 미드·윙백이 이 몫을 나눈다",
-      },
-      {
-        metric: `${f} — 슈팅 몫 · 미드`,
-        role: "measure",
-        unit: "ratio",
-        why: "§8 중앙·수비형 21.5% + 공격형 9.4%",
-      },
-      {
-        metric: `${f} — 슈팅 몫 · 수비`,
-        role: "measure",
-        unit: "ratio",
-        why: "§8 풀백 8.1% + 센터백 7.4%",
-      },
+    // 자리별 몫의 모은 칸이 `reference`라 모양 칸도 그 역할을 따른다 — 구조(투톱의 몫)는 아래 가드가 진다
+    ...FORMATIONS.flatMap((f): Band[] => [
+      ...rawLines(f, ["슈팅 몫 · 최전방", "슈팅 몫 · 측면", "슈팅 몫 · 미드", "슈팅 몫 · 수비", "득점 몫 · 최전방"]),
+      differenceBand(f, "슈팅 몫 · 최전방", (p) => p.shotShare.front, SHARE_TOLERANCE, "reference", "투톱이면 최전방 몫이 커진다"),
+      differenceBand(f, "슈팅 몫 · 측면", (p) => p.shotShare.wide, SHARE_TOLERANCE, "reference", "윙어·측면 미드·윙백의 몫"),
+      differenceBand(f, "슈팅 몫 · 미드", (p) => p.shotShare.mid, SHARE_TOLERANCE, "reference", "중앙·수비형·공격형 미드"),
+      differenceBand(f, "슈팅 몫 · 수비", (p) => p.shotShare.back, SHARE_TOLERANCE, "reference", "풀백·센터백 — 대개 세트피스 헤더"),
+      differenceBand(f, "득점 몫 · 최전방", (p) => p.frontGoalShare, GOAL_SHARE_TOLERANCE, "reference", "슈팅 몫보다 크다 — 좋은 자리에서 찬다"),
+      { metric: `${f} — 세트피스 득점 비중`, role: "reference", min: 0.12, max: 0.48, unit: "ratio", why: "§2 30% — 모양마다 골이 80개 남짓이라 넓게 연다" },
     ]),
-    {
-      metric: "모양 사이 팀 득점 폭",
-      role: "measure",
-      why: "다섯 모양의 팀 득점 최대 − 최소 — 모양 하나가 득점을 통째로 옮기면 그 모양의 규칙을 본다",
-    },
-    {
-      metric: "모양 사이 거리 폭 (km)",
-      role: "measure",
-      why: "같은 이유 — 백5가 덜 뛰고 4-3-3이 더 뛰는 정도면 정상이다",
-    },
+    { metric: "투톱 − 원톱 최전방 슈팅 몫", role: "guard", min: 0.06, unit: "ratio", why: "§9 R5 — 투톱 35~40% 대 원톱 22~25%, 실측 차 +10~15%p" },
   ],
 });
 
@@ -337,7 +519,7 @@ export const LIVE_TACTICS = defineHarness({
   id: "live-tactics",
   what: "홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가",
   doc: "docs/match/live-match.md §6",
-  cost: "시드 둘 × 리그 12경기 × 팔 다섯 = 120경기 · 40분 남짓",
+  cost: "모양 일곱 × 시드 둘 × 리그 6경기 × 팔 다섯 = 420경기 · 1시간 30분 남짓",
   // prettier-ignore
   bands: [
     { metric: "기준 — 우리 슈팅", role: "measure", why: "아래 변화들의 눈금 — 전술을 건드리지 않은 판" },
@@ -352,6 +534,12 @@ export const LIVE_TACTICS = defineHarness({
     { metric: "수비 라인 1 — 상대 xG 변화", role: "measure", why: "내려앉은 블록이 기회를 줄이는지는 상대의 몫이다" },
     { metric: "템포 5 — 우리 패스 변화", role: "measure", why: "판단 간격이 짧아진다 — 패스가 늘거나, 직접성이 올라 줄 수도 있다" },
     { metric: "템포 5 — 우리 슈팅 변화", role: "measure", why: "같은 팔의 결과" },
+    ...everyShape("멘탈리티 5 우리 슈팅 변화", { role: "guard", min: 0, why: "모양마다 12대진 — 크기는 잡음에 묻혀도 **방향이 뒤집히면** 그 모양에서 멘탈리티가 말에 닿지 않는다" }),
+    ...everyShape("멘탈리티 5 우리 xG 변화", { role: "reference", min: 0, why: "같은 팔의 기회의 질" }),
+    ...everyShape("압박 5 우리 거리 변화 (km)", { role: "guard", min: 0.5, why: "압박은 뛰는 것이다 — 백5의 압박도 팀 합 0.5km는 늘어야 한다" }),
+    ...everyShape("압박 5 상대 패스 변화", { role: "reference", max: 0, why: "공을 돌릴 시간을 뺏는다" }),
+    ...everyShape("수비 라인 1 상대 점유 변화", { role: "reference", min: 0, unit: "ratio", why: "내려앉으면 공을 내준다 — 모은 칸이 `reference`라 모양 칸도 그 역할이다" }),
+    ...everyShape("템포 5 우리 패스 변화", { role: "measure", why: "직접성과 판단 간격이 함께 움직인다" }),
   ],
 });
 
@@ -359,7 +547,7 @@ export const SIM_PARITY = defineHarness({
   id: "sim-parity",
   what: "같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가",
   doc: "docs/match/match.md §8.5",
-  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다 + 간이 1440판",
+  cost: "시드 넷 × 모양 쌍 49 = 196경기 · 45분 — `live-baseline` 한 벌을 넷이 나눠 읽는다 + 간이 3920판",
   // prettier-ignore
   bands: [
     { metric: "대진", role: "measure", unit: "count", why: "실시간 한 판씩 — 아래 비의 잡음은 이 수가 정한다" },
@@ -374,6 +562,10 @@ export const SIM_PARITY = defineHarness({
     { metric: "전력 기울기 (xG 차/능력치 1) — 간이", role: "measure", why: "같은 기울기 — 간이 시뮬의 `QUICK_RATING_SLOPE`가 정한다" },
     { metric: "전력 기울기 표준오차 — 실시간", role: "measure", why: "기울기 추정의 잡음 — 이것이 기울기 자체의 절반을 넘으면 아래 비는 읽을 수 없다" },
     { metric: "전력 기울기 — 실시간/간이", role: "reference", min: 0.5, max: 2, unit: "ratio", why: "능력 차가 결과로 옮겨지는 정도가 두 시뮬에서 같은 크기인가 — 간이 시뮬의 기울기는 리그 팀 간 xG sd 0.40에 서 있다(match.md §8.2). 대진 24개로는 같은 설정에서 20~80%로 흔들려 72개로 잰다" },
+    ...everyShape("팀 xG 간이", { role: "measure", why: "그 모양으로 선 팀의 간이 시뮬 xG — 간이 시뮬이 모양을 읽는 폭" }),
+    ...everyShape("팀 xG 실시간/간이", { role: "guard", min: 0.75, max: 1.33, unit: "ratio", why: "**모양마다 두 시뮬이 같은 눈금인가** — 세계의 남의 경기는 간이 시뮬이고 그 리그 대부분은 3-5-2·4-4-2다. 감독 경기만 다른 모양 효과를 받으면 안 된다" }),
+    ...everyShape("팀 득점 실시간/간이", { role: "guard", min: 0.65, max: 1.5, unit: "ratio", why: "같은 판정 — 팀-경기 56개의 득점 잡음(±17%)을 얹는다" }),
+    ...everyShape("팀 슈팅 실시간/간이", { role: "reference", min: 0.7, max: 1.4, unit: "ratio", why: "간이 시뮬의 슈팅 예산이 모양을 읽는가" }),
   ],
 });
 
@@ -381,7 +573,7 @@ export const INJURY_RATE = defineHarness({
   id: "injury-rate",
   what: "간이 시뮬의 경기당 부상·카드 — 기대한 눈금에 서는가 · 성향이 빈도에 닿는 폭 · 위험 등급별 실제 부상률 · 누적 피로가 굴림에 닿는 폭",
   doc: "docs/match/match.md §4.1",
-  cost: "간이 시뮬 72,000판 · 2~3분",
+  cost: "간이 시뮬 72,000판 + 모양 팔 29,400판 · 3~4분",
   // prettier-ignore
   bands: [
     { metric: "경기 강도 (양 팀 평균)", role: "measure", why: "`matchIntensity` — 카드·부상 기대치가 이 배수를 탄다" },
@@ -403,6 +595,8 @@ export const INJURY_RATE = defineHarness({
     { metric: "부상률 — 높음/낮음", role: "guard", min: 2.4, unit: "ratio", why: "같은 판정의 본론. 저울의 비가 3.2배쯤이라 **순서만 서면 넉넉히 넘는다** — 여기가 무너졌다면 경계가 분포에서 떨어져 나갔거나 저울의 항이 움직인 것이다" },
     { metric: "1인당 부상률 — 잔고 0", role: "measure", unit: "ratio", why: "체력·몸싸움·성향을 눕히고 **누적 피로만** 갈라 세운 팔의 기준선 (player.md §5.5)" },
     { metric: "1인당 부상률 — 잔고 70", role: "measure", unit: "ratio", why: "같은 팔의 반대편 — 시즌을 갈려 나간 몸" },
+    ...everyShape("부상 기대 대비 배율 (간이)", { role: "guard", min: 0.8, max: 1.2, why: "모양마다 4,200판(기대 부상 ~400건, 잡음 5%) — 자리 구성이 부상 총량을 옮기면 안 된다. 총량은 강도의 손잡이 하나다 (match.md §4.1)" }),
+    ...everyShape("카드 기대 대비 배율 (간이)", { role: "guard", min: 0.95, max: 1.15, why: "같은 판정 — 위 `카드 기대 대비 배율`의 두 줄 규약 그대로" }),
     { metric: "부상률 — 잔고 70/0", role: "guard", min: 1.2, unit: "ratio", why: "**시즌의 잔고가 굴림에 닿는가.** 저울의 비가 (40+21+8.7)/(40+8.7) ≈ 1.43이고, 다섯·여섯 명씩의 팔이라 잡음이 10%다 — 밴드는 그 아래에 둔다. 여기가 1에 붙으면 `INJURY_LOAD_WEIGHT`가 굴림에 못 닿고 있다는 뜻이고, 그러면 시즌 내내 뛴 열한 명과 로테이션 자원의 부상 위험이 같다" },
   ],
 });
@@ -497,10 +691,10 @@ export const AI_BENCH = defineHarness({
   id: "ai-bench",
   what: "감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래",
   doc: "docs/match/match.md §3.3",
-  cost: "두 시드 × 한 시즌 · 감독 경기는 실시간 · 40분 남짓",
+  cost: "두 시드 × 한 시즌 · 리그 팀마다 모양을 돌려 준다 · 감독 경기는 실시간 · 40분 남짓",
   // prettier-ignore
   bands: [
-    { metric: "AI 교체/경기", role: "guard", min: 3.5, max: 5, unit: "count", why: "football-reference §6 — 5인 교체제에서 EPL 3.9 · 분데스 4.5 — 정지점을 창으로 세는 정책(SUB_WINDOW_MAX·SUB_CHANCE·SUB_FATIGUE)이 그 부근에 세운다. 한도(5)는 장부가 막는다" },
+    { metric: "AI 교체/경기", role: "guard", min: 3.5, max: 5, unit: "count", why: "football-reference §6 — 공식전만 센다(친선의 한도는 벤치 정원이다). 5인 교체제에서 EPL 3.9 · 분데스 4.5 — 정지점을 창으로 세는 정책(SUB_WINDOW_MAX·SUB_CHANCE·SUB_FATIGUE)이 그 부근에 세운다. 한도(5)는 장부가 막는다" },
     { metric: "승부수 교체/경기", role: "measure", unit: "count", why: "스코어를 읽은 갈래가 실제로 얼마나 쓰이는가" },
     { metric: "굳히기 교체/경기", role: "measure", unit: "count", why: "리드를 지키는 갈래 — 승부수보다 드물어야 정상이다" },
     { metric: "체력 교체/경기", role: "measure", unit: "count", why: "예전부터 있던 갈래 — 스코어 갈래가 이걸 밀어내지 않았는지" },
@@ -512,6 +706,8 @@ export const AI_BENCH = defineHarness({
     { metric: "판의 모양을 바꾼 경기 비율", role: "measure", unit: "ratio", why: "경기당 한 번 — 스코어가 벌어진 경기에서만 선다" },
     { metric: "잰 경기 수", role: "measure", unit: "count", why: "표본이 있는가" },
     { metric: "감독 팀 교체/경기", role: "reference", min: 3, max: 5, unit: "count", why: "하네스의 감독 대역(`playMockMatch`의 `userBench`)이 실제로 교체하는가 — 0이면 감독 팀이 90분 내내 같은 열한 명으로 뛰어 체력·결과가 실제 플레이와 다르다" },
+    ...everyShape("상대 경기 수", { role: "measure", unit: "count", why: "리그 팀마다 모양을 돌려 줘 감독이 일곱 모양을 고르게 만난다" }),
+    ...everyShape("AI 교체/경기", { role: "guard", min: 2.5, max: 5, unit: "count", why: "§6 3.9~4.5 — 모양마다 경기 열 몇 개라 아래를 넉넉히 연다. 벤치 정책이 자리 구성에 막히면(백3에 센터백이 모자라 교체를 못 함) 여기가 0으로 꺼진다" }),
   ],
 });
 
@@ -813,6 +1009,7 @@ export const QUICK_OUTCOMES = defineHarness({
     { metric: "간이 교체 하프타임 몫", role: "measure", unit: "ratio", why: "하프타임 문턱(`SUB_FATIGUE_HALFTIME`)이 절벽처럼 걸리면 여기가 솟는다 — 실측은 소수다" },
     { metric: "지정 키커 페널티 성공률 (기대)", role: "reference", min: 0.75, max: 0.83, unit: "ratio", why: "[US] 경기 중 페널티 79% — 팀의 지정 키커(`takerOnPitch`)와 상대 골키퍼로 `penaltyRate`를 낸 평균" },
     { metric: "필드 상위 다섯 페널티 성공률 (기대)", role: "reference", min: 0.7, max: 0.8, unit: "ratio", why: "승부차기 실측 75% 안팎 — 승부차기의 기본 순서(기량 내림차순)로 앞 다섯이 차는 성공률. 지정 키커와 같은 식(`penaltyRate`)이라 한쪽을 옮기면 다른 쪽도 움직인다" },
+    ...everyShape("간이 AI 교체/팀", { role: "guard", min: 3, max: 5.5, unit: "count", why: "§6 3.9~4.5 — EPL 팀마다 모양을 돌려 줘 모양마다 팀-경기 100개 남짓. 자리 구성이 교체를 막거나 부풀리면 여기가 갈린다" }),
   ],
 });
 
@@ -831,7 +1028,6 @@ export const HARNESSES: readonly Harness[] = [
   LEAGUE_SPREAD,
   LIVE_MATCH_STATS,
   LIVE_GOAL_ANATOMY,
-  LIVE_FORMATIONS,
   LIVE_PLAYER_LOAD,
   LIVE_TACTICS,
   SIM_PARITY,

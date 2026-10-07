@@ -1,5 +1,5 @@
 import type { Formation, MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@gaffer/domain";
-import { FAMILIARITY_BASELINE, otherSide, weightSlotOf } from "@gaffer/domain";
+import { FAMILIARITY_BASELINE, FORMATIONS, otherSide, weightSlotOf } from "@gaffer/domain";
 import {
   HEADER_SHOT_HEIGHT,
   depthOf,
@@ -17,6 +17,8 @@ import {
   tacticsOf,
   type GameState,
 } from "@gaffer/engine";
+import { initialTactics } from "../src/app/create-game";
+import { defaultXiIds } from "../src/players/catalog/catalog";
 
 /**
  * 실시간 경기 하네스들이 같이 쓰는 실행기 — 두 AI 팀의 경기를 화면 없이 끝까지 굴리고
@@ -45,6 +47,8 @@ export function liveMatchWith(
 export interface TeamSample {
   teamId: string;
   side: MatchSide;
+  /** 킥오프의 모양 — 모양마다 같은 밴드를 거는 하네스가 표본을 가른다 (자유 배치면 프리셋 밖 이름) */
+  formation: string;
   goals: number;
   line: MatchStatLine;
   possession: number;
@@ -75,6 +79,7 @@ export function sampleOf(match: LiveMatch): MatchSample {
   const teams = (["home", "away"] as const).map((side) => ({
     teamId: match.setup.sides[side].teamId,
     side,
+    formation: match.setup.sides[side].kickoffTactics.formation,
     goals: match.ledger.score[side],
     line: sideStatLine(match.ledger, side),
     possession: possession[side],
@@ -98,17 +103,99 @@ export function sampleOf(match: LiveMatch): MatchSample {
 }
 
 /**
- * 그 팀을 프리셋 포메이션으로 다시 세운다 — 선발·벤치를 그 모양의 자리에 맞춰 새로 짠다.
+ * 그 팀을 프리셋 포메이션으로 다시 세운다 — **그 팀이 그 모양으로 세워졌다면**의 전술·선발·벤치다.
  * 전술 적응도는 기준선이다: 팔마다 같은 출발선이라야 포메이션의 차이만 남는다.
+ *
+ * 세계를 세울 때와 같은 지정 선발(`defaultXiIds`)을 넘긴다 — 빼면 같은 모양으로 다시 짜기만
+ * 해도 다른 열한 명이 서서, 모양이 아니라 선발이 바뀐 값을 잰다.
  */
 export function withFormation(state: GameState, teamId: string, formation: Formation): void {
   const tactics = tacticsOf(state, teamId);
-  tactics.spec = { ...tactics.spec, formation };
+  // 여섯 축도 세계를 세울 때의 그것이다 — 연구된 성향이 없는 구단은 모양이 축을 정한다
+  tactics.spec = initialTactics(teamId, formation);
   tactics.assignments = buildAssignments(
     firstTeamPlayers(state, teamId),
     formation,
     FAMILIARITY_BASELINE,
+    undefined,
+    defaultXiIds(teamId),
   );
+}
+
+/**
+ * 하네스가 도는 모양 — **프리셋 전부다.** 시드 세계는 감독 리그(EPL)의 열일곱 팀이
+ * 4-2-3-1을 고르므로, 모양을 세계에 맡기면 경기 하네스는 한 모양의 거울 경기만 잰다.
+ */
+export const FORMATION_ARMS: readonly Formation[] = FORMATIONS;
+
+/**
+ * 대진 `i`의 (홈, 원정) 모양 — 연속한 49경기가 7×7 순서쌍을 한 번씩 덮는다.
+ * `offset`은 시드마다 같은 쌍에 다른 팀이 서게 민다.
+ */
+export function formationPairOf(i: number, offset = 0): [Formation, Formation] {
+  const n = FORMATION_ARMS.length;
+  return [FORMATION_ARMS[(i + offset) % n]!, FORMATION_ARMS[(Math.floor(i / n) + 2 * offset) % n]!];
+}
+
+/** 대진 하나를 그 모양 쌍으로 세운 실시간 경기 */
+export function liveMatchIn(
+  state: GameState,
+  fixture: MatchRecord,
+  [home, away]: readonly [Formation, Formation],
+  tactics?: Partial<Record<MatchSide, Partial<TacticsSpec>>>,
+): LiveMatch {
+  withFormation(state, fixture.homeTeamId, home);
+  withFormation(state, fixture.awayTeamId, away);
+  return liveMatchWith(state, fixture, tactics);
+}
+
+/**
+ * 시즌을 굴리는 하네스의 세계 — **리그마다 팀에 프리셋을 돌려 준다** (팀 id 순).
+ * AI는 모양을 세계를 세울 때 한 번 고르므로 준 모양이 시즌 내내 선다. 감독 팀도 같다.
+ */
+export function assignLeagueFormations(state: GameState, offset = 0): Map<string, Formation> {
+  const byLeague = new Map<string, string[]>();
+  for (const { teamId } of state.tactics) {
+    const league = leagueOfTeamIn(state, teamId);
+    byLeague.set(league, [...(byLeague.get(league) ?? []), teamId]);
+  }
+  const given = new Map<string, Formation>();
+  for (const teams of byLeague.values()) {
+    [...teams].sort().forEach((teamId, i) => {
+      const formation = FORMATION_ARMS[(i + offset) % FORMATION_ARMS.length]!;
+      withFormation(state, teamId, formation);
+      given.set(teamId, formation);
+    });
+  }
+  return given;
+}
+
+/** 모양별로 가른 표본 — 키는 언제나 프리셋 일곱이다 */
+export function byFormation<T>(): Record<Formation, T[]> {
+  return Object.fromEntries(FORMATION_ARMS.map((f) => [f, [] as T[]])) as Record<Formation, T[]>;
+}
+
+/**
+ * 모양 효과를 원값에서 세운다 — `"<모양> — <지표>"`의 일곱 값을 그 평균과 견준다. 비로 읽는
+ * 지표(`ratio`)와 차로 읽는 지표(`difference`, 점유·몫)를 나눠 받는다. 밴드는 실측 쪽의 같은
+ * 셈에서 나온다 (catalog.ts `FORMATION_PROFILE`).
+ */
+export function addShapeEffects(
+  readings: Record<string, number>,
+  labels: { ratio?: readonly string[]; difference?: readonly string[] },
+): void {
+  const raw = (f: Formation, label: string) => readings[`${f} — ${label}`] ?? Number.NaN;
+  for (const [kind, list] of [
+    ["ratio", labels.ratio ?? []],
+    ["difference", labels.difference ?? []],
+  ] as const) {
+    for (const label of list) {
+      const center = mean(FORMATION_ARMS.map((f) => raw(f, label)));
+      for (const f of FORMATION_ARMS)
+        readings[`${f} — ${label} (모양 효과)`] =
+          kind === "ratio" ? raw(f, label) / center : raw(f, label) - center;
+    }
+  }
 }
 
 /** 감독 리그의 대진 앞에서부터 `count`경기 */
@@ -153,11 +240,12 @@ export interface ShapeProbe {
   /** 풀백 id → 우리가 공을 가졌을 때 달리기(`run`)를 시작한 횟수 — 오버래핑·침투 */
   fullBackRuns: Map<string, number>;
   /**
-   * 떠난 순서대로의 슛 — 헤더인가 · 목표까지의 거리(m). 장부의 슛 사건에는 몸의 부위도
-   * 거리도 없다. 공은 하나라 슛은 떠난 순서대로 끝나므로 장부의 `shot`·`goal` 사건과
+   * 떠난 순서대로의 슛 — 헤더인가 · 목표까지의 거리(m) · 찬 순간의 자리. 장부의 슛 사건에는
+   * 몸의 부위도 거리도 없고, `positionsPlayed`는 교체로 자리를 옮긴 선수의 **마지막** 자리라
+   * 그 전에 찬 슛의 자리를 모른다. 공은 하나라 슛은 떠난 순서대로 끝나므로 장부의 `shot`·`goal` 사건과
    * 순서로 짝지어진다.
    */
-  shots: Array<{ header: boolean; distance: number }>;
+  shots: Array<{ header: boolean; distance: number; position: string }>;
 }
 
 export function shapeProbe(): ShapeProbe {
@@ -172,13 +260,12 @@ export function shapeProbe(): ShapeProbe {
   let lastShot: Record<MatchSide, number> | null = null;
   const running = new Set<string>();
   probe.onTick = (state, input) => {
-    const slotOf = (id: string) =>
-      weightSlotOf(
-        (
-          input.home.slots.find((s) => s.player.id === id) ??
-          input.away.slots.find((s) => s.player.id === id)
-        )?.position ?? "",
-      );
+    const positionOf = (id: string) =>
+      (
+        input.home.slots.find((s) => s.player.id === id) ??
+        input.away.slots.find((s) => s.player.id === id)
+      )?.position ?? "";
+    const slotOf = (id: string) => weightSlotOf(positionOf(id));
     for (const side of ["home", "away"] as const) {
       if (lastShot && state.lastShotAt[side] !== lastShot[side] && !state.restart) {
         const defending = otherSide(side);
@@ -197,7 +284,11 @@ export function shapeProbe(): ShapeProbe {
     if (flight && key && key !== lastFlight) {
       // 헤더 슛은 높이가 정확히 `HEADER_SHOT_HEIGHT`다 — 발 슛은 0.3~1.7에서 연속으로 뽑혀
       // 높이 문턱으로는 가를 수 없다
-      probe.shots.push({ header: flight.height === HEADER_SHOT_HEIGHT, distance: flight.distance });
+      probe.shots.push({
+        header: flight.height === HEADER_SHOT_HEIGHT,
+        distance: flight.distance,
+        position: positionOf(flight.from),
+      });
     }
     lastFlight = key;
     for (const p of state.players) {

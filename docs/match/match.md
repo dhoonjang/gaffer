@@ -582,6 +582,12 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 바꿔 굴린 `live-tactics` 하네스의 측정값에서 온다. 이 표를 손으로 고치지 않는다 — 말의 규칙이
 바뀌면 하네스가 표를 다시 내고, `sim-parity`가 두 시뮬의 기울기가 같은 밴드에 서는지 본다.
 
+**모양도 거친 항 하나를 건다**(`QUICK_FORMATION_EFFECTS`) — 프리셋 일곱에만 서고 자유 배치의
+이름은 중립이다. 값은 실측(football-reference.md §9 R7·R8)에서 온다: 백5는 덜 차고(xG 항),
+더 많이 맞되 붐빈 박스 앞이라 맞는 슛의 질이 낮고(피슈팅 항은 슈팅 수를 늘리고 슛당 xG를
+같은 비로 낮춘다), 공을 내준다(점유 항). 득실의 순효과는 경기당 0.2골 안쪽이다 — 모양이 공짜로
+이기거나 지지 않는다. `world-season`이 모양마다 효과와 전력 보정 잔차를 잰다.
+
 ### 8.6 라인업 · 연장 · 옆 구장
 
 **AI 로테이션**(`packages/engine/src/match/simulation.ts`의 `simSquadOf`)은 스쿼드 운영의 기본이다. 자리를 내주는
