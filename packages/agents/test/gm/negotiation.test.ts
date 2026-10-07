@@ -221,7 +221,7 @@ describe("main dialogue and scheduled mail", () => {
     expect(
       (
         await send.handle({
-          recipient: { kind: "club", teamId: third.id },
+          to: `club:${third.id}`,
           subject: "제안",
           body: "조건 제안입니다.",
           negotiationId: n.id,
@@ -233,7 +233,7 @@ describe("main dialogue and scheduled mail", () => {
     expect(
       (
         await send.handle({
-          recipient: { kind: "club", teamId: n.sellerId },
+          to: `club:${n.sellerId}`,
           subject: "제안",
           body: "조건 제안입니다.",
           negotiationId: n.id,
@@ -279,6 +279,36 @@ describe("main dialogue and scheduled mail", () => {
     expect(overview).not.toContain("recipients");
     expect(overview).not.toContain('"contacts"');
     expect(overview).not.toContain("x".repeat(301));
+  });
+  it("lists every unread thread in the main context even past the recent-thread slots", () => {
+    const { state } = setup();
+    const clubs = state.teams
+      .filter((t) => t.id !== state.userTeamId && state.finances.some((f) => f.teamId === t.id))
+      .slice(0, 10);
+    clubs.forEach((t, i) =>
+      sendMail(state, {
+        requestId: `club-${i}`,
+        recipient: { kind: "club", teamId: t.id },
+        subject: `s-${i}`,
+        body: "b",
+      }),
+    );
+    const oldest = state.mailThreads.find(
+      (t) => t.recipient.kind === "club" && t.recipient.teamId === clubs[0]!.id,
+    )!;
+    oldest.messages.push({
+      ...oldest.messages[0]!,
+      id: "late-inbound",
+      direction: "inbound",
+      on: "2000-01-01",
+    });
+    const threads = mainMailOverview(state).threads;
+    expect(threads.length).toBeLessThanOrEqual(8);
+    expect(threads[0]).toMatchObject({
+      threadId: oldest.id,
+      to: `club:${clubs[0]!.id}`,
+      unread: 1,
+    });
   });
 });
 

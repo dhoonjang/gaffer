@@ -1,4 +1,4 @@
-import type { MailMessage } from "@gaffer/domain";
+import { mailRecipientHandle, type MailMessage, type MailThread } from "@gaffer/domain";
 import { buildMailView, mailMessageForViewer, type GameState } from "@gaffer/engine";
 
 export function mailAttachmentsContext(messages: readonly MailMessage[]): string {
@@ -10,43 +10,38 @@ export function ownedMailAttachments(state: GameState, ids: readonly string[]): 
     .map((id) => mailMessageForViewer(state, id))
     .filter((message) => message !== null);
 }
+const MAIL_OVERVIEW_THREADS = 8;
 export function mainMailOverview(state: GameState) {
   const mail = buildMailView(state);
+  const unreadOf = (thread: MailThread) =>
+    thread.messages.slice(thread.lastReadMessage).filter((m) => m.direction !== "outbound").length;
+  // 안 읽은 스레드는 자리 수와 상관없이 전부 — 총수만 보이고 어느 스레드인지 모르는 일이 없게
+  const unread = mail.threads.filter((thread) => unreadOf(thread) > 0);
+  const recent = mail.threads
+    .filter((thread) => unreadOf(thread) === 0)
+    .slice(0, Math.max(0, MAIL_OVERVIEW_THREADS - unread.length));
   return {
     unread: mail.unread,
-    // 주소록은 싣지 않는다 — 세계의 모든 구단이라 수백 건이다. 보낼 상대는 get_mail이 준다
-    recent: [...mail.threads]
-      .sort(
-        (a, b) =>
-          (b.messages.at(-1)?.on ?? "").localeCompare(a.messages.at(-1)?.on ?? "") ||
-          (b.messages.at(-1)?.at ?? "").localeCompare(a.messages.at(-1)?.at ?? "") ||
-          (b.messages.at(-1)?.id ?? "").localeCompare(a.messages.at(-1)?.id ?? "", undefined, {
-            numeric: true,
-          }),
-      )
-      .slice(0, 8)
-      .map((thread) => {
-        const message = thread.messages.at(-1);
-        return {
-          threadId: thread.id,
-          contactId: thread.contactId,
-          label: thread.label,
-          unread: thread.messages
-            .slice(thread.lastReadMessage)
-            .filter((m) => m.direction !== "outbound").length,
-          latest: message
-            ? {
-                id: message.id,
-                on: message.on,
-                direction: message.direction,
-                subject: message.subject,
-                excerpt: message.body.slice(0, 300),
-                negotiationId: message.negotiationId,
-                references: message.references,
-              }
-            : null,
-        };
-      }),
+    threads: [...unread, ...recent].map((thread) => {
+      const message = thread.messages.at(-1);
+      return {
+        threadId: thread.id,
+        to: mailRecipientHandle(thread.recipient),
+        label: thread.label,
+        unread: unreadOf(thread),
+        latest: message
+          ? {
+              id: message.id,
+              on: message.on,
+              direction: message.direction,
+              subject: message.subject,
+              excerpt: message.body.slice(0, 300),
+              negotiationId: message.negotiationId,
+              references: message.references,
+            }
+          : null,
+      };
+    }),
   };
 }
 

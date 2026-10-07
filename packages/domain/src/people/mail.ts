@@ -7,6 +7,25 @@ export const MailRecipientSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("staff"), personId: Id }).strict(),
 ]);
 export type MailRecipient = z.infer<typeof MailRecipientSchema>;
+/** 수신인 한 명을 문자열 하나로 — `club:<teamId>` · `agent:<playerId>` · `staff:<personId>` */
+export function mailRecipientHandle(recipient: MailRecipient): string {
+  if (recipient.kind === "club") return `club:${recipient.teamId}`;
+  if (recipient.kind === "agent") return `agent:${recipient.playerId}`;
+  return `staff:${recipient.personId}`;
+}
+export function parseMailRecipientHandle(text: string): MailRecipient | null {
+  const match = /^(club|agent|staff):(.+)$/.exec(text.trim());
+  if (!match) return null;
+  const id = match[2];
+  const raw =
+    match[1] === "club"
+      ? { kind: "club", teamId: id }
+      : match[1] === "agent"
+        ? { kind: "agent", playerId: id }
+        : { kind: "staff", personId: id };
+  const parsed = MailRecipientSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
 const MailReferencesSchema = z
   .object({
     playerIds: z.array(Id).max(20).default([]),

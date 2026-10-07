@@ -4,6 +4,7 @@ import {
   ManagerJobOfferSchema,
   InterviewOutcomeSchema,
   MailSendSchema,
+  mailRecipientHandle,
   ProposalTermsSchema,
   currentProposal,
   SetTransferListingSchema,
@@ -40,6 +41,7 @@ import {
   acceptManagerOffer,
   counterManagerOffer,
   sendMail,
+  resolveMailRecipientText,
   buildMailView,
   readMailThread,
   pickTeam,
@@ -539,13 +541,24 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
     wrap(
       "send_mail",
       descriptions.send_mail,
-      MailSendSchema.omit({ requestId: true }).extend({ proposal: ProposalTermsSchema.optional() }),
-      (input) => {
+      MailSendSchema.omit({ requestId: true, recipient: true }).extend({
+        to: z.string().trim().min(1).max(160),
+        proposal: ProposalTermsSchema.optional(),
+      }),
+      ({ to, proposal, ...rest }) => {
+        const resolved = resolveMailRecipientText(state, to);
+        if (!resolved.ok)
+          return {
+            ok: false,
+            message: `${resolved.message}: ${resolved.candidates
+              .map((c) => `${mailRecipientHandle(c.recipient)} (${c.description ?? c.label})`)
+              .join(", ")}`,
+          };
         const draft = structuredClone(state);
-        const { proposal, ...mail } = input;
+        const mail = { ...rest, recipient: resolved.contact.recipient };
         let proposalId: string | undefined;
         if (proposal) {
-          const n = draft.negotiations.find((n) => n.id === input.negotiationId);
+          const n = draft.negotiations.find((n) => n.id === rest.negotiationId);
           const team = managedTeamId(draft);
           if (!n || !team || ![n.buyerId, n.sellerId].includes(team))
             return { ok: false, message: "제안 메일에는 우리 구단의 정확한 협상 id가 필요합니다" };
@@ -592,33 +605,6 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
         };
       },
     ),
-    read("get_mail", descriptions.get_mail, z.object({}).strict(), () => {
-      const mail = buildMailView(state);
-      return {
-        ok: true,
-        message: JSON.stringify({
-          unread: mail.unread,
-          recipients: mail.recipients,
-          threads: mail.threads.slice(0, 12).map((thread) => ({
-            id: thread.id,
-            contactId: thread.contactId,
-            label: thread.label,
-            recipient: thread.recipient,
-            unread: thread.messages
-              .slice(thread.lastReadMessage)
-              .filter((message) => message.direction !== "outbound").length,
-            latest: thread.messages.at(-1)
-              ? {
-                  id: thread.messages.at(-1)!.id,
-                  subject: thread.messages.at(-1)!.subject,
-                  on: thread.messages.at(-1)!.on,
-                  direction: thread.messages.at(-1)!.direction,
-                }
-              : null,
-          })),
-        }),
-      };
-    }),
     wrap(
       "set_transfer_list",
       descriptions.set_transfer_list,

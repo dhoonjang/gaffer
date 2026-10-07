@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { GameState, NegotiationActor } from "@gaffer/engine";
-import type { ProposalTerms } from "@gaffer/domain";
+import { mailRecipientHandle, type ProposalTerms } from "@gaffer/domain";
 import { addDays } from "../../src/core/dates";
 import {
   processWorldMarket,
@@ -882,6 +882,12 @@ describe("mail recipient name resolution", () => {
       expect(new Set(cross.candidates.map((c) => c.recipient.kind))).toEqual(
         new Set(["club", "agent"]),
       );
+    if (!duplicate.ok)
+      for (const candidate of duplicate.candidates) {
+        const picked = resolveMailRecipientText(s.state, mailRecipientHandle(candidate.recipient));
+        expect(picked.ok && picked.contact.recipient).toEqual(candidate.recipient);
+      }
+    expect(resolveMailRecipientText(s.state, `club:${s.state.userTeamId}`).ok).toBe(false);
   });
   it("bounds autocomplete payloads, resolves actual own staff and replays successful delivery before new name lookup", () => {
     const s = setup();

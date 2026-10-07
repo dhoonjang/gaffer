@@ -9,7 +9,6 @@ export const CALL_LABELS = {
   update_negotiation: "협상 조건 기록",
   request_negotiation_confirmation: "조건 확인",
   send_mail: "메일 발송",
-  get_mail: "메일함 조회",
   read_mail: "메일 읽기",
   start_negotiation: "협상 시작",
   get_negotiations: "협상 목록 조회",

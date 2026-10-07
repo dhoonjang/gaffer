@@ -5,6 +5,7 @@ import type { MatchEvent, ShootoutOutcome } from "@gaffer/domain";
 import { contractEndForYears, eventCauseText, formatScore, shootoutTally } from "@gaffer/domain";
 import {
   addDays,
+  buildMailView,
   BIG_CHANCE_XG,
   clockOf,
   describeNextFixture,
@@ -171,7 +172,10 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: "테스트 메일 첨부 확인",
-    gm: () => [{ tool: "get_mail", input: {} }],
+    gm: ({ state }) => {
+      const thread = buildMailView(state).threads[0];
+      return thread ? [{ tool: "read_mail", input: { threadId: thread.id } }] : [];
+    },
   },
   {
     say: "훈련 잡아줘",

@@ -1,5 +1,6 @@
 import {
   MailRecipientSearchSchema,
+  parseMailRecipientHandle,
   type MailRecipientCandidate,
   type MailRecipientResolution,
   personaKeywords,
@@ -92,6 +93,9 @@ export function searchMailRecipients(
   return { candidates: candidatesFor(state, parsed.data.query, parsed.data.limit, true) };
 }
 export function resolveMailRecipientText(state: GameState, text: string): MailRecipientResolution {
+  const handle = parseMailRecipientHandle(text);
+  const exact = handle ? resolveMailRecipient(state, handle) : null;
+  if (exact) return { ok: true, contact: exact };
   const parsed = MailRecipientSearchSchema.safeParse({ query: text });
   if (!parsed.success) return { ok: false, message: "수신인을 입력해 주세요", candidates: [] };
   const candidates = candidatesFor(state, text, 20, false);
