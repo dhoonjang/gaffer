@@ -1077,7 +1077,7 @@ export function advanceTime(
      */
     const contractDay = reviewManagerContract(state, kind.board);
     simulateOtherMatches(state, kind.matchday);
-    processWorldMarket(state);
+    processWorldMarket(state, digest);
     // 녹아웃 — 직전 단계가 끝났으면 다음 단계를 편성한다.
     // 대항전을 먼저 돌려야 예약된 대항전 날짜가 컵 날짜 선택에 반영된다.
     if (hasCups(state.world)) {

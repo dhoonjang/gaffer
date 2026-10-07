@@ -1,7 +1,9 @@
+import type { TickSink } from "@gaffer/domain";
 import { managedTeamId, type GameState } from "../../core/state";
 import { deliverIncomingMail } from "../../people/mail";
 import { reviewBoard } from "./board";
 import { repairNegotiationSquads } from "../../team/negotiation-squad";
+import { progressMandates } from "../../team/negotiation-mandate";
 import {
   decideWorldManager,
   decideWorldMarket,
@@ -19,7 +21,7 @@ interface WorldMarketResult {
   appointments: number;
   dismissals: number;
 }
-export function processWorldMarket(state: GameState): WorldMarketResult {
+export function processWorldMarket(state: GameState, sink: TickSink = []): WorldMarketResult {
   const result: WorldMarketResult = {
     reviewed: 0,
     transfers: 0,
@@ -31,6 +33,7 @@ export function processWorldMarket(state: GameState): WorldMarketResult {
   if (state.phase === "match" || state.pendingMatch) return result;
   const changed = progressWorldMarketDeals(state);
   repairNegotiationSquads(state, changed);
+  progressMandates(state, sink);
   const managed = managedTeamId(state);
   for (const n of state.negotiations.filter(
     (n) => n.sellerId === managed && n.buyerId !== managed && n.status === "completed" && n.signed,

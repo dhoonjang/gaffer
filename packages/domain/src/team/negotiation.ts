@@ -49,6 +49,39 @@ export const NegotiationConfirmationPayloadSchema = z.object({
   clubProposalId: Id.nullable(),
 });
 export type NegotiationConfirmationPayload = z.infer<typeof NegotiationConfirmationPayloadSchema>;
+/** 위임이 결론까지 기다릴 수 있는 날 — 이 밖이면 감독이 직접 다루는 협상이다 */
+export const MANDATE_MAX_DAYS = 28;
+const MandateYears = z.number().int().min(1).max(6);
+/**
+ * 감독이 맡긴 협상 (docs/team/transfers.md 「감독이 맡긴 협상」) — 상한과 결론일은 GM이
+ * 정하고, 조건은 결론일에 코어가 정한다. `stage`는 위임이 지금 어디에 있는가다.
+ */
+const NegotiationMandateSchema = z.object({
+  grantedOn: DateString,
+  decideOn: DateString,
+  maxFee: Money,
+  maxWeeklyWage: Money,
+  minYears: MandateYears,
+  maxYears: MandateYears,
+  stage: z.enum(["pending", "agreed", "ready", "returned", "failed", "revoked"]),
+  updatedOn: DateString,
+  reason: z.string().max(400),
+});
+export type NegotiationMandate = z.infer<typeof NegotiationMandateSchema>;
+export const MandateRequestSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("grant"),
+      maxFee: Money,
+      maxWeeklyWage: Money.min(1),
+      minYears: MandateYears,
+      maxYears: MandateYears,
+      days: z.number().int().min(1).max(MANDATE_MAX_DAYS),
+    })
+    .strict(),
+  z.object({ action: z.literal("revoke") }).strict(),
+]);
+export type MandateRequest = z.infer<typeof MandateRequestSchema>;
 export const NegotiationSchema = z.object({
   id: Id,
   playerId: Id,
@@ -81,6 +114,7 @@ export const NegotiationSchema = z.object({
     })
     .nullable(),
   registration: z.enum(["not_submitted", "pending", "registered"]),
+  mandate: NegotiationMandateSchema.nullable(),
 });
 export type Negotiation = z.infer<typeof NegotiationSchema>;
 export const TransferPaymentSchema = z.object({

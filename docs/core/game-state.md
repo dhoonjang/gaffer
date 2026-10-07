@@ -428,7 +428,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 25`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
+**`SAVE_VERSION = 26`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
 세이브 버전과 별도로 `config/game-version.yml`이 소유한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 
@@ -748,8 +748,8 @@ tmp 쓰기가 실패하면 그 tmp는 **그 자리에서 거둔다**. 이름이 
 명단 등재는 협상이나 계약 동의가 아니며, GM·세계 시장이 같은 장부를 읽는다.
 선수가 구단을 떠나면 해당 등재를 정리한다.
 
-`negotiations`는 협상별 참여자·초안·불변 제안서·동의·메디컬·서명과 등록 상태·종료일과 사유를
-보존한다. `transferPayments`는 날짜별 지급 의무와 정산 완료를 보존한다. `marketReview`는
+`negotiations`는 협상별 참여자·초안·불변 제안서·동의·메디컬·서명과 등록 상태·종료일과 사유,
+감독이 맡긴 위임의 상한·연수·결론일과 단계를 보존한다. `transferPayments`는 날짜별 지급 의무와 정산 완료를 보존한다. `marketReview`는
 결정적 세계 시장의 구단별 검토 시점과 판단 근거를, `negotiationRequests`는 저장 완료한 조작의
 재전송 방지를 소유한다. 세부 스키마는 `packages/domain/src/team/negotiation.ts`에 있다.
 

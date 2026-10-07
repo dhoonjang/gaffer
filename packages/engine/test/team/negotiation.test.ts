@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { GameState, NegotiationActor } from "@gaffer/engine";
-import { mailRecipientHandle, type ProposalTerms } from "@gaffer/domain";
+import { contractEndForYears, mailRecipientHandle, type ProposalTerms } from "@gaffer/domain";
 import { addDays } from "../../src/core/dates";
+import { progressMandates } from "../../src/team/negotiation-mandate";
 import {
   processWorldMarket,
   marketReviewCohort,
@@ -24,6 +25,7 @@ import {
   deliverIncomingMail,
   activeContract,
   applyNegotiationRequest,
+  delegateNegotiation,
   buildNegotiationView,
   financeOf,
   isAvailable,
@@ -1122,4 +1124,107 @@ it("withdrawal cooldown runs fourteen days from actual closure rather than origi
   expect(decideWorldMarket(state, player.teamId)?.playerId).not.toBe(player.id);
   state.date = addDays(state.date, 1);
   expect(decideWorldMarket(state, player.teamId)?.playerId).toBe(player.id);
+});
+
+/**
+ * 감독이 맡긴 협상 (docs/team/transfers.md 「감독이 맡긴 협상」) — 결론일에 시장 공식으로
+ * 조건을 정하고, 위임 권한은 서명에 닿지 않는다.
+ */
+describe("manager mandate", () => {
+  const grant = (s: ReturnType<typeof setup>, over: Record<string, number> = {}) =>
+    delegateNegotiation(s.state, s.n.id, {
+      action: "grant",
+      maxFee: s.n.bounds.maxFee,
+      maxWeeklyWage: s.n.bounds.maxWeeklyWage,
+      minYears: 1,
+      maxYears: 5,
+      days: 3,
+      ...over,
+    });
+  /** 하루를 넘긴다 — tick이 부르는 순서 그대로(정산 → 위임) */
+  const nextDay = (state: GameState) => {
+    state.date = addDays(state.date, 1);
+    settleNegotiations(state);
+    const events: string[] = [];
+    progressMandates(state, events);
+    return events;
+  };
+
+  it("waits for the decision day, agrees on the market formula, clears a clean medical and leaves the signature to the manager", () => {
+    const s = setup();
+    expect(grant(s).ok).toBe(true);
+    expect(nextDay(s.state)).toEqual([]);
+    expect(nextDay(s.state)).toEqual([]);
+    expect(s.n.proposals).toEqual([]);
+    const agreedOn = nextDay(s.state);
+    expect(agreedOn).toHaveLength(1);
+    expect(s.n.mandate?.stage).toBe("agreed");
+    const club = s.n.proposals.find((p) => p.terms.scope === "club")!;
+    expect(club.terms.fee).toBe(Math.ceil(s.n.bounds.minFee * 1.25));
+    expect(club.acceptedBy).toEqual([s.n.buyerId, s.n.sellerId]);
+    expect(s.n.medical?.examinedOn).toBeNull();
+    expect(nextDay(s.state)).toHaveLength(1);
+    expect(s.n.mandate?.stage).toBe("ready");
+    expect(s.n.medical?.acknowledgedBy).toEqual([s.n.buyerId]);
+    expect(s.n.status).toBe("open");
+    expect(s.action({ kind: "sign" }, { kind: "mandate", partyId: s.n.buyerId }).ok).toBe(false);
+    expect(s.action({ kind: "sign" }).ok).toBe(true);
+    expect(s.n.status).toBe("signed");
+  });
+
+  it("cuts the price at the ceiling and closes as failed, leaving no proposal, when the ceiling is below the seller's floor", () => {
+    const capped = setup();
+    const ceiling = Math.floor((capped.n.bounds.minFee * 1.25 + capped.n.bounds.minFee) / 2);
+    expect(grant(capped, { maxFee: ceiling, days: 1 }).ok).toBe(true);
+    nextDay(capped.state);
+    expect(capped.n.proposals.find((p) => p.terms.scope === "club")?.terms.fee).toBe(ceiling);
+
+    const short = setup();
+    expect(grant(short, { maxFee: Math.floor(short.n.bounds.minFee / 2), days: 1 }).ok).toBe(true);
+    const events = nextDay(short.state);
+    expect(events).toHaveLength(1);
+    expect(short.n.mandate?.stage).toBe("failed");
+    expect(short.n.proposals).toEqual([]);
+    expect(short.n.medical).toBeNull();
+  });
+
+  it("closes a pending mandate when the manager sends terms directly and refuses to revoke a concluded one", () => {
+    const s = setup();
+    expect(grant(s).ok).toBe(true);
+    expect(s.action({ kind: "send", terms: s.terms }).ok).toBe(true);
+    expect(s.n.mandate?.stage).toBe("revoked");
+    expect(nextDay(s.state)).toEqual([]);
+    expect(delegateNegotiation(s.state, s.n.id, { action: "revoke" }).ok).toBe(false);
+  });
+
+  it("renews without a medical and stops at the manager's signature", () => {
+    const state = structuredClone(base);
+    const own = state.players.find(
+      (p) => p.teamId === state.userTeamId && activeContract(state, p.id),
+    )!;
+    const opened = openNegotiation(state, {
+      playerId: own.id,
+      buyerId: state.userTeamId,
+      kind: "renewal",
+      background: "재계약",
+    });
+    const n = state.negotiations.find((n) => n.id === opened.negotiationId)!;
+    expect(
+      delegateNegotiation(state, n.id, {
+        action: "grant",
+        maxFee: 999,
+        maxWeeklyWage: n.bounds.maxWeeklyWage,
+        minYears: 2,
+        maxYears: 2,
+        days: 1,
+      }).ok,
+    ).toBe(true);
+    expect(n.mandate?.maxFee).toBe(0);
+    nextDay(state);
+    expect(n.mandate?.stage).toBe("ready");
+    expect(n.medical).toBeNull();
+    expect(n.status).toBe("open");
+    const player = n.proposals.find((p) => p.terms.scope === "player")!;
+    expect(player.terms.until).toBe(contractEndForYears(player.terms.since, 2));
+  });
 });

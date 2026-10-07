@@ -102,6 +102,7 @@ export * from "./team/finance-view";
 export * from "./team/free-agency";
 export * from "./team/lineup";
 export * from "./team/negotiation";
+export { delegateNegotiation } from "./team/negotiation-mandate";
 export { repairNegotiationSquads } from "./team/negotiation-squad";
 export * from "./team/player-pool";
 export * from "./team/registration";

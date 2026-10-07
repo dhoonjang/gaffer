@@ -293,32 +293,22 @@ function executeWorldMarketIntent(state: GameState, intent: WorldMarketIntent): 
   if (n.status !== "open" || (n.proposals.length && currentProposal(n, "player"))) return null;
   const act = (action: unknown, partyId: string) =>
     actNegotiation(draft, n.id, action, { kind: "model", partyId }).ok;
-  const since = intent.kind === "renewal" ? draft.date : addDays(draft.date, 2),
-    age = ageOf(player.birthdate, draft.date),
-    years = age > 33 ? 1 : age > 29 ? 2 : 3;
+  const market = marketTerms(draft, n);
   const terms: ProposalTerms = {
     scope: "player",
     fee: 0,
     installments: [],
-    weeklyWage: Math.max(activeContract(draft, player.id)?.weeklyWage ?? 0, n.bounds.minWeeklyWage),
+    weeklyWage: market.weeklyWage,
     signingBonus: 0,
-    since,
-    until: contractEndForYears(since, years),
+    since: market.since,
+    until: contractEndForYears(market.since, market.years),
     expiresOn: addDays(draft.date, 7),
     promises: [],
   };
   if (intent.kind === "transfer") {
     if (
       !act(
-        {
-          kind: "send",
-          terms: {
-            ...terms,
-            scope: "club",
-            weeklyWage: 0,
-            fee: Math.ceil(n.bounds.minFee * CLEARANCE_PREMIUM),
-          },
-        },
+        { kind: "send", terms: { ...terms, scope: "club", weeklyWage: 0, fee: market.fee } },
         n.buyerId,
       )
     )
@@ -333,6 +323,24 @@ function executeWorldMarketIntent(state: GameState, intent: WorldMarketIntent): 
     return null;
   if (!act({ kind: intent.kind === "renewal" ? "sign" : "medical" }, n.buyerId)) return null;
   return n.id;
+}
+/**
+ * **시장의 조건 공식** — NPC 구단의 거래와 감독이 맡긴 협상이 같은 값을 낸다
+ * (docs/team/transfers.md). 이적 대금은 상대 최저선에 웃돈, 주급은 현재 주급과 선수
+ * 최저선 중 큰 값, 연수는 나이로 정한다. 계약금은 두지 않는다.
+ */
+export function marketTerms(
+  state: GameState,
+  n: Pick<Negotiation, "playerId" | "kind" | "bounds">,
+): { fee: number; weeklyWage: number; years: number; since: string } {
+  const player = state.players.find((p) => p.id === n.playerId)!;
+  const age = ageOf(player.birthdate, state.date);
+  return {
+    fee: n.kind === "transfer" ? Math.ceil(n.bounds.minFee * CLEARANCE_PREMIUM) : 0,
+    weeklyWage: Math.max(activeContract(state, player.id)?.weeklyWage ?? 0, n.bounds.minWeeklyWage),
+    years: age > 33 ? 1 : age > 29 ? 2 : 3,
+    since: n.kind === "renewal" ? state.date : addDays(state.date, 2),
+  };
 }
 export function progressWorldMarketDeals(state: GameState): string[] {
   const changed = new Set<string>();

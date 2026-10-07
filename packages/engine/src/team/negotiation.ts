@@ -39,10 +39,20 @@ interface NegotiationResult {
   replayed?: boolean;
   status?: number;
 }
+/**
+ * 누가 움직였는가 — `mandate`는 **감독이 맡긴 협상에서 코어가** 우리 구단으로 움직인 것이다.
+ * 그 권한은 제안 발송·메디컬 요청·위험 확인뿐이고 서명은 들지 않는다
+ * (docs/team/transfers.md 「감독이 맡긴 협상」).
+ */
 export interface NegotiationActor {
-  kind: "user" | "model";
+  kind: "user" | "model" | "mandate";
   partyId: string;
 }
+const MANDATE_ACTIONS: readonly NegotiationAction["kind"][] = [
+  "send",
+  "medical",
+  "acknowledge_medical",
+];
 const fail = (message: string): NegotiationResult => ({ ok: false, message, status: 400 });
 const success = (n: Negotiation, message: string): NegotiationResult => ({
   ok: true,
@@ -113,6 +123,7 @@ export function openNegotiation(
     previous.medical = null;
     previous.signed = null;
     previous.registration = "not_submitted";
+    previous.mandate = null;
     previous.revision += 1;
     return success(previous, "이전 협상을 이어갑니다");
   }
@@ -139,6 +150,7 @@ export function openNegotiation(
     medical: null,
     signed: null,
     registration: "not_submitted",
+    mandate: null,
   };
   state.negotiations.push(n);
   return success(n, "협상을 열었습니다");
@@ -198,6 +210,13 @@ export function actNegotiation(
     return fail("맡은 구단만 조작할 수 있습니다");
   if (actor.kind === "model" && actor.partyId === managed && a.kind !== "draft")
     return fail("모델은 유저 구단의 동의나 서명을 대신할 수 없습니다");
+  if (
+    actor.kind === "mandate" &&
+    (actor.partyId !== managed ||
+      !MANDATE_ACTIONS.includes(a.kind) ||
+      (n.mandate?.stage !== "pending" && n.mandate?.stage !== "agreed"))
+  )
+    return fail("감독이 맡긴 범위 밖의 조작입니다");
   if (a.kind === "register") {
     if (n.status !== "completed" || actor.partyId !== n.buyerId)
       return fail("합류한 선수를 영입 구단이 등록해야 합니다");
@@ -224,7 +243,7 @@ export function actNegotiation(
       if (invalid) return fail(invalid);
       if (!proposalParties(n, a.terms.scope).includes(actor.partyId))
         return fail("이 조건의 당사자가 아닙니다");
-      if (a.kind === "send" && actor.kind === "model") {
+      if (a.kind === "send" && actor.kind !== "user") {
         const error = acceptanceBoundError(state, n, a.terms, actor.partyId);
         if (error) return fail(error);
       }
@@ -377,6 +396,18 @@ export function actNegotiation(
       n.closed = { on: state.date, reason: a.reason };
       break;
   }
+  // 감독이 직접 우리 조건을 내거나 협상을 거두면 맡겨 둔 위임은 그 자리에서 닫힌다
+  if (
+    actor.kind === "user" &&
+    n.mandate?.stage === "pending" &&
+    (a.kind === "send" || a.kind === "withdraw")
+  )
+    n.mandate = {
+      ...n.mandate,
+      stage: "revoked",
+      updatedOn: state.date,
+      reason: "감독이 직접 협상을 이어 갔다",
+    };
   if (state.players.some((p) => p.id === n.playerId)) {
     const bounds = negotiationBounds(state, n);
     if (bounds.fingerprint !== n.bounds.fingerprint) n.bounds = bounds;
