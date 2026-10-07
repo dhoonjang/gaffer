@@ -587,6 +587,27 @@ export function buildNegotiationConfirmation(
     clubProposalId: club?.id ?? null,
   };
 }
+/**
+ * **오늘이 서명할 수 있는 마지막 날인 계약** — 감독 구단이 영입 구단이고 모든 당사자가
+ * 합의했으며 메디컬 결과가 나와 확인 카드만 남은 협상 가운데, 합류일이나 제안 기한이
+ * 오늘인 것. 내일이 되면 `sign`이 거부하므로 날짜 진행은 이 날에 멈춘다.
+ */
+export function signatureDeadlinesToday(state: GameState): Negotiation[] {
+  const team = managedTeamId(state);
+  if (!team) return [];
+  return state.negotiations.filter((n) => {
+    if (n.buyerId !== team || n.status !== "open" || !sourceValid(state, n)) return false;
+    const player = currentProposal(n, "player"),
+      club = currentProposal(n, "club");
+    if (!player || !proposalAgreed(n, player)) return false;
+    if (n.kind === "transfer" && (!club || !proposalAgreed(n, club))) return false;
+    if (n.kind !== "renewal" && !n.medical?.examinedOn) return false;
+    const last = [player, ...(club ? [club] : [])]
+      .flatMap((p) => [p.terms.since, p.terms.expiresOn])
+      .sort()[0];
+    return last === state.date;
+  });
+}
 /** 이 구단이 그 협상의 당사자(영입 구단 또는 매도 구단)인가 */
 export function isNegotiationParty(n: Negotiation, teamId: string): boolean {
   return n.buyerId === teamId || n.sellerId === teamId;

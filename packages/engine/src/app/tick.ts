@@ -1,7 +1,7 @@
 import { processWorldMarket } from "./workflows/world-market";
 import { dueMailReplies } from "../people/mail";
 import { deliverMedicalReportMail } from "../people/report-mail";
-import { settleNegotiations } from "../team/negotiation";
+import { settleNegotiations, signatureDeadlinesToday } from "../team/negotiation";
 import { repairNegotiationSquads } from "../team/negotiation-squad";
 import { expireStaffContracts } from "../people/staff-employment";
 import {
@@ -56,6 +56,7 @@ import {
   DAY_START,
   activeSuspensionFor,
   isAwayFromClub,
+  playerName,
 } from "../core/state";
 import { diffDays, dayOfWeek, addDays, MONDAY } from "../core/dates";
 import { makeRng } from "../core/rng";
@@ -1098,6 +1099,15 @@ export function advanceTime(
       return { ok: true, events, stopped: "blocked", trained };
     }
 
+    // 오늘이 지나면 서명할 수 없는 계약 — 경기일이어도 사실은 남기고, 경기 뒤 같은 날에 서명할 수 있다
+    const signatureDue = signatureDeadlinesToday(state);
+    for (const n of signatureDue)
+      pushEvent(
+        digest,
+        "contract",
+        `${playerName(state, n.playerId)} 계약 서명 마감일 — 오늘이 지나면 합의한 조건으로 서명할 수 없다`,
+      );
+
     const managed = managedTeamId(state);
     const userMatch = matchesOn(state.matches, state.date).find(
       (m) =>
@@ -1116,14 +1126,15 @@ export function advanceTime(
       return { ok: true, events, stopped: "matchday", trained };
     }
 
-    if (needsAttention || (stopForMailReplies && dueMailReplies(state).length > 0)) {
+    const decisionDue = needsAttention || signatureDue.length > 0;
+    if (decisionDue || (stopForMailReplies && dueMailReplies(state).length > 0)) {
       closeDay("attention");
       return {
         ok: true,
         events,
         stopped: "attention",
         trained,
-        ...(!needsAttention ? { pendingDateEvents: true } : {}),
+        ...(!decisionDue ? { pendingDateEvents: true } : {}),
       };
     }
     if (typeof until === "object" && d + 1 >= until.days) {

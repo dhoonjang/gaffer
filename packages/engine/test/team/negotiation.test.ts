@@ -35,6 +35,8 @@ import {
   toFreeAgency,
   repairNegotiationSquads,
   settleNegotiations,
+  signatureDeadlinesToday,
+  advanceTime,
   summarise,
 } from "@gaffer/engine";
 import { createMiniGame, resultOf } from "../helpers";
@@ -1167,6 +1169,8 @@ describe("manager mandate", () => {
     expect(s.n.mandate?.stage).toBe("ready");
     expect(s.n.medical?.acknowledgedBy).toEqual([s.n.buyerId]);
     expect(s.n.status).toBe("open");
+    // 합류일은 합의 이틀 뒤 — 메디컬이 끝난 날은 아직 마감일이 아니다
+    expect(signatureDeadlinesToday(s.state)).toEqual([]);
     expect(s.action({ kind: "sign" }, { kind: "mandate", partyId: s.n.buyerId }).ok).toBe(false);
     expect(s.action({ kind: "sign" }).ok).toBe(true);
     expect(s.n.status).toBe("signed");
@@ -1220,11 +1224,18 @@ describe("manager mandate", () => {
       }).ok,
     ).toBe(true);
     expect(n.mandate?.maxFee).toBe(0);
-    nextDay(state);
+    const granted = state.date;
+    // 재계약의 합류일은 합의한 그날이다 — 시계는 그날 서서 감독의 서명을 기다린다
+    const advanced = advanceTime(state, { days: 5 });
+    expect(advanced.stopped).toBe("attention");
+    expect(state.date).toBe(addDays(granted, 1));
     expect(n.mandate?.stage).toBe("ready");
     expect(n.medical).toBeNull();
     expect(n.status).toBe("open");
+    expect(signatureDeadlinesToday(state)).toEqual([n]);
     const player = n.proposals.find((p) => p.terms.scope === "player")!;
     expect(player.terms.until).toBe(contractEndForYears(player.terms.since, 2));
+    nextDay(state);
+    expect(signatureDeadlinesToday(state)).toEqual([]);
   });
 });
