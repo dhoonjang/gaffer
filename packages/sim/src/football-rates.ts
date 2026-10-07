@@ -9,7 +9,9 @@
 export const ASSIST_RATE = 0.68;
 /** 슈팅 중 코너·프리킥에서 나오는 몫 — 실측 세트피스 득점 25~30%에서 유도 */
 export const SET_PIECE_SHOT_SHARE = 0.27;
-/** 팀당 페널티 — 실측 0.154 (성공 79%) */
+/** 팀당 페널티 — 실측 0.154 */
 export const PENALTY_PER_MATCH = 0.154;
+/** 페널티 성공률 — 실측 79%. 페널티 한 개의 기대 득점이기도 하다 */
+export const PENALTY_SCORE_RATE = 0.79;
 /** 팀당 코너 — 실측 4.9, 분산 8.0 (과산포) */
 export const CORNERS_PER_MATCH = 4.9;

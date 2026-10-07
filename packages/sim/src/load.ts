@@ -89,8 +89,8 @@ export function conditionAfterLoad(
 
 /**
  * 자리별 90분 기대 부하 (m) — 실측 포지션별 총 거리·고속·스프린트
- * (football-reference.md §7 B). **실시간 경기를 굴려 잰 값으로 갈아 끼우는 표다**
- * (`pnpm balance live-player-load --report`).
+ * (football-reference.md §7 B). **실시간 경기가 실제로 뛴 것과 같은 눈금이어야 하는 표다** —
+ * `live-player-load`(`pnpm balance live-baseline`)가 둘의 비를 잰다.
  */
 export const EXPECTED_LOAD: Record<WeightSlot, LiveLoad> = {
   GK: { distance: 5300, highSpeed: 20, sprint: 5, sprints: 0 },

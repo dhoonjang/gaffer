@@ -16,14 +16,19 @@ import {
   simSquadOf,
   type GameState,
   eventTexts,
+  RATING_BASELINE,
 } from "@gaffer/engine";
-import { createTestGame, drillUserTactics, playMockMatch } from "../test/helpers";
+import { createTestGame, drillUserTactics, settleMatchdayQuick } from "../test/helpers";
 import { AI_ROTATION, LEAGUE_SPREAD, WORLD_SEASON } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
  * 전체 세계에서 한 시즌을 굴려 **분포**를 잰다 — 평균만으로는 닮았는지 알 수 없다.
  * 득점 평균이 2.8이어도 매 경기 1-1과 4-0이 반씩 섞인 리그와 실제 축구는 다른 게임이다.
+ *
+ * **재는 것은 간이 시뮬의 리그다** — 감독의 경기도 간이 결산으로 치른다. 실시간 경기를
+ * 섞으면 380경기 중 38경기가 다른 시뮬의 값을 싣고, 그 차이를 재는 자리는 `sim-parity`다.
+ * 실시간 경기 한 판이 수십 초라 섞는 순간 이 하네스 하나가 주간 시한을 넘기기도 했다.
  *
  *   pnpm balance world-season
  */
@@ -154,6 +159,26 @@ function ratio(n: number, total: number): number {
   return n / Math.max(1, total);
 }
 
+/**
+ * 득점 시각 한 구간의 몫 — 실측(football-reference.md §2)은 하프 안에서도 뒤로 갈수록 붐빈다.
+ * 간이 시뮬은 추가시간 축이 없어 90+ 골이 76~90에 접히므로 마지막 칸은 둘을 합쳐 읽는다.
+ */
+function goalShareBetween(minutes: readonly number[], from: number, to: number): number {
+  return ratio(minutes.filter((m) => m >= from && m <= to).length, minutes.length);
+}
+
+/**
+ * 출전당 평점 평균 — 시즌 기록의 `ratingSum ÷ apps`. 폼은 이 평균을 중립점(`RATING_BASELINE`)과
+ * 견주므로, 둘이 갈리면 리그 전체의 폼이 경기마다 한쪽으로 조용히 기운다 (player.md §5)
+ */
+function ratingMeanOf(state: GameState, competitionId: string): number {
+  const rows = state.seasonStats.filter(
+    (r) => r.season === state.season && r.competitionId === competitionId,
+  );
+  const apps = rows.reduce((a, r) => a + r.apps, 0);
+  return rows.reduce((a, r) => a + (r.ratingSum ?? 0), 0) / Math.max(1, apps);
+}
+
 function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
   const played = state.matches.filter(
     (m) => m.result && m.competitionId === LEAGUE && m.season === state.season,
@@ -173,43 +198,15 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
   const at = (i: number) => table[i]?.points ?? 0;
   const usIndex = table.findIndex((r) => r.teamId === state.userTeamId);
   const bookings = state.bookings.filter((b) => played.some((m) => m.id === b.matchId));
-  /**
-   * **어느 시뮬레이터가 그 경기를 굴렸는가로 카드를 가른다** (match.md §7).
-   *
-   * 감독의 경기만 실시간 경기를 지나고 나머지는 간이 시뮬이다. 두 눈금이 갈리면
-   * 여기가 벌어진다 — 그게 이 갈래를 찍는 이유다. ⚠️ **판정은 여기서 하지
-   * 않는다**: 감독의 리그 경기는 38판뿐이라 카드가 130장이고 상대 잡음이 9%다.
-   * 강도를 한쪽만 곱하는 정도(10~20%)가 그 잡음에 묻히므로 밴드로 걸면 시드마다
-   * 빨갛거나 초록이다. 표본을 키워 판정하는 자리는 `injury-rate` 하네스다.
-   *
-   * 부상은 여기서 아예 못 가른다 — `Injury`에는 경기 id가 없고, 있어도 감독 팀의
-   * 한 시즌 부상은 서너 건이라 잴 것이 없다.
-   */
-  const ourMatchIds = new Set(
-    played
-      .filter((m) => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)
-      .map((m) => m.id),
-  );
-  const cardsIn = (mine: boolean, card: "yellow" | "red") =>
-    bookings.filter((b) => b.card === card && ourMatchIds.has(b.matchId) === mine).length;
-  const ourGames = ourMatchIds.size;
-  const otherGames = played.length - ourGames;
-  const ourYellows = ratio(cardsIn(true, "yellow"), ourGames);
-  const otherYellows = ratio(cardsIn(false, "yellow"), otherGames);
-
-  /**
-   * **세트피스 득점 비율** — 골마다 붙는 `goalOrigins`가 원본이다 (match.md §1.4).
-   * 감독의 38경기(실시간 경기)와 나머지 342경기(간이 시뮬)가 한 눈금에 서야 하므로
-   * 리그 전체를 통째로 센다 — 두 채널이 갈리면 여기가 밴드 밖으로 나간다.
-   */
+  /** **세트피스 득점 비율** — 골마다 붙는 `goalOrigins`가 원본이다 (match.md §4) */
   const origins = played.flatMap((m) => m.result!.goalOrigins);
   const originShare = (kinds: readonly string[]) =>
     ratio(origins.filter((o) => kinds.includes(o)).length, origins.length);
   const originPerMatch = (kinds: readonly string[]) =>
     ratio(origins.filter((o) => kinds.includes(o)).length, played.length);
 
-  const homeWin = played.filter((m) => m.result!.homeGoals > m.result!.awayGoals).length;
   const draw = played.filter((m) => m.result!.homeGoals === m.result!.awayGoals).length;
+  const goalMinutes = played.flatMap((m) => m.result!.goalMinutes);
 
   return {
     "리그 평균 슈팅/경기": shotMean * 2,
@@ -218,11 +215,7 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
       sum((m) => m.result!.homeExpectedGoals + m.result!.awayExpectedGoals) / n,
     "리그 평균 득점/경기": mean,
     "총득점 분산": totals.reduce((a, b) => a + (b - mean) ** 2, 0) / n,
-    "홈 득점/경기": sum((m) => m.result!.homeGoals) / n,
-    "원정 득점/경기": sum((m) => m.result!.awayGoals) / n,
-    "홈승 비율": ratio(homeWin, n),
     "무승부 비율": ratio(draw, n),
-    "원정승 비율": ratio(n - homeWin - draw, n),
     // 클린시트는 **팀-경기** 단위다 — 경기 단위로 "한쪽이라도 0골"을 세면 두 배가 된다
     "클린시트 비율": share(teamGoals, 0),
     "총득점 0골 비율": share(totals, 0),
@@ -242,6 +235,26 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
     "코너·프리킥 득점/경기": originPerMatch(["corner", "free_kick"]),
     "페널티 득점/경기": originPerMatch(["penalty"]),
     "팀당 슈팅/경기": shotMean,
+    "슈팅당 xG": sum((m) => m.result!.homeXg + m.result!.awayXg) / Math.max(1, shotMean * 2 * n),
+    "팀-경기 xG sd": stdev(played.flatMap((m) => [m.result!.homeXg, m.result!.awayXg])),
+    "점유율 sd": stdev(
+      played.flatMap((m) => [m.result!.possession.home, m.result!.possession.away]),
+    ),
+    "전반 득점 비중": ratio(
+      played.flatMap((m) => m.result!.goalMinutes).filter((minute) => minute <= 45).length,
+      played.reduce((a, m) => a + m.result!.goalMinutes.length, 0),
+    ),
+    "득점 시각 1~15분": goalShareBetween(goalMinutes, 0, 15),
+    "득점 시각 16~30분": goalShareBetween(goalMinutes, 16, 30),
+    "득점 시각 31~45분": goalShareBetween(goalMinutes, 31, 45),
+    "득점 시각 46~60분": goalShareBetween(goalMinutes, 46, 60),
+    "득점 시각 61~75분": goalShareBetween(goalMinutes, 61, 75),
+    "득점 시각 76~90분": goalShareBetween(goalMinutes, 76, 90),
+    "평점 평균 − 폼 중립점": ratingMeanOf(state, LEAGUE) - RATING_BASELINE,
+    "도움 붙은 골 비중": ratio(
+      played.flatMap((m) => m.result!.assists).filter((a) => a !== "").length,
+      played.reduce((a, m) => a + m.result!.assists.length, 0),
+    ),
     "팀당 슈팅 분산":
       shots.reduce((a, b) => a + (b - shotMean) ** 2, 0) / Math.max(1, shots.length),
     "승점 1위": at(0),
@@ -252,11 +265,6 @@ function seasonReadings(state: GameState): Readings<typeof WORLD_SEASON> {
     "리그 승점 표준편차": stdev(table.map((r) => r.points)),
     "옐로/경기": ratio(bookings.filter((b) => b.card === "yellow").length, n),
     "레드/경기": ratio(bookings.filter((b) => b.card === "red").length, n),
-    "옐로/경기 (감독 경기 · 실시간 경기)": ourYellows,
-    "옐로/경기 (타 팀 경기 · 간이 시뮬)": otherYellows,
-    "옐로 — 감독/타 팀": ourYellows / Math.max(1e-9, otherYellows),
-    "레드/경기 (감독 경기 · 실시간 경기)": ratio(cardsIn(true, "red"), ourGames),
-    "레드/경기 (타 팀 경기 · 간이 시뮬)": ratio(cardsIn(false, "red"), otherGames),
     "감독 팀 순위": usIndex + 1,
     "감독 팀 승점": table[usIndex]?.points ?? 0,
     "리그 경기 수": played.length,
@@ -363,11 +371,20 @@ describe("전체 세계 한 시즌", () => {
    * 승점 곡선을 판정한다 — 케이스는 선언 순서대로 도므로 마지막 것이 전부를 본다.
    */
   const curves: LeagueCurve[] = [];
+  /**
+   * 시드마다의 시즌 측정값과 로테이션 집계 — **표는 시드를 모은 뒤 한 번 선다.** 한
+   * 리그-시즌은 380경기라 0골 비율 같은 칸이 시드마다 ±2%p씩 흔들리고, 여섯 장의 표를
+   * 나란히 읽으면 그 흔들림이 신호처럼 보인다. 시드마다 경기 수가 같으므로 칸별 평균이
+   * 곧 모은 표본의 값이다.
+   */
+  const seasons: Array<Readings<typeof WORLD_SEASON>> = [];
+  const rotation = newTally();
+  const notes: string[] = [];
 
   for (const seed of SEEDS) {
     it(`시드 ${seed}`, () => {
       const state = createTestGame(seed);
-      const tally = newTally();
+      const tally = rotation;
       let season: Readings<typeof WORLD_SEASON> | null = null;
       let note = "";
       for (let i = 0; i < 600; i++) {
@@ -382,22 +399,32 @@ describe("전체 세계 한 시즌", () => {
           if (state.season === 1) sampleRotation(state, tally);
           drillUserTactics(state, 7);
           rotate(state);
-          playMockMatch(state);
+          settleMatchdayQuick(state);
           if (state.season === 1) season = seasonReadings(state);
         }
       }
       expect(season, `시즌 1의 리그 경기가 하나도 없다${note}`).not.toBeNull();
       curves.push(...CURVE_LEAGUES.map((league) => curveOf(state, 1, league)));
-      const label = `시드 ${seed}${note}`;
-      console.log(
-        [
-          reportOf(WORLD_SEASON, season!, label),
-          reportOf(AI_ROTATION, rotationReadings(tally), label),
-        ].join("\n"),
-      );
-      expect(outOfBand(WORLD_SEASON, season!)).toEqual([]);
+      seasons.push(season!);
+      if (note) notes.push(`시드 ${seed}${note}`);
     });
   }
+
+  it(`시즌 분포 — 시드 ${SEEDS.length}개를 모아`, () => {
+    const metrics = Object.keys(seasons[0] ?? {}) as Array<keyof Readings<typeof WORLD_SEASON>>;
+    const pooled = Object.fromEntries(
+      metrics.map((metric) => [metric, average(seasons.map((r) => r[metric]))]),
+    ) as Readings<typeof WORLD_SEASON>;
+    const label = `시드 ${SEEDS.join("·")} 평균 (리그-시즌 ${seasons.length}개)${notes.length ? ` ⚠️ ${notes.join(" / ")}` : ""}`;
+    console.log(
+      [
+        reportOf(WORLD_SEASON, pooled, label),
+        reportOf(AI_ROTATION, rotationReadings(rotation), label),
+      ].join("\n"),
+    );
+    expect(seasons).toHaveLength(SEEDS.length);
+    expect(outOfBand(WORLD_SEASON, pooled)).toEqual([]);
+  });
 
   it(`승점 곡선 — 시드 ${SEEDS.length} × 리그 ${CURVE_LEAGUES.length}`, () => {
     const readings = spreadReadings(curves);

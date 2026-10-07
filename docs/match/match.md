@@ -204,7 +204,8 @@ flowchart TB
   실력이 덜 갈리는 무대라 폭이 좁고, 그래서 이변이 여기서 태어난다. 경기 중 페널티도
   같은 함수다(실측 성공률 79%가 기준점이다 — §9).
 - **차는 사람은 그 경기를 끝낸 열한 명이다**(온필드 — 퇴장이 있었으면 그보다 적다). 기본
-  순서는 승부차기 기량 내림차순, 골키퍼가 맨 뒤. 막아서는 골키퍼도 그 열한 명 중의 GK다.
+  순서는 승부차기 기량 내림차순, 골키퍼가 맨 뒤. 두 편의 인원이 다르면 많은 쪽이 적은 쪽
+  수에 맞춰 순서의 뒤에서 줄인다(Laws of the Game 10.2). 막아서는 골키퍼도 그 열한 명 중의 GK다.
 - **먼저 차는 쪽은 동전이 정한다** — 시드에서 떨어지는 결정적 동전이다.
 - **규정대로 조기 확정한다.** 5킥씩 차고도 같으면 서든데스, 상한은 없다(`shootoutSettled`).
 
@@ -262,8 +263,8 @@ EventCause { code, playerIds, values?, pointId? }
   ([live-match.md](live-match.md) §9.1). `marking`은 시트의 `behavior`가 걸린 말이 관여했다는
   사실이고 `pointId`로 감독 지시의 원문 출처를 인용한다.
   자유 문자열은 없다 — 문장은 렌더러 하나가 만든다.
-- **간이 시뮬의 골도 원인을 갖는다** — 어느 채널에서 나왔는가(`set_piece` · `counter` ·
-  `open`)와 슈터·도움까지. 행동의 사슬은 없다 — 장부가 없다.
+- **간이 시뮬의 골도 원인을 갖는다** — 어느 채널에서 나왔는가(`shotOrigin`의 `open` ·
+  `corner` · `free_kick` · `penalty`)와 슈터·도움까지. 행동의 사슬은 없다 — 장부가 없다.
 - **교체의 갈래는 `subCause`가 갖는다**(`injury` · `chase` · `hold` · `fatigue`).
 - **AI 벤치가 판을 옮긴 것도 사건이다**(`tactical_shift`) — 팀 사건이고 `actors`는 비어
   있다. 근거 하나가 갈래와 옮긴 뒤의 값을 싣는다.
@@ -296,8 +297,11 @@ EventCause { code, playerIds, values?, pointId? }
   `REDS_PER_MATCH`, [football-reference.md](football-reference.md) §5). 경고는 파울의 성질에서
   나온다(`CARD_ON_FOUL` — 파울 하나가 경고가 되는 비율 약 17%, 역습을 끊은 파울과 반복
   파울이 그 몫을 올린다). 두 번째 경고는 경고 한 줄 + 퇴장 한 줄이다(§5).
-- **강도**(`matchIntensity` 0.70\~1.30)가 총량에 곱해진다 — 압박·템포·태클 강도와 더비
-  `heat`. 실시간 경기에서는 이 값이 접촉의 빈도로 들어가고, 간이 시뮬에서는 팀 총량에
+- **퇴장은 두 갈래다** — 두 번째 경고와 곧장 레드(`STRAIGHT_RED_SHARE` 0.45가 퇴장 중 곧장
+  레드의 몫). 간이 시뮬은 카드 한 장마다 곧장 레드를 `STRAIGHT_RED_CHANCE`(=
+  `REDS_PER_MATCH` × `STRAIGHT_RED_SHARE` ÷ `YELLOWS_PER_MATCH`, 약 2%)로 굴리고, 두 번째 경고는
+  이미 경고를 안은 선수가 다시 뽑힐 때 생긴다(`BOOKED_AGAIN_WEIGHT`).
+- **강도**(`matchIntensity` 0.70\~1.30)가 총량에 곱해진다 — 압박·템포·태클 강도. 실시간 경기에서는 이 값이 접촉의 빈도로 들어가고, 간이 시뮬에서는 팀 총량에
   곱해진다. 어느 쪽이든 강도 1의 리그 평균이 위 값이다.
 - **누가 받는가**는 `bookingWeight`(거칠기 + 태클 미숙, 이미 경고면 `BOOKED_AGAIN_WEIGHT`)와
   시트 `temper`다. 실시간 경기에서는 접촉을 만든 말이 받으므로 가중은 접촉 확률에 들어간다.
@@ -351,8 +355,8 @@ EventCause { code, playerIds, values?, pointId? }
 체력 = 지수 감쇠 — log(남은 체력)이 부하에 선형으로 준다
 ```
 
-- **기대 부하표는 실시간 경기를 굴려 잰 값이다** — `pnpm balance live-player-load --report`가
-  자리 묶음 × 전술 배율의 표를 다시 만든다. 자리별 총 거리(센터백 10.2 → 중앙 미드 11.7km)와
+- **기대 부하표는 실시간 경기에 맞춰 둔 값이다** — `live-player-load`(`pnpm balance live-baseline`)가
+  포지션 묶음별 실측 거리·고속·스프린트와 표의 비를 찍고, 표는 그 값을 읽어 손으로 옮긴다. 자리별 총 거리(센터백 10.2 → 중앙 미드 11.7km)와
   고속·스프린트의 비가 [football-reference.md](football-reference.md) §7이다. 압박·템포·라인·폭이
   부하를 움직이는 폭은 실측 팀 간 총 거리 sd(약 2km, ±5%)와 고강도 주행의 폭(±30%) 사이다.
 - **원정은 조금 덜 채워 나온다**(`AWAY_CONDITION_PENALTY`) — 홈 이점의 전부다. 관중·분위기가
@@ -381,7 +385,7 @@ EventCause { code, playerIds, values?, pointId? }
 ### 6.2 수적 열세
 
 실시간 경기에서 열 명은 실제로 한 자리가 빈다 — 블록이 그만큼 얇고 그 공간을 상대가 쓴다.
-간이 시뮬은 빠진 한 명마다 팀 평점을 `SHORTHANDED_PENALTY`(12%)씩 깎는다(최대 세 명). 실측
+간이 시뮬은 빠진 한 명마다 팀 평점을 `SHORTHANDED_PENALTY`(7%)씩 깎는다(최대 세 명). 실측
 기준은 열 명이 된 팀의 실점 +15\~30% · 득점 −20\~25%이고, `sim-parity`가 두 시뮬의 값을 나란히
 찍는다.
 
@@ -510,12 +514,15 @@ ln xG(우리) = ln QUICK_XG_BASE
             − 수적 열세 (§6.2)
 ```
 
+- **`QUICK_XG_BASE`(1.34)는 리그 한가운데 팀의 xG다** — 페널티를 포함한다. `ln xG`가 전력에
+  선형이라 리그 평균 xG는 이 값에 팀 간 분산만큼(`e^(σ²/2)`) 얹혀 서고, 그 몫을 덜어 리그
+  경기당 득점이 실측 2.82에 선다.
 - **전력은 평점의 지수다.** 축구 득점의 표준 통계 모델(Maher 1982 · Dixon–Coles 1997)은
   `ln λ`가 공격·수비 평점의 차에 선형이다 — 같은 5점 차는 60 대 65에서도 80 대 85에서도
   같은 승률 차다. 기울기(`QUICK_RATING_SLOPE`)는 리그의 팀 간 xG sd가 **0.40**, 우승 승점이
   84\~93, 스무 팀 승점의 sd가 19\~20에 서도록 잡는다(`league-spread` 하네스).
 - **홈 계수는 실측 그대로다** — 홈 xG 1.67 · 원정 1.32 (평균 1.49). 감독의 경기는 원정
-  체력 감점 하나로 홈 이점을 내므로(§6) 두 시뮬의 홈 이점은 `sim-parity`가 나란히 찍는다.
+  체력 감점 하나로 홈 이점을 내므로(§6) 두 시뮬의 홈 이점은 다르다.
 - **스코어 상황은 골마다 같은 배가 곱해진다** — 앞선 팀 `e^(−0.10 × 골 차)`(한 골 0.90 ·
   두 골 0.82), 뒤진 팀 `e^(0.05 × 골 차)`. 실측 xG의 경기 상황 분해(한 골 앞서면 0.85\~0.9,
   두 골 0.7\~0.75)를 지난다. 골 정지점마다 다시 세운다.
@@ -523,7 +530,8 @@ ln xG(우리) = ln QUICK_XG_BASE
 ### 8.3 슈팅과 골 — 세 번의 확률
 
 ```
-슈팅 수      N ~ Poisson(xG / QUICK_XG_PER_SHOT)           슈팅당 xG 0.12
+페널티       K ~ Poisson(PENALTY_PER_MATCH × 공격 몫 × 상대 강도)   한 개의 기대 득점 PENALTY_SCORE_RATE 0.79
+슈팅 수      N ~ Poisson((xG − E[K] × 0.79) / QUICK_XG_PER_SHOT)  페널티를 뺀 슈팅당 xG 0.112
 슛 하나의 질 q ~ Beta(μ κ, (1−μ) κ)                       μ = xG / N 근처, κ = SHOT_XG_CONCENTRATION
 골 확률      logit p = logit q + FINISHING_LOGIT_WEIGHT × (결정력 − FINISHING_PIVOT) / FINISHING_SCALE
 결과         goal ~ Bernoulli(p) · 아니면 saved / blocked / off_target (유효슈팅 35% · 골/유효 32%)
@@ -532,13 +540,18 @@ ln xG(우리) = ln QUICK_XG_BASE
 `Σq`는 기회 xG, `Σp`는 결정력 반영 기대 득점, `Σgoal`은 실제 득점이다. `FINISHING_PIVOT`
 (75)은 게임 데이터의 슈팅 가중 리그 평균이라 리그 전체에서 `Σp ≈ Σq`다.
 
+**페널티는 팀 xG 예산 안의 몫이다** — 예산(`QUICK_XG_BASE`)이 페널티를 포함하므로 페널티의
+기대 득점을 먼저 덜고 나머지를 슈팅으로 나눈다. 예산 밖에 덧붙이면 팀 xG가 그만큼 부푼다.
+
 **누가 차는가**는 포지션별 슈팅 몫(`QUICK_SHOT_SHARE` — ST 27% · 윙어 27% · CM 22% ·
 AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 역할의 `shoot`
-성향과 결정력·침투를 곱해 뽑는다. 도움은 골의 `ASSIST_RATE`(0.68)에만 붙고 온필드에서
-시야·패스로 뽑는다.
+성향과 결정력·침투를 곱해 뽑는다. 도움은 골의 `ASSIST_RATE`(0.68)에만 붙고, 온필드에서
+자리의 공격 기여(`QUICK_ZONE_CONTRIBUTION.attack`) × 시야·패스로 뽑는다 — 자리를 빼면
+수비형 미드와 센터백이 도움 순위를 채운다.
 
 **세트피스는 같은 총량 안의 몫이다** — 슈팅의 `SET_PIECE_SHOT_SHARE`(0.27)가 코너·프리킥
-채널로 가고, 그 슛의 질은 키커의 킥력과 박스 안 공중볼이 정한다. 세트피스 골의 도움은
+채널로 가고, 그 슛의 평균 질은 열린 플레이의 `SET_PIECE_SHOT_QUALITY`(0.75)배다 — 밀집 수비
+속 헤더라 열린 플레이보다 낮다. 키커의 킥력과 슈터의 공중볼이 그 질을 조금 움직인다. 세트피스 골의 도움은
 키커다. 페널티는 팀당 `PENALTY_PER_MATCH`(0.154)에 상대의 거칠기와 우리 공격 몫을 곱해
 뽑고 `penaltyRate`(§3.4)로 성공을 정한다. 코너는 `CORNERS_PER_MATCH`(4.9)에 공격 몫을 곱해
 음이항으로 뽑는다(실측 분산 8.0 — 과산포).
@@ -554,7 +567,7 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 - **사건의 분**은 후반이 조금 더 붐빈다 — 전반 `QUICK_FIRST_HALF_SHARE`(0.45), 실측 골의
   전반 비중 45.1%. 간이 시뮬 사건은 정규시간 1~~90분, 연장 91~~120분에 배치된다.
   실시간 경기와 달리 `45+N`·`90+N` 추가시간 사건 축을 별도로 굴리지 않는다.
-- **경기를 시간순으로 굴린다** — 정지점(골·퇴장·하프타임·조용한 25분)마다 벤치가 판을 읽고
+- **경기를 시간순으로 굴린다** — 정지점(골·퇴장·하프타임·조용한 15분 — `QUICK_REVIEW_MINUTES`)마다 벤치가 판을 읽고
   (`planBenchSubs` · `planAiTacticalShift`, §3.3) 온필드가 바뀌면 평점을 다시 세운다. 골에서
   멈출 때 그 분 뒤로 굴려 둔 슛은 버리고 다시 굴린다 — 푸아송은 무기억이라 총량이 변하지
   않는다.
@@ -665,43 +678,43 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 하네스가 다시 잡는 값이다. 실시간 경기의 자리별 역할 성향표와 위협 격자(xT)는 상수가 아니라
 데이터다([live-match.md](live-match.md) §4·§5.1).
 
-| 묶음            | 상수                                                                                                                           | 근거 ([football-reference](football-reference.md))   |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| **공유 — 총량** | `FOULS_PER_MATCH` 12 · `YELLOWS_PER_MATCH` 2.07 · `REDS_PER_MATCH` 0.10 · `CARD_ON_FOUL`                                       | §5                                                   |
-|                 | `INJURY_PER_MATCH` · `INJURY_WEIGHT_*`                                                                                         | 시즌 부상 건수(`injury-rate`)                        |
-|                 | `ASSIST_RATE` 0.68                                                                                                             | 실측 도움 비율                                       |
-|                 | `PENALTY_PER_MATCH` 0.154 · `PENALTY_BASE` · `PENALTY_EDGE` · `PENALTY_FLOOR/CEILING`                                          | §2 성공률 79%                                        |
-|                 | `SET_PIECE_SHOT_SHARE` 0.27 · `CORNERS_PER_MATCH` 4.9                                                                          | §2 · §5                                              |
-|                 | `matchIntensity` 폭 0.70\~1.30 · `DERBY_INTENSITY_STEP` · `TACKLING_INTENSITY_STEP`                                            | 팀 간 파울 sd 1.6(§5)                                |
-| **공유 — 체력** | `LOAD_WEIGHT` (거리·고속·스프린트) · `STAMINA_RELIEF` · `AWAY_CONDITION_PENALTY`                                               | §7 자리별 거리 · §1 홈 이점                          |
-|                 | `RECOVERY_BASE` · `RECOVERY_STAMINA_BONUS` · `RECOVERY_FATIGUE_DRAG` · `FATIGUE_*`                                             | 7일 회복 불변식(§6.1)                                |
-|                 | 기대 부하표 `EXPECTED_LOAD`                                                                                                    | 실시간 경기 측정(`live-player-load`)                 |
-| **공유 — 벤치** | `SUB_*` 11 · `AI_*` 10 · `STALL_MINUTES`                                                                                       | §6 교체 분포(평균 68분, sd 15)                       |
-| **공유 — 장부** | `LEDGER_LIMITS` · `EXTRA_TIME_SUBS` · `FRIENDLY_SUBS` · `YELLOWS_TO_SEND_OFF`                                                  | 규정                                                 |
-| **간이 시뮬**   | `QUICK_XG_BASE` 1.49 · 홈 1.12/원정 0.89                                                                                       | §1·§2                                                |
-|                 | `QUICK_RATING_SLOPE` · `QUICK_MIDFIELD_SLOPE`                                                                                  | 팀 간 xG sd 0.40 · 승점 sd 19\~20(`league-spread`)   |
-|                 | `QUICK_LEAD_LOG_RATE` 0.10 · `QUICK_TRAIL_LOG_RATE` 0.05                                                                       | 경기 상황 xG 분해                                    |
-|                 | `QUICK_XG_PER_SHOT` 0.12 · `SHOT_XG_CONCENTRATION` · `FINISHING_*` · `SAVED_*` · `BLOCKED_SHARE`                               | §2 슈팅 12.6 · 유효 35% · 골/유효 32%                |
-|                 | `QUICK_SHOT_SHARE` (자리별)                                                                                                    | §8                                                   |
-|                 | `QUICK_POSSESSION_SLOPE` · `QUICK_POSSESSION_NOISE`                                                                            | §4 sd 11%p · 팀 간 8.5%p                             |
-|                 | `QUICK_FIRST_HALF_SHARE` 0.45 · `EXTRA_TIME_DENSITY` 0.84                                                                      | §2 시각 분포                                         |
-|                 | `QUICK_TACTIC_EFFECTS`                                                                                                         | 실시간 경기 측정(`live-tactics`)                     |
-|                 | `SHORTHANDED_PENALTY` 0.12                                                                                                     | 열 명의 실점 +15\~30%                                |
-| **실시간 경기** | 값은 전부 **`packages/sim/src/live/tuning.ts` 한 파일**에 있다 — 그 값을 읽는 파일 순서로 절이 나뉜다                          | —                                                    |
-|                 | `LIVE_STEP` 0.05 · `CHECKPOINT_MAX_MINUTES` 5 (도메인) · `DECIDE_INTERVAL` · `CARRIER_DECIDE_INTERVAL` · `FIRST_TOUCH_SECONDS` | —                                                    |
-|                 | `TOP_SPEED_*` · `ACCELERATION` · `URGENCY` · `AMBLE_*` · `SHAPE_DRIFT` · `RECOVERY_*` · `OVERLAP_*`                            | §7 최고 속도 29\~35 km/h · 자리별 거리·고속          |
-|                 | `PASS_*_ERROR` · `TOUCH_ERROR_BASE` · `SHOT_ERROR_*` · `SAVE_*` · `DIVE_*` · `XG_*` · `BLOCK_*`                                | §3 패스 83% · §2 유효 35% · 골/유효 32% · xG/슛 0.12 |
-|                 | `THREAT_VALUE` · `KEEP_VALUE` · `LOSS_SHARE` · `HOLD_*` · `DRIBBLE_BIAS` · `CROSS_RESERVE`                                     | §2 슈팅 12.6 · §5 드리블·크로스                      |
-|                 | `TACKLE_ATTEMPT` · `TACKLE_IN_PATH` · `DUEL_*` · `FOUL_ON_*` · `HOLDING_FOUL` · `BOX_*_RESTRAINT`                              | §5 태클 18\~20 · 성공 61% · 파울 12 · 페널티 0.154   |
-|                 | `RESTART_DEAD_SECONDS` · `GOAL_DEAD_SECONDS` · `STOPPAGE_SECONDS` · `ADDED_TIME_BASE`                                          | §4 인플레이 55\~59% · 경기 길이 97\~101분            |
-|                 | 전술 축 → 파라미터 (`teamParamsOf` · `*_PER_*_STEP`)                                                                           | 하네스 `live-tactics` · §7 팀 간 총 거리 sd 2km      |
-|                 | `SHEET_TARGET_CAP` 3.5% · `SHEET_TEAM_BUDGET` 8% · `SHEET_NET_CAP` +2.4% · `SHEET_*_STEP`                                      | 하네스                                               |
+| 묶음            | 상수                                                                                                                              | 근거 ([football-reference](football-reference.md))   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **공유 — 총량** | `FOULS_PER_MATCH` 12 · `YELLOWS_PER_MATCH` 2.07 · `REDS_PER_MATCH` 0.10 · `CARD_ON_FOUL`                                          | §5                                                   |
+|                 | `INJURY_PER_MATCH` · `INJURY_WEIGHT_*`                                                                                            | 시즌 부상 건수(`injury-rate`)                        |
+|                 | `ASSIST_RATE` 0.68                                                                                                                | 실측 도움 비율                                       |
+|                 | `PENALTY_PER_MATCH` 0.154 · `PENALTY_BASE` · `PENALTY_EDGE` · `PENALTY_FLOOR/CEILING`                                             | §2 성공률 79%                                        |
+|                 | `SET_PIECE_SHOT_SHARE` 0.27 · `CORNERS_PER_MATCH` 4.9                                                                             | §2 · §5                                              |
+|                 | `matchIntensity` 폭 0.70\~1.30 · `PRESSING_INTENSITY_STEP` · `TACKLING_INTENSITY_STEP`                                            | 팀 간 파울 sd 1.6(§5)                                |
+| **공유 — 체력** | `LOAD_WEIGHT` (거리·고속·스프린트) · `STAMINA_RELIEF` · `AWAY_CONDITION_PENALTY`                                                  | §7 자리별 거리 · §1 홈 이점                          |
+|                 | `RECOVERY_BASE` · `RECOVERY_STAMINA_BONUS` · `RECOVERY_FATIGUE_DRAG` · `FATIGUE_*`                                                | 7일 회복 불변식(§6.1)                                |
+|                 | 기대 부하표 `EXPECTED_LOAD`                                                                                                       | 실시간 경기 측정(`live-player-load`)                 |
+| **공유 — 벤치** | `SUB_*` 11 · `AI_*` 10 · `STALL_MINUTES`                                                                                          | §6 교체 분포(평균 68분, sd 15)                       |
+| **공유 — 장부** | `LEDGER_LIMITS` · `EXTRA_TIME_SUBS` · `FRIENDLY_SUBS` · `YELLOWS_TO_SEND_OFF`                                                     | 규정                                                 |
+| **간이 시뮬**   | `QUICK_XG_BASE` 1.34 · 홈 1.12/원정 0.89                                                                                          | §1·§2                                                |
+|                 | `QUICK_RATING_SLOPE` · `QUICK_MIDFIELD_SLOPE`                                                                                     | 팀 간 xG sd 0.40 · 승점 sd 19\~20(`league-spread`)   |
+|                 | `QUICK_LEAD_LOG_RATE` 0.10 · `QUICK_TRAIL_LOG_RATE` 0.05                                                                          | 경기 상황 xG 분해                                    |
+|                 | `QUICK_XG_PER_SHOT` 0.112 · `SET_PIECE_SHOT_QUALITY` 0.75 · `SHOT_XG_CONCENTRATION` · `FINISHING_*` · `SAVED_*` · `BLOCKED_SHARE` | §2 슈팅 12.6 · 유효 35% · 골/유효 32%                |
+|                 | `QUICK_SHOT_SHARE` (자리별)                                                                                                       | §8                                                   |
+|                 | `QUICK_POSSESSION_SLOPE` · `QUICK_POSSESSION_NOISE`                                                                               | §4 sd 11%p · 팀 간 8.5%p                             |
+|                 | `QUICK_FIRST_HALF_SHARE` 0.45 · `EXTRA_TIME_DENSITY` 0.84                                                                         | §2 시각 분포                                         |
+|                 | `QUICK_TACTIC_EFFECTS`                                                                                                            | 실시간 경기 측정(`live-tactics`)                     |
+|                 | `SHORTHANDED_PENALTY` 0.07                                                                                                        | 열 명의 실점 +15\~30%                                |
+| **실시간 경기** | 값은 전부 **`packages/sim/src/live/tuning.ts` 한 파일**에 있다 — 그 값을 읽는 파일 순서로 절이 나뉜다                             | —                                                    |
+|                 | `LIVE_STEP` 0.05 · `CHECKPOINT_MAX_MINUTES` 5 (도메인) · `DECIDE_INTERVAL` · `CARRIER_DECIDE_INTERVAL` · `FIRST_TOUCH_SECONDS`    | —                                                    |
+|                 | `TOP_SPEED_*` · `ACCELERATION` · `URGENCY` · `AMBLE_*` · `SHAPE_DRIFT` · `RECOVERY_*` · `OVERLAP_*`                               | §7 최고 속도 29\~35 km/h · 자리별 거리·고속          |
+|                 | `PASS_*_ERROR` · `TOUCH_ERROR_BASE` · `SHOT_ERROR_*` · `SAVE_*` · `DIVE_*` · `XG_*` · `BLOCK_*`                                   | §3 패스 83% · §2 유효 35% · 골/유효 32% · xG/슛 0.12 |
+|                 | `THREAT_VALUE` · `KEEP_VALUE` · `LOSS_SHARE` · `HOLD_*` · `DRIBBLE_BIAS` · `CROSS_RESERVE`                                        | §2 슈팅 12.6 · §5 드리블·크로스                      |
+|                 | `TACKLE_ATTEMPT` · `TACKLE_IN_PATH` · `DUEL_*` · `FOUL_ON_*` · `HOLDING_FOUL` · `BOX_*_RESTRAINT`                                 | §5 태클 18\~20 · 성공 61% · 파울 12 · 페널티 0.154   |
+|                 | `RESTART_DEAD_SECONDS` · `GOAL_DEAD_SECONDS` · `STOPPAGE_SECONDS` · `ADDED_TIME_BASE`                                             | §4 인플레이 55\~59% · 경기 길이 97\~101분            |
+|                 | 전술 축 → 파라미터 (`teamParamsOf` · `*_PER_*_STEP`)                                                                              | 하네스 `live-tactics` · §7 팀 간 총 거리 sd 2km      |
+|                 | `SHEET_TARGET_CAP` 3.5% · `SHEET_TEAM_BUDGET` 8% · `SHEET_NET_CAP` +2.4% · `SHEET_*_STEP`                                         | 하네스                                               |
 
 ## 11. 구현 범위와 한계
 
-- **홈 이점이 원정 체력 감점 하나다.** 실측 홈 이점(득점 1.55 대 1.27 · 홈승 43%)에 얼마나
-  닿는지는 `live-match-stats`가 재고, 간이 시뮬은 실측 홈 계수를 그대로 쓴다 — 두 시뮬의 홈
-  이점이 다를 수 있고 `sim-parity`가 그 차이를 `reference`로 찍는다.
+- **실시간 경기의 홈 이점은 원정 체력 감점 하나다** — 실측 홈 이점(득점 1.55 대 1.27 · 홈승
+  43%)에 닿지 않는다. 간이 시뮬은 실측 홈 계수를 그대로 쓴다. 홈 이점은 지금 어느 하네스도
+  재지 않는다 — 다시 설계할 때 측정도 함께 세운다.
 - **간이 시뮬에는 시트가 없다** — 판독기는 감독의 경기에서만 돈다. 부호가 양쪽으로 열려 있어
   평균은 중립이지만 분산은 다르다.
 - **간이 시뮬의 연장에는 교체가 없다** — 명단은 90분 종료 온필드 그대로 30분을 뛴다.
@@ -737,4 +750,4 @@ AM 9% · FB 8% · CB 7%, [football-reference.md](football-reference.md) §8)에 
 
 간이 시뮬의 코너는 골로 잘린 구간의 실제 확정 시간만큼만 표집한다.
 
-득점·카드·퇴장 효과와 상금 비중의 분포 밴드는 `pnpm balance quick-outcomes`가 측정한다. 단위 테스트는 확정된 장부·시간·명단 불변식을 검증한다.
+연장의 득점·카드와 퇴장 효과의 분포 밴드는 `pnpm balance quick-sim`(`quick-outcomes`)가 측정한다. 단위 테스트는 확정된 장부·시간·명단 불변식을 검증한다.

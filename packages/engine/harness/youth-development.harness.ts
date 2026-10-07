@@ -102,7 +102,8 @@ describe("한 시즌의 유스 육성", () => {
       )
       .map((p) => p.id);
 
-    playSeason(state);
+    // 재는 것은 2군·육성이다 — 감독의 1군 경기는 결과만 있으면 된다
+    playSeason(state, undefined, undefined, "quick");
 
     const reserveMatches = state.matches.filter(isReserveMatch);
     const unplayed = reserveMatches.filter((m) => m.result === null).length;

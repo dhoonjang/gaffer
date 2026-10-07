@@ -51,7 +51,7 @@ const RECOVERY_STAMINA_BONUS = 0.33;
  * (player.md §5.5 · match.md §3.1).
  *
  * 이 항이 이 축의 본론이다. 같은 XI로 연전을 버틴 12월의 주전은 잔고가 68쯤이라
- * (`pnpm balance ai-fitness` 실측) 하루 회복이 71%로 줄어, 지구력 70 중앙 미드필더가
+ * (`pnpm balance live-season`(`ai-fitness`) 실측) 하루 회복이 71%로 줄어, 지구력 70 중앙 미드필더가
  * 사흘 뒤 69 대신 57에서 나서고 **만 이레를 쉬어도 92에서 멈춘다.**
  *
  * ⚠️ **소모 쪽(`staminaFactor`)에는 걸지 않는다.** 양쪽에 걸면 지친 선수가 더 빨리
@@ -95,7 +95,7 @@ export function dailyRecovery(player: Player, kind: RecoveryKind): number {
  * 90분을 다 뛴 대가로 남는 잔고.
  *
  * 이 값이 평형을 정한다. 아래 해소 시간상수와 함께 읽으면 리듬마다의 봉우리가 나온다
- * (`pnpm balance ai-fitness` 시드 7 실측): 시즌 내내 같은 XI를 세운 팀의 그 열한 명이
+ * (`pnpm balance live-season`(`ai-fitness`) 시드 7 실측): 시즌 내내 같은 XI를 세운 팀의 그 열한 명이
  * **68**, 로테이션한 상대가 **34**. **로테이션 문턱(「지침」 50)이 그 사이에 있는 것이
  * 요점이다** — 돌려 쓰는 팀은 걸리지 않고 열한 명으로 버티는 팀은 걸린다.
  */

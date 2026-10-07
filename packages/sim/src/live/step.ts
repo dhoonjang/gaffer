@@ -35,6 +35,8 @@ import { INJURY_CONTACT_RISK, INJURY_SPRINT_RISK, injuryWeight } from "../injury
 import { AWAY_CONDITION_PENALTY, emptyLoad } from "../load";
 import { finishingGoalProbability, penaltyRate } from "../shot-model";
 import { takerOnPitch } from "../set-piece-taker";
+
+export { HEADER_SHOT_HEIGHT } from "./tuning";
 import { LN2, dexp, dlog, dsigmoid } from "./dmath";
 import {
   clamp,
@@ -204,7 +206,6 @@ import {
   ROLL_DECELERATION,
   ROLL_ON_MAX,
   ROLL_SPEED,
-  SAVE_DISTANCE,
   SAVE_KEEPER_SCALE,
   SAVE_LOGIT_BASE,
   SAVE_PLACEMENT,
@@ -238,6 +239,19 @@ import {
   TRANSITION_SECONDS,
   URGENCY,
   URGENCY_FULL,
+  HEADER_SHOT_HEIGHT,
+  KEEPER_SMOTHER_ATTEMPT,
+  KEEPER_SMOTHER_EDGE,
+  KEEPER_SMOTHER_RANGE,
+  DRIBBLE_CUT_IN,
+  RECEIVE_CROWD,
+  RECEIVE_CROWD_SIGMA,
+  DRIBBLE_CUT_IN_FROM,
+  SHOT_ERROR_NEAR,
+  SHOT_ERROR_RANGE,
+  SHOT_KEEP_SHARE,
+  SHOT_TENDENCY_THRESHOLD,
+  SHOT_TENDENCY_VALUE,
 } from "./tuning";
 
 /**
@@ -1329,9 +1343,42 @@ function stepBall(ctx: Ctx): void {
     looseBall(ctx);
     return;
   }
+  if (keeperSmothers(ctx, owner)) return;
   if (tackles(ctx, owner)) return;
   if (state.tick < owner.readyAt) return;
   decideCarrier(ctx, owner);
+}
+
+/**
+ * 골키퍼의 1대1 — 박스 안에서 공 가진 상대에게 몸이 닿는 거리면 발밑으로 몸을 던진다
+ * (live-match.md §5.6). 덤비는 판단은 골키퍼가 다가온 결과(`keeperTarget`)이고, 덮칠지는
+ * 골키핑 대 드리블이 정한다. 놓치면 골키퍼는 쓰러져 있고 골문이 빈다.
+ */
+function keeperSmothers(ctx: Ctx, owner: LivePlayer): boolean {
+  const { state } = ctx;
+  const keeper = state.players.find((p) => p.side !== owner.side && isKeeper(ctx, p));
+  if (!keeper || state.tick < keeper.readyAt) return false;
+  if (!inOwnBox(owner, keeper.side) || distance(keeper, owner) > KEEPER_SMOTHER_RANGE) return false;
+  if (ctx.rng() >= KEEPER_SMOTHER_ATTEMPT) return false;
+  stat(ctx, owner.id).dribbles += 1;
+  const win = dsigmoid(
+    (attr(ctx, keeper, "goalkeeping") - attr(ctx, owner, "dribbling") + KEEPER_SMOTHER_EDGE) /
+      DUEL_SCALE,
+  );
+  if (ctx.rng() < win) {
+    state.ball.owner = keeper.id;
+    state.ball.z = 0;
+    keeper.readyAt = state.tick + dead(2);
+    owner.readyAt = state.tick + dead(0.6);
+    state.possession = keeper.side;
+    state.possessionSince = state.tick;
+    state.lastPass = null;
+    state.setPiece = null;
+    return true;
+  }
+  stat(ctx, owner.id).dribblesWon += 1;
+  beaten(ctx, keeper);
+  return false;
 }
 
 /**
@@ -1480,7 +1527,10 @@ function stepFlight(ctx: Ctx): void {
       takeBall(ctx, caught);
       return;
     }
-    if (flight.offside && caught.id === flight.receiver) {
+    if (
+      (flight.offside && caught.id === flight.receiver) ||
+      flight.offsideIds?.includes(caught.id)
+    ) {
       stat(ctx, caught.id).offsides += 1;
       emit(ctx, "chance", flight.side, [caught.id]);
       restart(ctx, otherSide(flight.side), { x: caught.x, y: caught.y }, "free_kick");
@@ -1675,6 +1725,13 @@ function aerialContest(ctx: Ctx, intended?: LivePlayer): void {
   state.ball.flight = null;
   state.ball.z = 0;
   const attackingWinner = winner.side === (flight?.side ?? winner.side);
+  // 찬 순간 오프사이드 자리에 있던 말이 따냈다 — 관여했으니 오프사이드다
+  if (attackingWinner && flight?.offsideIds?.includes(winner.id)) {
+    stat(ctx, winner.id).offsides += 1;
+    emit(ctx, "chance", winner.side, [winner.id]);
+    restart(ctx, otherSide(winner.side), { x: winner.x, y: winner.y }, "free_kick");
+    return;
+  }
   // 우리 골 가까이에서 따낸 상대의 공중볼 — 잡지 않고 머리로 걷어낸다. 방향이 흩어져 줄 밖으로도 나간다
   if (
     !attackingWinner &&
@@ -1696,7 +1753,7 @@ function aerialContest(ctx: Ctx, intended?: LivePlayer): void {
     state.ball.owner = winner.id;
     shoot(ctx, winner, {
       header: true,
-      origin: state.setPiece ? "set_piece" : "cross",
+      origin: state.setPiece && state.setPiece.origin !== "open" ? "set_piece" : "cross",
       assist: flight.from,
     });
     return;
@@ -1809,12 +1866,18 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
     const near = clamp((range - SHOT_NEAR_RANGE) / (SHOT_FAR_RANGE - SHOT_NEAR_RANGE), 0, 1);
     const threshold =
       params.shotThreshold *
-      (1.4 - (tendency?.shoot ?? 0.5) * 0.8) *
+      (1 + (0.5 - (tendency?.shoot ?? 0.5)) * SHOT_TENDENCY_THRESHOLD) *
       (SHOT_NEAR_SHARE + (1 - SHOT_NEAR_SHARE) * near);
     if (xg > threshold) {
       const util =
-        xg * SHOT_VALUE * (0.7 + (tendency?.shoot ?? 0.5) * 0.6) -
-        KEEP_VALUE +
+        // 패스의 위협 이득과 같은 저울 — 멘탈리티가 패스의 이득을 키우는 만큼(`ambition`) 슛의
+        // 값도 키우고, 내려놓는 자리의 위협은 위험 회피만큼 치른다
+        xg *
+          SHOT_VALUE *
+          params.ambition *
+          (1 + ((tendency?.shoot ?? 0.5) - 0.5) * SHOT_TENDENCY_VALUE) -
+        KEEP_VALUE -
+        here * THREAT_VALUE * SHOT_KEEP_SHARE * params.riskAversion +
         (ctx.rng() - 0.5) * 0.05 * noiseScale;
       options.push({ kind: "shot", utility: util });
     }
@@ -1848,7 +1911,16 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
 
   // 드리블·운반 — 앞 공간
   if (!keeper) {
-    const ahead = inside({ x: owner.x + d * 9, y: owner.y + (FIELD.width / 2 - owner.y) * 0.1 });
+    // 마무리 지역에 가까울수록 골문 쪽으로 꺾는다 — 안으로 파고드는 역할(`inside`)일수록 더.
+    // 앞으로만 몰면 측면의 공은 골라인까지 내려가 크로스로만 끝난다
+    const cutIn =
+      clamp((ownerDepth - FIELD.length * DRIBBLE_CUT_IN_FROM) / (FIELD.length * 0.25), 0, 1) *
+      DRIBBLE_CUT_IN *
+      (0.5 + (tendency?.inside ?? 0.5));
+    const ahead = inside({
+      x: owner.x + d * 9 * (1 - cutIn * 0.5),
+      y: owner.y + (FIELD.width / 2 - owner.y) * (0.1 + cutIn),
+    });
     const onPath = opponents
       .map((q) => ({ q, s: segmentDistance(q, owner, ahead) }))
       .filter(({ s }) => s.distance < 4.5)
@@ -1982,7 +2054,8 @@ function shotOriginNow(
     state.tick <= state.setPiece.untilTick &&
     state.setPiece.side === owner.side
   )
-    return "set_piece";
+    // 쳐낸 슛 뒤의 창은 재시작이 아니다 — 흘러나온 공을 다시 찬 것이다
+    return state.setPiece.origin === "open" ? "rebound" : "set_piece";
   const lastPass = state.lastPass;
   if (lastPass && lastPass.to === owner.id && state.tick - lastPass.tick < dead(2.5)) {
     const passer = state.players.find((p) => p.id === lastPass.from);
@@ -2028,9 +2101,14 @@ function passSuccess(
     if (dd < reach) blockers += 1;
   }
   p *= blockers === 0 ? 1 : blockers === 1 ? 0.42 : 0.15;
-  const nearest = Math.min(...opponents.map((q) => distance(q, receiver)), 99);
-  if (nearest < 2) p *= 0.7;
-  else if (nearest < 4) p *= 0.87;
+  // 받는 말 둘레의 상대 — 붙은 수비가 많을수록 받기 어렵다. 한 명이 아니라 둘레 전체를 센다:
+  // 박스 안에서 센터백 둘에게 둘러싸인 공격수는 한 명이 붙은 공격수보다 받기 어렵다
+  let crowd = 0;
+  for (const q of opponents) {
+    const r = distance(q, receiver) / RECEIVE_CROWD_SIGMA;
+    crowd += dexp(-r * r);
+  }
+  p /= 1 + RECEIVE_CROWD * crowd;
   return clamp(p, 0.02, 0.98);
 }
 
@@ -2056,6 +2134,24 @@ function offsideAt(ctx: Ctx, receiver: LivePlayer, side: MatchSide): boolean {
     ctx.state.players.filter((p) => p.side !== side).map((p) => p.x),
     side,
   );
+}
+
+/** 찬 순간 오프사이드 자리에 선 차는 편의 말 — 크로스·뜬 공의 경합이 읽는다 */
+function offsideIdsAt(ctx: Ctx, kicker: LivePlayer): string[] {
+  return ctx.state.players
+    .filter((p) => p.side === kicker.side && p.id !== kicker.id && offsideAt(ctx, p, kicker.side))
+    .map((p) => p.id);
+}
+
+/**
+ * 스로인·골킥·코너에서는 오프사이드가 없다 — 재시작이 보낸 공의 표식을 지운다
+ * (Laws of the Game 11.3)
+ */
+function noOffsideFromRestart(ctx: Ctx): void {
+  const flight = ctx.state.ball.flight;
+  if (!flight) return;
+  flight.offside = false;
+  flight.offsideIds = [];
 }
 
 function pass(
@@ -2096,6 +2192,7 @@ function pass(
     side: owner.side,
     receiver: receiver.id,
     offside: offsideAt(ctx, receiver, owner.side),
+    offsideIds: offsideIdsAt(ctx, owner),
     to,
     speed:
       PASS_SPEED_MIN + (PASS_SPEED_MAX - PASS_SPEED_MIN) * clamp(dist / 40, 0, 1) + kicking / 60,
@@ -2127,6 +2224,7 @@ function cross(ctx: Ctx, owner: LivePlayer, spot: FieldPoint, kicking: number): 
     kind: "cross",
     from: owner.id,
     side: owner.side,
+    offsideIds: offsideIdsAt(ctx, owner),
     to,
     speed: 17 + kicking / 30,
     travelled: 0,
@@ -2188,7 +2286,7 @@ function shoot(
     SHOT_ERROR_BASE *
     (1 - (finishing / 99) * SHOT_ERROR_SKILL) *
     (1 + pressure * 0.25) *
-    (1 + dist / 40) *
+    (SHOT_ERROR_NEAR + dist / SHOT_ERROR_RANGE) *
     (opts.header ? 1.3 : 1) *
     normalish(ctx.rng);
   const to = { x: goal.x, y: aimY + error };
@@ -2217,7 +2315,7 @@ function shoot(
     speed,
     travelled: 0,
     distance: distance(owner, to),
-    height: opts.header ? 1.6 : 0.3 + ctx.rng() * 1.4,
+    height: opts.header ? HEADER_SHOT_HEIGHT : 0.3 + ctx.rng() * 1.4,
     xg,
     probability,
     origin,
@@ -2234,17 +2332,14 @@ function finishShot(
   const flight = state.ball.flight;
   if (!flight || flight.kind !== "shot") return;
   let result = outcome;
-  // 선방 — 골키퍼가 경로에 닿았어도 막을 수 있는가는 골키핑·배치·거리·속도가 정한다
-  if (outcome === "saved" && actor) {
-    const goal = goalOf(flight.side);
+  // 선방 — 골키퍼가 경로에 닿았어도 막을 수 있는가는 골키핑·배치·속도가 정한다.
+  // 페널티는 찬 순간 `penaltyRate`가 이미 골키퍼까지 읽고 정했다 — 두 번 굴리지 않는다
+  if (outcome === "saved" && actor && flight.origin !== "penalty") {
     const placement = Math.abs(flight.to.y - actor.y);
-    const shooter = state.players.find((p) => p.id === flight.from);
-    const dist = shooter ? distance(shooter, goal) : 16;
     const logit =
       SAVE_LOGIT_BASE +
       (attr(ctx, actor, "goalkeeping") - 60) / SAVE_KEEPER_SCALE -
-      placement * SAVE_PLACEMENT +
-      (dist - 14) * SAVE_DISTANCE -
+      placement * SAVE_PLACEMENT -
       (flight.speed - 24) * 0.04;
     if (!onTarget(flight.to.y, 1)) result = "off_target";
     else if (ctx.rng() >= dsigmoid(logit)) result = "goal";
@@ -2352,7 +2447,12 @@ function goalCauses(ctx: Ctx, scorer: string, assist: string | null): EventCause
     causes.push({ code: "direct_free_kick", playerIds: [scorer] });
   else if (sp && state.tick <= sp.untilTick && sp.origin !== "open") {
     causes.push({ code: "set_piece", playerIds: assist ? [assist, scorer] : [scorer] });
-  } else if (flight && flight.kind === "shot" && flight.height >= 1.5) {
+  } else if (sp && state.tick <= sp.untilTick && sp.side === flight?.side) {
+    causes.push({ code: "rebound", playerIds: [scorer] });
+  }
+  // 헤더는 몸의 부위라 길과 겹친다 — 코너의 헤더 골은 세트피스이자 헤더다. 발 슛의 높이(0.3~1.7)가
+  // 헤더의 높이와 겹치므로 높이 문턱이 아니라 그 값 자체로 가른다
+  if (flight && flight.kind === "shot" && flight.height === HEADER_SHOT_HEIGHT) {
     causes.push({ code: "header", playerIds: [scorer] });
   }
   const lastPass = state.lastPass;
@@ -2848,6 +2948,7 @@ function stepRestart(ctx: Ctx): void {
         { x: xAtDepth(FIELD.length - 7, r.side), y: FIELD.width / 2 + (ctx.rng() - 0.5) * 10 },
         kicking,
       );
+      noOffsideFromRestart(ctx);
       return;
     }
     case "goal_kick": {
@@ -2860,6 +2961,7 @@ function stepRestart(ctx: Ctx): void {
         const target = mates.sort((a, b) => attr(ctx, b, "aerial") - attr(ctx, a, "aerial"))[0];
         if (target) {
           pass(ctx, taker, target, { x: target.x, y: target.y }, false, kicking, kicking);
+          noOffsideFromRestart(ctx);
           if (state.ball.flight) state.ball.flight.height = 5;
           return;
         }
@@ -2873,7 +2975,10 @@ function stepRestart(ctx: Ctx): void {
         .filter((p) => p.side === r.side && p.id !== taker.id)
         .sort((a, b) => distance(a, taker) - distance(b, taker));
       const target = mates[r.kind === "kickoff" ? 0 : Math.min(1, mates.length - 1)] ?? mates[0];
-      if (target) pass(ctx, taker, target, { x: target.x, y: target.y }, false, 70, 60);
+      if (target) {
+        pass(ctx, taker, target, { x: target.x, y: target.y }, false, 70, 60);
+        noOffsideFromRestart(ctx);
+      }
       return;
     }
   }

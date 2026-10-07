@@ -1,13 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { CONDITION_MAX, DEFAULT_TACTICS } from "@gaffer/domain";
-import { injuryRiskOf, matchIntensity, teamCardRate, teamInjuryRate } from "@gaffer/sim";
-import { leagueOfTeamIn, quickSimulate, simSquadOf, type SimSquad } from "@gaffer/engine";
-import type { InjuryRiskGrade } from "@gaffer/domain";
+import {
+  injuryRiskOf,
+  matchIntensity,
+  penaltyRate,
+  takerOnPitch,
+  teamCardRate,
+  teamInjuryRate,
+} from "@gaffer/sim";
+import {
+  leagueOfTeamIn,
+  quickSimulate,
+  simSquadOf,
+  simulateExtraTime,
+  type SimSquad,
+} from "@gaffer/engine";
+import { positionGroupOfPlayer, type InjuryRiskGrade } from "@gaffer/domain";
 import { createTestGame } from "../test/helpers";
-import { INJURY_RATE } from "./catalog";
+import { INJURY_RATE, QUICK_OUTCOMES } from "./catalog";
 import { outOfBand, reportOf, type Readings } from "./harness";
 
 /**
+ * **간이 시뮬의 가장자리** — 한 시즌을 굴리는 `world-season`에는 드물어 분포가 서지 않는 것들을,
+ * 고정 대진을 수천~수만 번 굴려 잰다. 두 서술자가 한 파일을 쓴다.
+ *
+ * - `injury-rate` — 카드·퇴장·부상의 눈금, 성향·위험 등급·누적 피로가 부상률에 닿는 폭
+ * - `quick-outcomes` — 연장 득점·카드, 퇴장이 득실점에 닿는 폭, AI 교체의 수·시점, 페널티 성공률
+ *
+ *   pnpm balance quick-sim
+ *
+ * ── `injury-rate` ──
+ *
  * **간이 시뮬이 기대한 눈금으로 카드와 부상을 내는가** — 발생률 손잡이
  * (`teamCardRate`·`teamInjuryRate`)에서 유도한 기대치와 굴린 값을 맞댄다 (match.md §8).
  *
@@ -18,7 +41,6 @@ import { outOfBand, reportOf, type Readings } from "./harness";
  * 성향이 값으로 어떻게 움직이는지(오름·내림·상하한·균형식)는
  * `packages/engine/test/players/injury.test.ts`가 결정적으로 못 박고 있다.
  *
- *   pnpm balance injury-rate
  */
 
 /** 한 경기의 온필드 인원 (양팀) — 경기당 기대 건수를 개인 확률로 나눌 때의 분모 */
@@ -42,6 +64,9 @@ const AWAY = "liverpool";
 
 interface Tally {
   cards: number;
+  /** 퇴장 줄 · 그중 두 번째 경고로 나온 것 */
+  reds: number;
+  secondYellows: number;
   injuries: number;
 }
 
@@ -57,10 +82,16 @@ function flat(squad: SimSquad): SimSquad {
 }
 
 function quickArm(home: SimSquad, away: SimSquad, runs: number, channel: string): Tally {
-  const tally: Tally = { cards: 0, injuries: 0 };
+  const tally: Tally = { cards: 0, reds: 0, secondYellows: 0, injuries: 0 };
   for (let i = 0; i < runs; i++) {
     const one = quickSimulate(home, away, 2000 + i, `${channel}:${i}`);
     tally.cards += one.cards.length;
+    for (const red of one.cards.filter((c) => c.card === "red")) {
+      tally.reds += 1;
+      // 두 번째 경고는 같은 분·같은 선수의 경고 한 줄 + 퇴장 한 줄이다 (match.md §5)
+      if (one.cards.some((c) => c.card === "yellow" && c.playerId === red.playerId))
+        tally.secondYellows += 1;
+    }
     tally.injuries += one.injuries.length;
   }
   return tally;
@@ -227,6 +258,8 @@ describe("간이 시뮬은 기대한 눈금으로 카드와 부상을 낸다", (
       "부상 기대 대비 배율 (간이)": per(quick.injuries) / expected.injuries,
       "경기당 카드 (간이)": per(quick.cards),
       "카드 기대 대비 배율 (간이)": per(quick.cards) / expected.cards,
+      "경기당 퇴장 (간이)": per(quick.reds),
+      "퇴장 중 두 번째 경고 몫 (간이)": quick.secondYellows / Math.max(1, quick.reds),
       "유리몸 팀 배율": fragile.injuries / Math.max(1, healthy.injuries),
       "유리몸 한 명의 부상 점유율": hisShare / Math.max(1, homeInjuries),
       "위험 낮음 인원": grades.players.low,
@@ -249,5 +282,109 @@ describe("간이 시뮬은 기대한 눈금으로 카드와 부상을 낸다", (
       ),
     );
     expect(outOfBand(INJURY_RATE, readings)).toEqual([]);
+  });
+});
+
+/** 시즌 중 선발의 평균 체력 — `ai-rotation`의 「선발 평균 체력」 실측 */
+const SEASON_STARTER_CONDITION = 95;
+
+describe("간이 시뮬의 연장 · 퇴장 · 교체 · 페널티", () => {
+  it("quick-outcomes", () => {
+    const state = createTestGame(3);
+    const squad = (id: string) => simSquadOf(state, id, leagueOfTeamIn(state, id));
+
+    // 연장 — 같은 두 팀의 30분을 200번
+    const home = squad("mancity");
+    const away = squad("arsenal");
+    let extraGoals = 0;
+    let extraCards = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = simulateExtraTime(home, away, 500 + i, `extra:${i}`);
+      extraGoals += r.homeGoals + r.awayGoals;
+      extraCards += r.cards.length;
+    }
+
+    // 퇴장 — 미드필더 하나를 뺀 열 명과 열한 명을 같은 상대에 150번씩
+    const total = { eleven: { scored: 0, conceded: 0 }, ten: { scored: 0, conceded: 0 } };
+    for (const [h, a] of [
+      ["mancity", "hull"],
+      ["arsenal", "everton"],
+      ["fulham", "wolves"],
+    ] as const) {
+      const eleven = squad(h);
+      const opponent = squad(a);
+      const gone = eleven.starters.find((p) => positionGroupOfPlayer(p) === "MF")!;
+      const ten = { ...eleven, starters: eleven.starters.filter((p) => p.id !== gone.id) };
+      for (const key of ["eleven", "ten"] as const)
+        for (let i = 0; i < 150; i++) {
+          const r = quickSimulate(
+            key === "eleven" ? eleven : ten,
+            opponent,
+            10000 + i,
+            `red:${h}:${i}`,
+          );
+          total[key].scored += r.homeGoals;
+          total[key].conceded += r.awayGoals;
+        }
+    }
+
+    // 교체 · 페널티 — EPL 전 대진 한 바퀴. 새 세계의 체력은 개막 전의 몸(평균 78쯤)이라
+    // 그대로 재면 하프타임 교체가 쏟아진다 — 시즌 중 선발의 몸(`ai-rotation`이 재는 95쯤)으로 세운다
+    const epl = state.teams.map((t) => t.id).filter((id) => leagueOfTeamIn(state, id) === "epl");
+    const inSeason = (s: SimSquad): SimSquad => {
+      const rested = (p: SimSquad["starters"][number]) => ({
+        ...p,
+        state: { ...p.state, condition: SEASON_STARTER_CONDITION },
+      });
+      return { ...s, starters: s.starters.map(rested), bench: (s.bench ?? []).map(rested) };
+    };
+    const squads = new Map(epl.map((id) => [id, inSeason(squad(id))] as const));
+    const subMinutes: number[] = [];
+    let teamGames = 0;
+    const designated: number[] = [];
+    const topFive: number[] = [];
+    const keeperOf = (s: SimSquad) =>
+      s.starters.find((p) => positionGroupOfPlayer(p) === "GK") ?? null;
+    for (const h of epl) {
+      for (const a of epl) {
+        if (h === a) continue;
+        const r = quickSimulate(squads.get(h)!, squads.get(a)!, 20000, `subs:${h}:${a}`);
+        teamGames += 2;
+        for (const sub of r.subs) subMinutes.push(sub.minute);
+        const ours = squads.get(h)!;
+        const theirKeeper = keeperOf(squads.get(a)!);
+        const taker = takerOnPitch(ours.setPieceTakers?.penalty, "penalty", ours.starters);
+        if (taker) designated.push(penaltyRate(taker, theirKeeper));
+        const order = ours.starters
+          .filter((p) => positionGroupOfPlayer(p) !== "GK")
+          .map((p) => penaltyRate(p, theirKeeper))
+          .sort((x, y) => y - x)
+          .slice(0, 5);
+        topFive.push(...order);
+      }
+    }
+    const sorted = [...subMinutes].sort((x, y) => x - y);
+    const avg = (xs: number[]) => xs.reduce((x, y) => x + y, 0) / Math.max(1, xs.length);
+
+    const readings: Readings<typeof QUICK_OUTCOMES> = {
+      "연장 득점/경기": extraGoals / 200,
+      "연장 카드/경기": extraCards / 200,
+      "열 명/열한 명 실점 비": total.ten.conceded / total.eleven.conceded,
+      "열 명/열한 명 득점 비": total.ten.scored / total.eleven.scored,
+      "간이 AI 교체/팀": subMinutes.length / Math.max(1, teamGames),
+      "간이 교체 중앙 분": sorted[Math.floor(sorted.length / 2)] ?? Number.NaN,
+      "간이 교체 하프타임 몫":
+        subMinutes.filter((m) => m === 45).length / Math.max(1, subMinutes.length),
+      "지정 키커 페널티 성공률 (기대)": avg(designated),
+      "필드 상위 다섯 페널티 성공률 (기대)": avg(topFive),
+    };
+    console.log(
+      reportOf(
+        QUICK_OUTCOMES,
+        readings,
+        `연장 200 · 퇴장 대조 900 · EPL 전 대진 ${teamGames / 2}경기`,
+      ),
+    );
+    expect(outOfBand(QUICK_OUTCOMES, readings)).toEqual([]);
   });
 });

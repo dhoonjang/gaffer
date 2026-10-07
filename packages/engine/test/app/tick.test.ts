@@ -544,7 +544,7 @@ describe("누적 피로 (player.md §5.5)", () => {
      *
      * ⚠️ **두 값이 같기를 요구하지는 않는다** — 하루의 성격이 다르면 속도도 다르고
      * (여기 프리시즌은 우리가 휴가, 남의 팀은 본훈련이다) 그건 규칙이 같다는 것과
-     * 다른 말이다. 우리와 리그의 격차가 밴드 안인지는 `pnpm balance ai-fitness`가
+     * 다른 말이다. 우리와 리그의 격차가 밴드 안인지는 `pnpm balance live-season`(`ai-fitness`)가
      * 한 시즌을 돌려 잰다 (AGENTS.md §5 — 밸런스는 하네스의 일이다).
      */
     expect(fatigueOf(mine.state)).toBeLessThan(60);

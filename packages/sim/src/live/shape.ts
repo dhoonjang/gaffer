@@ -6,6 +6,9 @@ import type { RoleTendency } from "./roles";
 import { clamp, inside, xAtDepth, yAtLateral } from "./geometry";
 import {
   ATTACK_FOLLOW_HOLD,
+  ATTACK_FOLLOW_MAX,
+  ATTACK_FOLLOW_MIN,
+  ATTACK_FOLLOW_RATE,
   ATTACK_FRONT_MARGIN,
   DEFEND_FLOOR_BEHIND_BALL,
   DEFEND_FRONT_MARGIN,
@@ -78,7 +81,8 @@ export function shapePosition(
   let lateral: number;
   if (ctx.attacking) {
     const follow =
-      clamp((ctx.ballDepth - 45) * 0.35, -14, 16) * (1 - tendency.hold * ATTACK_FOLLOW_HOLD);
+      clamp((ctx.ballDepth - 45) * ATTACK_FOLLOW_RATE, ATTACK_FOLLOW_MIN, ATTACK_FOLLOW_MAX) *
+      (1 - tendency.hold * ATTACK_FOLLOW_HOLD);
     const advance = (tendency.advance - 0.5) * 14 * p.commit;
     depth = anchorDepth + p.attackShift + follow + advance;
     // 내려와서 받는 역할은 공이 뒤에 있을 때 내려온다

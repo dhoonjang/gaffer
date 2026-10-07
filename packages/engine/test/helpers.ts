@@ -217,10 +217,22 @@ export function playMockMatch(
    * 경기 중에만 있는 것(AI가 옮긴 전술·갈아 깐 판)을 재려면 여기서 읽어야 한다.
    */
   onFullTime?: (state: GameState) => void,
+  /**
+   * 감독 팀에도 AI 벤치 정책(교체·전술 전환)을 건다 — 감독이 손대지 않는 mock 경기에서는
+   * 감독 팀이 90분 내내 같은 열한 명으로 뛴다. 시즌을 굴려 체력·결과를 재는 하네스가 쓰는
+   * 감독의 대역이고, 제품에는 이 길이 없다.
+   */
+  options: { userBench?: boolean } = {},
 ): string[] {
   const started = startMatch(state);
   if (!started.ok) throw new Error(started.message);
   markEntered(state);
+  if (options.userBench && state.pendingMatch) {
+    const live = state.pendingMatch.live;
+    for (const side of ["home", "away"] as const) {
+      if (live.setup.sides[side].teamId === state.userTeamId) live.setup.sides[side].ai = true;
+    }
+  }
   playToFullTime(state);
   onFullTime?.(state);
   // 갈래를 나눈 결산을 여기선 평탄화해 돌려준다 — 이 반환을 읽는 테스트가 여럿이다
@@ -273,7 +285,11 @@ export function playToFullTime(state: GameState): void {
 const HEADLESS_CHUNK_TICKS = 5 * 60 * 20;
 
 /** idle → 다음 경기일까지 전진 후 경기까지 완료 (attention 정지는 계속 진행) */
-export function advanceAndPlay(state: GameState): void {
+export function advanceAndPlay(
+  state: GameState,
+  /** 감독 팀에도 AI 벤치를 건다 — `playMockMatch`의 같은 이름 */
+  options: { userBench?: boolean } = {},
+): void {
   let guard = 10;
   while (guard-- > 0) {
     const advanced = advanceTime(state, "next_match");
@@ -283,7 +299,7 @@ export function advanceAndPlay(state: GameState): void {
     if (advanced.stopped === "attention") continue; // 부상·불만 보고 후 계속
     if (advanced.stopped === "matchday") {
       drillUserTactics(state, 7); // 지난 한 주의 훈련
-      playMockMatch(state);
+      playMockMatch(state, undefined, options);
       return;
     }
     throw new Error(`경기일 도달 실패: ${advanced.stopped}`);

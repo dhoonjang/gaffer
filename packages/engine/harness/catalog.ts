@@ -1,5 +1,5 @@
 import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
-import { defineHarness, type Harness } from "./harness";
+import { defineHarness, type Band, type Harness } from "./harness";
 
 /**
  * 하네스 서술자 — **밴드 숫자가 사는 유일한 자리** (→ `docs/balance-harness.md`).
@@ -8,7 +8,7 @@ import { defineHarness, type Harness } from "./harness";
  * 쥔다. 여기에 없는 숫자를 하네스 본체가 직접 적으면 기댓값이 다시 두 곳으로 갈린다.
  */
 
-const MATCH = "docs/match/match.md §7";
+const QUICK_SIM = "docs/match/match.md §8";
 const FINANCE = "docs/team/finance.md §10";
 const HISTORY = "docs/agents/agents.md §5-1";
 const PROMPTS = "docs/agents/prompts.md §7";
@@ -16,9 +16,9 @@ const TOOL_CONTRACT = "docs/agents/prompts.md §2";
 
 export const WORLD_SEASON = defineHarness({
   id: "world-season",
-  what: "전체 세계 EPL 한 시즌 — 득점·슈팅 분포 · 승점 곡선 · 카드",
-  doc: MATCH,
-  cost: "시드당 40초쯤 × 6시드",
+  what: "간이 시뮬로 굴린 전체 세계 EPL 한 시즌 — 득점·슈팅 분포 · 승점 곡선 · 카드",
+  doc: QUICK_SIM,
+  cost: "시드당 수십 초 × 6시드 — 감독 경기도 간이 결산이다",
   // prettier-ignore
   bands: [
     { metric: "리그 평균 슈팅/경기", role: "reference", min: 24, max: 26, why: "실제 1부의 양 팀 합" },
@@ -26,11 +26,7 @@ export const WORLD_SEASON = defineHarness({
     { metric: "결정력 반영 기대 득점/경기", role: "measure", why: "기회 xG와 같은 눈금이어야 한다" },
     { metric: "리그 평균 득점/경기", role: "reference", min: 2.75, max: 3.05, why: "실제 1부 최근 다섯 시즌 2.7~3.3, 평균 2.9" },
     { metric: "총득점 분산", role: "measure", why: "실제는 분산 ≈ 평균 — 평균만으로는 닮았는지 알 수 없다" },
-    { metric: "홈 득점/경기", role: "reference", min: 1.5, max: 1.7, why: "실제 1부 — 총득점의 55% 안팎이 홈에서 난다. **지금은 벗어나 있다** — 홈 이점이 슈팅 노출 한 줄뿐이라 (match.md §9)" },
-    { metric: "원정 득점/경기", role: "reference", min: 1.2, max: 1.4, why: "실제 1부 — 홈의 0.78~0.82배. 위와 같은 이유로 지금은 위끝에 선다" },
-    { metric: "홈승 비율", role: "reference", min: 0.41, max: 0.48, unit: "ratio", why: "실제 1부 최근 네 시즌 41~48%" },
     { metric: "무승부 비율", role: "reference", min: 0.2, max: 0.26, unit: "ratio", why: "실제 1부 최근 네 시즌 20~25%" },
-    { metric: "원정승 비율", role: "reference", min: 0.29, max: 0.36, unit: "ratio", why: "실제 1부 최근 네 시즌 30~36% — 홈승을 넘지 않는다" },
     { metric: "클린시트 비율", role: "reference", min: 0.25, max: 0.32, unit: "ratio", why: "팀-경기 단위 — 경기 단위로 세면 두 배가 된다" },
     { metric: "총득점 0골 비율", role: "reference", min: 0.05, max: 0.085, unit: "ratio", why: "실제 1부(경기당 2.9골)의 스코어 분포 — 푸아송에 과산포 1.1~1.15가 얹힌 모양. 한 시즌 380경기라 시드마다 ±2%p는 잡음이다" },
     { metric: "총득점 1골 비율", role: "reference", min: 0.14, max: 0.19, unit: "ratio", why: "같은 분포" },
@@ -39,17 +35,29 @@ export const WORLD_SEASON = defineHarness({
     { metric: "총득점 4골 비율", role: "reference", min: 0.14, max: 0.17, unit: "ratio", why: "같은 분포" },
     { metric: "총득점 5골 비율", role: "reference", min: 0.07, max: 0.11, unit: "ratio", why: "같은 분포" },
     { metric: "총득점 6골 비율", role: "reference", min: 0.03, max: 0.055, unit: "ratio", why: "같은 분포" },
-    { metric: "총득점 7골+ 비율", role: "reference", min: 0.025, max: 0.045, unit: "ratio", why: "꼬리 — 실제 3~5%. 리드를 쥔 팀이 내려서지 않으면 여기가 먼저 부푼다 (`LEAD_SHOT_LOG_RATE`)" },
+    { metric: "총득점 7골+ 비율", role: "reference", min: 0.025, max: 0.045, unit: "ratio", why: "꼬리 — 실제 3~5%. 리드를 쥔 팀이 내려서지 않으면 여기가 먼저 부푼다 (`QUICK_LEAD_LOG_RATE`)" },
     { metric: "팀득점 0골 비율", role: "reference", min: 0.24, max: 0.29, unit: "ratio", why: "실제 1부의 팀별 득점 분포 (팀당 1.45골)" },
     { metric: "팀득점 1골 비율", role: "reference", min: 0.3, max: 0.35, unit: "ratio", why: "같은 분포" },
     { metric: "팀득점 2골 비율", role: "reference", min: 0.21, max: 0.25, unit: "ratio", why: "같은 분포" },
     { metric: "팀득점 3골 비율", role: "reference", min: 0.09, max: 0.13, unit: "ratio", why: "같은 분포" },
-    { metric: "팀득점 4골+ 비율", role: "reference", min: 0.04, max: 0.075, unit: "ratio", why: "실제 5~6% — 앞선 팀이 내려서는 몫이 여기를 잡는다 (`LEAD_SHOT_LOG_RATE`)" },
-    { metric: "세트피스 득점 비율", role: "reference", min: 0.22, max: 0.32, unit: "ratio", why: "실제 1부가 25~30%(페널티 포함) — 손잡이는 `SET_PIECE_SHOT_SHARE`·`CORNER_XG_BASE`·`PENALTY_PER_MATCH`다. 시드 편차를 양쪽으로 2%p 열어 둔다" },
+    { metric: "팀득점 4골+ 비율", role: "reference", min: 0.04, max: 0.075, unit: "ratio", why: "실제 5~6% — 앞선 팀이 내려서는 몫이 여기를 잡는다 (`QUICK_LEAD_LOG_RATE`)" },
+    { metric: "세트피스 득점 비율", role: "reference", min: 0.22, max: 0.32, unit: "ratio", why: "실제 1부가 25~30%(페널티 포함) — 손잡이는 `SET_PIECE_SHOT_SHARE`·`PENALTY_PER_MATCH`와 세트피스 슛의 질(키커 킥력·슈터 공중볼 항)이다. 시드 편차를 양쪽으로 2%p 열어 둔다" },
     { metric: "코너·프리킥 득점/경기", role: "measure", why: "실제 1부가 0.55~0.6 — 위 비율의 큰 몫" },
-    { metric: "페널티 득점/경기", role: "reference", min: 0.13, max: 0.24, why: "경기당 페널티 `PENALTY_PER_MATCH`(0.25) × 성공률(0.62~0.80) = 0.16~0.2. 시즌 380경기라 잡음이 15%다" },
+    { metric: "페널티 득점/경기", role: "reference", min: 0.16, max: 0.3, why: "[US] 양 팀 페널티 0.31 × 성공률 79% = 0.24 — 간이 시뮬은 팀당 `PENALTY_PER_MATCH`(0.154)에 공격 몫·상대 강도를 곱하고 `penaltyRate`로 성공을 정한다. 시즌 380경기라 잡음이 15%다" },
     { metric: "팀당 슈팅/경기", role: "measure", why: "위 양 팀 합의 절반 — 분산과 함께 읽는다" },
     { metric: "팀당 슈팅 분산", role: "measure", why: "슈팅이 몇몇 경기에 몰리는지" },
+    { metric: "슈팅당 xG", role: "reference", min: 0.11, max: 0.13, why: "[US] 0.12 (페널티 포함) — 페널티가 슈팅 예산 밖에 덧붙거나 세트피스 슛의 질이 열린 플레이보다 높으면 여기가 뜬다" },
+    { metric: "팀-경기 xG sd", role: "reference", min: 0.8, max: 1.05, why: "[US] 0.92 — 평균만 맞고 퍼짐이 좁으면 모든 경기가 비슷한 경기다" },
+    { metric: "점유율 sd", role: "reference", min: 0.09, max: 0.13, unit: "ratio", why: "[SB] 11.0%p — `QUICK_POSSESSION_SLOPE`·`QUICK_POSSESSION_NOISE`가 정한다 (match.md §8.4)" },
+    { metric: "전반 득점 비중", role: "reference", min: 0.42, max: 0.48, unit: "ratio", why: "[FD] 45.1% — `QUICK_FIRST_HALF_SHARE`. 여섯 시즌을 모으면 골이 6천을 넘어 잡음이 1%p 아래다" },
+    { metric: "득점 시각 1~15분", role: "reference", min: 0.09, max: 0.15, unit: "ratio", why: "[FD] §2 11.7% — 하프의 첫 구간이 가장 조용하다" },
+    { metric: "득점 시각 16~30분", role: "reference", min: 0.13, max: 0.19, unit: "ratio", why: "[FD] §2 15.9%" },
+    { metric: "득점 시각 31~45분", role: "reference", min: 0.13, max: 0.19, unit: "ratio", why: "[FD] §2 16.2% (45+ 포함)" },
+    { metric: "득점 시각 46~60분", role: "reference", min: 0.15, max: 0.21, unit: "ratio", why: "[FD] §2 18.0%" },
+    { metric: "득점 시각 61~75분", role: "reference", min: 0.15, max: 0.21, unit: "ratio", why: "[FD] §2 17.7%" },
+    { metric: "득점 시각 76~90분", role: "reference", min: 0.17, max: 0.24, unit: "ratio", why: "[FD] §2 17.9% + 90+ 2.6% — 간이 시뮬은 추가시간 골을 90분에 접는다" },
+    { metric: "평점 평균 − 폼 중립점", role: "guard", min: -0.15, max: 0.15, why: "폼은 출전당 평점을 중립점(`RATING_BASELINE`)과 견준다 — 리그의 평균 평점이 중립점에서 벗어나면 리그 전체의 폼이 경기마다 같은 쪽으로 기운다 (player.md §5)" },
+    { metric: "도움 붙은 골 비중", role: "guard", min: 0.5, max: 0.85, unit: "ratio", why: "`ASSIST_RATE`(0.68)가 열린 플레이 골에, 세트피스 골에는 키커가 붙는다. 0에 붙으면 도움이 기록에서 사라진 것이다 — 시즌 기록·마일스톤이 이 칸을 읽는다. 실시간 경기의 같은 칸은 `live-goal-anatomy`" },
     { metric: "승점 1위", role: "measure", unit: "score", why: "**판정은 `league-spread`가 한다** — 한 리그 한 시즌의 순위별 승점은 시드마다 ±10점이 흔들려 밴드로 걸면 같은 빌드가 빨갛거나 초록이다. 여기서는 그 시즌의 모양을 읽기만 한다" },
     { metric: "승점 4위", role: "measure", unit: "score", why: "같은 이유" },
     { metric: "승점 10위", role: "measure", unit: "score", why: "같은 이유" },
@@ -58,11 +66,6 @@ export const WORLD_SEASON = defineHarness({
     { metric: "리그 승점 표준편차", role: "measure", why: "스무 팀을 다 읽는 눈금 — 두 팀만 읽는 위 다섯보다 훨씬 조용하다. 판정은 `league-spread`" },
     { metric: "옐로/경기", role: "reference", min: 3.7, max: 4.5, why: "실제 1부 — 2023년 판정 지침 뒤 4.1~4.2 (2022-23은 3.6)" },
     { metric: "레드/경기", role: "reference", min: 0.12, max: 0.25, why: "실제 1부 시즌 45~60장" },
-    { metric: "옐로/경기 (감독 경기 · 실시간 경기)", role: "measure", why: "리그 38경기 · 카드 130장이라 상대 잡음 9% — 아래 비와 함께 읽는다" },
-    { metric: "옐로/경기 (타 팀 경기 · 간이 시뮬)", role: "measure", why: "리그 342경기 — 위 `옐로/경기`를 사실상 이쪽이 정한다" },
-    { metric: "옐로 — 감독/타 팀", role: "measure", unit: "ratio", why: "두 시뮬의 눈금이 갈리면 벌어지는 자리. **판정은 `injury-rate`가 한다** — 38경기로는 10~20%의 어긋남이 잡음에 묻힌다" },
-    { metric: "레드/경기 (감독 경기 · 실시간 경기)", role: "measure", why: "시즌당 예닐곱 장 — 갈래를 찍기만 한다" },
-    { metric: "레드/경기 (타 팀 경기 · 간이 시뮬)", role: "measure", why: "같은 갈래의 반대편" },
     { metric: "감독 팀 순위", role: "measure", unit: "score", why: "지시하지 않는 감독의 성적 — 목표값을 두지 않는다" },
     { metric: "감독 팀 승점", role: "measure", unit: "score", why: "지시하지 않는 감독의 성적 — 목표값을 두지 않는다" },
     { metric: "리그 경기 수", role: "measure", unit: "count", why: "시즌을 끝까지 돌았는지 — 380이어야 한다" },
@@ -72,7 +75,7 @@ export const WORLD_SEASON = defineHarness({
 export const AI_ROTATION = defineHarness({
   id: "ai-rotation",
   what: "AI 스쿼드의 체력 분포와 로테이션 문턱 발동률",
-  doc: MATCH,
+  doc: `${QUICK_SIM}.6`,
   cost: "world-season과 같은 시즌을 나눠 쓴다",
   // prettier-ignore
   bands: [
@@ -101,7 +104,7 @@ export const AI_ROTATION = defineHarness({
 export const LEAGUE_SPREAD = defineHarness({
   id: "league-spread",
   what: "20팀 38경기 상위 리그 셋의 승점 곡선 — 시드 × 리그를 모아 평균과 표준편차로",
-  doc: MATCH,
+  doc: `${QUICK_SIM}.2`,
   cost: "world-season과 같은 시즌을 나눠 쓴다",
   // prettier-ignore
   bands: [
@@ -120,27 +123,14 @@ export const LEAGUE_SPREAD = defineHarness({
   ],
 });
 
-export const ASSIST_RATE = defineHarness({
-  id: "assist-rate",
-  what: "골에 도움이 붙는 비율",
-  doc: MATCH,
-  cost: "축소 세계 6시드 · 수 초",
-  // prettier-ignore
-  bands: [
-    { metric: "골", role: "measure", unit: "count", why: "골이 없으면 시험이 성립하지 않는다" },
-    { metric: "도움", role: "measure", unit: "count", why: "빈 칸이 아닌 도움만 센다" },
-    { metric: "골 대비 도움 비율", role: "guard", min: 0.35, unit: "ratio", why: "설계값 68%(`ASSIST_RATE`)가 만드는 분포. 표본이 작아 하한만 넉넉히 잡는다 — 도움이 사라지는 회귀는 `ratings.test.ts`가 0이 아님으로 못 박는다" },
-  ],
-});
-
 export const LIVE_MATCH_STATS = defineHarness({
   id: "live-match-stats",
   what: "실시간 경기의 팀 통계 — 득점 분포·슈팅·xG·패스·점유·수비·규율·거리의 평균·중간값·sd",
   doc: "docs/match/football-reference.md",
-  cost: "시드 세계 셋 × 리그 12경기 = 36경기 · 10분",
+  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
   // prettier-ignore
   bands: [
-    { metric: "팀-경기 표본", role: "measure", unit: "count", why: "아래 밴드의 폭은 이 표본(72)의 잡음을 넣어 잡았다 — 팀 득점 평균의 표준오차가 0.15다" },
+    { metric: "팀-경기 표본", role: "measure", unit: "count", why: "팀-경기 144 — 팀 득점 평균의 표준오차가 0.1이다. 아래 밴드의 폭은 표본이 절반(72)이던 때의 잡음으로 잡아 넉넉하다" },
     { metric: "팀 득점 평균", role: "guard", min: 1.1, max: 1.75, why: "[FD] 1.41 — 표준오차 0.15의 두 배를 연다" },
     { metric: "팀 득점 sd", role: "reference", min: 0.95, max: 1.55, why: "[FD] 1.25 — 분산 ≈ 평균(푸아송)의 꼴" },
     { metric: "팀 득점 0골", role: "reference", min: 0.16, max: 0.36, unit: "ratio", why: "[FD] 25.8%" },
@@ -148,7 +138,7 @@ export const LIVE_MATCH_STATS = defineHarness({
     { metric: "팀 득점 2골", role: "reference", min: 0.14, max: 0.32, unit: "ratio", why: "[FD] 23.1%" },
     { metric: "팀 득점 3골", role: "reference", min: 0.04, max: 0.18, unit: "ratio", why: "[FD] 10.6%" },
     { metric: "팀 득점 4골+", role: "guard", max: 0.14, unit: "ratio", why: "[FD] 6.5% — 꼬리가 부풀면 수비가 무너진 것이다" },
-    { metric: "홈 득점 − 원정 득점", role: "measure", why: "[FD] 0.28 — 36경기로는 잡음(±0.4)이 커서 판정은 `sim-parity`의 몫이다" },
+    { metric: "무승부 비율", role: "measure", unit: "ratio", why: "[FD] 25.4% — 위와 같은 잡음" },
     { metric: "슈팅 평균", role: "guard", min: 10, max: 15.5, why: "[FD] 12.6 — sd 5.2의 표준오차 0.6에 팀 편차를 얹는다" },
     { metric: "슈팅 중간값", role: "reference", min: 9, max: 15, why: "[FD] 12" },
     { metric: "슈팅 sd", role: "reference", min: 3.5, max: 7, why: "[FD] 5.24 — p10 6 · p90 19" },
@@ -170,6 +160,8 @@ export const LIVE_MATCH_STATS = defineHarness({
     { metric: "파울", role: "reference", min: 8, max: 16, why: "[FD] 11.95" },
     { metric: "경고", role: "reference", min: 1.3, max: 2.8, why: "[FD] 2.07" },
     { metric: "퇴장", role: "reference", max: 0.25, why: "[FD] 0.10 — 36경기면 일곱 장쯤" },
+    { metric: "퇴장 중 두 번째 경고 몫", role: "measure", unit: "ratio", why: "실제 1부는 퇴장의 절반 남짓이 두 번째 경고다 — 간이 시뮬의 같은 칸은 `injury-rate`. 72경기면 퇴장이 열 몇 장이라 판정하지 않는다" },
+    { metric: "부상/팀", role: "reference", min: 0.02, max: 0.12, why: "`INJURY_PER_MATCH`(팀당 0.05~0.07) — 간이 시뮬과 같은 총량. 실시간 경기는 접촉·스프린트에 위험을 걸어 이 총량을 낸다 (match.md §4.1)" },
     { metric: "코너", role: "reference", min: 3.3, max: 6.5, why: "[FD] 4.86" },
     { metric: "크로스", role: "reference", min: 7, max: 17, why: "[SB] 12.0" },
     { metric: "오프사이드", role: "reference", min: 0.8, max: 4, why: "[SB] 2.3" },
@@ -191,7 +183,7 @@ export const LIVE_PLAYER_LOAD = defineHarness({
   id: "live-player-load",
   what: "풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표에 서는가",
   doc: "docs/match/football-reference.md §7",
-  cost: "시드 세계 둘 × 리그 8경기 = 16경기 · 5분",
+  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
   // prettier-ignore
   bands: [
     { metric: "풀타임 표본", role: "measure", unit: "count", why: "교체·퇴장·부상으로 나간 선수는 뺀다 — 90분을 다 뛴 몸만 잰다" },
@@ -207,8 +199,137 @@ export const LIVE_PLAYER_LOAD = defineHarness({
     { metric: "측면 고속 (m)", role: "reference", min: 650, max: 1200, why: "§7-B 850~950" },
     { metric: "공격수 고속 (m)", role: "reference", min: 450, max: 950, why: "§7-B 650~750" },
     { metric: "센터백 스프린트 (m)", role: "reference", min: 60, max: 260, why: "§7-B 120~180 (>25.2 km/h) — 오른쪽으로 치우친 분포" },
+    { metric: "풀백 스프린트 (m)", role: "reference", min: 180, max: 550, why: "§7-B 300~380 — 오버래핑의 몫" },
     { metric: "측면 스프린트 (m)", role: "reference", min: 220, max: 600, why: "§7-B 350~450 — 센터백의 두 배를 넘어야 한다" },
+    { metric: "공격수 스프린트 (m)", role: "reference", min: 160, max: 520, why: "§7-B 280~350 — 침투의 몫" },
     { metric: "실측/기대 부하표 — 거리", role: "guard", min: 0.88, max: 1.12, unit: "ratio", why: "간이 시뮬과 정산이 읽는 `EXPECTED_LOAD`가 실시간 경기가 실제로 뛴 것과 같은 눈금인가 — 갈리면 감독의 선수만 다른 몸으로 시즌을 난다" },
+  ],
+});
+
+/**
+ * **골이 어떻게 나왔는가** — 팀 통계(`live-match-stats`)가 맞아도 골이 전부 열린 플레이의
+ * 발끝에서 나오거나, 수비수가 골의 절반을 넣으면 축구가 아니다. 같은 경기를 읽는다.
+ */
+export const LIVE_GOAL_ANATOMY = defineHarness({
+  id: "live-goal-anatomy",
+  what: "실시간 경기의 골·슛 해부 — 시각 · 세트피스 몫 · 페널티 · 헤더 · 도움 · 자리별 슈팅·득점 몫",
+  doc: "docs/match/football-reference.md §2 · §8",
+  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다",
+  // prettier-ignore
+  bands: [
+    { metric: "골 표본", role: "measure", unit: "count", why: "72경기면 200골 안팎 — 비중 하나의 표준오차가 3%p쯤이다" },
+    { metric: "전반 득점 비중", role: "reference", min: 0.36, max: 0.54, unit: "ratio", why: "[FD] 45.1% — 후반이 조금 붐빈다 (체력이 떨어진 수비·교체·추격)" },
+    { metric: "90+ 득점 비중", role: "reference", min: 0.01, max: 0.08, unit: "ratio", why: "§2 득점 시각 2.6% — 0이면 추가시간이 시계에만 있고 경기에는 없다" },
+    { metric: "세트피스 득점 비중", role: "reference", min: 0.18, max: 0.4, unit: "ratio", why: "§2 좁게 센 세트피스(코너·프리킥 전달·페널티)가 득점의 약 30%" },
+    { metric: "세트피스 슈팅 비중", role: "reference", min: 0.18, max: 0.38, unit: "ratio", why: "§2 슈팅의 약 25~30%" },
+    { metric: "코너 슈팅/팀", role: "measure", why: "코너 4.86개 중 슛으로 이어진 몫 — 세트피스 몫을 가른다" },
+    { metric: "프리킥 슈팅/팀", role: "measure", why: "§2 직접 프리킥 슈팅 0.6 — 프리킥 전달의 슛까지 함께 센다" },
+    { metric: "페널티/팀", role: "reference", min: 0.06, max: 0.28, why: "[US] 팀-경기당 0.154 — 144 팀-경기면 기대 22개, 잡음이 ±5개다" },
+    { metric: "페널티 성공률", role: "measure", unit: "ratio", why: "[US] 79% — 표본이 20개 남짓이라 판정하지 않는다. 식은 `penaltyRate` 하나다 (match.md §3.4)" },
+    { metric: "슛 짝이 어긋난 경기", role: "guard", max: 0, unit: "count", why: "장부의 슛·골 사건과 관찰자가 본 슛 비행을 순서로 짝짓는다 — 수가 갈리면 아래 헤더·거리 칸이 엉뚱한 슛을 읽는다" },
+    { metric: "헤더 슈팅 비중", role: "measure", unit: "ratio", why: "아래 득점 비중과 함께 읽는다 — 헤더는 슛당 골이 낮다" },
+    { metric: "헤더 득점 비중", role: "reference", min: 0.07, max: 0.22, unit: "ratio", why: "§2 신체 — 헤더 14.0%. 슛 비행의 높이(`HEADER_SHOT_HEIGHT`)로 가른다" },
+    { metric: "골 원인 header 비중", role: "measure", unit: "ratio", why: "장부가 골에 붙인 `header` 원인 — 위 값과 같아야 한다. 갈리면 원인 표식이 몸의 부위를 잘못 읽고 있다" },
+    { metric: "슈팅 거리 중간값 (m)", role: "measure", why: "목표 지점까지 — 실측은 박스 모서리 근처(약 15~17m)다. 근거 수치는 football-reference에 아직 없다" },
+    { metric: "18m 밖 슈팅 비중", role: "measure", unit: "ratio", why: "박스 밖 슈팅 — 실제 1부는 슈팅의 3할 남짓이다. xG 거리 곡선(`XG_DISTANCE_SCALE`)과 슈팅 문턱이 함께 정한다" },
+    { metric: "도움 붙은 골 비중", role: "measure", unit: "ratio", why: "간이 시뮬의 `ASSIST_RATE`(0.68)와 같은 눈금이어야 한다 — 실시간 경기는 마지막 패스가 정한다" },
+    { metric: "슈팅 몫 — 스트라이커", role: "reference", min: 0.18, max: 0.38, unit: "ratio", why: "§8 [SB] 26.8% (CF·ST)" },
+    { metric: "슈팅 몫 — 측면", role: "reference", min: 0.16, max: 0.38, unit: "ratio", why: "§8 [SB] 26.8%" },
+    { metric: "슈팅 몫 — 중앙·수비형 미드", role: "reference", min: 0.12, max: 0.32, unit: "ratio", why: "§8 [SB] 21.5% (DM·CM)" },
+    { metric: "슈팅 몫 — 공격형 미드", role: "measure", unit: "ratio", why: "§8 [SB] 9.4% — 시드 세계의 포메이션에 AM이 얼마나 서는가에 매여 판정하지 않는다" },
+    { metric: "슈팅 몫 — 풀백", role: "reference", min: 0.03, max: 0.14, unit: "ratio", why: "§8 [SB] 8.1%" },
+    { metric: "슈팅 몫 — 센터백", role: "reference", min: 0.03, max: 0.13, unit: "ratio", why: "§8 [SB] 7.4% — 거의 전부 세트피스 헤더다" },
+    { metric: "득점 몫 — 스트라이커", role: "reference", min: 0.26, max: 0.52, unit: "ratio", why: "§8 [SB] 38.5% — 슈팅 몫보다 커야 한다 (좋은 자리에서 찬다)" },
+    { metric: "득점 몫 — 수비수", role: "reference", min: 0.04, max: 0.18, unit: "ratio", why: "§8 [SB] 풀백 5.5% + 센터백 5.6%" },
+  ],
+});
+
+/**
+ * **포메이션마다 축구가 서는가** — `live-baseline`은 시드 세계가 고른 모양(대개 4-3-3·4-2-3-1)만
+ * 굴린다. 백3·백5나 투톱에서만 무너지는 규칙은 거기서 보이지 않는다. 양 팀을 같은 모양으로 세워
+ * 모양마다 같은 가드를 건다 — 지표 이름은 `"<모양> — <지표>"`다.
+ */
+export const LIVE_FORMATION_ARMS = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "5-4-1"] as const;
+
+export const LIVE_FORMATIONS = defineHarness({
+  id: "live-formations",
+  what: "대표 포메이션 다섯(양 팀 같은 모양)마다 득점·슈팅·xG·패스·거리·크로스와 자리별 슈팅 몫",
+  doc: "docs/match/live-match.md §9.3 · docs/match/football-reference.md §8",
+  cost: "시드 둘 × 리그 6경기 × 모양 다섯 = 60경기 · 25분",
+  bands: [
+    ...LIVE_FORMATION_ARMS.flatMap((f): Band[] => [
+      {
+        metric: `${f} — 팀 득점`,
+        role: "guard",
+        min: 0.9,
+        max: 2,
+        why: "[FD] 1.41 — 팀-경기 24라 표준오차 0.25를 연다. 어느 모양에서도 경기가 서야 한다",
+      },
+      {
+        metric: `${f} — 슈팅`,
+        role: "guard",
+        min: 8,
+        max: 18,
+        why: "[FD] 12.6 — 모양이 슈팅 수를 바꾸되 축구 밖으로 밀지 않는다",
+      },
+      { metric: `${f} — xG`, role: "guard", min: 0.9, max: 2.1, why: "[US] 1.49" },
+      {
+        metric: `${f} — 팀 총 거리 (km)`,
+        role: "guard",
+        min: 100,
+        max: 124,
+        why: "football-reference §7 110~117 km — 교체 몫 · 모양마다의 흔들림",
+      },
+      {
+        metric: `${f} — 패스 시도`,
+        role: "reference",
+        min: 330,
+        max: 600,
+        why: "[SB]·[FM] 467~471",
+      },
+      {
+        metric: `${f} — 크로스`,
+        role: "reference",
+        min: 6,
+        max: 20,
+        why: "[SB] 12.0 — 측면이 넓은 모양(백3·백5의 윙백)일수록 늘어야 한다",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 최전방`,
+        role: "reference",
+        max: 0.5,
+        unit: "ratio",
+        why: "§8 스트라이커 26.8% — 투톱이면 몫이 커지지만 절반을 넘으면 나머지 자리가 슈팅 자리에 서지 않는 것이다",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 측면`,
+        role: "measure",
+        unit: "ratio",
+        why: "§8 26.8% — 윙어가 없는 모양(4-4-2·3-5-2·5-4-1)은 측면 미드·윙백이 이 몫을 나눈다",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 미드`,
+        role: "measure",
+        unit: "ratio",
+        why: "§8 중앙·수비형 21.5% + 공격형 9.4%",
+      },
+      {
+        metric: `${f} — 슈팅 몫 · 수비`,
+        role: "measure",
+        unit: "ratio",
+        why: "§8 풀백 8.1% + 센터백 7.4%",
+      },
+    ]),
+    {
+      metric: "모양 사이 팀 득점 폭",
+      role: "measure",
+      why: "다섯 모양의 팀 득점 최대 − 최소 — 모양 하나가 득점을 통째로 옮기면 그 모양의 규칙을 본다",
+    },
+    {
+      metric: "모양 사이 거리 폭 (km)",
+      role: "measure",
+      why: "같은 이유 — 백5가 덜 뛰고 4-3-3이 더 뛰는 정도면 정상이다",
+    },
   ],
 });
 
@@ -216,7 +337,7 @@ export const LIVE_TACTICS = defineHarness({
   id: "live-tactics",
   what: "홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가",
   doc: "docs/match/live-match.md §6",
-  cost: "시드 둘 × 리그 12경기 × 팔 다섯 = 120경기 · 30분",
+  cost: "시드 둘 × 리그 12경기 × 팔 다섯 = 120경기 · 40분 남짓",
   // prettier-ignore
   bands: [
     { metric: "기준 — 우리 슈팅", role: "measure", why: "아래 변화들의 눈금 — 전술을 건드리지 않은 판" },
@@ -236,9 +357,9 @@ export const LIVE_TACTICS = defineHarness({
 
 export const SIM_PARITY = defineHarness({
   id: "sim-parity",
-  what: "같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·홈 이점·전력 기울기가 같은 눈금인가",
+  what: "같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가",
   doc: "docs/match/match.md §8.5",
-  cost: "시드 세계 셋 × 리그 24경기 = 72경기 + 간이 1440판 · 20분",
+  cost: "시드 세계 셋 × 리그 24경기 = 72경기 · 20분 — `live-baseline` 한 벌을 넷이 나눠 읽는다 + 간이 1440판",
   // prettier-ignore
   bands: [
     { metric: "대진", role: "measure", unit: "count", why: "실시간 한 판씩 — 아래 비의 잡음은 이 수가 정한다" },
@@ -249,8 +370,6 @@ export const SIM_PARITY = defineHarness({
     { metric: "팀 xG — 간이", role: "measure", why: "같은 대진" },
     { metric: "팀 xG — 실시간/간이", role: "guard", min: 0.75, max: 1.33, unit: "ratio", why: "득점보다 조용한 연속값 — 두 시뮬의 기회 총량이 같은가" },
     { metric: "팀 슈팅 — 실시간/간이", role: "reference", min: 0.7, max: 1.4, unit: "ratio", why: "간이 시뮬의 슈팅은 실측 12.6에 서 있다" },
-    { metric: "홈 xG 우위 — 실시간", role: "measure", why: "원정 체력 감점만이 홈 이점이다 (live-match.md §7)" },
-    { metric: "홈 xG 우위 — 간이", role: "measure", why: "`QUICK_HOME_FACTOR` — 실측 홈/원정 xG 1.67/1.32" },
     { metric: "전력 기울기 (xG 차/능력치 1) — 실시간", role: "measure", why: "선발 평균 종합 능력치 1의 차가 xG 차를 얼마나 벌리는가" },
     { metric: "전력 기울기 (xG 차/능력치 1) — 간이", role: "measure", why: "같은 기울기 — 간이 시뮬의 `QUICK_RATING_SLOPE`가 정한다" },
     { metric: "전력 기울기 표준오차 — 실시간", role: "measure", why: "기울기 추정의 잡음 — 이것이 기울기 자체의 절반을 넘으면 아래 비는 읽을 수 없다" },
@@ -261,7 +380,7 @@ export const SIM_PARITY = defineHarness({
 export const INJURY_RATE = defineHarness({
   id: "injury-rate",
   what: "간이 시뮬의 경기당 부상·카드 — 기대한 눈금에 서는가 · 성향이 빈도에 닿는 폭 · 위험 등급별 실제 부상률 · 누적 피로가 굴림에 닿는 폭",
-  doc: MATCH,
+  doc: "docs/match/match.md §4.1",
   cost: "간이 시뮬 72,000판 · 2~3분",
   // prettier-ignore
   bands: [
@@ -269,7 +388,9 @@ export const INJURY_RATE = defineHarness({
     { metric: "경기당 부상 건수 (간이)", role: "measure", why: "양 팀 합" },
     { metric: "부상 기대 대비 배율 (간이)", role: "guard", min: 0.85, max: 1.15, why: "기대 = `teamInjuryRate`(강도·성향 포함)의 양 팀 합. 손잡이에서 유도하므로 눈금을 옮겨도 따라온다" },
     { metric: "경기당 카드 (간이)", role: "measure", why: "양 팀 합 — 경고 + 퇴장 줄 수" },
-    { metric: "카드 기대 대비 배율 (간이)", role: "guard", min: 1, max: 1.1, why: "기대 = `teamCardRate`(카드 **사건** 수)의 양 팀 합. 실측은 장부의 **줄** 수라 두 번째 경고가 두 줄(경고+퇴장)로 세어져 4% 위에 선다 — `STRAIGHT_RED_CHANCE`·`BOOKED_AGAIN_WEIGHT`를 만지면 여기가 먼저 움직인다" },
+    { metric: "카드 기대 대비 배율 (간이)", role: "guard", min: 1, max: 1.1, why: "기대 = `teamCardRate`(카드 **사건** 수)의 양 팀 합. 실측은 장부의 **줄** 수라 두 번째 경고가 두 줄(경고+퇴장)로 세어진다 — ⚠️ 이 배율은 카드가 경고인지 퇴장인지를 보지 않는다. 그 갈래는 아래 두 줄이 잰다" },
+    { metric: "경기당 퇴장 (간이)", role: "guard", min: 0.1, max: 0.3, why: "[FD] 경기당 0.19 (팀 0.10) — 퇴장 한 장은 남은 시간 내내 `SHORTHANDED_PENALTY`를 걸어 득점 분포까지 옮긴다. 카드 총량이 맞아도 경고·퇴장의 갈래가 뒤집히면 여기만 움직인다" },
+    { metric: "퇴장 중 두 번째 경고 몫 (간이)", role: "measure", unit: "ratio", why: "실제 1부는 퇴장의 절반 남짓이 두 번째 경고다 — `STRAIGHT_RED_SHARE`가 나머지를 정한다" },
     { metric: "유리몸 팀 배율", role: "guard", min: 1.3, why: "선발 전원 성향 2.2일 때 건강한 팀 대비 — 성향이 빈도에 닿는지" },
     { metric: "유리몸 한 명의 부상 점유율", role: "guard", min: 0.08, unit: "ratio", why: "뛴 선수(선발 11 + 교체 최대 5) 중 한 명이면 균등은 6~7% — 성향 2.2가 그 위로 띄운다" },
     { metric: "위험 낮음 인원", role: "guard", min: 1, unit: "count", why: "등급을 갈라 심은 선발 열한(4·4·3) 중 실제로 그 등급에 선 인원. **경계가 분포에서 떨어지면 여기가 먼저 빨개진다** — 셋 중 하나라도 0이면 아래 비는 잴 대상이 없다" },
@@ -290,7 +411,7 @@ export const FINANCE_TIER1 = defineHarness({
   id: "finance-tier1",
   what: "tier1 유저 구단의 한 시즌 살림 — 장부 손익 · 현금 · 급여 비중 · 수입",
   doc: `${FINANCE}.1`,
-  cost: "전체 세계 한 시즌 · 수 분",
+  cost: "전체 세계 한 시즌 × 2시드 · 감독 경기는 실시간 · 30분 남짓",
   // prettier-ignore
   bands: [
     { metric: "시즌 1 보고서 수", role: "guard", min: 10, unit: "count", why: "한 시즌을 다 돌지 못하면 나머지가 전부 헛값이다" },
@@ -301,6 +422,7 @@ export const FINANCE_TIER1 = defineHarness({
     { metric: "경기 달 수", role: "guard", min: 9, unit: "count", why: "프리시즌 달은 매치데이가 없어 급여 비중 대상에서 뺀다" },
     { metric: "경기 달 급여 비중 (최저)", role: "guard", min: 0.2, unit: "ratio", why: "실제 EPL 평균 ~70%의 아래쪽 폭" },
     { metric: "경기 달 급여 비중 (최고)", role: "guard", max: 0.95, unit: "ratio", why: "실제 EPL 평균 ~70%의 위쪽 폭" },
+    { metric: "대항전 우승 상금/1부 중간 연 매출", role: "reference", min: 0.2, max: 0.4, unit: "ratio", why: "UCL 우승 경로(참가·조별 5승 2무·단계·우승)의 상금이 EPL 중간 구단 한 해 매출(`annualRevenueEstimate`)의 2~4할 (finance.md §5)" },
   ],
 });
 
@@ -320,7 +442,7 @@ export const FINANCE_MULTI_SEASON = defineHarness({
   id: "finance-multi-season",
   what: "세 시즌을 굴려도 가라앉는 리그도, 돈만 쌓는 리그도 없다",
   doc: `${FINANCE}.3`,
-  cost: "전체 세계 세 시즌 · 십수 분",
+  cost: "전체 세계 세 시즌 · 감독 경기는 실시간 · 1시간 남짓 — 하네스 중 가장 길다",
   // prettier-ignore
   bands: [
     { metric: "도달한 시즌", role: "guard", min: 4, unit: "count", why: "세 시즌은 리그가 가라앉는지 보이는 가장 짧은 창이다" },
@@ -335,7 +457,7 @@ export const FINANCE_SECOND_TIER = defineHarness({
   id: "finance-second-tier",
   what: "리그전을 굴리지 않는 2부의 한 시즌 수지",
   doc: "docs/team/finance.md §5.1",
-  cost: "전체 세계 한 시즌 · 수 분",
+  cost: "finance-tier1과 같은 시즌을 나눠 쓴다",
   // prettier-ignore
   bands: [
     { metric: "2부 구단 수", role: "guard", min: 10, unit: "count", why: "표본이 없으면 중간값이 뜻을 잃는다" },
@@ -346,8 +468,8 @@ export const FINANCE_SECOND_TIER = defineHarness({
 export const AI_FITNESS = defineHarness({
   id: "ai-fitness",
   what: "한 시즌을 돈 뒤의 AI 스쿼드 체력·출전 분포",
-  doc: MATCH,
-  cost: "전체 세계 한 시즌 · 수 분",
+  doc: `${QUICK_SIM}.6`,
+  cost: "전체 세계 한 시즌 · 감독 경기는 실시간 · 25분 남짓",
   // prettier-ignore
   bands: [
     { metric: "상대 상위 14명 체력 (최저 팀)", role: "guard", min: 70, why: "라인업에 설 14명이 어느 시점에도 쓸 만해야 한다" },
@@ -374,11 +496,11 @@ export const AI_FITNESS = defineHarness({
 export const AI_BENCH = defineHarness({
   id: "ai-bench",
   what: "감독의 경기에서 상대 벤치가 쓰는 교체 수·시점·갈래",
-  doc: "docs/match/match.md §2",
-  cost: "시드당 수십 초 × 2시드",
+  doc: "docs/match/match.md §3.3",
+  cost: "두 시드 × 한 시즌 · 감독 경기는 실시간 · 40분 남짓",
   // prettier-ignore
   bands: [
-    { metric: "AI 교체/경기", role: "guard", min: 3.5, max: 5, unit: "count", why: "실제 1부는 5인 교체제에서 4.3 — 정지점을 창으로 세는 정책(SUB_WINDOW_MAX·SUB_CHANCE·SUB_FATIGUE)이 그 부근에 세운다. 한도(5)는 장부가 막는다" },
+    { metric: "AI 교체/경기", role: "guard", min: 3.5, max: 5, unit: "count", why: "football-reference §6 — 5인 교체제에서 EPL 3.9 · 분데스 4.5 — 정지점을 창으로 세는 정책(SUB_WINDOW_MAX·SUB_CHANCE·SUB_FATIGUE)이 그 부근에 세운다. 한도(5)는 장부가 막는다" },
     { metric: "승부수 교체/경기", role: "measure", unit: "count", why: "스코어를 읽은 갈래가 실제로 얼마나 쓰이는가" },
     { metric: "굳히기 교체/경기", role: "measure", unit: "count", why: "리드를 지키는 갈래 — 승부수보다 드물어야 정상이다" },
     { metric: "체력 교체/경기", role: "measure", unit: "count", why: "예전부터 있던 갈래 — 스코어 갈래가 이걸 밀어내지 않았는지" },
@@ -386,9 +508,10 @@ export const AI_BENCH = defineHarness({
     { metric: "끝까지 뒤진 경기에서 승부수를 던진 비율", role: "guard", min: 0.5, unit: "ratio", why: "0이면 이 기능이 죽은 것이다 — 벤치가 스코어를 읽는가의 단일 지표" },
     { metric: "끝까지 앞선 경기에서 굳힌 비율", role: "measure", unit: "ratio", why: "굳히기는 75′이고 교체 카드를 먼저 쓴 팀은 못 쓴다" },
     { metric: "AI 교체의 60′ 이후 비율", role: "reference", min: 0.5, max: 0.95, unit: "ratio", why: "실제 교체는 후반에 몰린다 — 전부 후반이면 하프타임 갈래가 죽은 것이다" },
-    { metric: "AI 교체 중앙 분", role: "measure", unit: "score", why: "실제 1부는 60분대 — 우리는 정지점(골·조용한 25분)이 후반에 몰려 그보다 뒤다" },
+    { metric: "AI 교체 중앙 분", role: "measure", unit: "score", why: "football-reference §6 — 평균 66~70분 (추정). 실시간 경기의 벤치는 경기 중단에만 교체를 실행해 그보다 뒤로 밀릴 수 있다" },
     { metric: "판의 모양을 바꾼 경기 비율", role: "measure", unit: "ratio", why: "경기당 한 번 — 스코어가 벌어진 경기에서만 선다" },
     { metric: "잰 경기 수", role: "measure", unit: "count", why: "표본이 있는가" },
+    { metric: "감독 팀 교체/경기", role: "reference", min: 3, max: 5, unit: "count", why: "하네스의 감독 대역(`playMockMatch`의 `userBench`)이 실제로 교체하는가 — 0이면 감독 팀이 90분 내내 같은 열한 명으로 뛰어 체력·결과가 실제 플레이와 다르다" },
   ],
 });
 
@@ -528,8 +651,9 @@ export const OVERALL_SCALE = defineHarness({
     { metric: "자리별 평균 W", role: "measure", why: "" },
     { metric: "자리별 평균 CF", role: "measure", why: "" },
     { metric: "자리별 평균 ST", role: "measure", why: "" },
-    { metric: "축 범위 위로 벗어난 비율", role: "measure", unit: "ratio", why: "종합이 어느 축보다 높은 선수" },
-    { metric: "축 범위 아래로 벗어난 비율", role: "measure", unit: "ratio", why: "종합이 어느 축보다 낮은 선수" },
+    { metric: "자리별 평균 폭", role: "guard", max: 8, unit: "score", why: "자리별 평균 종합의 최대 − 최소 — 종합의 자리 가중표(`POSITION_WEIGHTS`)가 한 자리를 통째로 기울이면 그 자리 선수가 종합·주급·이적료에서 손해나 이득을 본다. 시드가 바뀌어도 서야 하는 불변식이라 수준이 아니라 폭에 건다" },
+    { metric: "축 범위 위로 벗어난 비율", role: "guard", max: 0, unit: "ratio", why: "종합이 어느 축보다 높은 선수 — 종합은 축의 가중 평균이라 0이어야 한다" },
+    { metric: "축 범위 아래로 벗어난 비율", role: "guard", max: 0, unit: "ratio", why: "종합이 어느 축보다 낮은 선수 — 같은 불변식" },
     { metric: "등급 top(85+) 비율", role: "measure", unit: "ratio", why: "화면의 등급 색이 읽는 문턱" },
     { metric: "등급 strong(75+) 비율", role: "measure", unit: "ratio", why: "" },
     { metric: "등급 solid(65+) 비율", role: "measure", unit: "ratio", why: "" },
@@ -670,39 +794,44 @@ export const LIVE_SCHEMA = defineHarness({
 });
 
 /**
+ * **간이 시뮬의 가장자리** — 연장 30분과 열 명이 된 팀. 한 시즌을 굴리는 `world-season`에는
+ * 둘 다 드물어 분포가 서지 않으므로, 같은 대진을 짝지어 수백 번 굴려 잰다.
+ */
+export const QUICK_OUTCOMES = defineHarness({
+  id: "quick-outcomes",
+  what: "간이 시뮬의 가장자리 — 연장 득점·카드 · 퇴장이 득실점에 닿는 폭 · AI 교체의 수·시점 · 페널티 성공률",
+  doc: `${QUICK_SIM}.6 · docs/match/match.md §6.2`,
+  cost: "시드 1 · 연장 200 · 퇴장 대조 900 · EPL 전 대진 380 경기 · 수 초",
+  // prettier-ignore
+  bands: [
+    { metric: "연장 득점/경기", role: "reference", min: 0.5, max: 1.1, why: "90분의 2.82골을 30분으로 옮기고 지친 다리로 덜 붐빈다(`EXTRA_TIME_DENSITY` 0.84) — 0.8 안팎" },
+    { metric: "연장 카드/경기", role: "reference", min: 0.5, max: 1.6, why: "90분의 경고 4.1장을 30분으로 — 1.4. 연장은 카드가 붐비는 구간이라 아래로 열어 둔다" },
+    { metric: "열 명/열한 명 실점 비", role: "reference", min: 1.15, max: 1.45, unit: "ratio", why: "match.md §6.2 — 열 명이 된 팀의 실점 +15~30% (`SHORTHANDED_PENALTY`)" },
+    { metric: "열 명/열한 명 득점 비", role: "reference", min: 0.7, max: 0.88, unit: "ratio", why: "match.md §6.2 — 득점 −20~25%" },
+    { metric: "간이 AI 교체/팀", role: "reference", min: 3.5, max: 5, unit: "count", why: "football-reference §6 — 5인 교체제에서 EPL 3.9 · 분데스 4.5. 실시간 경기의 같은 정책은 `ai-bench`가 잰다 — 두 시뮬이 같은 벤치 정책을 쓰므로 여기가 갈리면 간이 시뮬이 체력을 다르게 추정하는 것이다" },
+    { metric: "간이 교체 중앙 분", role: "reference", min: 60, max: 78, unit: "score", why: "football-reference §6 — 평균 66~70분 (추정)" },
+    { metric: "간이 교체 하프타임 몫", role: "measure", unit: "ratio", why: "하프타임 문턱(`SUB_FATIGUE_HALFTIME`)이 절벽처럼 걸리면 여기가 솟는다 — 실측은 소수다" },
+    { metric: "지정 키커 페널티 성공률 (기대)", role: "reference", min: 0.75, max: 0.83, unit: "ratio", why: "[US] 경기 중 페널티 79% — 팀의 지정 키커(`takerOnPitch`)와 상대 골키퍼로 `penaltyRate`를 낸 평균" },
+    { metric: "필드 상위 다섯 페널티 성공률 (기대)", role: "reference", min: 0.7, max: 0.8, unit: "ratio", why: "승부차기 실측 75% 안팎 — 승부차기의 기본 순서(기량 내림차순)로 앞 다섯이 차는 성공률. 지정 키커와 같은 식(`penaltyRate`)이라 한쪽을 옮기면 다른 쪽도 움직인다" },
+  ],
+});
+
+/**
  * `pnpm balance --list`가 읽는 목록.
  *
  * **파일 하나가 여러 서술자를 실행할 수 있다** — 여기 없는 하네스는 돌면서도 리포트의 「몇 개가
  * 보고했다」 분모에서 빠지고, 여기만 있는 서술자는 목록에 서면서 돌지 않는다. 둘 다
  * 조용해서 오래 사니 `harness-catalog.test.ts`가 그 짝을 못 박는다.
  */
-export const QUICK_OUTCOMES = defineHarness({
-  id: "quick-outcomes",
-  what: "간이 연장·퇴장 효과·상금 비중",
-  doc: "docs/match/match.md",
-  cost: "시드 3 · 연장 200 · 퇴장 대조 900 경기",
-  bands: [
-    { metric: "extraGoals", role: "reference", min: 0.3, max: 1.4, why: "연장 득점 빈도" },
-    { metric: "extraCards", role: "reference", min: 0.5, why: "연장 카드 빈도" },
-    { metric: "redConcededRatio", role: "reference", min: 1.1, why: "10명/11명 실점 비" },
-    { metric: "redScoredRatio", role: "reference", max: 0.9, why: "10명/11명 득점 비" },
-    {
-      metric: "prizeIncomeRatio",
-      role: "reference",
-      min: 0.2,
-      max: 0.4,
-      why: "우승 경로 상금/1부 기준 수입",
-    },
-  ],
-});
 
 export const HARNESSES: readonly Harness[] = [
   QUICK_OUTCOMES,
   WORLD_SEASON,
   AI_ROTATION,
   LEAGUE_SPREAD,
-  ASSIST_RATE,
   LIVE_MATCH_STATS,
+  LIVE_GOAL_ANATOMY,
+  LIVE_FORMATIONS,
   LIVE_PLAYER_LOAD,
   LIVE_TACTICS,
   SIM_PARITY,

@@ -202,8 +202,8 @@ describe("흐름의 양 — 사건이 아닌 기록", () => {
   });
 
   it("골키퍼만 선방을 갖는다", () => {
-    // 한 판의 65분에는 선방이 없을 수 있다 — 다른 케이스가 굴려 둔 판까지 함께 본다
-    const keepers = [7, 11].flatMap((seed) => {
+    // 한 판의 65분에는 선방이 없을 수 있다 — 다른 케이스가 굴려 둔 판에 한 판을 더해 본다
+    const keepers = [7, 11, 42].flatMap((seed) => {
       const { match: view } = intoMatch(seed);
       return [...view.onPitch.home, ...view.onPitch.away].filter((p) => p.tally.saves > 0);
     });

@@ -31,8 +31,9 @@ import {
   ASSIST_RATE,
   CORNERS_PER_MATCH,
   PENALTY_PER_MATCH,
+  PENALTY_SCORE_RATE,
   SET_PIECE_SHOT_SHARE,
-  STRAIGHT_RED_SHARE,
+  STRAIGHT_RED_CHANCE,
   bookingWeight,
   conditionAfterLoad,
   expectedLoadOf,
@@ -218,22 +219,46 @@ export function teamRatingsOf(
 
 // ── 팀 xG (§8.2) ─────────────────────────────────────────────────────────────
 
-/** 리그 평균 팀의 90분 xG — 실측 1.49, 골 1.41의 사이 (football-reference.md §1·§2) */
-const QUICK_XG_BASE = 1.45;
-/** 공격 − 상대 수비 평점 1점이 ln xG를 미는 기울기 — 리그 팀 간 xG sd 0.40이 기준 */
-export const QUICK_RATING_SLOPE = 0.03;
+/**
+ * 평점이 리그 한가운데인 팀의 90분 xG (페널티 포함). 전력은 `ln xG`에 선형이라 리그 평균 xG는
+ * 이 값에 팀 간 분산만큼(e^(σ²/2)) 얹혀 선다 — 리그 경기당 득점이 실측 2.82(football-reference.md
+ * §1)에 서도록 그 몫을 덜어 둔 값이다
+ */
+const QUICK_XG_BASE = 1.34;
+/**
+ * 공격 − 상대 수비 평점 1점이 ln xG를 미는 기울기 — 리그 팀 간 xG sd 0.40, 스무 팀 승점 sd
+ * 19~20이 기준이다(`league-spread`). 승점의 퍼짐은 전력과 38경기의 운(sd 8쯤)이 제곱으로 더해진
+ * 것이라, 기울기가 모자라면 우승 승점이 80 아래로 눌린다
+ */
+export const QUICK_RATING_SLOPE = 0.045;
 /** 중원 차 1점의 기울기 — 공격·수비보다 약하다 */
-const QUICK_MIDFIELD_SLOPE = 0.012;
+const QUICK_MIDFIELD_SLOPE = 0.018;
 /** 홈·원정 계수 — 실측 홈 xG 1.67 · 원정 1.32 */
 export const QUICK_HOME_FACTOR = { home: 1.12, away: 0.89 } as const;
 /** 앞선 팀 골 차마다 xG에 곱해지는 e^-k · 뒤진 팀의 e^+k */
 const QUICK_LEAD_LOG_RATE = 0.1;
 const QUICK_TRAIL_LOG_RATE = 0.05;
-/** 빠진 한 명마다 팀 평점을 깎는 몫 — 최대 세 명 (match.md §6.2) */
-const SHORTHANDED_PENALTY = 0.12;
+/**
+ * 빠진 한 명마다 팀 평점을 깎는 몫 — 최대 세 명 (match.md §6.2). 평점 차는 `QUICK_RATING_SLOPE`를
+ * 타고 xG가 되므로 기울기를 옮기면 이 몫도 같은 비로 옮겨야 퇴장의 효과(실점 +15~30%)가 그대로다
+ */
+const SHORTHANDED_PENALTY = 0.07;
 const SHORTHANDED_MAX = 3;
-/** 슈팅당 xG — 슈팅 수의 분모 (실측 0.12) */
-const QUICK_XG_PER_SHOT = 0.12;
+/**
+ * 페널티를 뺀 슈팅당 xG — 슈팅 수의 분모 (실측 0.112, football-reference.md §2). 팀 xG
+ * 예산(`QUICK_XG_BASE`)은 페널티를 포함하므로, 페널티의 기대 몫을 먼저 덜고 나머지를 이 값으로
+ * 나눈다 — 페널티를 예산 밖에 덧붙이면 팀 xG가 그만큼 부푼다.
+ */
+const QUICK_XG_PER_SHOT = 0.112;
+/**
+ * 세트피스 슛의 평균 질 ÷ 열린 플레이 슛 — 코너·프리킥 전달의 슛은 대개 밀집 수비 속 헤더라
+ * 열린 플레이보다 낮다. 세트피스 득점 비중(페널티 포함 25~30%, football-reference.md §2)이
+ * 슈팅 몫 `SET_PIECE_SHOT_SHARE`(0.27)와 이 값에서 선다.
+ */
+const SET_PIECE_SHOT_QUALITY = 0.75;
+/** 열린 플레이 슛의 평균 xG — 세트피스와 섞인 평균이 `QUICK_XG_PER_SHOT`에 서도록 */
+const OPEN_SHOT_XG =
+  QUICK_XG_PER_SHOT / (1 - SET_PIECE_SHOT_SHARE + SET_PIECE_SHOT_SHARE * SET_PIECE_SHOT_QUALITY);
 
 /**
  * 여섯 축이 xG·피xG에 거는 거친 항 (§8.5) — ⚠️ `live-tactics` 하네스가 잰 값으로 갈아
@@ -365,7 +390,7 @@ const FIRST_HALF_DENSITY = 2 * QUICK_FIRST_HALF_SHARE;
 const SECOND_HALF_DENSITY = 2 * (1 - QUICK_FIRST_HALF_SHARE);
 
 /** 정지점 없이 조용히 흐를 수 있는 최대 분 — 벤치가 판을 다시 읽는 간격 */
-const QUICK_REVIEW_MINUTES = 25;
+const QUICK_REVIEW_MINUTES = 15;
 
 // ── 연장 (§8.6) ──────────────────────────────────────────────────────────────
 
@@ -421,16 +446,27 @@ function shooterWeight(slot: LineupSlot): number {
 }
 
 /**
- * 도움 — 시야·패스가 높은 동료 쪽으로 기운다. 골의 `ASSIST_RATE`에만 붙는다.
+ * 누가 마지막 패스를 주는가 — 자리의 공격 기여(`QUICK_ZONE_CONTRIBUTION.attack`) × 시야·패스.
+ * 자리를 빼고 시야·패스만 읽으면 수비형 미드와 센터백이 시즌 도움 순위를 채운다.
  */
+function assisterWeight(slot: LineupSlot): number {
+  const a = slot.player.attributes;
+  return QUICK_ZONE_CONTRIBUTION[weightSlotOf(slot.position)].attack * (a.vision + a.passing);
+}
+
+/** 도움 — 골의 `ASSIST_RATE`에만 붙는다 */
 function pickAssister(
   rng: () => number,
-  pool: readonly GamePlayer[],
+  assisters: ReadonlyArray<{ player: GamePlayer; weight: number }>,
   scorerId: string,
 ): GamePlayer | null {
   if (rng() > ASSIST_RATE) return null;
-  const candidates = outfield(pool).filter((p) => p.id !== scorerId);
-  return weightedPick(rng, candidates, (p) => p.attributes.vision + p.attributes.passing);
+  const candidates = assisters.filter((a) => a.player.id !== scorerId);
+  return weightedPick(
+    rng,
+    candidates.map((a) => a.player),
+    (p) => candidates.find((a) => a.player.id === p.id)?.weight ?? 0,
+  );
 }
 
 // ── 카드 · 부상 ──────────────────────────────────────────────────────────────
@@ -756,6 +792,7 @@ function runTimeline(input: TimelineInput): TimelineResult {
     xg: Record<MatchSide, number>;
     possession: { home: number; away: number };
     shooters: Record<MatchSide, Array<{ player: GamePlayer; weight: number }>>;
+    assisters: Record<MatchSide, Array<{ player: GamePlayer; weight: number }>>;
   } | null;
   const buildBoard = () => {
     const active = { home: activeAt("home", t), away: activeAt("away", t) };
@@ -794,11 +831,16 @@ function runTimeline(input: TimelineInput): TimelineResult {
       slotsOf(side)
         .filter((slot) => positionGroupOfPlayer(slot.player) !== "GK")
         .map((slot) => ({ player: slot.player, weight: shooterWeight(slot) }));
+    const assisters = (side: MatchSide) =>
+      slotsOf(side)
+        .filter((slot) => positionGroupOfPlayer(slot.player) !== "GK")
+        .map((slot) => ({ player: slot.player, weight: assisterWeight(slot) }));
     board = {
       ratings,
       xg: { home: xgOf("home"), away: xgOf("away") },
       possession,
       shooters: { home: shooters("home"), away: shooters("away") },
+      assisters: { home: assisters("home"), away: assisters("away") },
     };
     return board;
   };
@@ -857,7 +899,7 @@ function runTimeline(input: TimelineInput): TimelineResult {
     const booked = weightedPick(rng, pool, (p) => bookingWeight(p, yellowed.has(p.id)));
     if (!booked) return false;
     const second = yellowed.has(booked.id);
-    const straight = rng() < STRAIGHT_RED_SHARE;
+    const straight = rng() < STRAIGHT_RED_CHANCE;
     if (second || straight) {
       if (second) cards.push({ side, playerId: booked.id, card: "yellow", minute });
       cards.push({ side, playerId: booked.id, card: "red", minute });
@@ -892,8 +934,20 @@ function runTimeline(input: TimelineInput): TimelineResult {
         const active = activeAt(side, t);
         const shooters = current.shooters[side];
         const xg = current.xg[side] * window;
-        const shotCount = samplePoisson(rng, xg / QUICK_XG_PER_SHOT);
-        const meanXg = QUICK_XG_PER_SHOT;
+        /**
+         * 페널티 — 팀당 `PENALTY_PER_MATCH`에 상대의 거칠기(강도)와 우리 공격 몫을 곱한다.
+         * 페널티의 기대 xG는 팀 xG 예산 안의 몫이라 슈팅 수를 뽑기 전에 던다.
+         */
+        const penaltyRateOf =
+          PENALTY_PER_MATCH *
+          window *
+          (current.xg[side] / QUICK_XG_BASE) *
+          intensityOf(squads[other(side)]);
+        const shotCount = samplePoisson(
+          rng,
+          Math.max(0, xg - penaltyRateOf * PENALTY_SCORE_RATE) / QUICK_XG_PER_SHOT,
+        );
+        const meanXg = OPEN_SHOT_XG;
         const routine = quickRoutineFactors(
           squads[side].setPieceRoutine,
           squads[other(side)].setPieceRoutine,
@@ -920,11 +974,13 @@ function runTimeline(input: TimelineInput): TimelineResult {
               (p) => p.attributes.aerial + p.attributes.finishing / 2,
             );
             if (!shooter) continue;
-            // 죽은 공의 질 — 키커의 킥력과 슈터의 공중볼이 평균 xG를 조금 움직인다
+            // 죽은 공의 질 — 키커의 킥력과 슈터의 공중볼이 평균 xG를 조금 움직인다.
+            // 둘 다 70인 짝에서 배율이 1이다
             const quality =
               meanXg *
+              SET_PIECE_SHOT_QUALITY *
               routine.setPiece *
-              (0.85 +
+              (0.65 +
                 (((taker?.attributes.kicking ?? 60) + shooter.attributes.aerial) /
                   (2 * RATING_MAX)) *
                   0.5);
@@ -947,7 +1003,10 @@ function runTimeline(input: TimelineInput): TimelineResult {
             { meanXg: meanXg * routine.open },
             shooter.attributes.finishing,
           );
-          const assister = result.outcome === "goal" ? pickAssister(rng, active, shooter.id) : null;
+          const assister =
+            result.outcome === "goal"
+              ? pickAssister(rng, current.assisters[side], shooter.id)
+              : null;
           rolled.push({
             side,
             minute: minuteIn(),
@@ -957,15 +1016,8 @@ function runTimeline(input: TimelineInput): TimelineResult {
             ...result,
           });
         }
-        /**
-         * 페널티 — 팀당 `PENALTY_PER_MATCH`에 상대의 거칠기(강도)와 우리 공격 몫을 곱한다.
-         * 성공률이 곧 xG다 — 승부차기와 같은 식이고 결정력을 두 번 세지 않는다.
-         */
-        const attackShare = current.xg[side] / QUICK_XG_BASE;
-        const penalties = samplePoisson(
-          rng,
-          PENALTY_PER_MATCH * window * attackShare * intensityOf(squads[other(side)]),
-        );
+        // 성공률이 곧 xG다 — 승부차기와 같은 식이고 결정력을 두 번 세지 않는다
+        const penalties = samplePoisson(rng, penaltyRateOf);
         for (let kick = 0; kick < penalties; kick++) {
           const taker = takerOnPitch(squads[side].setPieceTakers?.penalty, "penalty", active);
           if (!taker) break;
