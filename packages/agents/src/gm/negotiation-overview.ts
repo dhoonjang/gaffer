@@ -106,6 +106,7 @@ export function managedNegotiationOverview(state: GameState) {
             : null,
           signed: n.signed,
           registration: n.registration,
+          mandate: n.mandate,
         };
       }),
   };

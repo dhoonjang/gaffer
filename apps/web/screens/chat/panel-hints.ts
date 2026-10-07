@@ -28,6 +28,7 @@ export const PANEL_OF: Record<string, PanelKey> = {
   start_negotiation: "메일함",
   update_negotiation: "메일함",
   request_negotiation_confirmation: "메일함",
+  delegate_negotiation: "메일함",
   send_mail: "메일함",
   read_mail: "메일함",
   // ── 스쿼드 — 선수단과 판이 바뀐 것 ──

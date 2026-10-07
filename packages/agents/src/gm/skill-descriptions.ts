@@ -43,6 +43,14 @@ export const SKILL_CATALOG = [
       "Presents a card of exact terms for the manager to confirm directly, for the negotiationId in the latest ledger. stage is agreement for agreeing terms, medical for confirming the actual examination results and risks, and sign for the final signature. The card pins the current immutable proposal id and revision and executes nothing. A renewal goes to sign after agreement with no medical; a new signing goes to sign after the actual medical is requested and its results confirmed.",
   },
   {
+    name: "delegate_negotiation",
+    label: CALL_LABELS.delegate_negotiation,
+    group: "대화·서사",
+    readOnly: false,
+    description:
+      "Records that the manager entrusts a negotiation in which our club is the buyer (transfer, free signing or renewal) to the club. Sales cannot be entrusted. From the manager's words and the negotiation context, decide maxFee (total club fee ceiling, transfers only), maxWeeklyWage, minYears–maxYears and days until the conclusion (1–28); use the manager's own numbers when stated. On that day the core sets the terms itself, sends our proposals, records the other side's consent and handles the medical. The manager's final signature still comes only from the sign confirmation card once the ledger shows the mandate ready. revoke takes back a mandate still waiting for its conclusion.",
+  },
+  {
     name: "send_mail",
     label: CALL_LABELS.send_mail,
     group: "대화·서사",

@@ -10,6 +10,7 @@ import {
   SetTransferListingSchema,
   OpenNegotiationSchema,
   NegotiationActionSchema,
+  MandateRequestSchema,
   CharacterUpdateSchema,
   POSITION_CODES,
   DateString,
@@ -52,6 +53,7 @@ import {
   actNegotiation,
   repairNegotiationSquads,
   buildNegotiationConfirmation,
+  delegateNegotiation,
   requestCharacterUpdate,
   type GameState,
   journal,
@@ -538,6 +540,21 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
               message:
                 "이 단계에서 확인할 유효한 조건이 없습니다. 최신 제안·당사자 동의·메디컬 장부를 조회하세요",
             };
+      },
+    ),
+    wrap(
+      "delegate_negotiation",
+      descriptions.delegate_negotiation,
+      z.object({ negotiationId: z.string().min(1), mandate: MandateRequestSchema }).strict(),
+      (input) => {
+        const result = delegateNegotiation(state, input.negotiationId, input.mandate);
+        const n = state.negotiations.find((item) => item.id === input.negotiationId);
+        return result.ok && n
+          ? {
+              ...result,
+              message: `${result.message}. 현재 협상 id: ${n.id}, revision: ${n.revision}`,
+            }
+          : result;
       },
     ),
     wrap(

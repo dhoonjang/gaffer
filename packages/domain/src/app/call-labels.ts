@@ -8,6 +8,7 @@ export const CALL_LABELS = {
   resign: "사임",
   update_negotiation: "협상 조건 기록",
   request_negotiation_confirmation: "조건 확인",
+  delegate_negotiation: "협상 위임",
   send_mail: "메일 발송",
   read_mail: "메일 읽기",
   start_negotiation: "협상 시작",
