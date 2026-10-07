@@ -57,7 +57,7 @@ function playSeasonsKeepingSeat(
 /** UCL 우승 경로의 상금 합 — 참가 · 리그 단계 5승 2무 · 단계 수당 · 우승 */
 function uclWinnerPrize(): number {
   const prize = cupCatalogById("ucl")!.prize;
-  const stages = Object.values(prize.stage).reduce((a, b) => a + (b ?? 0), 0);
+  const stages = Object.values(prize.stage).reduce((a, b) => a + b, 0);
   return prize.participation + 5 * prize.win + 2 * prize.draw + stages + prize.winner;
 }
 

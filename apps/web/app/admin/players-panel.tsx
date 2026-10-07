@@ -5,6 +5,7 @@ import type { CatalogLayer } from "./catalog-store";
 import { PlayerModal } from "./player-modal";
 import { groupTeamsByLeague, splitPositions } from "./types";
 import type { CatalogResponse, PlayerRow } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 선수 카탈로그 패널 — 목록은 **요약만** 보여주고 편집은 팝업이 맡는다.
@@ -115,7 +116,7 @@ export function PlayersPanel({
     onMessage(null);
     try {
       const res = await fetch("/api/admin/catalog", { method: "DELETE" });
-      const data: CatalogResponse = await res.json();
+      const data = (await res.json()) as CatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "되돌리기 실패");
       onApply(data);
       onMessage(data.message ?? null);
@@ -133,7 +134,7 @@ export function PlayersPanel({
   }
 
   return (
-    <section className="admin-panel">
+    <section>
       {/* 이 안내는 남긴다 — "편집이 진행 중 세이브에 안 먹는다"는 화면만 봐선 모른다 */}
       <p className="hint admin-note">
         편집 결과는 <b>이후 새로 시작하는 게임</b>에만 반영됩니다 — 진행 중인 게임은 시작 시 복사한
@@ -191,22 +192,22 @@ export function PlayersPanel({
               편집됨
             </span>
           )}
-          <button
-            className="ghost-btn"
+          <Button
+            variant="secondary"
             onClick={() => void resetCatalog()}
             disabled={busy || !edited}
             data-testid="catalog-reset"
           >
             시드 기본값으로
-          </button>
-          <button
-            className="primary-btn admin-add-btn"
+          </Button>
+          <Button
+            variant="primary"
             onClick={() => setTarget({ mode: "create" })}
             disabled={teams.length === 0}
             data-testid="admin-add-toggle"
           >
             + 새 선수
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -274,22 +275,24 @@ export function PlayersPanel({
 
       {visible.length > 0 && (
         <nav className="admin-pager" data-testid="admin-pager" aria-label="페이지 이동">
-          <button
-            className="mini-btn"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setPage(1)}
             disabled={current === 1}
             data-testid="admin-page-first"
           >
             ‹‹
-          </button>
-          <button
-            className="mini-btn"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setPage(current - 1)}
             disabled={current === 1}
             data-testid="admin-page-prev"
           >
             이전
-          </button>
+          </Button>
           <span className="admin-page-info" data-testid="admin-page-info">
             <input
               className="ai num"
@@ -306,22 +309,24 @@ export function PlayersPanel({
             />
             <span className="muted"> / {pageCount}</span>
           </span>
-          <button
-            className="mini-btn"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setPage(current + 1)}
             disabled={current === pageCount}
             data-testid="admin-page-next"
           >
             다음
-          </button>
-          <button
-            className="mini-btn"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setPage(pageCount)}
             disabled={current === pageCount}
             data-testid="admin-page-last"
           >
             ››
-          </button>
+          </Button>
         </nav>
       )}
 

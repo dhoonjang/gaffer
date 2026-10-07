@@ -63,7 +63,7 @@ function lastOptions(client: Anthropic): { timeout?: number; signal?: AbortSigna
   const stream = (client.messages as unknown as { stream: { mock: { calls: unknown[][] } } })
     .stream;
   const calls = stream.mock.calls;
-  return (calls[calls.length - 1]![1] ?? {}) as { timeout?: number; signal?: AbortSignal };
+  return calls[calls.length - 1]![1] ?? {};
 }
 
 const endTurn: Partial<Anthropic.Message> = {
@@ -74,7 +74,7 @@ const endTurn: Partial<Anthropic.Message> = {
 function hasCacheMarker(content: Anthropic.MessageParam["content"]): boolean {
   if (!Array.isArray(content)) return false;
   return content.some(
-    (b) => typeof b === "object" && "cache_control" in b && b.cache_control !== undefined,
+    (b) => typeof b === "object" && "cache_control" in b && b.cache_control !== null,
   );
 }
 

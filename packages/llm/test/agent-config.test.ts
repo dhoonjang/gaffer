@@ -158,6 +158,7 @@ ${restAs("agent", "gm")}`);
   it("에이전트는 한 자리만 빠져도 거부된다 — 자리마다 각각 확인한다", () => {
     for (const missing of AGENT_NAMES) {
       const agents = fullAgents();
+
       delete agents[missing];
       expect(() => parseLlmConfig(yamlOf(agents)), missing).toThrow("LLM 설정이 올바르지 않습니다");
     }
@@ -172,6 +173,7 @@ ${restAs("agent", "gm")}`);
     for (const key of Object.keys(AGENT_BLOCK)) {
       const agents = fullAgents();
       const partial = { ...agents.gm };
+
       delete partial[key];
       agents.gm = partial;
       expect(() => parseLlmConfig(yamlOf(agents)), key).toThrow("LLM 설정이 올바르지 않습니다");

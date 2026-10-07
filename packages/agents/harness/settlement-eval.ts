@@ -185,7 +185,12 @@ async function main() {
     ),
   };
   const stages: Stage[] = [];
-  let measurement: Record<string, unknown> = { measured: false };
+  let measurement: {
+    measured: boolean;
+    durationMs?: number;
+    passed?: boolean;
+    [field: string]: unknown;
+  } = { measured: false };
   if (values.live && !blockers.length && config) {
     const client = new TypesafeGameEvaluator(config);
     const evaluator: GameEvaluator = {
@@ -200,9 +205,9 @@ async function main() {
           stages.push({
             ...base,
             durationMs: performance.now() - began,
-            attempts: result.attempts ?? 1,
+            attempts: result.attempts,
             usage: result.usage,
-            usageComplete: result.usageComplete !== false,
+            usageComplete: result.usageComplete,
           });
           return result;
         } catch (error) {

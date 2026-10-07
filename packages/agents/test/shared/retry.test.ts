@@ -58,7 +58,7 @@ const answered = (output: TurnResult["output"]): TurnResult => ({
   usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
   toolCallCount: 0,
   stopReason: "completed",
-  output,
+  ...(output === undefined ? {} : { output }),
 });
 
 /**
@@ -497,7 +497,7 @@ function trainingAnswers(request: EvaluationRequest): EvaluationResult {
   return {
     model: "mock",
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-    answers: Object.fromEntries(
+    answers: Object.fromEntries<EvaluationResult["answers"][string]>(
       Object.entries(request.questions).map(([key, question]) => {
         if (question.type === "score") {
           const zero = question.criteria.indexOf("0");

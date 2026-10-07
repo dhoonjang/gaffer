@@ -25,5 +25,5 @@ export function liveDigest(match: LiveMatch): string {
   );
   const text = JSON.stringify(canonical(simulation));
   const half = Math.floor(text.length / 2);
-  return `${hashChannel(text).toString(16)}-${hashChannel(text.slice(half) + text.slice(0, half)).toString(16)}-${hashChannel(text.length + text).toString(16)}`;
+  return `${hashChannel(text).toString(16)}-${hashChannel(text.slice(half) + text.slice(0, half)).toString(16)}-${hashChannel(`${text.length}${text}`).toString(16)}`;
 }

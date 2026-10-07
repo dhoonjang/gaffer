@@ -12,6 +12,7 @@ import {
   seasonRating,
   eventCausesText,
   shootoutTally,
+  type BoardPoint,
 } from "@gaffer/domain";
 import { type ConditionRead, observationOf } from "../players/observation";
 import {
@@ -73,10 +74,10 @@ export interface TacticsView {
    * **감독이 그 갈래에 서지 않았으면 없다** — 중립인지는 화면이 다시 재지 않고
    * `tacticToggleValue`가 답한다.
    */
-  transition?: TransitionMode | null;
-  offsideTrap?: boolean;
-  tackling?: TacklingLevel;
-  keeperDistribution?: KeeperDistribution | null;
+  transition?: TransitionMode | null | undefined;
+  offsideTrap?: boolean | undefined;
+  tackling?: TacklingLevel | undefined;
+  keeperDistribution?: KeeperDistribution | null | undefined;
 }
 
 /**
@@ -118,7 +119,7 @@ interface MatchPlayerView {
   seasonRating: number | null;
   position: string;
   /** 경기가 계산에 사용한 실제 전술판 좌표. */
-  point?: import("@gaffer/domain").BoardPoint;
+  point?: BoardPoint;
   /**
    * 이 자리에서 지금 내는 전력 (상태·적응도 반영) — **정수로 반올림해 넘긴다.**
    * 코어는 소수로 셈하지만 감독이 89.7과 89.6을 견줄 일은 없고, 명단의 OVR·
@@ -217,10 +218,22 @@ export interface MatchView {
   stadium: string | null;
   /**
    * `id`는 문장(`crestOf`)과 구단 색의 열쇠다. `colours`는 카탈로그의 공식 색 — 화면은
-   * 엔진을 값으로 못 읽으므로 여기 실려 간다 (web/design-system.md §2).
+   * 엔진을 값으로 못 읽으므로 여기 실려 간다 (tokens.css 「구단 색」).
    */
-  home: { id: string; name: string; short: string; ours: boolean; colours?: ClubColours };
-  away: { id: string; name: string; short: string; ours: boolean; colours?: ClubColours };
+  home: {
+    id: string;
+    name: string;
+    short: string;
+    ours: boolean;
+    colours?: ClubColours | undefined;
+  };
+  away: {
+    id: string;
+    name: string;
+    short: string;
+    ours: boolean;
+    colours?: ClubColours | undefined;
+  };
   score: { home: number; away: number };
   /** 규정분 — 추가시간이면 `added`가 0보다 크다 (`45+2′`) */
   minute: number;
@@ -456,6 +469,7 @@ export function buildMatchView(state: GameState): MatchView | null {
   }
   for (const event of ledger.events) {
     const [first, second] = event.actors;
+    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- 개인 기록에 얹는 사건만 고른다 — 새 사건이 생겨도 기록은 늘지 않는다
     switch (event.type) {
       case "goal":
         if (first) tallyOf(first).goals += 1;

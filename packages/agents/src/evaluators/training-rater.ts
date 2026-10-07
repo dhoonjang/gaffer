@@ -179,10 +179,11 @@ export async function reportTraining(
    */
   if (evaluator === undefined && resolveLlmMode() === "mock") {
     const report = recordEmptyTrainingReport(state, brief);
-    if (report) deliverTrainingReportMail(state, report);
+    deliverTrainingReportMail(state, report);
     return { report };
   }
-  let report: TrainingReport | null = null;
+  // 재시도 콜백 안에서 채워진다 — 흐름 분석이 콜백 속 대입을 보지 못한다
+  let report = null as TrainingReport | null;
   let client = evaluator;
   await retryOnce(
     "rater:training",

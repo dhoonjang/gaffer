@@ -11,6 +11,7 @@ import {
   type CatalogResponse,
   type TeamCatalogResponse,
 } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 팀 카탈로그 패널 — 선수 탭과 같은 규칙이다: 목록은 요약만 보여주고 편집은
@@ -85,7 +86,7 @@ export function TeamsPanel({
     onMessage(null);
     try {
       const res = await fetch("/api/admin/catalog/team", { method: "DELETE" });
-      const data: TeamCatalogResponse = await res.json();
+      const data = (await res.json()) as TeamCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "되돌리기 실패");
       onApply(data);
       onMessage(data.message ?? null);
@@ -109,7 +110,7 @@ export function TeamsPanel({
   }
 
   return (
-    <section className="admin-panel">
+    <section>
       <p className="hint admin-note">
         편집 결과는 <b>이후 새로 시작하는 게임</b>에만 반영됩니다 — 진행 중인 게임은 시작 시 복사한
         값으로 계속 돕니다. 리그 소속·팀 추가/삭제는 구조 필드라, 세계가 성립하지 않는 편집은 저장할
@@ -146,22 +147,22 @@ export function TeamsPanel({
               편집됨
             </span>
           )}
-          <button
-            className="ghost-btn"
+          <Button
+            variant="secondary"
             onClick={() => void resetTeams()}
             disabled={busy || !edited}
             data-testid="teams-reset"
           >
             시드 기본값으로
-          </button>
-          <button
-            className="primary-btn admin-add-btn"
+          </Button>
+          <Button
+            variant="primary"
             onClick={() => setTarget({ mode: "create" })}
             disabled={leagues.length === 0}
             data-testid="team-add"
           >
             + 새 팀
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -211,8 +212,10 @@ export function TeamsPanel({
                 </td>
                 <td className="num">{t.commercialTier}</td>
                 <td className="num">
-                  <button
-                    className="mini-btn admin-squad-btn"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="admin-squad-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       openSquad(t);
@@ -221,7 +224,7 @@ export function TeamsPanel({
                     data-testid={`team-squad-${t.id}`}
                   >
                     {sizeOf(t)}명
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

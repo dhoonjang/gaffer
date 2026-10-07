@@ -216,7 +216,7 @@ describe("전술판 좌표 → 포지션 코드 (자유 배치의 원본)", () =
     const forwards = new Set(["ST", "LST", "RST"]);
     for (const f of FORMATIONS) {
       for (const cf of ["CF", "LF", "RF"]) {
-        expect(FORMATION_SLOTS[f], `${f}`).not.toContain(cf);
+        expect(FORMATION_SLOTS[f], f).not.toContain(cf);
       }
       expect(
         FORMATION_SLOTS[f].filter((c) => forwards.has(c)).length,
@@ -392,7 +392,7 @@ describe("빈 자리 (openSeats)", () => {
 describe("포메이션 숫자 자동 감지 (shapeOf)", () => {
   it("프리셋을 그대로 두면 프리셋 이름이 나온다 — 일곱 개 모두", () => {
     for (const f of FORMATIONS) {
-      expect(shapeOf(FORMATION_LAYOUTS[f]), `${f}`).toBe(f);
+      expect(shapeOf(FORMATION_LAYOUTS[f]), f).toBe(f);
     }
   });
 
@@ -401,7 +401,7 @@ describe("포메이션 숫자 자동 감지 (shapeOf)", () => {
       const sum = shapeOf(FORMATION_LAYOUTS[f])
         .split("-")
         .reduce((s, n) => s + Number(n), 0);
-      expect(sum, `${f}`).toBe(10);
+      expect(sum, f).toBe(10);
     }
   });
 
@@ -443,7 +443,7 @@ describe("포메이션 숫자 자동 감지 (shapeOf)", () => {
     const dropped = FORMATION_LAYOUTS["4-2-3-1"].map((p) => ({ ...p }));
     const striker = dropped.findIndex((p) => positionAtPoint(p) === "ST");
     dropped[striker] = { x: dropped[striker]!.x, y: 22 };
-    expect(positionAtPoint(dropped[striker]!)).toBe("CF");
+    expect(positionAtPoint(dropped[striker])).toBe("CF");
     expect(shapeOf(dropped)).toBe("4-2-4");
   });
 

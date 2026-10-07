@@ -72,9 +72,7 @@ function advanceKnockouts(state: GameState, digest: string[] = []): void {
 }
 
 function leaguePhaseOf(state: GameState, cupId: string) {
-  return state.matches.filter(
-    (m) => m.competitionId === cupId && (m.stage ?? "league") === "league",
-  );
+  return state.matches.filter((m) => m.competitionId === cupId && m.stage === "league");
 }
 
 /** 녹아웃을 끝까지 굴린다 — 단계마다 결과를 채우고 다음 단계를 편성한다 */
@@ -232,7 +230,7 @@ describe("승자 판정", () => {
     legs[0]!.result = resultOf({ homeGoals: 0, awayGoals: 2 });
     legs[1]!.result = resultOf({ homeGoals: 1, awayGoals: 0 });
     expect(euroTieWinner(state, "ucl", "playoff", 0)).toBe(legs[1]!.homeTeamId);
-    expect(legs[1]!.result?.penalties).toBeUndefined();
+    expect(legs[1]!.result.penalties).toBeUndefined();
   });
 
   it("합계가 같으면 연장을 먼저 치르고, 그래도 같으면 승부차기가 2차전 장부에 남는다", () => {
@@ -292,7 +290,7 @@ describe("게임 상태 반영", () => {
     const ourKnockouts = state.matches.filter(
       (m) =>
         isCup(m.competitionId) &&
-        (m.stage ?? "league") !== "league" &&
+        m.stage !== "league" &&
         (m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId),
     );
     expect(ourKnockouts.length).toBeGreaterThan(0);
@@ -377,7 +375,7 @@ describe("오피스 뷰", () => {
     const comp = buildOfficeViews(state).competitions.list.find((c) => c.europe !== null)!;
     const finalStage = comp.bracket.find((b) => b.stage === "final")!;
     expect(finalStage.ties).toHaveLength(1);
-    // 자는 `formatScore` 하나 — en dash 양옆 hair space, 승부차기는 괄호 (design-system.md §3)
+    // 자는 `formatScore` 하나 — en dash 양옆 hair space, 승부차기는 괄호 (tokens.css 「숫자와 표기」)
     expect(finalStage.ties[0]!.score).toMatch(/^\d+\u200A\u2013\u200A\d+/);
     for (const stage of comp.bracket) {
       for (const tie of stage.ties) {
@@ -436,7 +434,7 @@ describe("한 시즌 완주 (mock 경기)", () => {
     // 트로피는 **대회 id**로 남는다 — 이름을 고쳐도 같은 대회로 선다 (career.md §6).
     // 원장은 전 구단의 우승을 들므로 **우리 것만** 골라 센다
     const cupTrophies = state.trophies.filter(
-      (t) => isEuroCup(t.competitionId ?? null) && t.teamId === state.userTeamId,
+      (t) => isEuroCup(t.competitionId) && t.teamId === state.userTeamId,
     );
     const wonUcl = digest.some((d) => d.includes("UEFA 챔피언스리그 우승"));
     expect(cupTrophies.length).toBe(wonUcl ? 1 : 0);
@@ -515,9 +513,7 @@ describe("상금", () => {
     const entrants = new Set(phase.flatMap((m) => [m.homeTeamId, m.awayTeamId]));
     expect(entrants.size).toBe(cup.size);
     const key = `prize:competition:ucl:league-phase:S${state.season}`;
-    expect(state.finances.filter((f) => (f.prizesPaid ?? []).includes(key))).toHaveLength(
-      entrants.size,
-    );
+    expect(state.finances.filter((f) => f.prizesPaid.includes(key))).toHaveLength(entrants.size);
   });
 
   it("단계마다 진출 상금이 그 단계의 팀 전원에게 들어간다", () => {
@@ -527,7 +523,7 @@ describe("상금", () => {
     // 지급 사실은 prizesPaid 키가 갖는다 — AI 팀은 상세 원장을 쌓지 않는다
     const paidFor = (stage: "qf" | "sf" | "final") => {
       const key = `prize:competition:ucl:stage:${stage}:S1`;
-      return state.finances.filter((f) => (f.prizesPaid ?? []).includes(key)).length;
+      return state.finances.filter((f) => f.prizesPaid.includes(key)).length;
     };
     expect(paidFor("qf")).toBe(8);
     expect(paidFor("sf")).toBe(4);
@@ -552,7 +548,7 @@ describe("상금", () => {
     payWinnerPrize(state, "ucl", champion, []); // 두 번 불러도 한 번만
     // 지급 사실은 prizesPaid가 갖는다 (AI 팀은 원장을 쌓지 않는다)
     const paid = state.finances.filter((f) =>
-      (f.prizesPaid ?? []).includes("prize:competition:ucl:winner:S1"),
+      f.prizesPaid.includes("prize:competition:ucl:winner:S1"),
     );
     expect(paid).toHaveLength(1);
     expect(paid[0]!.teamId).toBe(champion);
@@ -610,7 +606,7 @@ describe("주중 경기 부담 (로테이션)", () => {
     }
     expect(simulated, "AI 경기가 간이 시뮬로 굴러야 한다").toBeTruthy();
 
-    const lineup = simulated!.result!.homeLineup ?? [];
+    const lineup = simulated!.result!.homeLineup;
     expect(lineup.length, "간이 시뮬이 출전 명단을 남긴다").toBeGreaterThanOrEqual(11);
     const shift = (id: string) =>
       (playerById(state, id)?.state.condition ?? 0) - (before.get(id) ?? 0);

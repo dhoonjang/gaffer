@@ -102,7 +102,7 @@ function leaderValueOf(tally: LeagueTally, key: LeaderboardKey): number {
       return tally.rating ?? 0;
     case "cleanSheets":
       return tally.cleanSheets;
-    default:
+    case "cards":
       return disciplinePoints(tally);
   }
 }

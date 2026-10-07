@@ -228,7 +228,7 @@ describe("source-grounded instruction compiler", () => {
     };
     const model = evaluator((instructions, criteria, stage) => {
       if (stage === 1) return "n1";
-      expect(criteria).toEqual({ unclear: expect.any(String) });
+      expect(criteria).toEqual({ unclear: expect.any(String) as unknown });
       return "unclear";
     });
     expect(

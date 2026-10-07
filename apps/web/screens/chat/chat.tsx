@@ -13,6 +13,7 @@ import { tickEventLook } from "@/screens/chat/tick-event-display";
 import { CALL_LABEL } from "@/screens/chat/call-label";
 import { IconBroadcast, IconMatch, IconPerson, SPEAKER_ICON } from "@/shared/icons";
 import { useProseNames } from "@/shared/player-card";
+import { Button } from "@/shared/button";
 
 /**
  * 산문 한 조각을 손잡이 섞인 노드로 — `useProseNames()`가 돌려주는 그 함수다.
@@ -55,7 +56,7 @@ function UtteranceBlock({
   roles,
 }: {
   utterance: Utterance;
-  roles?: Record<string, SpeakerRole>;
+  roles?: Record<string, SpeakerRole> | undefined;
 }) {
   const prose = useProseNames();
   const { speaker, lines } = utterance;
@@ -137,7 +138,7 @@ function ToolChip({
 }: {
   /** 이 칩이 진 호출들 — 첫 호출이 이름과 결을 정한다 (묶음은 그 둘이 같아야 선다) */
   calls: readonly ToolCallRecord[];
-  onReveal?: (calls: readonly ToolCallRecord[]) => void;
+  onReveal?: ((calls: readonly ToolCallRecord[]) => void) | undefined;
   revealed?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -148,7 +149,8 @@ function ToolChip({
   const shown = toRail ? revealed : open;
   return (
     <span className="tool-chip-wrap">
-      <button
+      <Button
+        variant="bare"
         className={`tool-chip${shown ? " open" : ""}${tone}`}
         onClick={() => (toRail ? onReveal(calls) : setOpen((o) => !o))}
         data-testid={`tool-${head.name}`}
@@ -159,7 +161,7 @@ function ToolChip({
       >
         {label}
         {calls.length > 1 && <i className="tool-chip-count">{calls.length}</i>}
-      </button>
+      </Button>
       {!toRail && open && (
         <div className="tool-detail" data-testid={`tool-detail-${head.name}`}>
           {calls.map((call, i) => (
@@ -239,7 +241,7 @@ function BookingCard({ card }: { card: CardMark }) {
 }
 
 /**
- * 사건 카드 — **넘긴 시간이 남긴 사실 하나에 카드 하나** (design-system.md §6).
+ * 사건 카드 — **넘긴 시간이 남긴 사실 하나에 카드 하나**.
  *
  * 시간을 넘기면 그 사이 벌어진 일이 여럿 온다(부상·추첨·계약 만료·경기일). 그것들을
  * 한 문단으로 이어 붙이면 화면은 도로 쪼갤 수 없고, 여덟 줄짜리 지문 하나가 되어
@@ -265,12 +267,12 @@ function TickEventCard({ event }: { event: TickEvent }) {
 }
 
 /**
- * 접기 전에 서는 카드 수 — **스태거 상한과 같은 다섯**이다(design-system.md §6).
+ * 접기 전에 서는 카드 수 — **스태거 상한과 같은 다섯**이다(tokens.css 「모션」 3).
  */
 const TICK_EVENTS_SHOWN = 5;
 
 /**
- * 한 턴의 사건 카드 목록 — **수를 줄이는 것은 화면의 일이다**(design-system.md §6).
+ * 한 턴의 사건 카드 목록 — **수를 줄이는 것은 화면의 일이다**.
  *
  * 일주일을 넘긴 턴은 카드를 열몇 장 낸다. 그것이 다 서면 장면이 스크롤 아래로 밀려,
  * 카드를 맨 위에 세운 이유가 없어진다. 코어는 사실을 다 내고 — 사실을 지우면 기록도
@@ -291,14 +293,14 @@ function TickEvents({ events }: { events: readonly TickEvent[] }) {
       ))}
       {/* 손잡이는 **목록의 마지막 자식**이다 — 카드의 `nth-child` 스태거가 그대로 성립한다 */}
       {rest > 0 && (
-        <button
+        <Button
+          variant="bare"
           className="tick-more"
           data-testid="tick-more"
           onClick={() => setExpanded(true)}
-          type="button"
         >
           나머지 {rest}건
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -401,21 +403,21 @@ export function ChatTurnView({
 }: {
   turn: ChatTurn;
   /** 스트리밍 중인 미완성 턴 — 마지막 미완성 줄을 보류해 파싱 깨짐 방지 */
-  streaming?: boolean;
-  playerNames?: Record<string, string>;
+  streaming?: boolean | undefined;
+  playerNames?: Record<string, string> | undefined;
   /** 화자 이름→직책 — `스티브 홀랜드 (수석코치)`처럼 함께 보여 준다 */
-  speakerRoles?: Record<string, SpeakerRole>;
+  speakerRoles?: Record<string, SpeakerRole> | undefined;
   /** 바로 앞 모델 턴의 시각 — 같으면 다시 적지 않는다 */
-  prevStamp?: string | null;
+  prevStamp?: string | null | undefined;
   /** 장부 칩을 눌렀다 — 레일 말풍선을 다시 세운다 (레일이 서 있을 때만 온다) */
-  onRevealHint?: (calls: readonly ToolCallRecord[]) => void;
+  onRevealHint?: ((calls: readonly ToolCallRecord[]) => void) | undefined;
   /** 지금 말풍선이 서 있는 호출 — 그 칩만 펼친 모양이 된다 (묶음은 첫 호출이 신원이다) */
   revealedCall?: ToolCallRecord | null;
   /**
    * 이 턴을 길게 눌렀다 — 무엇이 열리는지는 이 컴포넌트가 알지 않는다.
    * 주어지지 않으면 제스처 자체가 없다(프로덕션 · 아직 기록이 없는 턴).
    */
-  onLongPress?: () => void;
+  onLongPress?: (() => void) | undefined;
 }) {
   const text = useMemo(() => humanize(turn.text, playerNames), [turn.text, playerNames]);
   const press = useLongPress(onLongPress);

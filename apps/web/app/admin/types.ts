@@ -32,7 +32,7 @@ export interface CatalogPosition {
 }
 
 export interface CatalogPlayer extends Record<AttributeAxis, number> {
-  lorebook?: LorebookContent;
+  lorebook?: LorebookContent | undefined;
   id: string;
   teamId: string;
   nameKo: string;
@@ -41,10 +41,10 @@ export interface CatalogPlayer extends Record<AttributeAxis, number> {
   positions: CatalogPosition[];
   potential: number;
   /** 국적 — 협회 코드 (`domain/nationality.ts`). 카탈로그가 늘 채워 보낸다 */
-  nationality?: string;
-  secondNationality?: string;
+  nationality?: string | undefined;
+  secondNationality?: string | undefined;
   /** 실제 주급 (£/주) — 없으면 새 게임 시작 때 OVR 공식으로 어림한다 */
-  weeklyWage?: number;
+  weeklyWage?: number | undefined;
   /** 서버 파생 (읽기 전용) */
   age: number;
   overall: number;

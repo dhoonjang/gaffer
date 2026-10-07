@@ -294,7 +294,7 @@ export function releaseStaff(state: GameState, input: { name: string }): Command
       listedOn: state.season,
       from: state.userTeamId,
     },
-    ...(state.staffPool ?? []).filter((e) => e.name !== persona.name),
+    ...state.staffPool.filter((e) => e.name !== persona.name),
   ];
   const paid = severance > 0 ? ` · 위약금 ${formatMoney(severance)}` : "";
   return {
@@ -335,7 +335,7 @@ export function expireStaffContracts(state: GameState, on: string): string[] {
         listedOn: state.season,
         from: job.teamId,
       },
-      ...state.staffPool!.filter((e) => e.name !== persona.name),
+      ...state.staffPool.filter((e) => e.name !== persona.name),
     ];
     expired.push(persona.name);
   }

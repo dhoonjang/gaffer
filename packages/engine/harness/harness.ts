@@ -95,7 +95,7 @@ export function format(measured: number, unit?: Unit): string {
     case "count":
     case "score":
       return Number.isInteger(measured) ? `${measured}` : measured.toFixed(2);
-    default:
+    case undefined:
       return measured.toFixed(2);
   }
 }
@@ -120,6 +120,7 @@ const WIDE =
   /[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/;
 
 function widthOf(text: string): number {
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- 코드 포인트 단위가 의도다 — 이니셜·글자 폭은 결합 문자가 없는 이름과 표 칸을 잰다
   return [...text].reduce((n, ch) => n + (WIDE.test(ch) ? 2 : 1), 0);
 }
 

@@ -350,9 +350,9 @@ async function main() {
                 requestSha256: createHash("sha256").update(stableJson(request)).digest("hex"),
                 durationMs: performance.now() - began,
                 questions: Object.keys(request.questions).length,
-                attempts: result.attempts ?? 1,
+                attempts: result.attempts,
                 usage: result.usage,
-                usageComplete: result.usageComplete !== false,
+                usageComplete: result.usageComplete,
                 model: result.model,
               });
               return result;
@@ -567,7 +567,7 @@ async function main() {
             const evaluatorCalls = Object.fromEntries(
               Object.keys(LLM_CONFIG.evaluators).map((role) => [
                 role,
-                ledger.byAgent[role as EvaluatorName]?.calls ?? 0,
+                ledger.byAgent[role as EvaluatorName].calls,
               ]),
             );
             const totalEvaluatorCalls = Object.values(evaluatorCalls).reduce(
@@ -730,7 +730,7 @@ async function main() {
     "| --- | --- | ---: | ---: | ---: | ---: |",
     ...turns.map(
       (item) =>
-        `| ${item.name} | ${item.passed} | ${item.durationMs.toFixed(2)} | ${Object.values(item.evaluatorCalls).reduce((sum, calls) => sum + (calls ?? 0), 0)} / ${item.usage.calls} | ${item.usage.usage.inputTokens} / ${item.usage.usage.outputTokens} | ${show(item.costUsd)} |`,
+        `| ${item.name} | ${item.passed} | ${item.durationMs.toFixed(2)} | ${Object.values(item.evaluatorCalls).reduce((sum, calls) => sum + calls, 0)} / ${item.usage.calls} | ${item.usage.usage.inputTokens} / ${item.usage.usage.outputTokens} | ${show(item.costUsd)} |`,
     ),
     "",
     ...(blockers.length ? ["Blockers:", "", ...blockers.map((item) => `- ${item}`), ""] : []),

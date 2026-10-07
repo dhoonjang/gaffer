@@ -12,6 +12,7 @@ import {
   IconSkip,
   IconWeek,
 } from "../../shared/icons";
+import { Button } from "../../shared/button";
 
 /**
  * 시간을 넘기는 손잡이 — **버튼이 곧 조작이다.**
@@ -83,14 +84,15 @@ export function Composer({
   inputRef: RefObject<HTMLTextAreaElement | null>;
   /**
    * **GM이 제안한 감독의 다음 말** — 마지막 model 턴의 `suggestion`이다 (agents.md §2). 입력이
-   * 비어 있을 때 placeholder로 서고, Tab 또는 →가 그 문장을 입력에 채운다. 안내 문구는 없다 —
-   * 보이는 문장이 곧 손잡이다 (design-system.md §6).
+   * 비어 있을 때 placeholder로 서고, Tab 또는 →(IME 조합 중·Shift 조합은 제외)가 그 문장을
+   * 입력에 채운다. 안내 문구는 없다 — 보이는 문장이 곧 손잡이다. 한 글자라도 쓰면 사라지고,
+   * 보내면 다음 model 턴이 올 때까지 비어 있다. 채워진 문장은 색도 꼴도 다른 데 없는 보통의 입력이다.
    */
-  suggestion?: string | null;
-  liveControl?: { paused: boolean; blocked: boolean; toggle: () => void };
+  suggestion?: string | null | undefined;
+  liveControl?: { paused: boolean; blocked: boolean; toggle: () => void } | undefined;
   sendOnly?: boolean;
   maxLength?: number;
-  placeholder?: string;
+  placeholder?: string | undefined;
   testId?: string;
 }) {
   /** 시간 손잡이의 선택지가 펼쳐져 있는가 — 입력이 비었을 때만 열 수 있다 */
@@ -117,9 +119,9 @@ export function Composer({
       {skipOpen && canSkip && (
         <>
           {/* 바깥을 눌러 닫는다 — 메뉴 밖 어디든 */}
-          <button
+          <Button
+            variant="bare"
             className="skip-scrim"
-            type="button"
             aria-label="닫기"
             onClick={() => setSkipOpen(false)}
           />
@@ -130,7 +132,8 @@ export function Composer({
               const operation = t.op(nextMatchDate ?? "");
               const Icon = SKIP_ICONS[t.key];
               return (
-                <button
+                <Button
+                  variant="bare"
                   key={t.key}
                   role="menuitem"
                   onClick={() => {
@@ -142,7 +145,7 @@ export function Composer({
                 >
                   <Icon />
                   {t.label}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -200,10 +203,14 @@ export function Composer({
          * 뺏는다. 무엇을 하는 손잡이인지는 **아이콘이 바뀌는 것**이 말하고, 화면
          * 밖의 이름은 `aria-label`이 갖는다 — 단축키를 글로 알리지 않는다.
          */}
-        <button
+        <Button
+          variant="bare"
           className={hasInput || sendOnly ? "send" : inMatch ? "send" : "skip"}
           onClick={() => {
-            if (hasInput || sendOnly) return void onSend();
+            if (hasInput || sendOnly) {
+              onSend();
+              return;
+            }
             if (inMatch) return liveControl?.toggle();
             setSkipOpen((v) => !v);
           }}
@@ -244,7 +251,7 @@ export function Composer({
           ) : (
             <IconSkip />
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );

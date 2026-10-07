@@ -77,7 +77,7 @@ export function randInt(rng: () => number, min: number, max: number): number {
  * ⚠️ 뽑는 순서와 횟수가 곧 결과다. 추첨·편성이 이 함수 하나만 부르는 한 같은 시드는
  * 같은 대진을 낳는다.
  */
-export function shuffleInPlace<T>(items: T[], rng: () => number): void {
+export function shuffleInPlace(items: unknown[], rng: () => number): void {
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [items[i], items[j]] = [items[j]!, items[i]!];

@@ -216,7 +216,7 @@ function finalMotmOf(
     apps: 1,
     goals: best.goals,
     assists: best.assists,
-    rating: best.rating ?? undefined,
+    rating: best.rating,
   };
 }
 

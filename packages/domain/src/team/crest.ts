@@ -324,13 +324,19 @@ function initialsOf(shortName: string | undefined, id: string): string {
   return fromLabel(shortName ?? "") || fromLabel(id) || INITIALS_FALLBACK;
 }
 
+/** 글자를 코드 포인트로 — 이니셜은 결합 문자가 없는 이름에서 뽑는다 */
+function codePoints(text: string): string[] {
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- 코드 포인트 단위가 의도다 — 결합 문자가 없는 이름을 센다
+  return [...text];
+}
+
 function fromLabel(label: string): string {
   const [head, ...rest] = label.split(WORD_SEPARATOR).filter((word) => word.length > 0);
   if (head === undefined) return "";
   const letters =
     rest.length > 0
-      ? [head, ...rest].map((word) => [...word][0] ?? "")
-      : [...head].slice(0, INITIALS_MAX);
+      ? [head, ...rest].map((word) => codePoints(word)[0] ?? "")
+      : codePoints(head).slice(0, INITIALS_MAX);
   return letters.slice(0, INITIALS_MAX).join("").toUpperCase();
 }
 
@@ -349,9 +355,9 @@ function initialsFontSize(count: number): number {
  */
 interface CrestSubject {
   readonly id: string;
-  readonly shortName?: string;
+  readonly shortName?: string | undefined;
   /** 카탈로그의 공식 색 — 있으면 채움이 이 값이고, 없으면 id 해시다 (team.md §3.1) */
-  readonly colours?: ClubColours;
+  readonly colours?: ClubColours | undefined;
 }
 
 /**
@@ -420,7 +426,7 @@ export interface ClubToneSurface {
   readonly bg: string;
 }
 
-/** web/design-system.md §1의 값. 화면이 토큰을 바꾸면 여기도 따라와야 한다 */
+/** tokens.css 「팔레트」의 값. 화면이 토큰을 바꾸면 여기도 따라와야 한다 */
 export const CLUB_TONE_SURFACE: ClubToneSurface = { panel2: "#1a211c", bg: "#0a0d0b" };
 
 /** 세 색이 다 어두운 무채색이거나 비었을 때의 가는 자리 — `--silver` */
@@ -460,7 +466,7 @@ export function isChromatic(hex: string): boolean {
 }
 
 /**
- * 가는 자리의 색 (web/design-system.md §2 「`--club-hi`의 규칙」).
+ * 가는 자리의 색 (tokens.css 「구단 색」).
  *
  * **띠는 구단의 첫 색이다.** `primary`가 바닥 위 3:1을 그대로 넘으면 그 값 — 흰·빨강·
  * 하늘색·노랑. 유채색인데 어두우면(남색·클라렛) 색상·채도를 지키고 명도만 올린 첫 값.
@@ -543,7 +549,7 @@ interface BandSubject {
 }
 
 /**
- * **리그 안에서 띠는 서로 갈린다** (web/design-system.md §2).
+ * **리그 안에서 띠는 서로 갈린다** (tokens.css 「구단 색」).
  *
  * 같은 빨강·흰 구단이 여섯인 리그에서 띠 여섯이 한 값이면 띠는 아무도 가리지 못한다.
  * 주어진 순서(카탈로그 순서)로 앞선 구단이 제 색을 갖고, 뒤의 구단은 앞선 띠 전부와
@@ -770,7 +776,7 @@ function renderSvg(crest: Omit<Crest, "svg"> & { readonly id: string }): string 
     crest.division === "bordure"
       ? `<path d="${shapePath}" fill="none" stroke="${crest.secondary}" stroke-width="${BORDURE * 2}"/>`
       : "";
-  const glyphs = [...crest.initials];
+  const glyphs = codePoints(crest.initials);
   const fontSize = initialsFontSize(glyphs.length);
   const fitted =
     glyphs.length > 1 ? ` textLength="${INITIALS_WIDTH}" lengthAdjust="spacingAndGlyphs"` : "";

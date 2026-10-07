@@ -18,7 +18,10 @@ import {
  */
 
 /** 오늘 이 자리가 져야 할 역할 대가 — 아침의 자리를 벗어나 있으면 없다 */
-function roleCostOwed(memo: RoleMemo, at: { position: string; roleId?: string } | null): number {
+function roleCostOwed(
+  memo: RoleMemo,
+  at: { position: string; roleId?: string | undefined } | null,
+): number {
   if (!at) return 0;
   /**
    * 자리가 다르면 0이다. 자리 이동 자체에는 적응도 대가가 없고, 다른 자리의 역할은
@@ -40,9 +43,9 @@ function roleCostOwed(memo: RoleMemo, at: { position: string; roleId?: string } 
  * `at`이 null이면 **자리가 없다**(벤치·예비·2군)는 뜻이고, 낸 값은 되돌아온다.
  */
 export function settleRoleCost(
-  slot: { familiarity: number; roleMemo?: RoleMemo },
+  slot: { familiarity: number; roleMemo?: RoleMemo | undefined },
   today: string,
-  at: { position: string; roleId?: string } | null,
+  at: { position: string; roleId?: string | undefined } | null,
 ): void {
   const memo = slot.roleMemo;
   // 날짜가 바뀌면 기준이 새로 잡힌다 — 하루를 보냈으면 몸에 밴 것이다

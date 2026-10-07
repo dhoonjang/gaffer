@@ -314,16 +314,22 @@ export function parseLlmConfig(source: string, label = "config/llm.yml"): LlmCon
     version: parsed.data.version,
     maxRetries,
     evaluators: Object.fromEntries(
-      Object.entries(parsed.data.evaluators ?? {}).map(([name, raw]) => [
-        name,
-        {
-          provider: raw.provider,
-          model: raw.model,
-          timeoutMs: raw.timeout_ms,
-          inputUsdPerMillion: raw.input_usd_per_million,
-          maxRetries,
-        },
-      ]),
+      Object.entries(parsed.data.evaluators ?? {}).flatMap(([name, raw]) =>
+        raw === undefined
+          ? []
+          : [
+              [
+                name,
+                {
+                  provider: raw.provider,
+                  model: raw.model,
+                  timeoutMs: raw.timeout_ms,
+                  inputUsdPerMillion: raw.input_usd_per_million,
+                  maxRetries,
+                },
+              ],
+            ],
+      ),
     ),
     agents: Object.fromEntries(
       AGENT_NAMES.map((agent) => [
@@ -343,7 +349,7 @@ const CONFIG_RELATIVE_PATH = path.join("config", "llm.yml");
  */
 export function findConfigFile(relativePath: string, startDir = process.cwd()): string {
   let current = path.resolve(startDir);
-  while (true) {
+  for (;;) {
     const candidate = path.join(current, relativePath);
     if (existsSync(candidate)) return candidate;
     const parent = path.dirname(current);

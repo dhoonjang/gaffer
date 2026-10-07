@@ -51,17 +51,18 @@ if (args.includes("--list")) {
       ["exec", "vitest", "run", "--config", "vitest.balance.config.ts", ...filters],
       { stdio: "inherit", env, detached: true },
     );
-    let timedOut = false;
+    // 콜백이 세우는 표식 — 흐름 분석이 지역 변수의 재할당을 따라가지 못해 객체에 둔다
+    const deadlineHit: { value: boolean } = { value: false };
     const timer =
       minutes === undefined
         ? undefined
         : setTimeout(() => {
-            timedOut = true;
+            deadlineHit.value = true;
             process.kill(-child.pid!, "SIGKILL");
           }, minutes * 60_000);
     const status = await new Promise<number | null>((done) => child.on("exit", done));
     clearTimeout(timer);
-    if (timedOut) {
+    if (deadlineHit.value) {
       process.stdout.write(
         `\n[balance] ${minutes}분 시한에 끊었다 — 그때까지 온 측정값으로 리포트를 세운다\n`,
       );
@@ -74,6 +75,6 @@ if (args.includes("--list")) {
         `\n[balance] 하네스 ${reported}개 보고 · 이탈 ${breaches.length}건 → ${resolve(reportDir, SUMMARY_FILE)}\n`,
       );
     }
-    process.exitCode = timedOut ? 1 : (status ?? 1);
+    process.exitCode = deadlineHit.value ? 1 : (status ?? 1);
   }
 }

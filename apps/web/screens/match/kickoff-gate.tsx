@@ -12,6 +12,7 @@ import {
 } from "@gaffer/domain";
 import { Crest } from "@/shared/crest";
 import { humanDate } from "@/shared/dateline";
+import { Button } from "@/shared/button";
 
 type GateTeam = MatchView["home"];
 type GateTactics = MatchView["tactics"]["home"];
@@ -69,7 +70,7 @@ export function KickoffGate({
               .filter(Boolean)
               .join(" · ")}
           </span>
-          {/* 홈이 왼쪽·원정이 오른쪽 — 스코어보드·득점과 좌우가 늘 같다 (design-system §2 규칙 4) */}
+          {/* 홈이 왼쪽·원정이 오른쪽 — 스코어보드·득점과 좌우가 늘 같다 (tokens.css 「구단 색」 충돌 규칙 4) */}
           <div className="kg-fixture">
             <FixtureSide team={match.home} venue="홈" rating={match.xiRating.home} />
             <FixtureSide team={match.away} venue="원정" rating={match.xiRating.away} />
@@ -86,8 +87,8 @@ export function KickoffGate({
           </div>
           <ManagerNotes tactics={match.tactics[ours]} />
         </div>
-        <button
-          className="primary-btn"
+        <Button
+          variant="primary"
           autoFocus
           disabled={busy}
           /* 경기의 문도 손잡이다 — 무대는 누름과 함께 바뀌고(match.md §2), 그 턴이
@@ -96,7 +97,7 @@ export function KickoffGate({
           data-testid="kickoff-enter"
         >
           경기장 입장
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -114,8 +115,8 @@ function FixtureSide({ team, venue, rating }: { team: GateTeam; venue: string; r
       <Crest id={team.id} shortName={team.short} colours={team.colours} size={FIXTURE_CREST} />
       <b className="kg-club">{team.name}</b>
       <span className="kg-side-foot">
-        <span className="kg-venue">{venue}</span>
-        {/* 「XI」가 라틴이라 스코어 서체가 한글 옆에 서지 않는다 (design-system §3) */}
+        <span>{venue}</span>
+        {/* 「XI」가 라틴이라 스코어 서체가 한글 옆에 서지 않는다 (tokens.css 「서체」) */}
         <span className="kg-rating">
           XI <b className="fig">{rating}</b>
         </span>

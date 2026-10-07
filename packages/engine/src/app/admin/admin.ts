@@ -48,24 +48,24 @@ export interface AdminResult {
 }
 
 interface CatalogPlayerInputMeta {
-  lorebook?: LorebookContent;
+  lorebook?: LorebookContent | undefined;
   /** 표시 이름 (한글) */
   nameKo: string;
   /** 로마자 — id 슬러그·파생값의 기준 */
-  nameEn?: string;
+  nameEn?: string | undefined;
   birthdate: string;
   /**
    * 국적 — 협회 코드 (`domain/nationality.ts`). 비우면 그 클럽 협회로 선다.
    * `secondNationality`는 빈 문자열이 "지운다"는 뜻이다 — 복수 국적이 아니게 됐다는
    * 편집과 "손대지 않는다"가 갈려야 한다.
    */
-  nationality?: string;
-  secondNationality?: string;
+  nationality?: string | undefined;
+  secondNationality?: string | undefined;
   /** 주 포지션 */
   position: string;
   potential: number;
   /** 실제 주급 (£/주). 비우면 OVR 공식으로 어림한다 */
-  weeklyWage?: number;
+  weeklyWage?: number | undefined;
 }
 /** 16축을 평면 필드로 받는다 (어드민 폼과 1:1) */
 export type CatalogPlayerInput = CatalogPlayerInputMeta & AxisValues;
@@ -77,16 +77,18 @@ export type CatalogPlayerInput = CatalogPlayerInputMeta & AxisValues;
  * 실측을 지워 모델 추정으로 되돌림, 숫자면 그 값. 카탈로그의 주급은 실측이고
  * 없는 것이 기본이라, 0과 "값 없음"이 갈리지 않으면 새 게임 계약이 £0/주가 된다.
  */
-type CatalogPlayerPatch = Partial<Omit<CatalogPlayerInput, "weeklyWage">> & {
-  weeklyWage?: number | null;
+type CatalogPlayerPatch = {
+  [K in keyof Omit<CatalogPlayerInput, "weeklyWage">]?: CatalogPlayerInput[K] | undefined;
+} & {
+  weeklyWage?: number | null | undefined;
 };
 
 /** 선수 한 명의 편집 한 번 — 소속·포지션·수치가 같은 요청에 담긴다 */
 interface CatalogPlayerEdit extends CatalogPlayerPatch {
   /** 옮겨 갈 팀. 지금 소속과 같으면 이동은 없던 일이 된다 */
-  teamId?: string;
+  teamId?: string | undefined;
   /** 가능 포지션 전체 교체 (멀티 포지션) */
-  positions?: PlayerPosition[];
+  positions?: PlayerPosition[] | undefined;
 }
 
 /** 어드민 목록 행 — 파생값(나이·OVR·주 포지션)을 표시용으로 함께 담는다 */

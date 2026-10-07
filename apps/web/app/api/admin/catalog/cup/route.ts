@@ -13,7 +13,7 @@ export function GET() {
 }
 
 /** 컵 카탈로그를 시드 기본값으로 되돌린다 (유럽·국내 함께) */
-export const DELETE = adminWrite(async function () {
+export const DELETE = adminWrite(function () {
   const res = adminResetCupCatalog();
   const { europe, domestic } = adminCupCatalog();
   return NextResponse.json({

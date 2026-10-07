@@ -30,6 +30,7 @@ export function requestBoard(state: GameState, input: RequestBoardInput): Comman
     return { ok: false, message: "현재 맡은 구단의 요청만 결정할 수 있습니다" };
   if (existing && (existing.status === "approved" || existing.status === "rejected"))
     return { ok: false, message: "이미 끝난 요청입니다" };
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- 요청 종류는 지금 하나뿐이다 — 갈래가 늘면 이 비교가 일한다
   if (existing && (existing.kind !== input.kind || existing.amount !== input.amount))
     return { ok: false, message: "원래 요청의 종류와 금액을 유지해야 합니다" };
   const respondOn = input.respondOn ?? state.date;
@@ -68,6 +69,7 @@ export function requestBoard(state: GameState, input: RequestBoardInput): Comman
   if (input.decision && input.decision !== "rejected") {
     if ((request.granted ?? 0) > request.amount)
       return { ok: false, message: "승인량이 요청량보다 큽니다" };
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- 요청 종류는 지금 하나뿐이다 — 준공일은 경기장 요청에만 붙는다
     if (request.kind === "stadium" && (!request.deliversOn || request.deliversOn <= respondOn))
       return { ok: false, message: "착공 이후의 준공일이 필요합니다" };
     if (input.decision === "approved" && respondOn === state.date) {

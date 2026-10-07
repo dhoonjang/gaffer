@@ -11,6 +11,7 @@ import {
   SetTransferListingSchema,
   ageOf,
   naturalPositionsOf,
+  registrationBlockText,
   type TransferListingView,
   type Negotiation,
   type NegotiationConfirmationPayload,
@@ -205,7 +206,7 @@ export function actNegotiation(
     if (!p || p.teamId !== n.buyerId) return fail("현재 소속이 변경되었습니다");
     if (n.kind === "transfer" && !isTransferWindow(state.date)) return fail("등록 기간이 아닙니다");
     const allowed = canRegisterFor(state, p, n.buyerId);
-    if (!allowed.ok) return fail(`선수단 등록 제한: ${allowed.block}`);
+    if (!allowed.ok) return fail(`선수단 등록 제한: ${registrationBlockText(allowed.block)}`);
     n.registration = "registered";
     const contract = activeContract(state, p.id);
     if (contract) contract.registrationStatus = "registered";

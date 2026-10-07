@@ -3,6 +3,7 @@
 import { useCallback, useState, type KeyboardEvent } from "react";
 import type { CSSProperties, PointerEvent, ReactNode, Ref } from "react";
 import { nextInDirection, type MarkerDirection } from "@/shared/pitch-layout";
+import { Button } from "./button";
 
 /**
  * ── 전술판 ────────────────────────────────────────────────
@@ -104,34 +105,34 @@ type PitchRoleTag = { abbr: string; ko: string; desc: string };
 
 type PitchChipProps = {
   /** 만질 수 있는 칩은 버튼이다 — 상대 팀 칩처럼 읽기만 하는 것은 `span` */
-  as?: "button" | "span";
+  as?: "button" | "span" | undefined;
   /** 지금 서 있는 자리 (좌표에서 나온 코드) */
   code: string | null;
-  squadNumber?: number | null;
-  roleTag?: PitchRoleTag | null;
+  squadNumber?: number | null | undefined;
+  roleTag?: PitchRoleTag | null | undefined;
   /**
    * 완장 — 주장·부주장이 같은 자리에 같은 크기로 선다 (people.md §5-1).
    * 리더 그룹은 칩에 세우지 않는다: 열한 자리 중 다섯에 표식이 서면 그것은
    * 표식이 아니라 배경이 된다. 서열은 명단 표가 낸다.
    */
-  captain?: "captain" | "vice" | null;
+  captain?: "captain" | "vice" | null | undefined;
   /** 이름 — 칩에 그대로 선다(안 들어가면 접힌다). 빈 자리는 `null` */
   name: string | null;
   /** 이 자리에서 내는 전력 */
   ovr: ReactNode;
   /** 전력 뒤에 서는 표식 — 오차·부상·경고 */
-  metaExtra?: ReactNode;
+  metaExtra?: ReactNode | undefined;
   /** 상태 클래스 (`g-mf` · `selected` · `theirs` …) — 구조는 여기가, 상태는 부르는 쪽이 */
-  variant?: string;
-  style?: CSSProperties;
-  title?: string;
-  testId?: string;
+  variant?: string | undefined;
+  style?: CSSProperties | undefined;
+  title?: string | undefined;
+  testId?: string | undefined;
   /** 방향키 묶음의 정지점인가 — `useRovingMarkers`가 낸 값 (버튼일 때만 뜻이 있다) */
-  tabIndex?: number;
+  tabIndex?: number | undefined;
   /** 그 묶음이 자기를 되찾는 표식 — 같은 훅이 읽는다 */
-  markerId?: string;
-  onPointerDown?: (e: PointerEvent<HTMLElement>) => void;
-  onClick?: () => void;
+  markerId?: string | undefined;
+  onPointerDown?: ((e: PointerEvent<HTMLElement>) => void) | undefined;
+  onClick?: (() => void) | undefined;
 };
 
 /**
@@ -191,7 +192,8 @@ export function PitchChip({
   const className = `pitch-slot pitch-chip${variant ? ` ${variant}` : ""}`;
   if (as === "button")
     return (
-      <button
+      <Button
+        variant="bare"
         className={className}
         style={style}
         title={title}
@@ -202,7 +204,7 @@ export function PitchChip({
         onClick={onClick}
       >
         {body}
-      </button>
+      </Button>
     );
   return (
     <span className={className} style={style} title={title} data-testid={testId}>

@@ -149,7 +149,7 @@ describe("오피스 뷰 — 달력 (일정 축)", () => {
 
     // 유저 팀 경기만 (리그 38 + 대항전)
     expect(cal.entries.filter((e) => e.type === "match")).toHaveLength(userFixtureCount(state));
-    expect(cal.entries.some((e) => e.title?.includes("패스 훈련"))).toBe(true);
+    expect(cal.entries.some((e) => e.title.includes("패스 훈련"))).toBe(true);
   });
 
   it("일지는 저장하지 않고 기록 테이블에서 파생된다", () => {

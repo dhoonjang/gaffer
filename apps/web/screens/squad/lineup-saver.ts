@@ -48,7 +48,7 @@ export function createLineupSaver(delayMs: number = AUTOSAVE_MS): LineupSaver {
 
   const run = (save: LineupSave): Promise<LineupSaveOutcome> => {
     const tracked = save()
-      .catch((e): LineupSaveOutcome => ({
+      .catch((e: unknown): LineupSaveOutcome => ({
         ok: false,
         error: e instanceof Error ? e.message : String(e),
       }))

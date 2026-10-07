@@ -280,7 +280,7 @@ describe("성장은 곡선을 타고 쌓인다 — 판정 한 번이 곧 한 칸
     ]);
     expect(player.attributes.stamina, "서른 살이 한 번에 올랐다").toBe(before);
     // 다만 없던 일이 되지는 않는다 — 못 채운 몫이 남는다
-    expect(player.growthCarry?.stamina ?? 0).toBeGreaterThan(0);
+    expect(player.growthCarry.stamina ?? 0).toBeGreaterThan(0);
 
     // 같은 판정을 계속 받으면 언젠가는 한 칸이 된다 — 구간마다 결산이 하나씩 온다
     for (let i = 0; i < 30 && player.attributes.stamina === before; i++) {
@@ -295,7 +295,7 @@ describe("성장은 곡선을 타고 쌓인다 — 판정 한 번이 곧 한 칸
     }
     expect(player.attributes.stamina, "아무리 훈련해도 안 올랐다").toBe(before + 1);
     // 한 칸이 된 뒤에는 남은 몫만 들고 간다
-    expect(player.growthCarry?.stamina ?? 0).toBeLessThan(1);
+    expect(player.growthCarry.stamina ?? 0).toBeLessThan(1);
   });
 
   it("유망주는 한 주치 결산 한 번에 한 칸 오른다", () => {
@@ -380,9 +380,9 @@ describe("결산의 폭은 세션 수에 비례한다", () => {
     ]);
 
     expect(player.attributes.stamina, "하루치 다섯 번이 한 칸을 넘겼다").toBe(85);
-    expect(player.growthCarry?.stamina ?? 0, "하루치 결산이 아무것도 안 남겼다").toBeGreaterThan(0);
-    expect(player.growthCarry?.stamina ?? 0, "감독의 턴 페이스가 성장 속도를 갈랐다").toBeCloseTo(
-      player.growthCarry?.pace ?? 0,
+    expect(player.growthCarry.stamina ?? 0, "하루치 결산이 아무것도 안 남겼다").toBeGreaterThan(0);
+    expect(player.growthCarry.stamina ?? 0, "감독의 턴 페이스가 성장 속도를 갈랐다").toBeCloseTo(
+      player.growthCarry.pace ?? 0,
       10,
     );
   });
@@ -904,7 +904,7 @@ describe("한 칸의 규칙 (applyAttributeStep)", () => {
     const moved = step(state, player, "stamina", 1);
     expect(moved).toEqual({ axis: "stamina", step: 1, value: 61 });
     // 캐리가 두 칸어치가 돼도 장부는 한 칸만 움직이고, 남은 몫은 그대로 들고 간다
-    expect(player.growthCarry!.stamina).toBeGreaterThan(1);
+    expect(player.growthCarry.stamina).toBeGreaterThan(1);
     expect(step(state, player, "stamina", 1)!.value).toBe(62);
     expect(player.attributes.stamina).toBe(62);
   });
@@ -946,7 +946,7 @@ describe("한 칸의 규칙 (applyAttributeStep)", () => {
       }),
     ).toBeNull();
     expect(player.attributes.stamina).toBe(before);
-    expect(player.growthCarry!.stamina ?? 0).toBe(0);
+    expect(player.growthCarry.stamina ?? 0).toBe(0);
   });
 
   it("잠재력은 **오를 때만** 막는다 — 이미 넘은 선수도 늙는다", () => {
@@ -954,7 +954,7 @@ describe("한 칸의 규칙 (applyAttributeStep)", () => {
     player.attributes.stamina = 70;
     player.attributes.potential = 70;
     expect(step(state, player, "stamina", 1), "잠재력에 닿았는데 올랐다").toBeNull();
-    expect(player.growthCarry!.stamina ?? 0, "닿은 뒤에도 캐리가 쌓인다").toBe(0);
+    expect(player.growthCarry.stamina ?? 0, "닿은 뒤에도 캐리가 쌓인다").toBe(0);
 
     // 잠재력 위에 있는 능력치도 내려간다 — 천장은 내려가는 데 무의미하다
     player.attributes.pace = 90;
@@ -981,14 +981,14 @@ describe("한 칸의 규칙 (applyAttributeStep)", () => {
     const carryAfterGain = (factor: number) => {
       player.growthCarry = {};
       step(state, player, "stamina", 1, { factor });
-      return player.growthCarry!.stamina ?? 0;
+      return player.growthCarry.stamina ?? 0;
     };
     expect(carryAfterGain(0.5)).toBeCloseTo(carryAfterGain(1) * 0.5, 12);
 
     const carryAfterDecline = (factor: number) => {
       player.growthCarry = {};
       step(state, player, "stamina", -1, { factor });
-      return player.growthCarry!.stamina ?? 0;
+      return player.growthCarry.stamina ?? 0;
     };
     expect(carryAfterDecline(0.5)).toBe(carryAfterDecline(1));
     expect(carryAfterDecline(1)).toBeLessThan(0);
@@ -1018,7 +1018,7 @@ describe("훈련 결산 카드", () => {
     ])!;
 
     expect(state.trainingReports, "카드가 장부에 서지 않았다").toHaveLength(1);
-    expect(state.trainingReports![0]).toBe(report);
+    expect(state.trainingReports[0]).toBe(report);
     expect(report.from).toBe(brief.from);
     expect(report.to).toBe(brief.to);
     expect(report.sessions).toBe(brief.sessions.length);

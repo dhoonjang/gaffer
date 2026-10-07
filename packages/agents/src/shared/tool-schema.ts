@@ -36,7 +36,7 @@ function described(node: JsonSchemaNode, schema: z.ZodTypeAny): JsonSchemaNode {
 
 function derive(schema: z.ZodTypeAny, preserveNulls = false): JsonSchemaNode {
   if (schema instanceof z.ZodOptional)
-    return described(derive(schema.unwrap(), preserveNulls), schema);
+    return described(derive(schema.unwrap() as z.ZodTypeAny, preserveNulls), schema);
   /**
    * `null`과 기본값은 **관용이지 선택지가 아니다.** `.nullish()`는 없는 것을 `null`로
    * 적어 보내는 모델을 반려하지 않으려고 있고, `.default()`는 빠진 자리를 Zod가 채운다
@@ -45,31 +45,40 @@ function derive(schema: z.ZodTypeAny, preserveNulls = false): JsonSchemaNode {
    * 모델이 볼 것은 안쪽 갈래 하나이고, 빼도 된다는 것은 `required`가 말한다.
    */
   if (schema instanceof z.ZodNullable) {
-    const inner = derive(schema.unwrap(), preserveNulls);
+    const inner = derive(schema.unwrap() as z.ZodTypeAny, preserveNulls);
     return described(
       preserveNulls
         ? {
             ...inner,
             type: [inner.type, "null"],
-            ...(Array.isArray(inner.enum) ? { enum: [...inner.enum, null] } : {}),
+            ...(Array.isArray(inner.enum) ? { enum: [...(inner.enum as unknown[]), null] } : {}),
           }
         : inner,
       schema,
     );
   }
   if (schema instanceof z.ZodDefault)
-    return described(derive(schema.removeDefault(), preserveNulls), schema);
+    return described(derive(schema.removeDefault() as z.ZodTypeAny, preserveNulls), schema);
   if (schema instanceof z.ZodString) return described(stringNode(schema), schema);
   if (schema instanceof z.ZodNumber) return described(numberNode(schema), schema);
   if (schema instanceof z.ZodBoolean) return described({ type: "boolean" }, schema);
   if (schema instanceof z.ZodEnum) {
-    return described({ type: "string", enum: [...schema.options] }, schema);
+    return described({ type: "string", enum: [...(schema.options as string[])] }, schema);
   }
-  if (schema instanceof z.ZodArray) return described(arrayNode(schema, preserveNulls), schema);
-  if (schema instanceof z.ZodObject) return described(objectNode(schema, preserveNulls), schema);
+  if (schema instanceof z.ZodArray)
+    return described(arrayNode(schema as z.ZodArray<z.ZodTypeAny>, preserveNulls), schema);
+  if (schema instanceof z.ZodObject)
+    return described(objectNode(schema as z.ZodObject<z.ZodRawShape>, preserveNulls), schema);
   if (schema instanceof z.ZodDiscriminatedUnion)
-    return described(objectUnionNode(schema.options, preserveNulls), schema);
-  if (schema instanceof z.ZodUnion) return described(unionNode(schema, preserveNulls), schema);
+    return described(
+      objectUnionNode(schema.options as readonly z.ZodTypeAny[], preserveNulls),
+      schema,
+    );
+  if (schema instanceof z.ZodUnion)
+    return described(
+      unionNode(schema as z.ZodUnion<readonly [z.ZodTypeAny, ...z.ZodTypeAny[]]>, preserveNulls),
+      schema,
+    );
   if (schema instanceof z.ZodLiteral) return described(literalNode(schema.value), schema);
   throw new Error(`도구 스키마로 옮길 수 없는 갈래입니다: ${schema.constructor.name}`);
 }

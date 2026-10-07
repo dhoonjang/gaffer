@@ -427,8 +427,8 @@ describe("지나간 시즌의 개인 순위 (competition.md §2 「개인 순위
   });
 
   it("리그의 평점 문턱은 결산 스냅샷의 최종 표에서 나온다", () => {
-    const rows = state.history?.[0]?.leagues.find((l) => l.leagueId === league)?.rows;
-    expect(rows?.find((r) => r.teamId === state.userTeamId)?.record?.played).toBe(PAST_PLAYED);
+    const rows = state.history[0]?.leagues.find((l) => l.leagueId === league)?.rows;
+    expect(rows?.find((r) => r.teamId === state.userTeamId)?.record.played).toBe(PAST_PLAYED);
     const board = leaderboardOf(state, league, "rating", 10, PAST).map((r) => r.gamePlayerId);
     expect(board).toContain(one!.id);
     // 평점이 더 높아도 문턱 아래다 — 이번 시즌의 표와 같은 자다
@@ -505,7 +505,7 @@ describe("시즌 전환 (season.md §6)", () => {
     const state = createTestGame(5);
     transitionSeason(state);
     // 전환 직후엔 후보만 서 있고 계약도 원장 줄도 없다
-    expect((state.youthCandidates ?? []).length).toBeGreaterThan(0);
+    expect(state.youthCandidates.length).toBeGreaterThan(0);
     expect(
       state.moves.filter((m) => m.kind === "youth" && m.toTeamId === state.userTeamId),
     ).toHaveLength(0);
@@ -904,7 +904,7 @@ describe("18팀 리그의 시즌 리뷰", () => {
     score: (homeTeamId: string, awayTeamId: string) => [number, number],
   ): void {
     for (const match of state.matches) {
-      if (match.competitionId !== leagueId || (match.stage ?? "league") !== "league") continue;
+      if (match.competitionId !== leagueId || match.stage !== "league") continue;
       const [homeGoals, awayGoals] = score(match.homeTeamId, match.awayTeamId);
       match.result = resultOf({ homeGoals, awayGoals });
     }
@@ -1043,7 +1043,7 @@ describe("18팀 리그의 시즌 리뷰", () => {
 
     reviewSeason(state);
 
-    const paid = financeOf(state, us).prizesPaid ?? [];
+    const paid = financeOf(state, us).prizesPaid;
     expect(paid).toContain(`prize:competition:dfbpokal:winner:S${state.season}`);
     expect(paid).toContain(`prize:competition:ucl:winner:S${state.season}`);
     const prizes = financeOf(state, us).ledger.filter((e) => e.label.includes("우승 상금"));
@@ -1052,7 +1052,7 @@ describe("18팀 리그의 시즌 리뷰", () => {
       domesticCupById("dfbpokal")!.prize.winner,
     ]);
     // 준우승 상금도 그 구단의 몫이다
-    expect(financeOf(state, loser).prizesPaid ?? []).toContain(
+    expect(financeOf(state, loser).prizesPaid).toContain(
       `prize:competition:dfbpokal:runner-up:S${state.season}`,
     );
 
@@ -1072,7 +1072,7 @@ describe("18팀 리그의 시즌 리뷰", () => {
 
     recordSeasonHistory(state);
 
-    const row = state.history?.find((h) => h.season === state.season);
+    const row = state.history.find((h) => h.season === state.season);
     expect(row?.teamId).toBe(us);
     const table = row?.leagues.find((l) => l.leagueId === "bundesliga");
     const standings = computeStandings(state, "bundesliga");
@@ -1105,7 +1105,7 @@ describe("18팀 리그의 시즌 리뷰", () => {
     expect(ours.every((m) => m.opponentTeamId !== us)).toBe(true);
 
     recordSeasonHistory(state);
-    expect(state.history?.filter((h) => h.season === state.season)).toHaveLength(1);
+    expect(state.history.filter((h) => h.season === state.season)).toHaveLength(1);
   });
 
   it("AI 구단의 우승도 원장에 서고, 그것이 감독의 평판을 움직이지는 않는다", () => {
@@ -1180,7 +1180,7 @@ describe("풀 시즌 통합 — 리그 완주 후 커리어 기록·전환", () 
      * 시상은 **리그가 주는 상**이다 — 감독의 성적과 무관하게 그해 리그전을 돈
      * 리그마다 서고, 승강을 적용하기 전의 소속으로 적힌다 (season.md §6).
      */
-    const scorer = state.awards?.find(
+    const scorer = state.awards.find(
       (a) => a.season === 1 && a.code === "top-scorer" && a.competitionId === "epl",
     );
     expect(scorer).toBeDefined();
@@ -1484,7 +1484,7 @@ describe("유스 인테이크 (season.md §6)", () => {
   })();
 
   it("후보는 우리 팀에만 서고, AI 구단은 전환이 그 자리에서 계약한다", () => {
-    const rows = READ.youthCandidates ?? [];
+    const rows = READ.youthCandidates;
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(row.teamId).toBe(READ.userTeamId);
     // 후보는 아직 세계에 없다 — 명단에도 계약에도 없어야 한다
@@ -1508,7 +1508,7 @@ describe("유스 인테이크 (season.md §6)", () => {
     const seen = new Map<string, string>();
     const rows = [
       ...READ.players.map((p) => ({ name: p.name, where: p.teamId })),
-      ...(READ.youthCandidates ?? []).map((row) => ({ name: row.player.name, where: "후보" })),
+      ...READ.youthCandidates.map((row) => ({ name: row.player.name, where: "후보" })),
     ];
     for (const { name, where } of rows) {
       const first = seen.get(name);
@@ -1525,7 +1525,7 @@ describe("유스 인테이크 (season.md §6)", () => {
   });
 
   it("기한은 선수단 소집일이고, 코어가 채울 자리가 앞에 선다", () => {
-    const rows = READ.youthCandidates ?? [];
+    const rows = READ.youthCandidates;
     expect(youthIntakeDeadline(READ)).toBe(READ.calendar.squadReturn);
     for (const row of rows) expect(row.deadline).toBe(youthIntakeDeadline(READ));
     // `autoSign`은 앞에서부터 연속이다 — 뒤섞이면 "앞에서부터 채운다"가 거짓이 된다
@@ -1536,7 +1536,7 @@ describe("유스 인테이크 (season.md §6)", () => {
 
   /** 후보의 안개는 `(seed, 선수 id)` 해시라 몇 번을 물어도 같은 값이다 (player.md §9.1) */
   it("후보의 종합과 성장 가능성은 몇 번을 물어도 같다", () => {
-    for (const row of READ.youthCandidates ?? []) {
+    for (const row of READ.youthCandidates) {
       const fog = youthCandidateFog(READ.seed, row.player);
       expect(youthCandidateFog(READ.seed, row.player)).toEqual(fog);
     }
@@ -1545,7 +1545,7 @@ describe("유스 인테이크 (season.md §6)", () => {
   it("답하지 않으면 코어가 앞에서부터 정해진 수만큼 계약한다", () => {
     const state = createTestGame(5);
     transitionSeason(state);
-    const rows = state.youthCandidates ?? [];
+    const rows = state.youthCandidates;
     const auto = rows.filter((row) => row.autoSign).map((row) => row.player.id);
     const digest: string[] = [];
     settleYouthIntake(state, digest);
@@ -1585,7 +1585,7 @@ describe("유스 인테이크 (season.md §6)", () => {
     transitionSeason(state);
     expect(userPlayers(state).filter((p) => groupOf(p) === "GK")).toHaveLength(0);
 
-    const rows = state.youthCandidates ?? [];
+    const rows = state.youthCandidates;
     const outfield = rows.find((row) => groupOf(row.player) !== "GK");
     expect(outfield).toBeTruthy();
     const result = signYouth(state, { playerIds: [outfield!.player.id] });
@@ -1709,7 +1709,7 @@ describe("시즌 예상 순위 (season.md §2)", () => {
     const fresh = createTestGame();
     const stood = standPredictions(fresh);
     expect(stood.length, "리그가 한 줄도 서지 않았다").toBeGreaterThan(0);
-    const rows = structuredClone(fresh.predictions ?? []);
+    const rows = structuredClone(fresh.predictions);
     // 스쿼드가 달라져도 이미 선 줄은 움직이지 않는다 — 예상을 결과로 고쳐 쓰지 않는다
     fresh.players = fresh.players.filter((p) => p.teamId !== fresh.userTeamId);
     expect(standPredictions(fresh)).toEqual([]);

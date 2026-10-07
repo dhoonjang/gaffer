@@ -75,7 +75,7 @@ export function buildMatchBrief(state: GameState): string {
 export function armbandLine(state: GameState): string {
   const squad = playersOf(state, state.userTeamId);
   const captain = squad.find((p) => p.isCaptain);
-  const vice = squad.find((p) => p.isViceCaptain === true);
+  const vice = squad.find((p) => p.isViceCaptain);
   return (
     `완장: 주장 ${captain ? playerName(state, captain.id) : "없음"} · ` +
     `부주장 ${vice ? playerName(state, vice.id) : "없음"}`

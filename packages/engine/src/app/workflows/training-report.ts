@@ -23,9 +23,9 @@ import {
   TRAINING_ATTR_CAP,
   trainingSlots,
   settlementWeeks,
-  TrainedSession,
-  TrainingBrief,
-  TrainingOutcome,
+  type TrainedSession,
+  type TrainingBrief,
+  type TrainingOutcome,
   teamAxesOf,
   allowedAxesFor,
 } from "../../players/training-report";

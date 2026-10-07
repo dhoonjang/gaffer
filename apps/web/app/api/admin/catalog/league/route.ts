@@ -69,7 +69,7 @@ export const POST = adminWrite(async function (request: Request) {
 });
 
 /** 리그 카탈로그를 시드 기본값으로 되돌린다 */
-export const DELETE = adminWrite(async function () {
+export const DELETE = adminWrite(function () {
   const res = adminResetLeagueCatalog();
   return NextResponse.json(payload(res.message));
 });

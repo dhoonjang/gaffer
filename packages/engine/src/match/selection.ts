@@ -1,4 +1,4 @@
-import type { Formation, GamePlayer, TacticAssignment } from "@gaffer/domain";
+import type { Formation, GamePlayer, TacticAssignment, BoardPoint } from "@gaffer/domain";
 import {
   playerOverall,
   DEFAULT_FORMATION,
@@ -259,7 +259,7 @@ export function buildAssignments(
   preferred?: readonly string[],
   customLayout?: {
     slots: readonly string[];
-    points: readonly import("@gaffer/domain").BoardPoint[];
+    points: readonly BoardPoint[];
   },
 ): TacticAssignment[] {
   // 프리셋은 새 게임 초기화 전용이다. 시즌 중 재구성은 저장된 실제 좌표를 넘긴다.

@@ -101,7 +101,7 @@ export type GameTeam = z.infer<typeof GameTeamSchema>;
 const HexColourSchema = z.string().regex(/^#[0-9a-f]{6}$/);
 
 /**
- * 구단의 공식 색 (team.md §3.1 · web/design-system.md §2).
+ * 구단의 공식 색 (team.md §3.1 · tokens.css 「구단 색」).
  *
  * 값은 카탈로그가 공식 값 그대로 갖는다 — 어두운 화면에서 안 보이는 남색·검정은
  * 화면이 `clubTonesOf`로 밝힌 사본을 쓰고 여기 값은 손대지 않는다. `accent`는 가는
@@ -113,7 +113,7 @@ export const ClubColoursSchema = z.object({
   accent: z.union([HexColourSchema, z.literal("")]),
   /**
    * 띠(`--club-hi`) — 카탈로그가 1부 리그 안에서 서로 갈리도록 재어 붙인 **파생값**이다
-   * (`separatedBandsOf` · web/design-system.md §2). 공식 값이 아니고 색 표에도 없다.
+   * (`separatedBandsOf` · tokens.css 「구단 색」). 공식 값이 아니고 색 표에도 없다.
    */
   band: HexColourSchema.optional(),
 });

@@ -250,7 +250,8 @@ export function applyInstructionBatch(
             }
             const current = draft.developmentFocus;
             if (mode === "clear") input[field] = [];
-            else if (mode === "add") input[field] = [...new Set([...current, ...selected])];
+            else if (mode === "add")
+              input[field] = [...new Set([...current, ...(selected as unknown[])])];
             else if (mode === "remove")
               input[field] = current.filter((id) => !selected.includes(id));
             delete input.listMode;
@@ -314,8 +315,8 @@ async function runInstructions(
   said: string,
   options: {
     agent: InterpreterAgent;
-    evaluator?: GameEvaluator;
-    boardMoves?: readonly BoardMove[];
+    evaluator?: GameEvaluator | undefined;
+    boardMoves?: readonly BoardMove[] | undefined;
   },
 ): Promise<InstructionOutcome> {
   if (!said.trim()) return { notes: [], rejected: false, applied: 0 };
@@ -415,8 +416,8 @@ export function createInstructionTool(
     name: string;
     agent: InterpreterAgent;
     description: string;
-    said?: string;
-    boardMoves?: readonly BoardMove[];
+    said?: string | undefined;
+    boardMoves?: readonly BoardMove[] | undefined;
     allowed?: () => { ok: boolean; message: string } | undefined;
   },
 ): GameToolSpec {

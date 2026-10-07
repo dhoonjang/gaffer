@@ -18,6 +18,10 @@ import type {
   TeamFinance,
   TeamTactics,
   TrainingReport,
+  BoardPoint,
+  LorebookInjection,
+  RoleMemo,
+  TacticsSpec,
 } from "@gaffer/domain";
 import {
   playerOverall,
@@ -170,7 +174,7 @@ export interface ChatTurn {
   cards?: CardMark[];
   /**
    * 이 턴 앞에서 **코어가 굴린 시간이 남긴 사건들** — 화면이 사건 하나를 카드 하나로
-   * 세운다 (overview.md §2 · web/design-system.md §6).
+   * 세운다 (overview.md §2 · apps/web/screens/chat/chat.tsx `TickEvents`).
    *
    * tick의 사건이라 호출 칩이 없어 턴에 남는다. 한
    * 문자열로 이어 붙이면 화면이 되쪼갤 수 없다. 카드가 서는 자리는 장면보다 **앞**이다 —
@@ -178,7 +182,7 @@ export interface ChatTurn {
    */
   events?: TickEvent[];
   /** Exact book snapshots sent with this input; UI does not render prompt metadata. */
-  lorebook?: import("@gaffer/domain").LorebookInjection[];
+  lorebook?: LorebookInjection[];
   /**
    * **경기 중에 오간 말인가** — 이력에서 중계와 평시를 가르는 표식.
    *
@@ -193,7 +197,7 @@ export interface ChatTurn {
   inMatch?: boolean;
   /**
    * GM이 이 턴 끝에 낸 **감독의 다음 말 한 줄** — 입력창의 placeholder가 된다
-   * (docs/agents/agents.md §2 · docs/web/design-system.md §6).
+   * (docs/agents/agents.md §2 · apps/web/screens/chat/composer.tsx `suggestion`).
    *
    * 감독이 한 말이 아니다. 그래서 `model` 턴에만 있고, 이력·압축 브리프·해석기 입력
    * 어디에서도 읽지 않는다 — 읽는 것은 화면 하나다. 세이브에 남는 이유는 재개한 화면이
@@ -290,14 +294,14 @@ export interface PendingMatch {
    * 조정이 깎은 값을 그 경기 한 번의 대응으로 되돌리기 위해서다.
    */
   tacticsBefore: {
-    spec: import("@gaffer/domain").TacticsSpec;
+    spec: TacticsSpec;
     assignments: Array<{
       playerId: string;
       position: string;
-      point?: import("@gaffer/domain").BoardPoint;
+      point?: BoardPoint;
       roleId?: string;
       familiarity: number;
-      roleMemo?: import("@gaffer/domain").RoleMemo;
+      roleMemo?: RoleMemo;
     }>;
   };
   /**

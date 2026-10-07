@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "./modal";
 import type { CatalogPlayer, CatalogResponse, CatalogTeam } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 팀 명단 창 — 팀 목록의 스쿼드 칸에서 열린다.
@@ -43,7 +44,7 @@ export function SquadModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ teamId }),
       });
-      const data: CatalogResponse = await res.json();
+      const data = (await res.json()) as CatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "이동 실패");
       onMoved(data);
       setMsg(data.message ?? null);
@@ -62,9 +63,9 @@ export function SquadModal({
       subtitle={`${team.leagueName} · ${loaded ? `${players.length}명` : "…"}`}
       onClose={onClose}
       footer={
-        <button className="ghost-btn" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose}>
           닫기
-        </button>
+        </Button>
       }
     >
       {msg && (

@@ -233,7 +233,7 @@ function thinkingLevel(level: GoogleAgentConfig["thinkingLevel"]): ThinkingLevel
       return ThinkingLevel.MEDIUM;
     case "low":
       return ThinkingLevel.LOW;
-    default:
+    case "minimal":
       return ThinkingLevel.MINIMAL;
   }
 }

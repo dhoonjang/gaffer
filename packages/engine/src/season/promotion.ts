@@ -58,6 +58,7 @@ export function setLeague(state: GameState, teamId: string, leagueId: string): v
   const map = (state.leagueOf ??= {});
   // 세이브가 복사한 원 소속과 같으면 항목을 두지 않는다 — 지금 카탈로그와 견주면
   // 어드민의 리그 이동 편집이 진행 중인 세이브의 승강 기록을 지운다
+
   if (catalogLeagueIn(state, teamId) === leagueId) delete map[teamId];
   else map[teamId] = leagueId;
 }

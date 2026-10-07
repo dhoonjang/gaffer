@@ -72,16 +72,16 @@ export function kickoffAt(date: string, time?: string): number {
 
 /** 두 경기 사이의 휴식 시간(시간 단위, 절댓값) */
 export function restHours(
-  a: { date: string; time?: string },
-  b: { date: string; time?: string },
+  a: { date: string; time?: string | undefined },
+  b: { date: string; time?: string | undefined },
 ): number {
   return Math.abs(kickoffAt(b.date, b.time) - kickoffAt(a.date, a.time)) / 3_600_000;
 }
 
 /** 이 둘을 한 팀이 다 뛰면 휴식이 모자란가 */
 export function tooClose(
-  a: { date: string; time?: string },
-  b: { date: string; time?: string },
+  a: { date: string; time?: string | undefined },
+  b: { date: string; time?: string | undefined },
 ): boolean {
   return restHours(a, b) < MIN_REST_HOURS;
 }

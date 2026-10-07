@@ -44,7 +44,7 @@ export async function runReaderPipeline(options: {
   llm: GameLLM;
   user: string;
   schema: JsonObjectSchema;
-  evaluator?: GameEvaluator;
+  evaluator?: GameEvaluator | undefined;
 }): Promise<{
   reading: MatchReaderOutput;
   attempts: number;
@@ -72,9 +72,9 @@ export async function runReaderPipeline(options: {
     }
     return candidate;
   });
-  const points = report.points ?? [];
+  const points = report.points;
   const evaluations: EvaluationResult[] = [];
-  let sheet = report.sheet ?? [];
+  let sheet = report.sheet;
   if (options.evaluator && sheet.length > 0) {
     const questions: Record<string, ScoreQuestion> = {};
     sheet.forEach((line, index) => {

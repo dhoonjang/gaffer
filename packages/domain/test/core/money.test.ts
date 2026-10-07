@@ -7,7 +7,7 @@ import {
   formatScore,
 } from "@gaffer/domain";
 
-/** 표기의 자 — 하나씩 (money.ts · web/design-system.md §3 「숫자와 표기」) */
+/** 표기의 자 — 하나씩 (money.ts · tokens.css 「숫자와 표기」) */
 
 const HAIR = "\u200A";
 const EN_DASH = "\u2013";

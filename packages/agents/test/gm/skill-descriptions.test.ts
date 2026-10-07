@@ -418,7 +418,7 @@ describe("같은 종류의 인자는 같은 검증을 지난다", () => {
   it("필수 인자는 전부 선언된 인자다", () => {
     for (const tool of [...TOOLS, ...OUTPUT_SCHEMAS]) {
       for (const [, node] of [["", tool.inputSchema] as const, ...walk(tool.inputSchema)]) {
-        const declared = Object.keys((node.properties ?? {}) as Record<string, unknown>);
+        const declared = Object.keys(node.properties ?? {});
         for (const key of (node.required ?? []) as string[]) {
           expect(declared, `${tool.name}.${key}`).toContain(key);
         }

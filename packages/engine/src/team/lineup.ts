@@ -339,12 +339,12 @@ function matchdaySquadFloor(): string {
 interface LineupSlotInput {
   playerId: string;
   /** 이 전술에서 맡는 포지션 — 생략 시 포메이션 슬롯 기본값 */
-  position?: string;
+  position?: string | undefined;
   /**
    * 전술판 좌표 (자유 배치) — 주면 **포지션은 이 좌표에서 파생**하고 position은 무시한다.
    * 코드와 좌표가 어긋나는 배치를 애초에 만들지 않기 위해서다 (클라이언트를 믿지 않는다).
    */
-  point?: BoardPoint;
+  point?: BoardPoint | undefined;
 }
 
 /**
@@ -375,10 +375,10 @@ function candidatePoint(
   if (slot.position) {
     const code = slot.position.toUpperCase();
     // 이미 그 자리였다면 조정해 둔 좌표를 지킨다 (같은 코드로 다시 지시해도 안 튄다)
-    if (wasStarter && prev!.position === code) return prev!.point!;
+    if (wasStarter && prev.position === code) return prev.point!;
     return anchorOf(code);
   }
-  if (wasStarter) return prev!.point!;
+  if (wasStarter) return prev.point!;
   return null;
 }
 
@@ -610,13 +610,13 @@ export function setLineup(
   input: {
     starting: Array<string | LineupSlotInput>;
     /** 생략하면 **지금 벤치를 지킨다** — 빈 배열이 "비운다"이고 없는 것은 "그대로"다 */
-    bench?: Array<string | LineupSlotInput>;
+    bench?: Array<string | LineupSlotInput> | undefined;
     /**
      * 1·2군 이동을 **같은 요청으로** 처리한다 (승격 → 배치 → 강등 순).
      * 나눠 보내면 "승격은 됐는데 배치는 실패"한 반쪽 상태가 남는다 —
      * 웹 스쿼드 화면이 이미 한 요청으로 저장하는 것과 같은 이유다.
      */
-    squadLevels?: Array<{ playerId: string; level: "first" | "reserve" }>;
+    squadLevels?: Array<{ playerId: string; level: "first" | "reserve" }> | undefined;
   },
 ): CommandResult {
   const tactics = userTactics(state);
@@ -1079,17 +1079,25 @@ export function setPlayerTactic(
   state: GameState,
   input: {
     playerId: string;
-    position?: string;
-    point?: BoardPoint;
-    move?: { lane?: "left" | "center" | "right"; band?: "defense" | "midfield" | "attack" };
-    role?: string;
+    position?: string | undefined;
+    point?: BoardPoint | undefined;
+    move?:
+      | {
+          lane?: "left" | "center" | "right" | undefined;
+          band?: "defense" | "midfield" | "attack" | undefined;
+        }
+      | undefined;
+    role?: string | undefined;
   },
 ): CommandResult {
   const notes: string[] = [];
   /** 항목은 하위 명령이 각자 낸 것을 잇는다 — 세 조각이 한 줄로 엉키지 않게 */
   const items: CommandBriefItem[] = [];
-  /** 이미 바꾼 것이 있는가 — 있으면 뒤따르는 반려는 되돌리지 않고 결과로 적는다 */
-  let changed = false;
+  /**
+   * 이미 바꾼 것이 있는가 — 있으면 뒤따르는 반려는 되돌리지 않고 결과로 적는다.
+   * `take`가 클로저 안에서 켜므로 흐름 분석에 맡기지 않고 타입을 넓혀 둔다
+   */
+  let changed = false as boolean;
   const take = (res: CommandResult) => {
     notes.push(res.message);
     items.push(...(res.brief?.items ?? []));
@@ -1161,7 +1169,12 @@ export function movePlayerSlot(
     /** 전술판 좌표 — **화면의 드래그**가 쓴다 */
     point?: BoardPoint;
     /** 이름으로 부르는 이동 — 말로 지시하는 쪽(LLM)이 쓴다 */
-    move?: { lane?: "left" | "center" | "right"; band?: "defense" | "midfield" | "attack" };
+    move?:
+      | {
+          lane?: "left" | "center" | "right" | undefined;
+          band?: "defense" | "midfield" | "attack" | undefined;
+        }
+      | undefined;
   },
 ): CommandResult {
   const pick = pickOurPlayer(state, input.playerId);
@@ -1400,7 +1413,7 @@ export function setPlayerPosition(
  */
 export function setSetPieceTakers(
   state: GameState,
-  input: Partial<Record<SetPieceRole, string | null>>,
+  input: { [K in SetPieceRole]?: string | null | undefined },
 ): CommandResult {
   const tactics = userTactics(state);
   const next: SetPieceTakers = { ...(tactics.setPieceTakers ?? {}) };
@@ -1412,6 +1425,7 @@ export function setSetPieceTakers(
     if (ref === undefined) continue;
     if (ref === null) {
       if (next[role] === undefined) continue;
+
       delete next[role];
       changed = true;
       notes.push(`${SET_PIECE_ROLE_KO[role]} 키커 지정 해제`);
@@ -1448,7 +1462,7 @@ export function setSetPieceTakers(
  */
 export function setSetPieceRoutine(
   state: GameState,
-  input: Partial<Record<SetPieceRoutineKey, SetPieceRoutineLevel | null>>,
+  input: { [K in SetPieceRoutineKey]?: SetPieceRoutineLevel | null | undefined },
 ): CommandResult {
   const tactics = userTactics(state);
   const next: SetPieceRoutine = { ...(tactics.setPieceRoutine ?? {}) };
@@ -1462,6 +1476,7 @@ export function setSetPieceRoutine(
     const level: SetPieceRoutineLevel = want ?? SET_PIECE_ROUTINE_NEUTRAL;
     if (setPieceRoutineLevel(tactics.setPieceRoutine, key) === level) continue;
     // 중립은 칸을 비운다 — 「지시 없음」이 두 모양으로 적히지 않는다
+
     if (level === SET_PIECE_ROUTINE_NEUTRAL) delete next[key];
     else next[key] = level;
     changed = true;
@@ -1489,7 +1504,7 @@ export function setSetPieceRoutine(
  */
 export function setCaptain(
   state: GameState,
-  input: { playerId?: string | null; vice?: string | null },
+  input: { playerId?: string | null | undefined; vice?: string | null | undefined },
 ): CommandResult {
   const captainPick = input.playerId != null ? pickOurPlayer(state, input.playerId) : null;
   if (captainPick && !captainPick.ok) return captainPick;
@@ -1521,7 +1536,7 @@ export function setCaptain(
 
   if (input.vice !== undefined) {
     if (input.vice === null) {
-      const before = userPlayers(state).find((p) => p.isViceCaptain === true);
+      const before = userPlayers(state).find((p) => p.isViceCaptain);
       if (before) {
         before.isViceCaptain = false;
         notes.push("부주장 지정을 해제했습니다");
@@ -1554,7 +1569,7 @@ export function setCaptain(
  */
 export function setSquadNumber(
   state: GameState,
-  input: { playerId: string; number: number; take?: boolean },
+  input: { playerId: string; number: number; take?: boolean | undefined },
 ): CommandResult {
   const pick = pickOurPlayer(state, input.playerId);
   if (!pick.ok) return pick;
@@ -1789,7 +1804,10 @@ function retuneFamiliarity(
  * 스키마가 검증한다 (→ docs/match/match.md §1.2). 주지 않은 필드는 지금 값을
  * 그대로 잇고, `null`은 그 갈래의 지시를 푸는 자리다.
  */
-export function setTactics(state: GameState, spec: Partial<TacticsSpec>): CommandResult {
+export function setTactics(
+  state: GameState,
+  spec: { [K in keyof TacticsSpec]?: TacticsSpec[K] | undefined },
+): CommandResult {
   const tactics = userTactics(state);
   /**
    * 포메이션 이름은 **좌표의 파생값**이라 여기서 갈아 끼우지 않는다 (`shapeOf`).
@@ -1798,7 +1816,9 @@ export function setTactics(state: GameState, spec: Partial<TacticsSpec>): Comman
    */
   const { formation: _shapeName, ...axes } = spec;
   void _shapeName;
-  const parsed = TacticsSpecSchema.safeParse({ ...tactics.spec, ...axes });
+  // 비어 있는 칸은 지금 값을 지키는 것이다 — 덮어 지우지 않는다
+  const given = Object.fromEntries(Object.entries(axes).filter(([, value]) => value !== undefined));
+  const parsed = TacticsSpecSchema.safeParse({ ...tactics.spec, ...given });
   if (!parsed.success) {
     return {
       ok: false,

@@ -19,7 +19,6 @@ export interface AdminPersonaRow {
 export function adminPersonaCatalog(seed = 0): AdminPersonaRow[] {
   const overrides = readPersonaBooks();
   return personaCatalog(seed).map((person) => {
-    if (!person.lorebook) throw new Error(`인물 카탈로그에 로어북이 없습니다: ${person.name}`);
     return {
       characterId: person.characterId,
       name: person.name,

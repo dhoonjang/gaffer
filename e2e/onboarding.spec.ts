@@ -69,7 +69,7 @@ test("부임은 리그 → 팀 → 감독 한 단계씩 서고, 되돌아갈 수
   await expect(appointment).toContainText("프리미어리그");
   await expect(page.getByTestId("start-game")).toContainText("아스날");
 
-  // 이력이 첫 장면을 정한다는 것은 빈 칸의 placeholder가 말한다 (design-system.md §1 조작)
+  // 이력이 첫 장면을 정한다는 것은 빈 칸의 placeholder가 말한다 (tokens.css 「조작」)
   await expect(page.getByTestId("manager-background")).toHaveAttribute("placeholder", /부임 첫날/);
 
   // 진행 표시의 지나온 칸이 곧 되돌아가는 길이다 — 두 단계를 한 번에 건넌다
@@ -118,7 +118,7 @@ test("같은 시각은 다시 적지 않는다 — 화자 이름은 턴마다 �
 
   const turns = await modelTurns.evaluateAll((nodes) =>
     nodes.map((n) => ({
-      stamp: n.querySelector('[data-testid="scene-stamp"]')?.textContent?.trim() ?? null,
+      stamp: n.querySelector('[data-testid="scene-stamp"]')?.textContent.trim() ?? null,
       speakers: [...n.querySelectorAll(".say-who .speaker")].length,
       says: [...n.querySelectorAll(".say")].length,
     })),

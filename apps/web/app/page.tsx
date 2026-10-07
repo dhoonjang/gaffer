@@ -7,10 +7,11 @@ import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/shared/icons";
 import { GameListSkeleton } from "@/shared/skeleton";
 import { Crest, clubStyle } from "@/shared/crest";
 import { humanDate } from "@/shared/dateline";
+import { Button, buttonClass } from "@/shared/button";
 
 interface GameSummary {
   id: string;
-  /** 팀 id·약칭·공식 색 — 슬롯이 문장과 구단 띠를 세우는 열쇠 (web/design-system.md §2) */
+  /** 팀 id·약칭·공식 색 — 슬롯이 문장과 구단 띠를 세우는 열쇠 (tokens.css 「구단 색」) */
   teamId: string;
   teamShortName: string;
   colours?: ClubColours;
@@ -58,15 +59,15 @@ export default function HomePage() {
       try {
         const r = await fetch("/api/games");
         if (!r.ok) throw new Error(String(r.status));
-        const data = await r.json();
+        const data = (await r.json()) as { games?: GameListEntry[] };
         if (!cancelled) setGames(data.games ?? []);
       } catch {
         if (cancelled) return;
-        if (attempt < 4) setTimeout(() => run(attempt + 1), 1200);
+        if (attempt < 4) setTimeout(() => void run(attempt + 1), 1200);
         else setError("게임 목록을 불러오지 못했습니다");
       }
     }
-    run(0);
+    void run(0);
     return () => {
       cancelled = true;
     };
@@ -101,11 +102,11 @@ export default function HomePage() {
           </div>
         </div>
         <div className="home-head-actions">
-          <Link href="/admin" className="ghost-btn" data-testid="admin-link">
+          <Link href="/admin" className={buttonClass("secondary")} data-testid="admin-link">
             <IconDatabase />
             DB
           </Link>
-          <Link href="/new" className="primary-btn" data-testid="new-game">
+          <Link href="/new" className={buttonClass("primary")} data-testid="new-game">
             <IconPlus />새 게임
           </Link>
         </div>
@@ -141,16 +142,17 @@ export default function HomePage() {
                 </span>
                 <span className="game-card-stale-tag">열 수 없음</span>
               </div>
-              <button
+              <Button
+                variant="bare"
                 className="game-del"
-                onClick={() => remove(g.id, g.id)}
+                onClick={() => void remove(g.id, g.id)}
                 disabled={deleting === g.id}
                 data-testid={`delete-${g.id}`}
                 title="세이브 삭제"
                 aria-label="세이브 삭제"
               >
                 <IconTrash />
-              </button>
+              </Button>
             </div>
           ) : (
             /* 슬롯마다 `--club*`가 선다 — 왼쪽 3px 띠와 문장이 어느 구단의 세이브인지를
@@ -173,16 +175,17 @@ export default function HomePage() {
                   <span className="game-card-date">{humanDate(g.date, { year: true })}</span>
                 </span>
               </Link>
-              <button
+              <Button
+                variant="bare"
                 className="game-del"
-                onClick={() => remove(g.id, `${g.teamName} / ${g.managerName}`)}
+                onClick={() => void remove(g.id, `${g.teamName} / ${g.managerName}`)}
                 disabled={deleting === g.id}
                 data-testid={`delete-${g.id}`}
                 title="세이브 삭제"
                 aria-label="세이브 삭제"
               >
                 <IconTrash />
-              </button>
+              </Button>
             </div>
           ),
         )}

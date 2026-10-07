@@ -45,7 +45,7 @@ Vision, architecture and development conventions all live in
 pnpm install          # Node 26 — see .nvmrc
 pnpm test <path>      # the one suite you just touched — the local test loop
 pnpm typecheck        # tsc --noEmit over all three tsconfigs (TS 6.x — 7 breaks typescript-eslint)
-pnpm lint             # ESLint
+pnpm lint             # ESLint (type-aware) · stylelint · CSS class ledger (apps/web/shared/tokens.css)
 pnpm format           # Prettier --write · `pnpm format:check` is what CI runs
 pnpm test / pnpm e2e  # full suites — CI runs these; locally only on request
 pnpm dev              # web app dev server (LLM_MODE=mock needs no API key)

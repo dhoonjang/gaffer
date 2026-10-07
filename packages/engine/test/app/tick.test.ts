@@ -643,7 +643,7 @@ describe("A매치 휴식기 — 소집과 복귀", () => {
   /** 그 창이 남긴 사실 전부 — 누가 몇 경기 뛰고 어떤 몸으로 돌아왔나 */
   function snapshot(state: GameState): string {
     const condition = new Map(userPlayers(state).map((p) => [p.id, p.state.condition]));
-    return (state.callUps ?? [])
+    return state.callUps
       .map((c) =>
         [c.gamePlayerId, c.apps, c.goals, c.returnState, condition.get(c.gamePlayerId)].join(":"),
       )
@@ -662,7 +662,7 @@ describe("A매치 휴식기 — 소집과 복귀", () => {
     expect(snapshot(runs[1]!)).toBe(first);
     // 소집과 복귀는 짝이다 — 창이 닫히면 클럽 밖에 남는 선수가 없다
     for (const state of runs) {
-      expect((state.callUps ?? []).filter((c) => c.returnedOn === null)).toHaveLength(0);
+      expect(state.callUps.filter((c) => c.returnedOn === null)).toHaveLength(0);
     }
   });
 

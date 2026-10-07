@@ -436,7 +436,8 @@ export async function interpretInstructions(
   if (request.said.length > MAX_SOURCE_LENGTH || request.commands.length > MAX_QUESTIONS)
     return unresolved();
   const occurrences: Occurrence[] = [];
-  let uncertain = false;
+  // 판정 콜백 안에서 켜진다 — 흐름 분석이 콜백 속 대입을 보지 못한다
+  let uncertain = false as boolean;
   const state = JSON.stringify({
     instruction: request.said,
     reference: request.context,

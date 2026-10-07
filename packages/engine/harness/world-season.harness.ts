@@ -51,7 +51,7 @@ function rotate(state: GameState): void {
     const tired = byId.get(slot.playerId);
     const unavailable =
       !tired || isInjured(state, slot.playerId) || isSuspended(state, slot.playerId);
-    if (!unavailable && tired && 100 - tired.state.condition < ROTATION_FATIGUE) continue;
+    if (!unavailable && 100 - tired.state.condition < ROTATION_FATIGUE) continue;
     const pick = squad
       .filter(
         (p) =>

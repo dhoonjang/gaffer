@@ -330,9 +330,9 @@ non-deterministic LLM.
 | `season/`  | Season — fixtures, competitions, tables, prizes, awards                       | [season](docs/season/README.md)                                     |
 | `team/`    | Team — squad, lineup, tactics, transfers, contracts, finance, board requests  | [team](docs/team/README.md)                                         |
 | `people/`  | People — lorebook, staff, mailbox, press, manager career                      | [people](docs/people/README.md)                                     |
-| `app/`     | Time, season rollover, saves, GM lookups — what moves several domains at once | [app](docs/app/README.md)                                           |
+| —          | Time, season rollover, saves, GM lookups — what moves several domains at once | [architecture](docs/architecture.md)                                |
 | `agents/`  | Model calls, prompts, models and tracing                                      | [agents](docs/agents/README.md)                                     |
-| `web/`     | Screens and the design system                                                 | [web](docs/web/README.md)                                           |
+| —          | Screens and the design system — owned by code, not docs                       | [tokens.css](apps/web/shared/tokens.css)                            |
 
 ## Status
 

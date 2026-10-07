@@ -8,6 +8,7 @@ import {
   type ProposalTerms,
 } from "@gaffer/domain";
 import type { GamePayload } from "@/game/store";
+import { Button } from "../../shared/button";
 const money = (n: number) => `£${n.toLocaleString("en-GB")}`;
 const duration = (terms: ProposalTerms) => {
   const difference = Number(terms.until.slice(0, 4)) - Number(terms.since.slice(0, 4));
@@ -44,6 +45,16 @@ function Conditions({ terms }: { terms: ProposalTerms }) {
     </dl>
   );
 }
+/**
+ * ── 협상 확인 카드 — 대화 스크롤 안의 읽기 전용 장부 ────────
+ *
+ * 핵심은 지금 상대의 이적료, 또는 주급·계약 기간·계약금이고 분할금과 약속이 함께 선다.
+ * 기간은 연수로 적고 정해진 연수와 맞지 않으면 날짜 범위를 쓴다(`duration`). **카드에서
+ * 조건을 고치지 않는다** — 조정은 자연어 대화로 하고, 발송한 제안은 뒤에 조건이 바뀌어도
+ * 그대로 남는다(수정은 새 제안이다). 조작은 정확한 제안 id와 협상 버전으로 하고, 서버의
+ * 버전이 바뀌었으면 갱신한 뒤 조작한다. 메디컬은 요청·완료·실제 부상 이력과 위험 확인을
+ * 이 카드에 세우고, 계약 체결과 등록 대기는 서로 다른 상태다.
+ */
 export function NegotiationConfirmation({
   payload,
   game,
@@ -100,6 +111,8 @@ export function NegotiationConfirmation({
     writing.current = true;
     const actionController = new AbortController();
     controller.current = actionController;
+    /** 기다리는 사이 화면이 닫히거나 요청이 끊겼나 — 매번 다시 읽는다 */
+    const live = () => mounted.current && !actionController.signal.aborted;
     setPending(true);
     onBusy(true);
     setError(null);
@@ -118,11 +131,10 @@ export function NegotiationConfirmation({
         }),
       });
       const result = (await response.json()) as { game?: GamePayload; error?: string };
-      if (!mounted.current || actionController.signal.aborted) return;
+      if (!live()) return;
       if (response.status === 409) {
         const latest = await fetch(`/api/games/${game.id}`, { signal: actionController.signal });
-        if (latest.ok && mounted.current && !actionController.signal.aborted)
-          onGame((await latest.json()) as GamePayload);
+        if (latest.ok && live()) onGame((await latest.json()) as GamePayload);
       }
       if (!response.ok || !result.game)
         throw new Error(result.error ?? "조건 확인을 처리하지 못했습니다.");
@@ -131,8 +143,7 @@ export function NegotiationConfirmation({
       request.current = null;
       onGame(result.game);
     } catch (cause) {
-      if (mounted.current && !actionController.signal.aborted)
-        setError(cause instanceof Error ? cause.message : "요청을 처리하지 못했습니다.");
+      if (live()) setError(cause instanceof Error ? cause.message : "요청을 처리하지 못했습니다.");
     } finally {
       writing.current = false;
       controller.current = null;
@@ -173,12 +184,13 @@ export function NegotiationConfirmation({
               <Conditions terms={p.terms} />
               {card.stage === "agreement" &&
                 !p.acceptedBy.includes(game.views.negotiation.teamId ?? "") && (
-                  <button
+                  <Button
+                    variant="primary"
                     disabled={disabled}
                     onClick={() => void act({ kind: "accept", proposalId: p.id })}
                   >
                     조건 확인 후 합의
-                  </button>
+                  </Button>
                 )}
             </div>
           ),
@@ -202,36 +214,53 @@ export function NegotiationConfirmation({
       {card.stage === "medical" && (
         <div className="confirmation-actions">
           {!item.medical && (
-            <button disabled={disabled} onClick={() => void act({ kind: "medical" })}>
+            <Button
+              variant="secondary"
+              disabled={disabled}
+              onClick={() => void act({ kind: "medical" })}
+            >
               메디컬 요청
-            </button>
+            </Button>
           )}
           {item.medical?.examinedOn && !item.medical.acknowledgedBy.includes(item.buyerId) && (
-            <button disabled={disabled} onClick={() => void act({ kind: "acknowledge_medical" })}>
+            <Button
+              variant="secondary"
+              disabled={disabled}
+              onClick={() => void act({ kind: "acknowledge_medical" })}
+            >
               검사 결과·위험 확인
-            </button>
+            </Button>
           )}
           {item.medical?.examinedOn && item.medical.injuries.length > 0 && (
-            <button disabled={disabled} onClick={() => void act({ kind: "medical" })}>
+            <Button
+              variant="secondary"
+              disabled={disabled}
+              onClick={() => void act({ kind: "medical" })}
+            >
               추가 검사 요청
-            </button>
+            </Button>
           )}
         </div>
       )}
       {card.stage === "sign" && (
-        <button
+        <Button
+          variant="primary"
           disabled={disabled || !proposals.every((p) => p && proposalAgreed(item, p))}
           onClick={() => void act({ kind: "sign" })}
         >
           최종 서명
-        </button>
+        </Button>
       )}
       {item.status === "completed" &&
         item.registration === "pending" &&
         item.buyerId === game.views.negotiation.teamId && (
-          <button disabled={registrationDisabled} onClick={() => void act({ kind: "register" })}>
+          <Button
+            variant="primary"
+            disabled={registrationDisabled}
+            onClick={() => void act({ kind: "register" })}
+          >
             등록 신청
-          </button>
+          </Button>
         )}
       {error && (
         <p role="alert" className="error-text">

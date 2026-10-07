@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LorebookEntry } from "@gaffer/domain";
+import type { LorebookEntry, LorebookJob, LorebookRevision } from "@gaffer/domain";
 import {
   completeCharacterUpdate,
   requestCharacterUpdate,
@@ -18,8 +18,8 @@ const card = (id = "player:one", name = "김선수"): LorebookEntry => ({
 });
 const stateOf = () => ({
   lorebook: [card()],
-  lorebookRevisions: [] as import("@gaffer/domain").LorebookRevision[],
-  lorebookJobs: [] as import("@gaffer/domain").LorebookJob[],
+  lorebookRevisions: [] as LorebookRevision[],
+  lorebookJobs: [] as LorebookJob[],
   lorebookJobSequence: 0,
 });
 

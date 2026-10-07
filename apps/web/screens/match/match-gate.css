@@ -11,13 +11,13 @@
 .kickoff-gate {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-gate);
   display: grid;
   place-items: center;
   padding: var(--sp-6);
   background: var(--scrim);
   /* 종료 카드와 같은 등장 — 키프레임은 shell.css가 갖는다 (한 쌍이라 한 벌이다) */
-  animation: fulltime-in 160ms var(--ease-panel) both;
+  animation: fulltime-in var(--dur-ease) var(--ease-panel) both;
 }
 /**
  * 한 장에 오늘의 판이 통째로 든다 — 데이트라인 · 대진 · 팀시트 두 열 · 감독 노트 ·
@@ -61,7 +61,7 @@
 
 /**
  * 대진 — **홈이 왼쪽, 원정이 오른쪽.** 스코어보드·득점과 좌우가 늘 같아야 해서
- * 우리 편이 어느 쪽인지로 자리가 바뀌지 않는다 (design-system §2 충돌 규칙 4).
+ * 우리 편이 어느 쪽인지로 자리가 바뀌지 않는다 (tokens.css 「구단 색」 충돌 규칙 4).
  * 우리 열만 구단 워시로 물든다 — 카드가 `--pop` 표면 위라 `-pop` 쪽 값이다.
  */
 .kg-fixture {
@@ -120,7 +120,7 @@
  * 팀시트 — 두 열, 각 1–11. 한 줄은 등번호 · 포지션 · 이름뿐이다.
  * 열 머리는 팀 이름 하나다 — **레일은 없다.** 바로 위 대진에서 우리 열이 이미 구단
  * 워시로 물들어 있고 열의 자리도 그대로라, 여기 띠를 한 번 더 세우면 같은 카드에서
- * 구단 색이 두 벌이 된다 (design-system §2 충돌 규칙 7). 상대 열은 잉크가 한 단
+ * 구단 색이 두 벌이 된다 (tokens.css 「구단 색」 충돌 규칙 7). 상대 열은 잉크가 한 단
  * 물러나는 것으로 갈린다.
  */
 .kg-sheets {
@@ -207,9 +207,9 @@
   word-break: keep-all;
 }
 
-/* 경기장 입장 — 게이트의 버튼 높이는 40 (design-system §4). 카드가 잘리는 높이에서도
+/* 경기장 입장 — 게이트의 버튼 높이는 40 (tokens.css 「표면·간격」). 카드가 잘리는 높이에서도
    눌리지 않게 `flex: none`이다 — 문이 얇아지면 손잡이로 안 읽힌다 */
-.kickoff-card .primary-btn {
+.kickoff-card .btn-primary {
   flex: none;
   height: 40px;
   padding: 0 var(--sp-5);
@@ -220,13 +220,13 @@
  *
  * 무대는 이미 경기다(`game-screen.tsx`의 `entering`) — 스코어보드는 100ms 뒤부터
  * 내려오는 중이고, 이 한 장은 그 위에서 걷힌다. 둘이 겹치는 것이 **한 번의 몸짓**을
- * 만든다: 프로그램이 걷히고 그 자리에 경기가 선다 (match.md §8 모션 · design-system §5 5).
+ * 만든다: 프로그램이 걷히고 그 자리에 경기가 선다 (match.md §8 모션 · tokens.css 「모션」 5).
  *
  * ⚠️ 160은 `game-screen.tsx`의 `GATE_LEAVE_MS`와 같은 값이어야 한다 — 그동안 게이트를
  * 화면에 붙들어 두는 시간이다. 걷히는 동안은 손잡이가 아니다(`pointer-events`).
  */
 .kickoff-gate.leaving {
-  animation: kickoff-gate-out 160ms var(--ease-panel) both;
+  animation: kickoff-gate-out var(--dur-ease) var(--ease-panel) both;
   pointer-events: none;
 }
 @keyframes kickoff-gate-out {
@@ -235,7 +235,7 @@
   }
 }
 
-/* 모션 값은 전부 0 — `.fulltime`의 같은 규칙은 shell.css가 갖는다 (design-system §5) */
+/* 모션 값은 전부 0 — `.fulltime`의 같은 규칙은 shell.css가 갖는다 (tokens.css 「모션」) */
 @media (prefers-reduced-motion: reduce) {
   .kickoff-gate,
   .kickoff-gate.leaving {

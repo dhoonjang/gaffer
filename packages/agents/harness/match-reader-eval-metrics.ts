@@ -28,9 +28,9 @@ export function durationStats(values: readonly number[]) {
 }
 
 export interface Prices {
-  input?: number;
-  output?: number;
-  cachedInput?: number;
+  input?: number | undefined;
+  output?: number | undefined;
+  cachedInput?: number | undefined;
 }
 
 /** Cache-write pricing is provider-specific and cannot be inferred from these rates. */
@@ -60,7 +60,8 @@ export function stableJson(value: unknown): string {
       .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value) ?? "null";
+  // undefined·함수는 문자열이 아니라 undefined가 된다
+  return JSON.stringify(value) || "null";
 }
 
 /** Exact structural overlap only; lexical matching does not establish correctness. */

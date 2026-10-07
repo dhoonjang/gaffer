@@ -17,6 +17,7 @@ import {
   type CupCatalogResponse,
   type DomesticCupEntry,
 } from "./types";
+import { Button } from "../../shared/button";
 
 /**
  * 컵 편집 창 — 유럽 대항전과 국내 컵은 **모양이 다른 대회군**이라 창도 갈린다.
@@ -76,7 +77,7 @@ function windowStateOf(windows: StageWindows): WindowTable {
 function windowTable(base: StageWindows, edited: WindowTable): StageWindows {
   const table: StageWindows = {};
   for (const [stage, value] of Object.entries(base)) {
-    if (value) table[stage as MatchStage] = [value[0], value[1]];
+    table[stage as MatchStage] = [value[0], value[1]];
   }
   for (const stage of DOMESTIC_STAGES) table[stage] = [edited[stage][0], edited[stage][1]];
   return table;
@@ -250,7 +251,7 @@ export function EuroCupModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      const data: CupCatalogResponse = await res.json();
+      const data = (await res.json()) as CupCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "요청 실패");
       onSaved(data);
     } catch (e) {
@@ -269,17 +270,17 @@ export function EuroCupModal({
       onClose={onClose}
       footer={
         <>
-          <button
-            className="primary-btn"
+          <Button
+            variant="primary"
             onClick={() => void save()}
             disabled={saving}
             data-testid="cup-modal-save"
           >
             {saving ? "저장 중…" : "저장"}
-          </button>
-          <button className="ghost-btn" onClick={onClose} disabled={saving}>
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
             취소
-          </button>
+          </Button>
         </>
       }
     >
@@ -568,7 +569,7 @@ export function DomesticCupModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      const data: CupCatalogResponse = await res.json();
+      const data = (await res.json()) as CupCatalogResponse;
       if (!res.ok) throw new Error(data.error ?? "요청 실패");
       onSaved(data);
     } catch (e) {
@@ -595,17 +596,17 @@ export function DomesticCupModal({
       onClose={onClose}
       footer={
         <>
-          <button
-            className="primary-btn"
+          <Button
+            variant="primary"
             onClick={() => void save()}
             disabled={saving}
             data-testid="cup-modal-save"
           >
             {saving ? "저장 중…" : "저장"}
-          </button>
-          <button className="ghost-btn" onClick={onClose} disabled={saving}>
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
             취소
-          </button>
+          </Button>
         </>
       }
     >

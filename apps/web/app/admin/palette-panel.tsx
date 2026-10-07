@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   CLUB_HI_MIN_CONTRAST,
   CLUB_TONE_SURFACE,
@@ -12,10 +12,11 @@ import {
 import { Crest, cachedCrest, clubWash } from "@/shared/crest";
 import type { CatalogLayer } from "./catalog-store";
 import type { AdminTeamRow, TeamCatalogResponse } from "./types";
+import { Button } from "@/shared/button";
 
 /**
  * 팔레트 시트 — 구단 색과 화면용 밝힘을 **한 화면에서** 검수한다
- * (web/design-system.md §2 「검수」).
+ * (tokens.css 「검수」).
  *
  * 조율은 개별 구단이 아니라 전체 팔레트를 상대로만 한다 — 한 구단을 보기 좋게 고치는
  * 순간 규칙이 아니라 취향이 된다(team.md §3.1). 그래서 여기는 **읽기 전용**이다: 값은
@@ -34,7 +35,7 @@ interface PaletteRow {
   leagueId: string;
   leagueName: string;
   /** 공식 색 — 없는 구단은 아래 색이 전부 문장의 해시 값이다 */
-  colours?: ClubColours;
+  colours?: ClubColours | undefined;
   primary: string;
   secondary: string;
   /** 공식 강조색. 없는 구단(해시·흑백)은 빈 문자열 */
@@ -84,7 +85,7 @@ function Swatch({ colour }: { colour: string }) {
   if (colour === "") return <span className="palette-none">—</span>;
   return (
     <span className="palette-swatch">
-      <i style={{ background: colour }} />
+      <i style={{ "--swatch": colour } as CSSProperties} />
       <code>{colour}</code>
     </span>
   );
@@ -123,14 +124,17 @@ function PaletteRowCells({ row, showLeague }: { row: PaletteRow; showLeague: boo
       <td>
         <span className="palette-hi">
           <span className="palette-rail">
-            <i style={{ background: row.hi }} />
+            <i style={{ "--swatch": row.hi } as CSSProperties} />
           </span>
           <code>{row.hi}</code>
           {row.lifted && <span className="palette-tag">올림</span>}
         </span>
       </td>
       <td>
-        <span className="palette-wash" style={{ background: clubWash(row.primary) }}>
+        <span
+          className="palette-wash"
+          style={{ "--swatch": clubWash(row.primary) } as CSSProperties}
+        >
           {row.shortName}
         </span>
       </td>
@@ -171,7 +175,7 @@ export function PalettePanel({ teams }: { teams: CatalogLayer<TeamCatalogRespons
   const official = visible.filter((r) => r.colours !== undefined).length;
 
   return (
-    <section className="admin-panel">
+    <section>
       <p className="hint admin-note">
         값은 각 구단의 <b>공식 색</b> 그대로이고 출처는 원장(sources.md §7.5)입니다 — 이 시트는 읽기
         전용입니다. 공식 색이 없는 구단(「해시」)은 문장의 해시 색이 같은 규칙을 지납니다.
@@ -191,7 +195,8 @@ export function PalettePanel({ teams }: { teams: CatalogLayer<TeamCatalogRespons
         <div className="admin-toolbar-right">
           <div className="side-tabs" role="tablist" aria-label="시트 정렬">
             {SORTS.map(([key, label]) => (
-              <button
+              <Button
+                variant="bare"
                 key={key}
                 role="tab"
                 aria-selected={sort === key}
@@ -200,7 +205,7 @@ export function PalettePanel({ teams }: { teams: CatalogLayer<TeamCatalogRespons
                 data-testid={`palette-sort-${key}`}
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

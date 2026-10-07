@@ -239,9 +239,9 @@ const STRONG_FOOT_KO = { left: "왼발", right: "오른발", both: "양발" } as
 /** 선수의 바뀌지 않는 기본 정보 — 국적 · 출생연도 · 주발 · 키, 있는 것만 */
 function identityFactsOf(player: {
   birthdate: string;
-  nationality?: string;
-  foot?: Foot;
-  height?: number;
+  nationality?: string | undefined;
+  foot?: Foot | undefined;
+  height?: number | undefined;
 }): string[] {
   const foot = strongFootOf(player.foot);
   return [

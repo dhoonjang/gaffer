@@ -407,8 +407,8 @@ describe("도움이 사라지지 않는다", () => {
     for (const m of played.matches) {
       if (!m.result) continue;
       expect(m.result.assists, `${m.id} 도움 배열이 없다`).toBeDefined();
-      expect(m.result.assists!.length, `${m.id} 길이 불일치`).toBe(m.result.scorers.length);
-      assisted += m.result.assists!.filter((a) => a !== "").length;
+      expect(m.result.assists.length, `${m.id} 길이 불일치`).toBe(m.result.scorers.length);
+      assisted += m.result.assists.filter((a) => a !== "").length;
     }
     // 길이만 맞고 전부 빈 칸이면 도움은 여전히 사라진 것이다 — 0이 아님을 못 박는다
     expect(assisted, "도움이 한 건도 붙지 않았다").toBeGreaterThan(0);

@@ -421,7 +421,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
             "영입 구단 이름·약칭 또는 실제 구단 id. 생략하면 현재 맡은 구단. 명시한 구단을 찾지 못하면 get_team으로 확인한다",
           ),
       }),
-      async (input) => {
+      (input) => {
         const team =
           input.buyerId === undefined ? managedTeamId(state) : pickTeam(state, input.buyerId);
         if (team === null)

@@ -77,7 +77,7 @@ export interface MatchReportEventView {
 /** 한 팀의 경기 스탯 — 선수별 기록과 사건의 합, 두 벌로 두지 않는다 */
 interface MatchReportTeamView {
   /**
-   * 팀 id — 문장(`crestOf`)과 구단 색의 열쇠다 (web/design-system.md §2). 종료 카드의
+   * 팀 id — 문장(`crestOf`)과 구단 색의 열쇠다 (tokens.css 「구단 색」). 종료 카드의
    * 머리가 스코어보드와 **같은 해부**(문장 · 이름 · 스코어)로 서려면 이름만으로는
    * 모자란다 — 어드민 편집으로 이름이 갈리면 문장도 함께 갈린다.
    */
@@ -85,7 +85,7 @@ interface MatchReportTeamView {
   name: string;
   short: string;
   /** 카탈로그의 공식 색 — 화면은 엔진을 값으로 못 읽으므로 여기 실려 간다 */
-  colours?: ClubColours;
+  colours?: ClubColours | undefined;
   ours: boolean;
   goals: number;
   shots: number;

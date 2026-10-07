@@ -203,7 +203,7 @@ function acquireLocal(id: string, waitMs: number): Promise<Release | null> {
 export async function withGameLock<T>(
   id: string,
   waitMs: number,
-  fn: () => Promise<T>,
+  fn: () => T | Promise<T>,
 ): Promise<T> {
   const deadline = Date.now() + waitMs;
   const local = await acquireLocal(id, waitMs);
@@ -477,7 +477,7 @@ export function runTurnLocked(
             at: state.date,
             ...(turn.goals && turn.goals.length > 0 ? { goals: turn.goals } : {}),
             ...(turn.cards && turn.cards.length > 0 ? { cards: turn.cards } : {}),
-            // 넘긴 시간이 남긴 사건들 — 화면이 하나를 카드 하나로 세운다 (design-system.md §6)
+            // 넘긴 시간이 남긴 사건들 — 화면이 하나를 카드 하나로 세운다 (chat.tsx `TickEvents`)
             ...(turn.events && turn.events.length > 0 ? { events: turn.events } : {}),
             // GM이 낸 감독의 다음 말 — 입력창의 placeholder다. 모델 입력은 이 칸을 읽지 않는다 (agents.md §2)
             ...(turn.suggestion ? { suggestion: turn.suggestion } : {}),

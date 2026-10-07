@@ -1,7 +1,7 @@
 /**
  * ── 서체 — **파일은 `public/fonts`, 선언은 여기 하나** ──────────────
  *
- * 화면의 서체 셋(docs/web/design-system.md §3)이 셀프호스트된다. `next/font/local`은
+ * 화면의 서체 셋(tokens.css 「서체」)이 셀프호스트된다. `next/font/local`은
  * 조각별 `unicode-range`를 붙이지 못해 쓰지 않는다 — Pretendard는 다이내믹 서브셋
  * 92조각이고, 브라우저는 화면에 실제로 선 글자가 속한 조각만 내려받는다.
  *
@@ -10,7 +10,7 @@
  * | Pretendard Variable 1.3.9   | `/fonts/pretendard/*.woff2`   | SIL OFL 1.1 · 옆의 OFL.txt  |
  * | Barlow Condensed 600 · 700  | `/fonts/barlow-condensed/`    | SIL OFL 1.1 · 옆의 OFL.txt  |
  *
- * 토큰(`--font-ui` · `--font-score` · `--font-mono`)은 shell.css가 쥔다. 이 파일은
+ * 토큰(`--font-ui` · `--font-score` · `--font-mono`)은 tokens.css가 쥔다. 이 파일은
  * 서체가 **존재하고 내려오게** 할 뿐이다.
  *
  * 셸 어휘가 닿는 조각(79 · 85 · 86 · 87 · 88 · 89 · 90 · 91)과 Barlow 두 벌은
