@@ -102,7 +102,7 @@ export async function replyToMail(
       {
         name: "search_players",
         description:
-          "현재 연락 구단의 선수와 감독 구단 선수, 또는 현재 대리인이 맡은 선수만 조회한다. name은 실제 이름 또는 id다.",
+          "Looks up only the current contact club's players and the manager's club's players, or the players the current agent represents. name is a real name or id.",
         inputSchema: toToolSchema(z.object({ name: z.string().trim().min(1).optional() }).strict()),
         readOnly: true,
         handle(raw) {
@@ -139,7 +139,8 @@ export async function replyToMail(
       },
       {
         name: "get_negotiations",
-        description: "현재 메일 상대가 참여한 관련 협상의 정확한 조건만 조회한다.",
+        description:
+          "Looks up the exact terms of only the related negotiations the current mail contact takes part in.",
         inputSchema: toToolSchema(z.object({}).strict()),
         readOnly: true,
         handle: () => ({ ok: true, message: JSON.stringify(caseFacts()) }),
@@ -147,7 +148,7 @@ export async function replyToMail(
       {
         name: "negotiation_action",
         description:
-          "현재 연락 상대의 실제 협상 제안·수락·거절·철회를 기록한다. partyId는 연락 상대에서 결정된다. 감독 행동은 불가능하다.",
+          "Records the current contact's actual negotiation proposal, acceptance, rejection or withdrawal. partyId is set from the contact. Actions on the manager's behalf are not possible.",
         inputSchema: toToolSchema(ReplyActionSchema),
         handle(raw) {
           const parsed = ReplyActionSchema.safeParse(raw);
@@ -185,7 +186,7 @@ export async function replyToMail(
       {
         name: "start_negotiation",
         description:
-          "연락 상대가 참여하는 선수의 협상 장부를 연다. 감독의 제안이나 동의를 만들지 않는다.",
+          "Opens the negotiation ledger for a player the contact takes part in. It creates no proposal or agreement from the manager.",
         inputSchema: toToolSchema(z.object({ playerId: z.string().min(1) }).strict()),
         handle(raw) {
           const parsed = z

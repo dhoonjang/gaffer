@@ -26,7 +26,7 @@ export function mainMailOverview(state: GameState) {
       const message = thread.messages.at(-1);
       return {
         threadId: thread.id,
-        to: mailRecipientHandle(thread.recipient),
+        recipient: mailRecipientHandle(thread.recipient),
         label: thread.label,
         unread: unreadOf(thread),
         latest: message

@@ -30,8 +30,13 @@ export const BoardReviewSchema = z.discriminatedUnion("action", [
 ]);
 
 const InterviewTargetShape = {
-  interviewId: z.string().trim().min(1).optional().describe("응답할 면접 id"),
-  team: z.string().trim().min(1).optional().describe("응답할 구단 id·이름·약칭"),
+  interviewId: z.string().trim().min(1).optional().describe("Id of the interview to answer"),
+  team: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("Id, name or short name of the club to answer"),
 };
 
 export const InterviewOutcomeSchema = z.discriminatedUnion("offer", [

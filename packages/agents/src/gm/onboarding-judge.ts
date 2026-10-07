@@ -17,41 +17,42 @@ import {
   stampLorebook,
 } from "@gaffer/engine";
 import { toToolSchema } from "../shared/tool-schema";
+import { OUTPUT_LANGUAGE } from "../shared/output-language";
 import { SUGGESTION_MAX_CHARS } from "../shared/suggest-reply";
 import { parseSceneHeader } from "../shared/context";
 import { buildGmStateNote } from "./gm-input";
 
 /** 배경 해석과 첫 장면을 한 호출로 만들고 검증 후 함께 반영한다. */
 
-export const ONBOARDING_JUDGE_SYSTEM = `당신은 새로 부임하는 축구 감독의 이력을 읽고, 그 감독의 부임 첫날을 여는 사람이다.
+export const ONBOARDING_JUDGE_SYSTEM = `You read the record of a newly appointed football manager and open that manager's first day in the job.
 
-배경 한 문단과 부임 구단의 사실을 읽고 부임 첫날의 첫 장면을 쓴다.
+Read one paragraph of background and the facts of the new club, and write the first scene of the first day.
 
-# 입력
-<club> — 부임 구단: 이름·격·구단주·수석코치·주장·핵심 선수·유망주.
-<background> — 배경 문단.
-<lorebook> — 첫 장면에 활용할 인물의 기록.
-<snapshot> — 오늘 날짜와 선수단·일정의 사실. 첫 장면이 짚을 것이 여기 있다.
+# Input
+<club> — the new club: name, standing, owner, head coach, captain, key players, prospects.
+<background> — the background paragraph.
+<lorebook> — records of people to use in the first scene.
+<snapshot> — today's date and facts about the squad and schedule. What the first scene touches on is here.
 
-# 산출
-JSON 하나로 낸다 — scene, suggestion.
+# Output
+Return one JSON — scene, suggestion.
 
-# 첫 장면 (scene)
-오늘은 감독의 부임 첫날이다. 배경과 구단의 맥락에서 장면을 연다.
-- 짧게 — 여섯 줄 안팎. 한 사람이 감독을 맞는다.
-- <snapshot>의 사실 한두 개만 짚는다. 없는 사실을 지어내지 않는다.
-- 감독은 유저가 연기한다 — 감독의 말은 쓰지 않는다. 장면은 감독에게 묻는 한 문장으로 닫는다.
-- 내부 판정 수치나 확률은 장면에 적지 않는다.
+# First scene (scene)
+Today is the manager's first day. Open the scene from the background and the club's context.
+- Short — about six lines. One person greets the manager.
+- Touch on only one or two facts from <snapshot>. Do not invent facts.
+- The user plays the manager — do not write the manager's words. Close the scene with one sentence asking the manager something.
+- Do not put internal judging numbers or probabilities in the scene.
 
-# 출력 문법 (scene)
-장면은 @로 연다 — 줄은 줄바꿈으로 가르고, 시각 줄은 코어가 붙인다.
-- @이름: 사람의 말 — 이름을 화자 태그로 쓴다.
-- @: 화자 없는 내레이션. *별표 하나*로 감싼 것이 행동·연출이다.
-- 같은 화자가 이어 말하면 태그를 다시 적지 않는다.
-- 한국어.
+# Output grammar (scene)
+The scene opens with @ — lines are separated by line breaks, and the core adds the time line.
+- @Name: a person's words — use the name as the speaker tag.
+- @: narration without a speaker. What is wrapped in *single asterisks* is action and staging.
+- When the same speaker keeps talking, do not write the tag again.
+- ${OUTPUT_LANGUAGE}.
 
-# 감독의 첫 말 (suggestion)
-장면 끝의 물음에 감독이 할 법한 답 한 문장 — 감독의 말투로, 그대로 보낼 수 있게. 선택지가 아니다.
+# The manager's first words (suggestion)
+One sentence the manager would plausibly say in answer to the question at the end of the scene — in the manager's voice, ready to send as is. It is not a choice.
 `;
 
 /** 첫 장면의 출력 크기 상한 */
@@ -63,9 +64,15 @@ export const ReportInputSchema = z.object({
     .string()
     .min(1)
     .max(SCENE_MAX)
-    .describe("부임 첫날의 첫 장면 — 출력 문법 그대로, 줄은 줄바꿈으로"),
+    .describe(
+      "The first scene of the first day — in the output grammar, lines separated by line breaks",
+    ),
   /** 상한을 넘거나 비면 제안만 빠진다 — 장면을 반려할 이유는 아니다 (agents.md §2) */
-  suggestion: z.string().describe(`감독의 첫 말 한 문장 — ${SUGGESTION_MAX_CHARS}자 안쪽`),
+  suggestion: z
+    .string()
+    .describe(
+      `One sentence of the manager's first words — within ${SUGGESTION_MAX_CHARS} characters`,
+    ),
 });
 
 /** 모델이 보는 출력 스키마 — 위 Zod 한 벌에서 파생한다 (prompts.md §2 · models.md §3-2) */

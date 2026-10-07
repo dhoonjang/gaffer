@@ -221,7 +221,7 @@ describe("main dialogue and scheduled mail", () => {
     expect(
       (
         await send.handle({
-          to: `club:${third.id}`,
+          recipient: `club:${third.id}`,
           subject: "제안",
           body: "조건 제안입니다.",
           negotiationId: n.id,
@@ -233,7 +233,7 @@ describe("main dialogue and scheduled mail", () => {
     expect(
       (
         await send.handle({
-          to: `club:${n.sellerId}`,
+          recipient: `club:${n.sellerId}`,
           subject: "제안",
           body: "조건 제안입니다.",
           negotiationId: n.id,
@@ -306,7 +306,7 @@ describe("main dialogue and scheduled mail", () => {
     expect(threads.length).toBeLessThanOrEqual(8);
     expect(threads[0]).toMatchObject({
       threadId: oldest.id,
-      to: `club:${clubs[0]!.id}`,
+      recipient: `club:${clubs[0]!.id}`,
       unread: 1,
     });
   });

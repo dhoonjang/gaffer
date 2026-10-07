@@ -47,10 +47,10 @@ export const LorebookJobSchema = z.object({
 });
 export type LorebookJob = z.infer<typeof LorebookJobSchema>;
 export const CharacterUpdateSchema = z.object({
-  characterId: z.string().min(1).describe("로어북 항목 id 또는 이름"),
+  characterId: z.string().min(1).describe("Lorebook entry id or name"),
   additionalInformation: LorebookJobSchema.shape.additionalInformation,
   newCharacter: LorebookContentSchema.optional().describe(
-    "처음 등장한 인물의 항목. 기존 인물에는 생략",
+    "Entry for a person appearing for the first time. Omit for existing people",
   ),
 });
 

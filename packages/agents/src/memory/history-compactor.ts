@@ -16,14 +16,15 @@ import {
 import { agentConfig, createGameLLM, resolveLlmMode, type GameLLM } from "@gaffer/llm";
 import { ModelOutputError, readOutput, retryOnce } from "../shared/retry";
 import { toToolSchema } from "../shared/tool-schema";
+import { OUTPUT_LANGUAGE } from "../shared/output-language";
 
-export const HISTORY_COMPACTOR_SYSTEM = `당신은 구단의 기록 담당이다.
-이력에서 접히는 원문과 이전 요약을 합쳐 다시 요약한다.
-- past는 지난 결정과 이유, 사건의 흐름이다. ${HISTORY_DIGEST_CHARS}자 이내.
-- open은 아직 끝나지 않은 대화·의도·갈등·이야기다. ${HISTORY_OPEN_CHARS}자 이내. 끝난 일은 past로 옮기거나 지운다.
-- 장부에 있는 수치와 현재 상태는 복사하지 않는다. [장부] 사실과 원문에 없는 일을 만들지 않는다.
-- candidates는 앞으로 장면에 활용할 만한 인물 최대 ${CHARACTER_CANDIDATES_MAX}명의 이름과 한 줄 설명이다. 제공된 후보 색인에서 고르고 같은 이름은 한 번만 쓴다.
-- 후보 목록은 등장 의무가 아니다. 기존 이야기에 이어질 사람과 새로운 장면에 활용할 사람을 함께 고려한다.`;
+export const HISTORY_COMPACTOR_SYSTEM = `You keep the club's records.
+Combine the raw text folding out of the history with the previous summary and summarize again, in ${OUTPUT_LANGUAGE}.
+- past is past decisions and their reasons, and the flow of events. Within ${HISTORY_DIGEST_CHARS} characters.
+- open is conversations, intentions, conflicts and stories not yet finished. Within ${HISTORY_OPEN_CHARS} characters. Move finished matters to past or drop them.
+- Do not copy numbers and current state that are in the ledger. Do not invent [장부] facts or anything not in the raw text.
+- candidates are the names and one-line descriptions of up to ${CHARACTER_CANDIDATES_MAX} people worth using in coming scenes. Pick from the provided candidate index and use each name once.
+- The candidate list is not an obligation to appear. Consider both people who continue existing stories and people to use in new scenes.`;
 
 const ReportInputSchema = z.object({
   past: z.string().trim().min(1).max(HISTORY_DIGEST_CHARS),

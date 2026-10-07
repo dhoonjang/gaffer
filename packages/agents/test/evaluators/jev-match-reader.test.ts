@@ -59,7 +59,7 @@ function model(
               : "n0";
         } else if (instruction.includes("set_tactics")) choice = "v0";
         else if (instruction.includes("$.mode")) choice = byLabel(mode);
-        else if (instruction.includes("항목 수"))
+        else if (instruction.includes("The number of items"))
           choice = mode === "replace" || options.inconsistentClear ? `n${shapes.length}` : "n0";
         else if (instruction.includes(".shape")) choice = byLabel(shape);
         else if (instruction.includes(".action"))
@@ -154,7 +154,7 @@ describe("Jev match instruction boundary", () => {
     expect(
       evaluator.requests.some((request) =>
         Object.values(request.questions).some((question) =>
-          question.instructions.includes("인자 $.sheet[0].sign"),
+          question.instructions.includes("argument $.sheet[0].sign"),
         ),
       ),
     ).toBe(false);
@@ -179,7 +179,7 @@ describe("Jev match instruction boundary", () => {
       const asked = evaluator.requests
         .flatMap((request) => Object.values(request.questions))
         .flatMap((question) => {
-          const match = /인자 \$\.sheet\[0\]\.target\.(\w+)/.exec(question.instructions);
+          const match = /argument \$\.sheet\[0\]\.target\.(\w+)/.exec(question.instructions);
           return match ? [match[1]] : [];
         });
       expect(asked).toEqual(fields);
@@ -187,7 +187,9 @@ describe("Jev match instruction boundary", () => {
         const behaviorFields = evaluator.requests
           .flatMap((request) => Object.values(request.questions))
           .filter((question) =>
-            /인자 \$\.sheet\[0\]\.(action|when|targetPlayer|band)\./.test(question.instructions),
+            /argument \$\.sheet\[0\]\.(action|when|targetPlayer|band)\./.test(
+              question.instructions,
+            ),
           );
         expect(behaviorFields).toEqual([]);
         expect(evaluator.requests).toHaveLength(5);

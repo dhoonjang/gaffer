@@ -59,8 +59,8 @@ function build(seed: number, manager: string, background: string): GameState {
 
 /** 입력 블록의 지도와 실행 지침을 분리해 크기를 측정한다. */
 function gmSystemParts(): { map: number; guide: number } {
-  const map = /\n# 입력\n[\s\S]*?(?=\n# )/.exec(GM_SYSTEM)?.[0];
-  if (map === undefined) throw new Error("GM_SYSTEM에서 「# 입력」을 찾지 못했습니다");
+  const map = /\n# Input\n[\s\S]*?(?=\n# )/.exec(GM_SYSTEM)?.[0];
+  if (map === undefined) throw new Error("GM_SYSTEM에서 「# Input」을 찾지 못했습니다");
   return { map: map.length, guide: GM_SYSTEM.length - map.length };
 }
 

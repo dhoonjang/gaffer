@@ -261,7 +261,11 @@ describe("source-grounded instruction compiler", () => {
       },
     };
     const model = evaluator((instructions, criteria, stage) =>
-      stage === 1 ? "n1" : instructions.includes("항목만 세고") ? "n2" : select(criteria, "민수"),
+      stage === 1
+        ? "n1"
+        : instructions.includes("Count only the items")
+          ? "n2"
+          : select(criteria, "민수"),
     );
     const output = await interpretInstructions(
       request([command], model, {
@@ -290,7 +294,7 @@ describe("source-grounded instruction compiler", () => {
       },
     };
     const model = evaluator((instructions, criteria, stage) =>
-      stage === 1 ? "n1" : instructions.includes("시작 경계.") ? "s2" : "e0",
+      stage === 1 ? "n1" : instructions.includes("Start boundary") ? "s2" : "e0",
     );
     expect(
       (await interpretInstructions(request([command], model, { said: "패스 훈련 진행" }))).ops,
@@ -384,7 +388,7 @@ describe("source-grounded instruction compiler", () => {
     };
     const model = evaluator((instructions, criteria, stage) => {
       if (stage === 1) return "n1";
-      if (instructions.includes("항목만 세고")) return "n2";
+      if (instructions.includes("Count only the items")) return "n2";
       const first = instructions.includes("$.starting[0]");
       return select(
         criteria,
@@ -418,7 +422,7 @@ describe("source-grounded instruction compiler", () => {
       inputSchema: { type: "object", properties: { vice: { type: ["string", "null"] } } },
     };
     const model = evaluator((instructions, criteria, stage) =>
-      stage === 1 ? "n1" : select(criteria, "지정 해제"),
+      stage === 1 ? "n1" : select(criteria, "explicitly cleared"),
     );
     expect(
       await interpretInstructions(

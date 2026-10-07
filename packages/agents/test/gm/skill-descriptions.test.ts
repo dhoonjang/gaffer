@@ -95,16 +95,16 @@ describe("스킬 설명 — 코드가 유일한 원본이다", () => {
 describe("규칙이 사는 자리", () => {
   /**
    * 설명은 고정층에 매 턴 실린다 — 길이 예산이 없으면 규칙 하나를 지울 때마다 설명
-   * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈7,400자)에 한 도구
-   * 몫(600자)의 여유를 얹은 값이다 — **도구가 늘 때만** 그만큼 올린다. **도구가 줄면
+   * 두 줄이 붙어도 아무 데서도 드러나지 않는다. 상한은 지금 총량(≈15,900자)에 한 도구
+   * 몫(1,200자)의 여유를 얹은 값이다 — **도구가 늘 때만** 그만큼 올린다. **도구가 줄면
    * 함께 내린다**: 상한이 총량의 두 배로 남으면 설명이 한 벌씩 더 붙어도 걸리지 않는다.
    */
   it("설명은 길이 예산 안에 있다", () => {
     const total = SKILL_CATALOG.reduce((sum, skill) => sum + skill.description.length, 0);
     for (const skill of SKILL_CATALOG) {
-      expect(skill.description.length, skill.name).toBeLessThanOrEqual(600);
+      expect(skill.description.length, skill.name).toBeLessThanOrEqual(1_200);
     }
-    expect(total).toBeLessThanOrEqual(8_000);
+    expect(total).toBeLessThanOrEqual(17_200);
   });
 
   it("GM은 직접 명령 대신 역할별 해석 스킬을 받는다", () => {
@@ -127,7 +127,7 @@ describe("규칙이 사는 자리", () => {
     for (const axis of early) expect(line, axis).toContain(AXIS_KO[axis]);
 
     // 문장이 적은 나이가 곧 그 축들이 처음 꺾이는 해다 — 한 해 전까지는 꺾이지 않는다
-    const age = Number(/^(\d+)세/.exec(line)?.[1]);
+    const age = Number(/^Players past (\d+)/.exec(line)?.[1]);
     expect(early.every((axis) => agingDelta(axis, age) < 0)).toBe(true);
     expect(early.every((axis) => agingDelta(axis, age - 1) < 0)).toBe(false);
 

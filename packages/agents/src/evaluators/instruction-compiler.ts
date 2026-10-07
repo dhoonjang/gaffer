@@ -92,7 +92,7 @@ function validScalar(schema: Schema, value: Value): boolean {
 }
 
 function scope(node: Node): string {
-  return `${node.occurrence.command.name}[${node.occurrence.index}] 인자 ${node.path}. 같은 명령의 항목은 감독 원문에 나타난 순서다. 다른 항목/명령의 대상·값을 가져오지 않는다. ${typeof node.schema.description === "string" ? node.schema.description : ""}`;
+  return `${node.occurrence.command.name}[${node.occurrence.index}] argument ${node.path}. Items of the same command follow the order they appear in the manager's original words. Do not take targets or values from other items or commands. ${typeof node.schema.description === "string" ? node.schema.description : ""}`;
 }
 
 function choose(
@@ -194,11 +194,11 @@ function structural(
     else
       choose(
         queries,
-        `${scope(node)} 이 객체에 대한 명시적 지시가 있는가?`,
+        `${scope(node)} Is there an explicit instruction for this object?`,
         {
-          present: "이 객체의 인자를 지시했다",
-          absent: "이 객체를 지시하지 않았다",
-          unclear: "지시했지만 모호하다",
+          present: "instructed this object's arguments",
+          absent: "did not instruct this object",
+          unclear: "instructed but ambiguous",
         },
         (answer) => {
           if (answer === "present") make();
@@ -218,19 +218,20 @@ function structural(
     : MAX_ARRAY_ITEMS;
   const minimum = finite(node.schema.minItems) ? node.schema.minItems : 0;
   const criteria: Record<string, string> = {
-    unclear: "배열 내용을 정할 수 없다",
-    overflow: `항목이 ${cap}개를 넘는다`,
+    unclear: "cannot determine the array contents",
+    overflow: `more than ${cap} items`,
   };
-  if (!node.required) criteria.absent = "이 배열을 지정하지 않았다 (빈 배열과 다르다)";
+  if (!node.required)
+    criteria.absent = "did not specify this array (not the same as an empty array)";
   for (let count = minimum; count <= cap; count++)
     criteria[`n${count}`] = node.occurrence.command.contextual
-      ? `유지할 기존 효과와 새 효과를 합쳐 ${count}개`
-      : `명시적으로 지시한 항목 ${count}개`;
+      ? `${count} existing effects to keep and new effects combined`
+      : `${count} explicitly instructed items`;
   choose(
     queries,
     node.occurrence.command.contextual
-      ? `${scope(node)} 감독 지시를 실행할 전술 효과와 필요한 대가, 명시적으로 지우거나 대체하지 않은 active_effects를 합친 항목 수. 현재 사실에서 정하며 무관한 효과를 만들지 않는다.`
-      : `${scope(node)} 원문이 지시한 항목만 세고 맥락의 기존 명단을 채우지 않는다. 0은 명시적으로 빈 배열을 지시했을 때만.`,
+      ? `${scope(node)} The number of items combining the tactical effects that carry out the manager's instruction, their necessary costs, and the active_effects not explicitly removed or replaced. Decide from the current facts and do not create unrelated effects.`
+      : `${scope(node)} Count only the items the original words instruct; do not fill in the existing list from the context. 0 only when an empty array was explicitly instructed.`,
     criteria,
     (answer) => {
       if (answer === UNCLEAR || answer === OVERFLOW) {
@@ -270,8 +271,8 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
     choices.push({ label: String(node.schema.const), value: node.schema.const });
   } else if (typeOf(node.schema) === "boolean") {
     choices.push(
-      { label: "명시적으로 참/활성화", value: true },
-      { label: "명시적으로 거짓/해제", value: false },
+      { label: "explicitly true/enabled", value: true },
+      { label: "explicitly false/disabled", value: false },
     );
   } else {
     const supplied =
@@ -281,7 +282,7 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
     else if (typeOf(node.schema) === "number" || typeOf(node.schema) === "integer") {
       choices.push(
         ...sourceNumbers(request.said).map((number) => ({
-          label: `원문[${number.start}:${number.end}] ${number.text} = ${number.value}`,
+          label: `source[${number.start}:${number.end}] ${number.text} = ${number.value}`,
           value: number.value,
         })),
       );
@@ -297,24 +298,24 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
     }
   }
   if (nullable(node.schema) && !choices.some((choice) => choice.value === null)) {
-    choices.push({ label: "명시적으로 지정 해제 (null)", value: null });
+    choices.push({ label: "explicitly cleared (null)", value: null });
   }
   const values = choices.filter((candidate) => validScalar(node.schema, candidate.value));
   const criteria: Record<string, string> = {
     unclear: node.occurrence.command.contextual
-      ? "필요한 효과를 지시와 현재 근거에서 정할 수 없다"
-      : "필요하지만 원문에서 정할 수 없거나 여러 해석이 가능하다",
+      ? "the needed effect cannot be determined from the instruction and current grounds"
+      : "needed but cannot be determined from the original words, or has several readings",
   };
   if (!node.required)
     criteria.absent = node.occurrence.command.contextual
-      ? "이 효과에는 필요하지 않은 인자다"
-      : "감독이 이 인자를 지정하지 않았다";
+      ? "an argument this effect does not need"
+      : "the manager did not specify this argument";
   values.forEach((candidate, i) => {
     criteria[`v${i}`] = candidate.label;
   });
   choose(
     queries,
-    `${scope(node)} ${node.occurrence.command.contextual ? "감독이 요청한 전술을 최근 흐름과 선수 사실에 맞춰 구현하는 값을 고른다. 필요한 대가와 유지할 active_effects도 포함한다. 선택지의 수치 부호는 스키마가 정의한 효과 방향으로 해석한다." : "이 필드에 해당하는 지시가 없으면 absent(필수 필드면 unclear). 다른 필드의 지시나 기존 상태를 이 필드에 옮기지 않는다. 원문의 뜻과 후보 설명을 대응해 고른다. 금액·수량은 정확한 원문 값 또는 명시된 변환 후보만. 증감량·비율을 최종 금액으로 쓰지 않는다. 필요한 계산 결과가 후보에 없으면 unclear."}`,
+    `${scope(node)} ${node.occurrence.command.contextual ? "Pick the value that implements the tactic the manager asked for, fitted to the recent flow and the player facts. Include the necessary costs and the active_effects to keep. Read the sign of a choice's number as the effect direction the schema defines." : "If there is no instruction for this field, absent (unclear if the field is required). Do not carry another field's instruction or the existing state into this field. Pick by matching the meaning of the original words to the candidate descriptions. Amounts and quantities only as the exact original value or a stated conversion candidate. Do not use a change or ratio as the final amount. If the needed calculation result is not among the candidates, unclear."}`,
     criteria,
     (answer) => {
       if (answer === UNCLEAR) {
@@ -338,9 +339,11 @@ function sourceString(node: Node, said: string, queries: Query[]): void {
     if (end <= start || !validScalar(node.schema, value)) fail(node);
     else node.assign(value);
   };
-  const prefix: Record<string, string> = { unclear: "원문에 해당 표현이 없거나 경계가 모호하다" };
-  if (!node.required) prefix.absent = "이 인자를 지정하지 않았다";
-  if (nullable(node.schema)) prefix.clear = "명시적으로 지정 해제 (null)";
+  const prefix: Record<string, string> = {
+    unclear: "the original words have no matching phrase, or its boundary is ambiguous",
+  };
+  if (!node.required) prefix.absent = "did not specify this argument";
+  if (nullable(node.schema)) prefix.clear = "explicitly cleared (null)";
   const startCriteria = { ...prefix };
   const endCriteria = { ...prefix };
   starts.forEach((offset, i) => {
@@ -351,7 +354,7 @@ function sourceString(node: Node, said: string, queries: Query[]): void {
   });
   choose(
     queries,
-    `${scope(node)} 이 인자에 해당하는 원문 구절의 시작 경계. 새 문장을 쓰지 않는다. 끝 경계와 같은 구절을 가리킨다.`,
+    `${scope(node)} Start boundary of the original phrase for this argument. Do not write new text. Points at the same phrase as the end boundary.`,
     startCriteria,
     (answer) => {
       if (answer === UNCLEAR) {
@@ -372,7 +375,7 @@ function sourceString(node: Node, said: string, queries: Query[]): void {
   );
   choose(
     queries,
-    `${scope(node)} 이 인자에 해당하는 원문 구절의 끝 경계(포함하지 않음). 시작 경계와 같은 최소 구절을 고른다.`,
+    `${scope(node)} End boundary (exclusive) of the original phrase for this argument. Pick the same minimal phrase as the start boundary.`,
     endCriteria,
     (answer) => {
       if (answer === UNCLEAR) {

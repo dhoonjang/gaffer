@@ -24,13 +24,13 @@ const PlanSchema = z.object({
   mode: z
     .enum(["replace", "clear", "keep"])
     .describe(
-      "replace는 감독 지시를 반영한 전체 효과를 제출하되 active_effects의 무관한 기존 효과는 유지. 명시적으로 전체 교체를 요청한 경우에만 기존 효과를 모두 바꾼다. clear는 명시적으로 전체 해제, keep은 기존 효과 유지",
+      "replace submits the full set of effects reflecting the manager's instruction while keeping unrelated existing effects in active_effects. Replace all existing effects only when a full replacement is explicitly asked for. clear is an explicit full removal, keep keeps the existing effects",
     ),
   sheet: z
     .array(CandidateLineSchema)
     .max(SHEET_MAX)
     .describe(
-      "replace에는 요청한 변경·대가와 유지할 기존 효과 전체. 바꾸라고 하지 않은 active_effects는 유지한다. clear/keep은 빈 배열. behavior는 개인 지시, edge는 실행 품질, focus는 공격 방향, temper는 거칠기, legs는 체력 소모, cohesion은 형태 유지. behavior/edge/temper/legs는 target.player, focus는 target.side와 lane, cohesion은 target.side. behavior에는 action과 when, mark에는 targetPlayer가 필요하다. 수치 효과의 방향과 강도는 별도로 평가한다. 이득의 기회비용도 반영한다.",
+      "For replace: the requested changes and costs plus every existing effect to keep. Keep the active_effects not asked to change. Empty array for clear/keep. behavior is an individual instruction, edge execution quality, focus attacking direction, temper roughness, legs stamina spend, cohesion holding shape. behavior/edge/temper/legs take target.player, focus takes target.side and lane, cohesion takes target.side. behavior needs action and when; mark needs targetPlayer. The direction and strength of numeric effects are rated separately. Reflect the opportunity cost of a gain.",
     ),
 });
 
@@ -128,7 +128,7 @@ export async function interpretMatchInstructions(
       {
         name: PLAN_COMMAND,
         description:
-          "감독의 경기 전술 실행 지시를 적용한다: 맨마킹·커버·공간 침투·상대 약점 공략·왼쪽/오른쪽/중앙 공격 집중(focus). 최근 10분의 관측 사실과 현재 선수의 능력·위치·체력에 근거해 효과와 대가를 함께 정한다. 교체·자리·역할·팀 전술 6축 수치 변경은 해당 명령이 처리한다.",
+          "Applies the manager's in-match tactical instructions: man-marking, cover, runs into space, attacking an opponent's weakness, focusing the attack left/right/centre (focus). Decide the effects and their costs together from the observed facts of the last 10 minutes and the current players' ability, position and stamina. Substitutions, positions, roles and changes to the six team-tactic axes are handled by their own commands.",
         inputSchema: toToolSchema(PlanSchema),
         limit: 1,
         contextual: true,
@@ -169,15 +169,15 @@ export async function interpretMatchInstructions(
     if (line.shape === "behavior") return;
     questions[`line_${index}`] = {
       type: "score",
-      instructions: `전술 효과 ${index}의 방향과 연속 강도. 감독이 요청한 전술과 최근 10분의 관측 사실, 선수의 능력·위치·체력으로 판단한다. 대상과 모양은 바꾸지 않는다. 양수는 edge 실행 품질 증가, focus 해당 방향 선호 증가, temper 파울 증가, legs 체력 소모 증가, cohesion 형태 유지 증가이며 음수는 반대다. 이득과 기회비용을 각각 평가하고 분류 자신감을 강도로 사용하지 않는다.`,
+      instructions: `Direction and continuous strength of tactical effect ${index}. Judge from the tactic the manager asked for, the observed facts of the last 10 minutes, and the players' ability, position and stamina. Do not change the target or shape. Positive means more execution quality for edge, more preference for that direction for focus, more fouls for temper, more stamina spend for legs, more shape-holding for cohesion; negative is the reverse. Rate the gain and the opportunity cost separately, and do not use classification confidence as strength.`,
       criteria: [
-        "-3: 강한 감소",
-        "-2: 중간 감소",
-        "-1: 약한 감소",
-        "0: 효과 없음",
-        "+1: 약한 증가",
-        "+2: 중간 증가",
-        "+3: 강한 증가",
+        "-3: strong decrease",
+        "-2: moderate decrease",
+        "-1: slight decrease",
+        "0: no effect",
+        "+1: slight increase",
+        "+2: moderate increase",
+        "+3: strong increase",
       ],
     };
   });

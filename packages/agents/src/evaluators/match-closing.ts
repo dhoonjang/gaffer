@@ -8,7 +8,11 @@ export const MatchClosingSchema = z
         z
           .object({
             playerId: z.string().min(1),
-            note: z.string().min(1).max(200).describe("이 선수의 경기 사실에 근거한 평점 설명"),
+            note: z
+              .string()
+              .min(1)
+              .max(200)
+              .describe("rating notes for this player, grounded in their match facts"),
           })
           .strict(),
       )

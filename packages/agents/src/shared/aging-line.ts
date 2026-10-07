@@ -23,9 +23,8 @@ function declineAge(): number {
   return SCAN_TO;
 }
 
-/** "28세를 넘긴 선수는 내려가는 쪽이다 — 스피드·지구력·드리블." */
+/** "Players past 28 are on the way down — 스피드, 지구력, 드리블." — 축 이름은 질문의 선택지와 같은 표기다 */
 export function agingDeclineLine(): string {
-  /** 축 이름은 조사가 붙지 않는 자리에 둔다 — 받침이 갈리는 이름들이다 */
-  const axes = DECLINING_AXES.map((axis) => AXIS_KO[axis]).join("·");
-  return `${declineAge()}세를 넘긴 선수는 내려가는 쪽이다 — ${axes}.`;
+  const axes = DECLINING_AXES.map((axis) => AXIS_KO[axis]).join(", ");
+  return `Players past ${declineAge()} are on the way down — ${axes}.`;
 }

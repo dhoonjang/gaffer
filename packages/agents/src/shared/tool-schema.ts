@@ -222,6 +222,6 @@ function literalNode(value: unknown): JsonSchemaNode {
 export function inputError(error: z.ZodError): { ok: false; message: string } {
   return {
     ok: false,
-    message: `입력 오류 — ${error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(" / ")}`,
+    message: `Invalid input — ${error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(" / ")}`,
   };
 }

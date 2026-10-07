@@ -175,7 +175,7 @@ const positionArg = z
   .string()
   .min(1)
   .optional()
-  .describe(`자리 코드 — ${POSITION_CODES.join("/")}`);
+  .describe(`Position code — ${POSITION_CODES.join("/")}`);
 
 const dateArg = DateString;
 
@@ -209,7 +209,7 @@ const labelSchema = z
   .min(1)
   .max(TRAINING_LABEL)
   .describe(
-    `훈련 이름 — 감독의 말이 아니라 달력에 걸릴 제목 (예: 압박 전환 · 세트피스). ${TRAINING_LABEL}자까지`,
+    `Session name — the title shown on the calendar, not the manager's words (e.g. 압박 전환 · 세트피스). Up to ${TRAINING_LABEL} characters`,
   );
 
 /**
@@ -244,7 +244,7 @@ const TRAINING_INPUT = z
         rest: z.boolean().optional(),
       })
       .describe(
-        "훈련을 비운다 — rest=true(기본)면 그 자리를 쉬는 날로 못 박아 기본 훈련이 다시 들어오지 않는다",
+        "Clears training — with rest=true (default) the slot is fixed as a rest day so default training does not come back",
       ),
     recallSquad: z.boolean(),
     player: z
@@ -254,12 +254,14 @@ const TRAINING_INPUT = z
         position: z.string().min(1).optional(),
         rest: z
           .object({ until: dateArg })
-          .describe("그날까지 이 선수만 훈련에서 뺀다 — 누적 피로가 빠지고 전술 적응도가 무뎌진다")
+          .describe(
+            "Excuses only this player from training until that date — accumulated fatigue drains and tactical familiarity dulls",
+          )
           .optional(),
         clear: z.boolean().optional(),
       })
       .describe(
-        "한 선수만 겨냥한 개인 훈련 — 팀 훈련 위에 얹힌다. clear=true면 축·자리·휴식을 함께 거둔다",
+        "Individual training for one player — layered on top of team training. clear=true removes the axis, position and rest together",
       ),
   })
   .partial();
@@ -411,7 +413,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .min(1)
           .max(160)
           .describe(
-            "선수 이름 또는 실제 선수 id. 캐릭터북의 player: 접두어가 붙은 항목 id가 아니다. 모호하면 search_players로 확인한다",
+            "Player name or actual player id. Not the lorebook entry id with the player: prefix. If ambiguous, check with search_players",
           ),
         buyerId: z
           .string()
@@ -420,7 +422,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .max(160)
           .optional()
           .describe(
-            "영입 구단 이름·약칭 또는 실제 구단 id. 생략하면 현재 맡은 구단. 명시한 구단을 찾지 못하면 get_team으로 확인한다",
+            "Buying club's name, short name or actual club id. Omit for the club you manage. If the named club is not found, check with get_team",
           ),
       }),
       (input) => {
@@ -542,11 +544,11 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       "send_mail",
       descriptions.send_mail,
       MailSendSchema.omit({ requestId: true, recipient: true }).extend({
-        to: z.string().trim().min(1).max(160),
+        recipient: z.string().trim().min(1).max(160),
         proposal: ProposalTermsSchema.optional(),
       }),
-      ({ to, proposal, ...rest }) => {
-        const resolved = resolveMailRecipientText(state, to);
+      ({ recipient, proposal, ...rest }) => {
+        const resolved = resolveMailRecipientText(state, recipient);
         if (!resolved.ok)
           return {
             ok: false,
@@ -614,7 +616,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .trim()
           .min(1)
           .max(160)
-          .describe("우리 구단 선수의 이름 또는 player: 접두어 없는 실제 id"),
+          .describe("Name of a player at our club, or the actual id without the player: prefix"),
       }),
       (input) => {
         const picked = pickPlayerAmong(
@@ -652,17 +654,21 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .array(z.object({ playerId: playerRef, position: positionArg }))
           .min(1)
           .max(11)
-          .describe("선발로 세울 선수와 자리 — 부른 자리만 바뀌고 남은 자리는 지금 선발이 지킨다"),
+          .describe(
+            "Players to start and their positions — only the named positions change; the current starters keep the rest",
+          ),
         bench: z
           .array(z.object({ playerId: playerRef, position: positionArg }))
           .optional()
           .describe(
-            "벤치 — 생략하면 지금 벤치를 지킨다. 여기 적은 선수는 선발 자리를 지키지 않는다",
+            "Bench — omit to keep the current bench. Players listed here do not keep a starting place",
           ),
         squadLevels: z
           .array(z.object({ playerId: playerRef, level: z.enum(["first", "reserve"]) }))
           .optional()
-          .describe("1·2군 이동 — 2군 선수를 선발에 넣으려면 여기에 first로 함께 적는다"),
+          .describe(
+            "First team / reserves moves — to start a reserve player, also list them here as first",
+          ),
       }),
       (input) => setLineup(state, input),
     ),
@@ -677,7 +683,9 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
         moves: z
           .array(z.object({ playerId: playerRef, level: z.enum(["first", "reserve"]) }))
           .min(1)
-          .describe("옮길 선수와 갈 곳 — first는 1군 승격, reserve는 2군 이동"),
+          .describe(
+            "Players to move and where — first promotes to the first team, reserve moves to the reserves",
+          ),
       }),
       (input) => setSquadLevels(state, input),
     ),
@@ -685,8 +693,13 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       "set_captain",
       CORE_COMMAND_LABELS.set_captain!,
       z.object({
-        playerId: playerRef.optional().describe("주장으로 세울 선수 — 생략하면 주장은 그대로"),
-        vice: playerRef.nullable().optional().describe("부주장으로 세울 선수 — null이면 지정 해제"),
+        playerId: playerRef
+          .optional()
+          .describe("Player to make captain — omit to keep the captain"),
+        vice: playerRef
+          .nullable()
+          .optional()
+          .describe("Player to make vice-captain — null clears it"),
       }),
       (input) => setCaptain(state, input),
     ),
@@ -694,13 +707,13 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       "set_squad_number",
       descriptions.set_squad_number,
       z.object({
-        playerId: playerRef.describe("번호를 줄 선수"),
-        number: z.number().int().min(1).max(99).describe("등번호 — 1~99"),
+        playerId: playerRef.describe("Player to give the number"),
+        number: z.number().int().min(1).max(99).describe("Squad number — 1 to 99"),
         take: z
           .boolean()
           .optional()
           .describe(
-            "이미 그 번호를 단 동료가 있어도 넘겨받는다. 그 선수에게는 사용 가능한 새 번호를 배정한다",
+            "Takes the number even if a teammate already wears it. That teammate is given a new available number",
           ),
       }),
       (input) => setSquadNumber(state, input),
@@ -713,7 +726,9 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .array(playerRef)
           .min(1)
           .optional()
-          .describe("집중 육성할 2군 유망주 — 지정 전체를 다시 적는다. 생략하면 해제"),
+          .describe(
+            "Reserve prospects to develop intensively — restate the whole selection. Omit to clear",
+          ),
       }),
       (input) => setDevelopmentFocus(state, input),
     ),
@@ -725,7 +740,9 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .array(playerRef)
           .min(1)
           .optional()
-          .describe("첫 프로 계약을 줄 유스 후보 — 생략하면 전원 방출. 한 번의 확정이다"),
+          .describe(
+            "Youth candidates to give a first professional contract — omit to release them all. This is a one-time decision",
+          ),
       }),
       (input) => signYouth(state, input),
     ),
@@ -767,22 +784,28 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
          */
         move: z
           .object({
-            lane: z.enum(["left", "center", "right"]).optional().describe("좌·중·우"),
+            lane: z.enum(["left", "center", "right"]).optional().describe("Left, center or right"),
             band: z
               .enum(["defense", "midfield", "attack"])
               .optional()
-              .describe("우리 진영·중원·상대 진영"),
+              .describe("Our half, midfield or the opponent's half"),
           })
           .optional()
-          .describe("방향으로 옮긴다 — 지정하지 않은 축은 지금 자리를 그대로 쓴다"),
-        position: z.string().min(1).optional().describe("옮길 자리 (이미 그라운드에 있는 선수만)"),
+          .describe("Moves by direction — an axis left unspecified keeps the current position"),
+        position: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Position to move to (only players already on the pitch)"),
         // 자리마다 목록이 달라 열거로 서지 못한다 — 낱말은 해석 프롬프트의 역할 표가
         // 싣고 코어가 이름·id·약어를 같은 것으로 받는다 (prompts.md §2 · player.md §3.1)
         role: z
           .string()
           .min(1)
           .optional()
-          .describe("그 자리의 세부 역할 — 역할 표의 이름·id·약어 중 하나"),
+          .describe(
+            "Detailed role at that position — a name, id or abbreviation from the role table",
+          ),
       }),
       (input) => setPlayerTactic(state, input),
     ),
@@ -794,7 +817,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .array(playerRef)
           .min(1)
           .max(11)
-          .describe("감독이 이름을 든 사람만 — 나머지는 코어의 기본 순서가 잇는다"),
+          .describe("Only the people the manager named — the core's default order fills the rest"),
       }),
       (input) => setShootoutOrder(state, input),
     ),
@@ -802,9 +825,9 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       "set_set_piece_takers",
       CORE_COMMAND_LABELS.set_set_piece_takers!,
       z.object({
-        corner: playerRef.nullable().optional().describe("코너 키커 — null이면 지정 해제"),
-        freeKick: playerRef.nullable().optional().describe("프리킥 키커 — null이면 지정 해제"),
-        penalty: playerRef.nullable().optional().describe("페널티 키커 — null이면 지정 해제"),
+        corner: playerRef.nullable().optional().describe("Corner taker — null clears it"),
+        freeKick: playerRef.nullable().optional().describe("Free-kick taker — null clears it"),
+        penalty: playerRef.nullable().optional().describe("Penalty taker — null clears it"),
       }),
       (input) => setSetPieceTakers(state, input),
     ),
@@ -887,7 +910,10 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       "release_staff",
       descriptions.release_staff,
       z.object({
-        name: z.string().min(1).describe("우리 구단 스태프의 이름 — 감독이 부른 이름 그대로"),
+        name: z
+          .string()
+          .min(1)
+          .describe("Name of a staff member at our club — exactly as the manager said it"),
       }),
       (input) => releaseStaff(state, input),
     ),
@@ -895,7 +921,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
     wrap(
       "accept_manager_offer",
       descriptions.accept_manager_offer,
-      z.object({ offer: z.string().min(1).describe("제안 id 또는 구단 이름·약칭") }),
+      z.object({ offer: z.string().min(1).describe("Offer id, or club name or short name") }),
       (input) => acceptManagerOffer(state, input.offer),
     ),
 
@@ -903,16 +929,16 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       "counter_manager_offer",
       descriptions.counter_manager_offer,
       z.object({
-        offer: z.string().min(1).describe("제안 id 또는 구단 이름·약칭"),
+        offer: z.string().min(1).describe("Offer id, or club name or short name"),
         salary: z
           .number()
           .int()
           .nonnegative()
           .safe()
           .optional()
-          .describe("구단이 제시한 수정 연봉 (£/년)"),
+          .describe("Revised salary the club offered (£/year)"),
         years: z.number().int().min(1).max(100).optional(),
-        expiresOn: dateArg.optional().describe("구단이 제시한 응답 기한 YYYY-MM-DD"),
+        expiresOn: dateArg.optional().describe("Response deadline the club set, YYYY-MM-DD"),
       }),
       (input) =>
         counterManagerOffer(state, input.offer, {
@@ -925,7 +951,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
     wrap(
       "apply_manager_job",
       descriptions.apply_manager_job,
-      z.object({ team: z.string().min(1).describe("구단 id 또는 이름·약칭") }),
+      z.object({ team: z.string().min(1).describe("Club id, name or short name") }),
       (input) => applyForManagerJob(state, input.team),
     ),
     wrap("update_character", descriptions.update_character, CharacterUpdateSchema, (input) =>
@@ -955,7 +981,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .string()
           .min(1)
           .max(LEDGER_NOTE)
-          .describe(`무슨 돈인가 — 한 줄로 (${LEDGER_NOTE}자까지)`),
+          .describe(`What the money is for — one line (up to ${LEDGER_NOTE} characters)`),
       }),
       (input) => applyFinanceEvent(state, input),
     ),
@@ -970,7 +996,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
          * 표 한 장의 값이다 — 상한은 오타를 막는 자리이고, 실제 폭은 코어가 기준가
          * 대비로 잘라 준다 (finance.md §5.2).
          */
-        price: z.number().int().min(1).max(TICKET_PRICE_MAX).describe("표 한 장의 값 (£)"),
+        price: z.number().int().min(1).max(TICKET_PRICE_MAX).describe("Price of one ticket (£)"),
       }),
       (input) => setTicketPrice(state, input),
     ),
@@ -992,20 +1018,26 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
             .number()
             .int()
             .min(0)
-            .describe("계약이 이 일수 안에 끝나는 선수 — 무계약은 0일이라 언제나 걸린다"),
-          maxWage: z.number().min(0).describe("주급 상한 (£/주)"),
+            .describe(
+              "Players whose contract ends within this many days — no contract counts as 0 days and always matches",
+            ),
+          maxWage: z.number().min(0).describe("Maximum wage (£/week)"),
           homegrown: z
             .boolean()
-            .describe("우리 협회 기준 홈그로운인가 — 등록 명단 8명 규칙의 자격"),
+            .describe(
+              "Homegrown under our association — eligibility for the 8-player squad registration rule",
+            ),
           minGrowth: z
             .enum(GROWTH_OUTLOOKS)
             .describe(
-              `성장 가능성 하한 — ${GROWTH_OUTLOOKS.map((k) => `${k}(${GROWTH_OUTLOOK_KO[k]})`).join(" · ")}`,
+              `Minimum growth outlook — ${GROWTH_OUTLOOKS.map((k) => `${k}(${GROWTH_OUTLOOK_KO[k]})`).join(" · ")}`,
             ),
           knowledge: z
             .enum(["own", "seen", "rumoured"])
-            .describe("최소 지식 수준 — seen이면 직접 상대해 봤거나 그보다 잘 아는 선수만"),
-          foot: z.enum(["left", "right", "both"]).describe("주발"),
+            .describe(
+              "Minimum knowledge level — seen means only players faced in person or known better",
+            ),
+          foot: z.enum(["left", "right", "both"]).describe("Preferred foot"),
           sortBy: z.enum([
             "rating",
             "age",
@@ -1020,7 +1052,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           ]),
           limit: z.number().int().min(1).max(15),
           playerId: playerRef.describe(
-            "이 id를 주면 그 선수 한 명의 상세 카드를 돌려준다 (검색 조건 무시)",
+            "Given this id, returns the detailed card for that one player (search filters ignored)",
           ),
         })
         .partial(),
@@ -1075,16 +1107,16 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
         view: z
           .enum(["standings", "fixtures", "leaders", "calendar"])
           .describe(
-            "standings=순위표/대진표 · fixtures=경기 검색 · leaders=개인 순위와 팀 열 · calendar=감독의 달력(경기+훈련+컵 추첨)",
+            "standings=table/bracket · fixtures=match search · leaders=individual rankings and team columns · calendar=the manager's calendar (matches + training + cup draws)",
           ),
         split: z
           .enum(["all", "home", "away"])
           .optional()
-          .describe("standings 전용 — 홈 표·원정 표로 다시 세운다"),
+          .describe("standings only — rebuilds the table as a home table or away table"),
         key: z
           .enum(LEADERBOARD_KEYS)
           .optional()
-          .describe("leaders 전용 — 한 축만. 생략하면 다섯 축 전부"),
+          .describe("leaders only — a single axis. Omit for all five axes"),
         team: z.string().min(1).optional(),
         opponent: z.string().min(1).optional(),
         competition: z.string().min(1).optional(),
@@ -1095,7 +1127,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .max(SEASON_MAX)
           .optional()
           .describe(
-            "지나간 시즌 — 순위표는 그때의 최종 표, 개인 순위는 그 시즌의 표(팀 열은 없다), 일정은 결산에 남은 감독 팀의 경기",
+            "A past season — the table is the final table of that season, rankings are that season's (no team columns), fixtures are the manager's team matches kept in the season record",
           ),
         when: z.enum(["past", "upcoming", "both"]).optional(),
         from: dateArg.optional(),
