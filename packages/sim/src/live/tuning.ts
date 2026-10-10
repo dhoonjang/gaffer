@@ -88,6 +88,12 @@ export const DUEL_TACKLER_EDGE = 36;
 export const TACKLE_SKILL = { tackling: 0.85, anticipation: 0.15 } as const;
 
 /**
+ * 드리블의 기량 — 공을 붙이는 기술(드리블)에 제치는 몸놀림(민첩성)과 몸이 닿아도 버티는
+ * 균형 감각이 거든다 (live-match.md §2). 카드의 「드리블」 낱말이 보는 성공 축과 같은 갈래다.
+ */
+export const DRIBBLE_SKILL = { dribbling: 0.7, agility: 0.15, balance: 0.15 } as const;
+
+/**
  * **수비 읽기** — 공이 상대에게 있을 때 어디에 서는가. 위치 선정이 중심이고 예측력·집중력이
  * 거든다. 공 없는 수비 가치장의 온도, 수비 형태 오차, 슛 블록이 읽는다.
  */

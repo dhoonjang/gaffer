@@ -63,7 +63,7 @@ FC 공식 레이팅의 세부 능력치에서 온다. 자리에서의 의미는 
 | 기술 | `finishing`      | 결정력      | 박스 안 슈팅의 정확도와 골 확률                                             | Finishing 0.8 · Volleys 0.2                            | **분석형** |
 |      | `longShots`      | 중거리 슛   | 박스 밖 슈팅의 정확도와 골 확률, 모든 슛의 속도                             | Long Shots 0.7 · Shot Power 0.3                        | **분석형** |
 |      | `heading`        | 헤더        | 헤더 슛의 정확도, 공중볼 경합의 일부, 세트피스 슈터                         | Heading Accuracy                                       | 관측형     |
-|      | `dribbling`      | 드리블      | 태클 대 드리블의 경합, 골키퍼 덮치기와의 경합                               | Dribbling                                              | 관측형     |
+|      | `dribbling`      | 드리블      | 태클 대 드리블의 경합(민첩성·균형 감각이 거든다), 골키퍼 덮치기와의 경합    | Dribbling                                              | 관측형     |
 |      | `firstTouch`     | 퍼스트 터치 | 받는 순간의 공 처리(튀어 나감)와 다음 동작까지의 지연                       | Ball Control                                           | 관측형     |
 |      | `passing`        | 패스        | 패스 오차의 폭, 걷어내기의 거리                                             | Short Passing 0.7 · Long Passing 0.3                   | 관측형     |
 |      | `crossing`       | 크로스      | 크로스·코너킥의 오차와 속도, 크로스를 고를 확률, 코너 키커                  | Crossing 0.85 · Curve 0.15                             | 관측형     |
@@ -84,8 +84,8 @@ FC 공식 레이팅의 세부 능력치에서 온다. 자리에서의 의미는 
 |      | `workRate`       | 활동량      | 공격 가담·수비 복귀 버릇 (성향 · §3.4)                                      | Stamina 0.6 · Aggression 0.4 + Relentless·Press Proven | 관측형     |
 | 신체 | `acceleration`   | 가속력      | 첫 몇 걸음의 가속 (live-match.md §5.3)                                      | Acceleration                                           | 관측형     |
 |      | `pace`           | 속력        | 최고 속도                                                                   | Sprint Speed                                           | 관측형     |
-|      | `agility`        | 민첩성      | 골키퍼의 다이빙 범위·손이 닿는 반경 (필드 선수는 아직 읽지 않는다)          | Agility (GK는 GK Diving)                               | 관측형     |
-|      | `balance`        | 균형 감각   | 지금 실시간 경기가 읽지 않는다                                              | Balance                                                | 관측형     |
+|      | `agility`        | 민첩성      | 골키퍼의 다이빙 범위·손이 닿는 반경, 드리블 경합에서 제치는 몸놀림          | Agility (GK는 GK Diving)                               | 관측형     |
+|      | `balance`        | 균형 감각   | 드리블 경합에서 몸이 닿아도 버티기                                          | Balance                                                | 관측형     |
 |      | `jumpingReach`   | 점프력      | 공중볼 경합, 다룰 수 있는 공의 높이, 세트피스에 올라갈 사람                 | Jumping + (키 − 182cm) × 0.8                           | 관측형     |
 |      | `strength`       | 몸싸움      | 어깨 싸움, 태클 경합의 일부                                                 | Strength                                               | 관측형     |
 |      | `stamina`        | 지구력      | 경기 중 체력 소모                                                           | Stamina                                                | 관측형     |

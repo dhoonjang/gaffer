@@ -111,6 +111,7 @@ import {
   DUEL_SCALE,
   DUEL_TACKLER_EDGE,
   TACKLE_SKILL,
+  DRIBBLE_SKILL,
   DEFENSIVE_READING,
   ATTACKING_READING,
   FIELD_MAN_MARK,
@@ -646,6 +647,7 @@ const blendOf = (
   weights: Readonly<Partial<Record<Parameters<typeof matchAttribute>[1], number>>>,
 ) => Object.entries(weights) as unknown as Blend;
 const TACKLE_BLEND = blendOf(TACKLE_SKILL);
+const DRIBBLE_BLEND = blendOf(DRIBBLE_SKILL);
 const DEFENSIVE_BLEND = blendOf(DEFENSIVE_READING);
 const ATTACKING_BLEND = blendOf(ATTACKING_READING);
 
@@ -2616,7 +2618,7 @@ function tackleWinChance(ctx: Ctx, tackler: LivePlayer, owner: LivePlayer): numb
   return dsigmoid(
     (blendAttr(ctx, tackler, TACKLE_BLEND) +
       attr(ctx, tackler, "strength") * 0.4 -
-      attr(ctx, owner, "dribbling") -
+      blendAttr(ctx, owner, DRIBBLE_BLEND) -
       attr(ctx, owner, "strength") * 0.4 +
       DUEL_TACKLER_EDGE) /
       DUEL_SCALE,
