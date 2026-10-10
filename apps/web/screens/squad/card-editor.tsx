@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  AXIS_KO,
   CARD_STEP_MAX,
   CARD_WORDS,
   CARD_WORD_DEFS,
   PLACES,
   PLACE_KO,
+  cardKeyAxes,
   cardStep,
   cardTitle,
   cardWordsAt,
@@ -14,6 +16,7 @@ import {
   signedStep,
   type CardSteps,
   type CardWord,
+  type OverallAxis,
   type Place,
   type RoleCard,
 } from "@gaffer/domain";
@@ -55,10 +58,15 @@ function withPlace(card: RoleCard | null, place: Place | null): RoleCard | null 
 const habitText = (word: CardWord, lean: number) =>
   `${CARD_WORD_DEFS[word].ko} ${lean > 0 ? "+" : "−"}${Math.abs(lean).toFixed(1)}`;
 
+/** 국면마다 카드가 요구하는 축의 수 — FM의 핵심 능력치 다섯 */
+const KEY_AXES = 5;
+
 export function CardEditor({
   card,
   place,
   habit,
+  fit,
+  axes,
   onCard,
 }: {
   /** 지금 판 위의 카드 — 아직 저장되지 않은 선택까지 포함한다. null이면 기본 행동 */
@@ -67,12 +75,18 @@ export function CardEditor({
   place: Place;
   /** 이 자리에서 이 선수의 타고난 버릇 — 카드 위에 얹힌다 (읽기만 한다) */
   habit: CardSteps;
+  /** 이 카드와 기본 카드에서 내는 전력 — 명단·전술판과 같은 함수(`slotOverallOf`)의 값 */
+  fit: { card: number; base: number };
+  /** 이 선수의 축 — 카드가 요구하는 축 옆에 값을 세운다 */
+  axes: Readonly<Record<OverallAxis, number>>;
   /** 카드를 고치는 손잡이 — 없으면(배치 밖·경기 화면이 잠김) 읽기만 한다 */
   onCard?: ((card: RoleCard | null) => void) | undefined;
 }) {
   const keeper = place === "GK";
   const words = cardWordsAt(keeper);
   const ipPlace = card?.ip.place ?? null;
+  const keyAxes = cardKeyAxes(card, KEY_AXES);
+  const gap = fit.card - fit.base;
   const set = (word: CardWord, step: number) => (e: React.MouseEvent) => {
     // 상세는 행 안에 있다 — 막지 않으면 행 토글로 새어 나가 접힌다
     e.stopPropagation();
@@ -83,6 +97,11 @@ export function CardEditor({
       <div className="pd-card-head">
         <span className="pd-axis-group-name">카드</span>
         <b className="pd-card-title">{cardTitle(card)}</b>
+        {/* 이 카드에서 내는 전력 — 기본 카드와 다를 때만 그 차를 함께 적는다 */}
+        <span className="pd-card-fit">
+          전력 <b>{fit.card}</b>
+          {gap !== 0 && ` (기본 ${fit.base})`}
+        </span>
         {card && onCard && (
           <Button
             variant="ghost"
@@ -177,6 +196,12 @@ export function CardEditor({
                   </span>
                 );
               })}
+              {/* 이 국면의 낱말이 요구하는 축 — 성공을 정하는 축과 그 선수의 값 */}
+              {keyAxes[phase.key].length > 0 && (
+                <span className="pd-card-keys">
+                  {keyAxes[phase.key].map((axis) => `${AXIS_KO[axis]} ${axes[axis]}`).join(" · ")}
+                </span>
+              )}
             </div>
           </div>
         );

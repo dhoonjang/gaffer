@@ -831,6 +831,21 @@
   align-items: baseline;
   gap: 8px;
 }
+/* 이 카드에서 내는 전력 — 읽는 값이다 */
+.pd-card-fit {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.pd-card-fit b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* 국면의 낱말이 요구하는 축 — 낱말 격자의 한 줄을 통째로 쓴다 */
+.pd-card-keys {
+  grid-column: 1 / -1;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
 /* 버릇 — 읽는 값이라 손잡이 없이 글자로만 선다 */
 .pd-card-habit {
   color: var(--text-2);

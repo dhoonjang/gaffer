@@ -2,7 +2,7 @@ import { LorebookContentSchema, type LorebookContent } from "../people/lorebook"
 import { z } from "zod";
 import { DateString } from "../core/date-string";
 import { SQUAD_STATUSES, type SquadStatus } from "./squad-rules";
-import { CARD_WORDS, CARD_WORD_DEFS, cardStep, type RoleCard } from "./role-card";
+import { CARD_WORDS, CARD_WORD_DEFS, cardStep, phaseOfWord, type RoleCard } from "./role-card";
 import { PlaceSchema, type Place } from "./place";
 import { SLOT_REFERENCE } from "./slot-reference";
 
@@ -1053,6 +1053,32 @@ export function inheritedCard(
 /** 자리 + 카드 → 축 가중치. 카드가 없으면 그 자리의 기본 가중치다 */
 export function cardWeights(position: string, card?: RoleCard | null): OverallWeights {
   return cardModelOf(weightSlotOf(position), card).weights;
+}
+
+/**
+ * **국면마다 카드가 요구하는 축** — 그 국면 낱말들의 성공 축을 단계의 크기로 모아 큰 순으로
+ * (player.md §3). 화면의 핵심 능력치다 — 낱말이 없는 국면은 비어 있다. 무게는
+ * `cardWeights`가 얹는 몫과 같은 셈이다.
+ */
+export function cardKeyAxes(
+  card: RoleCard | null | undefined,
+  count: number,
+): { ip: OverallAxis[]; oop: OverallAxis[] } {
+  const lift = { ip: new Map<OverallAxis, number>(), oop: new Map<OverallAxis, number>() };
+  for (const word of CARD_WORDS) {
+    const step = cardStep(card, word);
+    if (step === 0) continue;
+    const def = CARD_WORD_DEFS[word];
+    const phase = lift[phaseOfWord(word)];
+    for (const axis of step > 0 ? def.plusAxes : def.minusAxes)
+      phase.set(axis, (phase.get(axis) ?? 0) + Math.abs(step));
+  }
+  const top = (m: Map<OverallAxis, number>) =>
+    [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, count)
+      .map(([axis]) => axis);
+  return { ip: top(lift.ip), oop: top(lift.oop) };
 }
 
 /**
