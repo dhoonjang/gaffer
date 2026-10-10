@@ -27,7 +27,8 @@ const CAUSE_TEXT: Record<EventCauseCode, (names: string[], cause: EventCause) =>
       ? `${josa(dribbler, "이/가")} ${beaten ? `${josa(beaten, "을/를")} ` : ""}${cause.note ? `${josa(cause.note, "으로/로")} ` : ""}제치고`
       : "개인 돌파로",
   error: ([culprit]) => (culprit ? `${culprit}의 실수에서` : "실수에서"),
-  keeper_out: ([keeper]) => (keeper ? `나온 ${keeper}가 닿지 못해` : "나온 골키퍼를 넘겨"),
+  keeper_out: ([keeper]) =>
+    keeper ? `나온 ${josa(keeper, "이/가")} 닿지 못해` : "나온 골키퍼를 넘겨",
   long_ball: ([kicker, winner]) =>
     winner ? `${kicker ? `${kicker}의 ` : ""}긴 공을 ${josa(winner, "이/가")} 따내` : "긴 공에서",
   header: () => "헤더",

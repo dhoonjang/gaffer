@@ -93,9 +93,9 @@ FC 공식 레이팅의 세부 능력치에서 온다. 자리에서의 의미는 
 | GK   | `reflexes`       | 반사 신경   | 선방 판정, 페널티 선방                                                      | GK Reflexes                                            | 관측형     |
 |      | `handling`       | 핸들링      | 잡을지 튕길지                                                               | GK Handling                                            | 관측형     |
 |      | `oneOnOnes`      | 1대1        | 뚫고 들어온 공격수 덮치기                                                   | GK Reflexes 0.4 · GK Positioning 0.4 · GK Diving 0.2   | 관측형     |
-|      | `aerialReach`    | 공중볼 처리 | 박스 안 골키퍼의 손이 닿는 높이 (live-match.md §5.6)                        | Jumping + (키 − 185cm) × 0.8                           | 관측형     |
+|      | `aerialReach`    | 공중볼 처리 | 박스 안 골키퍼의 손이 닿는 높이와 공중볼 경합의 손 (live-match.md §5.6)     | Jumping + (키 − 185cm) × 0.8                           | 관측형     |
 |      | `kicking`        | 킥          | 골킥 롱 배급의 정확도와 힘                                                  | GK Kicking                                             | 관측형     |
-|      | `commandOfArea`  | 공중볼 장악 | 지금 실시간 경기가 읽지 않는다 (성향)                                       | 45 + 키 + Cross Claimer                                | 관측형     |
+|      | `commandOfArea`  | 공중볼 장악 | 크로스에 나오는 거리 (성향 · live-match.md §5.6)                            | 45 + 키 + Cross Claimer                                | 관측형     |
 |      | `rushingOut`     | 나오기      | 나오기 버릇 — 라인 뒤를 덮으러 나오는 거리 (성향 · §3.4)                    | 40 + GK Diving + Rush Out                              | 관측형     |
 
 - **골키퍼의 판단은 골키퍼 위치선정에서 읽는다** — EA는 골키퍼의 필드 판단 축을 따로 재지
@@ -338,7 +338,8 @@ RoleCard {
 
 선수마다 같은 낱말 위에 **타고난 버릇**이 있다. 성향 축(§1)이 그 낱말을 기울인다 — 창의성은
 드리블, 적극성은 압박, 활동량은 공격 가담과 수비 복귀, 골키퍼의 나오기는 나오기다
-(`HABIT_WORDS`). 공중볼 장악은 아직 기울일 낱말이 없다.
+(`HABIT_WORDS`). 공중볼 장악은 낱말을 거치지 않고 크로스에 나오는 거리를 정한다
+([live-match.md](../match/live-match.md) §5.6).
 
 ```
 버릇 단계 = (그 성향 축 − 그 자리 선수의 평균) ÷ HABIT_SCALE     ±HABIT_MAX에서 자른다

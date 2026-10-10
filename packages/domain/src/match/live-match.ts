@@ -180,6 +180,11 @@ export interface LiveMatchState {
     tick: number;
     axis: AttributeAxis;
   } | null;
+  /**
+   * 크로스에 나온 골키퍼 — 그 공을 잡으면 지운다. 남아 있는 동안 그 골문에 난 골이
+   * `keeper_out`의 근거다 (live-match.md §5.6)
+   */
+  lastClaim: { by: string; side: MatchSide; tick: number } | null;
   restart: LiveRestart | null;
   setPiece: {
     origin: ShotOrigin;

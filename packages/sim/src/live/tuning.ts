@@ -707,6 +707,27 @@ export const KEEPER_AERIAL_PIVOT = 60;
 export const KEEPER_REACH_PER_POINT = 0.01;
 
 /**
+ * **크로스에 나오는 거리** (m) — 상대 크로스가 우리 박스 안, 골문 중심에서 이 거리 안에 떨어지면
+ * 골키퍼가 공의 길로 나온다. 공중볼 장악이 골키퍼 평균(`SLOT_INCLINATION`)일 때의 값이고
+ * 1점마다 `KEEPER_CLAIM_PER_POINT`씩, `KEEPER_CLAIM_LIMITS` 안에 선다 (live-match.md §5.6).
+ * 골문에서 떨어진 거리별 차단(5.5m 안 · 5.5–8m · 8–11m)이 실측(football-reference §5)에 선다
+ */
+export const KEEPER_CLAIM_RANGE = 7;
+
+export const KEEPER_CLAIM_PER_POINT = 0.1;
+
+export const KEEPER_CLAIM_LIMITS = [3, 12] as const;
+
+/**
+ * 크로스에 나오는 골키퍼의 가속 배수 — 짧은 거리에 몸을 던지는 걸음이다. 필드 선수의 가속
+ * (`ACCELERATION`)은 최고 속도까지의 평균이라 첫 몇 미터를 실제(5m ≈ 1.1초)보다 느리게 간다
+ */
+export const KEEPER_CLAIM_BURST = 3.5;
+
+/** 크로스에 나왔다가 닿지 못한 골키퍼의 골문에 난 골이 `keeper_out`을 다는 시간 (초) */
+export const KEEPER_OUT_SECONDS = 4;
+
+/**
  * 받는 순간 붙은 상대 한 명이 얹는 압박의 무게 — 마킹이 리그 평균(`MARKING_PIVOT`)이면 1이고
  * 1점마다 `MARKING_PRESSURE_PER_POINT`씩, `MARKING_PRESSURE_RANGE` 안에 선다 (live-match.md §5.3)
  */

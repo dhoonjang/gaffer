@@ -63,6 +63,7 @@ import { teamParamsOf, type TeamParams } from "./params";
 import {
   accelerationFactor,
   advanceFlight,
+  claimRangeOf,
   loftErrorOf,
   markingPressureOf,
   maxSpeedOf,
@@ -190,6 +191,9 @@ import {
   KEEPER_ATTACK_ADVANCE,
   KEEPER_ATTACK_MAX_OUT,
   KEEPER_REACTION_SECONDS,
+  KEEPER_OUT_SECONDS,
+  KEEPER_CLAIM_BURST,
+  DECELERATION,
   KEEP_VALUE,
   LINE_STEP_UP,
   LINE_STEP_UP_SPEED,
@@ -401,6 +405,7 @@ export function createLiveState(input: LiveInput, options: CreateLiveOptions): L
     lastPass: null,
     lastTurnover: null,
     lastBeat: null,
+    lastClaim: null,
     restart: {
       kind: "kickoff",
       side: options.kickoffSide,
@@ -556,6 +561,7 @@ function cloneState(s: LiveMatchState): LiveMatchState {
     lastPass: s.lastPass ? { ...s.lastPass } : null,
     lastTurnover: s.lastTurnover ? { ...s.lastTurnover, at: { ...s.lastTurnover.at } } : null,
     lastBeat: s.lastBeat ? { ...s.lastBeat } : null,
+    lastClaim: s.lastClaim ? { ...s.lastClaim } : null,
     possessionTime: { ...s.possessionTime },
     lastShotAt: { ...s.lastShotAt },
     bench: { ...s.bench },
@@ -1278,7 +1284,10 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
   p.action = best[0];
 }
 
-/** 골키퍼 — 공과 골문을 잇는 선 위, 가까우면 나온다; 박스 안의 느슨한 공은 잡으러 간다 */
+/**
+ * 골키퍼 — 공과 골문을 잇는 선 위, 가까우면 나온다; 박스 안의 느슨한 공과 장악 거리 안에
+ * 떨어지는 크로스는 잡으러 간다
+ */
 function keeperTarget(ctx: Ctx, p: LivePlayer): FieldPoint {
   const { state } = ctx;
   const own = ownGoalOf(p.side);
@@ -1295,6 +1304,16 @@ function keeperTarget(ctx: Ctx, p: LivePlayer): FieldPoint {
     const dx = flight.to.x - state.ball.x;
     const t = Math.abs(dx) > 0.01 ? clamp((p.x - state.ball.x) / dx, 0, 1) : 1;
     return inside({ x: p.x, y: state.ball.y + (flight.to.y - state.ball.y) * t });
+  }
+  if (flight && claimsCross(ctx, p, flight)) {
+    // 공이 지나가는 길에서 가장 가까운 점 — 떨어지는 자리에서는 머리들이 먼저 닿는다
+    p.action = "chase";
+    state.lastClaim = { by: p.id, side: p.side, tick: state.tick };
+    const { t } = segmentDistance(p, state.ball, flight.to);
+    return {
+      x: state.ball.x + (flight.to.x - state.ball.x) * t,
+      y: state.ball.y + (flight.to.y - state.ball.y) * t,
+    };
   }
   const attacking = state.possession === p.side;
   const out = attacking
@@ -1320,6 +1339,32 @@ function keeperTarget(ctx: Ctx, p: LivePlayer): FieldPoint {
   });
 }
 
+/** 크로스를 잡으러 나가는 중인가 — 크로스가 떠 있는 동안 공을 쫓는 골키퍼 */
+function claiming(ctx: Ctx, keeper: LivePlayer): boolean {
+  return keeper.action === "chase" && ctx.state.ball.flight?.kind === "cross";
+}
+
+/**
+ * 크로스를 잡으러 나간 골키퍼는 그 점에 멈춰 설 수 있는 속도까지만 낸다 — 지나치면 공이 등 뒤로
+ * 간다
+ */
+function arriving(ctx: Ctx, keeper: LivePlayer): number {
+  const player = playerOf(ctx, keeper.id);
+  const top = maxSpeedOf(keeper, player.attributes.pace, ctx.input.injured.has(keeper.id));
+  return Math.min(1, Math.sqrt(2 * DECELERATION * distance(keeper, keeper.target)) / top);
+}
+
+/** 상대 크로스가 우리 박스 안, 골문 중심에서 이 골키퍼의 장악 거리 안에 떨어지는가 (§5.6) */
+function claimsCross(ctx: Ctx, keeper: LivePlayer, flight: BallFlight): boolean {
+  return (
+    flight.kind === "cross" &&
+    flight.side !== keeper.side &&
+    inOwnBox(flight.to, keeper.side) &&
+    distance(flight.to, ownGoalOf(keeper.side)) <
+      claimRangeOf(playerOf(ctx, keeper.id).attributes.commandOfArea)
+  );
+}
+
 function slotOf(ctx: Ctx, p: LivePlayer): WeightSlot {
   return weightSlotOf(ctx.slot.get(p.id)?.position ?? "");
 }
@@ -1336,7 +1381,8 @@ function phaseSlotOf(ctx: Ctx, p: LivePlayer, attacking: boolean): WeightSlot {
  */
 function urgencyOf(ctx: Ctx, p: LivePlayer): number | undefined {
   const { state } = ctx;
-  if (state.restart || isKeeper(ctx, p)) return undefined;
+  if (state.restart) return undefined;
+  if (isKeeper(ctx, p)) return claiming(ctx, p) ? arriving(ctx, p) : undefined;
   const slot = slotOf(ctx, p);
   const gap = distance(p, p.target);
   const myDepth = depthOf(p.x, p.side);
@@ -1399,7 +1445,11 @@ function moveAll(ctx: Ctx): void {
       ctx.input.injured.has(p.id),
       player.attributes.stamina,
       ctx.input.sheet.legs[p.id] ?? 1,
-      isKeeper(ctx, p) ? 1 : accelerationFactor(player.attributes.acceleration),
+      isKeeper(ctx, p)
+        ? claiming(ctx, p)
+          ? KEEPER_CLAIM_BURST
+          : 1
+        : accelerationFactor(player.attributes.acceleration),
       urgencyOf(ctx, p),
     );
     const line = stat(ctx, p.id);
@@ -1516,6 +1566,7 @@ function looseBall(ctx: Ctx): void {
 
 function takeBall(ctx: Ctx, p: LivePlayer, opts: { fromPass?: boolean } = {}): void {
   const { state } = ctx;
+  if (state.lastClaim?.by === p.id) state.lastClaim = null;
   const previous = state.possession;
   if (previous !== p.side) {
     state.lastTurnover = {
@@ -1600,7 +1651,8 @@ function stepFlight(ctx: Ctx): void {
     if (
       flight.kind === "cross" &&
       flight.side !== caught.side &&
-      flight.travelled < CROSS_BLOCK_WINDOW
+      flight.travelled < CROSS_BLOCK_WINDOW &&
+      !isKeeper(ctx, caught)
     ) {
       // 크로스를 몸으로 막았다 — 공은 튄다. 골라인 밖이면 코너다
       state.ball.flight = null;
@@ -1791,9 +1843,13 @@ function aerialContest(ctx: Ctx, intended?: LivePlayer): void {
   let winner: LivePlayer | null = null;
   let best = -Infinity;
   for (const p of around) {
+    // 박스 안 골키퍼는 손으로 겨룬다 — 점프력·헤더의 몫을 공중볼 처리가 갖는다 (§5.6)
+    const reach =
+      isKeeper(ctx, p) && inOwnBox(p, p.side)
+        ? attr(ctx, p, "aerialReach") * 0.6
+        : attr(ctx, p, "jumpingReach") * 0.45 + attr(ctx, p, "heading") * 0.15;
     const score =
-      attr(ctx, p, "jumpingReach") * 0.45 +
-      attr(ctx, p, "heading") * 0.15 +
+      reach +
       attr(ctx, p, "strength") * 0.25 +
       attr(ctx, p, "positioning") * 0.15 +
       (intended && p.id === intended.id ? 6 : 0) -
@@ -2342,6 +2398,10 @@ function cross(ctx: Ctx, owner: LivePlayer, spot: FieldPoint, delivery: number):
     distance: dist,
     height: 2.6,
   };
+  // 장악 거리 안에 떨어지는 크로스에는 골키퍼가 반응 시간 뒤 나온다
+  const keeper = state.players.find((q) => q.side !== owner.side && isKeeper(ctx, q));
+  if (keeper && claimsCross(ctx, keeper, state.ball.flight))
+    keeper.decideAt = Math.min(keeper.decideAt, state.tick + dead(KEEPER_REACTION_SECONDS));
 }
 
 /** 걷어내기 — 멀리 보내는 긴 킥이라 패스가 거리와 속도를 정한다 */
@@ -2623,6 +2683,11 @@ function goalCauses(ctx: Ctx, scorer: string, assist: string | null): EventCause
       playerIds: [beat.by, beat.beaten],
       note: AXIS_KO[beat.axis],
     });
+  }
+  // 크로스에 나온 골키퍼가 닿지 못한 골문
+  const claim = state.lastClaim;
+  if (claim && claim.side !== side && state.tick - claim.tick < dead(KEEPER_OUT_SECONDS)) {
+    causes.push({ code: "keeper_out", playerIds: [claim.by] });
   }
   // 시트의 카드 수정이 걸린 말이 관여했다
   const involved = [scorer, ...(assist ? [assist] : []), ...(turnover ? [turnover.by] : [])];

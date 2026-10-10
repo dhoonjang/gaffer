@@ -1,5 +1,5 @@
 import type { FieldPoint, LiveAction, LivePlayer, Player } from "@gaffer/domain";
-import { FIELD, LIVE_STEP, RATING_MAX } from "@gaffer/domain";
+import { FIELD, LIVE_STEP, RATING_MAX, SLOT_INCLINATION } from "@gaffer/domain";
 import { SPEED_BAND, conditionAfterLoad } from "../load";
 import { clamp, distance } from "./geometry";
 import {
@@ -8,6 +8,9 @@ import {
   ACCELERATION_PIVOT,
   ACCELERATION_RANGE,
   KEEPER_AERIAL_PIVOT,
+  KEEPER_CLAIM_LIMITS,
+  KEEPER_CLAIM_PER_POINT,
+  KEEPER_CLAIM_RANGE,
   KEEPER_REACH_HEIGHT,
   KEEPER_REACH_PER_POINT,
   LOFT_SKILL_PER_POINT,
@@ -183,4 +186,17 @@ export function reachHeightOf(player: Player, keeperInBox: boolean): number {
     ? KEEPER_REACH_HEIGHT +
         (player.attributes.aerialReach - KEEPER_AERIAL_PIVOT) * KEEPER_REACH_PER_POINT
     : 1.2 + player.attributes.jumpingReach / 80;
+}
+
+/**
+ * 골키퍼가 크로스에 나오는 거리 (m) — 골문 중심에서 잰다. 공중볼 장악(성향)이 정하는 선택이고,
+ * 나와서 잡는지는 닿는 높이와 먼저 닿는 말이 정한다 (live-match.md §5.6)
+ */
+export function claimRangeOf(commandOfArea: number): number {
+  return clamp(
+    KEEPER_CLAIM_RANGE +
+      (commandOfArea - SLOT_INCLINATION.GK.commandOfArea) * KEEPER_CLAIM_PER_POINT,
+    KEEPER_CLAIM_LIMITS[0],
+    KEEPER_CLAIM_LIMITS[1],
+  );
 }

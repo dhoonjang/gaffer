@@ -1,8 +1,15 @@
 import { isOffsidePosition } from "../src/live/step";
-import { accelerationFactor, loftErrorOf, markingPressureOf } from "../src/live/physics";
+import {
+  accelerationFactor,
+  claimRangeOf,
+  loftErrorOf,
+  markingPressureOf,
+} from "../src/live/physics";
 import {
   ACCELERATION_PIVOT,
   ACCELERATION_RANGE,
+  KEEPER_CLAIM_LIMITS,
+  KEEPER_CLAIM_RANGE,
   LOFT_SKILL_PIVOT,
   LOFT_SKILL_RANGE,
   MARKING_PIVOT,
@@ -18,6 +25,7 @@ import {
   DEFAULT_TACTICS,
   FIELD,
   LIVE_STEP,
+  SLOT_INCLINATION,
   type WeightSlot,
 } from "@gaffer/domain";
 import {
@@ -476,5 +484,14 @@ describe("가속력과 마킹의 통로 (live-match.md §5.3)", () => {
     expect(loftErrorOf(LOFT_SKILL_PIVOT + 10)).toBeLessThan(1);
     expect(loftErrorOf(99)).toBeGreaterThanOrEqual(low);
     expect(loftErrorOf(0)).toBeLessThanOrEqual(high);
+  });
+
+  it("크로스에 나오는 거리는 골키퍼 평균이면 기준값이고, 공중볼 장악이 오를수록 멀며, 범위 밖으로 나가지 않는다 (§5.6)", () => {
+    const [low, high] = KEEPER_CLAIM_LIMITS;
+    const pivot = SLOT_INCLINATION.GK.commandOfArea;
+    expect(claimRangeOf(pivot)).toBe(KEEPER_CLAIM_RANGE);
+    expect(claimRangeOf(pivot + 10)).toBeGreaterThan(KEEPER_CLAIM_RANGE);
+    expect(claimRangeOf(0)).toBeGreaterThanOrEqual(low);
+    expect(claimRangeOf(99)).toBeLessThanOrEqual(high);
   });
 });
