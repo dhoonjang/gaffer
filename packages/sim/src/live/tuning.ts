@@ -72,11 +72,13 @@ export const TACKLE_ATTEMPT = 0.002;
 export const TACKLE_IN_PATH = 0.007;
 
 /**
- * 1대1의 수비 쪽 여유 (능력치 점) — 능력이 같으면 태클이 약 80% 이긴다. 드리블은 제칠 수 있는 상대에게만
+ * 1대1의 수비 쪽 여유 (능력치 점) — 능력이 같으면 태클이 약 84% 이긴다. 드리블은 제칠 수 있는 상대에게만
  * 거는 선택이라 실제 드리블 성공이 실측 45%쯤에, 태클 성공이 실측 61%(StatsBomb 12.0/19.7) 아래
- * 밴드에 선다 (football-reference.md §5). 여유가 클수록 확률이 끝에 붙어 능력 차가 결과를 덜 움직인다
+ * 밴드에 선다 (football-reference.md §5). 공격진의 태클 축이 실측(EA)대로 낮아 여유가 작으면 태클이
+ * 밴드 밑으로 털리고, 뚫린 압박이 드리블·슈팅을 실측 위로 띄운다. 여유가 클수록 확률이 끝에 붙어
+ * 능력 차가 결과를 덜 움직인다
  */
-export const DUEL_TACKLER_EDGE = 30;
+export const DUEL_TACKLER_EDGE = 36;
 
 /**
  * 태클의 기량 — 발을 넣는 기술(태클)에 **타이밍**(예측력)이 거든다 (live-match.md §2).
@@ -497,7 +499,12 @@ export const FIELD_MARK = 10;
  */
 export const MARK_TENDENCY_NEUTRAL = 0.5;
 
-export const FIELD_COVER = 3;
+/**
+ * 골 쪽 커버의 무게 — 공과 우리 골문 사이에 서는 가치. 슈팅 순간 공보다 골 쪽에 선 수비 수
+ * (기준판 밴드 ≥ 3.2)가 이 무게로 선다. 가벼우면 수비가 늦게 돌아와 문전 기회가 넘치고,
+ * 슈팅·xG가 실측 위로 뜬다
+ */
+export const FIELD_COVER = 9;
 
 export const FIELD_LINE_BEHIND = 0.6;
 
