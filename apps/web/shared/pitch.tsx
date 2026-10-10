@@ -100,8 +100,14 @@ export function PitchGround({
   );
 }
 
-/** 역할 약칭 — 감독이 기본값 아닌 역할을 고른 칩에만 붙는다 */
-type PitchRoleTag = { abbr: string; ko: string; desc: string };
+/**
+ * 역할 카드의 표식 — 감독이 기본 행동이 아닌 카드를 건 칩에만 붙는다. 칩에는 이름의
+ * 앞부분만 서고(칩 폭), 이름 전체와 낱말 줄은 툴팁이 든다.
+ */
+type PitchCardTag = { title: string; words: string };
+
+/** 칩에 서는 카드 이름의 길이 — 넘으면 줄임표로 접는다 */
+const CARD_TAG_CHARS = 5;
 
 type PitchChipProps = {
   /** 만질 수 있는 칩은 버튼이다 — 상대 팀 칩처럼 읽기만 하는 것은 `span` */
@@ -109,7 +115,7 @@ type PitchChipProps = {
   /** 지금 서 있는 자리 (좌표에서 나온 코드) */
   code: string | null;
   squadNumber?: number | null | undefined;
-  roleTag?: PitchRoleTag | null | undefined;
+  cardTag?: PitchCardTag | null | undefined;
   /**
    * 완장 — 주장·부주장이 같은 자리에 같은 크기로 선다 (people.md §5-1).
    * 리더 그룹은 칩에 세우지 않는다: 열한 자리 중 다섯에 표식이 서면 그것은
@@ -136,7 +142,7 @@ type PitchChipProps = {
 };
 
 /**
- * 칩 — **세 줄.** (번호 · 자리 · 역할) / (Ⓒ 이름) / (전력 · 표식)
+ * 칩 — **세 줄.** (번호 · 자리 · 카드) / (Ⓒ 이름) / (전력 · 표식)
  *
  * 등번호는 **자리 줄**에 선다. 이름 옆에 붙이던 때는 칩 폭(13cqw)에서 두 글자를
  * 빼앗아 다섯 자짜리 성이 통째로 잘렸다 — 자리 줄은 세 글자뿐이라 번호를 앉힐
@@ -146,7 +152,7 @@ export function PitchChip({
   as = "span",
   code,
   squadNumber,
-  roleTag,
+  cardTag,
   captain,
   name,
   ovr,
@@ -166,12 +172,17 @@ export function PitchChip({
         {squadNumber !== null && squadNumber !== undefined && (
           <i className="shirt-no">{squadNumber}</i>
         )}
-        {/* 자리 코드는 자기 요소를 갖는다 — 한 줄에 번호·역할이 함께 서므로
+        {/* 자리 코드는 자기 요소를 갖는다 — 한 줄에 번호·카드가 함께 서므로
             "이 칩의 자리"를 가리킬 자리가 하나 있어야 한다 */}
         <span className="slot-code">{code}</span>
-        {roleTag && (
-          <em className="slot-role" title={`${roleTag.ko} — ${roleTag.desc}`}>
-            {roleTag.abbr}
+        {cardTag && (
+          <em
+            className="slot-role"
+            title={cardTag.words ? `${cardTag.title} — ${cardTag.words}` : cardTag.title}
+          >
+            {cardTag.title.length > CARD_TAG_CHARS
+              ? `${cardTag.title.slice(0, CARD_TAG_CHARS - 1)}…`
+              : cardTag.title}
           </em>
         )}
       </span>

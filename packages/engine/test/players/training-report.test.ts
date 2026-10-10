@@ -550,7 +550,7 @@ describe("판정의 상한 — 한 번에 게임을 크게 흔들 수 없다", (
     // 본업도 천장에 둬 전향 완료 판정이 끼어들지 않게 한다
     player.positions.find((p) => p.isNatural)!.proficiency = 99;
     const taken = new Set(player.positions.map((p) => p.position));
-    const learned = ["ST", "CB", "LB", "RB", "CM"].find((p) => !taken.has(p))!;
+    const learned = (["ST", "CB", "LB", "RB", "CM"] as const).find((p) => !taken.has(p))!;
     player.positions.push({ position: learned, proficiency: 99, isNatural: false });
     setPlayerTraining(state, { playerId: target, position: learned });
 
@@ -626,7 +626,7 @@ describe("한 결산은 장부를 한 번만 움직인다", () => {
     // 본업이 새 자리보다 높아야 전향 완료 판정이 끼어들지 않는다
     player.positions.find((p) => p.isNatural)!.proficiency = 90;
     const taken = new Set(player.positions.map((p) => p.position));
-    const learned = ["ST", "CB", "LB", "RB", "CM"].find((p) => !taken.has(p))!;
+    const learned = (["ST", "CB", "LB", "RB", "CM"] as const).find((p) => !taken.has(p))!;
     player.positions.push({ position: learned, proficiency: 40, isNatural: false });
     setPlayerTraining(state, { playerId: target, position: learned });
 
@@ -796,7 +796,7 @@ describe("전향 훈련 — 상한과 완료 전이", () => {
   /** 이 선수가 아직 안 가진 자리 하나 */
   const freshPosition = (positions: ReadonlyArray<{ position: string }>) => {
     const taken = new Set(positions.map((p) => p.position));
-    return ["ST", "CB", "LB", "RB", "CM"].find((p) => !taken.has(p))!;
+    return (["ST", "CB", "LB", "RB", "CM"] as const).find((p) => !taken.has(p))!;
   };
 
   it("판정이 폭주해도 한 주치 두 칸까지고, 음수는 자리를 깎지 않는다", () => {

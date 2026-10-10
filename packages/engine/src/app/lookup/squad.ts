@@ -11,7 +11,9 @@ import {
   anchorOf,
   familiarityLabel,
   naturalPositionOf,
-  roleFit,
+  cardFit,
+  cardLine,
+  type RoleCard,
 } from "@gaffer/domain";
 import { describeStaffPool } from "../../people/staff-employment";
 import { personaBookOf } from "../../people/lorebook";
@@ -49,7 +51,6 @@ import {
   statLine,
   contractLabel,
 } from "./resolve";
-import { roleLabel } from "./player-card";
 
 // ── 스쿼드·배치 (우리 팀 전용) ──────────────────────────
 
@@ -75,7 +76,7 @@ function boardOrder(state: GameState, playerId: string, position: string): [numb
 /**
  * 배치 한 줄 — 그 **자리에서의** 적합도와 포지션 적응도를 함께 준다.
  * 자리를 바꿀지 판단하려면 "라이스가 좋은 선수인가"가 아니라 "이 자리에서
- * 좋은가"를 알아야 한다 (roleFit은 자리마다 다른 값을 낸다).
+ * 좋은가"를 알아야 한다 (cardFit은 자리마다 다른 값을 낸다).
  */
 function assignedRow(
   state: GameState,
@@ -83,7 +84,7 @@ function assignedRow(
   position: string,
   familiarity: number,
   next: DisciplineFixture | null,
-  roleId?: string,
+  card?: RoleCard,
 ): string {
   /**
    * **다음 대회 경기로 잰다** (match.md §6) — 눈금도 정지도 대회의 것이라,
@@ -114,7 +115,7 @@ function assignedRow(
   ].filter((x): x is string => x !== null);
   return (
     `  ${position.padEnd(4)} ${p.name}${armband(p)} (${p.id}) ${ageOf(p.birthdate, state.date)}세 · ` +
-    `${roleLabel(position, roleId)} · OVR${playerOverall(p)} 자리적합${roleFit(p.attributes, position, roleId)} 포지션적응${proficiencyAt(p, position)} ` +
+    `카드 ${cardLine(card)} · OVR${playerOverall(p)} 자리적합${cardFit(p.attributes, position, card)} 포지션적응${proficiencyAt(p, position)} ` +
     `전술적응${familiarity} · 폼 ${formLabel(p.state.form)} 체력${p.state.condition}` +
     // **라인업을 세우는 자리가 계약 만료를 읽는 자리이기도 하다** —
     // 만료일이 없으면 감독은 여름에 사라질 주전을 붙박이로 세운다
@@ -173,7 +174,7 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
           a?.position ?? naturalPositionOf(p).position,
           a?.familiarity ?? familiarityOf(state, p.id),
           nextFixture,
-          a?.roleId,
+          a?.card,
         );
       });
 

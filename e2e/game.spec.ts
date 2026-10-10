@@ -685,11 +685,13 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   expect(await page.locator(".pitch-slot .slot-name").allTextContents()).toEqual(beforeXI);
 
   /**
-   * **자리가 없으면 역할도 없다** (player.md §3.1). 이 상세는 비선발이라 알약이
-   * 아예 서지 않는다 — 주 포지션을 자리로 치고 목록을 켜 두면 감독은 코어가 받지
+   * **자리가 없으면 카드도 없다** (player.md §3.1). 이 상세는 비선발이라 카드가
+   * 아예 서지 않는다 — 주 포지션을 자리로 치고 카드를 켜 두면 감독은 코어가 받지
    * 않는 값을 고르게 되고, 그 선택이 저장마다 따라가 라인업이 통째로 반려된다.
    */
-  await expect(page.locator('[data-testid="player-detail"] .pd-role')).toHaveCount(0);
+  await expect(page.locator('[data-testid="player-detail"] [data-testid="role-card"]')).toHaveCount(
+    0,
+  );
   // 비선발을 고르면 **선발 행**에 화살표가 뜬다 (어느 쪽을 먼저 골라도 교체가 열린다)
   // 선발 11명은 내려가는 → , 예비·2군은 올라오는 ← (칸이 다르면 전부 열린다)
   await expect(page.locator('.swap-btn[data-dir="down"]')).toHaveCount(11);
@@ -748,11 +750,11 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   await expect(page.locator(".detail-row")).toContainText("적응");
   await expect(page.locator(".detail-row .fit-gauge").first()).toBeVisible();
   /**
-   * 선발은 자리가 있으니 역할이 있다 — 역할만 **누르는 물건**의 생김새를 갖는다.
-   * (커서로는 못 잰다: 상세가 행 안에 있어 행의 `pointer`를 물려받는다)
+   * 선발은 자리가 있으니 카드가 있다 — 단계를 옮기는 손잡이만 **누르는 물건**의 생김새를
+   * 갖는다. (커서로는 못 잰다: 상세가 행 안에 있어 행의 `pointer`를 물려받는다)
    */
-  const rolePill = page.locator('[data-testid="player-detail"] .pd-role').first();
-  await expect(rolePill).toBeVisible();
+  const cardStep = page.locator('[data-testid="player-detail"] .pd-card-step').first();
+  await expect(cardStep).toBeVisible();
   /**
    * **지금 자리라고 글자색을 바꾸지 않는다.** 밑줄만 얹는다 — 색까지 바꾸면 그 자리가
    * 선호인지 무리한 배치인지가 화면에서 사라진다. 선발은 맡은 자리가 있으니 그 칩이
@@ -760,8 +762,8 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
    */
   const here = page.locator('[data-testid="player-detail"] .pd-pos.here');
   await expect(here).toHaveCount(1);
-  // 펼치면 16축이 전부 보인다
-  await expect(page.locator(".detail-row .pd-axis")).toHaveCount(16);
+  // 펼치면 그 선수의 능력치가 전부 보인다 — 필드 30(기술·정신·신체) · 골키퍼 25(GK·정신·신체)
+  expect([25, 30]).toContain(await page.locator(".detail-row .pd-axis").count());
   // 명단은 사기·피로 두 열이 아니라 체력 한 열이다
   await expect(page.locator(".squad-table thead")).toContainText("체력");
   await expect(page.locator(".squad-table thead")).not.toContainText("사기");

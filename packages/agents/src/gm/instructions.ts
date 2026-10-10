@@ -8,13 +8,16 @@ import {
 } from "@gaffer/engine";
 import {
   TACTIC_AXES,
+  CARD_STEP_MAX,
+  CARD_WORDS,
+  PLACES,
+  PLACE_KO,
   POSITION_CODES,
   POSITION_NAMES,
-  rolesFor,
-  roleChoiceText,
   type Point,
   type SheetLine,
   type BoardMove,
+  cardStepLabel,
 } from "@gaffer/domain";
 import {
   createGameEvaluator,
@@ -109,6 +112,25 @@ export function instructionCommands(
         limit: TACTIC_CAPS[name] ?? OPS_PER_COMMAND,
       },
     ];
+  });
+}
+
+/**
+ * 경기 판독기의 명령 — 경기 중의 카드 수정은 시트의 `card` 줄이라(match.md §3.2)
+ * `set_player_tactic`은 자리만 옮긴다. 같은 일을 하는 두 문을 열어 두면 같은 말이
+ * 호출마다 다른 문으로 간다.
+ */
+function matchCommands(commands: InstructionCommand[]): InstructionCommand[] {
+  return commands.map((command) => {
+    if (command.name !== "set_player_tactic") return command;
+    const properties = Object.fromEntries(
+      Object.entries(command.inputSchema.properties ?? {}).filter(([key]) => key !== "card"),
+    );
+    return {
+      ...command,
+      description: "한 선수의 자리",
+      inputSchema: { ...command.inputSchema, properties },
+    };
   });
 }
 
@@ -209,15 +231,24 @@ export function instructionCandidates(
         value,
       };
     }),
-    "set_player_tactic.role": [
-      ...new Map(
-        POSITION_CODES.flatMap((position) =>
-          rolesFor(position).map(
-            (role) => [role.id, { label: roleChoiceText(role), value: role.id }] as const,
-          ),
-        ),
-      ).values(),
-    ],
+    // 배우는 것은 칸이 아니라 자리다 (player.md §8)
+    "set_training.position": PLACES.map((value) => ({
+      label: `${value} ${PLACE_KO[value]}`,
+      value,
+    })),
+    /**
+     * 카드의 낱말마다 일곱 단계 — 단계의 뜻을 낱말표에서 붙인다(player.md §3). 숫자만
+     * 주면 해석기가 원문에서 숫자를 찾는데, 감독은 「+2」라고 말하지 않는다.
+     */
+    ...Object.fromEntries(
+      CARD_WORDS.map((word) => [
+        `set_player_tactic.${word}`,
+        Array.from({ length: CARD_STEP_MAX * 2 + 1 }, (_, i) => ({
+          label: cardStepLabel(word, i - CARD_STEP_MAX),
+          value: i - CARD_STEP_MAX,
+        })),
+      ]),
+    ),
     ...Object.fromEntries(
       TACTIC_AXES.map((axis) => [
         `set_tactics.${axis.key}`,
@@ -408,8 +439,11 @@ async function runInstructions(
   const droppedEffects = new Set(
     live ? liveInputOf(live).sheet.dropped.map((drop) => drop.line) : [],
   );
+  // 카드 줄의 0은 「그 자리의 기본으로」라는 걸린 값이다 (live-match.md §6.2)
   const activeEffects =
-    live?.sheet.filter((line) => line.step > 0 && !droppedEffects.has(line)) ?? [];
+    live?.sheet.filter(
+      (line) => (line.step > 0 || line.shape === "card") && !droppedEffects.has(line),
+    ) ?? [];
   const context =
     agent === "match-reader"
       ? [
@@ -432,6 +466,10 @@ async function runInstructions(
   if (!options.evaluator && resolveLlmMode() === "mock") {
     orders = parseOrdersReport(ordersScript(state, said).output ?? {}, names, TACTIC_CAPS);
   } else {
+    const commands = instructionCommands(
+      specs,
+      live ? names : names.filter((name) => !LIVE_ONLY_OPS.includes(name)),
+    );
     const request = {
       said,
       context: [
@@ -439,32 +477,29 @@ async function runInstructions(
         ...context,
         ...buildBoardMovesBlock(state, options.boardMoves ?? []),
       ].join("\n"),
-      commands: instructionCommands(
-        specs,
-        live ? names : names.filter((name) => !LIVE_ONLY_OPS.includes(name)),
-      ),
+      commands: agent === "match-reader" ? matchCommands(commands) : commands,
       candidates: instructionCandidates(state, said),
       evaluator: options.evaluator ?? createGameEvaluator(agent),
     };
     if (agent === "match-reader" && state.pendingMatch) {
       const live = state.pendingMatch.live;
+      const side = userSide(state);
       // A combined substitution and instruction can target the incoming player. The
       // atomic application validates the completed lineup before applying any effect.
-      const people = [
-        ...new Set([
-          ...live.ledger.home.onPitch,
-          ...live.ledger.away.onPitch,
-          ...live.ledger[userSide(state)].bench,
-        ]),
-      ].map((id) => ({
-        label: `${state.players.find((p) => p.id === id)?.name ?? id} (${id})`,
-        value: id,
-      }));
-      request.candidates["set_match_plan.player"] = people;
-      request.candidates["set_match_plan.targetPlayer"] = people;
+      const ours = [...live.ledger[side].onPitch, ...live.ledger[side].bench];
+      const theirs = live.ledger[side === "home" ? "away" : "home"].onPitch;
+      const labelled = (ids: readonly string[]) =>
+        ids.map((id) => ({
+          label: `${state.players.find((p) => p.id === id)?.name ?? id} (${id})`,
+          value: id,
+        }));
+      request.candidates["set_match_plan.player"] = labelled([...new Set([...ours, ...theirs])]);
+      // 대인 마크의 표적은 상대 그라운드의 사람뿐이다 (live-match.md §6.2)
+      request.candidates["set_match_plan.targetPlayer"] = labelled(theirs);
       orders = await interpretMatchInstructions({
         ...request,
         pointId: `order-${live.state.tick}`,
+        ours,
       });
     } else orders = await interpretInstructions(request);
   }

@@ -21,6 +21,7 @@
     "fill-nationality": "tsx scripts/fill-nationality.ts",
     "fill-squad-roles": "tsx scripts/fill-squad-roles.ts",
     "ea-ratings": "tsx scripts/ea-ratings.ts",
+    "slot-reference": "tsx scripts/slot-reference.ts",
     "e2e": "playwright test",
     "dev": "pnpm --filter @gaffer/web dev"
   },

@@ -6,6 +6,7 @@ import {
   mailMessageForViewer,
   playerById,
   saveGame,
+  setPlayerCard,
   setPlayerTactic,
   setSetPieceTakers,
   setTactics,
@@ -55,8 +56,8 @@ export function applyMatchBoardOrder(state: GameState, order: MatchBoardOrder) {
         position: order.position,
         point: order.point,
       });
-    case "role":
-      return setPlayerTactic(state, { playerId: order.playerId, role: order.role });
+    case "card":
+      return setPlayerCard(state, { playerId: order.playerId, card: order.card });
     case "substitution":
       return substitutePlayer(state, { out: order.out, in: order.in });
     case "setPiece":
@@ -92,8 +93,8 @@ function boardMoveOf(order: MatchBoardOrder, before: number | null): BoardMove {
   switch (order.kind) {
     case "position":
       return { kind: "position", playerId: order.playerId, position: order.position };
-    case "role":
-      return { kind: "role", playerId: order.playerId, role: order.role };
+    case "card":
+      return { kind: "card", playerId: order.playerId, card: order.card };
     case "substitution":
       return { kind: "substitution", out: order.out, in: order.in };
     case "setPiece":

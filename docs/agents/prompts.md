@@ -317,10 +317,13 @@ Zod와 다른 JSON 스키마를 갖지 않는다.** 그 열의 선언(설정 이
   모델은 옛 뜻을 계속 받고, 한 갈래만 낱말이 빠지면 모델은 그 값을 **「나머지」**로 읽는다.
   **낱말이 곧 토큰인 갈래는 예외다** — `corner`·`freeKick`·`penalty`처럼 토큰 자체가 뜻인
   자리에 낱말을 얹는 것은 벌어질 어긋남이 없는 글자 수다.
-  **열거가 아닌 자리도 같은 규칙을 받는다** — `set_player_tactic.role`은 자리마다 목록이
-  달라 열거로 서지 못하는 자유 문자열이고, 그래서 자리별 역할 표와 현재 상태를 직접 지시 후보의 근거로 쓴다
-  (`roleVocabularyText` → [agents.md](agents.md) §3). `set_lineup.position`도 같다 —
-  코드 서른한 개(`POSITION_CODES`)를 `.describe()`가 든다.
+  **열거가 아닌 자리도 같은 규칙을 받는다** — `set_player_tactic.card`의 낱말은 −3~+3의
+  단계라 열거가 아니고, 그래서 낱말마다 양 끝의 뜻을 낱말표(`CARD_WORD_DEFS`)에서 끌어와
+  `.describe()`에 싣고, 지시 해석의 후보도 단계마다 그 뜻을 붙여 낸다(→ [agents.md](agents.md)
+  §3). 역할 이름의 표는 싣지 않는다 — FM 역할 이름은 모델이 이미 아는 말이고 카드의 이름으로만
+  남는다. `set_lineup.position`도 같다 — 슬롯 코드(`POSITION_CODES`)를 `.describe()`가 든다.
+  선수가 아는 **자리**를 받는 갈래(`set_training.player.position` · `search_players.position`)는
+  자리 14개(`PLACES`)를 싣는다.
 - **낱말표를 실어도 모델은 자기 표기로 부른다 — 그래서 코어가 별칭을 읽는다.** 감독의
   말을 옮기는 자리에서는 표에 없는 표기가 반드시 온다(`AML`·`DC`·`STC`). 표를 싣는 것과
   별칭을 읽는 것은 **둘 다** 필요하다: 표만 실으면 감독이 쓴 말이 버려지고, 별칭만 읽으면

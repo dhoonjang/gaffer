@@ -45,7 +45,7 @@ import {
   penaltyRate,
   planAiTacticalShift,
   planBenchSubs,
-  roleTendencyOf,
+  cardTendencyOf,
   samplePoisson,
   sampleShot,
   savedShare,
@@ -79,7 +79,7 @@ export interface SimSquad {
   teamId: string;
   /** 선발 11명 (이미 부상·정지 필터를 거친 상태) */
   starters: GamePlayer[];
-  /** 전술판 자리·역할·적응도. 없으면 주 포지션의 자연스러운 슬롯으로 조립한다. */
+  /** 전술판 자리·카드·적응도. 없으면 주 포지션의 자연스러운 슬롯으로 조립한다. */
   slots?: LineupSlot[] | undefined;
   tactics?: TacticsSpec | undefined;
   managerTactics?: number | undefined;
@@ -475,10 +475,10 @@ function weightedPick(
   return players[players.length - 1]!;
 }
 
-/** 누가 차는가 — 자리 몫 × 역할의 `shoot` 성향 × 결정력·침투 */
+/** 누가 차는가 — 자리 몫 × 카드의 `shoot` 성향 × 결정력·침투 */
 function shooterWeight(slot: LineupSlot): number {
   const share = QUICK_SHOT_SHARE[weightSlotOf(slot.position)];
-  const tendency = 0.5 + roleTendencyOf(slot.position, slot.roleId).shoot;
+  const tendency = 0.5 + cardTendencyOf(slot.position, slot.card).shoot;
   const skill = (slot.player.attributes.finishing + slot.player.attributes.offTheBall) / 2;
   return share * tendency * (0.5 + skill / RATING_MAX);
 }

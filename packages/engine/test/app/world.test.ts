@@ -10,8 +10,8 @@ import {
   GamePlayerSchema,
   initialCaptainOf,
   TeamTacticsSchema,
-  clusterOf,
-  isMirrorPair,
+  PLACE_PAIR_PENALTY,
+  pairedPlaceOf,
   isReserveMatch,
   naturalPositionOf,
   positionGroupOfPlayer,
@@ -212,57 +212,54 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
     expect(multi.length).toBeGreaterThan(outfield.length * 0.8);
   });
 
-  it("사실상 같은 자리(CB↔RCB/LCB 등)는 적응도가 거의 같다", () => {
-    let compared = 0;
+  it("보유 목록은 자리 단위다 — 한 자리는 한 줄이고, 이웃 쌍은 주 자리보다 2 낮다", () => {
+    let paired = 0;
     for (const e of catalog) {
+      // 같은 자리가 두 줄이면 한쪽만 오르고 다른 쪽은 그대로인 장부가 된다 (player.md §8)
+      const places = e.positions.map((p) => p.position);
+      expect(new Set(places).size, e.nameEn).toBe(places.length);
       const nat = naturalPositionOf(e);
-      const cluster = clusterOf(nat.position);
-      if (!cluster) continue;
-      // 묶음 전체를 갖고 있어야 한다 — 좌우 분화는 다른 자리가 아니다
-      for (const code of cluster) {
-        const own = e.positions.find((p) => p.position === code);
-        expect(own, `${e.nameEn} (${nat.position}) 에 ${code} 없음`).toBeDefined();
-        /**
-         * **좌우 분화는 저장값이 정확히 같다** — 주발은 저장하지 않고 조회할 때
-         * `positionProficiency`가 붙인다 (player.md §4·§8). 여기 얹어 두면 조회가
-         * 다시 얹어 폭이 두 배가 됐다. 역할이 다른 묶음(RB↔RWB · ST↔CF)만 −2가
-         * 남는다 — 같은 묶음이어도 하는 일이 다르기 때문이다.
-         */
-        const expected = code === nat.position || isMirrorPair(nat.position, code) ? 0 : 2;
-        expect(nat.proficiency - own!.proficiency, `${e.nameEn} ${nat.position}→${code}`).toBe(
-          expected,
-        );
-        compared++;
-      }
+      const pair = pairedPlaceOf(nat.position);
+      if (!pair) continue;
+      const own = e.positions.find((p) => p.position === pair);
+      expect(own, `${e.nameEn} (${nat.position}) 에 ${pair} 없음`).toBeDefined();
+      expect(nat.proficiency - own!.proficiency, `${e.nameEn} ${nat.position}→${pair}`).toBe(
+        PLACE_PAIR_PENALTY,
+      );
+      paired++;
     }
-    expect(compared).toBeGreaterThan(1000); // 중앙 계열이 카탈로그의 큰 몫
+    expect(paired).toBeGreaterThan(500); // 측면 자원이 카탈로그의 큰 몫
   });
 
-  it("묶음 밖 확장 포지션은 여전히 뚜렷하게 낮다", () => {
+  /** 주 자리 바로 아래로 받는 자리 — 이웃 쌍, 그리고 처진 스트라이커(AM)의 ST */
+  const nextToHome = (
+    nat: { position: string; proficiency: number },
+    p: { position: string; proficiency: number },
+  ) =>
+    p.position === pairedPlaceOf(nat.position) ||
+    (nat.position === "AM" &&
+      p.position === "ST" &&
+      nat.proficiency - p.proficiency === PLACE_PAIR_PENALTY);
+
+  it("확장 자리는 여전히 뚜렷하게 낮다", () => {
     // 적응도가 "다 비슷해지는" 반대 방향 붕괴를 막는다
     const outside = catalog.flatMap((e) => {
       const nat = naturalPositionOf(e);
       return e.positions
-        .filter(
-          (p) =>
-            !p.isNatural && !(clusterOf(nat.position)?.includes(p.position.toUpperCase()) ?? false),
-        )
+        .filter((p) => !p.isNatural && !nextToHome(nat, p))
         .map((p) => nat.proficiency - p.proficiency);
     });
     expect(outside.length).toBeGreaterThan(1000);
     expect(Math.min(...outside)).toBeGreaterThan(3);
   });
 
-  it("인접 포지션 값이 계층 안에 있다 — 70~82 (주 포지션 88~96 아래)", () => {
+  it("확장 자리 값이 계층 안에 있다 — 70~82 (주 자리 88~96 아래)", () => {
     // 하한: 프로 1군이 **바로 옆 자리**를 62로 소화한다는 건 실제 축구와 어긋난다.
-    // 상한: 그렇다고 주 포지션과 구별이 사라지면 자리 개념이 무의미해진다.
+    // 상한: 그렇다고 주 자리와 구별이 사라지면 자리 개념이 무의미해진다.
     const outside = catalog.flatMap((e) => {
       const nat = naturalPositionOf(e);
       return e.positions
-        .filter(
-          (p) =>
-            !p.isNatural && !(clusterOf(nat.position)?.includes(p.position.toUpperCase()) ?? false),
-        )
+        .filter((p) => !p.isNatural && !nextToHome(nat, p))
         .map((p) => p.proficiency);
     });
     expect(Math.min(...outside)).toBeGreaterThanOrEqual(70);

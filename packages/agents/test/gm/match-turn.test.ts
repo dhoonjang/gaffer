@@ -439,7 +439,7 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     }
   });
 
-  it("벤치 선수를 넣으며 주는 개인 지시는 교체 뒤 명단으로 검증한다", async () => {
+  it("벤치 선수를 넣으며 주는 카드 수정은 교체 뒤 명단으로 검증한다", async () => {
     const state = rolling();
     const before = structuredClone(state);
     const side = userSide(state);
@@ -453,11 +453,10 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
         {
           pointId: "combined",
           target: { player: incoming },
-          shape: "behavior",
+          shape: "card",
           sign: 1,
-          step: 1,
-          action: "mark",
-          when: "defend",
+          step: 3,
+          word: "mark",
           targetPlayer: target,
         },
       ],
@@ -517,11 +516,11 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     ];
     state.pendingMatch!.live.sheet = [onPitch, bench].map((player) => ({
       pointId: "prior",
-      shape: "behavior",
+      shape: "card",
       target: { player },
-      sign: 1,
+      sign: -1,
       step: 1,
-      action: "hold",
+      word: "passRisk",
     }));
     interpretMatch.mockImplementationOnce(async (request: MatchInstructionRequest) => {
       const block = request.context.match(/<active_effects>(.*?)<\/active_effects>/s)?.[1];
@@ -547,11 +546,10 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
           {
             pointId: "plan",
             target: { player: actor },
-            shape: "behavior",
-            sign: 1,
+            shape: "card",
+            sign: -1,
             step: 1,
-            action: "hold",
-            when: "always",
+            word: "freedom",
           },
         ],
       },

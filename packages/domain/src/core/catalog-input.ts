@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { DateString } from "./date-string";
 import { isAssociation } from "./nationality";
-import { ATTRIBUTE_AXES, positionGroupOf, type AttributeAxis } from "../players/player";
+import { ATTRIBUTE_AXES, placeOf, positionGroupOf, type AttributeAxis } from "../players/player";
+import { PlaceSchema } from "../players/place";
 import { ClubHonourSchema } from "../team/team";
 import { LorebookContentSchema } from "../people/lorebook";
 import { FormationSchema } from "../team/team-tactics";
@@ -30,8 +31,10 @@ const position = z
   .trim()
   .toUpperCase()
   .refine((v) => positionGroupOf(v) !== null, "알 수 없는 포지션입니다");
+/** 보유 목록의 한 줄은 자리다 — 슬롯 코드로 적어도 그 자리로 접힌다 (player.md §8) */
+const place = position.transform((v) => placeOf(v)).pipe(PlaceSchema);
 const positions = z
-  .array(z.object({ position, proficiency: rating, isNatural: z.boolean() }))
+  .array(z.object({ position: place, proficiency: rating, isNatural: z.boolean() }))
   .min(1, "포지션이 최소 1개 필요합니다")
   .refine((xs) => xs.some((p) => p.isNatural), "주 포지션은 하나 이상이어야 합니다")
   .refine(

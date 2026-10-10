@@ -11,7 +11,9 @@ import {
   clampCondition,
   slotOfTime,
   attributeAxisOf,
-  positionGroupOf,
+  normalizePositionCode,
+  placeOf,
+  storedProficiencyFor,
   ATTRIBUTE_AXES,
 } from "@gaffer/domain";
 import { pickOurPlayer, pickPlayerAmong } from "../core/player-ref";
@@ -420,8 +422,10 @@ export function setPlayerTraining(
   if (input.axis?.trim() && !axis) {
     return { ok: false, message: `알 수 없는 능력치 축: ${input.axis.trim()}` };
   }
-  const position = input.position?.toUpperCase();
-  if (position && !positionGroupOf(position)) {
+  // 배우는 것은 자리다 — 슬롯 코드로 불러도 그 자리로 접힌다 (player.md §8)
+  const asked = input.position?.trim();
+  const position = asked ? placeOf(normalizePositionCode(asked) ?? asked) : null;
+  if (asked && !position) {
     return { ok: false, message: `알 수 없는 포지션: ${input.position}` };
   }
   // 반려는 요청 전체에 걸린다 — 자리만 떼고 축만 걸면 감독이 시킨 적 없는 훈련이 선다
@@ -472,7 +476,8 @@ export function setPlayerTraining(
     items.push(item({ label: "능력치", text: ko }));
   }
   if (position) {
-    const fit = player.positions.find((p) => p.position === position)?.proficiency ?? 0;
+    // 처음 배우는 자리도 0에서 출발하지 않는다 — 결산이 올릴 그 값을 그대로 보인다
+    const fit = storedProficiencyFor(player.positions, position);
     parts.push(`${position} 전향 (지금 적응도 ${fit})`);
     items.push(item({ label: "전향", text: position, note: `적응도 ${fit}` }));
   }

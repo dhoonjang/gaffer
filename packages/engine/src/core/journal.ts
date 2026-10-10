@@ -1,5 +1,6 @@
 import type {
   BoardPoint,
+  RoleCard,
   LiveInputPayload,
   MatchEvent,
   Point,
@@ -278,7 +279,7 @@ export function journal(entry: JournalEntry): void {
 /**
  * 턴 앞뒤의 **상태 요약** — 장부의 사본이 아니라 그 턴이 무엇을 움직였는지를 보는 눈금.
  *
- * 날짜·시각·국면·시즌·진행 중인 경기·우리 전술판(6축과 선발 열한 명의 자리·좌표·역할,
+ * 날짜·시각·국면·시즌·진행 중인 경기·우리 전술판(6축과 선발 열한 명의 자리·좌표·카드,
  * 벤치)·주요 표의 줄 수다. 앞뒤 둘을 견주면 턴이 건드린 곳이 보이고, 낱낱은 세이브가
  * 갖는다. 전술판을 통째로 싣는 이유는 자리와 좌표가 **판이 세운 것인지 감독이 옮긴
  * 것인지**가 이 기록에서만 갈리기 때문이다.
@@ -295,7 +296,7 @@ interface TurnDigest {
       playerId: string;
       position: string;
       point: BoardPoint | null;
-      roleId: string | null;
+      card: RoleCard | null;
     }>;
     bench: string[];
   } | null;
@@ -326,7 +327,7 @@ export function turnDigestOf(state: GameState): TurnDigest {
               playerId: a.playerId,
               position: a.position,
               point: a.point ? { ...a.point } : null,
-              roleId: a.roleId ?? null,
+              card: a.card ?? null,
             })),
           bench: tactics.assignments.filter((a) => a.role === "bench").map((a) => a.playerId),
         }

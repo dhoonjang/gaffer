@@ -1,5 +1,6 @@
 import {
   ATTRIBUTE_AXES,
+  placeOf,
   playerOverall,
   tacticsSignature,
   weightSlotOf,
@@ -453,7 +454,11 @@ describe("회귀: 부상·정지 선수는 경기에 나설 수 없다", () => {
     const starter = original[1]!;
     const later = playerById(state, original[2]!.playerId)!;
     for (const axis of ATTRIBUTE_AXES) later.attributes[axis] = 99;
-    later.positions.push({ position: starter.position, proficiency: 99, isNatural: false });
+    later.positions.push({
+      position: placeOf(starter.position)!,
+      proficiency: 99,
+      isNatural: false,
+    });
     state.injuries.push({
       id: "inj-r1",
       gamePlayerId: starter.playerId,
@@ -545,7 +550,7 @@ describe("회귀: 부상·정지 선수는 경기에 나설 수 없다", () => {
     const assigned = new Set(assignmentsOf(state, teamId).map((a) => a.playerId));
     const spare = playersOf(state, teamId).find((p) => !assigned.has(p.id))!;
     spare.squadLevel = "reserve";
-    spare.positions = [{ position: starter.position, proficiency: 99, isNatural: true }];
+    spare.positions = [{ position: placeOf(starter.position)!, proficiency: 99, isNatural: true }];
     state.injuries.push({
       id: "inj-r4",
       gamePlayerId: starter.playerId,
@@ -1032,7 +1037,11 @@ describe("지시가 판에 닿는 길", () => {
  * **교체 투입은 자리를 잇고 역할은 자기 것을 쓴다** (match.md §3.2) — 나간 선수의 역할을
  * 물려주면 감독이 그 선수에게 시킨 적 없는 값이 승부를 움직인다.
  */
-describe("교체 투입의 역할 (match.md §3.2)", () => {
+/** 센터백 자리의 두 카드 — 걸려 있던 것과 교체 선수가 기억하는 것 */
+const PLAYING_OUT = { label: "볼 플레잉", ip: { passRisk: 2 }, oop: {} };
+const STEP_UP = { label: "리베로", ip: { freedom: 2, dribble: 1 }, oop: {} };
+
+describe("교체 투입의 카드 (match.md §3.2)", () => {
   function kickoffWithCbSub(state: GameState) {
     const started = startMatch(state);
     if (!started.ok) throw new Error(started.message);
@@ -1046,40 +1055,40 @@ describe("교체 투입의 역할 (match.md §3.2)", () => {
       (id) => groupOf(userPlayers(state).find((p) => p.id === id)!) !== "GK",
     );
     if (!out || !sub) throw new Error("CB 선발 또는 벤치 자원을 찾지 못했습니다");
-    out.roleId = "ball-playing-defender";
+    out.card = PLAYING_OUT;
     syncLiveTactics(state);
     const slotOf = (id: string) =>
       state.pendingMatch!.live.slots[side].find((s) => s.playerId === id);
     return { out, sub, slotOf };
   }
 
-  it("역할 기억이 있는 교체 선수는 자리를 잇고 자기 역할로 뛴다", () => {
+  it("카드 기억이 있는 교체 선수는 자리를 잇고 자기 카드로 뛴다", () => {
     const state = atMatchday();
     const { out, sub, slotOf } = kickoffWithCbSub(state);
-    state.roleMemory.push({ gamePlayerId: sub, position: out.position, roleId: "libero" });
+    state.cardMemory.push({ gamePlayerId: sub, place: placeOf(out.position)!, card: STEP_UP });
     expect(substitutePlayer(state, { out: out.playerId, in: sub }).ok).toBe(true);
     const slot = slotOf(sub);
-    expect(slot?.roleId).toBe("libero");
+    expect(slot?.card).toEqual(STEP_UP);
     expect(slot?.position).toBe(out.position);
     expect(slot?.point).toEqual(out.point);
   });
 
-  it("기억이 없는 교체 선수는 그 자리에 걸려 있던 역할을 잇는다", () => {
+  it("기억이 없는 교체 선수는 그 자리에 걸려 있던 카드를 잇는다", () => {
     const state = atMatchday();
     const { out, sub, slotOf } = kickoffWithCbSub(state);
-    expect(state.roleMemory.some((m) => m.gamePlayerId === sub)).toBe(false);
+    expect(state.cardMemory.some((m) => m.gamePlayerId === sub)).toBe(false);
     expect(substitutePlayer(state, { out: out.playerId, in: sub }).ok).toBe(true);
     const slot = slotOf(sub);
-    expect(slot?.roleId).toBe("ball-playing-defender");
+    expect(slot?.card).toEqual(PLAYING_OUT);
     expect(slot?.position).toBe(out.position);
   });
 
-  it("다른 자리의 역할 기억은 교체 투입에 쓰이지 않는다", () => {
+  it("다른 자리의 카드 기억은 교체 투입에 쓰이지 않는다", () => {
     const state = atMatchday();
     const { out, sub, slotOf } = kickoffWithCbSub(state);
-    state.roleMemory.push({ gamePlayerId: sub, position: "DM", roleId: "anchor" });
+    state.cardMemory.push({ gamePlayerId: sub, place: "DM", card: STEP_UP });
     expect(substitutePlayer(state, { out: out.playerId, in: sub }).ok).toBe(true);
-    expect(slotOf(sub)?.roleId).toBe("ball-playing-defender");
+    expect(slotOf(sub)?.card).toEqual(PLAYING_OUT);
   });
 
   it("두 자리가 비어도 각자 나간 선수의 자리를 잇는다", () => {

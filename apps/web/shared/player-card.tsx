@@ -19,6 +19,7 @@ import {
   injuryHistoryBrief,
   injuryHistoryText,
   physiqueLabel,
+  proficiencyLabel,
 } from "@gaffer/domain";
 import type { PlayerCardView } from "@gaffer/engine";
 import { IconClose } from "@/shared/icons";
@@ -433,7 +434,7 @@ function PlayerCardBody({ card }: { card: PlayerCardView; inMatch: boolean }) {
         {ours?.assignment && (
           <span className="pc-mark">
             {ours.assignment.tier} {ours.assignment.position}
-            {ours.assignment.role && ` (${ours.assignment.role.ko})`} · 전술적응{" "}
+            {ours.assignment.card && ` (카드 ${ours.assignment.card.title})`} · 전술적응{" "}
             {ours.assignment.familiarity}
           </span>
         )}
@@ -453,7 +454,7 @@ function PlayerCardBody({ card }: { card: PlayerCardView; inMatch: boolean }) {
           <span
             className={`pd-pos${x.isNatural ? " natural" : ""}`}
             key={x.position}
-            title={`${x.isNatural ? "선호 포지션" : "소화 가능"} · 그 자리 전력 ${x.overall}`}
+            title={`${x.isNatural ? "선호 포지션" : "소화 가능"} · ${proficiencyLabel(x.proficiency)} · 그 자리 전력 ${x.overall}`}
           >
             {x.position}
           </span>

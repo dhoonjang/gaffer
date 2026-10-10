@@ -78,6 +78,30 @@ export const TACKLE_IN_PATH = 0.007;
  */
 export const DUEL_TACKLER_EDGE = 30;
 
+/**
+ * 태클의 기량 — 발을 넣는 기술(태클)에 **타이밍**(예측력)이 거든다 (live-match.md §2).
+ * 태클 하나로만 재면 수비 축이 낮은 공격수·측면 자원의 압박이 거의 다 털려, 드리블이
+ * 실측(성공 45%)보다 잘 통하고 경기의 득점이 크게 뛴다.
+ */
+export const TACKLE_SKILL = { tackling: 0.85, anticipation: 0.15 } as const;
+
+/**
+ * **수비 읽기** — 공이 상대에게 있을 때 어디에 서는가. 위치 선정이 중심이고 예측력·집중력이
+ * 거든다. 공 없는 수비 가치장의 온도, 수비 형태 오차, 슛 블록이 읽는다.
+ */
+export const DEFENSIVE_READING = {
+  positioning: 0.4,
+  anticipation: 0.3,
+  concentration: 0.3,
+} as const;
+
+/**
+ * **공격 자리 읽기** — 공이 우리에게 있을 때 어디로 가는가. 오프 더 볼과 위치 선정이 반씩이다 —
+ * 동료와의 간격을 지키는 것이 공격 자리의 절반이다. 오프 더 볼 하나로 재면 최전방이 공격에서만
+ * 갑자기 날카로워져 득점이 실측보다 크게 뛴다.
+ */
+export const ATTACKING_READING = { offTheBall: 0.5, positioning: 0.5 } as const;
+
 /** 1대1 능력치 차의 눈금 — 10점 차가 로짓 0.45(약 11%p) */
 export const DUEL_SCALE = 22;
 
@@ -103,12 +127,12 @@ export const PENALTY_WRONG_WAY_SECONDS = 1.5;
 export const BLOCK_REACH = 1.2;
 
 /**
- * 경로에 닿는 필드 상대가 슛을 실제로 막는 확률 — 위치선정 `BLOCK_SKILL_PIVOT`에서.
+ * 경로에 닿는 필드 상대가 슛을 실제로 막는 확률 — 수비 읽기 `BLOCK_SKILL_PIVOT`에서.
  * 실측 1.4m 길목에 상대 하나가 선 슛의 33%, 둘 45%, 셋 51%가 막힌다 (StatsBomb 일반 플레이)
  */
 export const BLOCK_CHANCE = 0.55;
 
-/** 몸 막기의 위치선정 기준점과 1점당 확률 배율 — 슛 길을 읽는 수비가 몸을 먼저 넣는다 */
+/** 몸 막기의 수비 읽기 기준점과 1점당 확률 배율 — 슛 길을 읽는 수비가 몸을 먼저 넣는다 */
 export const BLOCK_SKILL_PIVOT = 65;
 
 export const BLOCK_SKILL_SLOPE = 0.012;
@@ -467,6 +491,12 @@ export const FIELD_PRESS = 8;
 
 export const FIELD_MARK = 10;
 
+/**
+ * 마크 성향의 중립 — 카드의 「마크」 낱말이 옮긴 `mark`가 이 값이면 마크 항의 무게가 그대로고,
+ * 대인 쪽(+)이면 그만큼 무겁고 지역 쪽(−)이면 가볍다 (live-match.md §4).
+ */
+export const MARK_TENDENCY_NEUTRAL = 0.5;
+
 export const FIELD_COVER = 3;
 
 export const FIELD_LINE_BEHIND = 0.6;
@@ -491,6 +521,12 @@ export const FIELD_DANGER_SIGMA = 28;
  * 공보다 앞(상대 쪽)에 선 말은 `FIELD_PRESS_BEHIND`초 늦게 닿는 것으로 친다 — 등 뒤에서는 길을 막지 못한다
  */
 export const FIELD_PRESS_TAU = 0.5;
+
+/**
+ * 「압박」 낱말이 압박 몫의 점수에 얹는 무게 — 자리 기본값에서 옮긴 `press` 한 단위당.
+ * +3(성향 +0.39)이면 같은 거리의 동료보다 두 배 남짓 나선다
+ */
+export const PRESS_WORD_BIAS = 2;
 
 export const FIELD_PRESS_BEHIND = 1;
 
@@ -523,10 +559,15 @@ export const FIELD_CHASE_TAU = 0.6;
 
 export const FIELD_CHASE_SIGMA = 3;
 
-/** 판독기의 개인 지시 — 지시가 가리키는 자리의 무게와 폭 (m) */
-export const FIELD_BEHAVIOR = 1.5;
+/**
+ * 대인 마크 — 시트가 `mark`에 표적을 준 말이 그 상대의 골 쪽에 받는 가치. 끝 단계(+3)의
+ * 무게와 폭 (m), 붙는 자리가 상대보다 골 쪽으로 물러선 거리 (m)
+ */
+export const FIELD_MAN_MARK = 1.5;
 
-export const FIELD_BEHAVIOR_SIGMA = 3;
+export const FIELD_MAN_MARK_SIGMA = 3;
+
+export const MAN_MARK_GOAL_SIDE = 1.5;
 
 /** 붐빔 — 동료 둘레에서 값이 준다. 무게와 폭 (m) */
 export const FIELD_CROWD = 0.5;
@@ -691,6 +732,12 @@ export const ATTACK_FOLLOW_MAX = 16;
 export const DEFEND_SHIFT_BASE = 0.7;
 
 export const DEFEND_SHIFT_PER_COVER = 0.6;
+
+/**
+ * 「수비 복귀」 낱말이 수비 형태의 깊이를 옮기는 폭 (m) — 자리 기본값에서 옮긴 `cover` 한
+ * 단위당. +3(성향 +0.36)이면 3.6m 더 깊이 선다 (live-match.md §3.2)
+ */
+export const RECOVER_WORD_DEPTH = 10;
 
 /** 수비 형태가 공보다 앞에 서지 않는 여유 (m) — 첫 수비수만 공으로 간다 */
 export const DEFEND_FRONT_MARGIN = 8;

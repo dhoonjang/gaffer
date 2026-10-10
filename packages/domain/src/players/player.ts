@@ -2,6 +2,9 @@ import { LorebookContentSchema, type LorebookContent } from "../people/lorebook"
 import { z } from "zod";
 import { DateString } from "../core/date-string";
 import { SQUAD_STATUSES, type SquadStatus } from "./squad-rules";
+import { CARD_WORDS, CARD_WORD_DEFS, cardStep, type RoleCard } from "./role-card";
+import { PlaceSchema, type Place } from "./place";
+import { SLOT_REFERENCE } from "./slot-reference";
 
 /** 등번호의 위끝 — 능력치 눈금과 같은 99지만 다른 축이다 */
 export const SQUAD_NUMBER_MAX = 99;
@@ -103,72 +106,75 @@ export const POSITION_NAMES: Readonly<Record<string, string>> = {
 export const POSITION_LINE_ORDER: Record<PositionGroup, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
 
 /**
- * **사실상 같은 자리** 묶음 — 좌우·중앙 분화나 표기만 다르고 요구 역량은 같다.
- * CB를 94로 소화하는 센터백은 RCB·LCB도 그만큼 해낸다(주발 쪽이 아니면 아주 조금
- * 낮은 정도). 그래서 이들은 "인접 포지션"이 아니라 적응도를 거의 공유하는
- * 동일 자리로 다룬다 — 파생(derivePositions)과 폴백(positionProficiency) 양쪽에서.
- *
- * 좌우·중앙 분화 외에 **현대 축구에서 한 사람이 같은 역할로 오가는 쌍**도 여기 넣는다:
- * 풀백↔윙백(라인 높이만 다르다), 측면 미드↔윙어(4-4-2의 RM과 4-3-3의 RW는 같은 선수),
- * 최전방 3형(ST·CF·SS). 이들을 "인접"으로 두면 사카의 RM이 67, 칼라피오리의 LWB가
- * 55로 나와 라인업 판단이 실제 축구와 어긋난다.
+ * 슬롯 코드 → 자리. **가운데 레인의 좌·중·우는 자리 하나를 함께 쓰고**(LCB·CB·RCB → CB),
+ * 측면은 왼쪽과 오른쪽이 따로다. 이름만 다른 표기(CDM·CAM)도 같은 자리다.
  */
-export const POSITION_CLUSTERS: readonly (readonly string[])[] = [
-  ["RCB", "CB", "LCB"],
-  ["RCM", "CM", "LCM"],
-  ["RDM", "DM", "CDM", "LDM"],
-  ["RAM", "AM", "CAM", "LAM"],
+const PLACE_OF_CODE: Record<string, Place> = {
+  GK: "GK",
+  LB: "LB",
+  RB: "RB",
+  LCB: "CB",
+  CB: "CB",
+  RCB: "CB",
+  LWB: "LWB",
+  RWB: "RWB",
+  DM: "DM",
+  CDM: "DM",
+  LDM: "DM",
+  RDM: "DM",
+  LM: "LM",
+  RM: "RM",
+  LCM: "CM",
+  CM: "CM",
+  RCM: "CM",
+  LW: "LW",
+  RW: "RW",
+  AM: "AM",
+  CAM: "AM",
+  LAM: "AM",
+  RAM: "AM",
+  SS: "AM",
+  ST: "ST",
+  LST: "ST",
+  RST: "ST",
+  CF: "ST",
+  LF: "ST",
+  RF: "ST",
+};
+
+/** 이 슬롯 코드가 읽는 자리 — 모르는 코드면 null */
+export function placeOf(position: string): Place | null {
+  return PLACE_OF_CODE[position.toUpperCase()] ?? null;
+}
+
+/** 두 코드가 같은 자리를 읽는가 (LCB↔CB ✅ · CF↔ST ✅ · RB↔RWB ❌) */
+export function samePlace(a: string, b: string): boolean {
+  const pa = placeOf(a);
+  return pa !== null && pa === placeOf(b);
+}
+
+/**
+ * **이웃 쌍** — 다른 자리지만 현대 축구에서 한 사람이 같은 일로 오가는 짝이다:
+ * 풀백↔윙백(라인 높이만 다르다), 측면 미드↔윙어(4-4-2의 RM과 4-3-3의 RW는 같은 선수).
+ * 생성은 짝을 주 자리 바로 아래로 주고, 폴백은 짝에서 2만 깎는다 (player.md §8).
+ */
+const PLACE_PAIRS: readonly (readonly [Place, Place])[] = [
   ["RB", "RWB"],
   ["LB", "LWB"],
   ["RM", "RW"],
   ["LM", "LW"],
-  ["RST", "ST", "LST", "RF", "CF", "LF", "SS"],
 ];
 
-/**
- * **좌우 분화 쌍** — 같은 자리를 왼쪽/가운데/오른쪽으로 나눠 부르는 것뿐이다.
- * 요구 역량이 같으므로 적응도도 **같은 수준**이어야 한다(묶음 감점 없음).
- * 반대로 `RB↔RWB`(라인 높이)나 `ST↔CF`(역할)는 같은 묶음이어도 하는 일이 달라
- * 감점이 남는다 — 그래서 묶음과 별개의 개념으로 둔다.
- *
- * 키는 **중앙 표기**, 값은 그 자리의 좌·우 변형이다.
- */
-const MIRROR_VARIANTS: Record<string, readonly [left: string, right: string]> = {
-  CB: ["LCB", "RCB"],
-  CDM: ["LDM", "RDM"],
-  CM: ["LCM", "RCM"],
-  CAM: ["LAM", "RAM"],
-  CF: ["LF", "RF"],
-  ST: ["LST", "RST"],
-};
+/** 이웃 쌍의 감점 — 저장 목록에 짝만 있을 때 이 자리를 읽는 값 (player.md §8) */
+export const PLACE_PAIR_PENALTY = 2;
 
-/** 포지션 코드 → 중앙 표기 조회표. 반복 조회에서 배열 할당과 선형 탐색을 피하도록 모듈 로드 때 만든다. */
-const MIRROR_BASE = new Map<string, string>([
-  // DM·AM은 CDM·CAM의 다른 표기라 같은 자리로 접는다
-  ["DM", "CDM"],
-  ["AM", "CAM"],
-]);
-for (const [base, [left, right]] of Object.entries(MIRROR_VARIANTS)) {
-  for (const code of [base, left, right]) MIRROR_BASE.set(code, base);
-}
-
-/** 좌우 분화를 벗겨 낸 중앙 표기 — LCB·RCB → CB. 분화가 아니면 그대로 */
-export function mirrorBaseOf(position: string): string {
-  const code = position.toUpperCase();
-  return MIRROR_BASE.get(code) ?? code;
-}
-
-/** 두 자리가 **같은 자리의 좌우 분화**인가 (CB↔LCB ✅ / RB↔RWB ❌) */
-export function isMirrorPair(a: string, b: string): boolean {
-  const codeA = a.toUpperCase();
-  const codeB = b.toUpperCase();
-  return codeA !== codeB && mirrorBaseOf(codeA) === mirrorBaseOf(codeB);
-}
-
-/** 이 포지션이 속한 동일 자리 묶음 (없으면 null) */
-export function clusterOf(position: string): readonly string[] | null {
-  const code = position.toUpperCase();
-  return POSITION_CLUSTERS.find((c) => c.includes(code)) ?? null;
+/** 이 자리의 이웃 쌍 — 없으면 null */
+export function pairedPlaceOf(place: string): Place | null {
+  for (const [a, b] of PLACE_PAIRS) {
+    if (a === place) return b;
+    if (b === place) return a;
+  }
+  return null;
 }
 
 /** 좌우가 있는 코드 전부 — 중앙(CB·CM·CDM·CAM·ST·CF)은 어느 쪽도 아니다 */
@@ -341,6 +347,7 @@ export type OverallAxis = Exclude<
   AttributeAxis,
   (typeof INCLINATION_AXES)[number] | "naturalFitness"
 >;
+const OVERALL_AXIS_SET: ReadonlySet<AttributeAxis> = new Set(OVERALL_AXES);
 
 /** GK만의 능력 축 — 필드 자리의 종합에는 들지 않는다 */
 const KEEPER_AXES: ReadonlySet<AttributeAxis> = new Set([
@@ -376,6 +383,31 @@ export function abilityAxesFor(isKeeper: boolean): AttributeAxis[] {
       !(INCLINATION_AXES as readonly AttributeAxis[]).includes(axis) &&
       (isKeeper ? !OUTFIELD_SKILL_AXES.has(axis) : !KEEPER_AXES.has(axis)),
   );
+}
+
+/**
+ * 그 자리의 평균 선수와 견줘 **두드러진** 능력 축 — 강점은 위로, 약점은 아래로 가장 많이
+ * 벗어난 축이다(`SLOT_REFERENCE`). 절대값으로 고르면 스트라이커의 약점은 언제나 태클·마킹이라
+ * 아무것도 말하지 않는다.
+ */
+export function standoutAxes(
+  attributes: Readonly<Record<AttributeAxis, number>>,
+  position: string,
+  count: number,
+): { strengths: OverallAxis[]; weaknesses: OverallAxis[] } {
+  const slot = weightSlotOf(position);
+  const reference = SLOT_REFERENCE[slot];
+  const ranked = abilityAxesFor(slot === "GK")
+    .filter((axis): axis is OverallAxis => OVERALL_AXIS_SET.has(axis))
+    .map((axis) => ({ axis, gap: attributes[axis] - reference[axis] }))
+    .sort((a, b) => b.gap - a.gap);
+  return {
+    strengths: ranked.slice(0, count).map((r) => r.axis),
+    weaknesses: ranked
+      .slice(-count)
+      .reverse()
+      .map((r) => r.axis),
+  };
 }
 
 /**
@@ -575,30 +607,16 @@ const CEIL_WEIGHT = 3;
 /** 가중치의 해상도 — 0.05 단위로 떨어뜨려야 표와 계산이 같은 값을 본다 */
 const roundWeight = (v: number) => Math.round(v * 20) / 20;
 
-/** 세부 역할 한 종 — 자리의 기본 가중치에 얹는 **차이**로 정의한다 */
-interface RoleDef {
-  id: string;
-  /** 한글 이름 */
-  ko: string;
-  /** FM 약칭 (GK·BPD·DLP…) */
-  abbr: string;
-  /** 한 줄 설명 — UI·LLM 도구 설명에 그대로 쓴다 */
-  desc: string;
-  /** 기본 가중치에서의 차이. 결과는 [그 자리의 바닥, CEIL_WEIGHT] 로 잘린다 */
-  delta: Partial<OverallWeights>;
-}
-
 /** 한 자리의 종합 가중치 — 종합에 드는 축(`OVERALL_AXES`)마다 하나 */
 export type OverallWeights = Record<OverallAxis, number>;
 
 /**
- * 자리별 축 가중치 — `overall`·`roleFit`·간이 시뮬 존 점수의 단일 소스다 (player.md §2).
- * 각 자리의 값은 그 자리의 **제네릭 역할**(센터백=CD, 풀백=FB, 윙어=W…)이고, 세부
- * 역할은 여기서의 차이로 정의한다.
+ * 자리별 축 가중치 — `overall`·`cardFit`·간이 시뮬 존 점수의 단일 소스다 (player.md §2).
+ * 각 자리의 값은 그 자리의 **기본 역할**(센터백·풀백·윙어…)이고, 역할 카드는 여기에
+ * 낱말의 성공 축을 얹는다 (`cardWeights`).
  *
- * ⚠️ **합은 의미가 없다.** `roleFit`이 가중 평균이라 자리 안의 **상대 비율**만
- * 결과에 닿고, 자리·역할 간 수준 차이는 `ROLE_PIVOT`이 흡수한다. 그래서 한 자리의
- * 축을 손보면 그 자리 **모든 역할의** 기준점을 다시 재야 한다.
+ * ⚠️ **합은 의미가 없다.** `cardFit`이 가중 평균이라 자리 안의 **상대 비율**만
+ * 결과에 닿는다. 카드 기준점은 카드마다 계산되므로 따로 다시 잴 표가 없다.
  *
  * ⚠️ **0인 칸은 그 자리에 없는 축이다** — 필드 자리의 GK 축, GK 자리의 필드 기술 축
  * (`KEEPER_AXES`·`OUTFIELD_SKILL_AXES`). 나머지 칸은 바닥(`FLOOR_WEIGHT`) 아래로
@@ -905,1030 +923,6 @@ export const POSITION_WEIGHTS: Record<WeightSlot, OverallWeights> = {
   },
 };
 
-const ROLE_DEFS: Record<WeightSlot, RoleDef[]> = {
-  GK: [
-    {
-      id: "goalkeeper",
-      ko: "골키퍼",
-      abbr: "GK",
-      desc: "라인을 지키고 박스를 장악한다. FM의 기본 GK",
-      delta: {},
-    },
-    {
-      id: "sweeper-keeper",
-      ko: "스위퍼 키퍼",
-      abbr: "SK",
-      desc: "하이라인 뒤를 덮고 발로 빌드업을 연다",
-      delta: {
-        pace: 0.15,
-        acceleration: 0.15,
-        passing: 0.25,
-        kicking: 0.2,
-        firstTouch: 0.05,
-        composure: 0.05,
-        decisions: 0.05,
-        concentration: 0.05,
-        positioning: 0.05,
-        anticipation: 0.05,
-        vision: 0.1,
-        aerialReach: -0.05,
-      },
-    },
-  ],
-  CB: [
-    {
-      id: "central-defender",
-      ko: "센터백",
-      abbr: "CD",
-      desc: "붙을 땐 붙고 덮을 땐 덮는다",
-      delta: {},
-    },
-    {
-      id: "cover-defender",
-      ko: "커버 센터백",
-      abbr: "CD-Co",
-      desc: "라인을 올린 뒤를 혼자 덮는다 — 뒷공간이 곧 그의 일",
-      delta: {
-        pace: 1,
-        acceleration: 0.8,
-        positioning: 0.35,
-        anticipation: 0.25,
-        composure: 0.1,
-        decisions: 0.1,
-        concentration: 0.1,
-        tackling: -0.2,
-        marking: -0.1,
-        strength: -0.6,
-        balance: -0.2,
-        jumpingReach: -0.55,
-        heading: -0.35,
-      },
-    },
-    {
-      id: "stopper",
-      ko: "스토퍼",
-      abbr: "CD-St",
-      desc: "라인 앞으로 나가 상대 9번을 먼저 끊는다",
-      delta: {
-        pace: 0.25,
-        acceleration: 0.2,
-        strength: 0.3,
-        balance: 0.1,
-        tackling: 0.2,
-        marking: 0.1,
-        composure: -0.1,
-        decisions: -0.05,
-        concentration: -0.05,
-        passing: -0.1,
-        jumpingReach: -0.1,
-        heading: -0.1,
-      },
-    },
-    {
-      id: "ball-playing-defender",
-      ko: "볼 플레잉 디펜더",
-      abbr: "BPD",
-      desc: "빌드업의 시작점. 압박을 패스로 벗긴다",
-      delta: {
-        jumpingReach: -0.2,
-        heading: -0.15,
-        dribbling: 0.1,
-        firstTouch: 0.05,
-        agility: 0.05,
-        passing: 0.3,
-        technique: 0.1,
-        crossing: 0.15,
-        freeKicks: 0.1,
-        longShots: 0.1,
-        vision: 0.35,
-        composure: 0.1,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "no-nonsense-cb",
-      ko: "노넌센스 센터백",
-      abbr: "NCB",
-      desc: "안전제일 — 걷어내고 부딪친다",
-      delta: {
-        strength: 0.4,
-        balance: 0.15,
-        passing: -0.15,
-        technique: -0.05,
-        crossing: -0.05,
-        freeKicks: -0.05,
-        tackling: 0.2,
-        marking: 0.15,
-        composure: -0.1,
-        decisions: -0.05,
-        concentration: -0.05,
-      },
-    },
-    {
-      id: "libero",
-      ko: "리베로",
-      abbr: "L",
-      desc: "뒤를 덮다가 공을 갖고 중원까지 올라간다",
-      delta: {
-        pace: 0.85,
-        acceleration: 0.7,
-        stamina: 0.35,
-        strength: -0.45,
-        balance: -0.15,
-        jumpingReach: -0.5,
-        heading: -0.3,
-        dribbling: 0.2,
-        firstTouch: 0.1,
-        agility: 0.05,
-        passing: 0.3,
-        technique: 0.1,
-        crossing: 0.15,
-        freeKicks: 0.05,
-        longShots: 0.05,
-        vision: 0.45,
-        composure: 0.15,
-        decisions: 0.15,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "wide-centre-back",
-      ko: "와이드 센터백",
-      abbr: "WCB",
-      desc: "백3의 좌우 — 측면으로 전진해 공격에 가담한다",
-      delta: {
-        pace: 0.65,
-        acceleration: 0.5,
-        stamina: 0.55,
-        strength: -0.45,
-        balance: -0.15,
-        jumpingReach: -0.5,
-        heading: -0.3,
-        dribbling: 0.15,
-        firstTouch: 0.1,
-        agility: 0.05,
-        passing: 0.05,
-        technique: 0.05,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        longShots: 0.05,
-        positioning: -0.1,
-        anticipation: -0.1,
-      },
-    },
-  ],
-  FB: [
-    { id: "full-back", ko: "풀백", abbr: "FB", desc: "올라가고 내려온다", delta: {} },
-    {
-      id: "no-nonsense-fb",
-      ko: "노넌센스 풀백",
-      abbr: "NFB",
-      desc: "수비가 전부. 오버래핑은 안 한다",
-      delta: {
-        pace: -0.35,
-        acceleration: -0.25,
-        stamina: -0.6,
-        strength: 0.4,
-        balance: 0.1,
-        jumpingReach: 0.25,
-        heading: 0.15,
-        dribbling: -0.2,
-        firstTouch: -0.15,
-        agility: -0.05,
-        longShots: -0.1,
-        crossing: -0.1,
-        freeKicks: -0.05,
-        technique: -0.05,
-        tackling: 0.45,
-        marking: 0.3,
-        positioning: 0.55,
-        anticipation: 0.35,
-      },
-    },
-    {
-      id: "wing-back",
-      ko: "윙백",
-      abbr: "WB",
-      desc: "측면을 밀고 올라가 크로스를 올린다",
-      delta: {
-        stamina: 0.25,
-        strength: -0.1,
-        finishing: 0.05,
-        longShots: 0.1,
-        dribbling: 0.25,
-        firstTouch: 0.15,
-        agility: 0.1,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        technique: 0.05,
-        tackling: -0.35,
-        marking: -0.25,
-        positioning: -0.25,
-        anticipation: -0.15,
-        offTheBall: 0.3,
-      },
-    },
-    {
-      id: "complete-wing-back",
-      ko: "컴플리트 윙백",
-      abbr: "CWB",
-      desc: "공수 모두 최상급을 요구하는 측면",
-      delta: {
-        stamina: 0.25,
-        jumpingReach: -0.1,
-        heading: -0.05,
-        finishing: 0.05,
-        longShots: 0.15,
-        dribbling: 0.4,
-        firstTouch: 0.25,
-        agility: 0.1,
-        balance: 0.05,
-        passing: 0.2,
-        technique: 0.1,
-        crossing: 0.2,
-        freeKicks: 0.1,
-        tackling: -0.45,
-        marking: -0.3,
-        vision: 0.25,
-        positioning: -0.35,
-        anticipation: -0.2,
-        offTheBall: 0.45,
-        composure: 0.1,
-        decisions: 0.05,
-        concentration: 0.05,
-      },
-    },
-    {
-      id: "inverted-full-back",
-      ko: "인버티드 풀백",
-      abbr: "IFB",
-      desc: "안으로 접어 중원 숫자를 만든다",
-      delta: {
-        pace: -0.65,
-        acceleration: -0.5,
-        stamina: -0.8,
-        dribbling: -0.1,
-        firstTouch: -0.05,
-        agility: -0.05,
-        passing: 0.4,
-        technique: 0.05,
-        crossing: -0.05,
-        longShots: -0.15,
-        tackling: 0.2,
-        marking: 0.15,
-        vision: 0.4,
-        positioning: 0.35,
-        anticipation: 0.25,
-        composure: 0.15,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "inverted-wing-back",
-      ko: "인버티드 윙백",
-      abbr: "IWB",
-      desc: "안으로 접고 전진해 중원을 지배한다",
-      delta: {
-        pace: -0.35,
-        acceleration: -0.25,
-        jumpingReach: -0.1,
-        heading: -0.05,
-        dribbling: 0.2,
-        firstTouch: 0.1,
-        agility: 0.05,
-        passing: 0.4,
-        technique: 0.05,
-        freeKicks: 0.05,
-        longShots: -0.1,
-        tackling: -0.35,
-        marking: -0.25,
-        vision: 0.45,
-        composure: 0.1,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-  ],
-  DM: [
-    {
-      id: "defensive-midfielder",
-      ko: "수비형 미드필더",
-      abbr: "DM",
-      desc: "자리를 지키며 연결한다",
-      delta: {},
-    },
-    {
-      id: "anchor",
-      ko: "앵커",
-      abbr: "A",
-      desc: "수비 앞을 떠나지 않는다",
-      delta: {
-        pace: -0.05,
-        acceleration: -0.05,
-        strength: 0.25,
-        balance: 0.05,
-        jumpingReach: 0.1,
-        heading: 0.05,
-        dribbling: -0.1,
-        firstTouch: -0.05,
-        agility: -0.05,
-        passing: -0.55,
-        technique: -0.2,
-        crossing: -0.25,
-        freeKicks: -0.15,
-        longShots: -0.1,
-        tackling: 0.05,
-        vision: -0.8,
-      },
-    },
-    {
-      id: "half-back",
-      ko: "하프백",
-      abbr: "HB",
-      desc: "수비 사이로 내려앉아 백3를 만든다",
-      delta: {
-        pace: -0.05,
-        acceleration: -0.05,
-        strength: 0.4,
-        balance: 0.15,
-        jumpingReach: 0.2,
-        heading: 0.15,
-        dribbling: -0.1,
-        firstTouch: -0.05,
-        agility: -0.05,
-        passing: -0.3,
-        technique: -0.05,
-        crossing: -0.05,
-        freeKicks: -0.05,
-        tackling: 0.05,
-        vision: -0.6,
-      },
-    },
-    {
-      id: "deep-lying-playmaker",
-      ko: "딥라잉 플레이메이커",
-      abbr: "DLP",
-      desc: "뒤에서 경기를 조립한다",
-      delta: {
-        strength: -0.25,
-        balance: -0.05,
-        jumpingReach: -0.1,
-        heading: -0.1,
-        dribbling: 0.15,
-        firstTouch: 0.1,
-        agility: 0.05,
-        passing: 0.3,
-        technique: 0.2,
-        crossing: 0.3,
-        freeKicks: 0.15,
-        longShots: 0.25,
-        tackling: -0.65,
-        marking: -0.4,
-        vision: 1.45,
-        composure: 0.25,
-        decisions: 0.2,
-        concentration: 0.15,
-      },
-    },
-    {
-      id: "ball-winning-midfielder",
-      ko: "볼 위닝 미드필더",
-      abbr: "BWM",
-      desc: "쫓아가 뺏는다",
-      delta: {
-        pace: 0.1,
-        acceleration: 0.1,
-        stamina: 0.75,
-        strength: 0.35,
-        balance: 0.1,
-        passing: -0.65,
-        technique: -0.2,
-        crossing: -0.3,
-        freeKicks: -0.15,
-        longShots: -0.15,
-        tackling: 0.05,
-        vision: -0.8,
-        composure: -0.1,
-        decisions: -0.1,
-        concentration: -0.05,
-      },
-    },
-    {
-      id: "regista",
-      ko: "레지스타",
-      abbr: "RGA",
-      desc: "자유롭게 움직이는 딥라잉 창조자",
-      delta: {
-        strength: -0.4,
-        balance: -0.1,
-        jumpingReach: -0.15,
-        heading: -0.1,
-        dribbling: 0.25,
-        firstTouch: 0.15,
-        agility: 0.1,
-        passing: 0.3,
-        technique: 0.2,
-        crossing: 0.4,
-        freeKicks: 0.2,
-        longShots: 0.35,
-        tackling: -0.8,
-        marking: -0.55,
-        vision: 1.65,
-        positioning: -0.35,
-        anticipation: -0.25,
-        composure: 0.3,
-        decisions: 0.25,
-        concentration: 0.2,
-      },
-    },
-    {
-      id: "segundo-volante",
-      ko: "세군도 볼란테",
-      abbr: "VOL",
-      desc: "수비형이면서 박스까지 침투한다",
-      delta: {
-        pace: 0.15,
-        acceleration: 0.15,
-        stamina: 0.75,
-        strength: 0.15,
-        balance: 0.05,
-        finishing: 0.2,
-        longShots: 0.2,
-        penalties: 0.05,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        technique: 0.05,
-        tackling: -0.25,
-        marking: -0.2,
-        vision: -0.35,
-        positioning: -0.2,
-        anticipation: -0.1,
-        offTheBall: 0.75,
-      },
-    },
-  ],
-  CM: [
-    { id: "central-midfielder", ko: "중앙 미드필더", abbr: "CM", desc: "공수를 오간다", delta: {} },
-    {
-      id: "box-to-box",
-      ko: "박스투박스",
-      abbr: "BBM",
-      desc: "양쪽 박스를 다 밟는다",
-      delta: {
-        pace: 0.1,
-        acceleration: 0.1,
-        stamina: 0.4,
-        strength: 0.1,
-        balance: 0.05,
-        finishing: 0.3,
-        longShots: 0.1,
-        penalties: 0.05,
-        passing: -0.35,
-        technique: -0.1,
-        crossing: -0.1,
-        freeKicks: -0.05,
-        tackling: 0.1,
-        marking: 0.1,
-        vision: -0.75,
-        positioning: 0.1,
-        anticipation: 0.05,
-        offTheBall: 0.5,
-      },
-    },
-    {
-      id: "advanced-playmaker",
-      ko: "어드밴스드 플레이메이커",
-      abbr: "AP",
-      desc: "전방에 붙어 마지막 패스를 만든다",
-      delta: {
-        stamina: -0.5,
-        strength: -0.1,
-        finishing: 0.1,
-        longShots: 0.15,
-        dribbling: 0.2,
-        firstTouch: 0.1,
-        agility: 0.05,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        technique: 0.05,
-        tackling: -0.35,
-        marking: -0.2,
-        vision: 0.8,
-        composure: 0.15,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "mezzala",
-      ko: "메짤라",
-      abbr: "MEZ",
-      desc: "하프스페이스로 파고든다",
-      delta: {
-        pace: 0.15,
-        acceleration: 0.1,
-        strength: -0.1,
-        jumpingReach: -0.05,
-        heading: -0.05,
-        finishing: 0.3,
-        longShots: 0.15,
-        penalties: 0.05,
-        dribbling: 0.35,
-        firstTouch: 0.2,
-        agility: 0.1,
-        tackling: -0.35,
-        marking: -0.2,
-        vision: 0.25,
-        offTheBall: 0.45,
-      },
-    },
-    {
-      id: "carrilero",
-      ko: "카릴레로",
-      abbr: "CAR",
-      desc: "좁은 측면을 메우는 셔틀러",
-      delta: {
-        pace: -0.05,
-        acceleration: -0.05,
-        stamina: 0.4,
-        finishing: -0.1,
-        longShots: -0.05,
-        dribbling: -0.2,
-        firstTouch: -0.1,
-        agility: -0.05,
-        tackling: 0.35,
-        marking: 0.2,
-        vision: -0.5,
-        positioning: 0.2,
-        anticipation: 0.1,
-      },
-    },
-    {
-      id: "roaming-playmaker",
-      ko: "로밍 플레이메이커",
-      abbr: "RPM",
-      desc: "전역을 돌며 공을 만진다",
-      delta: {
-        stamina: 0.3,
-        jumpingReach: -0.05,
-        heading: -0.05,
-        dribbling: 0.25,
-        firstTouch: 0.15,
-        agility: 0.05,
-        longShots: 0.05,
-        crossing: 0.05,
-        tackling: -0.25,
-        marking: -0.15,
-        vision: 0.8,
-        positioning: -0.05,
-        anticipation: -0.05,
-        composure: 0.15,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "ball-winning-midfielder",
-      ko: "볼 위닝 미드필더",
-      abbr: "BWM",
-      desc: "중원에서 상대를 끊는다",
-      delta: {
-        pace: 0.05,
-        acceleration: 0.05,
-        stamina: 0.4,
-        strength: 0.15,
-        balance: 0.05,
-        finishing: -0.1,
-        longShots: -0.15,
-        passing: -0.55,
-        technique: -0.15,
-        crossing: -0.2,
-        freeKicks: -0.15,
-        tackling: 0.6,
-        marking: 0.4,
-        vision: -0.95,
-      },
-    },
-  ],
-  AM: [
-    {
-      id: "attacking-midfielder",
-      ko: "공격형 미드필더",
-      abbr: "AM",
-      desc: "만들고 넣는다",
-      delta: {},
-    },
-    {
-      id: "advanced-playmaker",
-      ko: "어드밴스드 플레이메이커",
-      abbr: "AP",
-      desc: "마지막 패스가 일",
-      delta: {
-        pace: -0.05,
-        acceleration: -0.05,
-        stamina: -0.15,
-        finishing: -0.2,
-        longShots: -0.1,
-        penalties: -0.05,
-        dribbling: 0.1,
-        firstTouch: 0.05,
-        passing: 0.1,
-        composure: 0.1,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "shadow-striker",
-      ko: "섀도 스트라이커",
-      abbr: "SS",
-      desc: "9번 뒤에서 박스로 침투한다",
-      delta: {
-        pace: 0.2,
-        acceleration: 0.2,
-        finishing: 0.8,
-        longShots: 0.3,
-        penalties: 0.15,
-        passing: -0.75,
-        technique: -0.2,
-        crossing: -0.25,
-        freeKicks: -0.15,
-        vision: -1.15,
-        offTheBall: 0.9,
-        composure: 0.1,
-        decisions: 0.05,
-        concentration: 0.05,
-      },
-    },
-    {
-      id: "trequartista",
-      ko: "트레콰르티스타",
-      abbr: "TQ",
-      desc: "수비를 면제받은 자유인",
-      delta: {
-        stamina: -0.4,
-        finishing: 0.35,
-        longShots: 0.2,
-        penalties: 0.05,
-        dribbling: 0.15,
-        firstTouch: 0.1,
-        agility: 0.05,
-        positioning: -0.15,
-        anticipation: -0.1,
-        composure: 0.2,
-        decisions: 0.15,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "enganche",
-      ko: "엔간체",
-      abbr: "ENG",
-      desc: "움직이지 않고 배급으로 지배하는 고전 10번",
-      delta: {
-        pace: -0.2,
-        acceleration: -0.2,
-        stamina: -0.45,
-        finishing: -0.3,
-        longShots: -0.05,
-        penalties: -0.05,
-        passing: 0.1,
-        technique: 0.05,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        positioning: -0.2,
-        anticipation: -0.1,
-        offTheBall: -0.2,
-        composure: 0.2,
-        decisions: 0.15,
-        concentration: 0.1,
-      },
-    },
-  ],
-  W: [
-    { id: "winger", ko: "윙어", abbr: "W", desc: "벌려 서서 제치고 올린다", delta: {} },
-    {
-      id: "inverted-winger",
-      ko: "인버티드 윙어",
-      abbr: "IW",
-      desc: "반대발로 안쪽으로 감아 넣거나 컷백을 준다",
-      delta: {
-        stamina: -0.1,
-        finishing: -0.15,
-        passing: 0.2,
-        technique: 0.05,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        vision: 0.25,
-        composure: 0.05,
-        decisions: 0.05,
-        concentration: 0.05,
-      },
-    },
-    {
-      id: "inside-forward",
-      ko: "인사이드 포워드",
-      abbr: "IF",
-      desc: "안으로 접어 직접 마무리한다",
-      delta: {
-        stamina: -0.1,
-        finishing: 0.7,
-        longShots: 0.25,
-        penalties: 0.1,
-        dribbling: 0.1,
-        firstTouch: 0.05,
-        passing: -0.1,
-        technique: -0.05,
-        crossing: -0.15,
-        freeKicks: -0.05,
-        offTheBall: 0.65,
-        composure: 0.1,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "wide-midfielder",
-      ko: "와이드 미드필더",
-      abbr: "WM",
-      desc: "4-4-2의 측면 — 수비 라인까지 내려온다",
-      delta: {
-        pace: -0.4,
-        acceleration: -0.35,
-        stamina: 0.7,
-        finishing: -0.35,
-        longShots: -0.2,
-        penalties: -0.05,
-        dribbling: -0.5,
-        firstTouch: -0.3,
-        agility: -0.15,
-        balance: -0.05,
-        passing: 0.2,
-        technique: 0.05,
-        crossing: 0.05,
-        freeKicks: 0.05,
-        tackling: 0.2,
-        marking: 0.15,
-        positioning: 0.25,
-        anticipation: 0.15,
-      },
-    },
-    {
-      id: "defensive-winger",
-      ko: "디펜시브 윙어",
-      abbr: "DW",
-      desc: "측면에서 상대 풀백을 묶어 두는 압박형",
-      delta: {
-        pace: -0.25,
-        acceleration: -0.2,
-        stamina: 0.8,
-        strength: 0.1,
-        balance: -0.05,
-        finishing: -0.4,
-        longShots: -0.2,
-        penalties: -0.05,
-        dribbling: -0.6,
-        firstTouch: -0.35,
-        agility: -0.2,
-        tackling: 0.25,
-        marking: 0.15,
-        positioning: 0.3,
-        anticipation: 0.2,
-      },
-    },
-    {
-      id: "wide-playmaker",
-      ko: "와이드 플레이메이커",
-      abbr: "WP",
-      desc: "측면에서 안쪽을 향해 경기를 조립한다",
-      delta: {
-        pace: -0.5,
-        acceleration: -0.4,
-        finishing: -0.35,
-        longShots: -0.15,
-        penalties: -0.05,
-        passing: 0.35,
-        technique: 0.1,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        vision: 0.8,
-        positioning: -0.05,
-        anticipation: -0.05,
-        composure: 0.1,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "raumdeuter",
-      ko: "라움도이터",
-      abbr: "RMD",
-      desc: "제치지 않는다 — 빈 공간을 먼저 읽고 들어간다",
-      delta: {
-        pace: -0.35,
-        acceleration: -0.25,
-        finishing: 0.7,
-        longShots: 0.2,
-        penalties: 0.1,
-        dribbling: -0.75,
-        firstTouch: -0.45,
-        agility: -0.25,
-        balance: -0.1,
-        passing: -0.2,
-        technique: -0.1,
-        crossing: -0.2,
-        freeKicks: -0.1,
-        positioning: -0.05,
-        anticipation: -0.05,
-        offTheBall: 1.2,
-        composure: 0.15,
-        decisions: 0.1,
-        concentration: 0.1,
-      },
-    },
-  ],
-  CF: [
-    {
-      id: "deep-lying-forward",
-      ko: "딥라잉 포워드",
-      abbr: "DLF",
-      desc: "등지고 받아 연결하는 전방",
-      delta: {},
-    },
-    {
-      id: "false-nine",
-      ko: "폴스 나인",
-      abbr: "F9",
-      desc: "최전방을 비우고 내려와 숫자를 만든다",
-      delta: {
-        stamina: 0.15,
-        strength: -0.2,
-        balance: -0.05,
-        jumpingReach: -0.15,
-        heading: -0.1,
-        finishing: -0.55,
-        longShots: -0.25,
-        penalties: -0.1,
-        dribbling: 0.15,
-        firstTouch: 0.1,
-        agility: 0.05,
-        passing: 0.25,
-        technique: 0.05,
-        crossing: 0.05,
-        freeKicks: 0.05,
-        vision: 0.3,
-        positioning: -0.2,
-        anticipation: -0.15,
-        offTheBall: -0.4,
-        composure: 0.25,
-        decisions: 0.2,
-        concentration: 0.15,
-      },
-    },
-    {
-      id: "complete-forward",
-      ko: "컴플리트 포워드",
-      abbr: "CF",
-      desc: "모든 걸 요구하는 전방",
-      delta: {
-        pace: 0.3,
-        acceleration: 0.25,
-        stamina: 0.15,
-        strength: 0.25,
-        balance: 0.1,
-        jumpingReach: 0.25,
-        heading: 0.2,
-        longShots: 0.05,
-        crossing: 0.05,
-        freeKicks: 0.05,
-        technique: 0.05,
-        offTheBall: 0.55,
-      },
-    },
-    {
-      id: "trequartista",
-      ko: "트레콰르티스타",
-      abbr: "TQ",
-      desc: "최전방에 선 자유인 — 수비 가담이 없다",
-      delta: {
-        stamina: -0.2,
-        strength: -0.2,
-        balance: -0.05,
-        jumpingReach: -0.15,
-        heading: -0.1,
-        dribbling: 0.2,
-        firstTouch: 0.1,
-        agility: 0.05,
-        passing: 0.1,
-        vision: 0.25,
-        positioning: -0.25,
-        anticipation: -0.2,
-        offTheBall: -0.35,
-        composure: 0.25,
-        decisions: 0.2,
-        concentration: 0.15,
-      },
-    },
-  ],
-  ST: [
-    {
-      id: "advanced-forward",
-      ko: "어드밴스드 포워드",
-      abbr: "AF",
-      desc: "뒷공간으로 달려 마무리한다",
-      delta: {},
-    },
-    {
-      id: "poacher",
-      ko: "포처",
-      abbr: "P",
-      desc: "박스를 벗어나지 않는다. 한 번의 기회를 넣는다",
-      delta: {
-        pace: 0.15,
-        acceleration: 0.15,
-        stamina: -0.25,
-        strength: -0.35,
-        balance: -0.1,
-        passing: -0.05,
-        crossing: -0.05,
-        vision: -0.25,
-        offTheBall: 0.7,
-        composure: 0.15,
-        decisions: 0.15,
-        concentration: 0.1,
-      },
-    },
-    {
-      id: "target-forward",
-      ko: "타깃 포워드",
-      abbr: "TF",
-      desc: "공중과 등지기로 최전방을 잡아 둔다",
-      delta: {
-        pace: -0.6,
-        acceleration: -0.5,
-        stamina: -0.1,
-        strength: 0.85,
-        balance: 0.25,
-        jumpingReach: 0.8,
-        heading: 0.5,
-        dribbling: -0.2,
-        firstTouch: -0.1,
-        agility: -0.05,
-        passing: 0.1,
-        composure: 0.05,
-        decisions: 0.05,
-        concentration: 0.05,
-      },
-    },
-    {
-      id: "pressing-forward",
-      ko: "프레싱 포워드",
-      abbr: "PF",
-      desc: "첫 번째 수비수 — 쉬지 않고 쫓는다",
-      delta: {
-        pace: 0.25,
-        acceleration: 0.2,
-        stamina: 0.6,
-        strength: 0.3,
-        balance: 0.1,
-        finishing: -0.55,
-        longShots: -0.25,
-        penalties: -0.1,
-        tackling: 0.05,
-        marking: 0.05,
-        vision: -0.15,
-        composure: -0.2,
-        decisions: -0.15,
-        concentration: -0.1,
-      },
-    },
-    {
-      id: "complete-forward",
-      ko: "컴플리트 포워드",
-      abbr: "CF",
-      desc: "모든 걸 요구하는 9번",
-      delta: {
-        stamina: 0.15,
-        dribbling: 0.4,
-        firstTouch: 0.25,
-        agility: 0.1,
-        balance: 0.05,
-        passing: 0.2,
-        technique: 0.05,
-        crossing: 0.1,
-        freeKicks: 0.05,
-        longShots: 0.05,
-        vision: 0.4,
-        composure: 0.15,
-        decisions: 0.15,
-        concentration: 0.1,
-      },
-    },
-  ],
-};
-
 /**
  * **전술 적응 민감도** — 자리마다 "손발이 맞아야 하는 정도"가 다르다.
  *
@@ -1955,227 +949,111 @@ export function tacticalSensitivityOf(position: string): number {
   return TACTICAL_SENSITIVITY[weightSlotOf(position)];
 }
 
-/**
- * **역할별 기준점 보정** — `"슬롯:역할"` → 그 역할의 가중 평균이 자리 기본 역할에서
- * 얼마나 벗어나는가 (카탈로그 실측, `scripts` 없이 테스트로 재생성한다).
- *
- * 없으면 **역할 선택이 곧 공짜 능력치**가 된다. 예컨대 컴플리트 포워드는 높은 축만
- * 골라 얹으므로 보정 없이는 누구를 넣어도 값이 오르고, 반대로 프레싱 포워드는
- * 적극성(평균이 낮은 축)을 크게 잡아 누구를 넣어도 내려간다 — 선수가 아니라
- * **역할이 등급을 정하는** 셈이다. 역할마다 기준점을 따로 두면 **평균적인 선수는
- * 그 자리의 어느 역할에서도 같은 값**이고, 갈리는 건 "이 선수가 그 역할에
- * 맞느냐"뿐이다.
- *
- * ⚠️ **자리 사이에는 같은 보정을 두지 않는다.** 자리 간 수준 차는 가중치가 정한
- * 그대로 남는다 — 실측 자리별 평균 폭은 5.5다 (`attributes.test.ts`).
- */
-const ROLE_PIVOT: Record<string, number> = {
-  "AM:advanced-playmaker": 0.1,
-  "AM:shadow-striker": -0.7,
-  "AM:trequartista": -0.2,
-  "CB:ball-playing-defender": -1.4,
-  "CB:cover-defender": -1.1,
-  "CB:libero": -2.2,
-  "CB:no-nonsense-cb": 0.2,
-  "CB:stopper": -0.2,
-  "CB:wide-centre-back": -1.7,
-  "CF:complete-forward": 0.4,
-  "CF:false-nine": -0.2,
-  "CF:trequartista": 0.1,
-  "CM:ball-winning-midfielder": -0.3,
-  "CM:box-to-box": -0.5,
-  "CM:carrilero": -0.1,
-  "CM:mezzala": -0.1,
-  "CM:roaming-playmaker": 0.3,
-  "DM:anchor": -0.1,
-  "DM:ball-winning-midfielder": 0.1,
-  "DM:half-back": -0.3,
-  "DM:regista": -0.1,
-  "DM:segundo-volante": -0.4,
-  "FB:complete-wing-back": -0.8,
-  "FB:inverted-full-back": -0.7,
-  "FB:inverted-wing-back": -0.5,
-  "FB:no-nonsense-fb": -0.1,
-  "FB:wing-back": -0.4,
-  "GK:sweeper-keeper": -3.2,
-  "ST:complete-forward": -0.5,
-  "ST:poacher": 0.3,
-  "ST:pressing-forward": -0.3,
-  "ST:target-forward": 0.5,
-  "W:defensive-winger": -1.7,
-  "W:inside-forward": -0.3,
-  "W:inverted-winger": -0.2,
-  "W:raumdeuter": -0.7,
-  "W:wide-midfielder": -1.6,
-  "W:wide-playmaker": -0.4,
-};
+/** 낱말 한 칸이 그 방향의 성공 축 하나에 얹는 가중치 (player.md §3) */
+export const CARD_WORD_WEIGHT = 0.1;
 
-const roleWeightCache = new Map<string, OverallWeights>();
-
-/**
- * 두 역할 사이의 거리 — **가중치 델타의 차이 합**.
- *
- * 하드코딩한 상수 대신 카탈로그에서 뽑는다. 볼 플레잉 디펜더 → 노넌센스 센터백은
- * 요구가 정반대라 7.8이 나오고, 볼 플레잉 → 리베로는 둘 다 발로 푸는 수비수라
- * 2.6이다. 카탈로그를 손보면 비용이 저절로 따라온다.
- */
-export function roleDistance(position: string, from: string, to: string): number {
-  if (from === to) return 0;
-  const defs = ROLE_DEFS[weightSlotOf(position)];
-  const a = (defs.find((r) => r.id === from) ?? defs[0]!).delta;
-  const b = (defs.find((r) => r.id === to) ?? defs[0]!).delta;
-  let d = 0;
-  for (const axis of OVERALL_AXES) d += Math.abs((a[axis] ?? 0) - (b[axis] ?? 0));
-  return d;
+/** 카드 하나의 가중치와 기준점 — 같은 (자리 묶음, 낱말) 조합은 한 번만 잰다 */
+interface CardModel {
+  weights: OverallWeights;
+  pivot: number;
 }
+const cardModelCache = new Map<string, CardModel>();
 
-/** 역할 거리 1당 적응도 손실 — 슬라이더 한 칸(1.5~4)과 같은 눈금에 놓는다 (초안) */
-const ROLE_CHANGE_LOSS = 0.6;
-
-/**
- * 역할을 바꿀 때 치르는 **전술 적응도 대가** — 도메인이 유일한 출처다.
- *
- * 코어와 전술판이 같은 함수를 부른다. 대가를 서버 왕복에서만 매기면 저장이 늦거나
- * 막힌 동안 화면의 OVR은 새 역할로, 적응도는 옛 역할로 움직인다 (player.md §7.2).
- */
-export function roleChangeCost(position: string, from: string, to: string): number {
-  return Math.round(roleDistance(position, from, to) * ROLE_CHANGE_LOSS);
-}
-
-/** 이 자리에서 고를 수 있는 세부 역할 — 첫 항목이 기본값 */
-export function rolesFor(position: string): readonly RoleDef[] {
-  return ROLE_DEFS[weightSlotOf(position)];
-}
-
-/** 그 자리의 기본 역할 id */
-export function defaultRoleOf(position: string): string {
-  return ROLE_DEFS[weightSlotOf(position)][0]!.id;
-}
-
-/**
- * 표기를 견주는 꼴로 — 대소문자·공백·가운뎃점·붙임표를 지운다. 「인사이드 포워드」와
- * `inside-forward`와 `Inside Forward`가 한 자리에 모인다.
- */
-const roleKey = (text: string) => text.toLowerCase().replace(/[\s·・_-]/g, "");
-
-/**
- * **감독이 부른 표기로 그 자리의 역할을 찾는다** — 이름·id·약어를 같은 것으로 받는다
- * (player.md §3.1). 전술판은 id를 보내고 **말을 옮기는 해석기는 이름을 적으므로**,
- * 한 표기만 받으면 그쪽 경로의 역할 지시가 통째로 반려된다.
- *
- * ⚠️ 자리 밖은 보지 않는다 — 역할 목록은 자리마다 다르고, 이름이 두 자리에 걸치는 넷은
- * `delta`가 자리마다 따로 적힌다(§3.1). 없는 역할은 `undefined`고 반려는 부르는 쪽의 몫이다.
- */
-export function findRole(position: string, name: string): RoleDef | undefined {
-  const wanted = roleKey(name);
-  if (wanted.length === 0) return undefined;
-  return rolesFor(position).find((def) =>
-    [def.id, def.ko, def.abbr].some((token) => roleKey(token) === wanted),
-  );
-}
-
-/** 자리 하나를 부르는 포지션 코드 전부 — 역할 표의 왼쪽에 선다 */
-function positionCodesOf(slot: WeightSlot): string[] {
-  return Object.keys(SLOT_OF_POSITION).filter((code) => SLOT_OF_POSITION[code] === slot);
-}
-
-/** 역할 하나를 모델에게 설명하는 조각 — `인사이드 포워드(inside-forward·IF)` */
-export function roleChoiceText(def: RoleDef): string {
-  return `${def.ko}(${def.id}·${def.abbr})`;
-}
-
-/**
- * 모델에게 역할을 설명하는 표 — **자리 한 줄에 그 자리의 역할 전부**
- * (`LM/RM/LW/RW — 윙어(winger·W) · 인사이드 포워드(inside-forward·IF) · …`).
- *
- * `set_player_tactic.role`은 자리마다 목록이 달라 열거로 서지 못하는 자유 문자열이라,
- * 낱말이 모델에게 닿는 길이 이 표 하나뿐이다. 없으면 「안쪽으로 파고들어」가 어느
- * 명령에도 담기지 못한다 (docs/agents/agents.md §3). 왼쪽에 포지션 코드를 세우는 것은
- * 모델이 읽는 명단·스냅샷이 자리를 그 코드로 부르기 때문이다.
- */
-export function roleVocabularyText(): string {
-  const slots = Object.keys(ROLE_DEFS) as WeightSlot[];
-  return slots
-    .map(
-      (slot) =>
-        `${positionCodesOf(slot).join("/")} — ${ROLE_DEFS[slot].map(roleChoiceText).join(" · ")}`,
-    )
-    .join("\n");
-}
-
-/**
- * **자리를 옮겼을 때 되찾는 역할** — ① 지금 걸린 역할이 새 자리 목록에 있으면 그대로
- * → ② 그 자리의 기억 (§3.2). 둘 다 없으면 `undefined`, 곧 **그 자리의 기본 역할**이다.
- *
- * ⚠️ **자리가 바뀌었는지는 보지 않는다** — 그 역할이 새 자리 목록에 있는지만 본다.
- * 옛 자리와 견주면 CB → LCB처럼 코드만 바뀌는 이동에서 한쪽만 기억을 꺼내 값이 갈린다.
- *
- * 코어(`setLineup`의 승계)와 전술판이 **같은 이 함수를 부른다.** 저장을 기다리는
- * 3초 동안 화면이 규칙을 따로 밟으면, 감독이 누른 적 없는 역할 변경이 자동 저장
- * 응답과 함께 혼자 일어난다.
- *
- * `undefined`를 기본 역할로 접지 않는 이유: 코어는 **스스로 닿는 값을 배치에 적지
- * 않는다**. 적어 두면 그 기본 역할이 감독의 결정으로 기억에 남는다(`rememberRole`).
- *
- * @param current 지금 걸린 역할 (없으면 null·undefined)
- * @param remembered 그 자리에서 마지막에 맡던 역할 (없으면 null·undefined)
- */
-export function inheritedRole(
-  position: string,
-  current: string | null | undefined,
-  remembered: string | null | undefined,
-): string | undefined {
-  const options = rolesFor(position);
-  if (current != null && options.some((r) => r.id === current)) return current;
-  if (remembered != null && options.some((r) => r.id === remembered)) return remembered;
-  return undefined;
-}
-
-/**
- * **그 자리에 서면 실제로 걸리는 역할** — 되찾기(`inheritedRole`)에 기본 역할까지
- * 얹은 3단. 화면은 값이 있어야 알약을 그리므로 이쪽을 부른다.
- */
-export function roleAtSlot(
-  position: string,
-  current: string | null | undefined,
-  remembered: string | null | undefined,
-): string {
-  return inheritedRole(position, current, remembered) ?? defaultRoleOf(position);
-}
-
-/** 자리+역할 → 축 가중치. 모르는 역할 id는 기본 역할로 떨어진다 */
-export function roleWeights(position: string, role?: string): OverallWeights {
-  const slot = weightSlotOf(position);
-  const defs = ROLE_DEFS[slot];
-  const def = defs.find((r) => r.id === role) ?? defs[0]!;
-  const key = `${slot}:${def.id}`;
-  const cached = roleWeightCache.get(key);
-  if (cached) return cached;
-  const base = POSITION_WEIGHTS[slot];
-  const w = { ...base };
+/** 그 가중치로 낸 평균 — 무게가 0인 축은 보지 않는다 */
+function weightedMean(values: Readonly<Record<OverallAxis, number>>, w: OverallWeights): number {
+  let sum = 0;
+  let total = 0;
   for (const axis of OVERALL_AXES) {
-    const d = def.delta[axis];
-    if (d === undefined) continue;
-    w[axis] = Math.max(axisFloorAt(slot, axis), Math.min(CEIL_WEIGHT, roundWeight(base[axis] + d)));
+    const weight = w[axis];
+    if (weight === 0) continue;
+    sum += values[axis] * weight;
+    total += weight;
   }
-  roleWeightCache.set(key, w);
-  return w;
+  return total === 0 ? 0 : sum / total;
+}
+
+/** 두 자리의 반씩 — 공 있을 때의 자리가 있는 카드의 바탕과 기준 선수 (player.md §3.3) */
+function halfAndHalf(
+  a: Readonly<Record<OverallAxis, number>>,
+  b: Readonly<Record<OverallAxis, number>>,
+  round: (v: number) => number = (v) => v,
+): Record<OverallAxis, number> {
+  const out = { ...a };
+  for (const axis of OVERALL_AXES) out[axis] = round((a[axis] + b[axis]) / 2);
+  return out;
+}
+
+function cardModelOf(slot: WeightSlot, card: RoleCard | null | undefined): CardModel {
+  const ipSlot = card?.ip.place ? weightSlotOf(card.ip.place) : slot;
+  const key = `${slot}|${ipSlot}|${CARD_WORDS.map((word) => cardStep(card, word)).join(",")}`;
+  const cached = cardModelCache.get(key);
+  if (cached) return cached;
+  const base =
+    ipSlot === slot
+      ? POSITION_WEIGHTS[slot]
+      : halfAndHalf(POSITION_WEIGHTS[slot], POSITION_WEIGHTS[ipSlot], roundWeight);
+  const lift: Partial<Record<OverallAxis, number>> = {};
+  for (const word of CARD_WORDS) {
+    const step = cardStep(card, word);
+    if (step === 0) continue;
+    const def = CARD_WORD_DEFS[word];
+    for (const axis of step > 0 ? def.plusAxes : def.minusAxes) {
+      lift[axis] = (lift[axis] ?? 0) + Math.abs(step) * CARD_WORD_WEIGHT;
+    }
+  }
+  const weights = { ...base };
+  for (const axis of OVERALL_AXES) {
+    const d = lift[axis];
+    if (d === undefined) continue;
+    weights[axis] = Math.max(
+      axisFloorAt(slot, axis),
+      Math.min(CEIL_WEIGHT, roundWeight(base[axis] + d)),
+    );
+  }
+  /**
+   * ⚠️ **기준점은 카드마다 잰다** — 그 자리 선수의 평균 축(`SLOT_REFERENCE`)이 이 카드에서
+   * 내는 값과 기본 카드에서 내는 값의 차다. 없으면 카드가 곧 공짜 능력치다: 평균이 높은
+   * 축만 얹는 카드는 누구를 넣어도 오르고, 낮은 축을 얹는 카드는 누구를 넣어도 내려간다.
+   */
+  const reference =
+    ipSlot === slot
+      ? SLOT_REFERENCE[slot]
+      : halfAndHalf(SLOT_REFERENCE[slot], SLOT_REFERENCE[ipSlot]);
+  const pivot = weightedMean(reference, weights) - weightedMean(reference, base);
+  const model = { weights, pivot };
+  cardModelCache.set(key, model);
+  return model;
 }
 
 /**
- * 이 자리·이 역할에서의 전력 — **16축의 가중 평균이고, 축 범위를 벗어나지 않는다.**
+ * **자리를 옮겼을 때 되찾는 카드** — ① 같은 자리 안의 이동(LCB → RCB)이면 지금 카드
+ * 그대로 → ② 그 자리의 기억 (player.md §3.2). 둘 다 없으면 `undefined`, 곧 **그 자리의
+ * 기본 행동**이다.
  *
- * 같은 선수라도 **자리에 따라** 다르고(라이스를 DM에 두면 tackling·positioning이
- * 지배하고 AM에 올리면 vision·dribbling이 지배한다), 같은 자리에서도 **역할에 따라**
- * 다르다(같은 풀백이라도 정통 풀백과 인버티드 풀백은 요구가 다르다).
+ * 코어(`setLineup`의 승계 · `movePlayerSlot`)와 전술판이 **같은 이 함수를 부른다.**
+ * 저장을 기다리는 3초 동안 화면이 규칙을 따로 밟으면, 감독이 누른 적 없는 카드 변경이
+ * 자동 저장 응답과 함께 혼자 일어난다.
  *
- * `role`을 주지 않으면 그 자리의 **기본 역할**이다 — 표시용 `overall`이 이 값을 쓴다.
- *
- * ⚠️ **평균을 되펴지 않는다.** 한동안 자리 기준점에서 ×1.237로 되펴 6축 시절
- * 분포(평균 70 · 최대 94)에 맞췄는데, 그러면 종합이 **그 선수 어느 축보다도 높게**
- * 나온다 — 16축을 함께 펼쳐 놓은 화면에서 그건 계산이 틀린 것으로 읽힌다
- * (`docs/players/player.md` §4).
+ * @param from 지금 서 있던 칸 — 벤치·예비에서 올라오면 null
+ * @param to 새로 서는 칸
+ * @param current 지금 걸린 카드
+ * @param remembered 새 칸의 자리에서 마지막에 맡던 카드
  */
+export function inheritedCard(
+  from: string | null | undefined,
+  to: string,
+  current: RoleCard | null | undefined,
+  remembered: RoleCard | null | undefined,
+): RoleCard | undefined {
+  if (current && from != null && samePlace(from, to)) return current;
+  return remembered ?? undefined;
+}
+
+/** 자리 + 카드 → 축 가중치. 카드가 없으면 그 자리의 기본 가중치다 */
+export function cardWeights(position: string, card?: RoleCard | null): OverallWeights {
+  return cardModelOf(weightSlotOf(position), card).weights;
+}
+
 /**
  * **감독이 그 선수를 얼마나 정확히 아는가** — 표시값에 얹히는 결정적 오프셋 하나.
  *
@@ -2199,7 +1077,7 @@ const clampShown = (value: number) =>
   Math.max(SHOWN_RATING_MIN, Math.min(RATING_MAX, Math.round(value)));
 
 /**
- * 관측된 축에서 그 자리·역할의 전력을 낸다 — **화면과 서버의 단일 규칙.**
+ * 관측된 축에서 그 자리·카드의 전력을 낸다 — **화면과 서버의 단일 규칙.**
  *
  * 안개는 **축에만** 있다(`axes`가 이미 관측값이다). 합성값은 전부 여기서 파생되므로
  * 자리를 어떻게 옮겨도 명단과 전술판이 어긋날 수 없다.
@@ -2208,12 +1086,21 @@ export function observedFit(
   axes: AxisValues,
   observation: ObservationOffset,
   position: string,
-  role?: string,
+  card?: RoleCard | null,
 ): number {
-  return clampShown(roleFit(axes, position, role) + observation.overallOffset);
+  return clampShown(cardFit(axes, position, card) + observation.overallOffset);
 }
 
-/** 실제 16축·보유 포지션에서 낸 종합에 관측 오차를 한 번만 얹는다. */
+/** 보유 자리 목록의 한 줄 — 칸이 아니라 자리를 잰다 (`placeFit`) */
+export function observedPlaceFit(
+  axes: AxisValues,
+  observation: ObservationOffset,
+  place: string,
+): number {
+  return clampShown(placeFit(axes, place) + observation.overallOffset);
+}
+
+/** 실제 37축·보유 자리에서 낸 종합에 관측 오차를 한 번만 얹는다. */
 export function observedOverall(overall: number, observation: ObservationOffset): number {
   return clampShown(overall + observation.overallOffset);
 }
@@ -2249,11 +1136,20 @@ export function ratingLabel(value: number): string {
   return tierOfRating(value).ko;
 }
 
-export function roleFit(axes: AxisValues, position: string, role?: string): number {
-  const slot = weightSlotOf(position);
-  const defs = ROLE_DEFS[slot];
-  const def = defs.find((r) => r.id === role) ?? defs[0]!;
-  const w = roleWeights(position, def.id);
+/**
+ * 이 자리·이 카드에서의 전력 — **종합 축의 가중 평균이고, 축 범위를 벗어나지 않는다.**
+ *
+ * 같은 선수라도 **자리에 따라** 다르고(라이스를 DM에 두면 태클·위치 선정이 지배하고
+ * AM에 올리면 시야·드리블이 지배한다), 같은 자리에서도 **카드에 따라** 다르다(같은
+ * 풀백이라도 안으로 좁히는 풀백은 패스·드리블을 더 본다).
+ *
+ * 카드를 주지 않으면 그 자리의 **기본 역할**이다 — 표시용 `overall`이 이 값을 쓴다.
+ *
+ * ⚠️ **평균을 되펴지 않는다.** 배율로 되펴면 종합이 **그 선수 어느 축보다도 높게**
+ * 나온다 — 축을 함께 펼쳐 놓은 화면에서 그건 계산이 틀린 것으로 읽힌다 (player.md §4).
+ */
+export function cardFit(axes: AxisValues, position: string, card?: RoleCard | null): number {
+  const { weights: w, pivot } = cardModelOf(weightSlotOf(position), card);
   let sum = 0;
   let total = 0;
   let lowest = Infinity;
@@ -2270,19 +1166,37 @@ export function roleFit(axes: AxisValues, position: string, role?: string): numb
     if (value > highest) highest = value;
   }
   if (total === 0) return 0;
-  // 역할 기준점은 **평행 이동**이다 — 역할을 고르는 것만으로 값이 오르내리지
+  // 카드 기준점은 **평행 이동**이다 — 카드를 고르는 것만으로 값이 오르내리지
   // 않게 하되(§3), 축 범위 밖으로는 나가지 못한다.
-  const leveled = sum / total - (ROLE_PIVOT[`${slot}:${def.id}`] ?? 0);
+  const leveled = sum / total - pivot;
   return Math.max(lowest, Math.min(highest, Math.round(leveled)));
 }
 
 /**
- * **표시용 종합** — 그 선수가 가장 잘 맞는 자리에서, **기본 역할로** 낸 값.
+ * 자리가 품은 가중치 묶음 — 최전방(ST)은 전술판의 두 줄이 다른 묶음을 읽는다: 맨 앞 줄은
+ * 마무리하는 9번(ST), 그 뒤 줄은 내려와 잇는 전방(CF). 나머지 자리는 묶음 하나다.
+ */
+const PLACE_WEIGHT_CODES: Partial<Record<Place, readonly string[]>> = { ST: ["ST", "CF"] };
+
+/**
+ * 그 **자리**에서 기본 역할로 내는 전력 — 묶음이 둘이면 높은 쪽이다 (player.md §4).
+ * 전술판의 한 칸은 `cardFit`으로 잰다: 칸은 자기 묶음 하나만 읽는다.
+ */
+export function placeFit(axes: AxisValues, place: string): number {
+  const at = placeOf(place);
+  const codes = (at && PLACE_WEIGHT_CODES[at]) ?? [place];
+  let best = 0;
+  for (const code of codes) best = Math.max(best, cardFit(axes, code));
+  return best;
+}
+
+/**
+ * **표시용 종합** — 그 선수가 가장 잘 맞는 자리에서, **빈 카드로** 낸 값.
  *
- * 선수 카드의 숫자 하나는 "이 선수는 어느 정도인가"에 답해야 하므로 역할을 타면
- * 안 된다(같은 선수가 역할 목록만큼 여러 등급을 갖게 된다). 실제로 맡은 자리·역할의
- * 값은 `roleFit`이 따로 낸다 — 그래서 인버티드 풀백을 시킨 정통 풀백은 종합은
- * 그대로인데 그 경기의 전력만 낮게 잡힌다.
+ * 선수 카드의 숫자 하나는 "이 선수는 어느 정도인가"에 답해야 하므로 역할 카드를 타면
+ * 안 된다(같은 선수가 카드만큼 여러 등급을 갖게 된다). 실제로 맡은 자리·카드의 값은
+ * `cardFit`이 따로 낸다 — 그래서 안으로 좁히는 카드를 받은 정통 풀백은 종합은 그대로인데
+ * 그 경기의 전력만 달리 잡힌다.
  *
  * `positions`는 그 선수가 볼 줄 아는 자리 목록(`PLAYER_POSITION`)이다. 주 포지션만
  * 보면 안 된다 — 시드의 주 포지션 표기는 출처마다 갈리고(EA는 윙어를 LM/RM으로 적는다),
@@ -2290,7 +1204,7 @@ export function roleFit(axes: AxisValues, position: string, role?: string): numb
  */
 export function bestOverall(axes: AxisValues, positions: readonly { position: string }[]): number {
   let best = 0;
-  for (const p of positions) best = Math.max(best, roleFit(axes, p.position));
+  for (const p of positions) best = Math.max(best, placeFit(axes, p.position));
   return best;
 }
 
@@ -2475,7 +1389,8 @@ export function fatigueBand(fatigue: number): FatigueBand {
 
 /** 가능 포지션 + 포지션 적응도 — 선수당 여러 개, isNatural은 **하나 이상** */
 const PlayerPositionSchema = z.object({
-  position: z.string().min(1),
+  /** 자리 14개 중 하나 — 슬롯 코드는 적히지 않는다 (player.md §8) */
+  position: PlaceSchema,
   /** 포지션 적응도 0~99 — 출전·훈련으로 상승 */
   proficiency: RatingSchema,
   /** 주 포지션 — positionGroup·overall 공식의 기준 */
@@ -2662,7 +1577,16 @@ export const PlayerCatalogEntrySchema = z.object({
  * 자기 자리로 삼는 선수가 있다(칸셀루의 풀백·윙, 카마빙가의 중원·측면).
  * 검증 레이어는 **하나 이상**을 보장한다.
  */
-export function naturalPositionsOf(player: Pick<GamePlayer, "positions">): PlayerPosition[] {
+/** 보유 목록의 한 줄 — 저장 모양(`PlayerPosition`)도, 화면이 받는 복사본도 이 꼴이다 */
+interface HeldPosition {
+  position: string;
+  proficiency: number;
+  isNatural: boolean;
+}
+
+export function naturalPositionsOf<P extends HeldPosition>(player: {
+  positions: readonly P[];
+}): P[] {
   const natural = player.positions.filter((p) => p.isNatural);
   return natural.length > 0 ? natural : player.positions.slice(0, 1);
 }
@@ -2673,25 +1597,26 @@ export function naturalPositionsOf(player: Pick<GamePlayer, "positions">): Playe
  * 선호 여부를 물을 땐 이 함수가 아니라 `isNaturalAt`을 써야 한다 — 대표 하나만
  * 보면 나머지 주 포지션이 "소화 가능"으로 밀려난다.
  */
-export function naturalPositionOf(player: Pick<GamePlayer, "positions">): PlayerPosition {
+export function naturalPositionOf<P extends HeldPosition>(player: { positions: readonly P[] }): P {
   const natural = naturalPositionsOf(player);
   return natural.reduce((best, p) => (p.proficiency > best.proficiency ? p : best), natural[0]!);
 }
 
 /**
- * 이 자리가 그 선수의 **선호**인가 — 주 포지션 자체이거나 그 좌우 분화면 참이다.
- * `CB`가 주 포지션인 선수에게 `LCB`·`RCB`는 "소화 가능"이 아니라 같은 자리다
- * (요구 역량이 같고 갈리는 건 주발뿐 — player.md §4 좌우 분화).
- * 묶음(`RB↔RWB`·`ST↔CF`)까지는 넓히지 않는다 — 하는 일이 달라 감점이 남는다.
+ * 이 칸이 그 선수의 **선호**인가 — 주 자리로 접히는 칸이면 참이다 (player.md §8).
+ * `CB`가 주 자리인 선수에게 `LCB`·`RCB`는 "소화 가능"이 아니라 같은 자리다.
+ * 이웃 쌍(`RB↔RWB`)까지는 넓히지 않는다 — 다른 자리라 감점이 남는다.
  */
-export function isNaturalAt(player: Pick<GamePlayer, "positions">, position: string): boolean {
-  const code = position.toUpperCase();
-  return naturalPositionsOf(player).some(
-    (p) => p.position.toUpperCase() === code || isMirrorPair(p.position, code),
-  );
+export function isNaturalAt(
+  player: { positions: readonly HeldPosition[] },
+  position: string,
+): boolean {
+  return naturalPositionsOf(player).some((p) => samePlace(p.position, position));
 }
 
-export function positionGroupOfPlayer(player: Pick<GamePlayer, "positions">): PositionGroup {
+export function positionGroupOfPlayer(player: {
+  positions: readonly HeldPosition[];
+}): PositionGroup {
   return positionGroupOf(naturalPositionOf(player).position) ?? "MF";
 }
 

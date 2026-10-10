@@ -1,4 +1,5 @@
 import type {
+  CardSteps,
   EventCause,
   LiveInputPayload,
   LiveMatchState,
@@ -20,8 +21,11 @@ import {
   PHASE_END,
   PHASE_START,
   STOP_EVENT_TYPES,
+  cardStepsOf,
   otherSide,
+  placeOf,
   positionGroupOfPlayer,
+  positionProficiency,
 } from "@gaffer/domain";
 import { makeRng } from "../rng";
 import {
@@ -126,7 +130,7 @@ function slotToLineup(slot: LiveSlot, players: Record<string, Player>): LineupSl
     player,
     position: slot.position,
     ...(slot.point ? { point: slot.point } : {}),
-    ...(slot.roleId ? { roleId: slot.roleId } : {}),
+    ...(slot.card ? { card: slot.card } : {}),
     proficiency: slot.proficiency,
     familiarity: slot.familiarity,
   };
@@ -149,6 +153,22 @@ function sideInputOf(match: LiveMatch, side: MatchSide): LiveSideInput {
   };
 }
 
+/** 판에 선 말의 저장된 카드와 골키퍼 — 시트의 `card` 줄이 고치는 기준 */
+function slotCardsOf(match: LiveMatch): {
+  cards: Record<string, CardSteps>;
+  keepers: Set<string>;
+} {
+  const cards: Record<string, CardSteps> = {};
+  const keepers = new Set<string>();
+  for (const side of ["home", "away"] as const) {
+    for (const slot of match.slots[side]) {
+      cards[slot.playerId] = cardStepsOf(slot.card);
+      if (placeOf(slot.position) === "GK") keepers.add(slot.playerId);
+    }
+  }
+  return { cards, keepers };
+}
+
 /** 이 틱의 입력 — 시트는 지금 그라운드의 사람으로 다시 접는다 */
 export function liveInputOf(match: LiveMatch): LiveInput {
   const players = new Map(Object.entries(match.setup.players));
@@ -165,6 +185,7 @@ export function liveInputOf(match: LiveMatch): LiveInput {
           points: match.points,
           onPitch: { home: match.ledger.home.onPitch, away: match.ledger.away.onPitch },
           uptake: { home: uptakeOf("home"), away: uptakeOf("away") },
+          ...slotCardsOf(match),
         });
   const injured = new Set<string>(
     match.ledger.events
@@ -353,8 +374,8 @@ function applySubstitution(
           playerId: into,
           position,
           ...(leaving.point ? { point: leaving.point } : {}),
-          // 자리에 걸려 있던 역할을 잇는다 — 들어온 선수의 역할 기억은 엔진이 판을 다시 세울 때 얹는다 (match.md §3.2)
-          ...(leaving.roleId ? { roleId: leaving.roleId } : {}),
+          // 자리에 걸려 있던 카드를 잇는다 — 들어온 선수의 카드 기억은 엔진이 판을 다시 세울 때 얹는다 (match.md §3.2)
+          ...(leaving.card ? { card: leaving.card } : {}),
           proficiency: proficiencyOf(player, position),
           // 전술 적응도는 배치의 것이라 여기 없다 — 나간 선수의 값을 잇고, 엔진이 판을 다시 세울 때 제 값으로 선다
           familiarity: leaving.familiarity,
@@ -368,9 +389,9 @@ function applySubstitution(
   return true;
 }
 
+/** 투입 선수의 그 칸 적응도 — 킥오프 배치와 같은 함수다 (player.md §8) */
 function proficiencyOf(player: Player, position: string): number {
-  const found = player.positions.find((p) => p.position === position);
-  return found?.proficiency ?? 25;
+  return positionProficiency(player.positions, position, player.foot);
 }
 
 /** 퇴장·부상 뒤 말이 떠날 때 마지막 체력을 남긴다 */

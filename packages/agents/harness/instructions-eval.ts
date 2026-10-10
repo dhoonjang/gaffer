@@ -534,11 +534,11 @@ async function main() {
                 ? undefined
                 : (game.pendingMatch?.live.sheet ?? []).some(
                     (line) =>
-                      line.shape === "behavior" &&
-                      line.action === "mark" &&
+                      line.shape === "card" &&
+                      line.word === "mark" &&
                       line.target.player === mark.markerId &&
                       line.targetPlayer === mark.targetId &&
-                      line.step > 0,
+                      line.sign * line.step > 0,
                   );
             const strengths =
               focusSide === undefined

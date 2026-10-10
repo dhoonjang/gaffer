@@ -1,9 +1,13 @@
 import { validatedAnswer } from "../shared/evaluation-answers";
 import { z } from "zod";
 import {
+  CARD_STEP_MAX,
+  CARD_WORDS,
+  CARD_WORD_DEFS,
   PointSchema,
   SheetLineSchema,
   POINT_TEXT_MAX,
+  cardStepLabel,
   type Point,
   type SheetLine,
 } from "@gaffer/domain";
@@ -19,7 +23,18 @@ export const SHEET_LINES_PER_POINT = 3;
 export const SHEET_MAX = POINTS_MAX * SHEET_LINES_PER_POINT;
 
 const PLAN_COMMAND = "set_match_plan";
-const CandidateLineSchema = SheetLineSchema.omit({ pointId: true, sign: true, step: true });
+const WORDS_TEXT = CARD_WORDS.map((word) => {
+  const def = CARD_WORD_DEFS[word];
+  return `${word}=${def.ko}(−${def.minus}/+${def.plus})`;
+}).join(", ");
+const CandidateLineSchema = SheetLineSchema.omit({ pointId: true, sign: true, step: true }).extend({
+  word: SheetLineSchema.shape.word.describe(
+    `Role-card word for card rows — ${WORDS_TEXT}. A goalkeeper takes only passRisk and sweep; an outfield player every word but sweep`,
+  ),
+  targetPlayer: SheetLineSchema.shape.targetPlayer.describe(
+    "Only with the mark word: the opponent to man-mark",
+  ),
+});
 const PlanSchema = z.object({
   mode: z
     .enum(["replace", "clear", "keep"])
@@ -31,7 +46,7 @@ const PlanSchema = z.object({
     .max(SHEET_MAX)
     .optional()
     .describe(
-      "Only for replace: the requested changes and costs plus every existing effect to keep. Keep the active_effects not asked to change. behavior is an individual instruction, edge execution quality, focus attacking direction, temper roughness, legs stamina spend, cohesion holding shape. behavior/edge/temper/legs take target.player, focus takes target.side and lane, cohesion takes target.side; manager_side names our side. behavior needs action and when; mark needs targetPlayer. One line per player and shape, except edge. Lines apply in order: put a cost before the gain it pays for. A team's edge lines net at most a moderate gain, so a larger gain needs an edge cost on another of its players. The direction and strength of numeric effects are rated separately.",
+      "Only for replace: the requested changes and costs plus every existing effect to keep. Keep the active_effects not asked to change. card sets one role-card word of a player for this match, edge execution quality, focus attacking direction, temper roughness, legs stamina spend, cohesion holding shape. card/edge/temper/legs take target.player, focus takes target.side and lane, cohesion takes target.side; manager_side names our side. card needs word, one row per word; a role is several card rows. Otherwise one line per player and shape, except edge. Lines apply in order: put a cost before the gain it pays for. A team's edge lines net at most a moderate gain, so a larger gain needs an edge cost on another of its players. The direction and strength of every effect are rated separately.",
     ),
 });
 
@@ -39,6 +54,8 @@ export interface MatchInstructionRequest extends Omit<InstructionRequest, "evalu
   evaluator: GameEvaluator;
   /** The caller owns stable IDs and supplies only the recent ten-minute match context. */
   pointId: string;
+  /** The manager's own players — card rows instruct only them. */
+  ours: readonly string[];
 }
 
 type MatchInstructionResult = OpsOrders & {
@@ -66,16 +83,13 @@ function refineTargetSchema(
   let fields: string[];
   let required: string[];
   switch (row.shape) {
-    case "behavior":
-      fields = "action" in row && row.action === "mark" ? ["player"] : ["player", "lane"];
-      required = ["player"];
-      break;
     case "focus":
       fields = required = ["side", "lane"];
       break;
     case "cohesion":
       fields = required = ["side"];
       break;
+    case "card":
     case "edge":
     case "temper":
     case "legs":
@@ -100,14 +114,14 @@ function fieldDisposition(
     if (typeof input.mode !== "string") return "defer";
     return input.mode === "replace" ? "include" : "omit";
   }
-  const match = /^\$\.sheet\[(\d+)\]\.(action|when|targetPlayer|band|target\.lane)$/.exec(path);
+  const match = /^\$\.sheet\[(\d+)\]\.(word|targetPlayer)$/.exec(path);
   if (!match || !Array.isArray(input.sheet)) return "include";
   const row: unknown = input.sheet[Number(match[1])];
   if (typeof row !== "object" || row === null || !("shape" in row)) return "defer";
-  if (match[2] !== "target.lane") return row.shape === "behavior" ? "include" : "omit";
-  if (row.shape !== "behavior") return "include";
-  if (!("action" in row)) return "defer";
-  return row.action === "mark" ? "omit" : "include";
+  if (row.shape !== "card") return "omit";
+  if (match[2] === "word") return "include";
+  if (!("word" in row)) return "defer";
+  return row.word === "mark" ? "include" : "omit";
 }
 
 /** Interpret existing match commands and tactical effects without generating point prose. */
@@ -139,7 +153,7 @@ export async function interpretMatchInstructions(
         name: PLAN_COMMAND,
         label: PLAN_LABEL,
         description:
-          "Applies the manager's in-match tactical instructions to individual players and lanes: man-marking, cover, runs into space, attacking an opponent's weakness, focusing the attack left/right/centre. Decide the effects and their costs together from the observed facts of the last 10 minutes and the current players' ability, position and stamina. Team-wide mentality, defensive line, pressing, tempo, width and passing belong to set_tactics; substitutions, positions and roles to their own commands.",
+          "Applies the manager's in-match tactical instructions to individual players and lanes for this match: a player's role-card words (width, getting forward, runs in behind, dribbling, shooting, pressing, tracking back, man-marking an opponent), attacking an opponent's weakness, focusing the attack left/right/centre. Decide the effects and their costs together from the observed facts of the last 10 minutes and the current players' ability, position, card and stamina. Team-wide mentality, defensive line, pressing, tempo, width and passing belong to set_tactics; substitutions and positions to their own commands.",
         inputSchema: toToolSchema(PlanSchema),
         limit: 1,
         contextual: true,
@@ -171,10 +185,13 @@ export async function interpretMatchInstructions(
   const plan = { sheet: lines };
   const playerIds = new Set(players.map((candidate) => candidate.value));
   const targetIds = new Set(targets.map((candidate) => candidate.value));
+  const ours = new Set(request.ours);
   if (
     plan.sheet.some(
       (line) =>
-        (line.shape === "behavior" && line.action === "mark" && line.targetPlayer === undefined) ||
+        (line.shape === "card" &&
+          (line.word === undefined || !ours.has(line.target.player ?? ""))) ||
+        (line.targetPlayer !== undefined && line.word !== "mark") ||
         (line.target.player !== undefined && !playerIds.has(line.target.player)) ||
         (line.targetPlayer !== undefined && !targetIds.has(line.targetPlayer)),
     )
@@ -183,35 +200,38 @@ export async function interpretMatchInstructions(
 
   const questions: Record<string, ScoreQuestion> = {};
   plan.sheet.forEach((line, index) => {
-    if (line.shape === "behavior") return;
-    questions[`line_${index}`] = {
-      type: "score",
-      instructions: `Direction and continuous strength of tactical effect ${index}. Judge from the tactic the manager asked for, the observed facts of the last 10 minutes, and the players' ability, position and stamina. Do not change the target or shape. Positive means more execution quality for edge, more preference for that direction for focus, more fouls for temper, more stamina spend for legs, more shape-holding for cohesion; negative is the reverse. Rate the gain and the opportunity cost separately, and do not use classification confidence as strength.`,
-      criteria: [
-        "-3: strong decrease",
-        "-2: moderate decrease",
-        "-1: slight decrease",
-        "0: no effect",
-        "+1: slight increase",
-        "+2: moderate increase",
-        "+3: strong increase",
-      ],
-    };
+    const word = line.shape === "card" ? line.word : undefined;
+    questions[`line_${index}`] = word
+      ? {
+          type: "score",
+          instructions: `The step at which player ${line.target.player ?? ""} plays the card word ${word} in this match (effect ${index}). 0 is the place's default behaviour; the player's current card is in the facts. Judge from the role the manager asked for, the observed facts of the last 10 minutes, and the player's ability, position and stamina. Do not change the target or word, and do not use classification confidence as strength.`,
+          criteria: Array.from({ length: CARD_STEP_MAX * 2 + 1 }, (_, i) =>
+            cardStepLabel(word, i - CARD_STEP_MAX),
+          ),
+        }
+      : {
+          type: "score",
+          instructions: `Direction and continuous strength of tactical effect ${index}. Judge from the tactic the manager asked for, the observed facts of the last 10 minutes, and the players' ability, position and stamina. Do not change the target or shape. Positive means more execution quality for edge, more preference for that direction for focus, more fouls for temper, more stamina spend for legs, more shape-holding for cohesion; negative is the reverse. Rate the gain and the opportunity cost separately, and do not use classification confidence as strength.`,
+          criteria: [
+            "-3: strong decrease",
+            "-2: moderate decrease",
+            "-1: slight decrease",
+            "0: no effect",
+            "+1: slight increase",
+            "+2: moderate increase",
+            "+3: strong increase",
+          ],
+        };
   });
   const questionKeys = Object.keys(questions);
-  const answers: Record<string, unknown> =
-    questionKeys.length === 0
-      ? {}
-      : (
-          await request.evaluator.evaluate({
-            state: JSON.stringify({
-              instruction: request.said,
-              context: request.context,
-              effects: plan.sheet,
-            }),
-            questions,
-          })
-        ).answers;
+  const { answers } = await request.evaluator.evaluate({
+    state: JSON.stringify({
+      instruction: request.said,
+      context: request.context,
+      effects: plan.sheet,
+    }),
+    questions,
+  });
   if (
     Object.keys(answers).length !== questionKeys.length ||
     questionKeys.some((key) => !Object.hasOwn(answers, key))
@@ -220,13 +240,8 @@ export async function interpretMatchInstructions(
   const sheet: SheetLine[] = [];
   for (let index = 0; index < plan.sheet.length; index++) {
     const candidate = plan.sheet[index]!;
-    // The core consumes behavior as a discrete instruction and ignores its sign/step.
-    const answer =
-      candidate.shape === "behavior"
-        ? undefined
-        : validatedAnswer(questions[`line_${index}`]!, answers[`line_${index}`]);
-    const signed =
-      candidate.shape === "behavior" ? 1 : answer?.type === "score" ? answer.score - 3 : undefined;
+    const answer = validatedAnswer(questions[`line_${index}`]!, answers[`line_${index}`]);
+    const signed = answer?.type === "score" ? answer.score - 3 : undefined;
     if (signed === undefined) return planFailed();
     // Opposite readings average to no effect; that is a split, not a judgement of zero.
     if (answer?.type === "score") {

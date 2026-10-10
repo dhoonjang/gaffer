@@ -50,7 +50,7 @@ export * from "./players/numbers";
 export * from "./players/observation";
 export * from "./players/observation-view";
 export * from "./players/retirement";
-export * from "./players/role-memory";
+export * from "./players/card-memory";
 export * from "./players/slump";
 export * from "./players/squad-depth";
 export * from "./players/training";

@@ -1,4 +1,10 @@
-import { FORMATIONS, type Formation } from "@gaffer/domain";
+import {
+  CARD_WORDS,
+  CARD_WORD_DEFS,
+  FORMATIONS,
+  type CardWord,
+  type Formation,
+} from "@gaffer/domain";
 import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
 import { defineHarness, type Band, type BandRole, type Harness } from "./harness";
 
@@ -543,6 +549,154 @@ export const LIVE_TACTICS = defineHarness({
   ],
 });
 
+// ── 역할 카드의 낱말 ──
+//
+// 낱말 하나가 읽히는 자리 — 단계 +3이 −3보다 그 값을 어느 쪽으로 옮겨야 하는가(`sign`). 낱말표
+// 자체가 정의이므로(live-match.md §4 「이 표는 낱말의 정의」) 방향은 가드다. 크기와 득실은 잰다.
+
+/** `card-words` 하네스가 판마다 재는 값 — 본체가 이 이름으로 측정값을 낸다 */
+export type CardWordProbe =
+  | "wideIn"
+  | "depthIn"
+  | "spreadIn"
+  | "runs"
+  | "boxIn"
+  | "dribbles"
+  | "progressiveShare"
+  | "shots"
+  | "crosses"
+  | "pressOut"
+  | "depthOut"
+  | "markOut"
+  | "keeperOut";
+
+interface CardWordProbeDef {
+  probe: CardWordProbe;
+  label: string;
+  sign: 1 | -1;
+  unit?: "ratio";
+  why: string;
+}
+
+export const CARD_WORD_PROBES: Readonly<Record<CardWord, CardWordProbeDef>> = {
+  width: {
+    probe: "wideIn",
+    label: "공 있을 때 터치라인 쪽 (m)",
+    sign: 1,
+    why: "넓게 벌리면 터치라인 쪽에 선다 — 형태의 폭과 측면 성분",
+  },
+  attack: {
+    probe: "depthIn",
+    label: "공 있을 때 깊이 (m)",
+    sign: 1,
+    why: "올라가면 깊이가 는다 — 형태의 전진과 앞쪽 성분",
+  },
+  freedom: {
+    probe: "spreadIn",
+    label: "공 있을 때 퍼짐 (m)",
+    sign: 1,
+    why: "공을 찾아 움직이면 한 자리에 머물지 않는다 — 옆 퍼짐과 자리 지키기",
+  },
+  dropDeep: {
+    probe: "depthIn",
+    label: "공 있을 때 깊이 (m)",
+    sign: -1,
+    why: "받으러 내려오면 공이 뒤에 있을 때 깊이가 준다",
+  },
+  runBehind: {
+    probe: "runs",
+    label: "침투 시작/경기",
+    sign: 1,
+    why: "뒷공간을 노리면 위협 항이 무거워져 침투가 는다",
+  },
+  boxPresence: {
+    probe: "boxIn",
+    label: "공 있을 때 상대 박스 안 몫",
+    sign: 1,
+    unit: "ratio",
+    why: "박스 성분이 무거워진다",
+  },
+  dribble: {
+    probe: "dribbles",
+    label: "드리블/경기",
+    sign: 1,
+    why: "공 가진 선택에서 드리블의 효용이 오른다",
+  },
+  passRisk: {
+    probe: "progressiveShare",
+    label: "전진 패스 몫",
+    sign: 1,
+    unit: "ratio",
+    why: "과감한 패스는 라인을 넘기는 패스를 더 고른다",
+  },
+  shoot: { probe: "shots", label: "슈팅/경기", sign: 1, why: "슈팅 문턱이 내려가고 효용이 오른다" },
+  cross: { probe: "crosses", label: "크로스/경기", sign: 1, why: "크로스의 효용이 오른다" },
+  press: {
+    probe: "pressOut",
+    label: "공 없을 때 압박 몫",
+    sign: 1,
+    unit: "ratio",
+    why: "달려들면 공 없을 때 압박하는 시간이 는다 — 낱말은 누가 나서는지를 가르는데 하네스는 전원에게 걸어 몫이 동료 사이에서 그대로라, 이 칸은 히트맵 쪽 효과만 본다",
+  },
+  recover: {
+    probe: "depthOut",
+    label: "공 없을 때 깊이 (m)",
+    sign: -1,
+    why: "끝까지 따라 내려오면 공 없을 때 깊이가 준다",
+  },
+  mark: {
+    probe: "markOut",
+    label: "공 없을 때 가장 가까운 상대까지 (m)",
+    sign: -1,
+    why: "대인 쪽이면 상대에게 붙는다",
+  },
+  sweep: {
+    probe: "keeperOut",
+    label: "골키퍼의 공 없을 때 깊이 (m)",
+    sign: 1,
+    why: "뒤를 덮으면 골키퍼가 라인에서 나와 선다",
+  },
+};
+
+/** 낱말 하나의 밴드 이름 — 본체와 서술자가 같은 함수로 부른다 */
+export const cardWordMetric = (word: CardWord, what: "방향" | "+3 득실 xG" | "−3 득실 xG") =>
+  what === "방향"
+    ? `${CARD_WORD_DEFS[word].ko} — ${CARD_WORD_PROBES[word].label} (+3 − −3)`
+    : `${CARD_WORD_DEFS[word].ko} — ${what} 변화`;
+
+export const CARD_WORDS_HARNESS = defineHarness({
+  id: "card-words",
+  what: "홈 팀 카드에 낱말 하나만 −3·+3으로 걸었을 때 그 낱말이 읽히는 자리가 뜻한 쪽으로 움직이는가 · 그 대가",
+  doc: "docs/players/player.md §3 · docs/match/live-match.md §4",
+  cost: "팔 29(기준 + 낱말 14 × −3·+3) × 시드 둘 × 리그 3경기 = 174경기 · 40분 남짓",
+  bands: [
+    { metric: "기준 — 우리 xG", role: "measure", why: "아래 득실 변화의 눈금 — 카드가 없는 판" },
+    { metric: "기준 — 상대 xG", role: "measure", why: "같은 판" },
+    ...CARD_WORDS.flatMap((word): Band[] => {
+      const probe = CARD_WORD_PROBES[word];
+      return [
+        {
+          metric: cardWordMetric(word, "방향"),
+          role: "guard",
+          ...(probe.sign > 0 ? { min: 0 } : { max: 0 }),
+          ...(probe.unit ? { unit: probe.unit } : {}),
+          why: `${probe.why} — 낱말의 정의라 방향이 뒤집히면 표기 오류다`,
+        },
+        {
+          metric: cardWordMetric(word, "+3 득실 xG"),
+          role: "measure",
+          why: "기준 대비 (우리 xG − 상대 xG)의 변화 — 극단 카드가 이득만 보는가 (player.md §3)",
+        },
+        {
+          metric: cardWordMetric(word, "−3 득실 xG"),
+          role: "measure",
+          why: "같은 셈의 반대쪽",
+        },
+      ];
+    }),
+  ],
+});
+
 export const SIM_PARITY = defineHarness({
   id: "sim-parity",
   what: "같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가",
@@ -1030,6 +1184,7 @@ export const HARNESSES: readonly Harness[] = [
   LIVE_GOAL_ANATOMY,
   LIVE_PLAYER_LOAD,
   LIVE_TACTICS,
+  CARD_WORDS_HARNESS,
   SIM_PARITY,
   INJURY_RATE,
   FINANCE_TIER1,

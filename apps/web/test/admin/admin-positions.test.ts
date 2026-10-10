@@ -19,25 +19,6 @@ describe("어드민 포지션 가르기", () => {
     expect(other).toEqual(["DM"]);
   });
 
-  it("좌우 분화는 같은 자리라 중앙 표기로 접는다", () => {
-    const { natural, other } = splitPositions([
-      { position: "CB", proficiency: 92, isNatural: true },
-      { position: "LCB", proficiency: 92, isNatural: false },
-      { position: "RCB", proficiency: 91, isNatural: false },
-    ]);
-    expect(natural).toEqual(["CB"]);
-    expect(other).toEqual([]);
-  });
-
-  it("접은 자리 중 하나라도 선호면 선호고, 이름은 그 선호 쪽을 쓴다", () => {
-    const { natural, other } = splitPositions([
-      { position: "LST", proficiency: 90, isNatural: true },
-      { position: "ST", proficiency: 88, isNatural: false },
-    ]);
-    expect(natural).toEqual(["LST"]);
-    expect(other).toEqual([]);
-  });
-
   it("선호가 여럿이면 여럿을 돌려준다 — 적응도 내림차순", () => {
     const { natural } = splitPositions([
       { position: "LB", proficiency: 84, isNatural: true },
@@ -47,7 +28,8 @@ describe("어드민 포지션 가르기", () => {
   });
 
   it("카탈로그가 만드는 센터백은 본업 하나에 겸업 몇 자리로 읽힌다", () => {
-    const { natural, other } = splitPositions(derivePositions("Test Defender", "CB"));
+    // 왼쪽 센터백 시드도 자리는 CB다 — 칸의 좌우는 목록에 남지 않는다
+    const { natural, other } = splitPositions(derivePositions("Test Defender", "LCB"));
     expect(natural).toEqual(["CB"]);
     expect(other).not.toContain("CB");
     expect(other.length).toBeGreaterThan(0);

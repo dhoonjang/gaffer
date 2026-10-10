@@ -9,16 +9,19 @@ import {
   adaptationOf,
   ageOf,
   anchorOf,
-  defaultRoleOf,
+  cardTitle,
+  cardWordsText,
   formatMoney,
+  placeOf,
   positionAtPoint,
   positionGroupOf,
   positionProficiency,
-  rolesFor,
+  sameCard,
   separateBoardPoints,
   shapeOf,
   snapToBoard,
   type BoardPoint,
+  type RoleCard,
   type SetPieceRole,
   type SetPieceRoutineKey,
   type SetPieceRoutineLevel,
@@ -27,13 +30,13 @@ import type { GamePayload, GameSlice } from "@/game/store";
 import type { MatchBoardOrder } from "@/shared/match-orders";
 import { slotOverallOf } from "@/screens/squad/slot-overall";
 import {
-  familiarityForRole,
+  boardCardOf,
+  familiarityForCard,
   lineupBody,
-  resetRolesForMovedPlayers,
-  roleAtSlot,
+  resetCardsForMovedPlayers,
   swappedLists,
   type BoardState,
-} from "@/screens/squad/board-roles";
+} from "@/screens/squad/board-cards";
 import { IconBoard, IconClose, IconPerson, SPEAKER_ICON } from "@/shared/icons";
 import { usePlayerCardActions } from "@/shared/player-card";
 import { contractUntil, humanDate } from "@/shared/dateline";
@@ -159,9 +162,8 @@ export function SquadView({
       occupants: starters.map((p) => p.id),
       bench: players.filter((p) => p.role === "벤치").map((p) => p.id),
       reserve: players.filter((p) => p.squadLevel === "reserve").map((p) => p.id),
-      roles: Object.fromEntries(
-        players.filter((p) => p.roleId !== null).map((p) => [p.id, p.roleId!]),
-      ),
+      // 서버의 카드는 행이 들고 있다 — 판이 쥐는 것은 감독이 고친 것뿐이다
+      cards: {},
       tactics: squad.tactics,
       // 지정만 씨로 받는다 — 지정이 없을 때 설 사람은 코어가 내는 값이라 판이 쥐지 않는다
       setPieces: Object.fromEntries(
@@ -364,21 +366,21 @@ export function SquadView({
   const localReserveKey = board.reserve.join(",");
   const benchKey = [...benchSet].join(",");
   /**
-   * 지금 화면의 역할 — **아직 저장되지 않은 선택까지 포함한다.**
+   * 지금 화면의 카드 — **아직 저장되지 않은 선택까지 포함한다.**
    *
-   * 칩·명단·상세가 저마다 `p.roleId`(서버 값)를 보던 때는 알약을 눌러도 숫자가
-   * 자동 저장 왕복(3초)이 끝난 뒤에야 따라왔다. 감독이 "이 역할로 바꾸면 얼마가
-   * 되나"를 손으로 더듬어 볼 수가 없다.
+   * 칩·명단·상세가 저마다 `p.card`(서버 값)를 보던 때는 단계를 눌러도 숫자가 자동
+   * 저장 왕복(3초)이 끝난 뒤에야 따라왔다. 감독이 "이렇게 고치면 얼마가 되나"를 손으로
+   * 더듬어 볼 수가 없다.
    */
-  const roleOf = (p: SquadRow): string | undefined => {
+  const cardOf = (p: SquadRow): RoleCard | undefined => {
     const i = board.occupants.indexOf(p.id);
-    // 자리가 없으면 역할도 없다 (player.md §3.1)
+    // 자리가 없으면 카드도 없다 (player.md §3.1)
     if (i < 0) return undefined;
-    return board.roles[p.id] ?? roleAtSlot(p, positionAtPoint(board.points[i]!));
+    return boardCardOf(board, p, positionAtPoint(board.points[i]!));
   };
 
   /**
-   * 화면의 현재 배치·역할에 맞춰 명단 행을 계산한다.
+   * 화면의 현재 배치·카드에 맞춰 명단 행을 계산한다.
    * 자동 저장을 기다리지 않고 전술판 칩과 같은 slotOverallOf를 사용한다.
    */
   const localRows = useMemo(
@@ -386,11 +388,11 @@ export function SquadView({
       players.map((p) => {
         const idx = board.occupants.indexOf(p.id);
         const code = idx >= 0 ? positionAtPoint(board.points[idx]!) : null;
-        const role = board.roles[p.id] ?? (code ? roleAtSlot(p, code) : undefined);
-        if (code === p.assignedPosition && role === (p.roleId ?? undefined)) return p;
+        const card = code ? boardCardOf({ cards: board.cards }, p, code) : undefined;
+        if (code === p.assignedPosition && sameCard(card, p.card)) return p;
         const fit = code ? positionProficiency(p.positions, code, p.foot) : p.positionFit;
         /**
-         * 전술 적응도도 여기서 맞춘다 — 서버 값 그대로 두면 역할을 바꾼 직후
+         * 전술 적응도도 여기서 맞춘다 — 서버 값 그대로 두면 카드를 고친 직후
          * OVR만 움직이고 적응도는 옛 값에 머물러, **같은 화면의 두 숫자가 다른
          * 시점을 가리킨다** (player.md §7.2).
          *
@@ -400,25 +402,25 @@ export function SquadView({
          * 계산하면 돌아온 주전을 60으로 예고했다가 저장 응답에서 혼자 튄다.
          */
         const morning = p.role === "스쿼드" ? p.familiarityIfSlotted : p.familiarity;
-        const familiarity =
-          code && role ? familiarityForRole({ ...p, familiarity: morning }, code, role) : morning;
+        const familiarity = code
+          ? familiarityForCard({ ...p, familiarity: morning }, code, card)
+          : morning;
         return {
           ...p,
           assignedPosition: code,
-          slotOverall: slotOverallOf(p, code, role),
+          slotOverall: slotOverallOf(p, code, card),
           positionFit: fit,
           familiarity,
           adaptation: adaptationOf(fit, familiarity, code ?? p.assignedPosition ?? p.position),
         };
       }),
-    [players, board.occupants, board.points, board.roles],
+    [players, board.occupants, board.points, board.cards],
   );
 
-  /** 감독이 고른 세부 역할의 지문 — 명단 표를 다시 그릴지 가리는 값 */
-  const rolesKey = Object.entries(board.roles)
-    .map(([id, role]) => `${id}:${role}`)
-    .sort()
-    .join(",");
+  /** 감독이 고친 카드의 지문 — 명단 표를 다시 그릴지 가리는 값 */
+  const cardsKey = JSON.stringify(
+    Object.entries(board.cards).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
   const onPitchKey = board.occupants.join(",");
 
   /** 비선발 선수를 매치데이 벤치(최대 9)로 지정/해제 — 나머지는 예비 스쿼드 */
@@ -491,7 +493,7 @@ export function SquadView({
       bench = bench.filter((x) => x !== incoming.id);
       if (bench.length < MATCHDAY_BENCH) bench.push(outgoing);
     }
-    commit(resetRolesForMovedPlayers({ ...board, occupants, bench }, byId));
+    commit(resetCardsForMovedPlayers({ ...board, occupants, bench }));
   }
 
   /**
@@ -501,10 +503,10 @@ export function SquadView({
   function repositionSlot(index: number, point: BoardPoint) {
     const points = [...board.points];
     points[index] = snapToBoard(point);
-    const next = resetRolesForMovedPlayers(
-      { ...board, points: separateBoardPoints(points, index) },
-      byId,
-    );
+    const next = resetCardsForMovedPlayers({
+      ...board,
+      points: separateBoardPoints(points, index),
+    });
     if (advisory) {
       const playerId = board.occupants[index];
       const target = next.points[index];
@@ -580,7 +582,7 @@ export function SquadView({
       const bench = board.bench.filter((id) => id !== inId);
       if (bench.length < MATCHDAY_BENCH) bench.push(outId);
       // 장부를 직접 저장하지 않는다. 다음 진행 턴의 substitute 검증 전까지는 작업 사본이다.
-      setBoard(resetRolesForMovedPlayers({ ...board, occupants, bench }, byId));
+      setBoard(resetCardsForMovedPlayers({ ...board, occupants, bench }));
       setAdvisoryPending(true);
       setSelection(null);
       onOrder({ kind: "substitution", out: outId, in: inId });
@@ -591,7 +593,7 @@ export function SquadView({
     if (!aId) return;
     const swapped = swappedLists(board, aId, rowId);
     if (!swapped) return; // 같은 칸끼리는 바꿀 게 없다 (선발 자리 교환은 드래그)
-    commit(resetRolesForMovedPlayers({ ...board, ...swapped }, byId));
+    commit(resetCardsForMovedPlayers({ ...board, ...swapped }));
   }
 
   /**
@@ -631,7 +633,7 @@ export function SquadView({
           xi.reduce((s, p, i) => {
             const point = board.points[board.occupants.indexOf(p.id)] ?? board.points[i];
             const code = point ? positionAtPoint(point) : null;
-            return s + (slotOverallOf(p, code, roleOf(p)) ?? p.overall);
+            return s + (slotOverallOf(p, code, cardOf(p)) ?? p.overall);
           }, 0) / xi.length,
         )
       : 0;
@@ -664,7 +666,7 @@ export function SquadView({
   const onSelectRow = useStable(clickRoster);
   const onToggleBenchRow = useStable(toggleBench);
   const onSwapInRow = useStable(swapWithRow);
-  const onRoleRow = useStable(chooseRole);
+  const onCardRow = useStable(chooseCard);
   const onMoveSquadRow = useStable(moveSquad);
   // 새 기준은 큰 값부터 보는 게 자연스럽다 — 칸 순(기본)만 위에서 아래로 읽는다
   const onSortRow = useStable((key: SortKey) =>
@@ -715,20 +717,25 @@ export function SquadView({
   }
 
   /**
-   * 역할 선택 — **다른 조작과 같은 문을 지난다.**
-   * 알약을 누를 때마다 요청을 보내면 결정 하나가 요청 여럿이 되고, 감독이
+   * 카드 고치기 — **다른 조작과 같은 문을 지난다.**
+   * 단계를 누를 때마다 요청을 보내면 결정 하나가 요청 여럿이 되고, 감독이
    * 고르는 동안 서버가 계속 값을 매긴다. 정해진 값 하나만 자동 저장에 실린다.
+   * 카드는 **그 자리의 것**으로 적는다 — 다른 자리로 옮기면 내려간다 (player.md §3.1).
    */
-  function chooseRole(playerId: string, role: string) {
+  function chooseCard(playerId: string, card: RoleCard | null) {
+    const i = board.occupants.indexOf(playerId);
+    const place = i < 0 ? null : placeOf(positionAtPoint(board.points[i]!));
+    if (place === null) return;
+    const cards = { ...board.cards, [playerId]: { place, card } };
     if (advisory) {
-      setBoard({ ...board, roles: { ...board.roles, [playerId]: role } });
+      setBoard({ ...board, cards });
       setAdvisoryPending(true);
-      onOrder({ kind: "role", playerId, role });
+      onOrder({ kind: "card", playerId, card });
       return;
     }
     if (!live) return;
-    // 상세를 열어 둔 채 고른다 — 역할은 비교하며 바꾸는 값이다
-    commit({ ...board, roles: { ...board.roles, [playerId]: role } }, { keepSelection: true });
+    // 상세를 열어 둔 채 고친다 — 카드는 비교하며 바꾸는 값이다
+    commit({ ...board, cards }, { keepSelection: true });
   }
 
   /**
@@ -806,8 +813,8 @@ export function SquadView({
             inMatch={matchOn}
             setPieces={takers}
             slotCode={p.id === selectedPlayer?.id ? selectedSlotCode : null}
-            onRole={usable ? (role) => onRoleRow(p.id, role) : undefined}
-            roleId={board.roles[p.id] ?? p.roleId}
+            onCard={usable ? (card) => onCardRow(p.id, card) : undefined}
+            card={cardOf(p) ?? null}
             action={
               /* 벤치 지정 — 비선발 1군에게만 뜻이 있다 (선발은 이미 나가고, 2군은 승격이
                  먼저). 그 밖의 선수에게는 조작 칸 자체가 서지 않는다 */
@@ -835,7 +842,7 @@ export function SquadView({
     ),
     /**
      * ⚠️ 집합·표는 **문자열 열쇠로** 싣는다 (`localReserveKey`·`benchKey`·
-     * `onPitchKey`·`rolesKey`). `Set`과 객체는 내용이 같아도 렌더마다 새 객체라,
+     * `onPitchKey`·`cardsKey`). `Set`과 객체는 내용이 같아도 렌더마다 새 객체라,
      * 그것을 그대로 실으면 메모가 매번 깨져 아무것도 아끼지 못한다. 규칙은 열쇠가
      * 무엇을 대신하는지 볼 수 없어 원본이 빠졌다고 읽는다.
      */
@@ -845,9 +852,9 @@ export function SquadView({
       roster,
       localReserveKey,
       sort,
-      // 감독이 고른 세부 역할 — 이게 없으면 알약을 눌러도 표가 다시 그려지지 않아
+      // 감독이 고친 카드 — 이게 없으면 단계를 눌러도 표가 다시 그려지지 않아
       // 선택이 화면에 안 나타난다(저장은 되는데 아무 일도 안 일어난 것처럼 보인다)
-      rolesKey,
+      cardsKey,
       selectedPlayer?.id,
       selectedSlotCode,
       benchKey,
@@ -863,7 +870,7 @@ export function SquadView({
       onSelectRow,
       onToggleBenchRow,
       onSwapInRow,
-      onRoleRow,
+      onCardRow,
       onMoveSquadRow,
       onSortRow,
       tierById,
@@ -1025,23 +1032,26 @@ export function SquadView({
                  * 놓고 한 박자 뒤에 숫자가 따라오면 "이 자리로 옮기면 얼마가 되나"를
                  * 손으로 더듬어 볼 수가 없다.
                  *
-                 * ⚠️ 계산은 **명단과 같은 함수**(`slotOverallOf`)다. 여기서만 `roleFit`을
+                 * ⚠️ 계산은 **명단과 같은 함수**(`slotOverallOf`)다. 여기서만 `cardFit`을
                  * 다시 굴리던 때는 같은 선수의 OVR이 칩과 명단에서 달랐다.
                  */
-                const liveOverall = p ? slotOverallOf(p, code, roleOf(p)) : null;
+                const liveOverall = p ? slotOverallOf(p, code, cardOf(p)) : null;
                 const selected = selection?.kind === "slot" && selection.index === i;
                 /**
-                 * 맡은 역할 — **기본 역할이 아닐 때만** 칩에 뜬다.
-                 * 전원에게 붙이면 열한 칩이 다 같은 말(센터백·풀백·윙어)을 달고 있어
-                 * 읽히지 않는다. 감독이 실제로 **고른** 것만 보이면 판을 훑을 때
-                 * 그 선택이 눈에 남는다. 표기는 FM 약칭(BPD·IWB·RGA)이다 —
-                 * 칩에 들어갈 만큼 짧으면서 감독이 이미 아는 말이다.
+                 * 맡은 카드 — **기본 행동이 아닐 때만** 칩에 뜬다.
+                 * 전원에게 붙이면 열한 칩이 다 같은 말을 달고 있어 읽히지 않는다. 감독이
+                 * 실제로 **고친** 것만 보이면 판을 훑을 때 그 선택이 눈에 남는다.
                  */
-                const liveRole = p ? roleOf(p) : undefined;
-                const roleTag =
-                  p && code && liveRole && liveRole !== defaultRoleOf(code)
-                    ? (rolesFor(code).find((r) => r.id === liveRole) ?? null)
-                    : null;
+                const liveCard = p ? cardOf(p) : undefined;
+                // 이름이 없으면 공 있을 때의 자리(공격 DM)가 낱말보다 먼저 선다 — 다섯 글자 칸이다
+                const cardTag = liveCard
+                  ? {
+                      title:
+                        liveCard.label ??
+                        (liveCard.ip.place ? `공격 ${liveCard.ip.place}` : cardTitle(liveCard)),
+                      words: cardWordsText(liveCard),
+                    }
+                  : null;
                 if (!point) return null;
                 return (
                   <PitchChip
@@ -1072,7 +1082,7 @@ export function SquadView({
                     }
                     code={code}
                     squadNumber={p?.squadNumber}
-                    roleTag={roleTag}
+                    cardTag={cardTag}
                     captain={p?.isCaptain ? "captain" : p?.isViceCaptain ? "vice" : null}
                     name={p?.name ?? null}
                     /* 칩은 "그 자리에 선 선수"라 주 포지션 값이 아니라 자리 값이 맞다.

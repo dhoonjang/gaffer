@@ -21,7 +21,8 @@ import type {
   TrainingReport,
   BoardPoint,
   LorebookInjection,
-  RoleMemo,
+  CardMemo,
+  RoleCard,
   TacticsSpec,
 } from "@gaffer/domain";
 import {
@@ -298,7 +299,7 @@ export interface PendingMatch {
    * **킥오프 시점의 전술** — 경기가 끝나면 여기로 되돌린다 (match.md §3.2).
    *
    * 하프타임에 올린 라인, 후반에 옮긴 자리는 **그 경기의 대응**이지 팀의 전술이
-   * 아니다. 적응도(`familiarity`)와 역할 장부(`roleMemo`)도 함께 담는다 — 경기 중
+   * 아니다. 적응도(`familiarity`)와 카드 장부(`cardMemo`)도 함께 담는다 — 경기 중
    * 조정이 깎은 값을 그 경기 한 번의 대응으로 되돌리기 위해서다.
    */
   tacticsBefore: {
@@ -307,9 +308,9 @@ export interface PendingMatch {
       playerId: string;
       position: string;
       point?: BoardPoint;
-      roleId?: string;
+      card?: RoleCard;
       familiarity: number;
-      roleMemo?: RoleMemo;
+      cardMemo?: CardMemo;
     }>;
   };
   /**

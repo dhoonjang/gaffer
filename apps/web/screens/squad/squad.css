@@ -795,8 +795,7 @@
   width: 12px;
   height: 12px;
 }
-/* 포지션 + 역할 — 능력치 격자 옆의 한 열. 둘은 세로로 쌓인다 */
-/* 포지션 줄과 역할 줄 — 한 덩어리로 묶여 능력치 표 위에 눕는다 */
+/* 포지션 줄과 카드 — 한 덩어리로 묶여 능력치 표 위에 눕는다 */
 .pd-side {
   min-width: 0;
   display: flex;
@@ -805,29 +804,97 @@
   padding-bottom: 8px;
   border-bottom: 1px solid var(--pd-rule);
 }
-/* 세부 역할 — 포지션 줄과 같은 결로, 고른 것만 강조한다 */
-.pd-roles {
+/* 역할 카드 — 머리줄(이름 · 기본으로) 아래에 국면마다 낱말이 흐른다 */
+.pd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pd-card-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
 }
-.pd-roles .pd-axis-group-name {
+.pd-card-head .pd-axis-group-name {
   flex: 0 0 auto;
   text-align: left;
   line-height: var(--lh-prose);
 }
-.pd-role-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
+.pd-card-title {
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
 }
-/* 역할만 **누르는 물건**이다 — 알약 + 손가락 커서 + 눌리는 반응.
-   포지션이 글자가 되면서 이 줄에서 테두리를 가진 건 이것뿐이라 뭐가 조작
-   대상인지가 모양만으로 갈린다 */
-.pd-role {
-  padding: 4px 8px;
-  /* 투명 테두리 — 폭은 남는다. e2e가 포지션(0)과 역할(1px)의 테두리 폭으로 값과
-     조작을 가른다(game.spec.ts). 색은 켜졌을 때만 든다 */
+.pd-card-phase {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pd-card-phase-name {
+  flex: 0 0 64px;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+}
+.pd-card-words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 4px 16px;
+  min-width: 0;
+  flex: 1;
+}
+/* 공 있을 때의 자리 — 고르는 물건이라 세트피스 키커 셀렉트와 같은 상자다. 낱말 격자의
+   한 줄을 통째로 쓴다 — 한 칸에 앉으면 아래 낱말이 한 칸씩 밀려 국면 사이 열이 어긋난다 */
+.pd-card-place {
+  grid-column: 1 / -1;
+  justify-self: start;
+  align-self: center;
+  max-width: 196px;
+  height: 23px;
+  padding: 4px 4px 4px 8px;
+  background: var(--panel-2);
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: var(--fs-xs);
+}
+.pd-card-place:hover {
+  background: var(--pop);
+}
+/* 낱말 한 칸 — 이름 · [−] 값 [+] · 뜻. 값은 글자고 단계를 옮기는 것만 버튼이다 */
+.pd-card-word {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.pd-card-word.set {
+  color: var(--text);
+}
+.pd-card-word-name {
+  flex: 0 0 84px;
+}
+.pd-card-step-value {
+  flex: 0 0 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.pd-card-word-side {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 단계를 옮기는 손잡이 — 면이 선 작은 원. 포지션·값은 글자라 모양으로 갈린다.
+   테두리는 투명하게 폭만 둔다 — 초점 고리가 면 바깥에 서도록 */
+.pd-card-step {
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: var(--r-pill);
   background: var(--panel-2);
@@ -835,30 +902,23 @@
   font-size: var(--fs-xs);
   cursor: pointer;
   transition:
-    border-color var(--ease),
     background var(--ease),
     color var(--ease);
 }
-.pd-role:hover:not(:disabled) {
+.pd-card-step:hover:not(:disabled) {
   background: var(--pop);
   color: var(--text);
 }
-.pd-role:active:not(:disabled) {
-  transform: scale(0.97);
+.pd-card-step:active:not(:disabled) {
+  transform: scale(0.94);
 }
-.pd-role:focus-visible {
+.pd-card-step:focus-visible {
   outline: none;
   box-shadow: var(--ring);
 }
-.pd-role:disabled {
+.pd-card-step:disabled {
   cursor: default;
-  opacity: 0.6;
-}
-.pd-role.on {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
+  opacity: 0.4;
 }
 /**
  * 명단 칸이 좁으면 상세를 접는다.
@@ -927,7 +987,8 @@
   padding-bottom: 12px;
 }
 .player-detail .pd-positions,
-.player-detail .pd-roles,
+.player-detail .pd-card-head,
+.player-detail .pd-card-phase,
 .player-detail .pd-axis-group {
   gap: 12px;
   align-items: baseline;
@@ -943,9 +1004,9 @@
   font-size: var(--fs-sm);
   letter-spacing: 0;
 }
-.player-detail .pd-role {
-  min-height: 28px;
-  padding: 4px 8px;
+.player-detail .pd-card-step {
+  width: 24px;
+  height: 24px;
 }
 .player-detail .pd-axis-group {
   padding: 8px 0;

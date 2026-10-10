@@ -1,20 +1,13 @@
-import type {
-  LiveBehavior,
-  LiveLane,
-  MatchSide,
-  Point,
-  SheetLine,
-  SheetShape,
-} from "@gaffer/domain";
-import { sheetLineBenefits } from "@gaffer/domain";
+import type { CardSteps, LiveLane, MatchSide, Point, SheetLine, SheetShape } from "@gaffer/domain";
+import { cardWordsAt, sheetLineBenefits } from "@gaffer/domain";
 
 /**
  * 시트 — **판독의 수치 독해가 말의 규칙에 닿는 자리** (live-match.md §6.2).
  *
- * 판독기(agents `match-reader.ts`)는 누구를·어느 쪽으로·얼마나(step)만 고른다. 여기서
+ * 판독기(agents `jev-match-reader.ts`)는 누구를·어느 쪽으로·얼마나(step)만 고른다. 여기서
  * 하는 것은 그 나머지 전부다 — 실재 확인, 한도와 예산, 대가, 소화율. 모양 여섯은 전부
- * 말의 규칙에 이미 있는 손잡이다: `behavior`는 개인 지시, `edge`는 경기 계수, `focus`는
- * 공격 방향 선호, `temper`는 파울 확률, `legs`는 부하 배율, `cohesion`은 형태 오차.
+ * 말의 규칙에 이미 있는 손잡이다: `card`는 역할 카드의 낱말 단계, `edge`는 경기 계수,
+ * `focus`는 공격 방향 선호, `temper`는 파울 확률, `legs`는 부하 배율, `cohesion`은 형태 오차.
  *
  * **능력은 다시 곱하지 않는다.** 판독기가 진짜 능력치를 보고 step을 골랐으므로 코어가
  * 소화력으로 이득을 또 깎으면 같은 능력 차를 두 번 센다. 코어에 남는 것은 한도와 대가와
@@ -54,7 +47,9 @@ type SheetDropCode =
   | "wrong-side"
   | "no-side"
   | "no-lane"
-  | "no-action"
+  | "no-word"
+  | "wrong-word"
+  | "stray-target"
   | "duplicate"
   | "target-cap"
   | "team-budget"
@@ -75,9 +70,21 @@ interface SheetTag {
   value: number;
 }
 
+/** 대인 마크 — 붙을 상대와 그 말의 이번 경기 마크 단계 (0보다 크다) */
+export interface ManMark {
+  player: string;
+  step: number;
+}
+
 /** 말의 규칙이 읽는 것 — 시트가 접힌 결과 */
 export interface LiveSheet {
-  behaviors: LiveBehavior[];
+  /**
+   * 선수 id → 이번 경기에 고친 낱말의 단계 — 저장된 단계에서 고친 단계까지의 차이에
+   * 그 편의 지시 적용률을 곱한 값이다. 적지 않은 낱말은 저장된 카드 그대로다.
+   */
+  cards: Record<string, CardSteps>;
+  /** 선수 id → 대인으로 붙는 상대 */
+  manMarks: Record<string, ManMark>;
   /** 선수 id → 경기 계수에 얹는 ± */
   edge: Record<string, number>;
   /** 편 → 레인 → 선택 효용에 얹는 ± */
@@ -98,11 +105,16 @@ export interface SheetContext {
   onPitch: Record<MatchSide, readonly string[]>;
   /** 편마다의 지시 적용률 — 이득(+)에만 곱한다 */
   uptake: Record<MatchSide, number>;
+  /** 선수 id → 저장된 카드의 낱말 단계 — `card` 줄이 고치는 기준 */
+  cards: Readonly<Record<string, CardSteps>>;
+  /** 골키퍼 자리에 선 사람 — 그 자리의 낱말만 받는다 (`cardWordsAt`) */
+  keepers: ReadonlySet<string>;
 }
 
 export function emptySheet(): LiveSheet {
   return {
-    behaviors: [],
+    cards: {},
+    manMarks: {},
     edge: {},
     focus: { home: { left: 0, center: 0, right: 0 }, away: { left: 0, center: 0, right: 0 } },
     temper: {},
@@ -141,44 +153,59 @@ export function applySheet(lines: readonly SheetLine[], ctx: SheetContext): Live
       drop(line, "invalid-step");
       continue;
     }
-    if (step === 0) continue;
+    // 카드의 0은 「그 자리의 기본 행동으로」라는 값이다 — 다른 모양의 0만 아무 일도 없다
+    if (step === 0 && line.shape !== "card") continue;
     switch (line.shape) {
-      case "behavior": {
+      case "card": {
         const player = line.target.player;
         const side = player ? sideOf(player) : null;
         if (!player || !side) {
           drop(line, "no-player");
           break;
         }
-        if (!line.action) {
-          drop(line, "no-action");
+        const word = line.word;
+        if (!word) {
+          drop(line, "no-word");
           break;
         }
-        const key = `behavior:${player}`;
+        if (!cardWordsAt(ctx.keepers.has(player)).includes(word)) {
+          drop(line, "wrong-word");
+          break;
+        }
+        const target = line.targetPlayer;
+        if (target !== undefined && word !== "mark") {
+          drop(line, "stray-target");
+          break;
+        }
+        if (target !== undefined) {
+          const targetSide = sideOf(target);
+          if (!targetSide) {
+            drop(line, "no-player");
+            break;
+          }
+          if (targetSide === side) {
+            drop(line, "wrong-side");
+            break;
+          }
+        }
+        const key = `card:${player}:${word}`;
         if (seen.has(key)) {
           drop(line, "duplicate");
           break;
         }
-        if (line.targetPlayer && !sideOf(line.targetPlayer)) {
-          drop(line, "no-player");
-          break;
-        }
-        const target = line.targetPlayer;
         seen.add(key);
-        out.behaviors.push({
-          player,
-          action: line.action,
-          when: line.when ?? "always",
-          ...(target ? { targetPlayer: target } : {}),
-          ...(line.target.lane ? { lane: line.target.lane } : {}),
-          ...(line.band ? { band: line.band } : {}),
-        });
+        // 몸에 익지 않은 팀은 고친 만큼 다 하지 못한다 — 차이에 적용률이 곱해진다
+        const stored = ctx.cards[player]?.[word] ?? 0;
+        const value = round4(stored + (step * line.sign - stored) * ctx.uptake[side]);
+        out.cards[player] = { ...out.cards[player], [word]: value };
+        if (target !== undefined && value > 0)
+          out.manMarks[player] = { player: target, step: value };
         out.applied.push({
           pointId: line.pointId,
-          shape: "behavior",
+          shape: "card",
           favours: side,
-          playerIds: target ? [player, target] : [player],
-          value: 1,
+          playerIds: target !== undefined ? [player, target] : [player],
+          value,
         });
         break;
       }

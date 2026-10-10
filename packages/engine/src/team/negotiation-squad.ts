@@ -1,10 +1,17 @@
-import { anchorOf, DEFAULT_FORMATION, openSeats, positionAtPoint, presetOf } from "@gaffer/domain";
+import {
+  anchorOf,
+  DEFAULT_FORMATION,
+  openSeats,
+  positionAtPoint,
+  presetOf,
+  samePlace,
+} from "@gaffer/domain";
 import { FAMILIARITY_BASELINE, managedTeamId, type GameState } from "../core/state";
 import { buildAssignments } from "../match/selection";
 import {
   shelveFamiliarity,
   unshelveFamiliarity,
-  settleRoleCost,
+  settleCardCost,
 } from "../players/familiarity-memory";
 
 /** Roster changes rebuild AI selection; the manager's own board remains an explicit choice. */
@@ -49,8 +56,9 @@ export function repairNegotiationSquads(
       const memory = unshelveFamiliarity(tactics, assignment.playerId);
       if (memory) Object.assign(assignment, memory);
       const old = previous.find((a) => a.playerId === assignment.playerId);
-      if (old?.position === assignment.position && old.roleId) assignment.roleId = old.roleId;
-      settleRoleCost(assignment, state.date, assignment.role === "starting" ? assignment : null);
+      // 같은 자리에 다시 서면 카드를 잇는다 — 단계는 그 자리의 기본 행동에서의 차이다
+      if (old?.card && samePlace(old.position, assignment.position)) assignment.card = old.card;
+      settleCardCost(assignment, state.date, assignment.role === "starting" ? assignment : null);
     }
   }
 }

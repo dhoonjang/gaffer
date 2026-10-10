@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { DateString, diffDays } from "../core/date-string";
+import { RoleCardSchema, type RoleCard } from "../players/role-card";
 import {
   type AttributeAxis,
   type AxisValues,
-  clusterOf,
   footAdjust,
-  isMirrorPair,
+  pairedPlaceOf,
+  PLACE_PAIR_PENALTY,
+  placeOf,
   POSITION_LINE_ORDER,
   positionGroupOf,
   tacticalSensitivityOf,
@@ -14,6 +16,7 @@ import {
   type PositionGroup,
 } from "../players/player";
 import { normalizedLogCurve, reflectedLogCurve } from "../core/log-curves";
+import { PlaceSchema } from "../players/place";
 
 /** 적응도의 저장 형태 — **소수를 담는다** (`RatingSchema`는 정수라 여기 쓸 수 없다) */
 const FamiliaritySchema = z.number().min(0).max(100);
@@ -734,7 +737,7 @@ export const POSITION_ALIASES: Record<string, string> = {
   AMC: "CAM",
   AML: "LAM",
   AMR: "RAM",
-  // 측면 — 윙과 측면 미드는 코드가 갈려 있다 (`POSITION_CLUSTERS`가 같은 자리로 본다)
+  // 측면 — 윙과 측면 미드는 다른 자리다 (이웃 쌍 — player.md §8)
   WL: "LW",
   WR: "RW",
   LWF: "LW",
@@ -797,11 +800,69 @@ export function movePoint(
   });
 }
 
-/** 두 자리의 전술판 거리 (0~100 좌표계) — 적응도 감점의 기준 */
+/**
+ * 자리의 기준 좌표 — 그 자리로 접히는 전술판 칸들의 중심 (player.md §8).
+ * 센터백은 가운데 칸이 한 발 깊어 셋의 평균에 서고, 최전방(ST)은 두 줄(LST·ST·RST와
+ * LF·CF·RF) 사이에 선다. 가운데 칸 하나의 좌표를 쓰면 같은 자리의 다른 칸이 읽는
+ * 거리가 그 칸에서 잰 것처럼 치우친다.
+ */
+/** 자리마다 그 자리의 칸 좌표들 */
+const PLACE_POINTS: ReadonlyMap<string, readonly BoardPoint[]> = (() => {
+  const codesOf = new Map<string, Set<string>>();
+  for (const lanes of Object.values(BAND_LANE_CODES)) {
+    for (const code of Object.values(lanes)) {
+      const place = placeOf(code);
+      if (place === null) continue;
+      const codes = codesOf.get(place) ?? new Set<string>();
+      codes.add(code);
+      codesOf.set(place, codes);
+    }
+  }
+  return new Map(
+    [...codesOf].map(([place, codes]) => [
+      place,
+      [...codes].map((code) => POSITION_ANCHORS[code]!),
+    ]),
+  );
+})();
+
+const PLACE_ANCHORS: ReadonlyMap<string, BoardPoint> = new Map(
+  [...PLACE_POINTS].map(([place, points]) => [
+    place,
+    {
+      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+      y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+    },
+  ]),
+);
+
+/**
+ * **공 있을 때의 자리에 서는 전술판 좌표** (player.md §3.3) — 깊이는 그 자리의 기준
+ * 깊이이고, 가로는 전술판 칸의 쪽을 지킨다. 가운데 자리면 그 자리의 칸들이 퍼진 폭 안으로
+ * 접혀 전술판 쪽의 반공간에, 측면 자리면 그 측면에 선다. 같은 DM으로 들어가는 인버티드
+ * 풀백 둘이 한 점에 겹치지 않는 까닭이다.
+ */
+export function inPossessionPoint(board: BoardPoint, place: string): BoardPoint {
+  const anchor = PLACE_ANCHORS.get(place);
+  const points = PLACE_POINTS.get(place);
+  if (!anchor || !points) return board;
+  const reach = Math.max(...points.map((p) => Math.abs(p.x - 50)));
+  const central = points.some((p) => p.x === 50);
+  const x = central ? 50 + Math.max(-reach, Math.min(reach, board.x - 50)) : anchor.x;
+  return { x, y: anchor.y };
+}
+
+/**
+ * 두 자리의 전술판 거리 (0~100 좌표계) — 적응도 감점의 기준. 칸 코드는 자리로 접어
+ * 자리의 기준 좌표끼리 잰다 (LCB와 RCB가 같은 값을 읽는다).
+ * 실시간 경기의 교체도 이 값을 읽는다 — `Math.hypot`은 엔진마다 끝자리가 갈린다.
+ */
 export function positionDistance(a: string, b: string): number {
-  const p = anchorOf(a);
-  const q = anchorOf(b);
-  return Math.hypot(p.x - q.x, p.y - q.y);
+  const p = PLACE_ANCHORS.get(placeOf(a) ?? "") ?? anchorOf(a);
+  const q = PLACE_ANCHORS.get(placeOf(b) ?? "") ?? anchorOf(b);
+  const dx = p.x - q.x;
+  const dy = p.y - q.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 /**
@@ -815,8 +876,6 @@ const DISTANCE_PENALTY = 0.4;
  * 것과 같아진다 (CB→ST 54, CB→DM 73 — 자리를 바꿔 세우는 값이 너무 싸다).
  */
 const LINE_PENALTY = 12;
-/** 클러스터(사실상 같은 자리) 감점 — 좌우 분화 정도만 */
-const CLUSTER_PENALTY = 2;
 /**
  * 바닥값 — 아무리 생소해도 프로 선수는 이만큼은 한다.
  * 필드↔골문 경계도 이 값을 쓴다(거리로 잴 수 없는, 사실상 다른 종목이다).
@@ -828,6 +887,26 @@ export const PROFICIENCY_MIN = 0;
 
 /** 포지션 적응도의 저장 상한. 이 값에서만 `profFactor`가 정확히 1이다. */
 export const PROFICIENCY_MAX = 99;
+
+/**
+ * **포지션 적응도 → FM의 여섯 단계** (player.md §8). FM은 1~20을 Natural 18+ ·
+ * Accomplished 15+ · Competent 12+ · Unconvincing 9+ · Awkward 5+ · Makeshift로 읽는다 —
+ * 그 경계에 5를 곱한 자리다. 생성의 주 자리(88~96)가 본업, 확장(70~82)이 능숙·무난,
+ * 필드↔골문 바닥(25)이 어색에 선다.
+ */
+export const PROFICIENCY_TIERS = [
+  { key: "natural", min: 88, ko: "본업" },
+  { key: "accomplished", min: 75, ko: "능숙" },
+  { key: "competent", min: 60, ko: "무난" },
+  { key: "unconvincing", min: 45, ko: "어설픔" },
+  { key: "awkward", min: 25, ko: "어색" },
+  { key: "makeshift", min: 0, ko: "임시" },
+] as const;
+
+/** 적응도 한 칸을 단계 이름으로 — 화면이 숫자 대신 읽는 말 */
+export function proficiencyLabel(value: number): string {
+  return (PROFICIENCY_TIERS.find((t) => value >= t.min) ?? PROFICIENCY_TIERS[5]).ko;
+}
 
 /** 적응도 0도 프로 선수의 최소 기여는 남긴다. */
 const PROFICIENCY_FACTOR_FLOOR = 0.1;
@@ -902,7 +981,8 @@ export function adaptationOf(
  * 엔진(`proficiencyAt`)과 웹 전술판이 **같은 함수**를 쓴다 — 규칙을 양쪽에 복제하면
  * 서버가 계산한 값과 감독이 화면에서 본 값이 조용히 갈린다.
  *
- * 세 단계다: 정확 일치 → 같은 묶음(−2) → **전술판 거리 기반 감점**.
+ * 세 단계다: 같은 자리 → 이웃 쌍(−2) → **전술판 거리 기반 감점**. 목표 칸은 먼저
+ * 자기 자리로 접힌다 (player.md §8) — LCB를 묻는 것은 CB를 묻는 것이다.
  * 거리를 쓰는 이유: 라인 경계만 보면 ST→CAM(거리 22)이 생소로 떨어지고 RB→LB
  * (거리 78)가 같은 라인이라 더 높게 나오는 역전이 생긴다. 자유 배치에서는 자리가
  * 코드가 아니라 좌표로 정해지므로 거리가 유일하게 일관된 척도다.
@@ -947,35 +1027,33 @@ function proficiencyBase(
   positions: ReadonlyArray<{ position: string; proficiency: number }>,
   code: string,
 ): number {
-  const exact = positions.find((p) => p.position.toUpperCase() === code);
-  if (exact) return exact.proficiency;
+  // 자리로 접히지 않는 표기는 그 표기 그대로 잰다 — 목록에도 같은 표기로만 닿는다
+  const target = placeOf(code) ?? code;
+  const heldAt = (place: string) =>
+    positions.filter((p) => (placeOf(p.position) ?? p.position.toUpperCase()) === place);
+
+  const same = heldAt(target);
+  if (same.length > 0) return Math.max(...same.map((p) => p.proficiency));
 
   /**
-   * **좌우 분화는 감점이 없다.** CB를 94로 소화하는 센터백은 LCB·RCB도 94다 —
-   * 부르는 이름만 다른 같은 자리이기 때문이다. 주발 보정(±3)만 좌우를 가른다.
-   * 반대로 RB↔RWB(라인 높이)·ST↔CF(역할)는 같은 묶음이어도 하는 일이 달라
-   * 묶음 감점이 남는다.
+   * **이웃 쌍은 같은 일을 라인 높이·폭만 달리 한다** — 풀백↔윙백, 측면 미드↔윙어.
+   * 다른 자리라 저장은 따로지만, 목록에 없으면 짝에서 −2로 읽는다.
    */
-  const mirrored = positions.filter((p) => isMirrorPair(p.position, code));
-  if (mirrored.length > 0) return Math.max(...mirrored.map((p) => p.proficiency));
-
-  const cluster = clusterOf(code);
-  const sameSpot = cluster
-    ? positions.filter((p) => cluster.includes(p.position.toUpperCase()))
-    : [];
-  if (sameSpot.length > 0) {
-    return Math.max(...sameSpot.map((p) => p.proficiency)) - CLUSTER_PENALTY;
+  const pair = pairedPlaceOf(target);
+  const paired = pair ? heldAt(pair) : [];
+  if (paired.length > 0) {
+    return Math.max(...paired.map((p) => p.proficiency)) - PLACE_PAIR_PENALTY;
   }
 
-  const targetGroup = positionGroupOf(code);
+  const targetGroup = positionGroupOf(target);
   let best = PROFICIENCY_FLOOR;
   for (const held of positions) {
-    const heldCode = held.position.toUpperCase();
+    const heldPlace = placeOf(held.position) ?? held.position.toUpperCase();
     // 골키퍼 경계는 거리로 잴 수 없다 — 필드와 골문은 다른 일이라 바닥값에 둔다
-    if ((heldCode === "GK") !== (code === "GK")) continue;
+    if ((heldPlace === "GK") !== (target === "GK")) continue;
     const penalty =
-      Math.round(positionDistance(heldCode, code) * DISTANCE_PENALTY) +
-      LINE_PENALTY * linesBetween(positionGroupOf(heldCode), targetGroup);
+      Math.round(positionDistance(heldPlace, target) * DISTANCE_PENALTY) +
+      LINE_PENALTY * linesBetween(positionGroupOf(heldPlace), targetGroup);
     best = Math.max(best, held.proficiency - penalty);
   }
   return best;
@@ -1227,33 +1305,32 @@ const DrilledTacticsSchema = z.object({
 export type DrilledTactics = z.infer<typeof DrilledTacticsSchema>;
 
 /**
- * **오늘 역할을 손댄 흔적** — 고르는 동안 벌하지 않기 위한 장부.
+ * **오늘 카드를 손댄 흔적** — 고르는 동안 벌하지 않기 위한 장부.
  *
- * 역할을 바꾸면 적응도가 깎이는 게 맞다(하는 일이 달라진다). 그런데 감독은 알약을
- * 눌러 보며 고르고, 그때마다 API가 한 번씩 매기면 **결정 하나에 세 번 값을
- * 치른다.** 아직 그 역할로 훈련도 경기도 하지 않았는데. 그래서 **그날 아침의
- * 자리와 역할**을 기준으로 대가를 다시 계산하고, 이미 낸 만큼(`paid`)과의 차액만
+ * 카드를 바꾸면 적응도가 깎이는 게 맞다(하는 일이 달라진다). 그런데 감독은 단계를
+ * 눌러 보며 고르고, 그때마다 API가 한 번씩 매기면 **결정 하나에 여러 번 값을
+ * 치른다.** 아직 그 카드로 훈련도 경기도 하지 않았는데. 그래서 **그날 아침의
+ * 자리와 카드**를 기준으로 대가를 다시 계산하고, 이미 낸 만큼(`paid`)과의 차액만
  * 가감한다. 날짜가 바뀌면 저절로 무효가 된다(하루를 보냈으면 몸에 밴 것이다).
  *
  * **`paid`는 "오늘 이 선수가 낸 값"이지 "이 배치가 낸 값"이 아니다** — 배치는
  * 전술판 조작마다 다시 써지므로, 여기서 끊으면 같은 결정에 값을 두 번 문다.
- * 자리를 옮겨 아침의 자리를 벗어나면 낸 값은 되돌아온다 (`settleRoleCost`).
+ * 자리를 옮겨 아침의 자리를 벗어나면 낸 값은 되돌아온다 (`settleCardCost`).
  *
- * 자리를 함께 적는 이유: 역할 목록은 자리마다 다르고 같은 이름이 두 자리에 걸치지
- * 않는다(→ docs/players/player.md §3.1). 자리를 빼면 DM에 선 선수의 대가를 CB의
- * 역할과 견주게 되고, 그 자리에 없는 역할은 `roleDistance`가 조용히 기본 역할로
- * 읽어 엉뚱한 값이 나온다.
+ * 자리를 함께 적는 이유: 카드의 단계는 그 자리의 기본 행동에서의 차이라 자리가
+ * 바뀌면 같은 단계가 다른 움직임이다(→ docs/players/player.md §3.1). 다른 자리의 카드는
+ * 아침의 카드와 견줄 자가 없다.
  */
-const RoleMemoSchema = z.object({
+const CardMemoSchema = z.object({
   date: DateString,
   /** 그날 아침에 서 있던 자리 */
-  position: z.string().min(1),
-  /** 그날 아침에 맡고 있던 역할 */
-  role: z.string().min(1),
-  /** 오늘 역할 변경으로 이 선수의 적응도에서 이미 깎은 총량 */
+  place: PlaceSchema,
+  /** 그날 아침에 맡고 있던 카드 — 없으면 그 자리의 기본 행동이었다 */
+  card: RoleCardSchema.optional(),
+  /** 오늘 카드 변경으로 이 선수의 적응도에서 이미 깎은 총량 */
   paid: z.number().min(0),
 });
-export type RoleMemo = z.infer<typeof RoleMemoSchema>;
+export type CardMemo = z.infer<typeof CardMemoSchema>;
 
 /**
  * 전술 배치 (TACTIC_ASSIGNMENT) — 라인업의 원본.
@@ -1270,12 +1347,12 @@ const TacticAssignmentSchema = z.object({
    */
   point: BoardPointSchema.optional(),
   /**
-   * 이 자리에서 맡는 **세부 역할** (`ROLE_DEFS`의 id — 볼 플레잉 디펜더, 레지스타…).
+   * 이 자리에서 맡는 **역할 카드** (→ docs/players/player.md §3).
    *
-   * 없으면 그 자리의 기본 역할이다. 자리를 옮기면 그 자리에 없는 역할이 되므로
-   * 코어가 지운다.
+   * 없으면 그 자리의 기본 행동이다. 다른 자리로 옮기면 같은 단계가 다른 움직임이
+   * 되므로 코어가 내린다(카드 기억이 받아 간다).
    */
-  roleId: z.string().min(1).optional(),
+  card: RoleCardSchema.optional(),
   /**
    * 이 전술에 대한 적응도 0~100 — 훈련(tactical)·출전으로 상승, 전술 변경 시 하락.
    *
@@ -1298,8 +1375,8 @@ const TacticAssignmentSchema = z.object({
    * 없으면 아직 기억이 없다 — 첫 전술 변경이 지금 값을 적어 넣는다.
    */
   drilled: z.array(DrilledTacticsSchema).optional(),
-  /** 오늘 역할을 손댄 흔적 (`RoleMemo`) — 없으면 오늘 손대지 않았다 */
-  roleMemo: RoleMemoSchema.optional(),
+  /** 오늘 카드를 손댄 흔적 (`CardMemo`) — 없으면 오늘 손대지 않았다 */
+  cardMemo: CardMemoSchema.optional(),
 });
 export type TacticAssignment = z.infer<typeof TacticAssignmentSchema>;
 
@@ -1317,27 +1394,28 @@ const ShelvedFamiliaritySchema = z.object({
   playerId: z.string().min(1),
   familiarity: FamiliaritySchema,
   drilled: z.array(DrilledTacticsSchema).optional(),
-  roleMemo: RoleMemoSchema.optional(),
+  cardMemo: CardMemoSchema.optional(),
 });
 export type ShelvedFamiliarity = z.infer<typeof ShelvedFamiliaritySchema>;
 
 /**
- * 역할 기억 (ROLE_MEMORY) — **이 선수가 이 자리에서 마지막에 맡던 역할.**
+ * 카드 기억 (CARD_MEMORY) — **이 선수가 이 자리에서 마지막에 맡던 카드.**
  *
- * 역할은 배치에 붙어 있고 배치는 로테이션마다 다시 써진다. 배치 안에만 두면
+ * 카드는 배치에 붙어 있고 배치는 로테이션마다 다시 써진다. 배치 안에만 두면
  * 벤치로 한 번 내려가는 것으로 감독의 결정이 지워지고, 다시 선발이 되면 그 자리의
- * 기본 역할부터 시작한다. 그래서 배치 **바깥**에 선수 단위로 적는다.
+ * 기본 행동부터 시작한다. 그래서 배치 **바깥**에 선수 단위로 적는다.
  *
- * 키가 (선수, 자리)인 이유: 역할 목록은 자리마다 다르고 같은 이름이 두 자리에
- * 걸치지 않는다 — 자리를 벗어난 기억은 쓸 곳이 없다.
+ * 키가 (선수, 자리)인 이유: 단계는 그 자리의 기본 행동에서의 차이라 자리를 벗어난
+ * 기억은 다른 움직임이 된다 (player.md §3.2).
  */
-export const RoleMemorySchema = z.object({
+export const CardMemorySchema = z.object({
   gamePlayerId: z.string().min(1),
-  /** 자리 코드 (CB·DM·ST…) — 역할은 이 자리의 목록(`rolesFor`) 안에서만 뜻이 있다 */
-  position: z.string().min(1),
-  /** 그 자리에서 마지막에 맡던 역할 (`ROLE_DEFS`의 id) */
-  roleId: z.string().min(1),
+  /** 자리 14개 중 하나 — LCB에서 맡긴 카드는 RCB에서도 그 카드다 */
+  place: PlaceSchema,
+  /** 그 자리에서 마지막에 맡던 카드 */
+  card: RoleCardSchema,
 });
+export type CardMemory = z.infer<typeof CardMemorySchema>;
 
 // ── 적응도 기억에서 "새 전술의 출발점" 구하기 ─────────────
 //
@@ -1751,7 +1829,7 @@ export const SET_PIECE_ROLE_KO: Record<SetPieceRole, string> = {
 export type BoardMove =
   | { kind: "tactic"; axis: TacticAxisKey; from: number; to: number }
   | { kind: "position"; playerId: string; position: string }
-  | { kind: "role"; playerId: string; role: string }
+  | { kind: "card"; playerId: string; card: RoleCard | null }
   | { kind: "substitution"; out: string; in: string }
   | { kind: "setPiece"; role: SetPieceRole; playerId: string | null };
 

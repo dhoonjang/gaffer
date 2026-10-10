@@ -15,6 +15,7 @@ import {
   POSITION_ANCHORS,
   POSITION_CODES,
   anchorOf,
+  inPossessionPoint,
   normalizePositionCode,
   openSeats,
   clampToBoard,
@@ -241,6 +242,15 @@ describe("전술판 좌표 → 포지션 코드 (자유 배치의 원본)", () =
     expect(clampToBoard({ x: -20, y: 140 })).toEqual({ x: 4, y: 94 });
     expect(clampToBoard({ x: 120, y: -5 })).toEqual({ x: 96, y: 6 });
     expect(clampToBoard({ x: 50.34, y: 50.36 })).toEqual({ x: 50.3, y: 50.4 });
+  });
+});
+
+describe("공 있을 때의 자리에 서는 좌표 (inPossessionPoint · player.md §3.3)", () => {
+  it("가운데 자리면 전술판 쪽의 반공간으로 접히고, 측면 자리면 그 측면에 선다", () => {
+    expect(inPossessionPoint(POSITION_ANCHORS.RB!, "DM")).toEqual({ x: 67, y: 57 });
+    expect(inPossessionPoint(POSITION_ANCHORS.LB!, "DM")).toEqual({ x: 33, y: 57 });
+    expect(inPossessionPoint(POSITION_ANCHORS.CB!, "DM")).toEqual({ x: 50, y: 57 });
+    expect(inPossessionPoint(POSITION_ANCHORS.RCB!, "RB")).toEqual(POSITION_ANCHORS.RB);
   });
 });
 

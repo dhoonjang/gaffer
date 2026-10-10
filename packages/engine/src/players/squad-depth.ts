@@ -15,7 +15,7 @@ const STARTING_XI = 11;
 
 /**
  * 이 팀에서 그 자리를 더 잘 보는 선수 수 — 포지션군(GK/DF/MF/FW)은 40인 스쿼드에서
- * 너무 거칠어 "8명이 더 낫다"가 늘 나온다. 주 포지션 코드로 좁혀 센다.
+ * 너무 거칠어 "8명이 더 낫다"가 늘 나온다. 주 자리(14개 — player.md §8)로 좁혀 센다.
  */
 export function betterAtPosition(state: GameState, teamId: string, player: GamePlayer): number {
   const position = naturalPositionOf(player).position;

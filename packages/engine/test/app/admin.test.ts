@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ATTRIBUTE_AXES, ageOf, naturalPositionOf, roleFit } from "@gaffer/domain";
+import { ATTRIBUTE_AXES, ageOf, cardFit, naturalPositionOf } from "@gaffer/domain";
 import {
   leagueCatalog,
   teamCatalog,
@@ -169,7 +169,7 @@ describe("카탈로그 편집", () => {
      * 그래서 센터백에게 최전방을 주 포지션으로 찍어도 종합은 센터백 값을 유지한다 —
      * 자리 표기 하나로 선수의 등급이 흔들리면 이적·라인업 판단이 통째로 어긋난다
      * (시드의 주 포지션 표기는 출처마다 갈린다: EA는 윙어를 LM/RM으로 적는다).
-     * 실제로 최전방에 세웠을 때의 값은 `roleFit`이 따로 낸다.
+     * 실제로 최전방에 세웠을 때의 값은 `cardFit`이 따로 낸다.
      */
     const df = adminCatalog()
       .flatMap((t) => t.players)
@@ -185,7 +185,7 @@ describe("카탈로그 편집", () => {
     // 자리를 더해도 최댓값은 내려갈 수 없다
     expect(after.overall).toBeGreaterThanOrEqual(before);
     // 그리고 최전방 값으로 갈아치워지지도 않는다 — 센터백은 최전방이 더 낮다
-    expect(roleFit(after, "ST")).toBeLessThan(after.overall);
+    expect(cardFit(after, "ST")).toBeLessThan(after.overall);
   });
 
   it("가능 포지션·적응도를 직접 편집할 수 있다", () => {
@@ -238,7 +238,7 @@ describe("카탈로그 편집", () => {
       }).ok,
     ).toBe(true);
     const oldPotential = playerCatalog().find((x) => x.id === p.id)!.potential;
-    const positions = [{ position: "CM", proficiency: 99, isNatural: true }];
+    const positions = [{ position: "CM" as const, proficiency: 99, isNatural: true }];
     expect(adminEditCatalogPlayer(p.id, { positions }).ok).toBe(true);
     const after = adminCatalog()
       .flatMap((t) => t.players)

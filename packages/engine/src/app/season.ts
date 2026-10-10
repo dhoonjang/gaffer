@@ -1,7 +1,7 @@
 import {
   shelveFamiliarity,
   unshelveFamiliarity,
-  settleRoleCost,
+  settleCardCost,
 } from "../players/familiarity-memory";
 import {
   type GameState,
@@ -534,7 +534,7 @@ export function applyTransition(state: GameState): string[] {
       const memory = unshelveFamiliarity(tactics, assignment.playerId);
       if (!memory) continue;
       Object.assign(assignment, memory);
-      settleRoleCost(
+      settleCardCost(
         assignment,
         nextCalendar.preseasonStart,
         assignment.role === "starting" ? assignment : null,

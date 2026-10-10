@@ -10,6 +10,7 @@ import {
   AXIS_GROUPS,
   AXIS_GROUP_KO,
   AXIS_KO,
+  PLACES,
   POSITION_CODES,
   josa,
   type AttributeAxis,
@@ -110,8 +111,8 @@ export function PlayerModal({
   }
   function addPos() {
     const used = new Set(positions.map((p) => p.position));
-    const next = POSITION_CODES.find((c) => !used.has(c));
-    // 남은 코드가 없으면 더하지 않는다 — 중복 포지션은 저장에서 거절당한다
+    const next = PLACES.find((c) => !used.has(c));
+    // 남은 자리가 없으면 더하지 않는다 — 중복 자리는 저장에서 거절당한다
     if (next === undefined) return;
     setPositions((cur) => [
       ...cur,
@@ -358,7 +359,7 @@ export function PlayerModal({
                   onChange={(e) => setPos(i, { position: e.target.value })}
                   aria-label={`${p.position} 자리`}
                 >
-                  {POSITION_CODES.map((c) => (
+                  {PLACES.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

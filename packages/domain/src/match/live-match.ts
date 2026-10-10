@@ -45,34 +45,9 @@ export const LIVE_ACTIONS = [
 ] as const;
 export type LiveAction = (typeof LIVE_ACTIONS)[number];
 
-/**
- * 판독기가 말 하나에 주는 개인 지시 — 시트의 `behavior` 줄이 싣는 것 (live-match.md §6.2).
- * 코어가 실재를 검증한 뒤 그 말의 자리 규칙을 덮는다.
- */
-const LIVE_BEHAVIOR_ACTIONS = ["press", "mark", "cover", "support", "run", "hold"] as const;
-export const LiveBehaviorActionSchema = z.enum(LIVE_BEHAVIOR_ACTIONS);
-type LiveBehaviorAction = z.infer<typeof LiveBehaviorActionSchema>;
-
-const LIVE_BEHAVIOR_WHEN = ["attack", "defend", "always"] as const;
-export const LiveBehaviorWhenSchema = z.enum(LIVE_BEHAVIOR_WHEN);
-type LiveBehaviorWhen = z.infer<typeof LiveBehaviorWhenSchema>;
-
 const LIVE_LANES = ["left", "center", "right"] as const;
 export const LiveLaneSchema = z.enum(LIVE_LANES);
 export type LiveLane = z.infer<typeof LiveLaneSchema>;
-
-const LIVE_BANDS = ["defense", "midfield", "attack"] as const;
-export const LiveBandSchema = z.enum(LIVE_BANDS);
-type LiveBand = z.infer<typeof LiveBandSchema>;
-
-export interface LiveBehavior {
-  player: string;
-  action: LiveBehaviorAction;
-  when: LiveBehaviorWhen;
-  targetPlayer?: string;
-  lane?: LiveLane;
-  band?: LiveBand;
-}
 
 /** 속도 구간별 누적 — 부하의 원본이다 (live-match.md §7) */
 export interface LiveLoad {

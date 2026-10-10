@@ -13,6 +13,13 @@ import {
   NegotiationActionSchema,
   MandateRequestSchema,
   CharacterUpdateSchema,
+  CARD_LABEL_MAX,
+  CARD_WORD_DEFS,
+  CardStepSchema,
+  IP_WORDS,
+  OOP_WORDS,
+  type CardWord,
+  PLACES,
   POSITION_CODES,
   DateString,
   ATTRIBUTE_AXES,
@@ -148,7 +155,7 @@ const CORE_COMMAND_LABELS: Record<string, string> = {
     "선발·벤치 지정 — 벤치나 1군 미배치 선수를 선발에 넣기, 선발에서 빼기 (2군 선수의 1군 승격 포함)",
   set_squad_level: "선발·벤치를 바꾸지 않는 1·2군 이동",
   set_tactics: `팀 전술 — ${TACTIC_AXES.map((axis) => axis.label).join("·")}, 전환·오프사이드 트랩·태클·GK 배급`,
-  set_player_tactic: "선발로 선 한 선수의 자리 이동과 역할 (선발 명단은 바꾸지 않음)",
+  set_player_tactic: "선발로 선 한 선수의 자리 이동과 역할 카드 (선발 명단은 바꾸지 않음)",
   set_set_piece_takers: "세트피스 키커",
   set_set_piece_routine: "세트피스 인원",
   substitute: "교체",
@@ -180,6 +187,72 @@ const positionArg = z
   .min(1)
   .optional()
   .describe(`Position code — ${POSITION_CODES.join("/")}`);
+
+/** 선수가 아는 자리 — 칸의 좌우는 접힌다 (player.md §8). 슬롯 코드도 코어가 읽는다 */
+const placeArg = z
+  .string()
+  .min(1)
+  .describe(`Place — ${PLACES.join("/")}`);
+
+/**
+ * 역할 카드의 낱말 한 칸 — **뜻은 코어의 낱말표에서 끌어온다** (prompts.md §2 ·
+ * player.md §3). 손으로 한 벌 더 적으면 표를 고쳐도 모델은 옛 뜻을 계속 받는다.
+ */
+const cardStepArg = (word: CardWord) => {
+  const def = CARD_WORD_DEFS[word];
+  return CardStepSchema.optional().describe(
+    `${def.ko} — −3 ${def.minus} … +3 ${def.plus}. 0 removes the word`,
+  );
+};
+const cardStepsArg = <W extends CardWord>(words: readonly W[]) =>
+  z
+    .object(
+      Object.fromEntries(words.map((word) => [word, cardStepArg(word)])) as Record<
+        W,
+        ReturnType<typeof cardStepArg>
+      >,
+    )
+    .strict();
+
+/**
+ * 카드를 **고치는 말** — 적은 낱말만 바뀐다 (`patchCard`). 모델은 지금 카드(조회의
+ * 「카드」 줄)를 보고 바꿀 낱말만 적는다 — 처음부터 다시 쓰면 같은 말이 호출마다 다른
+ * 카드가 된다 (player.md §3.2).
+ */
+const cardPatchArg = z
+  .object({
+    label: z
+      .string()
+      .trim()
+      .max(CARD_LABEL_MAX)
+      .optional()
+      .describe(
+        "Card name — the manager's words first, else a football role name; an empty string removes it",
+      ),
+    ip: cardStepsArg(IP_WORDS)
+      .extend({
+        place: z
+          .enum(PLACES)
+          .nullable()
+          .optional()
+          .describe(
+            "Place the player takes when we have the ball (e.g. a full-back stepping into DM); null returns to the board's place",
+          ),
+      })
+      .optional()
+      .describe("In possession — only the words that change"),
+    oop: cardStepsArg(OOP_WORDS)
+      .optional()
+      .describe("Out of possession — only the words that change"),
+    reset: z
+      .boolean()
+      .optional()
+      .describe("Start from the position's default behaviour before applying the words"),
+  })
+  .strict()
+  .describe(
+    "Role card at the player's current position — each word is a step from −3 to +3 away from that position's default behaviour; words not given keep their current step",
+  );
 
 const dateArg = DateString;
 
@@ -255,7 +328,7 @@ const TRAINING_INPUT = z
       .object({
         playerId: playerRef,
         axis: z.enum(ATTRIBUTE_AXES).optional(),
-        position: z.string().min(1).optional(),
+        position: placeArg.optional(),
         rest: z
           .object({ until: dateArg })
           .describe(
@@ -816,15 +889,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
           .min(1)
           .optional()
           .describe("Position to move to (only players already on the pitch)"),
-        // 자리마다 목록이 달라 열거로 서지 못한다 — 낱말은 해석 프롬프트의 역할 표가
-        // 싣고 코어가 이름·id·약어를 같은 것으로 받는다 (prompts.md §2 · player.md §3.1)
-        role: z
-          .string()
-          .min(1)
-          .optional()
-          .describe(
-            "Detailed role at that position — a name, id or abbreviation from the role table",
-          ),
+        card: cardPatchArg.optional(),
       }),
       (input) => setPlayerTactic(state, input),
     ),
@@ -1026,7 +1091,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
       z
         .object({
           team: z.string().min(1),
-          position: z.string().min(1),
+          position: placeArg,
           name: z.string().min(1),
           competition: z.string().min(1),
           minAge: ageArg,

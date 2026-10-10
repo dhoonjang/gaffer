@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EvaluationAnswer, EvaluationRequest, GameEvaluator, ScoreAnswer } from "@gaffer/llm";
-import { POINT_TEXT_MAX } from "@gaffer/domain";
+import { CARD_STEP_MAX, POINT_TEXT_MAX, cardStepLabel } from "@gaffer/domain";
 import {
   interpretMatchInstructions,
   type MatchInstructionRequest,
@@ -21,17 +21,20 @@ function model(
     mode?: "replace" | "clear" | "keep" | "none";
     score?: EvaluationAnswer | null;
     forgedPlayer?: boolean;
-    missingMarkTarget?: boolean;
+    opponentCard?: boolean;
+    missingWord?: boolean;
+    zonal?: boolean;
     ordinary?: boolean;
     inconsistentClear?: boolean;
-    shapes?: readonly ("behavior" | "edge" | "focus" | "cohesion" | "temper" | "legs")[];
-    behaviorAction?: "mark" | "run";
+    shapes?: readonly ("card" | "edge" | "focus" | "cohesion" | "temper" | "legs")[];
+    word?: "mark" | "runBehind";
     missingTargetField?: boolean;
   } = {},
 ): GameEvaluator & { requests: EvaluationRequest[] } {
   const requests: EvaluationRequest[] = [];
   const mode = options.mode ?? "replace";
-  const shapes = options.shapes ?? ["behavior"];
+  const shapes = options.shapes ?? ["card"];
+  const word = options.word ?? "mark";
   return {
     requests,
     async evaluate(request) {
@@ -45,7 +48,7 @@ function model(
         if (question.type !== "choice") throw new Error("Unexpected question");
         const instruction = question.instructions;
         const rowIndex = Number(/\$\.sheet\[(\d+)\]/.exec(instruction)?.[1] ?? 0);
-        const shape = shapes[rowIndex] ?? "behavior";
+        const shape = shapes[rowIndex] ?? "card";
         let choice = "absent";
         const byLabel = (label: string) =>
           Object.entries(question.criteria).find(([, text]) => text === label)?.[0] ?? "unclear";
@@ -62,17 +65,17 @@ function model(
         else if (instruction.includes("The number of items"))
           choice = mode === "replace" || options.inconsistentClear ? `n${shapes.length}` : "n0";
         else if (instruction.includes(".shape")) choice = byLabel(shape);
-        else if (instruction.includes(".action"))
-          choice = shape === "behavior" ? byLabel(options.behaviorAction ?? "mark") : "absent";
-        else if (instruction.includes(".when"))
-          choice = shape === "behavior" ? byLabel("defend") : "absent";
+        else if (instruction.includes(".word"))
+          choice = shape === "card" && !options.missingWord ? byLabel(word) : "absent";
         else if (instruction.includes(".targetPlayer"))
           choice =
-            options.missingMarkTarget || shape !== "behavior" || options.behaviorAction === "run"
-              ? "absent"
-              : byLabel("상대 공격수");
+            shape === "card" && word === "mark" && !options.zonal
+              ? byLabel("상대 공격수")
+              : "absent";
         else if (instruction.includes(".target.player"))
-          choice = options.forgedPlayer ? "not-a-candidate" : byLabel("우리 수비수");
+          choice = options.forgedPlayer
+            ? "not-a-candidate"
+            : byLabel(options.opponentCard ? "상대 공격수" : "우리 수비수");
         else if (instruction.includes(".target.side")) choice = byLabel("home");
         else if (instruction.includes(".target.lane"))
           choice = options.missingTargetField ? "absent" : byLabel("left");
@@ -103,6 +106,7 @@ function input(evaluator: GameEvaluator): MatchInstructionRequest {
     context:
       "최근 10분: 상대 공격수가 세 차례 중앙에서 패스를 받았다. 현재 두 선수 모두 그라운드에 있다.",
     pointId: "order-1",
+    ours: ["home-1"],
     commands: [
       {
         name: "set_tactics",
@@ -116,7 +120,10 @@ function input(evaluator: GameEvaluator): MatchInstructionRequest {
       },
     ],
     candidates: {
-      "set_match_plan.player": [{ label: "우리 수비수", value: "home-1" }],
+      "set_match_plan.player": [
+        { label: "우리 수비수", value: "home-1" },
+        { label: "상대 공격수", value: "away-1" },
+      ],
       "set_match_plan.targetPlayer": [{ label: "상대 공격수", value: "away-1" }],
     },
     evaluator,
@@ -124,7 +131,7 @@ function input(evaluator: GameEvaluator): MatchInstructionRequest {
 }
 
 describe("Jev match instruction boundary", () => {
-  it("grounds a discrete behavior in the literal instruction without evaluating sign or strength", async () => {
+  it("grounds a card row in the literal instruction and scores its step on the word's own scale", async () => {
     const evaluator = model();
     const request = input(evaluator);
     const result = await interpretMatchInstructions(request);
@@ -136,21 +143,24 @@ describe("Jev match instruction boundary", () => {
           {
             pointId: "order-1",
             target: { player: "home-1" },
-            shape: "behavior",
+            shape: "card",
             sign: 1,
-            step: 1,
-            action: "mark",
-            when: "defend",
+            step: 1.5,
+            word: "mark",
             targetPlayer: "away-1",
           },
         ],
       },
     });
-    expect(
-      evaluator.requests.filter((request) =>
-        Object.values(request.questions).some((question) => question.type === "score"),
+    const scoring = evaluator.requests.filter((request) =>
+      Object.values(request.questions).some((question) => question.type === "score"),
+    );
+    expect(scoring).toHaveLength(1);
+    expect(scoring[0]!.questions.line_0?.criteria).toEqual(
+      Array.from({ length: CARD_STEP_MAX * 2 + 1 }, (_, i) =>
+        cardStepLabel("mark", i - CARD_STEP_MAX),
       ),
-    ).toHaveLength(0);
+    );
     expect(
       evaluator.requests.some((request) =>
         Object.values(request.questions).some((question) =>
@@ -158,50 +168,55 @@ describe("Jev match instruction boundary", () => {
         ),
       ),
     ).toBe(false);
-    // routing · mode · effect count · line · target/behavior fields
-    expect(evaluator.requests).toHaveLength(5);
+  });
+
+  it("asks for a mark target only on the mark word", async () => {
+    const zonal = await interpretMatchInstructions(input(model({ zonal: true })));
+    expect(zonal.reading?.sheet[0]).toMatchObject({ shape: "card", word: "mark" });
+    expect(zonal.reading?.sheet[0]?.targetPlayer).toBeUndefined();
+    const evaluator = model({ word: "runBehind" });
+    const run = await interpretMatchInstructions(input(evaluator));
+    expect(run.reading?.sheet[0]).toMatchObject({ shape: "card", word: "runBehind" });
+    expect(
+      evaluator.requests
+        .flatMap((request) => Object.values(request.questions))
+        .some((question) => question.instructions.includes("$.sheet[0].targetPlayer")),
+    ).toBe(false);
   });
 
   it.each([
-    ["behavior", "mark", { player: "home-1" }, ["player"]],
-    ["behavior", "run", { player: "home-1", lane: "left" }, ["player", "lane"]],
-    ["focus", "mark", { side: "home", lane: "left" }, ["side", "lane"]],
-    ["cohesion", "mark", { side: "home" }, ["side"]],
-    ["edge", "mark", { player: "home-1" }, ["player"]],
-    ["temper", "mark", { player: "home-1" }, ["player"]],
-    ["legs", "mark", { player: "home-1" }, ["player"]],
-  ] as const)(
-    "only asks applicable target fields for %s/%s",
-    async (shape, action, target, fields) => {
-      const evaluator = model({ shapes: [shape], behaviorAction: action });
-      const result = await interpretMatchInstructions(input(evaluator));
-      expect(result.unresolved).toBeUndefined();
-      expect(result.reading?.sheet[0]?.target).toEqual(target);
-      const asked = evaluator.requests
-        .flatMap((request) => Object.values(request.questions))
-        .flatMap((question) => {
-          const match = /argument \$\.sheet\[0\]\.target\.(\w+)/.exec(question.instructions);
-          return match ? [match[1]] : [];
-        });
-      expect(asked).toEqual(fields);
-      if (shape !== "behavior") {
-        const behaviorFields = evaluator.requests
-          .flatMap((request) => Object.values(request.questions))
-          .filter((question) =>
-            /argument \$\.sheet\[0\]\.(action|when|targetPlayer|band)\./.test(
-              question.instructions,
-            ),
-          );
-        expect(behaviorFields).toEqual([]);
-        expect(evaluator.requests).toHaveLength(6);
-        expect(
-          Object.values(evaluator.requests.at(-1)!.questions).every(
-            (question) => question.type === "score",
-          ),
-        ).toBe(true);
-      }
-    },
-  );
+    ["card", { player: "home-1" }, ["player"]],
+    ["focus", { side: "home", lane: "left" }, ["side", "lane"]],
+    ["cohesion", { side: "home" }, ["side"]],
+    ["edge", { player: "home-1" }, ["player"]],
+    ["temper", { player: "home-1" }, ["player"]],
+    ["legs", { player: "home-1" }, ["player"]],
+  ] as const)("only asks applicable target fields for %s", async (shape, target, fields) => {
+    const evaluator = model({ shapes: [shape] });
+    const result = await interpretMatchInstructions(input(evaluator));
+    expect(result.unresolved).toBeUndefined();
+    expect(result.reading?.sheet[0]?.target).toEqual(target);
+    const questions = evaluator.requests.flatMap((request) => Object.values(request.questions));
+    const asked = questions.flatMap((question) => {
+      const match = /argument \$\.sheet\[0\]\.target\.(\w+)/.exec(question.instructions);
+      return match ? [match[1]] : [];
+    });
+    expect(asked).toEqual(fields);
+    if (shape !== "card") {
+      expect(
+        questions.filter((question) =>
+          /argument \$\.sheet\[0\]\.(word|targetPlayer)\./.test(question.instructions),
+        ),
+      ).toEqual([]);
+      // routing · mode · effect count · line · target fields · score
+      expect(evaluator.requests).toHaveLength(6);
+      expect(
+        Object.values(evaluator.requests.at(-1)!.questions).every(
+          (question) => question.type === "score",
+        ),
+      ).toBe(true);
+    }
+  });
 
   it("requires both focus target fields without allowing an omitted lane", async () => {
     const result = await interpretMatchInstructions(
@@ -212,19 +227,19 @@ describe("Jev match instruction boundary", () => {
     expect(result.unresolved).toBeDefined();
   });
 
-  it("scores only numeric effects in a mixed plan and preserves the continuous signed expectation", async () => {
-    const evaluator = model({ shapes: ["behavior", "edge"] });
+  it("scores every effect of a mixed plan in one request and preserves the continuous signed expectation", async () => {
+    const evaluator = model({ shapes: ["card", "edge"] });
     const result = await interpretMatchInstructions(input(evaluator));
     expect(result.unresolved).toBeUndefined();
     expect(result.reading?.sheet.map(({ shape, sign, step }) => ({ shape, sign, step }))).toEqual([
-      { shape: "behavior", sign: 1, step: 1 },
+      { shape: "card", sign: 1, step: 1.5 },
       { shape: "edge", sign: 1, step: 1.5 },
     ]);
     const scoring = evaluator.requests.filter((request) =>
       Object.values(request.questions).some((question) => question.type === "score"),
     );
     expect(scoring).toHaveLength(1);
-    expect(Object.keys(scoring[0]!.questions)).toEqual(["line_1"]);
+    expect(Object.keys(scoring[0]!.questions)).toEqual(["line_0", "line_1"]);
     expect(scoring[0]!.questions.line_1?.criteria).toHaveLength(7);
   });
 
@@ -262,8 +277,8 @@ describe("Jev match instruction boundary", () => {
     expect(result.unresolved).toBe("경기 전술 효과 — 효과의 방향이 갈림");
   });
 
-  it("rejects marking without a target before scoring or applying effects", async () => {
-    const evaluator = model({ missingMarkTarget: true });
+  it("rejects a card row without a word before scoring or applying effects", async () => {
+    const evaluator = model({ missingWord: true });
     const result = await interpretMatchInstructions(input(evaluator));
     expect(result.unresolved).toBeTruthy();
     expect(result.reading).toBeUndefined();
@@ -330,6 +345,13 @@ describe("Jev match instruction boundary", () => {
     const evaluator = model({ score, ordinary: true, shapes: ["edge"] });
     const result = await interpretMatchInstructions(input(evaluator));
     expect(result.ops).toEqual({ set_tactics: [{ pressing: 4 }] });
+    expect(result.reading).toBeUndefined();
+    expect(result.unresolved).toBeDefined();
+  });
+
+  it("does not write a card row for an opponent — the manager instructs only their own players", async () => {
+    const result = await interpretMatchInstructions(input(model({ opponentCard: true })));
+    expect(result.ops).toEqual({});
     expect(result.reading).toBeUndefined();
     expect(result.unresolved).toBeDefined();
   });

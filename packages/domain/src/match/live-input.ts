@@ -7,6 +7,7 @@ import {
   TacticsSpecSchema,
 } from "../team/team-tactics";
 import { PointSchema, SheetLineSchema } from "./sheet";
+import { RoleCardSchema } from "../players/role-card";
 
 /**
  * 실시간 경기의 **입력** — 감독이 멈춘 자리(확정된 tick)에서 서버가 묶음에 적용하는 것
@@ -17,7 +18,8 @@ const LiveSlotSchema = z.object({
   playerId: z.string().min(1),
   position: z.string().min(1),
   point: BoardPointSchema.optional(),
-  roleId: z.string().min(1).optional(),
+  /** 그 자리의 역할 카드 — 없으면 그 자리의 기본 행동 (player.md §3) */
+  card: RoleCardSchema.optional(),
   proficiency: z.number().min(0).max(99),
   familiarity: z.number().min(0).max(100),
 });

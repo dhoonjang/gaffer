@@ -246,7 +246,7 @@ row, 지난 일 = 그대로 이력.**
 | `seasonStats` `SeasonStat`         | 시즌 × 팀 × **대회** — 출전·출전 분·득점·도움·`ratingSum`·슛·xG·선방·클린시트·카드 (2군은 대회 ID로 구분)     | `packages/domain/src/players/player-statistics.ts`  |
 | `transferList` `TransferListing`   | 이적 리스트 등재 — 호가와 함께                                                                                | `packages/domain/src/team/player-management.ts`     |
 | `playerTraining` `PlayerTraining`  | 개인 훈련 — 겨냥한 축(1·2군) · 배우는 자리(1군만)                                                             | `packages/domain/src/team/player-management.ts`     |
-| `roleMemory` `RoleMemory`          | 역할 기억 — 선수 × 자리 → 마지막에 맡긴 역할                                                                  | `packages/domain/src/team/team-tactics.ts`          |
+| `cardMemory` `CardMemory`          | 카드 기억 — 선수 × 자리 → 마지막에 맡긴 역할 카드                                                             | `packages/domain/src/team/team-tactics.ts`          |
 | `milestones` `Milestone`           | 마일스톤 — 데뷔·첫 골·구단 통산 문턱·해트트릭. **감독 팀 선수만** (아래 ⚠️)                                   | `packages/domain/src/players/player-statistics.ts`  |
 | `retired` `RetiredPlayer`          | **은퇴 명부** — 그만둔 사람의 id·이름·생일·주 포지션·마지막 팀·날짜·시즌·사유. **감독 팀에서 은퇴한 선수만**  | `packages/domain/src/players/career-records.ts`     |
 
@@ -366,7 +366,7 @@ erDiagram
     GAME_PLAYER ||--o{ SEASON_STAT : "시즌 x 팀 x 대회"
     GAME_PLAYER ||--o| TRANSFER_LISTING : "이적 리스트"
     GAME_PLAYER ||--o| PLAYER_TRAINING : "개인 훈련"
-    GAME_PLAYER ||--o{ ROLE_MEMORY : "자리별 역할 기억"
+    GAME_PLAYER ||--o{ CARD_MEMORY : "자리별 카드 기억"
     GAME_PLAYER ||--o{ NEGOTIATION : "흥정"
 
     NEGOTIATION     ||--o{ NEGOTIATION_ROUND : "오퍼"
@@ -669,7 +669,9 @@ tmp 쓰기가 실패하면 그 tmp는 **그 자리에서 거둔다**. 이름이 
 - **클럽 소속 선수의 활성 계약은 선수당 1건**이고 그 `teamId`는 선수의 소속과
   같다. 무소속은 활성 계약이 없다. 팀 주급 총액이 여기서 파생되므로 둘이 갈리면 재정이 조용히 틀린다.
 - **`positions`는 비지 않고 `isNatural`이 하나 이상**이다. 주 포지션이 없으면
-  `overall`·포지션군·라인업 판단이 전부 기준을 잃는다.
+  `overall`·포지션군·라인업 판단이 전부 기준을 잃는다. 줄마다 자리 14개 중 하나이고
+  (`PlaceSchema` — 슬롯 코드는 적히지 않는다), 한 자리는 한 줄뿐이다
+  ([player.md](../players/player.md) §8).
 - **감독이 저장하는 선발은 정확히 11명(GK 1명), 벤치는 매치데이 명단, 배치 없음 =
   예비.** 팀 엔티티에 선발 배열은 없다 — `TACTIC_ASSIGNMENT`가 유일한 원본이다.
   코어의 자동 편성만은 열 명을 남길 수 있다 — 1군에 골키퍼가 없으면 골문을 비운다

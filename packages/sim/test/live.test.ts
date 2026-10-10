@@ -3,6 +3,8 @@ import { emptyRecentFlow, recordFlowTick, recordFlowEvents } from "../src/live/r
 import { describe, expect, it } from "vitest";
 import {
   SheetStepSchema,
+  type CardWord,
+  type RoleCard,
   type SheetLine,
   DEFAULT_TACTICS,
   FIELD,
@@ -24,7 +26,7 @@ import {
   heatmapMean,
   heatmapOf,
   makeRng,
-  roleTendencyOf,
+  cardTendencyOf,
   sampleHeatmap,
   shapePosition,
   teamParamsOf,
@@ -314,8 +316,8 @@ describe("히트맵 — 역할의 연속 분포 (live-match.md §3.3)", () => {
   it("풀백의 무게는 공이 전진할수록 연속으로 앞으로 옮고, 범위는 자기 박스부터 상대 마무리 지역까지다", () => {
     const params = teamParamsOf(DEFAULT_TACTICS, 1, 1);
     const slot = { position: "LB", point: { x: 12, y: 78 } };
-    const zoneAt = (ballDepth: number, attacking: boolean, roleId?: string) => {
-      const tendency = roleTendencyOf("LB", roleId);
+    const zoneAt = (ballDepth: number, attacking: boolean, card?: RoleCard) => {
+      const tendency = cardTendencyOf("LB", card);
       const center = shapePosition(slot, tendency, {
         side: "home",
         params,
@@ -349,18 +351,21 @@ describe("히트맵 — 역할의 연속 분포 (live-match.md §3.3)", () => {
     }
     expect(quantile(zoneAt(12, false), 0.1)).toBeLessThan(FIELD.boxDepth);
     expect(quantile(zoneAt(85, true), 0.9)).toBeGreaterThan(FIELD.length * (2 / 3));
-    // 윙백은 같은 공에서 풀백보다 앞에, 노-넌센스 풀백은 뒤에 무게를 둔다
-    const mid = (roleId: string) => heatmapMean(zoneAt(70, true, roleId)).depth;
-    expect(mid("wing-back")).toBeGreaterThan(mid("full-back"));
-    expect(mid("full-back")).toBeGreaterThan(mid("no-nonsense-fb"));
+    // 공격 가담을 올린 카드는 같은 공에서 기본 풀백보다 앞에, 내린 카드는 뒤에 무게를 둔다
+    const mid = (attack: number) =>
+      heatmapMean(zoneAt(70, true, { ip: { attack }, oop: {} })).depth;
+    expect(mid(2)).toBeGreaterThan(mid(0));
+    expect(mid(0)).toBeGreaterThan(mid(-2));
   });
 });
 
 describe("연속 강도 시트", () => {
   const context: SheetContext = {
     points: [{ id: "point", text: "측면의 공간", about: [], importance: 2 }],
-    onPitch: { home: ["player"], away: ["opponent"] },
+    onPitch: { home: ["player", "keeper"], away: ["opponent"] },
     uptake: { home: 1, away: 1 },
+    cards: { player: { attack: 2 } },
+    keepers: new Set(["keeper"]),
   };
   const line = (shape: SheetLine["shape"], step: number, sign: 1 | -1 = -1): SheetLine => ({
     pointId: "point",
@@ -393,13 +398,43 @@ describe("연속 강도 시트", () => {
     expect(applySheet(lines, context)).toEqual(result);
   });
 
-  it("없는 상대를 지목한 행동은 대상으로 바뀌지 않고 전부 반려된다", () => {
-    const result = applySheet(
-      [{ ...line("behavior", 1), action: "mark", targetPlayer: "missing" }],
-      context,
-    );
-    expect(result.behaviors).toEqual([]);
-    expect(result.dropped.map((entry) => entry.code)).toEqual(["no-player"]);
+  const card = (word: CardWord, signed: number, extra: Partial<SheetLine> = {}): SheetLine => ({
+    pointId: "point",
+    target: { player: "player" },
+    shape: "card",
+    sign: signed < 0 ? -1 : 1,
+    step: Math.abs(signed),
+    word,
+    ...extra,
+  });
+
+  it("카드 줄은 그 낱말의 이번 경기 단계다 — 0도 값이고, 저장된 단계와의 차이에 적용률이 곱해진다", () => {
+    const half = { ...context, uptake: { home: 0.5, away: 1 } };
+    expect(applySheet([card("attack", 0)], context).cards.player).toEqual({ attack: 0 });
+    expect(applySheet([card("attack", 0)], half).cards.player).toEqual({ attack: 1 });
+    expect(applySheet([card("width", 3)], half).cards.player).toEqual({ width: 1.5 });
+    expect(applySheet([card("width", -1.5)], context).cards.player).toEqual({ width: -1.5 });
+  });
+
+  it("그 자리에 없는 낱말·마크 밖의 표적·없거나 같은 편인 표적·겹친 낱말은 반려된다", () => {
+    const codes = (lines: SheetLine[]) =>
+      applySheet(lines, context).dropped.map((entry) => entry.code);
+    expect(codes([card("dribble", 1, { target: { player: "keeper" } })])).toEqual(["wrong-word"]);
+    expect(codes([card("sweep", 1)])).toEqual(["wrong-word"]);
+    expect(codes([card("press", 2, { targetPlayer: "opponent" })])).toEqual(["stray-target"]);
+    expect(codes([card("mark", 3, { targetPlayer: "missing" })])).toEqual(["no-player"]);
+    expect(codes([card("mark", 3, { targetPlayer: "keeper" })])).toEqual(["wrong-side"]);
+    expect(codes([card("press", 1), card("press", 2)])).toEqual(["duplicate"]);
+    expect(codes([card("passRisk", -2, { target: { player: "keeper" } })])).toEqual([]);
+  });
+
+  it("대인 마크는 마크 단계가 0보다 클 때만 선다", () => {
+    const man = applySheet([card("mark", 3, { targetPlayer: "opponent" })], context);
+    expect(man.manMarks.player).toEqual({ player: "opponent", step: 3 });
+    expect(man.applied[0]?.playerIds).toEqual(["player", "opponent"]);
+    const zonal = applySheet([card("mark", -1, { targetPlayer: "opponent" })], context);
+    expect(zonal.manMarks).toEqual({});
+    expect(zonal.cards.player).toEqual({ mark: -1 });
   });
 
   it("스키마가 비유한 수와 범위 밖 강도를 막는다", () => {

@@ -12,6 +12,7 @@ import {
   bestOverall,
   josa,
   naturalPositionOf,
+  placeOf,
 } from "@gaffer/domain";
 import {
   CATALOG_AGE_REF,
@@ -162,11 +163,13 @@ function applyPatch(entry: PlayerCatalogEntry, patch: CatalogPlayerPatch): void 
   }
   if (patch.secondNationality === "") delete entry.secondNationality;
   else if (patch.secondNationality !== undefined) entry.secondNationality = patch.secondNationality;
-  if (patch.position !== undefined) {
+  // 주 포지션은 자리로 접혀 선다 — 목록은 자리 단위다 (player.md §8)
+  const home = patch.position === undefined ? null : placeOf(patch.position);
+  if (home !== null) {
     for (const p of entry.positions) p.isNatural = false;
-    const existing = entry.positions.find((p) => p.position === patch.position);
+    const existing = entry.positions.find((p) => p.position === home);
     if (existing) existing.isNatural = true;
-    else entry.positions.push({ position: patch.position, proficiency: 88, isNatural: true });
+    else entry.positions.push({ position: home, proficiency: 88, isNatural: true });
   }
 }
 

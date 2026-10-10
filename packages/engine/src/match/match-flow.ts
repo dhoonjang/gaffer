@@ -32,6 +32,7 @@ import {
   type GamePlayer,
   josa,
   STARTING_XI,
+  sameCardWords,
   tacticsSignature,
   type Player,
   CHECKPOINT_TICKS,
@@ -51,11 +52,12 @@ import {
   positionGroupOfPlayer,
   PROFICIENCY_MAX,
   storedProficiencyFor,
+  placeOf,
   positionGrowthTarget,
   type MilestoneCode,
   milestonePhrase,
 } from "@gaffer/domain";
-import { recallRole } from "../players/role-memory";
+import { recallCard } from "../players/card-memory";
 import {
   type LineupSlot,
   type LiveMatch,
@@ -114,8 +116,7 @@ export function userSide(state: GameState): MatchSide {
 }
 
 /** 전술판의 한 자리 — 사람이 바뀌어도 자리는 그대로 남는다 */
-type Seat = Pick<TacticAssignment, "position"> &
-  Partial<Pick<TacticAssignment, "point" | "roleId">>;
+type Seat = Pick<TacticAssignment, "position"> & Partial<Pick<TacticAssignment, "point" | "card">>;
 
 /**
  * 배치 + 선수 → 실시간 경기의 자리(`LiveSlot`). 온필드 id 목록으로 필터해 교체·퇴장을
@@ -141,7 +142,7 @@ export function slotsFor(
     vacated.set(assignment.playerId, {
       position: assignment.position,
       ...(assignment.point ? { point: assignment.point } : {}),
-      ...(assignment.roleId ? { roleId: assignment.roleId } : {}),
+      ...(assignment.card ? { card: assignment.card } : {}),
     });
   }
   /**
@@ -187,19 +188,19 @@ export function slotsFor(
     const position =
       inherited?.position ?? assignment?.position ?? naturalPositionOf(player).position;
     /**
-     * **교체 투입은 자리를 잇고 역할은 자기 것을 쓴다** (match.md §3.2) — 역할은 들어온
-     * 선수가 그 자리에서 맡던 것(역할 기억)이 먼저고, 기억이 없으면 그 자리에 걸려 있던
-     * 역할을 잇는다.
+     * **교체 투입은 자리를 잇고 카드는 자기 것을 쓴다** (match.md §3.2) — 카드는 들어온
+     * 선수가 그 자리에서 맡던 것(카드 기억)이 먼저고, 기억이 없으면 그 자리에 걸려 있던
+     * 카드를 잇는다.
      */
-    const recalled = inherited ? recallRole(state, id, position) : undefined;
-    const roleId = recalled ?? inherited?.roleId ?? assignment?.roleId;
+    const recalled = inherited ? recallCard(state, id, position) : undefined;
+    const card = recalled ?? inherited?.card ?? assignment?.card;
     const point = inherited?.point ?? assignment?.point;
     return [
       {
         playerId: id,
         position,
         ...(point ? { point } : {}),
-        ...(roleId ? { roleId } : {}),
+        ...(card ? { card } : {}),
         proficiency: proficiencyAt(player, position),
         // 전술 적응도는 **개인 값**이다 — 팀 평균으로 뭉개면 어제 온 선수와
         // 3년 뛴 선수가 같은 정도로 전술을 소화하는 셈이 된다
@@ -219,7 +220,7 @@ export function lineupSlotsOf(state: GameState, slots: readonly LiveSlot[]): Lin
         player,
         position: slot.position,
         ...(slot.point ? { point: slot.point } : {}),
-        ...(slot.roleId ? { roleId: slot.roleId } : {}),
+        ...(slot.card ? { card: slot.card } : {}),
         proficiency: slot.proficiency,
         familiarity: slot.familiarity,
       },
@@ -356,7 +357,7 @@ export function assembleUserLineup(
   return { onPitch, bench: benchIds, replaced, error: null };
 }
 
-/** 킥오프 시점의 전술을 뜬다 — 경기 뒤 되돌릴 자리. 적응도·역할 장부까지 담는다 */
+/** 킥오프 시점의 전술을 뜬다 — 경기 뒤 되돌릴 자리. 적응도·카드 장부까지 담는다 */
 export function snapshotTactics(state: GameState): PendingMatch["tacticsBefore"] {
   const tactics = tacticsOf(state, state.userTeamId);
   return {
@@ -366,16 +367,16 @@ export function snapshotTactics(state: GameState): PendingMatch["tacticsBefore"]
       position: a.position,
       familiarity: a.familiarity,
       ...(a.point ? { point: { ...a.point } } : {}),
-      ...(a.roleId ? { roleId: a.roleId } : {}),
-      ...(a.roleMemo ? { roleMemo: { ...a.roleMemo } } : {}),
+      ...(a.card ? { card: a.card } : {}),
+      ...(a.cardMemo ? { cardMemo: { ...a.cardMemo } } : {}),
     })),
   };
 }
 
 /**
  * 경기 중 조정을 킥오프 상태로 되돌린다 — **그 경기의 대응은 그 경기에서 끝난다.**
- * 되돌리는 것은 감독이 경기 중 만질 수 있는 것뿐이다: 전술 6축·포메이션, 자리·역할,
- * 그리고 경기 중 조정이 깎은 적응도와 역할 장부.
+ * 되돌리는 것은 감독이 경기 중 만질 수 있는 것뿐이다: 전술 6축·포메이션, 자리·카드,
+ * 그리고 경기 중 조정이 깎은 적응도와 카드 장부.
  */
 export function restoreTactics(state: GameState): string | null {
   const snap = state.pendingMatch?.tacticsBefore;
@@ -388,16 +389,16 @@ export function restoreTactics(state: GameState): string | null {
   for (const a of tactics.assignments) {
     const was = before.get(a.playerId);
     if (!was) continue; // 경기 중 새로 배치된 선수는 그대로 둔다
-    if (a.position !== was.position || a.roleId !== was.roleId) changed = true;
+    if (a.position !== was.position || !sameCardWords(a.card, was.card)) changed = true;
     if (a.familiarity !== was.familiarity) changed = true;
     a.familiarity = was.familiarity;
     a.position = was.position;
     if (was.point) a.point = { ...was.point };
     else delete a.point;
-    if (was.roleId) a.roleId = was.roleId;
-    else delete a.roleId;
-    if (was.roleMemo) a.roleMemo = { ...was.roleMemo };
-    else delete a.roleMemo;
+    if (was.card) a.card = was.card;
+    else delete a.card;
+    if (was.cardMemo) a.cardMemo = { ...was.cardMemo };
+    else delete a.cardMemo;
   }
   return changed ? "경기 중 조정한 전술을 킥오프 전으로 되돌렸습니다" : null;
 }
@@ -582,7 +583,7 @@ function pushLiveInput(state: GameState, payload: LiveInputPayload): string[] {
 }
 
 /**
- * **감독의 전술판이 바뀌었다** — 6축·자리·역할·세트피스 지시를 실시간 경기의 우리 편에
+ * **감독의 전술판이 바뀌었다** — 6축·자리·카드·세트피스 지시를 실시간 경기의 우리 편에
  * 다시 싣는다. 판을 고치는 명령이 지난 뒤 한 번 부른다(`turn-runner` · 전술판 저장).
  * 자리는 `slotsFor`가 세우므로 교체 투입자의 자리 승계와 같은 규칙이다.
  */
@@ -650,13 +651,13 @@ export function substitutePlayer(state: GameState, input: { out: string; in: str
   const assignment = tacticsOf(state, state.userTeamId).assignments.find(
     (a) => a.playerId === incoming.id,
   );
-  const roleId = recallRole(state, incoming.id, leavingSlot.position) ?? leavingSlot.roleId;
+  const card = recallCard(state, incoming.id, leavingSlot.position) ?? leavingSlot.card;
   const slot: LiveSlot = {
     ...leavingSlot,
     playerId: incoming.id,
     proficiency: proficiencyAt(incoming, leavingSlot.position),
     familiarity: assignment?.familiarity ?? FAMILIARITY_BASELINE,
-    ...(roleId ? { roleId } : {}),
+    ...(card ? { card } : {}),
   };
   const immediate = live.state.restart !== null || live.state.interval;
   const rejected = pushLiveInput(state, {
@@ -667,7 +668,7 @@ export function substitutePlayer(state: GameState, input: { out: string; in: str
     slot,
   });
   if (rejected.length > 0) return { ok: false, message: rejected.join("\n") };
-  // 곧바로 들어갔으면 자리를 다시 세운다 — 들어온 선수의 역할 기억이 여기서 얹힌다 (match.md §3.2)
+  // 곧바로 들어갔으면 자리를 다시 세운다 — 들어온 선수의 카드 기억이 여기서 얹힌다 (match.md §3.2)
   if (immediate) syncLiveTactics(state);
   return {
     ok: true,
@@ -966,24 +967,29 @@ export function seatOf(state: GameState, player: GamePlayer): string {
   return assignment?.position ?? naturalPositionOf(player).position;
 }
 
-/** 실전 경험 — 그 자리의 적응도가 `MATCH_PROFICIENCY_GAIN`만큼 오른다 */
+/**
+ * 실전 경험 — 그 칸이 접히는 **자리**의 적응도가 `MATCH_PROFICIENCY_GAIN`만큼 오른다
+ * (player.md §8). LCB에서 뛴 경기는 CB를 올린다.
+ */
 export function gainMatchProficiency(
   state: GameState,
   player: GamePlayer,
   position: string,
   entryId: string | null,
 ): void {
-  const slot = player.positions.find((p) => p.position === position);
+  const place = placeOf(position);
+  if (place === null) return;
+  const slot = player.positions.find((p) => p.position === place);
   if (slot) {
     if (slot.proficiency >= PROFICIENCY_MAX) return;
     slot.proficiency = Math.min(PROFICIENCY_MAX, slot.proficiency + MATCH_PROFICIENCY_GAIN);
   } else {
     // 처음 맡은 자리 — **주발을 벗긴 원값**에서 출발한다 (player.md §8)
     player.positions.push({
-      position,
+      position: place,
       proficiency: Math.min(
         PROFICIENCY_MAX,
-        storedProficiencyFor(player.positions, position) + MATCH_PROFICIENCY_GAIN,
+        storedProficiencyFor(player.positions, place) + MATCH_PROFICIENCY_GAIN,
       ),
       isNatural: false,
     });
@@ -993,7 +999,7 @@ export function gainMatchProficiency(
     player.id,
     entryId,
     "match",
-    positionGrowthTarget(position),
+    positionGrowthTarget(place),
     MATCH_PROFICIENCY_GAIN,
     "match-minutes",
   );
