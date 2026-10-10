@@ -1,4 +1,4 @@
-import type { OverallAxis, WeightSlot } from "./player";
+import type { InclinationAxis, OverallAxis, WeightSlot } from "./player";
 
 /**
  * 자리 묶음마다 그 자리 선수의 **평균 축** — 카드 기준점의 기준 선수다 (player.md §3).
@@ -16,4 +16,21 @@ export const SLOT_REFERENCE: Readonly<Record<WeightSlot, Readonly<Record<Overall
   W: { finishing: 59.1, longShots: 59.8, heading: 43.7, dribbling: 67.8, firstTouch: 66.1, passing: 59.6, crossing: 60.2, technique: 57.7, tackling: 29.5, marking: 29.6, freeKicks: 50.3, penalties: 51.9, anticipation: 61.7, vision: 60.6, decisions: 61.5, composure: 60.9, offTheBall: 62, positioning: 29.1, concentration: 55.1, acceleration: 73.1, pace: 71.8, agility: 71.8, balance: 68.9, jumpingReach: 57.7, strength: 50.8, stamina: 61, reflexes: 5.9, handling: 5.9, oneOnOnes: 5.8, aerialReach: 5.9, kicking: 5.9 },
   CF: { finishing: 69.9, longShots: 67, heading: 69.3, dribbling: 68.8, firstTouch: 70, passing: 61.7, crossing: 53.1, technique: 60.7, tackling: 27, marking: 28.2, freeKicks: 50.9, penalties: 65.5, anticipation: 68.4, vision: 61.1, decisions: 67.8, composure: 66.7, offTheBall: 71.2, positioning: 27.5, concentration: 59.9, acceleration: 69.4, pace: 71.3, agility: 66.2, balance: 63, jumpingReach: 78.6, strength: 71.3, stamina: 65.4, reflexes: 8.5, handling: 8.2, oneOnOnes: 8.3, aerialReach: 8.2, kicking: 8.5 },
   ST: { finishing: 69.9, longShots: 67, heading: 69.3, dribbling: 68.8, firstTouch: 70, passing: 61.7, crossing: 53.1, technique: 60.7, tackling: 27, marking: 28.2, freeKicks: 50.9, penalties: 65.5, anticipation: 68.4, vision: 61.1, decisions: 67.8, composure: 66.7, offTheBall: 71.2, positioning: 27.5, concentration: 59.9, acceleration: 69.4, pace: 71.3, agility: 66.2, balance: 63, jumpingReach: 78.6, strength: 71.3, stamina: 65.4, reflexes: 8.5, handling: 8.2, oneOnOnes: 8.3, aerialReach: 8.2, kicking: 8.5 },
+};
+
+/**
+ * 자리 묶음마다 그 자리 선수의 **평균 성향** — 버릇은 이 값에서 벗어난 만큼이다 (player.md §3.4).
+ */
+export const SLOT_INCLINATION: Readonly<
+  Record<WeightSlot, Readonly<Record<InclinationAxis, number>>>
+> = {
+  GK: { aggression: 23, flair: 30, workRate: 27, commandOfArea: 47.3, rushingOut: 38.6 },
+  CB: { aggression: 67.4, flair: 37.4, workRate: 65, commandOfArea: 7.1, rushingOut: 7 },
+  FB: { aggression: 63.3, flair: 45.3, workRate: 66.8, commandOfArea: 6.8, rushingOut: 7 },
+  DM: { aggression: 67.4, flair: 44.8, workRate: 69.6, commandOfArea: 7.3, rushingOut: 7.3 },
+  CM: { aggression: 63.7, flair: 48.3, workRate: 67.7, commandOfArea: 6.6, rushingOut: 7 },
+  AM: { aggression: 51, flair: 52, workRate: 58.3, commandOfArea: 6.5, rushingOut: 6.2 },
+  W: { aggression: 46.7, flair: 51.8, workRate: 55.4, commandOfArea: 5.9, rushingOut: 5.8 },
+  CF: { aggression: 59, flair: 49.9, workRate: 63.5, commandOfArea: 8.2, rushingOut: 8.2 },
+  ST: { aggression: 59, flair: 49.9, workRate: 63.5, commandOfArea: 8.2, rushingOut: 8.2 },
 };

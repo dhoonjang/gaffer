@@ -825,10 +825,16 @@
   font-size: var(--fs-xs);
   font-weight: 600;
 }
-.pd-card-phase {
+.pd-card-phase,
+.pd-card-habit {
   display: flex;
   align-items: baseline;
   gap: 8px;
+}
+/* 버릇 — 읽는 값이라 손잡이 없이 글자로만 선다 */
+.pd-card-habit {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
 }
 .pd-card-phase-name {
   flex: 0 0 64px;

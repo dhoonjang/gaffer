@@ -1,6 +1,7 @@
 export * from "./players/player";
 export * from "./players/place";
 export * from "./players/role-card";
+export * from "./players/habit";
 export * from "./players/slot-reference";
 export * from "./core/log-curves";
 export * from "./players/squad-rules";

@@ -2,6 +2,7 @@
 
 import {
   CARD_STEP_MAX,
+  CARD_WORDS,
   CARD_WORD_DEFS,
   PLACES,
   PLACE_KO,
@@ -11,6 +12,7 @@ import {
   normalizeCard,
   phaseOfWord,
   signedStep,
+  type CardSteps,
   type CardWord,
   type Place,
   type RoleCard,
@@ -49,15 +51,22 @@ function withPlace(card: RoleCard | null, place: Place | null): RoleCard | null 
  * 대가(적응도)는 칸마다 적지 않는다 — 고르기 전에 대가를 말하면 카드가 가장 싼 쪽으로
  * 접힌다 (player.md §7.2). 명단의 적응 게이지가 지금 상태를 말한다.
  */
+/** 버릇 한 칸 — `드리블 +1.2`. 카드 단계와 달리 소수가 선다 (player.md §3.4) */
+const habitText = (word: CardWord, lean: number) =>
+  `${CARD_WORD_DEFS[word].ko} ${lean > 0 ? "+" : "−"}${Math.abs(lean).toFixed(1)}`;
+
 export function CardEditor({
   card,
   place,
+  habit,
   onCard,
 }: {
   /** 지금 판 위의 카드 — 아직 저장되지 않은 선택까지 포함한다. null이면 기본 행동 */
   card: RoleCard | null;
   /** 전술판의 자리 — 공 없을 때의 자리이고, 공 있을 때의 자리가 없으면 그때도 이 자리다 */
   place: Place;
+  /** 이 자리에서 이 선수의 타고난 버릇 — 카드 위에 얹힌다 (읽기만 한다) */
+  habit: CardSteps;
   /** 카드를 고치는 손잡이 — 없으면(배치 밖·경기 화면이 잠김) 읽기만 한다 */
   onCard?: ((card: RoleCard | null) => void) | undefined;
 }) {
@@ -87,6 +96,18 @@ export function CardEditor({
           </Button>
         )}
       </div>
+      {/* 타고난 버릇 — 같은 쪽의 카드에는 더해지고 반대쪽이면 반만 남는다 (player.md §3.4) */}
+      {CARD_WORDS.some((word) => (habit[word] ?? 0) !== 0) && (
+        <div className="pd-card-habit">
+          <span className="pd-card-phase-name">버릇</span>
+          <span>
+            {CARD_WORDS.flatMap((word) => {
+              const lean = habit[word] ?? 0;
+              return lean === 0 ? [] : [habitText(word, lean)];
+            }).join(" · ")}
+          </span>
+        </div>
+      )}
       {PHASES.map((phase) => {
         const inPhase = words.filter((word) => phaseOfWord(word) === phase.key);
         if (inPhase.length === 0) return null;

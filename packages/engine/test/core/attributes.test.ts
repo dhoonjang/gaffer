@@ -27,6 +27,7 @@ import {
   CARD_STEP_MAX,
   CARD_WORDS,
   CARD_WORD_DEFS,
+  SLOT_INCLINATION,
   SLOT_REFERENCE,
   axisFloorAt,
   bestOverall,
@@ -345,13 +346,14 @@ describe("역할 카드의 가중치와 적합도 (player.md §3)", () => {
     expect([...strengths, ...weaknesses]).not.toContain("tackling");
   });
 
-  it("기준 선수는 카탈로그의 그 자리 평균이다 — 어긋나면 pnpm slot-reference --write", () => {
+  it("기준 선수와 버릇의 기준은 카탈로그의 그 자리 평균이다 — 어긋나면 pnpm slot-reference --write", () => {
     const sums = new Map<WeightSlot, { n: number; axes: Record<string, number> }>();
     for (const e of cat) {
       const slot = weightSlotOf(naturalPositionOf(e).position);
       const row = sums.get(slot) ?? { n: 0, axes: {} };
       row.n += 1;
-      for (const a of OVERALL_AXES) row.axes[a] = (row.axes[a] ?? 0) + e[a];
+      for (const a of [...OVERALL_AXES, ...INCLINATION_AXES])
+        row.axes[a] = (row.axes[a] ?? 0) + e[a];
       sums.set(slot, row);
     }
     for (const slot of Object.keys(SLOT_REFERENCE) as WeightSlot[]) {
@@ -360,6 +362,12 @@ describe("역할 카드의 가중치와 적합도 (player.md §3)", () => {
       for (const a of OVERALL_AXES) {
         expect(
           Math.abs(SLOT_REFERENCE[slot][a] - row.axes[a]! / row.n),
+          `${slot}.${a}`,
+        ).toBeLessThanOrEqual(1);
+      }
+      for (const a of INCLINATION_AXES) {
+        expect(
+          Math.abs(SLOT_INCLINATION[slot][a] - row.axes[a]! / row.n),
           `${slot}.${a}`,
         ).toBeLessThanOrEqual(1);
       }

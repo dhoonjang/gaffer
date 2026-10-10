@@ -3,6 +3,7 @@
 import { GrowthOutlook } from "@/shared/growth-outlook";
 import {
   formatRating,
+  habitSteps,
   isNaturalAt,
   physiqueLabel,
   placeOf,
@@ -244,7 +245,14 @@ export function PlayerDetail({
 
           {/* 역할 카드 — **자리 위에 얹히는 지시**다. 같은 센터백이라도 몰고 나가는 카드와
             뒤를 지키는 카드는 요구 역량이 다르고, 그 차이는 자리 전력이 곧바로 답한다 */}
-          {cardPlace && <CardEditor card={card ?? null} place={cardPlace} onCard={onCard} />}
+          {cardPlace && (
+            <CardEditor
+              card={card ?? null}
+              place={cardPlace}
+              habit={habitSteps(p, cardPlace)}
+              onCard={onCard}
+            />
+          )}
         </div>
 
         {/* 능력치 — 카드와 나눠 쓰는 조각 (`player-facts.tsx`) */}

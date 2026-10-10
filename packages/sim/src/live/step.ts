@@ -24,10 +24,12 @@ import {
   LIVE_STEP,
   PHASE_END,
   cardStepsOf,
+  habitSteps,
   otherSide,
   positionProficiency,
   setPieceRoutineCount,
   weightSlotOf,
+  withHabit,
 } from "@gaffer/domain";
 import { makeRng } from "../rng";
 import { emptyStatLine } from "../match-ledger";
@@ -404,13 +406,14 @@ export function createLiveState(input: LiveInput, options: CreateLiveOptions): L
 }
 
 /**
- * 그 말의 성향 — 저장된 카드에 시트의 경기 중 수정을 덮는다 (live-match.md §4·§6.2).
- * 수정은 적은 낱말만 바꾼다 — 나머지는 저장된 카드 그대로다.
+ * 그 말의 성향 — 저장된 카드에 시트의 경기 중 수정을 덮고, 선수의 버릇을 얹는다
+ * (live-match.md §4·§6.2 · player.md §3.4). 수정은 적은 낱말만 바꾼다.
  */
 function slotTendency(slot: LineupSlot, sheet: LiveSheet): RoleTendency {
+  const card = { ...cardStepsOf(slot.card), ...sheet.cards[slot.player.id] };
   return stepsTendencyOf(
     slot.position,
-    { ...cardStepsOf(slot.card), ...sheet.cards[slot.player.id] },
+    withHabit(card, habitSteps(slot.player.attributes, slot.position)),
     slot.card?.ip.place,
   );
 }

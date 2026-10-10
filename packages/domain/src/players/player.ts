@@ -334,6 +334,7 @@ export const INCLINATION_AXES = [
   "commandOfArea",
   "rushingOut",
 ] as const satisfies readonly AttributeAxis[];
+export type InclinationAxis = (typeof INCLINATION_AXES)[number];
 
 /**
  * **종합에 드는 축** — 성향 축과 타고난 체력을 뺀 32축. 타고난 체력은 경기 사이의

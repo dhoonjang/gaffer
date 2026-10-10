@@ -10,6 +10,12 @@ import {
   CARD_WORD_DEFS,
   PROFICIENCY_TIERS,
   cardDistance,
+  HABIT_AGAINST_CARD,
+  HABIT_MAX,
+  HABIT_SCALE,
+  SLOT_INCLINATION,
+  habitSteps,
+  withHabit,
   cardWordsAt,
   familiarityLabel,
   normalizeCard,
@@ -112,6 +118,29 @@ describe("역할 카드의 낱말 (player.md §3)", () => {
     expect(cardWordsAt(true)).toEqual(["passRisk", "sweep"]);
     expect(cardWordsAt(false)).not.toContain("sweep");
     expect(cardWordsAt(false)).toHaveLength(CARD_WORDS.length - 1);
+  });
+});
+
+describe("타고난 버릇 (player.md §3.4)", () => {
+  const average = SLOT_INCLINATION.W;
+
+  it("그 자리의 평균 선수는 버릇이 없고, 벗어난 만큼 ±HABIT_MAX까지 기운다", () => {
+    expect(habitSteps(average, "RW")).toEqual({});
+    const showman = { ...average, flair: average.flair + HABIT_SCALE };
+    expect(habitSteps(showman, "RW")).toEqual({ dribble: 1 });
+    const extreme = { ...average, workRate: 0 };
+    expect(habitSteps(extreme, "RW")).toEqual({ attack: -HABIT_MAX, recover: -HABIT_MAX });
+    // 골키퍼는 자기 자리의 낱말만 — 창의성이 높아도 드리블 버릇은 없다
+    expect(habitSteps({ ...SLOT_INCLINATION.GK, flair: 99 }, "GK")).toEqual({});
+  });
+
+  it("카드와 같은 쪽이거나 카드가 0이면 더하고, 반대쪽이면 버릇은 반만 남는다", () => {
+    expect(withHabit({}, { dribble: 1 })).toEqual({ dribble: 1 });
+    expect(withHabit({ dribble: 2 }, { dribble: 1 })).toEqual({ dribble: 3 });
+    expect(withHabit({ dribble: -2 }, { dribble: 1 })).toEqual({
+      dribble: -2 + HABIT_AGAINST_CARD,
+    });
+    expect(withHabit({ width: 2 }, {})).toEqual({ width: 2 });
   });
 });
 
