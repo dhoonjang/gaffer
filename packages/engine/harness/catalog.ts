@@ -1,7 +1,11 @@
 import {
+  AXIS_KO,
   CARD_WORDS,
   CARD_WORD_DEFS,
   FORMATIONS,
+  INCLINATION_AXES,
+  OVERALL_AXES,
+  type AttributeAxis,
   type CardWord,
   type Formation,
 } from "@gaffer/domain";
@@ -697,6 +701,44 @@ export const CARD_WORDS_HARNESS = defineHarness({
   ],
 });
 
+// ── 축 한 칸의 경기 가치 ──
+//
+// 축 하나를 한 팀 전원 `AXIS_VALUE_STEP`만큼 올린 판과 기준 판의 차를 10점당으로 접는다
+// (player.md §1 「크기」). 공격 가치는 우리 xG가 오른 만큼, 수비 가치는 상대 xG가 내려간 만큼이다.
+
+/** 재는 축 — 종합에 드는 능력 축과 성향 축 */
+export const AXIS_VALUE_AXES: readonly AttributeAxis[] = [...OVERALL_AXES, ...INCLINATION_AXES];
+
+/** 한 판에서 올리는 폭 — 잡음에 묻히지 않을 만큼 크고, 99에 많이 걸리지 않을 만큼 작다 */
+export const AXIS_VALUE_STEP = 15;
+
+/** 축 하나의 밴드 이름 — 본체와 서술자가 같은 함수로 부른다 */
+export const axisValueMetric = (axis: AttributeAxis, what: "득실" | "공격" | "수비") =>
+  `${AXIS_KO[axis]} — ${what} xG / 10점`;
+
+export const AXIS_VALUE = defineHarness({
+  id: "axis-value",
+  what: "축 하나를 홈 팀 전원 +15로 올렸을 때의 공격·수비·득실 xG — 축 한 칸의 경기 가치",
+  doc: "docs/players/player.md §1",
+  cost: "팔 38(기준 + 축 37) × 시드 둘 × 리그 4경기 = 304경기 · 1시간 30분 남짓",
+  bands: [
+    {
+      metric: "기준 — 우리 xG",
+      role: "measure",
+      why: "아래 변화의 눈금 — 능력치를 건드리지 않은 판",
+    },
+    ...AXIS_VALUE_AXES.flatMap((axis): Band[] => [
+      {
+        metric: axisValueMetric(axis, "득실"),
+        role: "measure",
+        why: "공격 가치 + 수비 가치 — 0에 붙은 축은 통로가 없거나 약하다",
+      },
+      { metric: axisValueMetric(axis, "공격"), role: "measure", why: "우리 xG가 오른 만큼" },
+      { metric: axisValueMetric(axis, "수비"), role: "measure", why: "상대 xG가 내려간 만큼" },
+    ]),
+  ],
+});
+
 export const SIM_PARITY = defineHarness({
   id: "sim-parity",
   what: "같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가",
@@ -1185,6 +1227,7 @@ export const HARNESSES: readonly Harness[] = [
   LIVE_PLAYER_LOAD,
   LIVE_TACTICS,
   CARD_WORDS_HARNESS,
+  AXIS_VALUE,
   SIM_PARITY,
   INJURY_RATE,
   FINANCE_TIER1,

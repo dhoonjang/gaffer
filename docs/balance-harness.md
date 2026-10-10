@@ -55,6 +55,7 @@ pnpm balance --report out --deadline 200  # 200분에 끊고 그때까지 온 �
 | `live-player-load`     | 풀타임 선수의 포지션별 총 거리·고속·스프린트 — 실측과 기대 부하표(`EXPECTED_LOAD`)에 서는가               | [live-match](match/live-match.md) §7 · [football-reference](match/football-reference.md) §7 |
 | `live-tactics`         | 홈 팀 전술 하나만 바꿔 굴렸을 때 슈팅·xG·점유·거리가 예상한 방향으로 움직이는가                           | [live-match](match/live-match.md) §6 · §9.3                                                 |
 | `card-words`           | 홈 팀 카드에 낱말 하나만 −3·+3으로 걸었을 때 그 낱말의 자리가 뜻한 쪽으로 움직이는가 · 그 대가            | [player](players/player.md) §3 · [live-match](match/live-match.md) §4                       |
+| `axis-value`           | 축 하나를 홈 팀 전원 +15로 올렸을 때의 공격·수비·득실 xG — 축 한 칸의 경기 가치                           | [player](players/player.md) §1                                                              |
 | `quick-outcomes`       | 간이 시뮬의 연장 득점·카드 · 퇴장 효과 · AI 교체 수·시점 · 페널티 성공률                                  | [match](match/match.md) §6.2 · §8.6                                                         |
 | `sim-parity`           | 같은 대진을 실시간 경기와 간이 시뮬로 굴렸을 때 득점·xG·슈팅·전력 기울기가 같은 눈금인가                  | [match](match/match.md) §8.5 · [live-match](match/live-match.md) §9.3                       |
 | `injury-rate`          | 간이 시뮬의 경기당 부상·카드가 기대한 눈금인가 · 성향 · 누적 피로                                         | [match](match/match.md) §4.1                                                                |
@@ -112,8 +113,8 @@ pnpm balance --report out --deadline 200  # 200분에 끊고 그때까지 온 �
 그래서 `live-match-stats` · `live-goal-anatomy` · `live-player-load` · `sim-parity`는
 **한 파일(`live-baseline.harness.ts`)이 한 번 굴린 196경기를 나눠 읽는다** — 거르는 이름도
 `pnpm balance live-baseline` 하나다. 서술자마다 따로 굴리면 같은 경기를 두세 번 다시 굴리고,
-표본이 작은 쪽은 잡음까지 떠안는다. 전술을 바꿔 굴리는 `live-tactics`와 카드를 바꿔 굴리는
-`card-words`만 제 판을 갖는다.
+표본이 작은 쪽은 잡음까지 떠안는다. 전술을 바꿔 굴리는 `live-tactics`, 카드를 바꿔 굴리는
+`card-words`, 능력치를 바꿔 굴리는 `axis-value`만 제 판을 갖는다.
 
 `world-season`도 같은 이유로 표를 **시드를 모은 뒤 한 번** 세운다 — 한 리그-시즌의
 분포 칸은 시드마다 ±2%p씩 흔들려, 시드별 표 여섯 장은 그 흔들림을 신호처럼 보인다.

@@ -1,5 +1,19 @@
-import type { Formation, MatchRecord, MatchSide, MatchStatLine, TacticsSpec } from "@gaffer/domain";
-import { FAMILIARITY_BASELINE, FORMATIONS, otherSide, weightSlotOf } from "@gaffer/domain";
+import type {
+  AttributeAxis,
+  Formation,
+  MatchRecord,
+  MatchSide,
+  MatchStatLine,
+  TacticsSpec,
+  WeightSlot,
+} from "@gaffer/domain";
+import {
+  FAMILIARITY_BASELINE,
+  FORMATIONS,
+  naturalPositionOf,
+  otherSide,
+  weightSlotOf,
+} from "@gaffer/domain";
 import {
   HEADER_SHOT_HEIGHT,
   depthOf,
@@ -195,6 +209,26 @@ export function addShapeEffects(
         readings[`${f} — ${label} (모양 효과)`] =
           kind === "ratio" ? raw(f, label) / center : raw(f, label) - center;
     }
+  }
+}
+
+/**
+ * 킥오프 직전에 한 편 명단(선발·벤치)의 능력치를 바꾼다 — 축의 가치를 재는 하네스가 시뮬
+ * 코드를 건드리지 않고 판을 가른다. 세이브의 선수 객체는 그대로 두고 이 경기의 명단만
+ * 새 객체로 바꾼다. `slot`은 그 선수가 선 자리 묶음(벤치는 주 자리)이다.
+ */
+export function editAttributes(
+  live: LiveMatch,
+  side: MatchSide,
+  edit: (attributes: Record<AttributeAxis, number>, slot: WeightSlot) => void,
+): void {
+  const slotOf = new Map(live.slots[side].map((s) => [s.playerId, weightSlotOf(s.position)]));
+  for (const id of [...live.ledger[side].onPitch, ...live.ledger[side].bench]) {
+    const player = live.setup.players[id];
+    if (!player) continue;
+    const attributes = { ...player.attributes };
+    edit(attributes, slotOf.get(id) ?? weightSlotOf(naturalPositionOf(player).position));
+    live.setup.players[id] = { ...player, attributes };
   }
 }
 
