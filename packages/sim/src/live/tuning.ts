@@ -662,8 +662,28 @@ export const TOP_SPEED_FLOOR = 6.95;
 /** 스피드 99가 더하는 속도 (m/s) — 35 km/h까지 */
 export const TOP_SPEED_SPAN = 2.75;
 
-/** 가속 (m/s²) — 약 4초에 최고 속도에 닿는다 */
+/**
+ * 가속 (m/s²) — 가속력이 리그 평균(`ACCELERATION_PIVOT`)인 필드 선수가 약 4초에 최고 속도에
+ * 닿는다. 가속력 1점마다 `ACCELERATION_PER_POINT`씩 다르고 `ACCELERATION_RANGE` 안에 선다
+ * (live-match.md §5.3). 골키퍼의 걸음은 이 값 그대로다 — 골키퍼의 몸은 다이빙과 나오기가 맡는다
+ */
 export const ACCELERATION = 2.3;
+
+export const ACCELERATION_PIVOT = 65;
+
+export const ACCELERATION_PER_POINT = 0.012;
+
+export const ACCELERATION_RANGE = [0.6, 1.4] as const;
+
+/**
+ * 받는 순간 붙은 상대 한 명이 얹는 압박의 무게 — 마킹이 리그 평균(`MARKING_PIVOT`)이면 1이고
+ * 1점마다 `MARKING_PRESSURE_PER_POINT`씩, `MARKING_PRESSURE_RANGE` 안에 선다 (live-match.md §5.3)
+ */
+export const MARKING_PIVOT = 51;
+
+export const MARKING_PRESSURE_PER_POINT = 0.015;
+
+export const MARKING_PRESSURE_RANGE = [0.4, 1.6] as const;
 
 /** 감속은 가속보다 빠르다 */
 export const DECELERATION = 5.5;

@@ -58,7 +58,15 @@ import {
   yAtLateral,
 } from "./geometry";
 import { teamParamsOf, type TeamParams } from "./params";
-import { advanceFlight, maxSpeedOf, movePlayer, reachHeightOf, reachOf } from "./physics";
+import {
+  accelerationFactor,
+  advanceFlight,
+  markingPressureOf,
+  maxSpeedOf,
+  movePlayer,
+  reachHeightOf,
+  reachOf,
+} from "./physics";
 import { SLOT_TENDENCY, stepsTendencyOf, type RoleTendency } from "./roles";
 import {
   heatmapLogDensityAt,
@@ -1382,6 +1390,7 @@ function moveAll(ctx: Ctx): void {
       ctx.input.injured.has(p.id),
       player.attributes.stamina,
       ctx.input.sheet.legs[p.id] ?? 1,
+      isKeeper(ctx, p) ? 1 : accelerationFactor(player.attributes.acceleration),
       urgencyOf(ctx, p),
     );
     const line = stat(ctx, p.id);
@@ -1511,10 +1520,12 @@ function takeBall(ctx: Ctx, p: LivePlayer, opts: { fromPass?: boolean } = {}): v
     state.lastPass = null;
     state.setPiece = null;
   }
-  // 첫 터치 — 퍼스트 터치가 정하고 침착성이 거든다, 압박이 흔든다
-  const pressure = state.players.filter(
-    (q) => q.side !== p.side && distance(q, p) < PRESSURE_RADIUS,
-  ).length;
+  // 첫 터치 — 퍼스트 터치가 정하고 침착성이 거든다, 붙은 상대의 마킹이 흔든다
+  let pressure = 0;
+  for (const q of state.players) {
+    if (q.side !== p.side && distance(q, p) < PRESSURE_RADIUS)
+      pressure += markingPressureOf(attr(ctx, q, "marking"));
+  }
   const control = dsigmoid(
     (attr(ctx, p, "firstTouch") * 0.7 + attr(ctx, p, "composure") * 0.3 - 55) / 14,
   );

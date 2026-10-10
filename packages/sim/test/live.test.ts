@@ -1,4 +1,11 @@
 import { isOffsidePosition } from "../src/live/step";
+import { accelerationFactor, markingPressureOf } from "../src/live/physics";
+import {
+  ACCELERATION_PIVOT,
+  ACCELERATION_RANGE,
+  MARKING_PIVOT,
+  MARKING_PRESSURE_RANGE,
+} from "../src/live/tuning";
 import { emptyRecentFlow, recordFlowTick, recordFlowEvents } from "../src/live/recent-flow";
 import { describe, expect, it } from "vitest";
 import {
@@ -445,5 +452,19 @@ describe("연속 강도 시트", () => {
       expect(result.dropped.map((entry) => entry.code)).toEqual(["invalid-step"]);
     }
     expect(SheetStepSchema.parse(1.25)).toBe(1.25);
+  });
+});
+
+describe("가속력과 마킹의 통로 (live-match.md §5.3)", () => {
+  it("리그 평균이면 1이고, 축이 오를수록 커지며, 범위 밖으로 나가지 않는다", () => {
+    for (const [of, pivot, [low, high]] of [
+      [accelerationFactor, ACCELERATION_PIVOT, ACCELERATION_RANGE],
+      [markingPressureOf, MARKING_PIVOT, MARKING_PRESSURE_RANGE],
+    ] as const) {
+      expect(of(pivot)).toBe(1);
+      expect(of(pivot + 10)).toBeGreaterThan(of(pivot));
+      expect(of(0)).toBeGreaterThanOrEqual(low);
+      expect(of(99)).toBeLessThanOrEqual(high);
+    }
   });
 });

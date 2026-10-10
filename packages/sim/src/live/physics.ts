@@ -4,6 +4,12 @@ import { SPEED_BAND, conditionAfterLoad } from "../load";
 import { clamp, distance } from "./geometry";
 import {
   ACCELERATION,
+  ACCELERATION_PER_POINT,
+  ACCELERATION_PIVOT,
+  ACCELERATION_RANGE,
+  MARKING_PIVOT,
+  MARKING_PRESSURE_PER_POINT,
+  MARKING_PRESSURE_RANGE,
   AMBLE_PER_METRE,
   AMBLE_SPEED,
   CONDITION_SPEED_FLOOR,
@@ -55,12 +61,28 @@ interface MoveResult {
  * `urgency`는 국면이 행동의 급함을 갈아 끼울 때만 온다 — 되돌아 뛰기·오버래핑처럼 같은
  * 행동이 그 순간에만 서두르는 경우다. 오면 걸음 상한(`AMBLE_*`)도 걸지 않는다.
  */
+/** 받는 순간 붙은 상대 한 명의 압박 무게 — 마킹이 리그 평균이면 1 (live-match.md §5.3) */
+export function markingPressureOf(marking: number): number {
+  const [low, high] = MARKING_PRESSURE_RANGE;
+  return clamp(1 + (marking - MARKING_PIVOT) * MARKING_PRESSURE_PER_POINT, low, high);
+}
+
+/** 가속의 배율 — 가속력이 리그 평균이면 1 (live-match.md §5.3) */
+export function accelerationFactor(acceleration: number): number {
+  const [low, high] = ACCELERATION_RANGE;
+  return clamp(1 + (acceleration - ACCELERATION_PIVOT) * ACCELERATION_PER_POINT, low, high);
+}
+
+/**
+ * @param accel 가속의 배율 — 필드 선수는 `accelerationFactor`, 골키퍼는 1
+ */
 export function movePlayer(
   p: LivePlayer,
   player: Player,
   injured: boolean,
   stamina: number,
   legs: number,
+  accel: number,
   urgency?: number,
 ): MoveResult {
   const dx = p.target.x - p.x;
@@ -76,7 +98,7 @@ export function movePlayer(
   const wx = gap > 0.05 ? (dx / gap) * wanted : 0;
   const wy = gap > 0.05 ? (dy / gap) * wanted : 0;
   const speedNow = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-  const rate = wanted >= speedNow ? ACCELERATION : DECELERATION;
+  const rate = wanted >= speedNow ? ACCELERATION * accel : DECELERATION;
   const maxDelta = rate * LIVE_STEP;
   p.vx += clamp(wx - p.vx, -maxDelta, maxDelta);
   p.vy += clamp(wy - p.vy, -maxDelta, maxDelta);

@@ -69,7 +69,7 @@ FC 공식 레이팅의 세부 능력치에서 온다. 자리에서의 의미는 
 |      | `crossing`       | 크로스      | 크로스·코너킥의 오차와 속도, 크로스를 고를 확률, 코너 키커                  | Crossing 0.85 · Curve 0.15                             | 관측형     |
 |      | `technique`      | 테크닉      | 패스에 싣는 속도                                                            | Curve·Volleys·Long Passing·Ball Control + 개인기       | **분석형** |
 |      | `tackling`       | 태클        | 태클 경합(예측력이 타이밍으로 거든다), 가로채기 반경의 일부, 파울 확률      | Standing 0.6 · Sliding 0.4                             | 관측형     |
-|      | `marking`        | 마킹        | 지금 실시간 경기가 읽지 않는다                                              | Def. Awareness                                         | **분석형** |
+|      | `marking`        | 마킹        | 공을 받는 상대에게 붙었을 때 첫 터치를 흔드는 압박의 무게                   | Def. Awareness                                         | **분석형** |
 |      | `freeKicks`      | 프리킥      | 직접 프리킥 슛, 프리킥 배달, 프리킥 키커                                    | FK Accuracy 0.8 · Curve 0.2                            | **분석형** |
 |      | `penalties`      | 페널티킥    | 페널티·승부차기 성공률 (`penaltySkill`)                                     | Penalties                                              | **분석형** |
 | 정신 | `anticipation`   | 예측력      | 상대 패스를 끊는 반경, 태클 타이밍, 수비 읽기의 일부                        | Reactions                                              | **분석형** |
@@ -79,10 +79,10 @@ FC 공식 레이팅의 세부 능력치에서 온다. 자리에서의 의미는 
 |      | `offTheBall`     | 오프 더 볼  | 공 없는 공격의 형태 오차·가치장 정확도(온도) — 위치 선정과 반씩             | Positioning (공격 위치선정)                            | **분석형** |
 |      | `positioning`    | 위치 선정   | 수비 읽기의 중심(수비 형태 오차·온도·블록), 공격 자리의 절반, 세트피스 수비 | Def. Awareness 0.6 · Interceptions 0.4                 | **분석형** |
 |      | `concentration`  | 집중력      | 수비 읽기의 일부 (수비 형태 오차·온도·블록)                                 | Reactions 0.5 · Composure 0.3 · Def. Aw. 0.2           | **분석형** |
-|      | `aggression`     | 적극성      | 파울·카드 확률 (성향)                                                       | Aggression                                             | 관측형     |
-|      | `flair`          | 창의성      | 지금 실시간 경기가 읽지 않는다 (성향)                                       | 개인기 별 + Trickster·Inventive·Gamechanger·Technical  | **분석형** |
-|      | `workRate`       | 활동량      | 지금 실시간 경기가 읽지 않는다 (성향)                                       | Stamina 0.6 · Aggression 0.4 + Relentless·Press Proven | 관측형     |
-| 신체 | `acceleration`   | 가속력      | 지금 실시간 경기가 읽지 않는다 — 가속은 상수다(live-match.md §5.3)          | Acceleration                                           | 관측형     |
+|      | `aggression`     | 적극성      | 파울·카드 확률, 압박 버릇 (성향 · §3.4)                                     | Aggression                                             | 관측형     |
+|      | `flair`          | 창의성      | 드리블 버릇 (성향 · §3.4)                                                   | 개인기 별 + Trickster·Inventive·Gamechanger·Technical  | **분석형** |
+|      | `workRate`       | 활동량      | 공격 가담·수비 복귀 버릇 (성향 · §3.4)                                      | Stamina 0.6 · Aggression 0.4 + Relentless·Press Proven | 관측형     |
+| 신체 | `acceleration`   | 가속력      | 첫 몇 걸음의 가속 (live-match.md §5.3)                                      | Acceleration                                           | 관측형     |
 |      | `pace`           | 속력        | 최고 속도                                                                   | Sprint Speed                                           | 관측형     |
 |      | `agility`        | 민첩성      | 골키퍼의 다이빙 범위·손이 닿는 반경 (필드 선수는 아직 읽지 않는다)          | Agility (GK는 GK Diving)                               | 관측형     |
 |      | `balance`        | 균형 감각   | 지금 실시간 경기가 읽지 않는다                                              | Balance                                                | 관측형     |
