@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { MatchEvent, MatchSide, ShotOrigin } from "./match-events";
 import type { PlayPhase } from "./match";
+import type { AttributeAxis } from "../players/player";
 
 /**
  * 실시간 경기의 상태 — **말 22개와 공** (live-match.md).
@@ -168,6 +169,17 @@ export interface LiveMatchState {
   lastPass: { from: string; to: string; tick: number } | null;
   /** 공을 잃은 자리 — `high_turnover`의 근거 */
   lastTurnover: { by: string; side: MatchSide; tick: number; at: FieldPoint } | null;
+  /**
+   * 가장 최근에 수비를 제친 드리블 — `individual`의 근거. `axis`는 그 경합을 가른 공 가진
+   * 쪽의 축이다 (live-match.md §9.1)
+   */
+  lastBeat: {
+    by: string;
+    beaten: string;
+    side: MatchSide;
+    tick: number;
+    axis: AttributeAxis;
+  } | null;
   restart: LiveRestart | null;
   setPiece: {
     origin: ShotOrigin;

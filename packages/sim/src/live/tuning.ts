@@ -93,6 +93,12 @@ export const TACKLE_SKILL = { tackling: 0.85, anticipation: 0.15 } as const;
  */
 export const DRIBBLE_SKILL = { dribbling: 0.7, agility: 0.15, balance: 0.15 } as const;
 
+/** 1대1에서 몸싸움이 양쪽 기량에 얹히는 몫 — 태클 쪽과 공 가진 쪽이 같은 무게다 */
+export const DUEL_STRENGTH = 0.4;
+
+/** 수비를 제친 드리블이 득점의 원인(`individual`)으로 붙는 시간 (초) */
+export const INDIVIDUAL_SECONDS = 8;
+
 /**
  * **수비 읽기** — 공이 상대에게 있을 때 어디에 서는가. 위치 선정이 중심이고 예측력·집중력이
  * 거든다. 공 없는 수비 가치장의 온도, 수비 형태 오차, 슛 블록이 읽는다.

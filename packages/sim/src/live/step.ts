@@ -1,4 +1,5 @@
 import type {
+  AttributeAxis,
   BallFlight,
   EventCause,
   FieldPoint,
@@ -19,6 +20,7 @@ import type {
   WeightSlot,
 } from "@gaffer/domain";
 import {
+  AXIS_KO,
   CARD_STEP_MAX,
   FIELD,
   LIVE_STEP,
@@ -113,6 +115,8 @@ import {
   DUEL_TACKLER_EDGE,
   TACKLE_SKILL,
   DRIBBLE_SKILL,
+  DUEL_STRENGTH,
+  INDIVIDUAL_SECONDS,
   DEFENSIVE_READING,
   ATTACKING_READING,
   FIELD_MAN_MARK,
@@ -396,6 +400,7 @@ export function createLiveState(input: LiveInput, options: CreateLiveOptions): L
     possessionSince: tick,
     lastPass: null,
     lastTurnover: null,
+    lastBeat: null,
     restart: {
       kind: "kickoff",
       side: options.kickoffSide,
@@ -550,6 +555,7 @@ function cloneState(s: LiveMatchState): LiveMatchState {
       : null,
     lastPass: s.lastPass ? { ...s.lastPass } : null,
     lastTurnover: s.lastTurnover ? { ...s.lastTurnover, at: { ...s.lastTurnover.at } } : null,
+    lastBeat: s.lastBeat ? { ...s.lastBeat } : null,
     possessionTime: { ...s.possessionTime },
     lastShotAt: { ...s.lastShotAt },
     bench: { ...s.bench },
@@ -2604,6 +2610,20 @@ function goalCauses(ctx: Ctx, scorer: string, assist: string | null): EventCause
       causes.push({ code: "high_turnover", playerIds: [turnover.by] });
     else causes.push({ code: "counter", playerIds: [turnover.by] });
   }
+  // 슈터나 도움이 직전에 수비를 제쳤다 — 그 경합을 가른 축을 낱말로 싣는다
+  const beat = state.lastBeat;
+  if (
+    beat &&
+    beat.side === side &&
+    state.tick - beat.tick < dead(INDIVIDUAL_SECONDS) &&
+    (beat.by === scorer || beat.by === assist)
+  ) {
+    causes.push({
+      code: "individual",
+      playerIds: [beat.by, beat.beaten],
+      note: AXIS_KO[beat.axis],
+    });
+  }
   // 시트의 카드 수정이 걸린 말이 관여했다
   const involved = [scorer, ...(assist ? [assist] : []), ...(turnover ? [turnover.by] : [])];
   for (const id of involved) {
@@ -2622,9 +2642,9 @@ function goalCauses(ctx: Ctx, scorer: string, assist: string | null): EventCause
 function tackleWinChance(ctx: Ctx, tackler: LivePlayer, owner: LivePlayer): number {
   return dsigmoid(
     (blendAttr(ctx, tackler, TACKLE_BLEND) +
-      attr(ctx, tackler, "strength") * 0.4 -
+      attr(ctx, tackler, "strength") * DUEL_STRENGTH -
       blendAttr(ctx, owner, DRIBBLE_BLEND) -
-      attr(ctx, owner, "strength") * 0.4 +
+      attr(ctx, owner, "strength") * DUEL_STRENGTH +
       DUEL_TACKLER_EDGE) /
       DUEL_SCALE,
   );
@@ -2657,7 +2677,41 @@ function duel(ctx: Ctx, owner: LivePlayer, tackler: LivePlayer): void {
     return;
   }
   stat(ctx, owner.id).dribblesWon += 1;
+  ctx.state.lastBeat = {
+    by: owner.id,
+    beaten: tackler.id,
+    side: owner.side,
+    tick: ctx.state.tick,
+    axis: beatAxisOf(ctx, owner, tackler),
+  };
   beaten(ctx, tackler);
+}
+
+/**
+ * 제친 경합을 가른 축 — 드리블 대 태클 · 민첩성 대 예측력 · 균형 감각 대 몸싸움 · 몸싸움 대
+ * 몸싸움 가운데 공 가진 쪽이 경합의 무게만큼 가장 크게 앞선 축 (live-match.md §9.1)
+ */
+function beatAxisOf(ctx: Ctx, owner: LivePlayer, tackler: LivePlayer): AttributeAxis {
+  const edges: [AttributeAxis, number][] = [
+    [
+      "dribbling",
+      DRIBBLE_SKILL.dribbling * attr(ctx, owner, "dribbling") -
+        TACKLE_SKILL.tackling * attr(ctx, tackler, "tackling"),
+    ],
+    [
+      "agility",
+      DRIBBLE_SKILL.agility * attr(ctx, owner, "agility") -
+        TACKLE_SKILL.anticipation * attr(ctx, tackler, "anticipation"),
+    ],
+    [
+      "balance",
+      DRIBBLE_SKILL.balance * (attr(ctx, owner, "balance") - attr(ctx, tackler, "strength")),
+    ],
+    ["strength", DUEL_STRENGTH * (attr(ctx, owner, "strength") - attr(ctx, tackler, "strength"))],
+  ];
+  let best = edges[0]!;
+  for (const edge of edges) if (edge[1] > best[1]) best = edge;
+  return best[0];
 }
 
 /** 제쳐진 수비 — 한 박자 그 자리에 남는다. 공 가진 말은 그 사이에 지나간다 */
