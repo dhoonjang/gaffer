@@ -1,5 +1,6 @@
 import { managedNegotiationOverview } from "./negotiation-overview";
 import {
+  TACTIC_AXES,
   HireStaffInputSchema,
   ManagerJobOfferSchema,
   InterviewOutcomeSchema,
@@ -99,7 +100,7 @@ import {
 import { z } from "zod";
 import { type GmToolCall, type CommandReturn, recordCall } from "../shared/gm-types";
 import { type GameToolSpec, type ToolCallContext } from "@gaffer/llm";
-import { skillDescriptions } from "./skill-descriptions";
+import { SILENT_SKILLS, skillDescriptions } from "./skill-descriptions";
 import { toToolSchema, inputError } from "../shared/tool-schema";
 import { createInstructionTool } from "./instructions";
 import { sideTeamName } from "../shared/match-context";
@@ -143,10 +144,11 @@ function routineText(key: SetPieceRoutineKey): string {
 }
 
 const CORE_COMMAND_LABELS: Record<string, string> = {
-  set_lineup: "선발 11명·벤치 지정 (선발에 넣을 2군 선수의 1군 승격 포함)",
+  set_lineup:
+    "선발·벤치 지정 — 벤치나 1군 미배치 선수를 선발에 넣기, 선발에서 빼기 (2군 선수의 1군 승격 포함)",
   set_squad_level: "선발·벤치를 바꾸지 않는 1·2군 이동",
-  set_tactics: "팀 전술 6축과 갈래",
-  set_player_tactic: "한 선수의 자리와 역할",
+  set_tactics: `팀 전술 — ${TACTIC_AXES.map((axis) => axis.label).join("·")}, 전환·오프사이드 트랩·태클·GK 배급`,
+  set_player_tactic: "선발로 선 한 선수의 자리 이동과 역할 (선발 명단은 바꾸지 않음)",
   set_set_piece_takers: "세트피스 키커",
   set_set_piece_routine: "세트피스 인원",
   substitute: "교체",
@@ -303,7 +305,7 @@ export function buildToolSpecs(state: GameState, calls: GmToolCall[]): GameToolS
   ) =>
     recordCall(calls, name, result, {
       input,
-      ...(name === "update_character" ? { silent: true } : {}),
+      ...(SILENT_SKILLS.has(name) ? { silent: true } : {}),
       ...(context ? { line: writtenLines(context.text) } : {}),
     });
   const OUT_OF_WORK_TOOLS = new Set([

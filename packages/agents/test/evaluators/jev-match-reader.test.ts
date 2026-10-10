@@ -158,7 +158,8 @@ describe("Jev match instruction boundary", () => {
         ),
       ),
     ).toBe(false);
-    expect(evaluator.requests).toHaveLength(4);
+    // routing · mode · effect count · line · target/behavior fields
+    expect(evaluator.requests).toHaveLength(5);
   });
 
   it.each([
@@ -192,9 +193,9 @@ describe("Jev match instruction boundary", () => {
             ),
           );
         expect(behaviorFields).toEqual([]);
-        expect(evaluator.requests).toHaveLength(5);
+        expect(evaluator.requests).toHaveLength(6);
         expect(
-          Object.values(evaluator.requests[4]!.questions).every(
+          Object.values(evaluator.requests.at(-1)!.questions).every(
             (question) => question.type === "score",
           ),
         ).toBe(true);
@@ -231,7 +232,6 @@ describe("Jev match instruction boundary", () => {
     ["negative boundary", [1, 0, 0, 0, 0, 0, 0], -1, 3],
     ["positive boundary", [0, 0, 0, 0, 0, 0, 1], 1, 3],
     ["zero", [0, 0, 0, 1, 0, 0, 0], 1, 0],
-    ["opposing mass", [0.5, 0, 0, 0, 0, 0, 0.5], 1, 0],
     ["continuous negative", [0, 0.5, 0.5, 0, 0, 0, 0], -1, 1.5],
   ] as const)("maps %s to deterministic direction and magnitude", async (_, mass, sign, step) => {
     const score: ScoreAnswer = {
@@ -245,6 +245,21 @@ describe("Jev match instruction boundary", () => {
     const result = await interpretMatchInstructions(input(model({ shapes: ["edge"], score })));
     expect(result.unresolved).toBeUndefined();
     expect(result.reading?.sheet[0]).toMatchObject({ shape: "edge", sign, step });
+  });
+
+  it("holds an effect whose strength readings point both ways instead of averaging to zero", async () => {
+    const score: ScoreAnswer = {
+      type: "score",
+      score: 3,
+      confidence: 0.1,
+      probabilities: { "0": 0.5, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0.5 },
+    };
+    const result = await interpretMatchInstructions(
+      input(model({ shapes: ["edge"], score, ordinary: true })),
+    );
+    expect(result.reading).toBeUndefined();
+    expect(result.ops).toEqual({ set_tactics: [{ pressing: 4 }] });
+    expect(result.unresolved).toBe("경기 전술 효과 — 효과의 방향이 갈림");
   });
 
   it("rejects marking without a target before scoring or applying effects", async () => {
@@ -277,12 +292,14 @@ describe("Jev match instruction boundary", () => {
     });
   });
 
-  it("rejects a clear decision paired with nonempty effects instead of clearing the current plan", async () => {
-    const result = await interpretMatchInstructions(
-      input(model({ mode: "clear", inconsistentClear: true })),
-    );
-    expect(result.reading).toBeUndefined();
-    expect(result.unresolved).toBeDefined();
+  it("asks for effect lines only once the plan replaces the current effects", async () => {
+    const evaluator = model({ mode: "clear", inconsistentClear: true });
+    const result = await interpretMatchInstructions(input(evaluator));
+    expect(result).toEqual({ ops: {}, reading: { points: [], sheet: [] } });
+    const asked = evaluator.requests
+      .flatMap((request) => Object.values(request.questions))
+      .map((question) => question.instructions);
+    expect(asked.some((text) => text.includes("argument $.sheet"))).toBe(false);
   });
 
   it("keeps ordinary commands without manufacturing a tactical reading", async () => {
@@ -309,10 +326,10 @@ describe("Jev match instruction boundary", () => {
       { ...scored(), probabilities: { ...scored().probabilities, "0": -0.1 } },
     ],
     ["wrong type", { type: "noul", noul: 0.9 }],
-  ] as const)("rejects %s score before any commands can apply", async (_, score) => {
+  ] as const)("drops the effect on a %s score and keeps the ordinary command", async (_, score) => {
     const evaluator = model({ score, ordinary: true, shapes: ["edge"] });
     const result = await interpretMatchInstructions(input(evaluator));
-    expect(result.ops).toEqual({});
+    expect(result.ops).toEqual({ set_tactics: [{ pressing: 4 }] });
     expect(result.reading).toBeUndefined();
     expect(result.unresolved).toBeDefined();
   });

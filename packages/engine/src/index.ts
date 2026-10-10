@@ -133,6 +133,7 @@ export * from "./app/admin/admin-persona";
 export * from "./app/admin/admin-team";
 export * from "./app/catalog-invariants";
 export * from "./app/create-game";
+export * from "./app/exhibits";
 export * from "./app/lookup/career";
 export * from "./app/lookup/history";
 export * from "./app/lookup/league";

@@ -490,6 +490,21 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     expect(rejected.rejected).toBe(true);
     expect(before).toEqual(snapshot);
     expect(rejectedCalls).toEqual([]);
+
+    // 효과만 코어에서 걸리면 함께 읽힌 교체는 그대로 들어간다
+    const ghost = structuredClone(reading);
+    ghost.sheet[0]!.target = { player: "ghost" };
+    const partial = applyInstructionBatch(
+      before,
+      [],
+      { ops: { substitute: [{ out, in: incoming }] } },
+      TACTIC_OPS,
+      { reading: ghost },
+    );
+    expect(partial.rejected).toBe(false);
+    expect(before.pendingMatch!.live.ledger[side].onPitch).toContain(incoming);
+    expect(before.pendingMatch!.live.sheet).toEqual(snapshot.pendingMatch!.live.sheet);
+    expect(partial.notes.at(-1)).toBe("전술 효과를 걸지 못했습니다 — 그라운드에 없는 선수");
   });
 
   it("활성 효과 문맥에는 퇴장·교체로 무효가 된 줄을 싣지 않는다", async () => {

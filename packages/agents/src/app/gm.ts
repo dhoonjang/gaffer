@@ -1,5 +1,6 @@
 import { advanceOperationWithWorld, advanceSceneWithWorld } from "./date-work";
 import {
+  type Exhibit,
   selectLorebook,
   familiarLorebookIds,
   playerName,
@@ -82,6 +83,7 @@ import {
 } from "../gm/gm-input";
 import {
   buildGmReference,
+  fileExhibits,
   parseSceneHeader,
   sanitizeCasterText,
   sanitizeSceneText,
@@ -658,6 +660,21 @@ async function closeTurn(
   let body = stripLedgerIds(humanizePlayerIds(state, scene.body));
   let header = scene.header;
   /**
+   * 자료 카드는 **턴이 닫힐 때의 장부**로 푼다 — 값이 그 턴에 함께 저장된다
+   * (prompts.md §1 「자료 카드」). 걷은 카드 줄만큼 그 뒤 호출 칩의 자리를 당긴다 —
+   * 칩의 줄 수는 모델이 쓴 본문(헤더 포함)으로 셌다.
+   */
+  // 경기 장면은 위생이 선수 카드만 남겼고, 모델의 표식이 걷혀 헤더가 없다(offset 0)
+  const filed = fileExhibits(state, body);
+  body = filed.body;
+  const exhibits: Exhibit[] = filed.exhibits;
+  const offset = scene.header ? 1 : 0;
+  const dropped = filed.dropped.map((line) => line + offset);
+  for (const record of ledger.calls) {
+    const at = record.line;
+    if (at !== undefined) record.line = at - dropped.filter((line) => line <= at).length;
+  }
+  /**
    * **장면이 비어 돌아온 턴** — 왕복 상한을 도구로 채우면(`stopReason === "tool_use"`)
    * 모델은 "확인하겠습니다" 한 줄만 남기거나 아무것도 쓰지 못한다. 도구는 이미 돌아
    * 라인업과 훈련이 바뀐 뒤라 되돌릴 수 없으므로, 코어가 이번 턴의 기록으로 세운다
@@ -729,6 +746,7 @@ async function closeTurn(
     ...(ledger.cards.length > 0 ? { cards: ledger.cards } : {}),
     // 손잡이가 굴린 구간과 헤더가 민 구간의 사건이 민 순서대로 함께 온다
     ...(ledger.events.length > 0 ? { events: ledger.events } : {}),
+    ...(exhibits.length > 0 ? { exhibits } : {}),
     ...(clockStalled !== null ? { clockStalled } : {}),
     ...(suggestion === undefined ? {} : { suggestion }),
     usage: result.usage,

@@ -56,6 +56,7 @@ The reply is written only in the commands below — what came in angle brackets 
 - <commentary>…</commentary> — the commentary.
 - <speak name="Name">…</speak> — a person's words. The head coach too goes by the lorebook name, and players are called by their Korean names. For ledger ids, use the one next to the name. Inside, what is wrapped in *single asterisks* is action and staging.
 - <narration>…</narration> — narration without a speaker, written without asterisks.
+- <player_card players="Name, Name" type="fitness" /> — players' cards on screen, self-closing on its own line: one player shows that player's card, two to eight a comparison table. type follows what the speaker is talking about: overview (the default) · fitness (condition, fatigue, injuries) · stats (this season's record, form) · contract · ability. The core fills in every number, so speakers do not repeat them; they say what they make of it.
 - While the same voice continues, change lines inside one command. Open a new command whenever the voice changes, and close each command before the next.
 - In <commentary>, a goal opens with a single line 「골! 아스널 1\u200a–\u200a0 첼시 (사카 34′)」 — the score and both names are exactly as written in the script's goal line.
 - Quotes in “ ”, inner thoughts in ‘ ’.
@@ -63,7 +64,7 @@ The reply is written only in the commands below — what came in angle brackets 
 
 # Voice
 ${OUTPUT_LANGUAGE}. The language of domestic football commentary, rhythmic and focused on highlights.
-Speakers do not voice the game's internal numbers — abilities, strength scores, application rates, probabilities. “리그 최고 수준의 스피드” instead of “pace 88”, “지시가 아직 덜 붙었습니다” instead of “적용률 68%”.
+Speakers do not voice the game's internal numbers — abilities, strength scores, application rates, probabilities, tactical setting steps. “리그 최고 수준의 스피드” instead of “pace 88”, “지시가 아직 덜 붙었습니다” instead of “적용률 68%”.
 `;
 
 /** 킥오프 턴의 표식 — 도구도 사건도 없는 첫 휘슬의 턴이다 (agents.md §3) */

@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { CORE_COMMANDS, SKILL_CATALOG } from "@gaffer/agents";
+import { CORE_COMMANDS, SILENT_SKILLS, SKILL_CATALOG } from "@gaffer/agents";
 import { hasRailHint } from "../../screens/chat/panel-hints";
 import { CALL_LABEL } from "../../screens/chat/call-label";
 
 /** 화면에 표시할 변경은 대응 장부의 말풍선으로 연결한다. */
-const SILENT_CALLS = new Set(["update_character"]);
-
 describe("호출이 화면에 서는 길", () => {
   it("조작형 호출은 모두 말풍선 아니면 카드다", () => {
     const orphans = SKILL_CATALOG.filter(
-      (s) => !s.readOnly && !hasRailHint(s.name) && !SILENT_CALLS.has(s.name),
+      (s) => !s.readOnly && !hasRailHint(s.name) && !SILENT_SKILLS.has(s.name),
     ).map((s) => s.name);
     expect(orphans, "표시할 호출에는 장부 연결이 필요하다").toEqual([]);
   });

@@ -16,6 +16,14 @@ const MAX_SOURCE_LENGTH = 8_000;
 const ABSENT = "absent";
 const UNCLEAR = "unclear";
 const OVERFLOW = "overflow";
+/** A choice is adopted only above this probability (agents.md §1). */
+const MAJORITY = 0.5;
+// 반려 사유는 GM이 되물을 자리를 고르는 근거라 명령·인자 단위로 남긴다
+const SPLIT = "해석이 갈려 정하지 못함";
+const UNREADABLE = "원문으로 정할 수 없거나 여러 뜻으로 읽힘";
+const MALFORMED = "값이 규칙에 맞지 않음";
+/** Fields that name a target rather than a change — they must come from state candidates. */
+const IDENTIFIER = /(?:Id|Ids)$/;
 
 class UnresolvedInstruction extends Error {}
 
@@ -25,7 +33,7 @@ interface Occurrence {
   command: InstructionCommand;
   index: number;
   input: Record<string, Value>;
-  invalid: boolean;
+  problems: string[];
 }
 interface Node {
   schema: Schema;
@@ -37,7 +45,10 @@ interface Node {
 }
 interface Query {
   question: ChoiceQuestion;
-  read: (choice: string) => void;
+  /** `split` — no candidate won a majority; the choice arrives as `unclear`. */
+  read: (choice: string, split: boolean) => void;
+  /** Reads the whole distribution instead of a majority choice (grouped candidates). */
+  readDistribution?: (probabilities: Readonly<Record<string, number>>) => void;
 }
 
 function object(value: unknown): Schema | undefined {
@@ -46,8 +57,33 @@ function object(value: unknown): Schema | undefined {
     : undefined;
 }
 
-function fail(node: Node): void {
-  node.occurrence.invalid = true;
+/**
+ * A command that can carry changes but received only its target changes nothing — the core
+ * rejects it, and a rejection rolls back the whole batch. It is held here instead.
+ */
+function changesNothing(occurrence: Occurrence): boolean {
+  const props = Object.keys(object(occurrence.command.inputSchema.properties) ?? {});
+  const changes = (key: string) => !IDENTIFIER.test(key);
+  return props.some(changes) && !Object.keys(occurrence.input).some(changes);
+}
+
+function invalid(occurrence: Occurrence): boolean {
+  return occurrence.problems.length > 0;
+}
+
+function label(occurrence: Occurrence): string {
+  return `${occurrence.command.label ?? occurrence.command.description} ${occurrence.index + 1}번째`;
+}
+
+function fail(node: Node, reason: string = MALFORMED): void {
+  const argument = node.path.replace(/^\$\.?/, "");
+  node.occurrence.problems.push(
+    `${label(node.occurrence)}${argument ? ` · ${argument}` : ""} — ${reason}`,
+  );
+}
+
+function unreadable(split: boolean): string {
+  return split ? SPLIT : UNREADABLE;
 }
 
 function finite(value: unknown): value is number {
@@ -119,21 +155,24 @@ async function evaluate(
     questions[`q${i}`] = query.question;
   });
   const response = await request.evaluator.evaluate({ state, questions });
-  if (Object.keys(response.answers).length !== queries.length)
-    throw new UnresolvedInstruction("평가 응답 개수가 다릅니다");
-  const choices = queries.map((query, i) => {
+  // A malformed or missing answer fails only its own question.
+  const answers = queries.map((query, i) => {
     const answer = validatedAnswer(query.question, response.answers[`q${i}`]);
-    if (answer?.type !== "choice")
-      throw new UnresolvedInstruction("평가 응답이 후보와 일치하지 않습니다");
-    const choice = majorityChoice(answer);
-    if (choice === undefined) throw new UnresolvedInstruction("평가 선택에 과반 지지가 없습니다");
-    return choice;
+    return answer?.type === "choice" ? answer : undefined;
   });
-  choices.forEach((choice, i) => queries[i]!.read(choice));
+  answers.forEach((answer, i) => {
+    const query = queries[i]!;
+    if (!answer) query.read(UNCLEAR, false);
+    else if (query.readDistribution) query.readDistribution(answer.probabilities);
+    else {
+      const choice = majorityChoice(answer);
+      query.read(choice ?? UNCLEAR, choice === undefined);
+    }
+  });
 }
 
 function properties(node: Node, target: Record<string, Value>, queue: Node[]): void {
-  if (node.occurrence.invalid) return;
+  if (invalid(node.occurrence)) return;
   const originalProps = object(node.schema.properties);
   const schema =
     node.occurrence.command.refineObjectSchema?.(node.path, node.occurrence.input, {
@@ -200,9 +239,9 @@ function structural(
           absent: "did not instruct this object",
           unclear: "instructed but ambiguous",
         },
-        (answer) => {
+        (answer, split) => {
           if (answer === "present") make();
-          else if (answer === UNCLEAR) fail(node);
+          else if (answer === UNCLEAR) fail(node, unreadable(split));
         },
       );
     return true;
@@ -233,9 +272,9 @@ function structural(
       ? `${scope(node)} The number of items combining the tactical effects that carry out the manager's instruction, their necessary costs, and the active_effects not explicitly removed or replaced. Decide from the current facts and do not create unrelated effects.`
       : `${scope(node)} Count only the items the original words instruct; do not fill in the existing list from the context. 0 only when an empty array was explicitly instructed.`,
     criteria,
-    (answer) => {
+    (answer, split) => {
       if (answer === UNCLEAR || answer === OVERFLOW) {
-        fail(node);
+        fail(node, answer === OVERFLOW ? `${cap}개를 넘음` : unreadable(split));
         return;
       }
       if (answer === ABSENT) return;
@@ -288,7 +327,7 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
       );
     } else if (typeOf(node.schema) === "string") {
       // Identifiers must come from state, not arbitrary words that happen to fit string().
-      if (!/(?:Id|Ids)$/.test(node.property)) {
+      if (!IDENTIFIER.test(node.property)) {
         sourceString(node, request.said, queries);
         return;
       }
@@ -317,9 +356,9 @@ function scalar(node: Node, request: InstructionRequest, queries: Query[]): void
     queries,
     `${scope(node)} ${node.occurrence.command.contextual ? "Pick the value that implements the tactic the manager asked for, fitted to the recent flow and the player facts. Include the necessary costs and the active_effects to keep. Read the sign of a choice's number as the effect direction the schema defines." : "If there is no instruction for this field, absent (unclear if the field is required). Do not carry another field's instruction or the existing state into this field. Pick by matching the meaning of the original words to the candidate descriptions. Amounts and quantities only as the exact original value or a stated conversion candidate. Do not use a change or ratio as the final amount. If the needed calculation result is not among the candidates, unclear."}`,
     criteria,
-    (answer) => {
+    (answer, split) => {
       if (answer === UNCLEAR) {
-        fail(node);
+        fail(node, unreadable(split));
         return;
       }
       if (answer !== ABSENT) node.assign(values[Number(answer.slice(1))]!.value);
@@ -356,9 +395,9 @@ function sourceString(node: Node, said: string, queries: Query[]): void {
     queries,
     `${scope(node)} Start boundary of the original phrase for this argument. Do not write new text. Points at the same phrase as the end boundary.`,
     startCriteria,
-    (answer) => {
+    (answer, split) => {
       if (answer === UNCLEAR) {
-        fail(node);
+        fail(node, unreadable(split));
         return;
       }
       if (answer === ABSENT) {
@@ -377,9 +416,9 @@ function sourceString(node: Node, said: string, queries: Query[]): void {
     queries,
     `${scope(node)} End boundary (exclusive) of the original phrase for this argument. Pick the same minimal phrase as the start boundary.`,
     endCriteria,
-    (answer) => {
+    (answer, split) => {
       if (answer === UNCLEAR) {
-        fail(node);
+        fail(node, unreadable(split));
         return;
       }
       if (answer === ABSENT) {
@@ -427,20 +466,28 @@ function validTree(schema: Schema, value: Value): boolean {
   return validScalar(schema, value);
 }
 
-/** Typed, source-grounded interpretation only. Execution and state validation belong to the app/core. */
+/**
+ * Typed, source-grounded interpretation only. Execution and state validation belong to the app/core.
+ * Occurrences that resolve are returned even when others do not; `unresolved` names the rest.
+ */
 export async function interpretInstructions(
   request: InstructionRequest,
 ): Promise<InstructionResult> {
   if (!request.said.trim()) return { ops: {} };
-  const unresolved = (): InstructionResult => ({
-    ops: {},
-    unresolved: "지시의 대상·값·범위를 확인해야 합니다",
+  const unresolved = (
+    problems: readonly string[] = [],
+    ops: InstructionResult["ops"] = {},
+  ): InstructionResult => ({
+    ops,
+    unresolved:
+      problems.length > 0
+        ? [...new Set(problems)].join(" / ")
+        : "지시의 대상·값·범위를 확인해야 합니다",
   });
   if (request.said.length > MAX_SOURCE_LENGTH || request.commands.length > MAX_QUESTIONS)
     return unresolved();
   const occurrences: Occurrence[] = [];
-  // 판정 콜백 안에서 켜진다 — 흐름 분석이 콜백 속 대입을 보지 못한다
-  let uncertain = false as boolean;
+  const routeProblems: string[] = [];
   const state = JSON.stringify({
     instruction: request.said,
     reference: request.context,
@@ -464,22 +511,39 @@ export async function interpretInstructions(
       };
       for (let n = 1; n <= command.limit; n++)
         criteria[`n${n}`] = `${n} requested action${n === 1 ? "" : "s"} of this kind.`;
+      const settle = (answer: string, split: boolean) => {
+        if (answer === UNCLEAR || answer === OVERFLOW) {
+          routeProblems.push(
+            `${command.label ?? command.description} — ${answer === OVERFLOW ? `한 번에 ${command.limit}개를 넘게 요청함` : split ? "요청인지 해석이 갈림" : "요청인지 정할 수 없음"}`,
+          );
+          return;
+        }
+        for (let i = 0; i < Number(answer.slice(1)); i++)
+          occurrences.push({ command, index: i, input: {}, problems: [] });
+      };
       choose(
         route,
         `How many distinct actions of "${command.description}" (${command.name}) does the manager request in state.instruction? Match the meaning of the request, not mentions of internal command names or numerical settings. Use state.reference only to identify the context, never as a source of new requests.`,
         criteria,
-        (answer) => {
-          if (answer === UNCLEAR || answer === OVERFLOW) {
-            uncertain = true;
-            return;
-          }
-          for (let i = 0; i < Number(answer.slice(1)); i++)
-            occurrences.push({ command, index: i, input: {}, invalid: false });
-        },
+        settle,
       );
+      // Whether an action is requested is decided on the summed counts, so mass spread over
+      // n1..nk still counts as a request; the count is the likeliest among them.
+      const counts = Object.keys(criteria).filter((key) => /^n[1-9]\d*$/.test(key));
+      route.at(-1)!.readDistribution = (p) => {
+        const mass = counts.reduce((sum, key) => sum + (p[key] ?? 0), 0);
+        if ((p.n0 ?? 0) > MAJORITY) settle("n0", false);
+        else if ((p[OVERFLOW] ?? 0) > MAJORITY) settle(OVERFLOW, false);
+        else if (mass > MAJORITY)
+          settle(
+            counts.reduce((best, key) => ((p[key] ?? 0) > (p[best] ?? 0) ? key : best)),
+            false,
+          );
+        else settle(UNCLEAR, (p[UNCLEAR] ?? 0) <= MAJORITY);
+      };
     }
     await evaluate(request, state, route);
-    if (uncertain) return unresolved();
+    if (occurrences.length === 0 && routeProblems.length > 0) return unresolved(routeProblems);
     const selected = new Map(occurrences.map(({ command }) => [command.name, command]));
     const argumentsState = {
       instruction: request.said,
@@ -505,7 +569,7 @@ export async function interpretInstructions(
       const next: Node[] = [];
       const afterAnswers: (() => void)[] = [];
       for (const node of queue) {
-        if (node.occurrence.invalid) continue;
+        if (invalid(node.occurrence)) continue;
         const disposition =
           node.occurrence.command.fieldDisposition?.(node.path, node.occurrence.input) ?? "include";
         if (disposition === "defer") {
@@ -518,6 +582,20 @@ export async function interpretInstructions(
         }
         if (!structural(node, queries, next, afterAnswers)) scalar(node, request, queries);
       }
+      // Asked alongside the first argument round so it costs no extra call.
+      if (round === 0 && queries.length > 0)
+        choose(
+          queries,
+          "Besides what the commands in state.commands carry out, does state.instruction request another action? Ignore discussion, explanation, quotation and hypotheticals.",
+          {
+            no: "every requested action is carried out by these commands",
+            yes: "a requested action is left that none of these commands carries out",
+            unclear: "cannot tell",
+          },
+          (answer) => {
+            if (answer === "yes") routeProblems.push("옮길 명령을 찾지 못한 요청이 남음");
+          },
+        );
       await evaluate(
         request,
         JSON.stringify({
@@ -533,25 +611,37 @@ export async function interpretInstructions(
       afterAnswers.forEach((resolve) => resolve());
       queue = next;
     }
-    if (queue.length > 0) return unresolved();
-    if (
-      occurrences.some(
-        (occurrence) =>
-          occurrence.invalid || !validTree(occurrence.command.inputSchema, occurrence.input),
-      )
-    )
-      return unresolved();
-    const identities = occurrences.map(
-      (occurrence) => `${occurrence.command.name}:${JSON.stringify(occurrence.input)}`,
-    );
-    if (new Set(identities).size !== identities.length) return unresolved();
+    for (const node of queue)
+      if (!invalid(node.occurrence))
+        node.occurrence.problems.push(`${label(node.occurrence)} — 지시 구조가 너무 깊음`);
+    const seen = new Set<string>();
     const ops: InstructionResult["ops"] = {};
-    for (const occurrence of occurrences)
+    for (const occurrence of occurrences) {
+      if (invalid(occurrence)) continue;
+      if (!validTree(occurrence.command.inputSchema, occurrence.input)) {
+        occurrence.problems.push(`${label(occurrence)} — 필요한 값이 빠졌거나 겹침`);
+        continue;
+      }
+      if (changesNothing(occurrence)) {
+        occurrence.problems.push(`${label(occurrence)} — 바꿀 값을 정하지 못함`);
+        continue;
+      }
+      const identity = `${occurrence.command.name}:${JSON.stringify(occurrence.input)}`;
+      if (seen.has(identity)) {
+        occurrence.problems.push(`${label(occurrence)} — 같은 지시를 두 번 읽음`);
+        continue;
+      }
+      seen.add(identity);
       (ops[occurrence.command.name] ??= []).push(occurrence.input);
-    return { ops };
+    }
+    const problems = [
+      ...routeProblems,
+      ...occurrences.flatMap((occurrence) => occurrence.problems),
+    ];
+    return problems.length > 0 ? unresolved(problems, ops) : { ops };
   } catch (error) {
     // Provider errors retain their metering and cancellation semantics at the caller.
     if (!(error instanceof UnresolvedInstruction)) throw error;
-    return unresolved();
+    return unresolved([error.message]);
   }
 }

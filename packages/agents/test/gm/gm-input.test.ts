@@ -28,6 +28,7 @@ import {
   tacticWord,
   type MatchRecord,
   awardTitle,
+  mirrorBaseOf,
   normalizeSpeaker,
 } from "@gaffer/domain";
 import {
@@ -38,6 +39,7 @@ import {
   lastScenePoint,
   sanitizeCasterText,
   sanitizeSceneText,
+  fileExhibits,
   stampMatchScene,
   noteSceneHeader,
   operationLabel,
@@ -1393,6 +1395,121 @@ describe("sanitizeSceneText", () => {
     expect(
       sanitizeSceneText(`<speak name="손흥민">감독님.\n<narration>문이 닫힌다</narration>`),
     ).toBe('<speak name="손흥민">감독님.</speak>\n<narration>문이 닫힌다</narration>');
+  });
+});
+
+/**
+ * 자료 카드 — 모델은 참조만 쓰고 코어가 장부로 채운다 (prompts.md §1 「자료 카드」).
+ * 위생이 정본의 꼴과 상한을 지키고, 턴이 닫힐 때 풀리지 않는 카드는 줄째로 걷힌다.
+ */
+describe("자료 카드", () => {
+  const MARK = '<scene date="2026-07-01" time="09:45" />';
+  const coach = (text: string) => `<speak name="스티브 홀랜드">${text}</speak>`;
+
+  it("받는 속성만 남긴 스스로 닫는 꼴로 적고, 여닫는 꼴의 본문(모델이 쓴 수치)은 버린다", () => {
+    const raw = [
+      MARK,
+      '<player_card overall="84" players=" 부카요 사카 ">종합 84</player_card>',
+      coach("보시죠."),
+    ].join("\n");
+    expect(sanitizeSceneText(raw)).toBe(
+      [MARK, '<player_card players="부카요 사카" />', coach("보시죠.")].join("\n"),
+    );
+  });
+
+  it("선수 카드의 갈래는 정본에 남고, 모르는 갈래는 기본 갈래로 읽힌다", () => {
+    const state = game();
+    const ours = state.players.find((p) => p.teamId === state.userTeamId)!;
+    const filed = fileExhibits(
+      state,
+      [
+        `<player_card players="${ours.id}" type="fitness" />`,
+        `<player_card players="${ours.id}" type="mood" />`,
+      ].join("\n"),
+    );
+    expect(filed.body).toBe(
+      [
+        `<player_card players="${ours.name}" type="fitness" />`,
+        `<player_card players="${ours.name}" />`,
+      ].join("\n"),
+    );
+    expect(filed.exhibits.map((e) => e.kind === "player" && e.view)).toEqual([
+      "fitness",
+      "overview",
+    ]);
+  });
+
+  it("대사 안의 카드는 대사를 끊고, 카드 뒤에 같은 화자로 다시 연다", () => {
+    const raw = `${MARK}${coach('후보 셋입니다.<player_card players="a, b" />워튼이 현실적입니다.')}`;
+    expect(sanitizeSceneText(raw)).toBe(
+      [
+        MARK,
+        coach("후보 셋입니다."),
+        '<player_card players="a, b" />',
+        coach("워튼이 현실적입니다."),
+      ].join("\n"),
+    );
+  });
+
+  it("같은 카드는 한 번, 한 턴에 셋까지다", () => {
+    const cards = ["a", "a", "b", "c", "d"].map((name) => `<player_card players="${name}" />`);
+    const kept = sanitizeSceneText([MARK, ...cards, coach("이상입니다.")].join("\n"));
+    expect(kept.match(/<player_card/gu)).toHaveLength(3);
+    expect(kept).not.toContain('players="d"');
+  });
+
+  it("경기 장면에는 선수 카드만 선다 — 재정·협상 카드는 걷힌다", () => {
+    expect(
+      sanitizeCasterText(
+        '<commentary>전진합니다.</commentary><finance_card /><player_card players="a" /><negotiation_card player="a" />',
+      ),
+    ).toBe('<commentary>전진합니다.</commentary>\n<player_card players="a" />');
+  });
+
+  it("풀린 카드는 이름으로 편 정본과 값을, 풀리지 않는 카드는 걷은 줄의 자리를 돌려준다", () => {
+    const state = game();
+    const ours = state.players.find((p) => p.teamId === state.userTeamId)!;
+    const body = [
+      coach("이 친구 보시죠."),
+      `<player_card players="${ours.id}" />`,
+      '<player_card players="세상에 없는 선수" />',
+      `<negotiation_card player="${ours.name}" />`,
+      "<finance_card />",
+      `<player_card players="${ours.name}" />`,
+      coach("다음 주에 다시 보죠."),
+    ].join("\n");
+    const filed = fileExhibits(state, body);
+    expect(filed.body).toBe(
+      [
+        coach("이 친구 보시죠."),
+        `<player_card players="${ours.name}" />`,
+        "<finance_card />",
+        coach("다음 주에 다시 보죠."),
+      ].join("\n"),
+    );
+    // 없는 선수 · 협상이 없는 선수 · 이름으로 편 뒤 겹친 카드 — 본문 안 1-기준 줄 번호
+    expect(filed.dropped).toEqual([3, 4, 6]);
+    expect(filed.exhibits.map((e) => e.kind)).toEqual(["player", "finance"]);
+    const [card] = filed.exhibits;
+    expect(card?.kind === "player" && card.players[0]?.knowledge).toBe("own");
+  });
+
+  it("다른 자리는 좌우 변형을 중앙 표기 하나로 접고, 주 자리의 묶음은 싣지 않는다", () => {
+    const state = game();
+    const ours = state.players.filter((p) => p.teamId === state.userTeamId);
+    const filed = fileExhibits(
+      state,
+      `<player_card players="${ours.map((p) => p.id).join(", ")}" type="ability" />`,
+    );
+    const [card] = filed.exhibits;
+    if (card?.kind !== "player") throw new Error("선수 카드가 서지 않았다");
+    for (const p of card.players) {
+      const codes = p.otherPositions.map((o) => o.position);
+      expect(new Set(codes.map(mirrorBaseOf)).size).toBe(codes.length);
+      expect(codes.map(mirrorBaseOf)).not.toContain(mirrorBaseOf(p.position));
+      expect(codes.every((code) => mirrorBaseOf(code) === code)).toBe(true);
+    }
+    expect(card.players.some((p) => p.otherPositions.length > 0)).toBe(true);
   });
 });
 

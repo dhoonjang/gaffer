@@ -1071,41 +1071,56 @@ button.pitch-slot.theirs {
   flex-direction: column;
   gap: var(--sp-2);
 }
+/**
+ * 접힌 경기 — **장면 경계의 층**이다(shared/marks.css). 면도 띠도 없이 스코어 · 상대 · 날짜를
+ * 적고 헤어라인이 꺾쇠까지 뻗는다 — 시각 표시와 같은 몸이라 대화의 마디로 읽힌다.
+ * 누를 수 있다는 것은 꺾쇠와 hover의 잉크가 말한다.
+ */
 .match-log-head {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   align-self: stretch;
-  padding: var(--sp-2) var(--sp-3);
-  background: var(--panel-2);
+  padding: var(--sp-2) 0;
+  background: none;
   border: none;
-  border-left: 2px solid var(--gold-soft);
-  border-radius: var(--r-sm);
   color: var(--text-2);
   font-size: var(--fs-md);
   text-align: left;
-  transition:
-    background var(--ease),
-    color var(--ease);
+  transition: color var(--ease);
 }
 .match-log-head:hover {
-  background: var(--pop);
   color: var(--text);
+}
+.match-log-head > svg:first-child {
+  color: var(--gold-soft);
 }
 .match-log-head b {
   color: var(--text);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-score);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: var(--lh-fig);
 }
 /* 상대와 홈·원정 — 결과 다음으로 궁금한 것 */
 .match-log-title {
-  flex: 1;
   min-width: 0;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .match-log-date {
+  color: var(--text-3);
   font-size: var(--fs-xs);
   white-space: nowrap;
+}
+.match-log-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  transition: background var(--ease);
+}
+.match-log-head:hover .match-log-rule {
+  background: var(--border);
 }
 /* 펼쳐지면 꺾쇠가 위를 본다 — 여는 것과 닫는 것이 같은 자리에서 갈린다 */
 .match-log-head svg:last-child {
@@ -1118,105 +1133,4 @@ button.pitch-slot.theirs {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-/**
- * 경고·퇴장 — 골 카드와 **같은 자리, 다른 무게.**
- *
- * 골보다 조용해야 한다(판을 뒤집은 건 아니다). 그래서 배경을 깔지 않고 왼쪽에
- * 카드 색 조각 하나만 세운다 — 축구에서 그 색이 곧 그 사건이다. 우리 선수만
- * 또렷하고 상대는 가라앉는다: **내가 손볼 자리**가 아니기 때문이다.
- */
-.booking-card {
-  --book: var(--warn);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: 4px 0;
-  padding: 4px var(--sp-3) 4px 0;
-  font-size: var(--fs-sm);
-  color: var(--dim);
-}
-.booking-card.red,
-.booking-card.second_yellow {
-  --book: var(--loss);
-}
-.booking-card.ours {
-  color: var(--text-2);
-}
-/* 카드 조각 — 실제 옐로/레드 카드의 비율(가로:세로 ≈ 2:3) */
-.booking-mark {
-  width: 9px;
-  height: 13px;
-  border-radius: var(--r-xs);
-  background: var(--book);
-  flex-shrink: 0;
-  /* 심판이 들어 올린 각도 — 정면으로 두면 그냥 색 막대로 읽힌다 */
-  transform: rotate(-8deg);
-}
-.booking-minute {
-  color: var(--book);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.booking-card.ours .booking-player {
-  color: var(--text);
-  font-weight: 600;
-}
-.booking-kind {
-  font-size: var(--fs-2xs);
-  padding: 0 8px;
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--book) 16%, transparent);
-  color: var(--book);
-}
-/* 팀 이름은 오른쪽 끝 — 카드마다 같은 자리에 있어야 세로로 훑힌다 */
-.booking-team {
-  margin-left: auto;
-  font-size: var(--fs-2xs);
-}
-
-.goal-card {
-  --goal: var(--loss);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: var(--sp-2) 0;
-  padding: 8px var(--sp-3);
-  border-radius: var(--r-sm);
-  border-left: 3px solid var(--goal);
-  background: var(--panel);
-  font-size: var(--fs-md);
-  animation: goal-in var(--dur-goal) var(--ease-panel) both;
-}
-.goal-card.ours {
-  --goal: var(--win);
-}
-.goal-ball {
-  display: inline-flex;
-  color: var(--goal);
-}
-.goal-minute {
-  color: var(--goal);
-  font-variant-numeric: tabular-nums;
-}
-.goal-scorer {
-  font-weight: 600;
-  color: var(--text);
-}
-.goal-assist {
-  color: var(--text-2);
-  font-size: var(--fs-sm);
-}
-/* 스코어는 오른쪽 끝 — 카드마다 같은 자리에 있어야 세로로 훑힌다 */
-.goal-score {
-  margin-left: auto;
-  color: var(--silver);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .goal-card {
-    animation: none;
-  }
 }

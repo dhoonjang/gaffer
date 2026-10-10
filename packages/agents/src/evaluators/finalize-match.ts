@@ -38,7 +38,7 @@ const SCORE_LABEL_DECIMALS = 2;
 
 export const FINALIZE_MATCH_RULES = `Settle every player who appeared in the football match that just ended.
 brief holds the confirmed records, minutes, position, rating anchor and room to grow; commentary is this match's commentary.
-Goals, assists, shots, saves and cards are already reflected in the anchor, so do not add them again. Adjust only for what the records do not hold: dominance, handling danger, responsibility for goals conceded, impact after a substitution.
+The anchor already holds the team result, goals, assists, the clean sheet or goals conceded, and cards, so do not add them again. Adjust for what it does not hold: shots and saves, dominance, handling danger, a player's own fault in a goal conceded, impact after a substitution.
 Weigh minutes and position, and do not judge an individual by the team result alone. Do not invent experiences or achievements that did not happen.
 The rating is ${RATING_MIN}~${RATING_MAX}, within ±${RATING_BAND} of the anchor. Score is the adjustment added to the anchor.
 Tactical adaptation is ${MATCH_FAMILIARITY_MIN}~${MATCH_FAMILIARITY_MAX}. Having played long does not by itself guarantee growth.

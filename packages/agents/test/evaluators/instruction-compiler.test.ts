@@ -228,6 +228,7 @@ describe("source-grounded instruction compiler", () => {
     };
     const model = evaluator((instructions, criteria, stage) => {
       if (stage === 1) return "n1";
+      if (!instructions.includes("$.price")) return "no";
       expect(criteria).toEqual({ unclear: expect.any(String) as unknown });
       return "unclear";
     });
@@ -340,7 +341,7 @@ describe("source-grounded instruction compiler", () => {
     ).toBeDefined();
   });
 
-  it("rejects repeated identical command instances instead of applying a financial instruction twice", async () => {
+  it("applies a repeated identical command instance once instead of applying a financial instruction twice", async () => {
     const command: InstructionCommand = {
       name: "request_board",
       description: "보드 구장 증설 요청",
@@ -357,8 +358,8 @@ describe("source-grounded instruction compiler", () => {
     const output = await interpretInstructions(
       request([command], model, { said: "보드에 구장 3만 석 증설을 요청해" }),
     );
-    expect(output.ops).toEqual({});
-    expect(output.unresolved).toBeDefined();
+    expect(output.ops).toEqual({ request_board: [{ amount: 30000 }] });
+    expect(output.unresolved).toBe("보드 구장 증설 요청 2번째 — 같은 지시를 두 번 읽음");
   });
 
   it("keeps nested array arguments scoped to the same ordered item", async () => {
@@ -474,6 +475,106 @@ describe("source-grounded instruction compiler", () => {
       expect(base.requests).toHaveLength(1);
     },
   );
+
+  it("applies the resolved command and names the split argument of the other", async () => {
+    const flagCommand: InstructionCommand = {
+      name: "set_flag",
+      description: "깃발",
+      limit: 1,
+      inputSchema: {
+        type: "object",
+        properties: { on: { type: "boolean" } },
+        required: ["on"],
+      },
+    };
+    const base = evaluator((instructions, criteria, stage) => {
+      if (stage === 1) return "n1";
+      if (instructions.includes("$.on")) return select(criteria, "explicitly true");
+      if (instructions.includes("$.playerId")) return select(criteria, "민수");
+      if (instructions.includes("$.number")) return select(criteria, "= 9");
+      return "absent";
+    });
+    const model: GameEvaluator = {
+      async evaluate(input) {
+        const result = await base.evaluate(input);
+        for (const [key, question] of Object.entries(input.questions)) {
+          const answer = result.answers[key];
+          if (question.type !== "choice" || answer?.type !== "choice") continue;
+          if (!question.instructions.includes("$.playerId")) continue;
+          const rival = Object.keys(question.criteria).find(
+            (key) => key !== answer.choice && key !== "unclear",
+          )!;
+          answer.probabilities[answer.choice] = 0.4;
+          answer.probabilities.unclear = 0.35;
+          answer.probabilities[rival] = 0.25;
+        }
+        return result;
+      },
+    };
+    const result = await interpretInstructions(request([numberCommand, flagCommand], model));
+    expect(result.ops).toEqual({ set_flag: [{ on: true }] });
+    expect(result.unresolved).toBe("등번호 지정 1번째 · playerId — 해석이 갈려 정하지 못함");
+    expect(base.requests).toHaveLength(2);
+  });
+
+  it("holds a command that names only its target so the core cannot roll back the batch", async () => {
+    const tacticCommand: InstructionCommand = {
+      name: "set_player_tactic",
+      description: "선수 자리",
+      limit: 1,
+      inputSchema: {
+        type: "object",
+        properties: {
+          playerId: { type: "string" },
+          position: { type: "string", enum: ["GK", "ST"] },
+        },
+        required: ["playerId"],
+      },
+    };
+    const model = evaluator((instructions, criteria, stage) => {
+      if (stage === 1) return "n1";
+      if (instructions.includes("$.playerId")) return select(criteria, "민수");
+      if (instructions.includes("$.number")) return select(criteria, "= 9");
+      return "absent";
+    });
+    const result = await interpretInstructions(request([numberCommand, tacticCommand], model));
+    expect(result.ops).toEqual({ set_squad_number: [{ playerId: "p1", number: 9 }] });
+    expect(result.unresolved).toBe("선수 자리 1번째 — 바꿀 값을 정하지 못함");
+  });
+
+  it("reads a request whose mass is spread over several counts as one request", async () => {
+    const base = evaluator((instructions, criteria, stage) => {
+      if (stage === 1) return "n1";
+      if (instructions.includes("$.playerId")) return select(criteria, "민수");
+      if (instructions.includes("$.number")) return select(criteria, "= 9");
+      return instructions.startsWith("Besides") ? "no" : "absent";
+    });
+    const model: GameEvaluator = {
+      async evaluate(input) {
+        const result = await base.evaluate(input);
+        const route = result.answers.q0;
+        if (base.requests.length === 1 && route?.type === "choice") {
+          route.choice = "n0";
+          route.probabilities = { ...route.probabilities, n0: 0.4, n1: 0.35, n2: 0.25 };
+        }
+        return result;
+      },
+    };
+    const result = await interpretInstructions(request([numberCommand], model));
+    expect(result).toEqual({ ops: { set_squad_number: [{ playerId: "p1", number: 9 }] } });
+  });
+
+  it("names a requested action left over by the selected commands", async () => {
+    const model = evaluator((instructions, criteria, stage) => {
+      if (stage === 1) return "n1";
+      if (instructions.includes("$.playerId")) return select(criteria, "민수");
+      if (instructions.includes("$.number")) return select(criteria, "= 9");
+      return instructions.startsWith("Besides") ? "yes" : "absent";
+    });
+    const result = await interpretInstructions(request([numberCommand], model));
+    expect(result.ops).toEqual({ set_squad_number: [{ playerId: "p1", number: 9 }] });
+    expect(result.unresolved).toBe("옮길 명령을 찾지 못한 요청이 남음");
+  });
 
   it("propagates provider failures for caller metering and cancellation", async () => {
     const failure = new Error("Provider unavailable");

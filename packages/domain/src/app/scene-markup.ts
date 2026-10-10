@@ -4,7 +4,7 @@ import { BROADCAST_SPEAKER } from "../people/persona";
  * ── 장면 커맨드 — 모델턴의 출력 문법 ──────────────────────────────────────
  *
  * 모델턴은 커맨드로만 이루어진다 (docs/agents/prompts.md §1):
- * `<scene date time place />` · `<speak name>` · `<narration>` · `<commentary>`.
+ * `<scene date time place />` · `<speak name>` · `<narration>` · `<commentary>` · 자료 카드.
  * 코어의 위생(`packages/agents` — `createSceneSieve`)과 화면의 파서가 **같은 어휘기와
  * 같은 이름**을 읽는다 — 두 벌이면 한쪽만 고쳐져 저장된 장면과 화면이 갈린다.
  *
@@ -24,9 +24,45 @@ export function isVoiceTag(name: string): name is VoiceTag {
   return (VOICE_TAGS as readonly string[]).includes(name);
 }
 
-/** 장면 커맨드인가 — 위생이 남기는 것은 이 넷뿐이다 */
+/**
+ * 자료 카드 — 스스로 닫는 참조 태그 (prompts.md §1 「자료 카드」).
+ *
+ * 속성은 참조(이름·달)뿐이고 수치는 코어가 장부에서 채운다. 태그마다 **받는 속성의
+ * 목록**이 정본의 꼴을 정한다 — 그 밖의 속성은 위생이 버린다.
+ */
+export const EXHIBIT_ATTRS = {
+  player_card: ["players", "type"],
+  negotiation_card: ["player"],
+  finance_card: ["month"],
+} as const;
+export type ExhibitTag = keyof typeof EXHIBIT_ATTRS;
+
+/**
+ * 선수 카드의 갈래 — 인물이 말하는 주제에 맞는 칸만 선다 (prompts.md §1 「자료 카드」).
+ * 첫 것이 기본이다. 부상 이력을 말하는 자리에 주급 표가 서면 장면과 어긋난다.
+ */
+export const PLAYER_CARD_TYPES = ["overview", "fitness", "stats", "contract", "ability"] as const;
+export type PlayerCardType = (typeof PLAYER_CARD_TYPES)[number];
+
+/** 속성값 → 갈래. 모르는 값은 기본 갈래다 */
+export function playerCardType(value: string | undefined): PlayerCardType {
+  const v = value?.trim();
+  return (PLAYER_CARD_TYPES as readonly string[]).includes(v ?? "")
+    ? (v as PlayerCardType)
+    : "overview";
+}
+export const EXHIBIT_TAGS = Object.keys(EXHIBIT_ATTRS) as ExhibitTag[];
+
+/** 경기 장면에도 서는 카드 — 교체 후보를 견주는 선수 카드뿐이다 (prompts.md §1) */
+export const MATCH_EXHIBIT_TAGS: readonly ExhibitTag[] = ["player_card"];
+
+export function isExhibitTag(name: string): name is ExhibitTag {
+  return (EXHIBIT_TAGS as readonly string[]).includes(name);
+}
+
+/** 장면 커맨드인가 — 위생이 남기는 것은 표식·목소리·자료 카드뿐이다 */
 export function isSceneCommand(name: string): boolean {
-  return name === SCENE_TAG || isVoiceTag(name);
+  return name === SCENE_TAG || isVoiceTag(name) || isExhibitTag(name);
 }
 
 // ── 어휘기 ──────────────────────────────────────────────────────────────
@@ -199,10 +235,21 @@ export function commentary(text: string): string {
   return `${openVoice(COMMENTARY_TAG)}${text}${closeVoice(COMMENTARY_TAG)}`;
 }
 
+/** 자료 카드의 정본 — 받는 속성만, 정해진 순서로. 빈 값은 싣지 않는다 */
+export function exhibitTag(tag: ExhibitTag, attrs: Record<string, string>): string {
+  const kept = EXHIBIT_ATTRS[tag]
+    .map((name) => [name, attrs[name]?.trim() ?? ""] as const)
+    .filter(([, value]) => value.length > 0)
+    .map(([name, value]) => ` ${name}="${escapeAttr(value)}"`);
+  return `<${tag}${kept.join("")} />`;
+}
+
 // ── 읽기 — 위생을 지난 본문 ─────────────────────────────────────────────
 
 export type SceneItem =
   | { kind: "scene"; marker: SceneMarker }
+  /** 자료 카드 — 값은 본문이 아니라 턴에 저장된다(`ChatTurn.exhibits`), 순서로 짝짓는다 */
+  | { kind: "exhibit"; tag: ExhibitTag; attrs: Record<string, string> }
   | {
       kind: "voice";
       tag: VoiceTag;
@@ -251,6 +298,10 @@ export function readSceneMarkup(text: string): SceneItem[] {
     if (token.kind === "text" || token.kind === "close") continue;
     if (token.name === SCENE_TAG) {
       items.push({ kind: "scene", marker: readSceneMarker(token.attrs) });
+      continue;
+    }
+    if (isExhibitTag(token.name)) {
+      items.push({ kind: "exhibit", tag: token.name, attrs: token.attrs });
       continue;
     }
     if (token.kind === "open" && isVoiceTag(token.name)) {

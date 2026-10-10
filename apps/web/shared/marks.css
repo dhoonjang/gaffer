@@ -1,0 +1,296 @@
+/**
+ * ══ 채팅의 표시 — 말 밖에 서는 것은 네 층이다 ══════════════════════════════
+ *
+ * **누가 만든 표시인가**가 생김새를 정한다. 층마다 몸이 하나다.
+ *
+ * 1. 장면 경계 — 시각 표시 · 접힌 경기. 면 없이 글자와 헤어라인 한 줄
+ *    (`.scene-stamp` · `.match-log-head`).
+ * 2. 세계의 사실 — 사건 · 골 · 경고. 코어가 낸 사실이라 면 없이 선으로 가른 줄 하나이고,
+ *    결은 머리 칸의 글자색이 말한다 (`.fact`).
+ * 3. 보여 준 자료 — 자료 카드. 모델이 고르고 코어가 채운 읽는 값이라 `--panel` 한 장이고,
+ *    머리줄이 무엇의 자료인지 말한다 (`.sheet`).
+ * 4. 감독이 시킨 일 — 호출 칩 · 확인 카드. 감독 말풍선의 키 워시를 나눠 든다 — 누를 수
+ *    있는 것은 이 층뿐이다 (`.tool-chip` · `.sheet[data-layer="order"]`).
+ *
+ * 색 띠(왼쪽 레일)는 어느 층에도 없다 — 종류는 머리 칸의 낱말이, 결은 그 글자색이 말한다.
+ * 띠가 다섯 종류의 카드에 다 서면 띠가 아무것도 가르지 못한다.
+ */
+
+/* ── 2. 사실 ─────────────────────────────────────────────────────────────── */
+
+/* 여러 줄이 한 덩어리 — 줄 사이는 헤어라인 하나, 덩어리의 위아래도 같은 선이다 */
+.facts {
+  display: flex;
+  flex-direction: column;
+}
+/**
+ * 머리 칸 · 문장 · 곁 칸. 머리 칸 폭이 고정이라 여러 줄의 문장이 한 세로선에서 시작한다 —
+ * 신문의 단신란처럼 눈이 왼쪽 낱말을 훑고 오른쪽 문장으로 건너간다.
+ */
+.fact {
+  --fact: var(--text-3);
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  column-gap: var(--sp-3);
+  align-items: baseline;
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  animation: goal-in var(--dur-ease) var(--ease-panel) both;
+}
+.fact + .fact {
+  border-top: 0;
+}
+.fact-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--fact);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+  white-space: nowrap;
+}
+.fact-body {
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: var(--lh-ui);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.fact-aside {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* 사건의 결 — 꼬리표 글자가 든다(낱말은 `tick-event-display.ts`) */
+.fact[data-kind="injury"] {
+  --fact: var(--loss);
+}
+.fact[data-kind="board"],
+.fact[data-kind="contract"] {
+  --fact: var(--warn);
+}
+.fact[data-kind="draw"] {
+  --fact: var(--violet);
+}
+.fact[data-kind="matchday"] {
+  --fact: var(--gold);
+}
+
+/**
+ * 골 — 사실 중 유일하게 판을 뒤집는다. 면을 깔지 않고 **위 선의 굵기와 글자의 크기**로
+ * 무게를 준다: 분은 스코어버그의 숫자, 위 선은 결의 색 2px. 넣은 골과 먹은 골은 W/L의
+ * 축이다(tokens.css 「구단 색」 충돌 규칙 1).
+ */
+.fact.goal {
+  --fact: var(--loss);
+  padding: var(--sp-3) 0;
+  border-top: 2px solid var(--fact);
+  animation-duration: var(--dur-goal);
+}
+.fact.goal.ours {
+  --fact: var(--win);
+}
+.fact.goal .fact-key {
+  font-family: var(--font-score);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: var(--ls-none);
+  line-height: var(--lh-fig);
+}
+.fact.goal .fact-body b {
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
+.fact.goal .fact-body span {
+  margin-left: var(--sp-2);
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+.fact.goal .fact-aside {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.fact.goal .fact-aside .fig {
+  margin-left: var(--sp-1);
+  color: var(--text);
+  font-family: var(--font-score);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+/* 경고·퇴장 — 골보다 조용하다. 상대의 카드는 내가 손볼 자리가 아니라 가라앉는다 */
+.fact.booking {
+  --fact: var(--warn);
+}
+.fact.booking.red,
+.fact.booking.second_yellow {
+  --fact: var(--loss);
+}
+.fact.booking .fact-key {
+  font-family: var(--font-score);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  letter-spacing: var(--ls-none);
+}
+.fact.booking:not(.ours) .fact-body {
+  color: var(--text-3);
+}
+.fact.booking .fact-body span {
+  margin-left: var(--sp-2);
+  color: var(--fact);
+  font-size: var(--fs-xs);
+}
+/* 카드 조각 — 실제 카드의 비율(2:3)과 심판이 들어 올린 각도 */
+.booking-mark {
+  width: 8px;
+  height: 12px;
+  border-radius: var(--r-xs);
+  background: var(--fact);
+  transform: rotate(-8deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fact,
+  .sheet {
+    animation: none;
+  }
+}
+
+/* ── 3·4. 한 장 ──────────────────────────────────────────────────────────── */
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: var(--sp-1) 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  background: var(--panel);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-md);
+  line-height: var(--lh-table);
+  animation: goal-in var(--dur-ease) var(--ease-panel) both;
+}
+/* 감독이 시킨 일 — 감독 말풍선과 같은 바탕이라 "내가 한 일"로 읽힌다 */
+.sheet[data-layer="order"] {
+  background: var(--key-wash);
+}
+/**
+ * 머리줄 — **무엇의 자료인가.** 종류(굵게) · 갈래 · 오른쪽 끝에 상태. 아래 헤어라인이
+ * 머리와 본문을 가른다. 띠의 색 대신 낱말이 종류를 말한다.
+ */
+.sheet-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+}
+.sheet-kicker b {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.sheet-status {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.sheet-status[data-tone="live"] {
+  color: var(--gold);
+}
+.sheet-status[data-tone="done"] {
+  color: var(--win);
+}
+/* 한 장의 주어 — 선수 이름 · 협상 상대. 이름이 곧 그 면의 주어다(「서체」 굵기).
+   이름 손잡이(`.player-name`)는 둘레의 글자를 물려받으므로 자리를 한 단계 좁혀 이긴다 */
+.sheet-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+}
+.sheet-title .sheet-name {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+.sheet-sub {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.sheet.pending {
+  min-height: 72px;
+}
+
+/* 조건 한 갈래 — 제목 줄, 이름표:값 두 칸, 당사자 동의 */
+.sheet-terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.sheet-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.sheet-section-head b {
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.sheet-dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sp-1) var(--sp-4);
+  margin: 0;
+}
+.sheet-dl dt {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.sheet-dl dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* 당사자 동의 — 알약을 줄 세우지 않고 낱말로. 동의한 쪽만 승의 초록이 든다 */
+.sheet-parties {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.sheet-parties b {
+  color: var(--win);
+  font-weight: 500;
+}
+/* 한 장의 밑줄 — 진행 단계 · 여유 같은 맺음말. 위 헤어라인이 본문과 가른다 */
+.sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.sheet-foot em {
+  margin-right: var(--sp-1);
+  color: var(--text-3);
+  font-style: normal;
+}
+.sheet-foot [data-short="true"] {
+  color: var(--loss);
+}
