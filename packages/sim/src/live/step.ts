@@ -61,6 +61,7 @@ import { teamParamsOf, type TeamParams } from "./params";
 import {
   accelerationFactor,
   advanceFlight,
+  loftErrorOf,
   markingPressureOf,
   maxSpeedOf,
   movePlayer,
@@ -2270,8 +2271,12 @@ function pass(
   const pressure = state.players.filter(
     (q) => q.side !== owner.side && distance(q, owner) < PRESSURE_RADIUS,
   ).length;
-  const sloppiness =
-    passSloppiness(passing) * (1 + pressure * PASS_PRESSURE_ERROR) * (lofted ? PASS_LOFT_ERROR : 1);
+  // 뜬 공의 배수는 테크닉이 줄인다 — 골키퍼의 롱 배급은 킥
+  const loft = lofted
+    ? PASS_LOFT_ERROR *
+      loftErrorOf(attr(ctx, owner, isKeeper(ctx, owner) ? "kicking" : "technique"))
+    : 1;
+  const sloppiness = passSloppiness(passing) * (1 + pressure * PASS_PRESSURE_ERROR) * loft;
   const along =
     dist > 0.01
       ? { x: (target.x - owner.x) / dist, y: (target.y - owner.y) / dist }

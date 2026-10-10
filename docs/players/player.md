@@ -67,7 +67,7 @@ FC 공식 레이팅의 세부 능력치에서 온다. 자리에서의 의미는 
 |      | `firstTouch`     | 퍼스트 터치 | 받는 순간의 공 처리(튀어 나감)와 다음 동작까지의 지연                       | Ball Control                                           | 관측형     |
 |      | `passing`        | 패스        | 패스 오차의 폭, 걷어내기의 거리                                             | Short Passing 0.7 · Long Passing 0.3                   | 관측형     |
 |      | `crossing`       | 크로스      | 크로스·코너킥의 오차와 속도, 크로스를 고를 확률, 코너 키커                  | Crossing 0.85 · Curve 0.15                             | 관측형     |
-|      | `technique`      | 테크닉      | 패스에 싣는 속도                                                            | Curve·Volleys·Long Passing·Ball Control + 개인기       | **분석형** |
+|      | `technique`      | 테크닉      | 패스에 싣는 속도, 뜬 패스(긴 전환·스루)의 오차                              | Curve·Volleys·Long Passing·Ball Control + 개인기       | **분석형** |
 |      | `tackling`       | 태클        | 태클 경합(예측력이 타이밍으로 거든다), 가로채기 반경의 일부, 파울 확률      | Standing 0.6 · Sliding 0.4                             | 관측형     |
 |      | `marking`        | 마킹        | 공을 받는 상대에게 붙었을 때 첫 터치를 흔드는 압박의 무게                   | Def. Awareness                                         | **분석형** |
 |      | `freeKicks`      | 프리킥      | 직접 프리킥 슛, 프리킥 배달, 프리킥 키커                                    | FK Accuracy 0.8 · Curve 0.2                            | **분석형** |

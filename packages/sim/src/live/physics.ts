@@ -7,6 +7,9 @@ import {
   ACCELERATION_PER_POINT,
   ACCELERATION_PIVOT,
   ACCELERATION_RANGE,
+  LOFT_SKILL_PER_POINT,
+  LOFT_SKILL_PIVOT,
+  LOFT_SKILL_RANGE,
   MARKING_PIVOT,
   MARKING_PRESSURE_PER_POINT,
   MARKING_PRESSURE_RANGE,
@@ -61,6 +64,12 @@ interface MoveResult {
  * `urgency`는 국면이 행동의 급함을 갈아 끼울 때만 온다 — 되돌아 뛰기·오버래핑처럼 같은
  * 행동이 그 순간에만 서두르는 경우다. 오면 걸음 상한(`AMBLE_*`)도 걸지 않는다.
  */
+/** 뜬 패스의 오차에 곱하는 배율 — 테크닉(골키퍼는 킥)이 리그 평균이면 1 (live-match.md §5.3) */
+export function loftErrorOf(skill: number): number {
+  const [low, high] = LOFT_SKILL_RANGE;
+  return clamp(1 - (skill - LOFT_SKILL_PIVOT) * LOFT_SKILL_PER_POINT, low, high);
+}
+
 /** 받는 순간 붙은 상대 한 명의 압박 무게 — 마킹이 리그 평균이면 1 (live-match.md §5.3) */
 export function markingPressureOf(marking: number): number {
   const [low, high] = MARKING_PRESSURE_RANGE;

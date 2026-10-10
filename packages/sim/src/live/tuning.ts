@@ -195,8 +195,17 @@ export const PASS_SKILL_HALVING = 15;
 /** 3.5m 안의 상대 하나가 오차에 더하는 몫 */
 export const PASS_PRESSURE_ERROR = 0.45;
 
-/** 뜬 패스의 오차 배수 */
+/**
+ * 뜬 패스의 오차 배수 — 차는 선수의 테크닉(골키퍼는 킥)이 리그 평균(`LOFT_SKILL_PIVOT`)일 때의
+ * 값이다. 1점마다 `LOFT_SKILL_PER_POINT`씩 줄고 `LOFT_SKILL_RANGE` 안에 선다 (live-match.md §5.3)
+ */
 export const PASS_LOFT_ERROR = 1.7;
+
+export const LOFT_SKILL_PIVOT = 55;
+
+export const LOFT_SKILL_PER_POINT = 0.012;
+
+export const LOFT_SKILL_RANGE = [0.7, 1.3] as const;
 
 /** 패스 속도 (m/s) — 짧게 12, 길게 22 */
 export const PASS_SPEED_MIN = 12;

@@ -1,8 +1,10 @@
 import { isOffsidePosition } from "../src/live/step";
-import { accelerationFactor, markingPressureOf } from "../src/live/physics";
+import { accelerationFactor, loftErrorOf, markingPressureOf } from "../src/live/physics";
 import {
   ACCELERATION_PIVOT,
   ACCELERATION_RANGE,
+  LOFT_SKILL_PIVOT,
+  LOFT_SKILL_RANGE,
   MARKING_PIVOT,
   MARKING_PRESSURE_RANGE,
 } from "../src/live/tuning";
@@ -466,5 +468,13 @@ describe("가속력과 마킹의 통로 (live-match.md §5.3)", () => {
       expect(of(0)).toBeGreaterThanOrEqual(low);
       expect(of(99)).toBeLessThanOrEqual(high);
     }
+  });
+
+  it("뜬 패스의 오차는 테크닉이 리그 평균이면 그대로고, 좋을수록 줄며, 범위 밖으로 나가지 않는다", () => {
+    const [low, high] = LOFT_SKILL_RANGE;
+    expect(loftErrorOf(LOFT_SKILL_PIVOT)).toBe(1);
+    expect(loftErrorOf(LOFT_SKILL_PIVOT + 10)).toBeLessThan(1);
+    expect(loftErrorOf(99)).toBeGreaterThanOrEqual(low);
+    expect(loftErrorOf(0)).toBeLessThanOrEqual(high);
   });
 });
