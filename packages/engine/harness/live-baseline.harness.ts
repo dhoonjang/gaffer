@@ -210,6 +210,7 @@ function slopeError(xs: number[], ys: number[], b: number): number {
 describe("실시간 경기 기준판", () => {
   const matches: MatchSample[] = [];
   const goalSide: number[] = [];
+  const crossClaims = { open: { intoBox: 0, stopped: 0 }, setPiece: { intoBox: 0, stopped: 0 } };
   const fullBackSpans: number[] = [];
   const fullBackReach: number[] = [];
   const fullBackRuns: number[] = [];
@@ -246,6 +247,10 @@ describe("실시간 경기 기준판", () => {
         matches.push(sample);
 
         goalSide.push(...probe.goalSide);
+        for (const kind of ["open", "setPiece"] as const) {
+          crossClaims[kind].intoBox += probe.crossClaims[kind].intoBox;
+          crossClaims[kind].stopped += probe.crossClaims[kind].stopped;
+        }
         // 30분 넘게 뛴 풀백만 — 교체로 들어온 몇 분은 범위를 재지 못한다
         for (const [id, depths] of probe.fullBackDepths) {
           if (depths.length < 30 * 60) continue;
@@ -371,6 +376,11 @@ describe("실시간 경기 기준판", () => {
       "볼 인플레이 몫": mean(matches.map((m) => m.inPlay)),
       "슈팅 순간 골 쪽 수비 수": mean(goalSide),
       "슈팅 순간 골 쪽 수비 수 sd": sd(goalSide),
+      "박스 안 오픈 플레이 크로스": crossClaims.open.intoBox / Math.max(1, matches.length * 2),
+      "골키퍼 크로스 차단 — 오픈 플레이":
+        crossClaims.open.stopped / Math.max(1, crossClaims.open.intoBox),
+      "골키퍼 크로스 차단 — 코너·프리킥":
+        crossClaims.setPiece.stopped / Math.max(1, crossClaims.setPiece.intoBox),
       "풀백 깊이 폭 (p10~p90, m)": mean(fullBackSpans),
       "풀백 깊이 폭 sd (m)": sd(fullBackSpans),
       "풀백 앞 끝 (p90 깊이, m)": mean(fullBackReach),

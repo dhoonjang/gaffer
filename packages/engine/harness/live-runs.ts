@@ -17,6 +17,7 @@ import {
 import {
   HEADER_SHOT_HEIGHT,
   depthOf,
+  inOwnBox,
   playLiveToEnd,
   possessionOf,
   sideStatLine,
@@ -280,6 +281,11 @@ export interface ShapeProbe {
    * 순서로 짝지어진다.
    */
   shots: Array<{ header: boolean; distance: number; position: string }>;
+  /**
+   * 박스 안에 떨어진 크로스 — 오픈 플레이와 세트피스(코너·프리킥을 차는 그 공)마다 그 수와
+   * 막는 쪽 골키퍼가 잡은 수 (live-match.md §5.6). 크로스가 끝난 틱에 공을 쥔 말로 가른다
+   */
+  crossClaims: Record<"open" | "setPiece", { intoBox: number; stopped: number }>;
 }
 
 export function shapeProbe(): ShapeProbe {
@@ -289,7 +295,13 @@ export function shapeProbe(): ShapeProbe {
     fullBackDepths: new Map(),
     fullBackRuns: new Map(),
     shots: [],
+    crossClaims: { open: { intoBox: 0, stopped: 0 }, setPiece: { intoBox: 0, stopped: 0 } },
   };
+  let cross: { key: string; keeper: string; kind: "open" | "setPiece" } | null = null;
+  /** 막 끝난 재시작 — 그 뒤 첫 비행이 코너·프리킥의 배달이다 */
+  let restartKind: string | null = null;
+  let delivery = false;
+  let anyFlight = "";
   let lastFlight = "";
   let lastShot: Record<MatchSide, number> | null = null;
   const running = new Set<string>();
@@ -325,6 +337,28 @@ export function shapeProbe(): ShapeProbe {
       });
     }
     lastFlight = key;
+    if (state.restart) restartKind = state.restart.kind;
+    else if (restartKind) {
+      delivery = restartKind === "corner" || restartKind === "free_kick";
+      restartKind = null;
+    }
+    const flightKey = flight ? `${flight.kind}:${flight.from}:${flight.to.x}:${flight.to.y}` : "";
+    const fresh = flight !== null && flightKey !== anyFlight;
+    anyFlight = flightKey;
+    if (cross && flightKey !== cross.key) {
+      probe.crossClaims[cross.kind].intoBox += 1;
+      if (state.ball.owner === cross.keeper) probe.crossClaims[cross.kind].stopped += 1;
+      cross = null;
+    }
+    if (fresh && flight.kind === "cross" && inOwnBox(flight.to, otherSide(flight.side))) {
+      const slots = flight.side === "home" ? input.away.slots : input.home.slots;
+      cross = {
+        key: flightKey,
+        keeper: slots.find((s) => weightSlotOf(s.position) === "GK")?.player.id ?? "",
+        kind: delivery ? "setPiece" : "open",
+      };
+    }
+    if (fresh) delivery = false;
     for (const p of state.players) {
       const run = p.action === "run" && p.side === state.possession;
       if (run && !running.has(p.id) && slotOf(p.id) === "FB") {
