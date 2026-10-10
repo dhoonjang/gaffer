@@ -760,9 +760,9 @@ export const SETTLE: Partial<Record<LiveAction, number>> = {
  * 움직일 때마다 자리를 고치는 걸음이라 팀 총 거리(실측 104~122km)의 몸통이다. 급한 행동
  * (압박·침투·되돌아가기)은 이 값을 쓰지 않는다
  */
-export const AMBLE_SPEED = 0.8;
+export const AMBLE_SPEED = 0.7;
 
-export const AMBLE_PER_METRE = 0.25;
+export const AMBLE_PER_METRE = 0.2;
 
 /** 순간 여력 — 고속 주행이 태우고 걷는 동안 찬다 (초당) */
 export const FUEL_BURN_SPRINT = 0.11;
