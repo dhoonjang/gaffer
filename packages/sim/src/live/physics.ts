@@ -7,6 +7,9 @@ import {
   ACCELERATION_PER_POINT,
   ACCELERATION_PIVOT,
   ACCELERATION_RANGE,
+  KEEPER_AERIAL_PIVOT,
+  KEEPER_REACH_HEIGHT,
+  KEEPER_REACH_PER_POINT,
   LOFT_SKILL_PER_POINT,
   LOFT_SKILL_PIVOT,
   LOFT_SKILL_RANGE,
@@ -171,7 +174,13 @@ export function reachOf(player: Player, keeperInBox: boolean): number {
   return keeperInBox ? 1.1 + player.attributes.agility / 90 : 0.85;
 }
 
-/** 이 말이 지금 다룰 수 있는 공의 높이 (m) — 점프력이 키를 담는다 */
+/**
+ * 이 말이 지금 다룰 수 있는 공의 높이 (m) — 점프력이 키를 담는다. 박스 안 골키퍼는 손이 닿는
+ * 높이라 공중볼 처리가 정한다
+ */
 export function reachHeightOf(player: Player, keeperInBox: boolean): number {
-  return keeperInBox ? 2.9 : 1.2 + player.attributes.jumpingReach / 80;
+  return keeperInBox
+    ? KEEPER_REACH_HEIGHT +
+        (player.attributes.aerialReach - KEEPER_AERIAL_PIVOT) * KEEPER_REACH_PER_POINT
+    : 1.2 + player.attributes.jumpingReach / 80;
 }

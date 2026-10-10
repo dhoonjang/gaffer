@@ -691,6 +691,16 @@ export const ACCELERATION_PER_POINT = 0.012;
 export const ACCELERATION_RANGE = [0.6, 1.4] as const;
 
 /**
+ * 박스 안 골키퍼의 손이 닿는 높이 (m) — 공중볼 처리가 리그 평균의 골키퍼(`KEEPER_AERIAL_PIVOT`)일
+ * 때의 값이고 1점마다 `KEEPER_REACH_PER_POINT`씩 다르다 (live-match.md §5.6)
+ */
+export const KEEPER_REACH_HEIGHT = 2.9;
+
+export const KEEPER_AERIAL_PIVOT = 60;
+
+export const KEEPER_REACH_PER_POINT = 0.01;
+
+/**
  * 받는 순간 붙은 상대 한 명이 얹는 압박의 무게 — 마킹이 리그 평균(`MARKING_PIVOT`)이면 1이고
  * 1점마다 `MARKING_PRESSURE_PER_POINT`씩, `MARKING_PRESSURE_RANGE` 안에 선다 (live-match.md §5.3)
  */
