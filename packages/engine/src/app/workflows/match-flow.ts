@@ -204,7 +204,7 @@ export function startMatch(state: GameState): FlowResult {
   const note = lineup.replaced.length > 0 ? ` (자동 대체: ${lineup.replaced.join(", ")})` : "";
   /**
    * 경기 명단의 주장·부주장을 우선하고, 둘 다 없으면 명단 전체에서
-   * 리더십·생일·id 순으로 완장을 배정한다. 지정 주장과 다를 때만 결과에 알린다.
+   * 나이(생일)·id 순으로 완장을 배정한다. 지정 주장과 다를 때만 결과에 알린다.
    */
   const squadIds = new Set([...lineup.onPitch, ...lineup.bench]);
   const wornBy = matchCaptainOf(state, state.userTeamId, squadIds);

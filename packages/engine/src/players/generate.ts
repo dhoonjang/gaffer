@@ -2,7 +2,7 @@ import type { GamePlayer, PositionGroup } from "@gaffer/domain";
 import { bestOverall, freshPlayerState } from "@gaffer/domain";
 import { claimSyntheticName, syntheticNamePoolOf } from "../core/catalog/names";
 import { countryOfTeam, TIER_BASE } from "../core/catalog/team-catalog";
-import { deriveAxes } from "./catalog/attributes";
+import { SYNTHETIC_BASE_LIFT, synthesizeAxes } from "./catalog/attributes";
 import {
   deriveHomegrownCountry,
   deriveNationality,
@@ -22,15 +22,6 @@ import { seasonYear } from "../core/dates";
  */
 
 const clamp99 = (x: number) => Math.max(1, Math.min(99, Math.round(x)));
-
-/**
- * 기준선에서 축이 흩어지는 폭 — 자리에 맞는 축은 위로(`strong`), 무관한 축은
- * 아래로(`weak`) 치우친다. 폭이 좁으면 합성 선수가 전부 같은 모양이 된다.
- */
-const SPREAD = { ordinary: 6, strong: 8, weakMin: -18, weakMax: -8 } as const;
-
-/** 필드 플레이어의 골키핑 — 있으나 마나 한 값이지만 0은 아니다 */
-const OUTFIELD_GK = { from: 15, span: 20 } as const;
 
 /** 유스가 합류하는 나이 */
 const YOUTH_AGE = { min: 17, max: 19 } as const;
@@ -65,13 +56,6 @@ const SPREAD_BOUND = Math.sqrt(6);
 const YOUTH_CEILING_TAIL = { share: 0.02, span: 8 } as const;
 
 /**
- * `syntheticAxes`가 기준선 위에 얹는 몫 — 자리에 맞는 축이 위로만 치우치므로
- * (`strong`) 종합이 기준선보다 이만큼 높게 나온다. **지금 실력을 겨냥하려면 그만큼
- * 되민다** — 안 되밀면 인테이크가 노린 자리보다 통째로 이만큼 위에 선다.
- */
-const AXES_OVERALL_LIFT = 1.5;
-
-/**
  * 천장이 체급 기준선에서 벗어나는 폭 — 흩어짐 + 드문 위꼬리.
  *
  * ⚠️ **난수를 언제나 네 번 뽑는다.** 꼬리에 걸린 후보만 한 번 더 뽑으면 그 뒤의
@@ -94,63 +78,6 @@ const GROUP_POSITION: Record<PositionGroup, string[]> = {
   MF: ["DM", "CM", "AM", "RCM"],
   FW: ["ST", "RW", "LW", "CF"],
 };
-
-/**
- * 합성 선수의 시드 6축 + 골키핑 — 자리에 맞는 축은 위로(`strong`), 무관한 축은
- * 아래로(`weak`) 치우친다.
- *
- * ⚠️ **난수를 뽑는 순서가 곧 그 선수다.** 유스 콜업과 승격 보강이 이 함수 하나를
- * 쓰는 이유이고, 순서를 바꾸면 같은 시드에서 다른 사람이 나온다.
- */
-function syntheticAxes(rng: () => number, group: PositionGroup, base: number) {
-  const v = (d = SPREAD.ordinary) => clamp99(base + randInt(rng, -d, d));
-  const strong = () => clamp99(base + randInt(rng, 0, SPREAD.strong));
-  const weak = () => clamp99(base + randInt(rng, SPREAD.weakMin, SPREAD.weakMax));
-  const outfieldGk = () => clamp99(OUTFIELD_GK.from + randInt(rng, 0, OUTFIELD_GK.span));
-
-  if (group === "GK") {
-    return {
-      pace: weak(),
-      shooting: weak(),
-      passing: v(),
-      dribbling: weak(),
-      defending: v(),
-      physical: v(),
-      goalkeeping: strong(),
-    };
-  }
-  if (group === "DF") {
-    return {
-      pace: v(),
-      shooting: weak(),
-      passing: v(),
-      dribbling: v(),
-      defending: strong(),
-      physical: strong(),
-      goalkeeping: outfieldGk(),
-    };
-  }
-  if (group === "MF") {
-    return {
-      pace: v(),
-      shooting: v(),
-      passing: strong(),
-      dribbling: v(),
-      defending: v(),
-      physical: v(),
-      goalkeeping: outfieldGk(),
-    };
-  }
-  return {
-    pace: strong(),
-    shooting: strong(),
-    passing: v(),
-    dribbling: strong(),
-    defending: weak(),
-    physical: v(),
-    goalkeeping: outfieldGk(),
-  };
-}
 
 export function generateYouthPlayer(
   seed: number,
@@ -198,30 +125,28 @@ export function generateYouthPlayer(
    * 들어가야 세계마다 다른 사람이 난다.
    */
   const gap = sampleGapFor(age, `${seed}:${channel}`);
-  const base = ceiling - gap - AXES_OVERALL_LIFT;
 
   const { ko: nameKo, en: nameEn } = claimSyntheticName(
     rng,
     syntheticNamePoolOf(countryOfTeam(teamId)),
     takenNames,
   );
-  const attrs = syntheticAxes(rng, group, base);
   const nationality = deriveNationality(teamId, undefined);
 
   const month = randInt(rng, 1, 12);
   const day = randInt(rng, 1, 28);
   const birthdate = `${refYear - age}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  // 시드 6축 → 16축 (실선수 카탈로그와 같은 파생 공식)
-  const axes = deriveAxes(
-    `${nameEn}-${slugifyName(teamId)}-${season}-${index}`,
-    position,
-    attrs,
-    age,
-  );
   // 카탈로그·어드민과 **같은 함수**로 종합을 낸다 — 보유 자리 목록이 인자다 (player.md §4)
   const positions = derivePositions(
     `${nameEn}-${slugifyName(teamId)}-${season}-${index}`,
     position,
+  );
+  // 지금 실력은 천장에서 여지만큼 내려온 자리다 — 그 종합에서 37축이 선다
+  const axes = synthesizeAxes(
+    `${nameEn}-${slugifyName(teamId)}-${season}-${index}`,
+    position,
+    positions,
+    ceiling - gap,
   );
   const overall = bestOverall(axes, positions);
 
@@ -291,16 +216,14 @@ export function generatePromotionSigning(
     syntheticNamePoolOf(countryOfTeam(teamId)),
     takenNames,
   );
-  const attrs = syntheticAxes(rng, group, base);
-
   const age = randInt(rng, SIGNING_AGE.min, SIGNING_AGE.max);
   const month = randInt(rng, 1, 12);
   const day = randInt(rng, 1, 28);
   const birthdate = `${refYear - age}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   // 파생 키는 유스와 같은 모양이다 — 같은 이름·팀·시즌·번호면 언제나 같은 사람이다
   const key = `${nameEn}-${slugifyName(teamId)}-${season}-${index}`;
-  const axes = deriveAxes(key, position, attrs, age);
   const positions = derivePositions(key, position);
+  const axes = synthesizeAxes(key, position, positions, base + SYNTHETIC_BASE_LIFT);
   const overall = bestOverall(axes, positions);
   // 홈그로운은 세계와 같은 비율로 굴린다 — 등록 명단의 홈그로운 셈이 갈리지 않게
   const homegrownCountry = deriveHomegrownCountry({ nameEn, birthdate }, teamId, undefined);

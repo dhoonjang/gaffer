@@ -6,7 +6,7 @@ import type {
   TacticsSpec,
   LiveSlot,
 } from "@gaffer/domain";
-import { ATTRIBUTE_AXES, DEFAULT_TACTICS } from "@gaffer/domain";
+import { ATTRIBUTE_AXES, AXIS_GROUPS, DEFAULT_TACTICS } from "@gaffer/domain";
 import {
   createLedger,
   createLiveMatch,
@@ -15,7 +15,7 @@ import {
   type LiveSetup,
 } from "@gaffer/sim";
 
-/** 테스트용 선수 — 16축 전부 보유, positions[], 부상은 상태에 없음 */
+/** 테스트용 선수 — 37축 전부 보유, positions[], 부상은 상태에 없음 */
 export function makePlayer(
   id: string,
   teamId: string,
@@ -34,9 +34,11 @@ export function makePlayer(
     birthdate: "2000-01-01",
     positions: [{ position, proficiency: 90, isNatural: true }],
     attributes: {
-      // 16축 전부를 base로 채우고, GK만 goalkeeping을 따로 준다
+      // 37축 전부를 base로 채우고, GK 축만 골키퍼가 아니면 낮게 준다
       ...(Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, base])) as AxisValues),
-      goalkeeping: group === "GK" ? base : 22,
+      ...(Object.fromEntries(
+        AXIS_GROUPS.goalkeeping.map((a) => [a, group === "GK" ? base : 22]),
+      ) as Partial<AxisValues>),
       potential: Math.min(99, base + 5),
       ...overrides,
     },

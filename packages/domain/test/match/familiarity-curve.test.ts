@@ -182,8 +182,8 @@ const attrsOf = (over: Partial<AxisValues> = {}): AxisValues => ({
   ...over,
 });
 
-/** 롱볼이 자기 축구인 선수 — 킥·제공권은 최고, 연결·침착은 바닥 */
-const longBaller = attrsOf({ kicking: 99, aerial: 99, passing: 1, composure: 1 });
+/** 롱볼이 자기 축구인 선수 — 긴 킥·제공권은 최고, 연결·침착은 바닥 */
+const longBaller = attrsOf({ technique: 99, jumpingReach: 99, passing: 1, composure: 1 });
 
 describe("전술 변화의 방향 (tacticsAffinityShift)", () => {
   it("왕복은 정확히 제자리다 — 오간 것만으로는 한 톨도 안 남는다", () => {
@@ -218,7 +218,7 @@ describe("전술 변화의 방향 (tacticsAffinityShift)", () => {
     // 쏠림이 최대인 선수에게 한 칸은 딱 그 축의 무게(= 전술 거리)만큼이다
     expect(tacticsAffinityShift(longBaller, A, step)).toBeCloseTo(tacticsDistance(A, step), 10);
     // 능력 차를 더 벌려도 같은 값이다 — 클램프가 물린다
-    const extreme = attrsOf({ kicking: 99, aerial: 99, passing: 0, composure: 0 });
+    const extreme = attrsOf({ technique: 99, jumpingReach: 99, passing: 0, composure: 0 });
     expect(tacticsAffinityShift(extreme, A, step)).toBeCloseTo(tacticsDistance(A, step), 10);
     // 반대쪽으로 가면 부호만 뒤집힌다
     expect(tacticsAffinityShift(longBaller, A, { ...A, passStyle: 2 })).toBeCloseTo(

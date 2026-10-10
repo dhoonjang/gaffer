@@ -22,7 +22,13 @@ import {
   PERSONAL_TRAINING_AIM,
   monthlyGrowthMultiplier,
 } from "@gaffer/engine";
-import { isUnder21, ATTRIBUTE_AXES, isReserveMatch, type AttributeAxis } from "@gaffer/domain";
+import {
+  isUnder21,
+  ATTRIBUTE_AXES,
+  AXIS_GROUPS,
+  isReserveMatch,
+  type AttributeAxis,
+} from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
 import { createTestGame, advanceAndPlay } from "../helpers";
 
@@ -560,26 +566,29 @@ describe("여름 휴가", () => {
  * 화면에 드러나지 않는 공식이라 못 박는다.
  */
 describe("개인 훈련 축 배율", () => {
-  const FIELD_AXES: readonly AttributeAxis[] = ATTRIBUTE_AXES.filter((a) => a !== "goalkeeping");
+  const KEEPER_AXES: readonly AttributeAxis[] = AXIS_GROUPS.goalkeeping;
+  const FIELD_AXES: readonly AttributeAxis[] = ATTRIBUTE_AXES.filter(
+    (a) => !KEEPER_AXES.includes(a),
+  );
 
-  it("개인 축이 필드 축이면 필드 15축 배율 합이 15이고 goalkeeping은 그대로다", () => {
+  it("개인 축이 필드 축이면 필드 30축 배율 합이 30이고 GK 축은 그대로다", () => {
     for (const personal of FIELD_AXES) {
       const sum = FIELD_AXES.reduce(
         (acc, axis) => acc + monthlyGrowthMultiplier(axis, personal),
         0,
       );
       expect(sum, personal).toBeCloseTo(FIELD_AXES.length, 10);
-      expect(monthlyGrowthMultiplier("goalkeeping", personal)).toBe(1);
+      for (const keeper of KEEPER_AXES) expect(monthlyGrowthMultiplier(keeper, personal)).toBe(1);
     }
   });
 
-  it("개인 축이 goalkeeping이면 필드에서 걷어 16축 합이 16이다", () => {
+  it("개인 축이 GK 축이면 필드에서 걷어 37축 합이 37이다", () => {
     const total = ATTRIBUTE_AXES.reduce(
-      (acc, axis) => acc + monthlyGrowthMultiplier(axis, "goalkeeping"),
+      (acc, axis) => acc + monthlyGrowthMultiplier(axis, "reflexes"),
       0,
     );
     expect(total).toBeCloseTo(ATTRIBUTE_AXES.length, 10);
-    expect(monthlyGrowthMultiplier("goalkeeping", "goalkeeping")).toBe(PERSONAL_TRAINING_AIM);
+    expect(monthlyGrowthMultiplier("reflexes", "reflexes")).toBe(PERSONAL_TRAINING_AIM);
   });
 
   it("겨냥한 축은 AIM배이고 나머지 필드 축은 눌리며, 겨냥이 없으면 전 축이 1이다", () => {

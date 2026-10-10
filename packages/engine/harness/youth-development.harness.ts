@@ -1,6 +1,7 @@
 import {
   playerOverall,
   ATTRIBUTE_AXES,
+  AXIS_GROUPS,
   type AxisValues,
   ageOf,
   isReserveMatch,
@@ -58,7 +59,8 @@ describe("한 시즌의 유스 육성", () => {
       aimed = picks(3000, { personal: "finishing" });
     const sum = (counts: typeof baseline, axes: readonly (typeof ATTRIBUTE_AXES)[number][]) =>
       axes.reduce((n, a) => n + counts.get(a)!, 0);
-    const restAxes = ATTRIBUTE_AXES.filter((a) => a !== "finishing" && a !== "goalkeeping");
+    const keeperAxes: readonly string[] = AXIS_GROUPS.goalkeeping;
+    const restAxes = ATTRIBUTE_AXES.filter((a) => a !== "finishing" && !keeperAxes.includes(a));
     const menuCounts = ATTRIBUTE_AXES.map(
       (a) => state.trainingSessions.filter((t) => t.focus.includes(a)).length,
     );

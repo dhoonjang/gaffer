@@ -701,7 +701,7 @@
   flex: 1;
   display: grid;
   /* 열 폭을 묶어야 값이 제 라벨 옆에 남는다 — 1fr로 늘리면 옆 축 라벨에 붙어 읽힌다 */
-  grid-template-columns: repeat(5, minmax(0, 98px));
+  grid-template-columns: repeat(5, minmax(0, 112px));
   justify-content: start;
   gap: 0 16px;
 }

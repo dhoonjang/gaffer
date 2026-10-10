@@ -99,7 +99,7 @@ interface SetPieceTakerView {
   designated: string | null;
   /**
    * 지금 선발로 치면 **실제로 차는 사람** — 지정이 없거나 그가 선발 밖이면 코어의
-   * 기본값(코너·프리킥은 킥력 최고, 페널티는 `penaltySkill` 최고)이다. 선발이 비면
+   * 기본값(코너는 크로스, 프리킥은 프리킥, 페널티는 `penaltySkill` 최고)이다. 선발이 비면
    * `null`.
    *
    * 경기 중에는 **지금 그라운드에 선 자리에서 같은 규칙으로 고른 값**이다 — 교체로
@@ -423,7 +423,7 @@ export function recentRatingsOf(state: GameState, playerId: string, limit = 5): 
  * 죽은 공 키커 셋 — **지정과 지금 실제로 설 사람** (`SetPieceTakerView`).
  *
  * 기본값을 내는 것은 코어의 함수 하나다(`setPieceTakersOf` — 경기가 부르는 바로
- * 그것). 여기서 「킥력 최고」를 다시 재면 명단이 예고한 키커와 90분이 세우는 키커가
+ * 그것). 여기서 「크로스 최고」를 다시 재면 명단이 예고한 키커와 90분이 세우는 키커가
  * 갈리고, 그때 감독이 믿는 것은 화면이지 판정이 아니다.
  *
  * 경기 중이면 `live`가 지금 그라운드에서 고른 값이라 그것이 이긴다 (match.md §8).

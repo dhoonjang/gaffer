@@ -181,9 +181,9 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
     expect(twoClubs).toEqual([]);
   });
 
-  it("전 선수가 goalkeeping을 갖는다 — 예외 분기 없음", () => {
+  it("전 선수가 GK 축을 갖는다 — 예외 분기 없음", () => {
     for (const e of catalog) {
-      expect(e.goalkeeping).toBeGreaterThan(0);
+      expect(e.reflexes).toBeGreaterThan(0);
     }
     // 필드 플레이어는 낮고, GK는 높다
     const gks = catalog.filter((e) => e.positions.some((p) => p.isNatural && p.position === "GK"));
@@ -191,8 +191,8 @@ describe("선수 카탈로그 (불변 초기치 DB)", () => {
       (e) => !e.positions.some((p) => p.isNatural && p.position === "GK"),
     );
     const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
-    expect(mean(gks.map((e) => e.goalkeeping))).toBeGreaterThan(
-      mean(outfield.map((e) => e.goalkeeping)) + 30,
+    expect(mean(gks.map((e) => e.reflexes))).toBeGreaterThan(
+      mean(outfield.map((e) => e.reflexes)) + 30,
     );
   });
 
@@ -657,20 +657,23 @@ describe("게임 생성 (7월 1일 프리시즌 시작)", () => {
    * 1군도 없으면 명단 전체로 물러난다 (people.md §5-1).
    */
   it("첫 주장의 후보는 선발 → 1군 → 명단 전체 순으로 물러난다", () => {
-    const p = (id: string, leadership: number, level: "first" | "reserve") => ({
+    const p = (id: string, birthdate: string, level: "first" | "reserve") => ({
       id,
-      birthdate: "1996-01-01",
+      birthdate,
       squadLevel: level,
-      attributes: { leadership },
     });
-    const squad = [p("keeper", 90, "first"), p("winger", 60, "first"), p("kid", 80, "reserve")];
+    const squad = [
+      p("keeper", "1990-01-01", "first"),
+      p("winger", "1999-01-01", "first"),
+      p("kid", "1985-01-01", "reserve"),
+    ];
 
-    // 선발이 후보를 정한다 — 리더십 90이 명단에 있어도 선발이 아니면 서지 않는다
+    // 선발이 후보를 정한다 — 더 나이 든 선수가 명단에 있어도 선발이 아니면 서지 않는다
     expect(initialCaptainOf(squad, ["winger"])?.id).toBe("winger");
-    // 배치가 비면 1군 — 2군의 리더십 80보다 1군의 90이 앞선다
+    // 배치가 비면 1군 — 2군의 최고참보다 1군의 최고참이 앞선다
     expect(initialCaptainOf(squad, [])?.id).toBe("keeper");
     // 1군도 비면 명단 전체 — 완장이 비지는 않는다
-    expect(initialCaptainOf([p("kid", 80, "reserve")], [])?.id).toBe("kid");
+    expect(initialCaptainOf([p("kid", "1985-01-01", "reserve")], [])?.id).toBe("kid");
     expect(initialCaptainOf([], [])).toBeNull();
   });
 

@@ -1,5 +1,6 @@
 import {
   ATTRIBUTE_AXES,
+  abilityAxesFor,
   type AttributeAxis,
   AXIS_KO,
   type GamePlayer,
@@ -124,9 +125,7 @@ export function strengthsAndWeaknesses(
   player: GamePlayer,
 ): { strengths: string[]; weaknesses: string[] } {
   const knowledge = knowledgeOf(state, player.id);
-  const ranked = ATTRIBUTE_AXES.filter(
-    (k) => k !== "goalkeeping" || naturalPositionOf(player).position === "GK",
-  )
+  const ranked = abilityAxesFor(naturalPositionOf(player).position === "GK")
     .map((key) => ({
       key,
       value: observedRating(state, player.id, key, player.attributes[key], knowledge),

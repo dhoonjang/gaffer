@@ -280,8 +280,8 @@ export function PlayerDetail({
           )}
         </div>
 
-        {/* 능력치 16축 — 카드와 나눠 쓰는 조각 (`player-facts.tsx`) */}
-        <AxisGrid axes={p as unknown as Record<string, number>} />
+        {/* 능력치 — 카드와 나눠 쓰는 조각 (`player-facts.tsx`) */}
+        <AxisGrid axes={p as unknown as Record<string, number>} keeper={p.position === "GK"} />
       </div>
 
       {/* 커리어 — 시즌 × 팀의 표와 그 옆의 마일스톤. **머리글 줄이 아니라 제

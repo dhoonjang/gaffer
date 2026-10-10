@@ -1529,9 +1529,7 @@ export function setCaptain(
     player.isCaptain = true;
     if (player.isViceCaptain) player.isViceCaptain = false;
     notes.push(`${josa(player.name, "을/를")} 주장으로 지명했습니다`);
-    items.push(
-      item({ label: "주장", text: player.name, note: `리더십 ${player.attributes.leadership}` }),
-    );
+    items.push(item({ label: "주장", text: player.name }));
   }
 
   if (input.vice !== undefined) {
@@ -1547,9 +1545,7 @@ export function setCaptain(
       for (const p of userPlayers(state)) p.isViceCaptain = false;
       vice.isViceCaptain = true;
       notes.push(`${josa(vice.name, "을/를")} 부주장으로 지명했습니다`);
-      items.push(
-        item({ label: "부주장", text: vice.name, note: `리더십 ${vice.attributes.leadership}` }),
-      );
+      items.push(item({ label: "부주장", text: vice.name }));
     }
   }
 
@@ -1676,11 +1672,11 @@ export function rememberTactics(tactics: TeamTactics, on: string): void {
 }
 
 /**
- * 전술 이해가 빠른 선수 — **시야·위치선정·침착성**이 새 지시를 덜 흔든다.
+ * 전술 이해가 빠른 선수 — **판단력·예측력·시야**가 새 지시를 덜 흔든다.
  *
- * 세 축을 고른 이유: 시야는 그림을 그리는 힘, 위치선정은 그 그림에서 제 자리를 찾는
- * 힘, 침착성은 익숙지 않은 상황에서도 판단이 무너지지 않는 힘이다. 셋 다
- * **판단 계열**이라 관측으로도 오차가 남는 축이고(player.md §9),
+ * 세 축을 고른 이유: 시야는 그림을 그리는 힘, 예측력은 그 그림이 어떻게 움직일지 읽는
+ * 힘, 판단력은 그 안에서 맞는 것을 고르는 힘이다. 셋 다 **판단 계열**이라 관측으로도
+ * 오차가 남는 축이고(player.md §9),
  * 그래서 "왜 쟤만 못 따라오지"가 감독에게 흥미로운 질문이 된다.
  */
 export function tacticalUptake(player: Player): number {

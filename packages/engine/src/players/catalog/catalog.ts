@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import type { PlayerCatalogEntry, PlayerPosition, PositionGroup } from "@gaffer/domain";
 import {
   PlayerCatalogEntrySchema,
-  ageOf,
   associationOfCountry,
   bestOverall,
   clusterOf,
@@ -12,7 +11,7 @@ import {
   weightSlotOf,
   type Foot,
 } from "@gaffer/domain";
-import { deriveAxes } from "./attributes";
+import { SYNTHETIC_BASE_LIFT, deriveAxes, eaRatingOf, synthesizeAxes } from "./attributes";
 import { hashOf } from "../../core/catalog/name-hash";
 import { catalogPath, dataDir } from "../../core/catalog/paths";
 import { catalogCacheKey } from "../../core/catalog/catalog-source";
@@ -181,17 +180,17 @@ const HEIGHT_BASE: Record<string, number> = {
 
 /**
  * 기준치는 **파생 후 평균이 실제 자리 평균에 닿도록** 뒤에서 맞춘 값이다.
- * 공중볼이 낮은 자리(윙어·공격형 미드필더)는 보정이 음수라 기준치를 그만큼 올려
+ * 점프력이 낮은 자리(윙어·공격형 미드필더)는 보정이 음수라 기준치를 그만큼 올려
  * 두지 않으면 평균이 3cm쯤 낮게 깔린다.
  */
 export function physiqueOf(
   nameEn: string,
   position: string,
-  axes: { aerial: number; strength: number; pace: number },
+  axes: { jumpingReach: number; strength: number; pace: number },
 ): { height: number; weight: number } {
   const base = HEIGHT_BASE[weightSlotOf(position)] ?? 180;
-  // 공중볼이 자리 평균(65)에서 벗어난 만큼 키가 따라간다 — ±7cm 폭
-  const aerialLift = Math.round(((axes.aerial - 65) / 35) * 7);
+  // 점프력이 자리 평균(70)에서 벗어난 만큼 키가 따라간다 — ±7cm 폭
+  const aerialLift = Math.round(((axes.jumpingReach - 70) / 35) * 7);
   const jitter = (hashOf(`height:${nameEn}`) % 7) - 3;
   const height = Math.max(160, Math.min(206, base + aerialLift + jitter));
 
@@ -324,8 +323,8 @@ type CatalogDraft = Omit<PlayerCatalogEntry, "id">;
 function entryFromSeed(teamId: string, s: RealPlayerSeed): CatalogDraft {
   const homegrownCountry = deriveHomegrownCountry(s, teamId, s.homegrown);
   const nationality = deriveNationality(teamId, s.nationality);
-  // 시드는 6축 + GK — 16축은 여기서 파생한다 (attributes.ts, 부채는 §8 2단계)
-  const axes = deriveAxes(s.nameEn, s.position, s, ageOf(s.birthdate, CATALOG_AGE_REF));
+  // 37축은 EA 세부 능력치에서 옮긴다 — EA에 없는 선수만 대표 수치에서 세운다 (attributes.ts)
+  const axes = deriveAxes(s.nameEn, s.position, s, { ea: eaRatingOf(s), height: s.height });
   const positions = derivePositions(s.nameEn, s.position);
   return {
     teamId,
@@ -458,20 +457,15 @@ const GROUP_TARGET: Record<PositionGroup, number> = { GK: 3, DF: 9, MF: 9, FW: 5
 const TEMPLATE_GROUPS: PositionGroup[] = FALLBACK_TEMPLATE.map((p) => positionGroupOf(p) ?? "MF");
 
 /**
- * 합성 선수가 기준선 위로 올라갈 수 있는 최대폭 — `strong()`이 주는 상한이다.
- * 보충 선수의 기준선을 정하는 자리(`topUpBase`)가 같은 값을 읽는다: 그만큼 뺀
- * 자리에서 출발해야 어떤 굴림도 그 팀 최고 선수를 넘지 못한다.
+ * 합성 선수가 기준선 위로 올라갈 수 있는 최대폭 — 얹는 몫과 개인 편차의 끝
+ * (`synthesizeAxes` — 1.5 + 4.4)보다 넉넉하다. 보충 선수의 기준선을 정하는 자리
+ * (`topUpBase`)가 같은 값을 읽는다: 그만큼 뺀 자리에서 출발해야 어떤 굴림도 그 팀 최고
+ * 선수를 넘지 못한다.
  */
 const SYNTHETIC_UPSIDE = 8;
 
 /** 아카데미 자원이 1군 기준선에서 내려앉는 폭 */
 const ACADEMY_DROP = { min: 12, max: 20 } as const;
-
-/**
- * 기준선에서 축이 흩어지는 폭 — 자리에 맞는 축은 위로(`strong`), 무관한 축은
- * 아래로(`weak`) 치우친다. 폭이 좁으면 합성 선수가 전부 같은 모양이 된다.
- */
-const SPREAD = { ordinary: 6, weakMin: -18, weakMax: -8 } as const;
 
 /** 합성 선수의 나이 — 아카데미와 1군이 다른 구간에 선다 */
 const ACADEMY_AGE = { min: 16, max: 20 } as const;
@@ -585,59 +579,15 @@ function fallbackEntries(
   return slots.map((i) => {
     const position = template[i]!;
     const rng = makeRng(hashOf(`${teamId}:${i}`), `catalog:${teamId}:${i}`);
-    const group = positionGroupOf(position) ?? "MF";
     const { ko: nameKo, en: nameEn } = claimSyntheticName(rng, pool, takenNames);
     // 아카데미는 1군보다 한참 낮게 출발한다 (잠재력은 아래에서 크게 잡는다)
     const base =
       i >= academyFrom ? squadBase - randInt(rng, ACADEMY_DROP.min, ACADEMY_DROP.max) : squadBase;
-    const v = (d = SPREAD.ordinary) => clamp99(base + randInt(rng, -d, d));
-    const strong = () => clamp99(base + randInt(rng, 0, SYNTHETIC_UPSIDE));
-    const weak = () => clamp99(base + randInt(rng, SPREAD.weakMin, SPREAD.weakMax));
     // 아카데미 자원은 어리고, 능력치는 낮지만 잠재력 폭이 크다
     const academy = i >= academyFrom;
     const age = academy
       ? randInt(rng, ACADEMY_AGE.min, ACADEMY_AGE.max)
       : randInt(rng, SENIOR_AGE.min, SENIOR_AGE.max);
-    const attrs =
-      group === "GK"
-        ? {
-            pace: weak(),
-            shooting: weak(),
-            passing: v(),
-            dribbling: weak(),
-            defending: v(),
-            physical: v(),
-            goalkeeping: strong(),
-          }
-        : group === "DF"
-          ? {
-              pace: v(),
-              shooting: weak(),
-              passing: v(),
-              dribbling: v(),
-              defending: strong(),
-              physical: strong(),
-              goalkeeping: 0,
-            }
-          : group === "MF"
-            ? {
-                pace: v(),
-                shooting: v(),
-                passing: strong(),
-                dribbling: v(),
-                defending: v(),
-                physical: v(),
-                goalkeeping: 0,
-              }
-            : {
-                pace: strong(),
-                shooting: strong(),
-                passing: v(),
-                dribbling: strong(),
-                defending: weak(),
-                physical: v(),
-                goalkeeping: 0,
-              };
     const foot = syntheticFoot(nameEn, position);
     const birthdate = `${CATALOG_AGE_REF_YEAR - age}-${String(randInt(rng, 1, 12)).padStart(2, "0")}-${String(randInt(rng, 1, 28)).padStart(2, "0")}`;
     // 아카데미 자원은 그 클럽이 키운 선수다 — 정의상 홈그로운
@@ -647,7 +597,8 @@ function fallbackEntries(
       academy ? true : undefined,
     );
     const positions = derivePositions(nameEn, position);
-    const axes = deriveAxes(nameEn, position, attrs, age);
+    // 기준선에서 37축이 선다 — 실선수와 같은 옮김을 지나되 대표 수치를 지어내지 않는다
+    const axes = synthesizeAxes(nameEn, position, positions, base + SYNTHETIC_BASE_LIFT);
     return {
       teamId,
       foot,

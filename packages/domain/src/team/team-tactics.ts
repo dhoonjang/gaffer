@@ -362,15 +362,15 @@ const AXIS_AFFINITY: Record<TacticAxisKey, { high: AttributeAxis[]; low: Attribu
   // 공격적(들어가서 끝낸다) ↔ 수비적(자리를 지키고 끊는다)
   mentality: { high: ["finishing", "dribbling", "offTheBall"], low: ["tackling", "positioning"] },
   // 높은 라인(뒷공간을 발로 덮는다) ↔ 내려선 수비(박스를 자리로 지킨다)
-  defensiveLine: { high: ["pace", "aggression"], low: ["positioning", "aerial"] },
+  defensiveLine: { high: ["pace", "aggression"], low: ["positioning", "heading"] },
   // 맹렬한 압박(뛰고 물어야 한다) ↔ 자리 지키기(읽고 선다)
-  pressing: { high: ["stamina", "aggression"], low: ["positioning", "vision"] },
+  pressing: { high: ["stamina", "workRate", "aggression"], low: ["positioning", "anticipation"] },
   // 빠른 템포(몰고 전진) ↔ 느린 템포(돌리며 기다린다)
   tempo: { high: ["pace", "dribbling"], low: ["passing", "composure"] },
   // 측면 확장(침투와 크로스) ↔ 중앙 집중(좁은 공간의 연결)
-  width: { high: ["pace", "kicking"], low: ["dribbling", "vision"] },
+  width: { high: ["pace", "crossing"], low: ["dribbling", "vision"] },
   // 롱볼(차고 받아낸다) ↔ 짧은 패스(주고받고 압박을 견딘다)
-  passStyle: { high: ["kicking", "aerial"], low: ["passing", "composure"] },
+  passStyle: { high: ["technique", "jumpingReach"], low: ["passing", "composure"] },
 };
 
 /** 이 축에서 이 선수가 **어느 쪽에 가까운가** — +1이면 높은 쪽, −1이면 낮은 쪽 */
@@ -1500,18 +1500,18 @@ const GAIN_CURVE: Record<
 };
 
 /**
- * 전술을 얼마나 빨리 읽는가 — 시야·위치선정·침착성의 평균 (대략 40~90).
+ * 전술을 얼마나 빨리 읽는가 — 판단력·예측력·시야의 평균 (대략 40~90).
  *
- * 전술 이해는 발이 아니라 머리가 하는 일이라 이 세 축이 정한다. 하락 폭
- * (`shiftFactor`)이 이미 쓰던 값과 **같은 함수**여야 한다 — 잘 읽는 선수가 빨리
+ * 전술 이해는 발이 아니라 머리가 하는 일이라 고르기·읽기·보기의 세 축이 정한다.
+ * 하락 폭(`shiftFactor`)이 이미 쓰던 값과 **같은 함수**여야 한다 — 잘 읽는 선수가 빨리
  * 익히면서 잘 잊는다면 앞뒤가 안 맞는다.
  */
 export function tacticalUptake(attrs: {
+  decisions: number;
+  anticipation: number;
   vision: number;
-  positioning: number;
-  composure: number;
 }): number {
-  return (attrs.vision + attrs.positioning + attrs.composure) / 3;
+  return (attrs.decisions + attrs.anticipation + attrs.vision) / 3;
 }
 
 /**

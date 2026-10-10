@@ -228,7 +228,7 @@ describe("카탈로그 편집", () => {
   it("포지션만 바꿔도 잠재력은 새 OVR 이상이고 중복 포지션은 저장되지 않는다", () => {
     const p = adminCatalog()[0]!.players[0]!;
     const axes = Object.fromEntries(
-      ATTRIBUTE_AXES.map((axis) => [axis, axis === "goalkeeping" ? 1 : 90]),
+      ATTRIBUTE_AXES.map((axis) => [axis, axis === "reflexes" ? 1 : 90]),
     );
     expect(
       adminEditCatalogPlayer(p.id, {
@@ -275,7 +275,7 @@ describe("카탈로그 편집", () => {
         dribbling: 82,
         tackling: 40,
         strength: 60,
-        goalkeeping: 20,
+        reflexes: 20,
         potential: 88,
       }),
     );
@@ -299,7 +299,7 @@ describe("카탈로그 편집", () => {
       dribbling: 55,
       tackling: 70,
       strength: 72,
-      goalkeeping: 18,
+      reflexes: 18,
       potential: 75,
     });
     const a = adminAddCatalogPlayer("arsenal", base);
@@ -450,7 +450,7 @@ describe("게임 격리 — 카탈로그 편집은 새 게임에만 반영된다
         dribbling: 82,
         tackling: 35,
         strength: 70,
-        goalkeeping: 22,
+        reflexes: 22,
         potential: 92,
       }),
     );

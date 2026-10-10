@@ -463,6 +463,7 @@ function PlayerCardBody({ card }: { card: PlayerCardView; inMatch: boolean }) {
       <AxisGrid
         axes={Object.fromEntries(card.attributes.map((a) => [a.key, a.value]))}
         margins={Object.fromEntries(card.attributes.map((a) => [a.key, a.margin]))}
+        keeper={card.position === "GK"}
       />
 
       {/* 기록은 안개 밖이다 (player.md §10) — 남의 선수도 참값 그대로 선다.

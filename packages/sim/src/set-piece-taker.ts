@@ -28,12 +28,12 @@ function slotGroup(slot: TakerSlot): PositionGroup {
 export type SetPieceRole = "corner" | "freeKick" | "penalty";
 
 /**
- * 자리마다 읽는 능력 — 코너·프리킥은 배급(`kicking`), 페널티는 `penaltySkill`.
+ * 자리마다 읽는 능력 — 코너는 크로스, 프리킥은 프리킥, 페널티는 `penaltySkill`.
  * 기본값을 고르는 저울이자 태그가 싣는 수치다.
  */
 const TAKER_SKILL: Record<SetPieceRole, (p: Player) => number> = {
-  corner: (p) => p.attributes.kicking,
-  freeKick: (p) => p.attributes.kicking,
+  corner: (p) => p.attributes.crossing,
+  freeKick: (p) => p.attributes.freeKicks,
   penalty: penaltySkill,
 };
 
@@ -41,9 +41,8 @@ const TAKER_SKILL: Record<SetPieceRole, (p: Player) => number> = {
  * 한 자리를 채운다 — **지정이 먼저, 그가 그라운드에 없으면 능력 최고.**
  *
  * `onPitch`는 지정을 대조하는 전원이고 `fallback`은 기본값을 고르는 후보다. 둘이
- * 갈리는 것은 **골키퍼 때문**이다: 골킥·펀트를 재는 `kicking`은 골키퍼가 거의
- * 언제나 팀 최고라 걸러 내지 않으면 모든 팀의 코너를 골키퍼가 올리지만, 자기
- * 골문을 비우고 올라가는 일 자체는 감독이 지정으로 시킬 수 있다.
+ * 갈리는 것은 **골키퍼 때문**이다: 골키퍼는 기본값으로 세우지 않지만, 자기 골문을
+ * 비우고 올라가는 일 자체는 감독이 지정으로 시킬 수 있다.
  */
 function fill<T>(
   named: string | null | undefined,

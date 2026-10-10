@@ -132,12 +132,15 @@ export function advanceFlight(ball: {
   return { arrived: remaining <= step + 1e-6 || f.speed <= 0.3, step };
 }
 
-/** 이 말이 지금 공에 손을 댈 수 있는 반경 (m) — 골키퍼는 박스 안에서 더 멀다 */
+/**
+ * 이 말이 지금 공에 손을 댈 수 있는 반경 (m) — 골키퍼는 박스 안에서 더 멀다.
+ * 골키퍼의 민첩성은 다이빙이다(몸을 던져 닿는 범위 — player.md §1).
+ */
 export function reachOf(player: Player, keeperInBox: boolean): number {
-  return keeperInBox ? 1.1 + player.attributes.goalkeeping / 90 : 0.85;
+  return keeperInBox ? 1.1 + player.attributes.agility / 90 : 0.85;
 }
 
-/** 이 말이 지금 다룰 수 있는 공의 높이 (m) */
+/** 이 말이 지금 다룰 수 있는 공의 높이 (m) — 점프력이 키를 담는다 */
 export function reachHeightOf(player: Player, keeperInBox: boolean): number {
-  return keeperInBox ? 2.9 : 1.2 + player.attributes.aerial / 80;
+  return keeperInBox ? 2.9 : 1.2 + player.attributes.jumpingReach / 80;
 }

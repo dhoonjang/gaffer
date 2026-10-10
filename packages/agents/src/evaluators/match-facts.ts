@@ -5,12 +5,17 @@ import {
   playerName,
   playerById,
 } from "@gaffer/engine";
-import { ATTRIBUTE_AXES, AXIS_KO } from "@gaffer/domain";
+import { AXIS_KO, INCLINATION_AXES, abilityAxesFor } from "@gaffer/domain";
 
+/** 한 선수의 능력치 줄 — 그 자리에 뜻이 있는 능력 축, 그다음 성향 축 */
 function attributeLine(state: GameState, id: string, position: string): string {
   const player = playerById(state, id);
   if (!player) return "";
-  return ATTRIBUTE_AXES.filter((axis) => position === "GK" || axis !== "goalkeeping")
+  const keeper = position === "GK";
+  const inclinations = INCLINATION_AXES.filter(
+    (axis) => keeper || (axis !== "commandOfArea" && axis !== "rushingOut"),
+  );
+  return [...abilityAxesFor(keeper), ...inclinations]
     .map((axis) => `${AXIS_KO[axis]}${player.attributes[axis]}`)
     .join(" ");
 }

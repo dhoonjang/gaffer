@@ -797,7 +797,7 @@ describe("주장·전술·개인 지시", () => {
     for (const a of tactics.assignments) a.familiarity = 70;
     const uptake = (id: string) => {
       const at = playerById(state, id)!.attributes;
-      return (at.vision + at.positioning + at.composure) / 3;
+      return (at.decisions + at.anticipation + at.vision) / 3;
     };
     const starters = tactics.assignments.filter((a) => a.role === "starting");
     const sorted = [...starters].sort((a, b) => uptake(a.playerId) - uptake(b.playerId));
@@ -821,11 +821,21 @@ describe("주장·전술·개인 지시", () => {
     const tactics = userTactics(state);
     for (const a of tactics.assignments) a.familiarity = 60;
     const starters = assignmentsOf(state, state.userTeamId, "starting");
-    // 킥·제공권으로 먹고사는 선수와, 짧게 주고받는 기술자
+    // 긴 킥·제공권으로 먹고사는 선수와, 짧게 주고받는 기술자
     const longBall = playerById(state, starters[1]!.playerId)!;
-    Object.assign(longBall.attributes, { kicking: 92, aerial: 88, passing: 55, composure: 55 });
+    Object.assign(longBall.attributes, {
+      technique: 92,
+      jumpingReach: 88,
+      passing: 55,
+      composure: 55,
+    });
     const shortPass = playerById(state, starters[2]!.playerId)!;
-    Object.assign(shortPass.attributes, { kicking: 50, aerial: 48, passing: 92, composure: 90 });
+    Object.assign(shortPass.attributes, {
+      technique: 50,
+      jumpingReach: 48,
+      passing: 92,
+      composure: 90,
+    });
 
     setTactics(state, { passStyle: 5 }); // 3 → 5, 롱볼로
     const famOf = (id: string) =>
@@ -844,7 +854,12 @@ describe("주장·전술·개인 지시", () => {
     for (const a of tactics.assignments) a.familiarity = 60;
     const starters = assignmentsOf(state, state.userTeamId, "starting");
     const longBall = playerById(state, starters[1]!.playerId)!;
-    Object.assign(longBall.attributes, { kicking: 92, aerial: 88, passing: 55, composure: 55 });
+    Object.assign(longBall.attributes, {
+      technique: 92,
+      jumpingReach: 88,
+      passing: 55,
+      composure: 55,
+    });
 
     setTactics(state, { passStyle: 5, tempo: 5 });
     const away = assignmentsOf(state, state.userTeamId, "starting").map((a) => a.familiarity);
@@ -996,9 +1011,9 @@ describe("주장·전술·개인 지시", () => {
 
   it("역할 변경 비용은 하드코딩이 아니라 **역할 사이 거리**에서 나온다", () => {
     // 볼 플레잉 ↔ 리베로는 둘 다 발로 푸는 수비수라 가깝고,
-    // 볼 플레잉 ↔ 노넌센스는 요구가 정반대라 멀다
+    // 뒤를 덮는 커버 ↔ 앞으로 나가는 스토퍼는 요구가 정반대라 멀다
     const near = roleDistance("CB", "ball-playing-defender", "libero");
-    const far = roleDistance("CB", "ball-playing-defender", "no-nonsense-cb");
+    const far = roleDistance("CB", "cover-defender", "stopper");
     expect(near).toBeGreaterThan(0);
     expect(far).toBeGreaterThan(near);
     // 같은 역할이면 0 — 다시 눌러도 손해가 없다

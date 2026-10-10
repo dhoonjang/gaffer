@@ -190,11 +190,11 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: "평일 오전은 세트피스 반복 훈련 잡아줘",
-    ops: () => weekly(WEEKDAYS, "세트피스", ["kicking", "finishing"]),
+    ops: () => weekly(WEEKDAYS, "세트피스", ["freeKicks", "crossing"]),
   },
   {
     say: "월요일 오전은 세트피스 반복 훈련 잡아줘",
-    ops: () => weekly([1], "세트피스", ["kicking", "finishing"]),
+    ops: () => weekly([1], "세트피스", ["freeKicks", "crossing"]),
   },
   {
     say: "훈련 쉬자",

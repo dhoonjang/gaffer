@@ -20,6 +20,7 @@
     "pseudonymize": "tsx scripts/pseudonymize.ts",
     "fill-nationality": "tsx scripts/fill-nationality.ts",
     "fill-squad-roles": "tsx scripts/fill-squad-roles.ts",
+    "ea-ratings": "tsx scripts/ea-ratings.ts",
     "e2e": "playwright test",
     "dev": "pnpm --filter @gaffer/web dev"
   },

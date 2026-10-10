@@ -18,7 +18,12 @@ import { GET as getGame, DELETE as deleteGameRoute } from "../../app/api/games/[
 import { POST as postTurn } from "../../app/api/games/[id]/turn/stream/route";
 import { POST as postLineup } from "../../app/api/games/[id]/lineup/route";
 import { GET as getLive, POST as postLive } from "../../app/api/games/[id]/match/live/route";
-import { CHECKPOINT_TICKS, STOP_EVENT_TYPES, FORMATION_LAYOUTS } from "@gaffer/domain";
+import {
+  ATTRIBUTE_AXES,
+  CHECKPOINT_TICKS,
+  STOP_EVENT_TYPES,
+  FORMATION_LAYOUTS,
+} from "@gaffer/domain";
 import { advanceLive, liveDigest, liveFinished, type LiveMatch } from "@gaffer/sim";
 import {
   GET as catalogGet,
@@ -703,23 +708,12 @@ describe("API — 온보딩부터 경기까지", () => {
         nameEn: "New Guy",
         birthdate: "2007-03-01",
         position: "ST",
-        // 능력치 16축 전부 (API가 요구한다)
+        // 능력치 37축 전부 (API가 요구한다)
+        ...Object.fromEntries(ATTRIBUTE_AXES.map((axis) => [axis, 60])),
         pace: 82,
-        stamina: 74,
-        strength: 70,
-        aerial: 68,
         finishing: 78,
         dribbling: 80,
-        passing: 66,
-        kicking: 62,
-        tackling: 35,
-        vision: 60,
-        positioning: 76,
-        offTheBall: 72,
-        composure: 70,
-        aggression: 58,
-        leadership: 40,
-        goalkeeping: 20,
+        reflexes: 20,
         potential: 88,
       }),
     );
@@ -781,7 +775,7 @@ describe("API — 온보딩부터 경기까지", () => {
         dribbling: 60,
         tackling: 60,
         strength: 60,
-        goalkeeping: 18,
+        reflexes: 18,
         potential: 70,
       }),
     );

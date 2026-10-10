@@ -138,31 +138,27 @@ const PENALTY_BASE = 0.765;
 /** 기량 차 1당 오르내리는 폭 */
 const PENALTY_EDGE = 0.004;
 
-/** 키커의 페널티 기량 — 결정력·침착성·킥력의 가중 평균 */
-const PENALTY_WEIGHTS = { finishing: 0.5, composure: 0.3, kicking: 0.2 } as const;
-/** 골키퍼의 페널티 기량 — 골키핑·침착성의 가중 평균 */
-const KEEPER_WEIGHTS = { goalkeeping: 0.7, composure: 0.3 } as const;
+/** 키커의 페널티 기량 — 페널티킥·침착성의 가중 평균 */
+const PENALTY_WEIGHTS = { penalties: 0.7, composure: 0.3 } as const;
+/** 골키퍼의 페널티 기량 — 반사 신경·침착성의 가중 평균 */
+const KEEPER_WEIGHTS = { reflexes: 0.7, composure: 0.3 } as const;
 /**
  * 골키퍼가 없을 때 서는 기량 — 골키퍼가 퇴장당해 필드 선수가 골문에 선 경기.
  * `PENALTY_BASE`가 그대로 서도록 평균적인 키커와 같은 자리에 둔다.
  */
 const KEEPER_FALLBACK_SKILL = 60;
 
-/** 키커의 페널티 기량 — 결정력 0.5 · 침착성 0.3 · 킥력 0.2 */
+/** 키커의 페널티 기량 — 페널티킥 0.7 · 침착성 0.3 */
 export function penaltySkill(p: Player): number {
   const a = p.attributes;
-  return (
-    a.finishing * PENALTY_WEIGHTS.finishing +
-    a.composure * PENALTY_WEIGHTS.composure +
-    a.kicking * PENALTY_WEIGHTS.kicking
-  );
+  return a.penalties * PENALTY_WEIGHTS.penalties + a.composure * PENALTY_WEIGHTS.composure;
 }
 
-/** 막아서는 골키퍼의 기량 — 골키핑 0.7 · 침착성 0.3. 골키퍼가 없으면 대체값 */
+/** 막아서는 골키퍼의 기량 — 반사 신경 0.7 · 침착성 0.3. 골키퍼가 없으면 대체값 */
 export function keeperSkill(p: Player | null): number {
   if (!p) return KEEPER_FALLBACK_SKILL;
   const a = p.attributes;
-  return a.goalkeeping * KEEPER_WEIGHTS.goalkeeping + a.composure * KEEPER_WEIGHTS.composure;
+  return a.reflexes * KEEPER_WEIGHTS.reflexes + a.composure * KEEPER_WEIGHTS.composure;
 }
 
 /**
@@ -172,7 +168,7 @@ export function keeperSkill(p: Player | null): number {
  * 갈리는 무대라는 설계가 거기 들어 있다 (→ docs/season/competition.md §6).
  *
  * 경기 중 페널티는 이 값이 곧 그 슛의 `xg`이자 `goalProbability`다 — 결정력을 한 번
- * 더 얹지 않는다. `penaltySkill`이 이미 결정력 0.5를 싣고 있어 두 번 세는 것이 된다.
+ * 더 얹지 않는다. `penaltySkill`이 이미 키커의 기량을 싣고 있어 두 번 세는 것이 된다.
  */
 export function penaltyRate(taker: Player, keeper: Player | null): number {
   const edge = (penaltySkill(taker) - keeperSkill(keeper)) * PENALTY_EDGE;
