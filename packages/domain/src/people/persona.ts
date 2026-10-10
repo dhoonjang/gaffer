@@ -94,9 +94,9 @@ export function isStaffRole(role: PersonaRole): role is StaffRole {
 
 export const PersonaSchema = z.object({
   /**
-   * 채팅 @태그와 1:1 (people.md §3) — **그 사람의 이름**이다.
+   * 채팅 발화의 `name`과 1:1 (people.md §3) — **그 사람의 이름**이다.
    *
-   * 선수가 `@손흥민:`으로 말하는데 코치만 `@수석코치:`로 말하면, 이름을 지어 준
+   * 선수가 `<speak name="손흥민">`으로 말하는데 코치만 `<speak name="수석코치">`로 말하면, 이름을 지어 준
    * 의미가 없고 화면에서도 그 사람이 아니라 직책이 말하는 것처럼 읽힌다.
    * 직책은 인물 카드가 따로 알려 준다.
    */

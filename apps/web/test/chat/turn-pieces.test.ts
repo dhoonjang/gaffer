@@ -7,6 +7,7 @@ import {
   splitStaging,
   weaveTurn,
 } from "../../screens/chat/turn-pieces";
+import type { SayLine } from "../../screens/chat/scene-stamp";
 import { buildPlayerNameIndex, splitPlayerNames } from "../../shared/player-names";
 import { mergeSlice } from "../../game/game-slice";
 import { chatForActiveMatch } from "../../screens/match/match-chat";
@@ -47,10 +48,14 @@ const call = (name: string, line?: number): ToolCallRecord => ({
   ...(line === undefined ? {} : { line }),
 });
 
+/** 줄 이름표 — 엮기는 줄의 글자만 읽으므로 화자는 비워 둔다 */
+const says = (texts: readonly string[]): SayLine[] =>
+  texts.map((text, block) => ({ speaker: "", block, text }));
+
 /** 조각을 읽기 쉬운 꼴로 — 말 묶음은 첫 줄로, 표시는 호출 이름이나 키로 */
 const shape = (lines: string[], parts: Parameters<typeof weaveTurn>[1]) =>
-  weaveTurn(lines, parts).map((piece) => {
-    if (!piece.mark) return piece.lines[0] ?? "";
+  weaveTurn(says(lines), parts).map((piece) => {
+    if (!piece.mark) return piece.lines[0]?.text ?? "";
     if (piece.mark.kind === "calls") return piece.mark.calls.map((c) => c.name).join("+");
     return piece.mark.key;
   });
@@ -65,11 +70,7 @@ describe("splitStaging", () => {
     splitStaging(line).map((p) => (p.staging ? `*${p.text}*` : p.text));
 
   it("연출은 기울고 말은 그대로 — 별표는 남지 않는다", () => {
-    expect(shown("@손흥민: *고개를 숙인다* 죄송합니다.")).toEqual([
-      "@손흥민: ",
-      "*고개를 숙인다*",
-      " 죄송합니다.",
-    ]);
+    expect(shown("*고개를 숙인다* 죄송합니다.")).toEqual(["*고개를 숙인다*", " 죄송합니다."]);
   });
 
   it("마크다운 볼드가 말을 연출로 뒤집지 않는다 — 연속 별표는 구분자 하나다", () => {
@@ -98,84 +99,71 @@ describe("splitStaging", () => {
   });
 
   it("스트리밍 중 열린 채 끝난 `*…`는 연출이다 — 닫힐 때까지 깜빡이지 않는다", () => {
-    expect(shown("@: *교체 보드가")).toEqual(["@: ", "*교체 보드가*"]);
+    expect(shown("고개를 들고 *교체 보드가")).toEqual(["고개를 들고 ", "*교체 보드가*"]);
     // 별표만 도착한 프레임에서는 빈 <em>이 서지 않는다
-    expect(splitStaging("@: *")).toEqual([{ text: "@: ", staging: false }]);
+    expect(splitStaging("고개를 들고 *")).toEqual([{ text: "고개를 들고 ", staging: false }]);
   });
 
   it("별표가 없으면 조각은 하나 — 평범한 대사는 그대로다", () => {
-    expect(splitStaging("@감독: 라인을 올려")).toEqual([
-      { text: "@감독: 라인을 올려", staging: false },
-    ]);
+    expect(splitStaging("라인을 올려")).toEqual([{ text: "라인을 올려", staging: false }]);
     expect(splitStaging("")).toEqual([]);
   });
 });
 
 describe("분 읽기", () => {
   it("프라임·아포스트로피·추가 시간을 모두 읽는다", () => {
-    expect(minuteOf("@중계: *23′ — 사카, 골입니다!*")).toBe(23);
-    expect(minuteOf("@중계: 67' 슛이 빗나갑니다")).toBe(67);
-    expect(minuteOf("@중계: 45+2′ 전반 종료 직전")).toBe(45);
+    expect(minuteOf("*23′ — 사카, 골입니다!*")).toBe(23);
+    expect(minuteOf("67' 슛이 빗나갑니다")).toBe(67);
+    expect(minuteOf("45+2′ 전반 종료 직전")).toBe(45);
   });
 
   it("시간이 없는 줄은 자리를 정하지 않는다", () => {
-    expect(minuteOf("@감독: 라인을 올려")).toBeNull();
-    expect(minuteOf("@: *교체 보드가 올라간다*")).toBeNull();
+    expect(minuteOf("라인을 올려")).toBeNull();
+    expect(minuteOf("*교체 보드가 올라간다*")).toBeNull();
   });
 });
 
 describe("골·경고는 그 분이 지나간 줄 뒤에 선다", () => {
   it("골 문장 다음에 골 카드가 낀다", () => {
     expect(
-      shape(["@중계: 킥오프!", "@중계: *23′ — 사카, 골입니다!*", "@중계: 30′ 흐름이 이어집니다"], {
+      shape(["킥오프!", "*23′ — 사카, 골입니다!*", "30′ 흐름이 이어집니다"], {
         goals: [goal(23, "사카")],
       }),
-    ).toEqual(["@중계: 킥오프!", "g0", "@중계: 30′ 흐름이 이어집니다"]);
+    ).toEqual(["킥오프!", "g0", "30′ 흐름이 이어집니다"]);
   });
 
   it("두 사건은 저마다 제 자리로 흩어진다 — 앞에 몰리지 않는다", () => {
     expect(
-      shape(["@중계: 12′ 첫 골!", "@중계: 40′ 경고가 나옵니다", "@중계: 55′ 두 번째 골!"], {
+      shape(["12′ 첫 골!", "40′ 경고가 나옵니다", "55′ 두 번째 골!"], {
         goals: [goal(12, "사카"), goal(55, "하베르츠")],
         cards: [booking(40, "라이스")],
       }),
-    ).toEqual([
-      "@중계: 12′ 첫 골!",
-      "g0",
-      "@중계: 40′ 경고가 나옵니다",
-      "c0",
-      "@중계: 55′ 두 번째 골!",
-      "g1",
-    ]);
+    ).toEqual(["12′ 첫 골!", "g0", "40′ 경고가 나옵니다", "c0", "55′ 두 번째 골!", "g1"]);
   });
 
   it("중계가 시간을 안 적었으면 맨 뒤에 남는다 — 사라지지 않는다", () => {
-    expect(shape(["@중계: 골이 터집니다!"], { goals: [goal(23, "사카")] })).toEqual([
-      "@중계: 골이 터집니다!",
+    expect(shape(["골이 터집니다!"], { goals: [goal(23, "사카")] })).toEqual([
+      "골이 터집니다!",
       "g0",
     ]);
   });
 });
 
 describe("호출 칩은 불린 자리에 선다", () => {
-  const lines = [
-    "@: *감독실 문이 닫힌다*",
-    "@손흥민: 믿어주셔서 감사합니다.",
-    "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
-  ];
+  const lines = ["*감독실 문이 닫힌다*", "믿어주셔서 감사합니다.", "개인 훈련을 지정했습니다."];
 
   it("장면을 쓴 뒤에 불린 호출은 그 대사 뒤에 붙는다", () => {
     expect(shape(lines, { calls: [call("set_player_training", 2)] })).toEqual([
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
       "set_player_training",
-      "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
+      "개인 훈련을 지정했습니다.",
     ]);
   });
 
   it("아무것도 쓰기 전에 불린 호출은 맨 앞이다", () => {
     expect(shape(lines, { calls: [call("get_squad", 0)] })).toEqual([
       "get_squad",
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
     ]);
   });
 
@@ -183,25 +171,25 @@ describe("호출 칩은 불린 자리에 선다", () => {
     expect(
       shape(lines, { calls: [call("set_player_training", 1), call("set_captain", 1)] }),
     ).toEqual([
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
       "set_player_training+set_captain",
-      "@손흥민: 믿어주셔서 감사합니다.",
+      "믿어주셔서 감사합니다.",
     ]);
   });
 
   it("자리를 모르는 옛 기록은 지금까지처럼 맨 앞에 선다", () => {
     expect(shape(lines, { calls: [call("set_player_training")] })).toEqual([
       "set_player_training",
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
     ]);
   });
 
   it("떼어 낸 헤더만큼 자리를 당긴다 — 시각 표시는 줄에서 빠졌다", () => {
     // 저장된 본문은 `[2026-08-15 AM 9:00]` 헤더를 포함해 세므로 3, 화면에서는 2다
     expect(shape(lines, { calls: [call("set_player_training", 3)], cuts: [0] })).toEqual([
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
       "set_player_training",
-      "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
+      "개인 훈련을 지정했습니다.",
     ]);
   });
 
@@ -210,30 +198,30 @@ describe("호출 칩은 불린 자리에 선다", () => {
     expect(
       shape(lines, { calls: [call("get_squad", 1), call("set_player_training", 3)], cuts: [2] }),
     ).toEqual([
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
       "get_squad",
-      "@손흥민: 믿어주셔서 감사합니다.",
+      "믿어주셔서 감사합니다.",
       "set_player_training",
-      "@스티브 홀랜드: 개인 훈련을 지정했습니다.",
+      "개인 훈련을 지정했습니다.",
     ]);
   });
 
   it("본문보다 뒤를 가리키면 맨 끝에 남는다", () => {
     expect(shape(lines, { calls: [call("set_lineup", 99)] })).toEqual([
-      "@: *감독실 문이 닫힌다*",
+      "*감독실 문이 닫힌다*",
       "set_lineup",
     ]);
   });
 });
 
 describe("시각 표시는 헤더가 서 있던 자리에 선다", () => {
-  const lines = ["판정을 먼저 하겠습니다.", "@짐 랫클리프: 합의됐습니다."];
+  const lines = ["판정을 먼저 하겠습니다.", "합의됐습니다."];
 
   it("본문 한복판의 헤더 자리에 낀다 — 맨 앞으로 올라가지 않는다", () => {
     expect(shape(lines, { stamps: [{ after: 1, stamp: "2026-07-15 오전" }] })).toEqual([
       "판정을 먼저 하겠습니다.",
       "sp0",
-      "@짐 랫클리프: 합의됐습니다.",
+      "합의됐습니다.",
     ]);
   });
 
@@ -244,25 +232,25 @@ describe("시각 표시는 헤더가 서 있던 자리에 선다", () => {
         calls: [call("accept_deal", 2)],
         cuts: [1],
       }),
-    ).toEqual(["판정을 먼저 하겠습니다.", "sp0", "accept_deal", "@짐 랫클리프: 합의됐습니다."]);
+    ).toEqual(["판정을 먼저 하겠습니다.", "sp0", "accept_deal", "합의됐습니다."]);
   });
 });
 
 describe("아무 표시도 없으면 조각은 하나 — 평시 대화는 그대로다", () => {
   it("쪼개지 않는다", () => {
-    const lines = ["@수석코치: 훈련 계획입니다", "@감독: 좋아"];
-    expect(weaveTurn(lines)).toEqual([{ lines }]);
+    const lines = ["훈련 계획입니다", "좋아"];
+    expect(weaveTurn(says(lines))).toEqual([{ lines: says(lines) }]);
   });
 });
 
 describe("칩과 사건이 함께 있는 턴", () => {
   it("각자 제 자리로 — 칩은 줄 수로, 골은 분으로", () => {
     expect(
-      shape(["@중계: 킥오프!", "@중계: *23′ — 사카, 골입니다!*", "@스티브 홀랜드: 교체할까요?"], {
+      shape(["킥오프!", "*23′ — 사카, 골입니다!*", "교체할까요?"], {
         goals: [goal(23, "사카")],
         calls: [call("substitute", 3)],
       }),
-    ).toEqual(["@중계: 킥오프!", "g0", "@스티브 홀랜드: 교체할까요?", "substitute"]);
+    ).toEqual(["킥오프!", "g0", "교체할까요?", "substitute"]);
   });
 });
 
@@ -407,86 +395,71 @@ describe("buildTraceIndex", () => {
   });
 });
 
+/** 말 줄 — `"화자|대사"`, 화자가 없으면 지문. 커맨드 자리는 `block`이 따로 받는다 */
+const sayIn = (block: number, row: string): SayLine => {
+  const bar = row.indexOf("|");
+  return bar < 0
+    ? { speaker: "", block, text: row }
+    : { speaker: row.slice(0, bar), block, text: row.slice(bar + 1) };
+};
+
 /**
- * 이어쓰기 — **태그 없이 여는 줄은 직전 화자가 이어 말하는 것이다**
- * (docs/agents/prompts.md §1). 문법이 되풀이된 태그를 지웠으므로 화면이 이어 준다.
+ * 화자 묶음 — 같은 사람의 연달은 발화는 한 묶음이고, 지문은 커맨드 하나가 한 묶음이다
+ * (docs/agents/prompts.md §1).
  */
 describe("groupUtterances", () => {
   /** 읽기 쉬운 꼴로 — `화자|줄1/줄2` */
   const shown = (groups: ReturnType<typeof groupUtterances>) =>
     groups.map((g) => `${g.speaker}|${g.lines.join("/")}`);
 
-  it("태그 없는 줄은 직전 화자에 이어진다", () => {
-    expect(shown(groupUtterances(["@손흥민: 준비됐습니다.", "믿어 주십시오."]))).toEqual([
-      "손흥민|준비됐습니다./믿어 주십시오.",
-    ]);
-  });
-
-  it("태그를 다시 적어도 같은 화자면 한 묶음 — 이어쓰기와 결과가 같다", () => {
-    const tagged = groupUtterances(["@손흥민: 준비됐습니다.", "@손흥민: 믿어 주십시오."]);
-    expect(shown(tagged)).toEqual(
-      shown(groupUtterances(["@손흥민: 준비됐습니다.", "믿어 주십시오."])),
-    );
-  });
-
-  it("다른 화자의 태그는 묶음을 끊는다", () => {
+  it("한 발화 커맨드의 줄은 한 묶음이다", () => {
     expect(
-      shown(groupUtterances(["@손흥민: 준비됐습니다.", "믿어 주십시오.", "@감독: 알겠다."])),
-    ).toEqual(["손흥민|준비됐습니다./믿어 주십시오.", "감독|알겠다."]);
+      shown(groupUtterances([sayIn(0, "손흥민|준비됐습니다."), sayIn(0, "손흥민|믿어 주십시오.")])),
+    ).toEqual(["손흥민|준비됐습니다./믿어 주십시오."]);
   });
 
-  it("명시적 @: 내레이션은 저마다 독립된 지문이고, 그 뒤 태그 없는 줄만 이어진다", () => {
+  it("같은 사람의 발화가 연달아 오면 커맨드가 달라도 한 묶음이다", () => {
     expect(
-      shown(groupUtterances(["@: *문이 열린다*", "@: *정적이 흐른다*", "*아무도 말이 없다*"])),
-    ).toEqual(["|*문이 열린다*", "|*정적이 흐른다*/*아무도 말이 없다*"]);
+      shown(groupUtterances([sayIn(0, "손흥민|준비됐습니다."), sayIn(1, "손흥민|믿어 주십시오.")])),
+    ).toEqual(["손흥민|준비됐습니다./믿어 주십시오."]);
   });
 
-  it("첫 @ 줄 앞의 태그 없는 줄은 이을 화자가 없어 내레이션으로 선다", () => {
-    expect(shown(groupUtterances(["명단을 확인하겠습니다.", "@손흥민: 준비됐습니다."]))).toEqual([
-      "|명단을 확인하겠습니다.",
-      "손흥민|준비됐습니다.",
-    ]);
+  it("다른 화자는 묶음을 끊는다", () => {
+    expect(
+      shown(groupUtterances([sayIn(0, "손흥민|준비됐습니다."), sayIn(1, "감독|알겠다.")])),
+    ).toEqual(["손흥민|준비됐습니다.", "감독|알겠다."]);
   });
 
-  it("넘겨받은 화자가 있으면 이어쓰기로 여는 조각도 그 화자로 선다", () => {
-    expect(shown(groupUtterances(["믿어 주십시오."], "손흥민"))).toEqual(["손흥민|믿어 주십시오."]);
+  it("지문은 커맨드마다 독립된 묶음이다", () => {
+    expect(
+      shown(
+        groupUtterances([
+          sayIn(0, "문이 열린다"),
+          sayIn(1, "정적이 흐른다"),
+          sayIn(1, "아무도 말이 없다"),
+        ]),
+      ),
+    ).toEqual(["|문이 열린다", "|정적이 흐른다/아무도 말이 없다"]);
   });
 });
 
 /**
- * **화자는 조각 경계를 넘는다** — 골 카드가 한 화자의 발화 한복판을 끊으면
- * 그 뒤 조각은 태그 없는 줄로 열린다. 조각마다 따로 묶으면 화자를 잃는다.
+ * **화자는 조각 경계를 넘는다** — 골 카드가 한 화자의 발화 한복판을 끊어도 줄마다
+ * 화자가 실려 있으므로 뒤 조각이 화자를 잃지 않는다.
  */
 describe("groupPieces", () => {
   const shown = (pieces: ReturnType<typeof weaveTurn>) =>
     groupPieces(pieces).map((groups) => groups.map((g) => `${g.speaker}|${g.lines.join("/")}`));
 
-  it("골 카드가 끊은 뒤에도 이어쓰기 줄은 같은 화자가 말한다", () => {
-    const pieces = weaveTurn(["@중계: 23′ 손흥민이 밀어 넣습니다!", "믿기지 않는 마무리입니다."], {
-      goals: [goal(23, "손흥민")],
-    });
+  it("골 카드가 끊은 뒤에도 같은 화자가 말한다", () => {
+    const pieces = weaveTurn(
+      [sayIn(0, "중계|23′ 손흥민이 밀어 넣습니다!"), sayIn(0, "중계|믿기지 않는 마무리입니다.")],
+      { goals: [goal(23, "손흥민")] },
+    );
     expect(shown(pieces)).toEqual([
       ["중계|23′ 손흥민이 밀어 넣습니다!"],
       [],
       ["중계|믿기지 않는 마무리입니다."],
-    ]);
-  });
-
-  it("표시가 여럿 껴도 화자는 마지막 태그를 따라간다", () => {
-    const pieces = weaveTurn(
-      [
-        "@중계: 23′ 골입니다!",
-        "@손흥민: *포효한다*",
-        "이 골은 팬들께 바칩니다.",
-        "@중계: 44′ 경고입니다.",
-      ],
-      { goals: [goal(23, "손흥민")], cards: [booking(44, "파비우")] },
-    );
-    expect(shown(pieces)).toEqual([
-      ["중계|23′ 골입니다!"],
-      [],
-      ["손흥민|*포효한다*/이 골은 팬들께 바칩니다.", "중계|44′ 경고입니다."],
-      [],
     ]);
   });
 });
@@ -656,7 +629,7 @@ describe("alreadyShown", () => {
   });
 
   it("발화에 스냅샷을 이어 붙여 적는 어댑터도 접힌다", () => {
-    const user = "@장동훈: 내일 보자";
+    const user = "내일 보자";
     const note = "<snapshot>\n<now>2026-07-18 PM 5:35</now>\n</snapshot>";
     expect(alreadyShown(`${user}\n\n${note}`, [user, note, `${user}\n\n${note}`])).toBe(true);
   });

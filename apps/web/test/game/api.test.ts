@@ -1067,7 +1067,7 @@ describe("API — 팀·리그·컵 카탈로그 어드민", () => {
 describe("채팅 기록 필터", () => {
   const turn = (calls: ChatTurn["toolCalls"]): ChatTurn => ({
     role: "model",
-    text: "[2026-08-15 오후]\n@코치: 끝났습니다.",
+    text: '<scene date="2026-08-15" time="14:00" />\n<speak name="코치">끝났습니다.</speak>',
     toolCalls: calls,
     at: "2026-08-15",
   });

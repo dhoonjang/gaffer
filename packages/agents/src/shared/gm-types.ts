@@ -68,7 +68,7 @@ export function recordCall(
 }
 
 export interface GmTurnResult {
-  /** 모델 턴 텍스트 — @문법 (overview.md §3) */
+  /** 모델 턴 텍스트 — 장면 커맨드 (prompts.md §1) */
   text: string;
   toolCalls: GmToolCall[];
   /** 이번 턴에 들어간 골 (경기 턴에만) */

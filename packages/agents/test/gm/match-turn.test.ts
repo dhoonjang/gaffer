@@ -46,6 +46,8 @@ import {
   STALLED_CLOCK_TURNS,
   stampMatchScene,
   stampMatchStream,
+  filterCasterStream,
+  sanitizeCasterText,
   truncatedNote,
   type GmToolCall,
   type OpsOrders,
@@ -326,32 +328,30 @@ describe("경기 턴 — 지시는 판에 걸리고 시계는 턴 밖에서 구�
 
 /**
  * 경기 장면의 시각은 **장부의 것**이다 (docs/agents/agents.md §3 ④). 대화만 한 턴에
- * 캐스터가 `[12']`를 적고 화면이 그것을 그대로 믿어, 코어가 0′에 서 있는데 감독은
+ * 캐스터가 `<scene minute="12" />`를 적고 화면이 그것을 그대로 믿어, 코어가 0′에 서 있는데 감독은
  * 12분이 지나간 판 위에 다음 지시를 쌓았다.
  */
 describe("경기 장면의 시각 — 장부가 붙인다", () => {
-  it("캐스터가 적은 분이 장부와 어긋나면 장부의 분으로 세운다", () => {
-    const casted = "[12']\n@중계: 브루노가 중거리 슛을 때립니다!";
-    expect(stampMatchScene(casted, 0)).toBe("[0']\n@중계: 브루노가 중거리 슛을 때립니다!");
+  it("캐스터가 적은 분은 체가 걷고 장부의 분이 선다", () => {
+    const casted = '<scene minute="12" />\n<commentary>브루노가 중거리 슛을 때립니다!</commentary>';
+    expect(stampMatchScene(sanitizeCasterText(casted), 0)).toBe(
+      '<scene minute="0" />\n<commentary>브루노가 중거리 슛을 때립니다!</commentary>',
+    );
   });
 
-  it("헤더가 없는 응답에도 장부의 분이 선다", () => {
-    expect(stampMatchScene("@중계: 다시 이어갑니다.", 67)).toBe("[67']\n@중계: 다시 이어갑니다.");
+  it("표식이 없는 응답에도 장부의 분이 선다", () => {
+    expect(stampMatchScene("<commentary>다시 이어갑니다.</commentary>", 67)).toBe(
+      '<scene minute="67" />\n<commentary>다시 이어갑니다.</commentary>',
+    );
   });
 
   /** 사후 교정만 하면 스트리밍 첫 줄이 화면에 먼저 닿아 라이브 화면이 잠깐 어긋난다 */
-  it("스트리밍은 코어의 분을 먼저 내보내고 모델의 시각 줄은 화면에 닿지 않는다", () => {
+  it("스트리밍은 코어의 분을 먼저 내보내고 모델의 표식은 화면에 닿지 않는다", () => {
     const out: string[] = [];
-    const feed = stampMatchStream(43, (delta) => out.push(delta));
-    for (const delta of ["[1", "2']\n@중계: ", "다시 이어갑니다."]) feed(delta);
-    expect(out.join("")).toBe("[43']\n@중계: 다시 이어갑니다.");
-  });
-
-  it("모델이 시각 줄을 쓰지 않아도 본문은 그대로 흐른다", () => {
-    const out: string[] = [];
-    const feed = stampMatchStream(0, (delta) => out.push(delta));
-    for (const delta of ["@중계: ", "휘슬이 울립니다."]) feed(delta);
-    expect(out.join("")).toBe("[0']\n@중계: 휘슬이 울립니다.");
+    const feed = filterCasterStream(stampMatchStream(43, (delta) => out.push(delta)));
+    for (const delta of ["<scene min", 'ute="12" />\n<commentary>', "다시 이어갑니다."])
+      feed(delta);
+    expect(out.join("")).toBe('<scene minute="43" />\n<commentary>다시 이어갑니다.');
   });
 });
 
@@ -597,7 +597,7 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
       expect((await tool!.handle({})).ok).toBe(true);
       expect(state.pendingMatch!.live.ledger[side].onPitch).toContain(incoming);
       expect((await tool!.handle({})).ok).toBe(false);
-      return answered("@중계: 교체가 들어갑니다.");
+      return answered("<commentary>교체가 들어갑니다.</commentary>");
     });
     const result = await runGmTurn(state, said);
     expect(result.toolCalls.filter((call) => call.name === "substitute")).toHaveLength(1);
@@ -610,7 +610,9 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
   it("대화만 한 턴에는 Jev를 만들거나 평가하지 않고 시계도 움직이지 않는다", async () => {
     const state = rolling();
     const tick = state.pendingMatch!.live.state.tick;
-    runTurn.mockResolvedValue(answered("@레오 카스텔라노: 감독님, 부르셨습니까."));
+    runTurn.mockResolvedValue(
+      answered('<speak name="레오 카스텔라노">감독님, 부르셨습니까.</speak>'),
+    );
     const result = await runGmTurn(state, "레오, 잠깐");
     expect(runTurn).toHaveBeenCalledTimes(1);
     expect(createEvaluator).not.toHaveBeenCalled();
@@ -628,7 +630,7 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
       const result = await req.tools!.find((tool) => tool.name === "tactic_orders")!.handle({});
       expect(result.ok).toBe(false);
       expect(result.message).toContain("확인");
-      return answered("@레오 카스텔라노: 누구를 바꿀까요?");
+      return answered('<speak name="레오 카스텔라노">누구를 바꿀까요?</speak>');
     });
     await runGmTurn(state, "그 선수 바꿔");
     expect(runTurn).toHaveBeenCalledTimes(1);
@@ -644,7 +646,7 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     runTurn.mockImplementation(async (req: TurnRequest) => {
       expect(req.tools?.map((tool) => tool.name)).toEqual(["finalize_match"]);
       heard.push(req.user);
-      return answered("[8']\n@중계: 골이 들어갑니다!");
+      return answered('<scene minute="8" />\n<commentary>골이 들어갑니다!</commentary>');
     });
     seat(state, [{ minute: 8, type: "goal", team: side, actors: [scorer], causes: [] }]);
     const tick = state.pendingMatch!.live.state.tick;
@@ -746,12 +748,12 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
         expect(reply.ok).toBe(true);
         finalizeReply = reply.message;
         return answered(
-          "[90']\n@중계: 경기 종료 휘슬이 울립니다.\n@레오 카스텔라노: 수고하셨습니다.",
+          '<scene minute="90" />\n<commentary>경기 종료 휘슬이 울립니다.</commentary>\n<speak name="레오 카스텔라노">수고하셨습니다.</speak>',
           1,
         );
       }
       expect((await finalize.handle({})).ok).toBe(false); // 아직 안 끝난 경기는 반려
-      return answered("[85']\n@중계: 경기가 이어집니다.");
+      return answered('<scene minute="85" />\n<commentary>경기가 이어집니다.</commentary>');
     });
 
     /** 턴 러너처럼 장면을 채팅에 남긴다 — 마감 에이전트가 읽는 중계의 원본이다 */
@@ -798,7 +800,9 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
     const matchId = state.pendingMatch!.matchId;
     const seen = { anchors: {} as Record<string, number>, commentary: "" };
     evaluate.mockImplementation(settler(state, matchId, seen));
-    runTurn.mockResolvedValue(answered("[90']\n@중계: 휘슬이 울립니다."));
+    runTurn.mockResolvedValue(
+      answered('<scene minute="90" />\n<commentary>휘슬이 울립니다.</commentary>'),
+    );
 
     const last = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
     const result = state.matches.find((match) => match.id === matchId)!.result!;
@@ -876,17 +880,17 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
 describe("중계 위생 — 꺾쇠 블록은 화면에도 저장에도 서지 않는다", () => {
   realMode();
 
-  it("블록은 걷히고 시각 헤더와 이어쓰기는 남는다 — 스트리밍도 같다", async () => {
+  it("블록과 모델의 표식은 걷히고 중계는 남는다 — 스트리밍도 같다", async () => {
     const state = matchState();
     markEntered(state);
     const scene = [
-      "[12']",
+      '<scene minute="12" />',
       "<points>",
       "- 왼쪽으로 몰리는 상대의 공격",
       "- 거친 플레이에 흔들리는 미드필더",
       "</points>",
-      "@중계: 브루노가 중거리 슛을 때립니다!",
-      "골키퍼가 가까스로 쳐냅니다.",
+      "<commentary>브루노가 중거리 슛을 때립니다!",
+      "골키퍼가 가까스로 쳐냅니다.</commentary>",
     ].join("\n");
     runTurn.mockImplementation(
       async (req: { onText?: (delta: string) => void }): Promise<unknown> => {
@@ -905,10 +909,11 @@ describe("중계 위생 — 꺾쇠 블록은 화면에도 저장에도 서지 �
       expect(text).not.toContain("<points");
       expect(text).not.toContain("</points>");
       expect(text).not.toContain("왼쪽으로 몰리는");
-      expect(text).toContain("@중계: 브루노가 중거리 슛을 때립니다!");
-      // 턴마다 새로 찍는 시각 헤더와 이어쓰기 줄은 그대로 남는다 (prompts.md §1)
+      expect(text).toContain("<commentary>브루노가 중거리 슛을 때립니다!");
       expect(text).toContain("골키퍼가 가까스로 쳐냅니다.");
-      expect(text).toMatch(/^\[\d+'\]\n/u);
+      // 모델의 표식은 걷히고 장부의 분이 맨 앞에 선다 (prompts.md §1)
+      expect(text).not.toContain('<scene minute="12"');
+      expect(text).toMatch(/^<scene minute="\d+" \/>\n/u);
     }
   });
 });
@@ -1168,9 +1173,9 @@ describe("평시 GM 턴 — 상한을 도구로 채운 턴", () => {
       before + 1,
     );
     expect(turn.toolCalls.map((call) => call.name)).toContain("apply_finance_event");
-    // 장면 자리에는 코어의 기록이 선다 — 시점 헤더와 `@:` 내레이션
-    expect(turn.text.startsWith("[")).toBe(true);
-    expect(turn.text.split("\n").some((line) => line.startsWith("@:"))).toBe(true);
+    // 장면 자리에는 코어의 기록이 선다 — 장면 표식과 내레이션
+    expect(turn.text.startsWith("<scene ")).toBe(true);
+    expect(turn.text).toContain("<narration>");
     expect(turn.text).not.toContain("압박을 올리겠습니다");
   });
 
@@ -1210,8 +1215,8 @@ describe("시계 — 출처가 날짜의 주인을 정한다", () => {
     return { ...answered(""), output: { ops: {} } };
   };
 
-  /** 시점 헤더 한 줄 — 읽히는 형식은 `[날짜 시간대 시:분]`이다 (prompts.md §1) */
-  const header = (date: string, clock = "오후 3:20") => `[${date} ${clock}]`;
+  /** 장면 표식 — 날짜와 시각 (prompts.md §1) */
+  const header = (date: string, clock = "15:20") => `<scene date="${date}" time="${clock}" />`;
 
   it("평시 턴의 헤더는 날짜와 시각을 함께 민다", async () => {
     const state = structuredClone(IDLE);
@@ -1244,7 +1249,7 @@ describe("시계 — 출처가 날짜의 주인을 정한다", () => {
     markEntered(state);
     const day = state.date;
     runTurn.mockImplementation(
-      scene(`${header(addDays(day, 1), "오후 11:30")}\n@중계: 경기가 이어집니다.`),
+      scene(`${header(addDays(day, 1), "23:30")}\n<commentary>경기가 이어집니다.</commentary>`),
     );
 
     await runGmTurn(state, "계속 지켜보자");
@@ -1256,7 +1261,7 @@ describe("시계 — 출처가 날짜의 주인을 정한다", () => {
   it("헤더 없는 평시 턴이 셋 연달으면 그 수가 턴 결과로 올라가고, 손잡이가 그것을 되돌린다", async () => {
     const state = structuredClone(IDLE);
     const start = state.date;
-    runTurn.mockImplementation(scene("@스티브 홀랜드: 헤더를 잊었습니다."));
+    runTurn.mockImplementation(scene('<speak name="스티브 홀랜드">헤더를 잊었습니다.</speak>'));
 
     const stalled: (number | undefined)[] = [];
     for (let turn = 0; turn < STALLED_CLOCK_TURNS; turn++) {

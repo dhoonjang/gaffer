@@ -48,6 +48,7 @@ import type {
   TickEvent,
   LorebookInjection,
 } from "@gaffer/domain";
+import { hasVoice, narration, sceneMarker } from "@gaffer/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@gaffer/llm";
 import { reportTraining } from "../evaluators/training-rater";
 import {
@@ -111,14 +112,9 @@ const ADVANCE_STOP_KO: Record<string, string> = {
   blocked: "진행하지 못했다",
 };
 
-/** 장면이 섰는가 — 출력 문법이 요구하는 것은 `@`로 여는 줄 하나다 (prompts.md §1) */
-function hasSceneLine(text: string): boolean {
-  return text.split("\n").some((line) => line.trim().startsWith("@"));
-}
-
 /**
  * 장면이 비어 돌아온 턴을 세우는 **코어의 기록** — 호출이 남긴 요약을 내레이션
- * (`@:`) 줄로 옮긴다.
+ * (`<narration>`)으로 옮긴다.
  *
  * ⚠️ **대사는 쓰지 않는다.** 여기 서는 것은 장부가 이미 아는 사실뿐이고, 그래서
  * "장면을 대신 써 주지 않는다"와 어긋나지 않는다 (agents.md §2·§8). 세울 기록이
@@ -139,8 +135,14 @@ function sceneFromToolCalls(calls: readonly GmToolCall[]): string | null {
     )
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => `@: *${line}*`);
+    .map((line) => narration(line));
   return lines.length > 0 ? lines.join("\n") : null;
+}
+
+/** 커맨드 밖의 글자를 지문으로 감싼 본문 — 기록도 장면도 없는 턴의 마지막 구제다 */
+function rescuedBody(state: GameState, rawText: string): string {
+  const rescued = sanitizeSceneText(rawText, { manager: state.manager.name });
+  return stripLedgerIds(humanizePlayerIds(state, parseSceneHeader(rescued).body));
 }
 
 /**
@@ -447,18 +449,18 @@ async function callGm(
       }
     : undefined;
   /**
-   * 경기의 첫 줄은 코어가 쓴다 — 모델이 적은 시각은 화면에 닿기 전에 걷힌다.
-   * 위생은 두 국면에 다 걸린다 — 걸러질 줄이 화면에 잠깐 떴다 사라지면 그것대로
-   * 눈에 띄므로 저장과 화면에 같은 것이 선다 (agents.md §2). 중계가 읽는 것은
-   * 꺾쇠 규칙 하나뿐이고, 코어의 시각 줄은 그 체를 지나 화면에 선다.
+   * 경기의 장면 표식은 코어가 쓴다 — 모델이 적은 표식은 체가 걷는다.
+   * 위생은 두 국면에 다 걸린다 — 걸러질 것이 화면에 잠깐 떴다 사라지면 그것대로
+   * 눈에 띄므로 저장과 화면에 같은 것이 선다 (agents.md §2). ⚠️ 코어의 표식은 체
+   * **뒤**에서 붙는다 — 앞에 두면 경기의 체가 모델의 표식과 함께 그것까지 걷는다.
    */
   const streamText = !trackText
     ? undefined
     : inMatch
       ? opening.matchMinute !== null
-        ? stampMatchStream(() => minuteNow(state, ledger, opening), filterCasterStream(trackText))
+        ? filterCasterStream(stampMatchStream(() => minuteNow(state, ledger, opening), trackText))
         : filterCasterStream(trackText)
-      : filterSceneStream(trackText);
+      : filterSceneStream(trackText, { manager: state.manager.name });
   /** 이 호출이 남긴 자국 — 그 전에 코어가 남긴 기록(손잡이의 구간)은 세지 않는다 */
   const callsBefore = ledger.calls.length;
   const result = await retryOnce(
@@ -544,34 +546,41 @@ async function closeTurn(
     closedByCore = true;
   }
 
-  // 도구 앞에 흘린 작업 서술과 값이 같은 반복 헤더를 걷어낸다 — 중계에는 헤더 규칙을
-  // 걸지 않는다(턴마다 헤더를 새로 찍는 것이 정상이다 — prompts.md §1). 남는 것은
-  // 두 국면이 함께 읽는 꺾쇠 규칙 하나다
-  const sceneText = inMatch ? sanitizeCasterText(rawText) : sanitizeSceneText(rawText);
-  // 첫 줄 헤더가 본문과 갈린다 — 저장할 때 되붙일 것이고, 경기 턴은 분을 여기서 읽는다
+  // 장면 커맨드만 남긴다 — 작업 서술, 되받아 쓴 입력 블록, 값이 같은 반복 표식이 걷힌다.
+  // 경기에서는 모델의 표식까지 걷고 장부의 분을 세운다 (prompts.md §1)
+  // 평시는 구제를 미룬다 — 장면이 빈 턴에는 커맨드 밖의 작업 서술보다 코어의 기록이 앞선다(아래)
+  const sceneText = inMatch
+    ? sanitizeCasterText(rawText)
+    : sanitizeSceneText(rawText, { manager: state.manager.name, rescue: false });
+  // 여는 표식이 본문과 갈린다 — 저장할 때 되붙일 것이다
   const scene = parseSceneHeader(sceneText);
   /**
-   * 시계를 움직이는 것은 **턴이 닿은 시각**, 곧 마지막 시점 헤더다 — 모델의 선언을
+   * 경기의 표식은 화면에 서지 않지만 **모델이 적은 것은 읽는다** — 분이 장부와 갈렸다는
+   * 신호(아래 경고)와, 그 날 안에서 흐른 시각(출처 `ledger`는 날짜를 세우고 시각만 민다).
+   */
+  const marked = inMatch ? parseSceneHeader(rawText.trim()) : scene;
+  /**
+   * 시계를 움직이는 것은 **턴이 닿은 시각**, 곧 마지막 표식이다 — 모델의 선언을
    * 코어가 따라가되 그대로 믿지 않고, 경기일·기한 앞에서 멈춘 뒤 그 사실을 기록으로
    * 남긴다. 한 턴이 오전 훈련에서 오후 면담으로 넘어갔으면 채팅에도 오후가 서므로,
-   * 첫 헤더로만 밀면 상단 띠와 채팅이 갈린다 (agents.md §2).
+   * 첫 표식으로만 밀면 상단 띠와 채팅이 갈린다 (agents.md §2).
    */
-  const scenePoint = lastScenePoint(sceneText);
+  const scenePoint = lastScenePoint(inMatch ? rawText : sceneText);
   // 중계가 적은 분은 쓰이지 않지만, 장부와 갈렸다는 사실은 프롬프트가 흔들린 신호다
   if (
     opening.matchMinute !== null &&
-    scene.minute !== null &&
-    scene.minute !== minuteNow(state, ledger, opening)
+    marked.minute !== null &&
+    marked.minute !== minuteNow(state, ledger, opening)
   ) {
     console.warn(
-      `[gm] 중계의 시각 ${scene.minute}′ — 장부(${minuteNow(state, ledger, opening)}′)로 세웁니다`,
+      `[gm] 중계의 시각 ${marked.minute}′ — 장부(${minuteNow(state, ledger, opening)}′)로 세웁니다`,
     );
   }
   /**
-   * 헤더를 못 읽으면 시계가 멈춘다 — 첫 줄을 로그에 남기고 **연달은 횟수를 센다.**
+   * 표식을 못 읽으면 시계가 멈춘다 — 첫 줄을 로그에 남기고 **연달은 횟수를 센다.**
    * 로그만으로는 정지가 조용히 쌓이므로, 셋이 되면 그 수가 턴 결과로 올라가
    * 화면이 띠를 세운다 (`GmTurnResult.clockStalled` — agents.md §2).
-   * 손잡이가 이미 시계를 옮긴 턴은 헤더가 날짜를 또 밀지 못하는 것이 정상이다.
+   * 손잡이가 이미 시계를 옮긴 턴은 표식이 날짜를 또 밀지 못하는 것이 정상이다.
    */
   let clockStalled: number | null = null;
   /** 장면의 시계가 어디에 닿았는가 — 기록에 한 줄로 선다 (models.md §5-3) */
@@ -654,10 +663,10 @@ async function closeTurn(
    * 라인업과 훈련이 바뀐 뒤라 되돌릴 수 없으므로, 코어가 이번 턴의 기록으로 세운다
    * (agents.md §2·§8). 기록도 사건도 장면도 없으면 저장하지 않고 턴을 되돌린다.
    */
-  if (!inMatch && !hasSceneLine(body)) {
+  if (!inMatch && !hasVoice(body)) {
     // 모델이 헤더도 못 썼을 때 코어가 세우는 지금 시각 — 헤더가 없으면 화면의
     // 시각이 스트리밍이 끝나는 순간 사라진다
-    const now = () => `[${state.date} ${formatClock(clockOf(state))}]`;
+    const now = () => sceneMarker({ date: state.date, time: clockOf(state) });
     const record = sceneFromToolCalls(ledger.calls);
     if (record) {
       // mock 모드에서는 이것이 계약이다 — 대본은 장면을 쓰지 않는다 (agents.md §8)
@@ -669,7 +678,10 @@ async function closeTurn(
       body = record;
       emptyScene = true;
       header ??= now();
-    } else if (body.trim().length === 0) {
+    } else if (hasVoice(rescuedBody(state, rawText))) {
+      // 커맨드를 통째로 어긴 응답 — 빈 턴보다 어긴 장면이 낫다 (prompts.md §1)
+      body = rescuedBody(state, rawText);
+    } else {
       /**
        * **손잡이만 눌러 시간만 흐른 턴** — 장면도 세울 기록도 없지만 코어가 낸 사건이
        * 있으면 그 턴은 일어난 일이 있다. 화면은 사건 카드로 그 턴을 세우므로 되돌리지
@@ -679,7 +691,7 @@ async function closeTurn(
       if (ledger.events.length === 0) {
         const elapsed = ledger.calls.some((call) => call.name === TIME_PASSED);
         if (!elapsed) throw new GmTurnFailure("모델이 아무 장면도 내지 않아 턴을 취소했습니다.");
-        body = `@: *${state.date} ${formatClock(clockOf(state))}*`;
+        body = narration(`${state.date} ${formatClock(clockOf(state))}`);
         emptyScene = true;
       }
       header ??= now();
@@ -698,8 +710,8 @@ async function closeTurn(
     kind: "scene",
     inMatch,
     kickoff,
-    header: scene.header ?? null,
-    minute: scene.minute,
+    header: marked.header ?? null,
+    minute: marked.minute,
     ledgerMinute: opening.matchMinute === null ? null : minuteNow(state, ledger, opening),
     scenePoint: scenePoint ? { ...scenePoint } : null,
     clockSource: inMatch ? null : clockSourceOf(shape, opening),

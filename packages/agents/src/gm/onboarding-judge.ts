@@ -4,6 +4,7 @@ import {
   ageOf,
   naturalPositionOf,
   lorebookText,
+  readSceneMarkup,
 } from "@gaffer/domain";
 import { z } from "zod";
 import {
@@ -19,7 +20,6 @@ import {
 import { toToolSchema } from "../shared/tool-schema";
 import { OUTPUT_LANGUAGE } from "../shared/output-language";
 import { SUGGESTION_MAX_CHARS } from "../shared/suggest-reply";
-import { parseSceneHeader } from "../shared/context";
 import { buildGmStateNote } from "./gm-input";
 
 /** 배경 해석과 첫 장면을 한 호출로 만들고 검증 후 함께 반영한다. */
@@ -45,10 +45,9 @@ Today is the manager's first day. Open the scene from the background and the clu
 - Do not put internal judging numbers or probabilities in the scene.
 
 # Output grammar (scene)
-The scene opens with @ — lines are separated by line breaks, and the core adds the time line.
-- @Name: a person's words — use the name as the speaker tag.
-- @: narration without a speaker. What is wrapped in *single asterisks* is action and staging.
-- When the same speaker keeps talking, do not write the tag again.
+The scene is written only in commands; the core adds the scene marker.
+- <speak name="Name">…</speak> — a person's words. name is the person's name. Inside, what is wrapped in *single asterisks* is action and staging. Change lines inside one <speak> while the same person keeps talking; open a new command when the speaker changes.
+- <narration>…</narration> — narration without a speaker, written without asterisks.
 - ${OUTPUT_LANGUAGE}.
 
 # The manager's first words (suggestion)
@@ -64,9 +63,7 @@ export const ReportInputSchema = z.object({
     .string()
     .min(1)
     .max(SCENE_MAX)
-    .describe(
-      "The first scene of the first day — in the output grammar, lines separated by line breaks",
-    ),
+    .describe("The first scene of the first day — written in the output grammar's commands"),
   /** 상한을 넘거나 비면 제안만 빠진다 — 장면을 반려할 이유는 아니다 (agents.md §2) */
   suggestion: z
     .string()
@@ -112,19 +109,17 @@ function buildClubBlock(state: GameState): string {
 }
 
 /**
- * 첫 장면 검사 — 문법과 화자(수석코치 등장·감독 미발화)까지만 본다. 내용은 보지 않는다.
+ * 첫 장면 검사 — 문법과 화자(감독 미발화)까지만 본다. 내용은 보지 않는다.
  */
 export function isValidOnboardingText(state: GameState, text: string): boolean {
-  // 첫 줄의 시점 헤더는 문법의 일부다 — 본문만 떼어 검사한다
-  const lines = parseSceneHeader(text)
-    .body.split("\n")
-    .filter((line) => line.trim().length > 0);
+  const voices = readSceneMarkup(text).filter(
+    (item) => item.kind === "voice" && item.text.length > 0,
+  );
   return (
-    lines.length >= 1 &&
-    // 장면은 `@`로 연다 — 그 뒤의 태그 없는 줄은 이어쓰기다 (prompts.md §1)
-    (lines[0] ?? "").startsWith("@") &&
+    // 장면은 커맨드로 선다 — 커맨드 밖의 글자는 장면이 아니다 (prompts.md §1)
+    voices.length >= 1 &&
     // 감독은 유저의 몫이다 — GM이 대신 말하면 첫 턴부터 규약이 깨진다
-    !lines.some((line) => line.startsWith(`@${state.manager.name}:`))
+    !voices.some((item) => item.kind === "voice" && item.speaker === state.manager.name)
   );
 }
 

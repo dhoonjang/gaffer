@@ -210,7 +210,7 @@ export function seedSellerAgreement() {
   state.chat.push({
     role: "model",
     at: state.date,
-    text: "@: 상대 구단이 이적 조건을 제안했습니다.",
+    text: "<narration>상대 구단이 이적 조건을 제안했습니다.</narration>",
     toolCalls: [{ name: "request_negotiation_confirmation", summary: "매각 조건 확인", payload }],
   });
   saveGame(state);

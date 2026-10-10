@@ -47,3 +47,6 @@ balance-report/
 # 다시 나오는 값이고, 전환 시점은 유저가 정하는 결정이라 저장소에 남기지 않는다
 # (docs/data/sources.md §7.4).
 .pseudonymized/
+
+# 외부 참고 자료 — 사내 프롬프트 등 공개 저장소에 올리면 안 되는 로컬 전용 문서
+docs/agents/reference/

@@ -66,13 +66,11 @@ import {
 import { offerSeat, offerTerms, vacancyRows, managerSeatLines } from "./employment-context";
 import {
   buildGmReference,
-  type SceneScan,
-  keepsSceneLine,
-  afterSceneLine,
+  createSceneSieve,
   scenePointOf,
-  parseSceneHeader,
   historyEnd,
   buildOperatorMessage,
+  type SieveOptions,
 } from "../shared/context";
 import { buildMatchBrief, armbandLine } from "../shared/match-context";
 import {
@@ -99,6 +97,9 @@ import {
   lorebookText,
   interviewFactText,
   type MailMessage,
+  readSceneMarkup,
+  sceneMarker,
+  speak,
 } from "@gaffer/domain";
 
 /** 경기 다이제스트가 "방금 있었던 일"로 치는 기간 (일) */
@@ -135,7 +136,7 @@ export function buildGmDigest(state: GameState): string | null {
 
 /** 유저의 자연어를 모델이 읽는 감독 화자 형식으로 감싼다. */
 export function buildManagerMessage(state: GameState, message: string): string {
-  return `@${state.manager.name}: ${message}`;
+  return speak(state.manager.name, message);
 }
 
 /** 감독이 그 말을 건넨 사람 — 소속은 말을 건 그날의 것이다 */
@@ -984,113 +985,61 @@ export function buildGmStateNote(state: GameState, passed?: TimePassed | null): 
 }
 
 /**
- * 스트리밍에도 같은 위생을 건다 — 걸러진 줄이 화면에 잠깐 떴다 사라지면
- * 그것대로 눈에 띈다. 줄의 **앞머리**와 여기까지 지나온 것(`SceneScan`)만 보면
- * 판정되므로, 지연되는 것은 줄 앞머리뿐이고 그다음 델타는 그대로 흘러간다.
+ * 스트리밍에도 같은 위생을 건다 — 걸러진 것이 화면에 잠깐 떴다 사라지면 그것대로 눈에
+ * 띈다. 저장과 **같은 체**(`createSceneSieve`)를 지나므로 둘이 갈리지 않는다. 지연되는
+ * 것은 태그의 닫는 `>`까지뿐이고, 장면 커맨드의 본문은 도착하는 대로 흘러간다.
  *
- * ⚠️ **헤더는 값을, 꺾쇠는 닫는 부등호를 봐야 판정된다** — 같은 시각이면 소음,
- * 달라졌으면 전환이고, `<`로 연 줄은 태그인지 대사인지가 `>`에서 갈린다. 그래서 그
- * 두 줄만 닫는 글자(또는 줄 끝)까지 기다린다. 32자 안의 줄이라 지연은 눈에 띄지 않는다.
- *
- * ⚠️ **상태(`afterSceneLine`)는 줄이 끝난 뒤 줄 전체로 민다** — 앞머리로 밀면 한 줄에서
- * 여닫은 블록(`<b>강조</b>`)이 스트리밍에서만 열린 채 남아, 화면과 저장이 갈린다.
+ * 커맨드가 하나도 없는 응답의 구제(`sanitizeSceneText`)는 여기 걸리지 않는다 — 스트림은
+ * 응답의 끝을 모른다. 저장된 본문이 턴 끝에 화면을 바꾼다.
  */
-function filterStream(emit: (delta: string) => void, scenes: boolean): (delta: string) => void {
-  let line = ""; // 이 줄에 지금까지 온 것 전부 — 판정과 무관하게 쌓는다
-  let sent = 0; // 그중 이미 내보낸 글자 수
-  let keeping: boolean | null = null; // 이 줄을 내보내는가 — null이면 판정 전
-  const scan: SceneScan = { lastHeader: null, sceneOpen: false, block: null, scenes };
-
-  /** 앞머리만으로 판정할 수 있는가 — 못 하면 닫는 글자를 기다린다 */
-  const ready = (): boolean => {
-    const head = line.trimStart();
-    if (head.startsWith("<") && !head.includes(">")) return false;
-    if (scan.scenes && head.startsWith("[") && !head.includes("]")) return false;
-    return true;
-  };
-  /** 판정이 났으면 아직 안 나간 만큼을 흘려보낸다 */
-  const pump = (): void => {
-    if (keeping === null && line.trim().length > 0 && ready()) keeping = keepsSceneLine(line, scan);
-    if (keeping === true && sent < line.length) {
-      emit(line.slice(sent));
-      sent = line.length;
-    }
-  };
-  const endLine = (): void => {
-    // 닫히지 않은 채 줄이 끝난 헤더·꺾쇠도 여기서 판정된다
-    if (keeping === null && line.trim().length > 0) keeping = keepsSceneLine(line, scan);
-    if (keeping === true && sent < line.length) emit(line.slice(sent));
-    afterSceneLine(line, scan);
-    // 줄바꿈은 살아남은 줄에만 붙인다 — 걸러진 줄은 자리도 남기지 않는다
-    if (keeping !== false) emit("\n");
-    line = "";
-    sent = 0;
-    keeping = null;
-  };
-
+export function filterSceneStream(
+  emit: (delta: string) => void,
+  options: SieveOptions = {},
+): (delta: string) => void {
+  const sieve = createSceneSieve(options);
   return (delta: string) => {
-    const parts = delta.split("\n");
-    parts.forEach((part, i) => {
-      if (i > 0) endLine();
-      if (part.length > 0) {
-        line += part;
-        pump();
-      }
-    });
+    const kept = sieve.push(delta);
+    if (kept.length > 0) emit(kept);
   };
 }
 
-/** 평시 스트리밍 — 헤더·작업 로그·꺾쇠를 함께 걷는다 */
-export function filterSceneStream(emit: (delta: string) => void): (delta: string) => void {
-  return filterStream(emit, true);
-}
-
-/** 중계 스트리밍 — 꺾쇠 블록만 걷는다 (`sanitizeCasterText`와 같은 규칙) */
+/** 중계 스트리밍 — 같은 체다. 모델의 표식은 걷히고 장부의 분은 `stampMatchStream`이 세운다 */
 export function filterCasterStream(emit: (delta: string) => void): (delta: string) => void {
-  return filterStream(emit, false);
+  return filterSceneStream(emit, { match: true });
 }
 
 /**
- * 턴이 **닿은 시각** — 시점 헤더가 여럿이면 마지막 것이다.
+ * 턴이 **닿은 시각** — 표식이 여럿이면 마지막 것이다.
  *
- * 한 턴 안에서 시간이 흐르면 위생이 그 전환 헤더를 남기므로(prompts.md §1), 장면이
- * 실제로 도착한 곳은 마지막 헤더다. 시계를 첫 헤더로만 밀면 채팅은 오후를 세우는데
+ * 한 턴 안에서 시간이 흐르면 위생이 그 전환 표식을 남기므로(prompts.md §1), 장면이
+ * 실제로 도착한 곳은 마지막 표식이다. 시계를 첫 표식으로만 밀면 채팅은 오후를 세우는데
  * 상단 띠는 오전에 남아 **한 화면의 두 시계가 갈린다.**
  */
 export function lastScenePoint(text: string): ScenePoint | null {
   let point: ScenePoint | null = null;
-  for (const line of text.split("\n")) {
-    const here = scenePointOf(line);
+  for (const item of readSceneMarkup(text)) {
+    if (item.kind !== "scene") continue;
+    const here = scenePointOf(item.marker);
     if (here) point = here;
   }
   return point;
 }
 
-/** 경기 장면의 첫 줄 — 시계의 주인이 장부라 코어가 직접 쓴다 */
-function matchHeader(minute: number): string {
-  return `[${minute}']`;
-}
-
-/** 헤더 한 줄인가 — 대괄호로 열고 닫은 줄 하나 (`[43']` · `[2026-07-18 오후]`) */
-const BRACKET_LINE_RE = /^\s*\[[^\]]*\]\s*$/u;
-
 /**
  * **경기 장면의 시각은 장부가 붙인다** (agents.md §3 ④).
  *
- * 평시의 첫 줄 헤더는 시계를 옮기는 입구지만 경기의 시계 주인은 장부다. 캐스터가
- * 적은 분은 걷어내고 그 자리에 장부의 분을 세운다 — 대화만 한 턴에 `[12']`를 적어
- * 감독이 지나가지도 않은 12분 위에 다음 지시를 쌓던 자리다.
+ * 평시의 표식은 시계를 옮기는 입구지만 경기의 시계 주인은 장부다. 중계가 적은 표식은
+ * 위생이 이미 걷었고(`sanitizeCasterText`), 그 자리에 장부의 분을 세운다 — 대화만 한
+ * 턴에 `12′`를 적어 감독이 지나가지도 않은 12분 위에 다음 지시를 쌓던 자리다.
  */
 export function stampMatchScene(text: string, minute: number): string {
-  return `${matchHeader(minute)}\n${parseSceneHeader(text).body}`;
+  const body = text.trim();
+  return body.length > 0 ? `${sceneMarker({ minute })}\n${body}` : sceneMarker({ minute });
 }
 
 /**
- * 스트리밍에도 같은 주인 — **코어의 시각 줄이 먼저 나가고 모델의 첫 줄은 화면에
- * 닿기 전에 걷힌다.** 사후 교정만 하면 라이브 화면이 잠깐 다른 분을 보여 준다.
- *
- * 판정에 필요한 것은 첫 줄뿐이라 지연되는 것도 첫 줄뿐이다. 헤더일 수 없다고
- * 판정되는 순간(`[`로 열지 않았다) 그 자리에서 흘려보낸다.
+ * 스트리밍에도 같은 주인 — **코어의 표식이 먼저 나간다.** 모델의 표식은 그 뒤의 체
+ * (`filterCasterStream`)가 걷으므로 화면에 닿지 않는다.
  */
 export function stampMatchStream(
   /** 장부의 분 — 함수면 **첫 델타가 나가는 순간**에 읽는다 (도구가 시계를 옮긴 뒤다) */
@@ -1098,38 +1047,12 @@ export function stampMatchStream(
   emit: (delta: string) => void,
 ): (delta: string) => void {
   let opened = false;
-  /** 아직 판정하지 못한 첫 줄. `null`이면 판정이 끝나 그대로 흘려보낸다 */
-  let head: string | null = "";
-  const flush = (rest: string): void => {
-    head = null;
-    if (rest.length > 0) emit(rest);
-  };
   return (delta: string) => {
     if (!opened) {
-      emit(`${matchHeader(typeof minute === "function" ? minute() : minute)}\n`);
+      emit(`${sceneMarker({ minute: typeof minute === "function" ? minute() : minute })}\n`);
       opened = true;
     }
-    if (head === null) {
-      emit(delta);
-      return;
-    }
-    head += delta;
-    for (;;) {
-      const nl = head.indexOf("\n");
-      if (nl < 0) {
-        if (head.trim().length > 0 && !head.trimStart().startsWith("[")) flush(head);
-        return;
-      }
-      const first = head.slice(0, nl);
-      const rest = head.slice(nl + 1);
-      // 코어가 이미 첫 줄을 세웠으므로 그 앞의 빈 줄은 자리도 남기지 않는다
-      if (first.trim().length === 0) {
-        head = rest;
-        continue;
-      }
-      flush(BRACKET_LINE_RE.test(first) ? rest : `${first}\n${rest}`);
-      return;
-    }
+    emit(delta);
   };
 }
 

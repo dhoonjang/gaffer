@@ -245,7 +245,7 @@ export function generateHeadCoach(seed: number, teamId: string, today?: string):
   const real = realCoachNameOf(teamId);
   const name = personaNames(seed, teamId).headCoach;
   return withPersonaBook({
-    // 화자 태그는 직책이 아니라 **이름**이다 — 선수가 @손흥민:으로 말하듯
+    // 화자는 직책이 아니라 **이름**이다 — 선수가 <speak name="손흥민">으로 말하듯
     characterId: name,
     name,
     role: "head_coach",

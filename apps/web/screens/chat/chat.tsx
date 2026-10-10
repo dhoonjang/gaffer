@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { CardMark, ChatTurn, GoalMark, ToolCallRecord, SpeakerRole } from "@gaffer/engine";
-import { cutStamps } from "./scene-stamp";
+import { cutStamps, sceneLines } from "./scene-stamp";
 import { hasRailHint } from "./panel-hints";
 import { groupChips, groupPieces, splitStaging, weaveTurn } from "./turn-pieces";
 import type { Utterance } from "./turn-pieces";
@@ -320,7 +320,7 @@ function humanize(text: string, names?: Record<string, string>): string {
   return text.replace(ID_LIKE, (token) => names[token] ?? token);
 }
 
-export { partOfDayStamp, turnStamp } from "./scene-stamp";
+export { sceneStamp, turnStamp } from "./scene-stamp";
 
 /** 눌렀다고 치는 시간 — 짧으면 스크롤을 잡는 손에 걸리고, 길면 눌러도 안 열린 줄 안다 */
 const LONG_PRESS_MS = 500;
@@ -435,26 +435,18 @@ export function ChatTurnView({
     );
   }
 
-  let lines = text.split("\n").filter((line) => line.trim().length > 0);
-  if (streaming && lines.length > 0) {
-    // 아직 콜론/닫는 괄호가 도착하지 않은 마지막 줄은 다음 델타까지 보류 —
-    // 안 그러면 `@김`이나 `[2026-07-15 AM 9:1`이 한 프레임 날것으로 보인다
-    const last = lines[lines.length - 1] ?? "";
-    if (/^@[^:]*$/u.test(last) || /^\[[^\]]*$/u.test(last)) lines = lines.slice(0, -1);
-  }
-
   /**
-   * 시점 헤더를 걷어내 시각 표시로 세운다 — **첫 줄만이 아니다.** GM이 판정을 몇 줄
-   * 적고 나서 장면을 여는 턴에서는 헤더가 본문 한복판에 서고, 그때 걷어내지 않으면
-   * `[2026-07-15 AM 9:15]`가 대사 사이에 날것으로 남는다.
+   * 장면 표식을 걷어내 시각 표시로 세운다 — **첫 표식만이 아니다.** 한 턴 안에서 시간이
+   * 흐르면 표식이 본문 한복판에 선다. 스트리밍 중 끝에 걸린 미완성 태그는 파서가
+   * 다음 델타까지 보류한다(`sceneLines`).
    *
    * 시각은 **바뀔 때만** 선다 — 같은 값이 반복되면 시간이 흐른다는 신호가 오히려
-   * 죽는다. 이 선이 곧 장면의 경계다. 눈금은 **때**라(`partOfDayStamp`) 오전 내내
+   * 죽는다. 이 선이 곧 장면의 경계다. 눈금은 **때**라(`sceneStamp`) 오전 내내
    * 벌어진 장면들은 한 덩어리로 묶이고, 오후로 넘어갈 때 다시 선다.
    * 정확한 시각은 상단 띠가 갖는다 — 같은 화면에 시계를 둘 두지 않는다.
    */
-  const cut = cutStamps(lines);
-  lines = cut.lines;
+  const cut = cutStamps(sceneLines(text));
+  const lines = cut.lines;
   let seen = prevStamp;
   const stamps = cut.stamps.filter((s) => {
     if (s.stamp === seen) return false;
@@ -475,7 +467,7 @@ export function ChatTurnView({
   /**
    * 표시는 **벌어진 자리**에 선다 — 칩은 호출 시점의 줄 수, 골·경고는 분으로.
    * 자리를 모르는 기록(코어가 스스로 밀어 넣은 기록)은 맨 앞이다.
-   * `cuts`는 시각 표시로 떼어 낸 헤더 줄들 — 칩의 줄 수는 그것까지 세고 저장된다.
+   * `cuts`는 시각 표시로 떼어 낸 표식 줄들 — 칩의 줄 수는 그것까지 세고 저장된다.
    */
   const pieces = weaveTurn(lines, {
     goals: turn.goals,
@@ -504,7 +496,7 @@ export function ChatTurnView({
        * 시각이 그다음이다. 스탬프는 머리글이 아니라 장면과 장면 사이의 경계선이라
        * (`.scene-stamp`) 턴 끝에 서도 홀로 뜨지 않는다: 뒤따르는 장면으로 이어진다.
        *
-       * ⚠️ **`pieces` 밖이다.** 본문이 빈 턴(대본이 시점 헤더만 내는 「시간만 흐른
+       * ⚠️ **`pieces` 밖이다.** 본문이 빈 턴(대본이 장면 표식만 내는 「시간만 흐른
        * 턴」)에서는 `lines`가 비고 `pieces`가 스탬프뿐인데, 카드를 그 안에 끼우면
        * 그때 함께 사라진다. 카드는 장면이 있든 없든 사실이므로 장면과 무관하게 선다.
        */}

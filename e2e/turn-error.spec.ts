@@ -101,7 +101,7 @@ test("멎은 턴도 실패로 끝나고 다음 턴을 막지 않는다", async (
     route.fulfill({
       status: 200,
       contentType: "application/x-ndjson; charset=utf-8",
-      body: '{"type":"delta","text":"@수석코치: 알"}\n',
+      body: '{"type":"delta","text":"<speak name=\\"수석코치\\">알"}\n',
     }),
   );
 

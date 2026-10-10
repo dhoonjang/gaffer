@@ -428,7 +428,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 26`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
+**`SAVE_VERSION = 27`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
 세이브 버전과 별도로 `config/game-version.yml`이 소유한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 
@@ -683,7 +683,7 @@ tmp 쓰기가 실패하면 그 tmp는 **그 자리에서 거둔다**. 이름이 
   않는 대상을 매일 찾고, 대상만 남으면 달력에서 사라진 채 상태가 굴러간다.
 - **`state.phase`는 라우팅 전용** — 모델 입력에 넣지 않는다.
 - **`ChatTurn.role`의 `operator`는 감독 발화가 아니다.** 화면에 그리지 않고,
-  모델 이력에도 `@:` 화자 없음으로 들어간다.
+  모델 이력에도 발화가 아닌 `<operator>` 봉투로 들어간다.
 - **무소속(`freeagents`)은 클럽이 아니다.** 팀 엔티티 한 줄만 갖고 재정도 전술도
   AI 감독도 갖지 않는다 ([team.md](../team/team.md) §4). 무소속 선수를 들이는 길은 없다.
 

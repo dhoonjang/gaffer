@@ -1,7 +1,6 @@
 import { OUTPUT_LANGUAGE } from "./output-language";
 
-/** The story GM speaks the grammar consumed by the shared chat renderer. */
-export const SCENE_OUTPUT_GRAMMAR = `- @Name: line — the speaker tag is that person's name. The screen adds the job title. Write players' names in ${OUTPUT_LANGUAGE} too.
-- @: narration without a speaker.
-- When the same speaker keeps talking, do not write the tag again.
-- What is wrapped in *single asterisks* is action and staging.`;
+/** 평시 GM이 쓰는 목소리 커맨드 — 공용 채팅 렌더러가 읽는 문법이다 (prompts.md §1). */
+export const SCENE_OUTPUT_GRAMMAR = `- <speak name="Name">…</speak> — a person's words. name is that person's name; the screen adds the job title. Write players' names in ${OUTPUT_LANGUAGE} too. Inside, what is wrapped in *single asterisks* is action and staging.
+- <narration>…</narration> — narration without a speaker, written without asterisks.
+- While the same person keeps talking, change lines inside one <speak>. Open a new command whenever the speaker changes, and close each command before the next.`;

@@ -101,7 +101,10 @@ beforeAll(() => {
 describe("LLM 응답 실패", () => {
   it("응답 뷰 생성 실패는 저장 전에 끝나며 재시도할 상태를 보존한다", async () => {
     const game = await newGame();
-    reject.mockResolvedValueOnce({ text: "@수석코치: 알겠습니다.", toolCalls: [] });
+    reject.mockResolvedValueOnce({
+      text: '<speak name="수석코치">알겠습니다.</speak>',
+      toolCalls: [],
+    });
     payloadFailure.active = true;
     try {
       const events = await turnEvents(game.id, "훈련 잡아줘");
@@ -197,7 +200,10 @@ describe("LLM 응답 실패", () => {
     // 이미 있는 실패 경로를 탄다 — 무응답에 별도의 상태는 없다
     expect(failed.find((e) => e.type === "error")?.error).toContain("지연");
 
-    reject.mockResolvedValueOnce({ text: "@수석코치: 알겠습니다.", toolCalls: [] });
+    reject.mockResolvedValueOnce({
+      text: '<speak name="수석코치">알겠습니다.</speak>',
+      toolCalls: [],
+    });
     const next = await turnEvents(game.id, "다시 훈련 잡아줘");
     const chat = next.find((e) => e.type === "done")?.payload?.chat ?? [];
     expect(chat[chat.length - 1]?.text).toContain("알겠습니다");
@@ -228,7 +234,7 @@ describe("LLM 응답 실패", () => {
       const first = await reader.read();
       expect(decoder.decode(first.value)).toContain('"ping"');
 
-      release?.({ text: "@수석코치: 끝났습니다.", toolCalls: [] });
+      release?.({ text: '<speak name="수석코치">끝났습니다.</speak>', toolCalls: [] });
       let rest = "";
       for (;;) {
         const { value, done } = await reader.read();
@@ -266,7 +272,10 @@ describe("LLM 응답 실패", () => {
 
   it("성공한 턴은 평소처럼 유저·모델 턴을 남긴다", async () => {
     const game = await newGame();
-    reject.mockResolvedValueOnce({ text: "@수석코치: 알겠습니다.", toolCalls: [] });
+    reject.mockResolvedValueOnce({
+      text: '<speak name="수석코치">알겠습니다.</speak>',
+      toolCalls: [],
+    });
 
     const events = await turnEvents(game.id, "훈련 잡아줘");
     const chat = events.find((e) => e.type === "done")?.payload?.chat ?? [];
@@ -322,7 +331,7 @@ describe("기다리기를 멈춘 턴", () => {
     const rejected = await call(new Response('{"error":"메시지가 필요합니다"}', { status: 400 }));
     expect(rejected?.settled).toBe(true);
     // `done`도 `error`도 없이 끊겼다 — 저장됐는지 여기서는 알 수 없다
-    const cut = await call(ndjson('{"type":"delta","text":"@수석코치: 알"}\n'));
+    const cut = await call(ndjson('{"type":"delta","text":"<speak name=\\"수석코치\\">알"}\n'));
     expect(cut?.settled).toBe(false);
     // 그래서 배너는 "취소"라고 말하지 않는다 — 서버는 그 턴을 계속 돌리고 있다
     expect(cut?.reason).not.toContain("취소");
@@ -345,7 +354,7 @@ describe("기다리기를 멈춘 턴", () => {
 
     const settled = reloaded(game.id, true); // 잠금 뒤에 줄을 선다
     await new Promise((r) => setImmediate(r));
-    release?.({ text: "@수석코치: 끝났습니다.", toolCalls: [] });
+    release?.({ text: '<speak name="수석코치">끝났습니다.</speak>', toolCalls: [] });
     await drain(turn);
 
     expect((await settled).chat).toHaveLength(game.chat.length + 2);

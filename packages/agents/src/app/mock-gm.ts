@@ -3,7 +3,6 @@ import {
   clockOf,
   clubProfileIn,
   describeNextFixture,
-  formatClock,
   headCoachOf,
   personaBookOf,
   makeRng,
@@ -11,7 +10,7 @@ import {
   teamName,
   type GameState,
 } from "@gaffer/engine";
-import { josaOf } from "@gaffer/domain";
+import { josaOf, narration, sceneMarker, speak } from "@gaffer/domain";
 import { ScriptedGameLLM, resolveLlmMode, type AgentConfig, type GameLLM } from "@gaffer/llm";
 import type { GmTurnResult } from "../shared/gm-types";
 import { matchScript, peaceScript } from "../gm/mock-script";
@@ -55,57 +54,54 @@ export function mockGmLlm(
   );
 }
 
-/** 수석코치 화자 태그 — 직책이 아니라 그 사람의 이름이다 (people.md §3) */
-function coachTag(state: GameState): string {
-  return `@${headCoachOf(state).characterId}:`;
+/** 수석코치의 화자 이름 — 직책이 아니라 그 사람의 이름이다 (people.md §3) */
+function coachName(state: GameState): string {
+  return headCoachOf(state).characterId;
 }
 
 /**
- * 첫 장면의 자리 — **장소는 헤더가 갖고 첫 줄은 그 자리에서 벌어지는 것부터 쓴다**
+ * 첫 장면의 자리 — **장소는 표식이 갖고 첫 줄은 그 자리에서 벌어지는 것부터 쓴다**
  * (prompts.md §1). 실모드의 GM이 받는 규칙과 같은 규칙이라 대본도 같은 꼴로 연다.
  */
 const ONBOARDING_SCENES = [
   {
     place: (team: string) => `${team} 트레이닝 센터`,
-    line: () => `@: *정문 앞, 새 감독을 기다리던 카메라 셔터가 일제히 터진다*`,
+    line: () => narration(`정문 앞, 새 감독을 기다리던 카메라 셔터가 일제히 터진다`),
   },
   {
     place: (team: string) => `${team} 훈련장`,
-    line: () => `@: *잔디에 물기가 남은 이른 아침, 첫 출근 차량이 멈춰 선다*`,
+    line: () => narration(`잔디에 물기가 남은 이른 아침, 첫 출근 차량이 멈춰 선다`),
   },
   {
     place: (_team: string, stadium: string) => stadium,
-    line: () => `@: *선수 통로. 아직 빈 관중석 너머로 새 시즌 준비 소리가 울린다*`,
+    line: () => narration(`선수 통로. 아직 빈 관중석 너머로 새 시즌 준비 소리가 울린다`),
   },
   {
     place: (team: string) => `${team} 사무동`,
-    line: () => `@: *벽을 채운 역대 시즌 사진 앞에서 새 감독의 첫날이 시작된다*`,
+    line: () => narration(`벽을 채운 역대 시즌 사진 앞에서 새 감독의 첫날이 시작된다`),
   },
   {
     place: () => `감독실`,
-    line: () => `@: *프리시즌 첫날. 훈련장 사무실 문이 열린다*`,
+    line: () => narration(`프리시즌 첫날. 훈련장 사무실 문이 열린다`),
   },
 ] as const;
 
 const ONBOARDING_WELCOMES = [
-  (name: string, tag: string, coach: string) =>
-    `${tag} ${name} 감독님, 기다리고 있었습니다. 수석코치 ${coach}입니다. 오늘부터 제가 가장 가까운 자리에서 돕겠습니다.`,
-  (name: string, tag: string, coach: string) =>
-    `${tag} 어서 오십시오, ${name} 감독님. ${coach}입니다. 첫날부터 결정할 일이 적지 않습니다.`,
-  (name: string, tag: string, coach: string) =>
-    `${tag} ${name} 감독님, 드디어 뵙는군요. ${coach}라고 합니다 — 이곳의 분위기와 선수단 사정은 제가 솔직하게 말씀드리겠습니다.`,
-  (name: string, tag: string, coach: string) =>
-    `${tag} 환영합니다, ${name} 감독님. 수석코치 ${coach}입니다. 구단은 새 출발을 준비했고, 선수단은 감독님의 첫마디를 기다리고 있습니다.`,
+  (name: string, coach: string) =>
+    `${name} 감독님, 기다리고 있었습니다. 수석코치 ${coach}입니다. 오늘부터 제가 가장 가까운 자리에서 돕겠습니다.`,
+  (name: string, coach: string) =>
+    `어서 오십시오, ${name} 감독님. ${coach}입니다. 첫날부터 결정할 일이 적지 않습니다.`,
+  (name: string, coach: string) =>
+    `${name} 감독님, 드디어 뵙는군요. ${coach}라고 합니다 — 이곳의 분위기와 선수단 사정은 제가 솔직하게 말씀드리겠습니다.`,
+  (name: string, coach: string) =>
+    `환영합니다, ${name} 감독님. 수석코치 ${coach}입니다. 구단은 새 출발을 준비했고, 선수단은 감독님의 첫마디를 기다리고 있습니다.`,
 ] as const;
 
 const ONBOARDING_CLOSERS = [
-  (tag: string) =>
-    `${tag} 먼저 선수단을 들여다보시겠습니까, 아니면 이번 주 훈련 방향부터 정하시겠습니까?`,
-  (tag: string) => `${tag} 훈련, 전술, 선수단 가운데 무엇부터 손대시겠습니까?`,
-  (tag: string) =>
-    `${tag} 감독님의 첫 결정은 무엇입니까 — 선수단 점검부터 할까요, 훈련장으로 바로 나갈까요?`,
-  (tag: string) =>
-    `${tag} 개막까지 시간을 어떻게 쓰실지 말씀해 주십시오. 제가 바로 준비하겠습니다.`,
+  () => `먼저 선수단을 들여다보시겠습니까, 아니면 이번 주 훈련 방향부터 정하시겠습니까?`,
+  () => `훈련, 전술, 선수단 가운데 무엇부터 손대시겠습니까?`,
+  () => `감독님의 첫 결정은 무엇입니까 — 선수단 점검부터 할까요, 훈련장으로 바로 나갈까요?`,
+  () => `개막까지 시간을 어떻게 쓰실지 말씀해 주십시오. 제가 바로 준비하겠습니다.`,
 ] as const;
 
 /**
@@ -119,22 +115,31 @@ export function buildOnboardingTurn(state: GameState): GmTurnResult {
   const rng = makeRng(state.seed, "onboarding-copy");
   const team = teamName(state.userTeamId);
   const persona = headCoachOf(state);
-  const tag = coachTag(state);
+  const coach = coachName(state);
 
   const scene = pick(rng, ONBOARDING_SCENES);
   return {
     text: [
       // 첫 장면도 시점과 장소를 세우고 연다 — 실모드와 같은 문법이다
-      `[${state.date} ${formatClock(clockOf(state))} · ${scene.place(team, clubProfileIn(state, state.userTeamId).stadium)}]`,
+      sceneMarker({
+        date: state.date,
+        time: clockOf(state),
+        place: scene.place(team, clubProfileIn(state, state.userTeamId).stadium),
+      }),
       scene.line(),
-      pick(rng, ONBOARDING_WELCOMES)(state.manager.name, tag, persona.name),
-      `@: ${personaBookOf(state, persona).description}`,
-      `${tag} “${state.manager.background}”${josaOf(state.manager.background, "이라는/라는")} 이력도 검토했습니다.`,
-      `${tag} 스쿼드의 축은 ${views.squad.players
-        .slice(0, 3)
-        .map((p) => p.name)
-        .join(", ")}입니다. ${describeNextFixture(state)}`,
-      pick(rng, ONBOARDING_CLOSERS)(tag),
+      speak(coach, pick(rng, ONBOARDING_WELCOMES)(state.manager.name, persona.name)),
+      narration(personaBookOf(state, persona).description),
+      speak(
+        coach,
+        [
+          `“${state.manager.background}”${josaOf(state.manager.background, "이라는/라는")} 이력도 검토했습니다.`,
+          `스쿼드의 축은 ${views.squad.players
+            .slice(0, 3)
+            .map((p) => p.name)
+            .join(", ")}입니다. ${describeNextFixture(state)}`,
+          pick(rng, ONBOARDING_CLOSERS)(),
+        ].join("\n"),
+      ),
     ].join("\n"),
     toolCalls: [],
     suggestion: "선수단부터 보자",

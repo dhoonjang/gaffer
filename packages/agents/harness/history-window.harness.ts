@@ -55,7 +55,7 @@ const USER_TURN_CHARS = 24;
  */
 const CHARS_PER_TOKEN = 1.43;
 
-/** 세계 하나 — 이력의 봉투(`@감독이름: `)를 실제 코드가 붙이려면 감독이 있어야 한다 */
+/** 세계 하나 — 이력의 봉투(감독의 `<speak>`)를 실제 코드가 붙이려면 감독이 있어야 한다 */
 function build(): GameState {
   const background = "K리그에서 뛰다 은퇴한 수비수 출신 분석가";
   return createGame({

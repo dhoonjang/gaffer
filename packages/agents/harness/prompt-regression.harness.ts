@@ -160,10 +160,8 @@ async function casterArm(seed: number): Promise<CasterArm> {
     arm.turns += 1;
     arm.rawLines += textLines(text).length;
     arm.keptLines += textLines(sanitizeCasterText(text)).length;
-    // 위생 전후로 첫 줄 헤더가 같은가 — 구간마다 새로 찍는 시각 줄은 소음이 아니다
-    if (parseSceneHeader(text).header === parseSceneHeader(sanitizeCasterText(text)).header) {
-      arm.headers += 1;
-    }
+    // 저장된 중계가 장부의 분 표식으로 여는가 — 표식은 코어가 체 뒤에서 붙인다
+    if (parseSceneHeader(text).minute !== null) arm.headers += 1;
   }
   return arm;
 }
@@ -209,10 +207,9 @@ describe("프롬프트 회귀", () => {
       const parsed = parseSceneHeader(text);
       if (parsed.header !== null) headers += 1;
       /**
-       * 문법 — 헤더를 뗀 본문은 `@` 줄로 연다. 그 뒤의 태그 없는 줄은 직전 화자의
-       * 이어쓰기라 세지 않는다 (prompts.md §1).
+       * 문법 — 표식을 뗀 본문은 장면 커맨드로 연다 (prompts.md §1).
        *
-       * ⚠️ **본문이 없는 턴은 분모에 들지 않는다.** 시간만 흐른 턴은 헤더만 서고
+       * ⚠️ **본문이 없는 턴은 분모에 들지 않는다.** 시간만 흐른 턴은 표식만 서고
        * 본문이 비는데, 그 사실은 이번 턴의 사건 카드가 이미 진다 (overview.md §2) —
        * 문법을 어긴 것이 아니라 쓸 장면이 없는 것이다. 분모가 통째로 비는 자리는
        * 아래 「본문이 선 장면 비율」이 잡는다.
@@ -220,7 +217,7 @@ describe("프롬프트 회귀", () => {
       const opening = textLines(parsed.body)[0];
       if (opening !== undefined) {
         bodied += 1;
-        if (opening.startsWith("@")) grammatical += 1;
+        if (/^<(speak|narration|commentary)\b/u.test(opening)) grammatical += 1;
       }
     }
 

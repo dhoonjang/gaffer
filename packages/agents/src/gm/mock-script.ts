@@ -2,14 +2,21 @@ import { TACTIC_OPS } from "../evaluators/tactic-orders";
 import { TRAINING_OPS } from "../evaluators/training-orders";
 import { FINANCE_OPS } from "../evaluators/finance-orders";
 import type { MatchEvent, ShootoutOutcome } from "@gaffer/domain";
-import { contractEndForYears, eventCauseText, formatScore, shootoutTally } from "@gaffer/domain";
+import {
+  commentary,
+  contractEndForYears,
+  eventCauseText,
+  formatScore,
+  narration,
+  sceneMarker,
+  shootoutTally,
+} from "@gaffer/domain";
 import {
   addDays,
   buildMailView,
   BIG_CHANCE_XG,
   clockOf,
   describeNextFixture,
-  formatClock,
   minutesOfClock,
   managedTeamId,
   nextMatchFor,
@@ -261,9 +268,9 @@ function clockOfMinutes(total: number): string {
  */
 const SCRIPT_PLACE = "감독실";
 
-/** 실모드와 같은 모양의 시점 헤더 — 이 한 줄이 코어의 시계를 민다 (agents.md §2) */
+/** 실모드와 같은 모양의 장면 표식 — 이것이 코어의 시계를 민다 (agents.md §2) */
 function sceneHeader(date: string, clock: string, place = SCRIPT_PLACE): string {
-  return `[${date} ${formatClock(clock)} · ${place}]`;
+  return sceneMarker({ date, time: clock, place });
 }
 
 /** 오늘의 한 걸음 뒤 — 장면 하나가 흘려보내는 시각 */
@@ -317,7 +324,7 @@ export function peaceScript(
   const suggested = suggestLine(peaceSuggestion(state, line));
   return stands
     ? { calls, text: `${header}\n${suggested}` }
-    : { text: `${header}\n@: *${describeNextFixture(state)}*\n${suggested}` };
+    : { text: `${header}\n${narration(describeNextFixture(state))}\n${suggested}` };
 }
 
 /** 해석기의 대본 — 같은 말이 같은 표의 같은 줄에서 명령의 인자를 받는다 */
@@ -396,47 +403,53 @@ function renderEvent(
   const at = eventMinuteText(ev);
   switch (ev.type) {
     case "kickoff":
-      return [`@중계: 킥오프! 경기가 시작됩니다.`];
+      return [commentary(`킥오프! 경기가 시작됩니다.`)];
     case "goal": {
       const cause = ev.causes[0] ? ` — ${eventCauseText(ev.causes[0], nameOf)}` : "";
-      return [`@중계: 골! ${scoreLine(state, score)} (${from}${name} ${at})${cause}`.trimEnd()];
+      return [
+        commentary(`골! ${scoreLine(state, score)} (${from}${name} ${at})${cause}`.trimEnd()),
+      ];
     }
     case "shot": {
       const big = (ev.xg ?? 0) >= BIG_CHANCE_XG ? "결정적인 장면! " : "";
       const shapes = ev.shotOutcome ? SHOT_KO[ev.shotOutcome] : undefined;
       const shape = shapes?.[turnOf(ev.shotOutcome ?? "shot") % shapes.length];
       return [
-        `@중계: ${at} ${big}${shape ? shape(`${from}${name}`) : `${from}${name}의 슛이 이어집니다.`}`,
+        commentary(
+          `${at} ${big}${shape ? shape(`${from}${name}`) : `${from}${name}의 슛이 이어집니다.`}`,
+        ),
       ];
     }
     case "foul":
-      return [`@중계: ${at} ${name}의 반칙 — 주심이 점을 가리킵니다!`];
+      return [commentary(`${at} ${name}의 반칙 — 주심이 점을 가리킵니다!`)];
     case "chance":
-      return [`@중계: ${at} ${name}에게 기회가 왔지만 마무리가 아쉽습니다.`];
+      return [commentary(`${at} ${name}에게 기회가 왔지만 마무리가 아쉽습니다.`)];
     case "save":
-      return [`@중계: ${at} 골키퍼의 선방!`];
+      return [commentary(`${at} 골키퍼의 선방!`)];
     case "yellow_card":
-      return [`@중계: ${at} ${name}에게 옐로카드.`];
+      return [commentary(`${at} ${name}에게 옐로카드.`)];
     case "red_card":
-      return [`@중계: *${at} ${name} 퇴장!*`];
+      return [commentary(`*${at} ${name} 퇴장!*`)];
     case "injury":
-      return [`@중계: ${at} ${name}, 그라운드에 쓰러집니다 — 의료진이 들어옵니다.`];
+      return [commentary(`${at} ${name}, 그라운드에 쓰러집니다 — 의료진이 들어옵니다.`)];
     case "half_time":
-      return [`@중계: *하프타임 — 라커룸으로 향한다* ${scoreLine(state, score)}`];
+      return [commentary(`*하프타임 — 라커룸으로 향한다* ${scoreLine(state, score)}`)];
     case "extra_time_start":
-      return [`@중계: *90분 종료 — 승부는 연장으로 넘어갑니다.* ${scoreLine(state, score)}`];
+      return [commentary(`*90분 종료 — 승부는 연장으로 넘어갑니다.* ${scoreLine(state, score)}`)];
     case "extra_half_time":
-      return [`@중계: *연장 전반 종료.* ${scoreLine(state, score)}`];
+      return [commentary(`*연장 전반 종료.* ${scoreLine(state, score)}`)];
     case "full_time":
-      return [`@중계: *경기 종료 휘슬* 최종 스코어 ${scoreLine(state, score)}.`];
+      return [commentary(`*경기 종료 휘슬* 최종 스코어 ${scoreLine(state, score)}.`)];
     case "substitution":
       return [
-        `@: *교체 보드가 올라간다 — ${nameOf(ev.actors[0] ?? "")} OUT, ${nameOf(ev.actors[1] ?? "")} IN*`,
+        narration(
+          `교체 보드가 올라간다 — ${nameOf(ev.actors[0] ?? "")} OUT, ${nameOf(ev.actors[1] ?? "")} IN`,
+        ),
       ];
     // 상대 벤치가 판을 옮겼다 — 문장은 원인 렌더러가 만든다 (match.md §3.3)
     case "tactical_shift":
       return ev.causes[0]
-        ? [`@중계: ${at} 상대 벤치가 움직입니다 — ${eventCauseText(ev.causes[0], nameOf)}.`]
+        ? [commentary(`${at} 상대 벤치가 움직입니다 — ${eventCauseText(ev.causes[0], nameOf)}.`)]
         : [];
     default:
       return [];
@@ -467,10 +480,12 @@ function shootoutLines(state: GameState): string[] {
   return [
     ...(last
       ? [
-          `@중계: ${last.round}번째 키커 ${playerName(state, last.taker)} — ${SHOOTOUT_KO[last.outcome]}`,
+          commentary(
+            `${last.round}번째 키커 ${playerName(state, last.taker)} — ${SHOOTOUT_KO[last.outcome]}`,
+          ),
         ]
-      : [`@중계: *120분이 승부를 가르지 못했습니다 — 승부차기로 갑니다.*`]),
-    `@중계: *승부차기 ${formatScore(tally.home, tally.away)}.*`,
+      : [commentary(`*120분이 승부를 가르지 못했습니다 — 승부차기로 갑니다.*`)]),
+    commentary(`*승부차기 ${formatScore(tally.home, tally.away)}.*`),
   ];
 }
 
@@ -491,8 +506,8 @@ export function matchScript(
       : "양 팀";
     return {
       text: [
-        `@: *터널을 나선 스물두 명이 자리를 잡는다*`,
-        `@중계: ${fixture}, 곧 킥오프입니다.`,
+        narration(`터널을 나선 스물두 명이 자리를 잡는다`),
+        commentary(`${fixture}, 곧 킥오프입니다.`),
         suggested,
       ].join("\n"),
     };
@@ -510,7 +525,7 @@ export function matchScript(
     return renderEvent(state, ev, running, turnOf);
   });
   // 사건 없이 멈춘 턴에도 한 줄은 선다 — 빈 장면은 턴이 취소되는 자리다
-  if (lines.length === 0) lines.push(`@중계: ${minute}′ — ${scoreLine(state, now)}.`);
+  if (lines.length === 0) lines.push(commentary(`${minute}′ — ${scoreLine(state, now)}.`));
   lines.push(suggested);
   const hit = options.message ? findLine(options.message) : null;
   const commands = hit?.line.ops?.({ state, named: hit.named }) ?? {};

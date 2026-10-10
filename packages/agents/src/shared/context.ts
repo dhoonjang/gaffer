@@ -8,9 +8,27 @@ import {
   savedClubProfile,
   teamName,
 } from "@gaffer/engine";
+import {
+  createMarkupLexer,
+  closeVoice,
+  isSceneCommand,
+  isVoiceTag,
+  narration,
+  openVoice,
+  readSceneMarker,
+  readSceneMarkup,
+  sceneClock,
+  sceneMarker,
+  speak,
+  SCENE_TAG,
+  SPEAK_TAG,
+  type MarkupToken,
+  type SceneMarker,
+  type VoiceTag,
+} from "@gaffer/domain";
 
 /**
- * 감독 — 이름과 화자 태그는 속성, 배경은 본문. 세이브당 고정인 것만이다.
+ * 감독 — 이름은 속성, 배경은 본문. 세이브당 고정인 것만이다.
  *
  * **데이터만 싣는다** (prompts.md §5). 선수 이름이 스냅샷에 있다는 것, 선수 인자는
  * 이름으로 받는다는 것, 감독을 대신 연기하지 않는다는 것은 전부 시스템 프롬프트가
@@ -22,16 +40,14 @@ import {
 export function describeManager(
   manager: Pick<GameState["manager"], "name" | "background">,
 ): string {
-  return [
-    `<manager name="${manager.name}" tag="@${manager.name}:">`,
-    `배경: ${manager.background}`,
-    `</manager>`,
-  ].join("\n");
+  return [`<manager name="${manager.name}">`, `배경: ${manager.background}`, `</manager>`].join(
+    "\n",
+  );
 }
 
 /**
  * 화면 조작 — 감독의 발화가 아니다. **모델의 출력 문법 밖 봉투로 싣는다**
- * (`<operator>시간 진행 — 하루</operator>`). `@:`는 GM이 내레이션을 쓰는 채널이라 거기 담으면
+ * (`<operator>시간 진행 — 하루</operator>`). `<narration>`은 GM이 지문을 쓰는 커맨드라 거기 담으면
  * 감독의 화면 조작이 모델 자신의 문법으로 이력에 서고, 인물이 그 손잡이를 아는
  * 것으로 읽힌다 (docs/agents/prompts.md §1).
  */
@@ -51,12 +67,12 @@ export const TURN_EXCERPT_CHARS = 1500;
 
 /**
  * 턴 목록을 해석기가 읽는 줄로 — **평시의 `<recent_turns>`와 경기의 `<match_log>`가 같은
- * 함수를 쓴다.** 감독 턴은 `@감독:` 봉투, 손잡이 턴은 오퍼레이터 봉투, 모델 턴은 본문을
+ * 함수를 쓴다.** 감독 턴은 감독의 발화 커맨드, 손잡이 턴은 오퍼레이터 봉투, 모델 턴은 본문을
  * 잘라서. 두 벌이면 한쪽만 고쳐져 두 해석기가 다른 말을 읽는다.
  */
 function renderTurns(turns: readonly ChatTurn[]): string[] {
   return turns.map((t) => {
-    if (t.role === "user") return `@감독: ${t.text}`;
+    if (t.role === "user") return speak("감독", t.text);
     if (t.role === "operator") return buildOperatorMessage(t.text);
     return t.text.slice(0, TURN_EXCERPT_CHARS);
   });
@@ -65,272 +81,215 @@ function renderTurns(turns: readonly ChatTurn[]): string[] {
 /**
  * **이번 턴에 밀어 넣은 꼬리를 뺀 지난 턴들** — 해석기의 `<recent_turns>`·`<match_log>`가
  * 읽는다. 턴 러너는 감독의 말을 모델 호출 전에 채팅에 넣으므로(`historyEnd`) 꼬리를
- * 그대로 실으면 같은 말이 `@감독:` 줄과 두 벌이 된다 (agents.md §3).
+ * 그대로 실으면 같은 말이 이번 턴의 감독 발화와 두 벌이 된다 (agents.md §3).
  */
 function pastTurns(turns: GameState["chat"]): GameState["chat"] {
   return turns.slice(0, historyEnd(turns));
 }
 
-/** `<recent_turns>`의 본문 — 평시의 지난 턴들. 이번 턴의 것은 `@감독:` 줄이 싣는다 */
+/** `<recent_turns>`의 본문 — 평시의 지난 턴들. 이번 턴의 것은 감독 발화 블록이 싣는다 */
 export function buildRecentTurnsBlock(state: GameState, count = RECENT_TURNS): string {
   const peace = pastTurns(state.chat.filter(isPeaceTurn));
   return renderTurns(peace.slice(-count)).join("\n");
 }
 
 /**
- * 장면 헤더 — 모델이 첫 줄에 적는 시점과 장소. 시계를 움직이는 유일한 입구다.
- * 일상 `[2026-07-13 오후 · 훈련장]` · 경기 `[67']`. 형식이 어긋나면 시간이 멈춘다
- * (로그로 드러낸다).
- * ⚠️ 날짜만 필수 — 시:분을 필수로 좁히면 `[2026-07-20 월요일 오전]`을 못 잡아
- * 시계가 며칠씩 멈춘다. **장소도 같은 이유로 흘려 읽는다**: 시계는 날짜가 미는 것이고
- * 장소는 화면이 데이트라인으로 세우는 것이라(`partOfDayStamp`), 장소가 없거나
- * 구분자가 다르다고 그 턴의 시계를 멈출 이유가 없다 (prompts.md §1).
+ * 장면 표식 → 시점. 날짜만 필수다 — 시각을 못 읽으면 그 때의 기본 시각, 그것도 없으면
+ * 그 날의 시작이다. ⚠️ 시각·장소를 필수로 좁히면 표식 하나를 못 읽은 턴의 시계가 멎는다
+ * (prompts.md §1). 경기의 분 표식은 시점이 아니다.
  */
-const SCENE_HEADER_RE = new RegExp(
-  [
-    /^\[\s*(\d{4}-\d{2}-\d{2})/, // 날짜 — 이것만 필수
-    /(?:\s*[,·]?\s*\(?\s*[월화수목금토일](?:요일)?\s*\)?)?/, // 요일 (수) · 월요일
-    /(?:\s*[,·]?\s*(AM|PM|오전|오후|아침|점심|저녁|밤|새벽))?/, // 시간대
-    /(?:\s*(\d{1,2}):(\d{2}))?/, // 시각
-    /(?:\s*[·—–,-]?\s*[^\]]*)?/, // 장소 — 구분자가 무엇이든, 없어도 읽는 것은 화면이다
-    /\s*\]/,
-  ]
-    .map((r) => r.source)
-    .join(""),
-  "i",
-);
-
-const MATCH_HEADER_RE = /^\[\s*(\d{1,3})\s*['′분]?\s*\]/;
-
-/** 시간대만 적힌 헤더의 기본 시각 — 하루 안에서 되감기지 않을 만큼만 민다 */
-const PART_OF_DAY: Record<string, string> = {
-  새벽: "06:00",
-  아침: "08:00",
-  오전: "09:00",
-  am: "09:00",
-  점심: "12:30",
-  오후: "14:00",
-  pm: "14:00",
-  저녁: "19:00",
-  밤: "21:00",
-};
-
-/**
- * `AM 9:30` · `PM 7:05` · `14:30` → "HH:MM" (24시간). 읽을 수 없으면 null.
- *
- * ⚠️ **시간대가 붙었는지가 12시간제인지를 가른다.** 시간대 없는 `14:30`까지 12로
- * 접으면 `02:30`이 되어 시각이 오전으로 뒤집히고, 코어가 되감기를 막으므로 그 턴의
- * 시계가 통째로 멎는다. 그래서 시간대가 없으면 적힌 값이 곧 24시간 값이다 —
- * `오전 12:05`는 자정 00:05, 시간대 없는 `12:05`는 정오 12:05.
- */
-function toClock(meridiem: string | undefined, hour: string, minute: string): string | null {
-  const h = Number(hour);
-  if (h > 23 || Number(minute) > 59) return null;
-  const h24 = meridiem ? (h % 12) + (/^(PM|오후|저녁|밤)$/i.test(meridiem) ? 12 : 0) : h;
-  return `${String(h24).padStart(2, "0")}:${minute}`;
+export function scenePointOf(marker: SceneMarker): ScenePoint | null {
+  const date = marker.date?.match(/^\d{4}-\d{2}-\d{2}/u)?.[0];
+  if (!date) return null;
+  return { date, clock: sceneClock(marker.time) ?? "09:00" };
 }
 
-/** 헤더가 가리키는 시각 — 시:분이 있으면 그것, 없으면(또는 읽을 수 없으면) 시간대의 기본값 */
-function clockFromHeader(meridiem: string | undefined, hour?: string, minute?: string): string {
-  const clock = hour && minute ? toClock(meridiem, hour, minute) : null;
-  return clock ?? PART_OF_DAY[(meridiem ?? "").toLowerCase()] ?? "09:00";
+/** 위생의 갈래 — 경기는 모델의 표식을 걷고 코어가 장부의 분을 세운다 */
+export interface SieveOptions {
+  match?: boolean;
+  /** 감독의 이름 — 그 이름의 발화는 모델턴에 서지 않는다 (prompts.md §1) */
+  manager?: string;
+  /** 장면 커맨드가 없는 응답을 지문으로 구제하는가 — 기본은 그렇다 */
+  rescue?: boolean;
 }
 
-/** 위생이 지금까지 본 것 — 직전에 살린 헤더는 무엇이었나, 장면이 열렸나 */
-export interface SceneScan {
-  /** 마지막으로 살아남은 시점 헤더의 값 — 아직 하나도 없으면 null */
-  lastHeader: string | null;
-  /** 첫 `@` 줄이 지나갔다 — 그 뒤의 태그 없는 줄은 이어쓰기다 */
-  sceneOpen: boolean;
-  /** 열려 있는 꺾쇠 블록의 이름 — 그 안의 줄은 어느 국면에서도 장면이 아니다 */
-  block: string | null;
-  /** 헤더·작업 로그 규칙까지 거는가 — 중계는 꺾쇠 규칙 하나만 읽는다 */
-  scenes: boolean;
-}
-
-/** 헤더 값 비교용 — 안쪽 공백의 차이는 같은 시각이다 */
-function headerKey(line: string): string {
-  return line.trim().replace(/\s+/gu, " ");
+/** 위생 하나의 결과 — 걷은 글자는 구제(`sanitizeSceneText`)가 읽는다 */
+interface SceneSieve {
+  push(delta: string): string;
+  end(): string;
+  /** 목소리가 하나라도 섰는가 */
+  voiced(): boolean;
+  /** 커맨드 밖에 흘린 글자 — 꺾쇠 블록 안의 것은 없다 */
+  stray(): string;
 }
 
 /**
- * 줄 앞머리의 여는 태그 이름 — `<points>` · `<ledger>` (`</…>`·`<…/>`는 아니다).
+ * **장면 위생의 체** — 장면 커맨드만 남기고 정본의 꼴로 다시 적는다 (prompts.md §1).
  *
- * ⚠️ 이름은 **글자로 열린다**(`\p{L}`) — 코어의 블록은 영어지만 모델이 지어내는
- * 태그는 한글일 수 있고(`<생각>`), 숫자로 여는 것은 태그가 아니라 부등호다(`3 < 4`).
+ * 줄을 보지 않고 커맨드를 본다: 작업 로그(커맨드 밖의 글자), 되받아 쓴 입력 블록
+ * (`<points>`·`<ledger>`), 값이 같은 반복 표식, 감독 이름의 발화가 걷힌다.
+ * 저장(`sanitizeSceneText`)과 스트리밍(`filterSceneStream`)이 같은 체를 지난다 —
+ * 둘이 갈리면 화면과 저장에 다른 장면이 선다.
+ *
+ * 정본의 꼴: 커맨드마다 새 줄에서 열고, 여는 태그 바로 뒤에 첫 줄이, 닫는 태그 바로
+ * 앞에 끝 줄이 붙는다. 그래서 본문의 빈 줄 아닌 줄 수가 곧 화면의 줄 수다.
  */
-const OPENS_TAG_RE = /^<([\p{L}_][\p{L}\p{N}_-]*)(?:\s[^<>]*)?>/u;
+export function createSceneSieve(options: SieveOptions = {}): SceneSieve {
+  const lexer = createMarkupLexer();
+  let mode:
+    | { kind: "outside" }
+    | { kind: "voice"; tag: VoiceTag; name: string; started: boolean; gap: string }
+    | { kind: "drop"; name: string } = { kind: "outside" };
+  let lastMarker: string | null = null;
+  let wrote = false;
+  let voiced = false;
+  let stray = "";
 
-/** 줄 하나로 끝난 꺾쇠 — 짝 없는 닫는 태그이거나 스스로 닫은 태그 */
-const LONE_TAG_RE = /^<\/[\p{L}_][\p{L}\p{N}_-]*\s*>$|^<[\p{L}_][\p{L}\p{N}_-]*(?:\s[^<>]*?)?\/>$/u;
-
-/** 이 줄이 그 이름의 블록을 닫는가 — 한 줄로 여닫은 블록도 여기서 걸린다 */
-function closesTag(trimmed: string, name: string): boolean {
-  return new RegExp(`</${name}\\s*>`, "u").test(trimmed);
-}
-
-/** 장면이 다시 서는 줄인가 — 화자(`@`)이거나 시점 헤더(`[`)다 */
-function opensScene(trimmed: string): boolean {
-  return trimmed.startsWith("@") || trimmed.startsWith("[");
-}
-
-/**
- * 꺾쇠로 여닫는 블록은 **읽는 것**이고 장면이 아니다 (prompts.md §1).
- *
- * `<points>`·`<ledger>`는 코어가 읽으라고 넣어 준 입력 구조인데, 모델이 그것을
- * 되받아 쓰면 프롬프트 내부 구조가 감독이 읽는 자리에 그대로 선다. 평시도 중계도
- * 이 한 규칙을 함께 읽는다.
- *
- * 판정은 **줄 단위**다 — `@`로 연 줄 안의 꺾쇠는 대사의 일부라 손대지 않는다.
- */
-function opensTagBlock(trimmed: string): string | null {
-  const opened = OPENS_TAG_RE.exec(trimmed);
-  // 한 줄에서 여닫았으면 블록을 열지 않는다 — 그 줄 하나만 걷힌다
-  return opened && !closesTag(trimmed, opened[1] ?? "") ? (opened[1] ?? "") : null;
-}
-
-/** 줄 전체가 꺾쇠 하나인가 — 열든 닫든 스스로 닫든, 장면에는 설 수 없다 */
-function isTagLine(trimmed: string): boolean {
-  return trimmed.startsWith("<") && (OPENS_TAG_RE.test(trimmed) || LONE_TAG_RE.test(trimmed));
-}
-
-/**
- * 장면에 설 수 있는 줄인가 — 꺾쇠 블록 밖이면서, 시점 헤더(**직전 것과 값이 다른 것**),
- * `@`로 시작하는 화자·내레이션, 빈 줄(문단 간격), 그리고 **장면이 선 뒤의 이어쓰기
- * 줄**(prompts.md §1). 중계(`scenes: false`)는 꺾쇠 규칙까지만 읽는다.
- *
- * ⚠️ 이어쓰기가 되는 것은 첫 `@` 줄 **뒤**부터다 — 그 앞의 태그 없는 줄은 도구
- * 앞에 흘린 작업 로그라, 살리면 "…확인하겠습니다"가 코치의 대사로 붙는다.
- * 헤더 꼴(`[`)은 이어쓰기보다 헤더 규칙이 앞선다.
- *
- * ⚠️ **뒤 헤더를 일괄로 걷지 않는다.** 도구 반복이 다시 찍는 헤더는 값이 같고, 한 턴
- * 안에서 오전 훈련 뒤 오후 면담을 여는 헤더는 값이 다르다 — 값 비교만이 소음과 전환을
- * 가른다. 일괄로 걷으면 그 전환이 화면에서 통째로 사라진다.
- */
-export function keepsSceneLine(line: string, scan: SceneScan): boolean {
-  const trimmed = line.trim();
-  // 닫히지 않은 블록은 장면이 다시 서는 줄에서 끝난다 — 짝 없는 꺾쇠 하나가
-  // 그 뒤의 장면을 통째로 삼키지 않게 (prompts.md §1)
-  if (scan.block !== null && !opensScene(trimmed)) return false;
-  if (isTagLine(trimmed)) return false;
-  if (!scan.scenes) return true;
-  if (trimmed.length === 0) return true;
-  if (trimmed.startsWith("@")) return true;
-  if (trimmed.startsWith("[")) return headerKey(trimmed) !== scan.lastHeader;
-  return scan.sceneOpen;
-}
-
-/** 판정을 마친 줄이 다음 판정에 남기는 것 */
-export function afterSceneLine(line: string, scan: SceneScan): void {
-  const trimmed = line.trim();
-  if (scan.block !== null) {
-    if (opensScene(trimmed)) scan.block = null;
-    else {
-      if (closesTag(trimmed, scan.block)) scan.block = null;
-      // 블록 안에서는 헤더도 이어쓰기도 나지 않는다
-      return;
+  const take = (tokens: readonly MarkupToken[]): string => {
+    let out = "";
+    const element = (open: string) => {
+      out += `${wrote ? "\n" : ""}${open}`;
+      wrote = true;
+    };
+    const endVoice = () => {
+      if (mode.kind === "voice" && mode.started) out += closeVoice(mode.tag);
+      mode = { kind: "outside" };
+    };
+    const outside = (token: MarkupToken) => {
+      if (token.kind === "text") {
+        stray += token.text;
+        return;
+      }
+      if (token.kind === "close") return;
+      if (token.name === SCENE_TAG) {
+        if (options.match) return;
+        const marker = sceneMarker(readSceneMarker(token.attrs));
+        // 값이 같은 반복 표식은 도구 반복이 다시 찍은 소음이다 — 시각이 바뀐 것만 전환이다
+        if (marker !== lastMarker) element(marker);
+        lastMarker = marker;
+        return;
+      }
+      if (token.kind === "empty") return;
+      if (isVoiceTag(token.name)) {
+        const name = (token.attrs.name ?? "").trim();
+        if (token.name === SPEAK_TAG && options.manager && name === options.manager.trim()) {
+          mode = { kind: "drop", name: token.name };
+          return;
+        }
+        mode = { kind: "voice", tag: token.name, name, started: false, gap: "" };
+        return;
+      }
+      mode = { kind: "drop", name: token.name };
+    };
+    for (const token of tokens) {
+      if (mode.kind === "voice") {
+        if (token.kind === "text") {
+          // 앞뒤 공백은 정본에서 빠진다
+          const lead = mode.started ? token.text : token.text.trimStart();
+          // 안의 빈 줄은 줄바꿈 하나로 접는다 — 화면은 빈 줄을 세우지 않는다
+          const body = lead.trimEnd().replace(/\n\s*\n/gu, "\n");
+          const tail = lead.slice(body.length);
+          if (body.length > 0) {
+            if (!mode.started) {
+              element(openVoice(mode.tag, mode.name));
+              mode.started = true;
+              voiced = true;
+            }
+            out += (mode.gap.includes("\n") ? "\n" : mode.gap) + body;
+            mode.gap = "";
+          }
+          mode.gap += tail;
+          continue;
+        }
+        if (token.kind === "close" && token.name === mode.tag) {
+          endVoice();
+          continue;
+        }
+        // 목소리 안에서 다른 태그가 열렸다 — 닫는 태그를 잊은 발화가 그 뒤를 삼키지 않게
+        endVoice();
+        outside(token);
+        continue;
+      }
+      if (mode.kind === "drop") {
+        if (token.kind === "close" && token.name === mode.name) {
+          mode = { kind: "outside" };
+          continue;
+        }
+        // 닫히지 않은 블록은 장면 커맨드가 다시 열리는 자리에서 끝난다
+        if ((token.kind === "open" || token.kind === "empty") && isSceneCommand(token.name)) {
+          mode = { kind: "outside" };
+          outside(token);
+        }
+        continue;
+      }
+      outside(token);
     }
-  } else if (trimmed.startsWith("<")) {
-    scan.block = opensTagBlock(trimmed);
-    if (isTagLine(trimmed)) return;
-  }
-  if (trimmed.startsWith("[")) scan.lastHeader = headerKey(trimmed);
-  if (trimmed.startsWith("@")) scan.sceneOpen = true;
-}
-
-/** 걷어낸 자리에 남은 빈 줄이 겹치지 않게 (문단 간격은 하나면 족하다) */
-function joinScene(kept: readonly string[]): string {
-  return kept
-    .join("\n")
-    .replace(/\n{3,}/gu, "\n\n")
-    .trim();
-}
-
-function sieve(text: string, scenes: boolean): string {
-  const lines = text.split("\n");
-  const scan: SceneScan = {
-    lastHeader: null,
-    sceneOpen: false,
-    block: null,
-    // ⚠️ **`@` 줄이 하나도 없으면 장면 규칙은 걸지 않는다** — 규약을 통째로 어긴
-    // 응답까지 지우면 빈 턴이 되어 무슨 일이 있었는지조차 사라진다. 꺾쇠 블록은
-    // 그런 응답에서도 걷는다 — 그것은 장면 규약이 아니라 프롬프트 내부 구조다
-    scenes: scenes && lines.some((line) => line.trim().startsWith("@")),
+    return out;
   };
-  const kept: string[] = [];
-  for (const line of lines) {
-    const keeps = keepsSceneLine(line, scan);
-    afterSceneLine(line, scan);
-    if (keeps) kept.push(line);
-  }
-  return joinScene(kept);
+
+  return {
+    push: (delta) => take(lexer.push(delta)),
+    end: () => {
+      let out = take(lexer.end());
+      // 잘린 응답도 거기까지는 장면이다 — 열린 목소리를 닫아 준다
+      if (mode.kind === "voice" && mode.started) out += closeVoice(mode.tag);
+      mode = { kind: "outside" };
+      return out;
+    },
+    voiced: () => voiced,
+    stray: () => stray,
+  };
 }
 
 /**
- * 장면 위생 — **도구 앞에 흘린 작업 서술과 값이 같은 반복 헤더를 걷어낸다.**
- *
- * 도구를 부르는 턴에서 모델은 반복마다 "…확인하겠습니다" 한 줄과 헤더를 새로
- * 찍는다(프롬프트로 몇 번을 눌러도 남는 습성이다). 그 줄들은 장면이 아니라
- * 작업 로그인데 화면에는 코치의 말과 나란히 선다. 걷는 것은 **장면이 서기 전**의
- * 태그 없는 줄까지다 — 그 뒤의 것은 이어쓰기라 살린다.
- *
- * **시각이 달라진 헤더는 남는다** — 그것은 소음이 아니라 장면 전환이고, 화면이
- * 그 자리에서 시각 표시로 세운다(`cutStamps`).
+ * 장면 위생 — 저장할 본문. 체를 한 번 지나고, **장면 커맨드가 하나도 없는 응답**은 커맨드
+ * 밖의 글자를 내레이션 하나로 감싸 남긴다: 규약을 통째로 어긴 응답까지 지우면 빈 턴이
+ * 되어 무슨 일이 있었는지조차 사라진다 (prompts.md §1).
  */
-export function sanitizeSceneText(text: string): string {
-  return sieve(text, true);
+export function sanitizeSceneText(text: string, options: SieveOptions = {}): string {
+  const sieve = createSceneSieve(options);
+  const kept = sieve.push(text) + sieve.end();
+  if (sieve.voiced() || options.rescue === false) return kept;
+  const stray = sieve
+    .stray()
+    .replace(/\n{2,}/gu, "\n")
+    .trim();
+  if (stray.length === 0) return kept;
+  return [kept, narration(stray)].filter((part) => part.length > 0).join("\n");
 }
 
-/**
- * 중계 위생 — **꺾쇠 블록만 걷는다** (prompts.md §1).
- *
- * 평시 규칙을 그대로 갖다 붙일 수 없다: 턴마다 헤더를 새로 찍는 것이 중계에서는
- * 정상이고, 이어쓰기의 경계도 다르다. 남는 것은 두 국면이 함께 읽는 좁은 규칙
- * 하나 — 모델이 `<points>`를 되받아 써도 화면에도 저장에도 서지 않는다.
- */
+/** 중계 위생 — 같은 체다. 모델의 표식은 걷히고 장부의 분은 `stampMatchScene`이 세운다 */
 export function sanitizeCasterText(text: string): string {
-  return sieve(text, false);
+  return sanitizeSceneText(text, { match: true });
 }
 
 interface ParsedScene {
-  /** 헤더를 걷어낸 본문 */
+  /** 여는 표식을 뗀 본문 */
   body: string;
   /**
-   * 읽어낸 원문 헤더 줄 — 없으면 null. ⚠️ 저장할 때 본문에 되붙여야 한다 —
+   * 여는 표식(정본) — 없으면 null. ⚠️ 저장할 때 본문에 되붙여야 한다 —
    * 떼면 화면(scene-stamp)의 시각이 스트리밍이 끝나는 순간 사라진다.
    */
   header: string | null;
   point: ScenePoint | null;
-  /** 경기 헤더의 목표 분 */
+  /** 경기 표식의 분 */
   minute: number | null;
 }
 
-/** 한 줄이 가리키는 시점 — 평시의 시점 헤더가 아니면 null (경기 분 헤더도 아니다) */
-export function scenePointOf(line: string): ScenePoint | null {
-  const scene = SCENE_HEADER_RE.exec(line.trim());
-  if (!scene) return null;
-  // 시각을 빼먹었으면 시간대의 기본 시각, 그것도 없으면 그 날의 시작
-  return { date: scene[1] ?? "", clock: clockFromHeader(scene[2], scene[3], scene[4]) };
-}
+const LEADING_SCENE_RE = /^\s*(<scene\b[^<>]*>)/u;
 
-/** 첫 줄의 헤더를 떼어 시점을 읽는다. 헤더가 없으면 시간은 흐르지 않는다. */
+/** 본문을 여는 장면 표식을 떼어 시점을 읽는다. 표식이 없으면 시간은 흐르지 않는다. */
 export function parseSceneHeader(text: string): ParsedScene {
-  const lines = text.split("\n");
-  const firstIndex = lines.findIndex((line) => line.trim().length > 0);
-  if (firstIndex < 0) return { body: text, header: null, point: null, minute: null };
-  const first = (lines[firstIndex] ?? "").trim();
-
-  const point = scenePointOf(first);
-  if (point) {
-    const rest = [...lines.slice(0, firstIndex), ...lines.slice(firstIndex + 1)];
-    return { body: rest.join("\n").trim(), header: first, point, minute: null };
-  }
-  const match = MATCH_HEADER_RE.exec(first);
-  if (match) {
-    const rest = [...lines.slice(0, firstIndex), ...lines.slice(firstIndex + 1)];
-    return { body: rest.join("\n").trim(), header: first, point: null, minute: Number(match[1]) };
-  }
-  return { body: text, header: null, point: null, minute: null };
+  const lead = LEADING_SCENE_RE.exec(text);
+  const item = lead ? readSceneMarkup(lead[1] ?? "")[0] : undefined;
+  if (!lead || item?.kind !== "scene")
+    return { body: text, header: null, point: null, minute: null };
+  return {
+    body: text.slice(lead[0].length).trim(),
+    header: sceneMarker(item.marker),
+    point: scenePointOf(item.marker),
+    minute: item.marker.minute ?? null,
+  };
 }
 
 /**

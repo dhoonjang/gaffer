@@ -5,6 +5,8 @@ import {
   buildOnboardingTurn,
   runGmTurn,
   takeSuggestion,
+  parseSceneHeader,
+  sanitizeSceneText,
 } from "@gaffer/agents";
 import { STOP_EVENT_TYPES } from "@gaffer/domain";
 import {
@@ -54,24 +56,23 @@ beforeAll(() => {
 const newGame = (): GameState => structuredClone(BASE);
 
 /**
- * 모델 턴 문법 — **첫 줄은 장면의 시점**이고 나머지 텍스트 줄은 `@`로 시작한다
- * (overview §2.1). 시점 줄이 시계를 움직이므로 문법의 일부다.
+ * 모델 턴 문법 — **장면 표식으로 열고** 그 뒤는 장면 커맨드뿐이다 (prompts.md §1).
+ * 표식이 시계를 움직이므로 문법의 일부다. 저장된 본문은 위생을 지난 정본이라
+ * 한 번 더 체를 지나도 그대로다.
  */
 function expectGmGrammar(text: string) {
-  const lines = text.split("\n");
-  const first = lines.find((line) => line.trim().length > 0)?.trim() ?? "";
-  expect(/^\[[^\]]+\]$/u.test(first), `첫 줄이 시점이 아니다: "${first}"`).toBe(true);
-  for (const line of lines.slice(lines.indexOf(first) + 1)) {
-    if (line.trim().length === 0) continue;
-    expect(line.startsWith("@"), `문법 위반 줄: "${line}"`).toBe(true);
-  }
+  expect(
+    parseSceneHeader(text).point,
+    `여는 표식이 시점이 아니다: "${text.split("\n")[0]}"`,
+  ).not.toBeNull();
+  expect(sanitizeSceneText(text)).toBe(text);
 }
 
 const namesOf = (turn: { toolCalls: ReadonlyArray<{ name: string }> }): string[] =>
   turn.toolCalls.map((call) => call.name);
 
 describe("mock 대본 — 부임 첫 장면", () => {
-  it("@문법으로 배경·스쿼드·다음 일정을 브리핑한다", () => {
+  it("장면 커맨드로 배경·스쿼드·다음 일정을 브리핑한다", () => {
     const turn = buildOnboardingTurn(newGame());
     expectGmGrammar(turn.text);
     expect(turn.text).toContain("김감독");
@@ -157,19 +158,24 @@ describe("mock 대본 — 표의 한 줄이 코어 명령까지 닿는다", () =
 });
 
 /**
- * 마지막 줄의 태그는 **코어가 읽는 자유 텍스트**다 (prompts.md §1) — 시점 헤더와 같은 급이라
+ * 마지막 줄의 태그는 **코어가 읽는 자유 텍스트**다 (prompts.md §1) — 장면 표식과 같은 급이라
  * 경계가 조용히 어긋난다: 값을 못 꺼내면 placeholder만 비지만, 본문에서 못 지우면 태그가
  * 화면과 다음 턴의 이력에 선다.
  */
 describe("다음 말 제안 — 마지막 줄의 태그에서 꺼낸다", () => {
-  const SCENE = ["[2026-07-01 AM 9:45 · 감독실]", "@코치: 첫 주는 체력입니다."].join("\n");
+  const SCENE = [
+    '<scene date="2026-07-01" time="09:45" place="감독실" />',
+    '<speak name="코치">첫 주는 체력입니다.</speak>',
+  ].join("\n");
 
   it("태그의 값을 꺼내고 본문에서는 지운다 — 감싼 따옴표와 안쪽 줄바꿈은 걷는다", () => {
     const taken = takeSuggestion(`${SCENE}\n<suggest_reply>“훈련\n잡아줘”</suggest_reply>`);
     expect(taken).toEqual({ text: SCENE, suggestion: "훈련 잡아줘" });
-    // 줄 한복판의 태그도 지운다 — 위생은 줄 앞머리의 꺾쇠만 본다
-    const inline = takeSuggestion(`@코치: 갑시다. <suggest_reply>가자</suggest_reply>`);
-    expect(inline).toEqual({ text: "@코치: 갑시다. ", suggestion: "가자" });
+    // 발화 안에 낀 태그도 지운다 — 남겨 두면 체가 그 자리에서 발화를 끊는다
+    const inline = takeSuggestion(
+      `<speak name="코치">갑시다. <suggest_reply>가자</suggest_reply></speak>`,
+    );
+    expect(inline).toEqual({ text: '<speak name="코치">갑시다. </speak>', suggestion: "가자" });
   });
 
   it("태그가 없으면 본문 그대로, 값이 없거나 상한을 넘으면 제안 없이 태그만 지운다", () => {
@@ -209,7 +215,7 @@ describe("mock 대본 — 경기", () => {
 
     // 입장 턴은 첫 휘슬만 — 사건은 아직 없다. 도구 없는 턴에도 다음 말은 선다
     const entered = await runGmTurn(state, "진행", undefined, { kind: "enter_match" });
-    expect(entered.text).toContain("@중계:");
+    expect(entered.text).toContain("<commentary>");
     expect(entered.suggestion).toBe("계속 가자");
     expect(state.pendingMatch?.entered).toBe(true);
     expect(entered.goals ?? []).toHaveLength(0);
@@ -231,7 +237,7 @@ describe("mock 대본 — 경기", () => {
       const { events } = advanceLiveMatch(state, 60 * 20);
       if (!events.some((e) => STOP_EVENT_TYPES.has(e.type))) continue;
       const turn = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
-      if (turn.text.includes("@중계:")) broadcasts += 1;
+      if (turn.text.includes("<commentary>")) broadcasts += 1;
     }
     expect(state.phase).toBe("idle");
     expect(broadcasts).toBeGreaterThan(0);

@@ -9,7 +9,7 @@ import { hintsOfChip, panelHintsOf } from "../../screens/chat/panel-hints";
 
 const turn = (calls: ChatTurn["toolCalls"]): ChatTurn => ({
   role: "model",
-  text: "[2026-08-15 오전]\n@코치: 네.",
+  text: '<scene date="2026-08-15" time="09:00" />\n<speak name="코치">네.</speak>',
   toolCalls: calls,
   at: "2026-08-15",
 });

@@ -38,6 +38,7 @@ import {
   lastScenePoint,
   sanitizeCasterText,
   sanitizeSceneText,
+  stampMatchScene,
   noteSceneHeader,
   operationLabel,
   MAX_SKIP_DAYS,
@@ -123,11 +124,7 @@ describe("레퍼런스 층 — <club>·<manager> (캐시되는 시스템 블록)
       ].join("\n"),
     );
     expect(describeManager(state.manager)).toBe(
-      [
-        `<manager name="김감독" tag="@김감독:">`,
-        `배경: ${state.manager.background}`,
-        `</manager>`,
-      ].join("\n"),
+      [`<manager name="김감독">`, `배경: ${state.manager.background}`, `</manager>`].join("\n"),
     );
     expect(ref).toBe(`${describeClub(state)}\n\n${describeManager(state.manager)}`);
     // 경기 레퍼런스도 같은 두 블록으로 연다. 로어북은 유저 턴에서만 주입한다.
@@ -459,9 +456,9 @@ describe("<now>의 교체 한도 — 다음 경기가 정한다", () => {
 describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", () => {
   const scene = (state: GameState, tail: string) =>
     [
-      "@: *이른 아침, 훈련장에 안개가 걷힌다*",
-      `@${headCoachOf(state).characterId}: 감독님, 오시느라 고생 많으셨습니다.`,
-      `@${headCoachOf(state).characterId}: ${tail}`,
+      "<narration>이른 아침, 훈련장에 안개가 걷힌다</narration>",
+      `<speak name="${headCoachOf(state).characterId}">감독님, 오시느라 고생 많으셨습니다.</speak>`,
+      `<speak name="${headCoachOf(state).characterId}">${tail}</speak>`,
     ].join("\n");
 
   /** 판정 하나 — 출력 스키마가 받는 산출의 모양 (첫 장면 `scene`은 `reply`가 붙인다) */
@@ -597,7 +594,7 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
     const llm: GameLLM = {
       runTurn: async (input) => {
         call++;
-        return reply(input, `@${state.manager.name}: 반갑습니다, 여러분.`);
+        return reply(input, `<speak name="${state.manager.name}">반갑습니다, 여러분.</speak>`);
       },
     };
 
@@ -617,7 +614,12 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
     const state = game();
     const coach = headCoachOf(state);
     state.chat.push({ role: "user", text: "지난 발화", toolCalls: [], at: state.date });
-    state.chat.push({ role: "model", text: "@코치: 알겠습니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">알겠습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     // 이번 턴 — 전술판 조작이 먼저, 발화가 뒤 (turn-runner가 미는 순서)
     state.chat.push({
       role: "operator",
@@ -639,17 +641,25 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
     expect(sent).toContain(
       "<operator>전술판 적용 완료 — 압박 상향\n전술판 적용 완료 — 라인 상향</operator>",
     );
-    expect(sent.indexOf(`@김감독: ${coach.characterId} 불러줘`)).toBeLessThan(
+    expect(sent.indexOf(`<speak name="김감독">${coach.characterId} 불러줘</speak>`)).toBeLessThan(
       sent.indexOf("<lorebook>"),
     );
     expect(sent).not.toContain("<snapshot>");
 
     // 턴이 끝나면 카드가 기록되고 모델 턴이 붙는다 — 다음 턴의 이력이 이 자리를 다시 그린다
     recordCharacterInjection(state, cards);
-    state.chat.push({ role: "model", text: "@코치: 왔습니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">왔습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     const history = buildGmHistory(state);
     expect(history.at(-2)?.content).toBe(sent);
-    expect(history.at(-1)).toEqual({ role: "assistant", content: "@코치: 왔습니다" });
+    expect(history.at(-1)).toEqual({
+      role: "assistant",
+      content: '<speak name="코치">왔습니다</speak>',
+    });
   });
 
   /**
@@ -669,7 +679,7 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
     stubRunTurn.mockImplementation(async (input: TurnRequest): Promise<TurnResult> => {
       request = input;
       return {
-        text: `[${state.date} AM 10:00]\n@${coach.characterId}: 부르셨습니까.`,
+        text: `<scene date="${state.date}" time="10:00" />\n<speak name="${coach.characterId}">부르셨습니까.</speak>`,
         history: { version: 1, provider: "google", model: "test", messages: [] },
         historyBase: 0,
         usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -719,9 +729,14 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
     });
     const sent = buildGmTurnMessage(state, []);
     expect(sent).toBe(
-      `@김감독: 요즘 어때?\n\n<addressee team="${teamNameIn(state, from)}">${target.name}</addressee>`,
+      `<speak name="김감독">요즘 어때?</speak>\n\n<addressee team="${teamNameIn(state, from)}">${target.name}</addressee>`,
     );
-    state.chat.push({ role: "model", text: "@코치: 좋습니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">좋습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     target.teamId = state.userTeamId;
     expect(buildGmHistory(state)[0]?.content).toBe(sent);
   });
@@ -729,9 +744,14 @@ describe("이번 턴 유저 메시지는 다음 턴 이력의 같은 자리와 �
   it("카드도 조작도 없는 턴은 발화 한 줄이 곧 메시지다", () => {
     const state = game();
     state.chat.push({ role: "user", text: "분위기 어때?", toolCalls: [], at: state.date });
-    expect(buildGmTurnMessage(state, [])).toBe("@김감독: 분위기 어때?");
-    state.chat.push({ role: "model", text: "@코치: 좋습니다", toolCalls: [], at: state.date });
-    expect(buildGmHistory(state)[0]?.content).toBe("@김감독: 분위기 어때?");
+    expect(buildGmTurnMessage(state, [])).toBe('<speak name="김감독">분위기 어때?</speak>');
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">좋습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
+    expect(buildGmHistory(state)[0]?.content).toBe('<speak name="김감독">분위기 어때?</speak>');
   });
 });
 
@@ -755,15 +775,15 @@ describe("이력 창 — 시작점을 STEP 단위로만 옮긴다", () => {
     expect(history[3]?.content).toBe("턴 3");
   });
 
-  it("현재·과거 유저 발화를 @감독이름: 형식으로 만든다", () => {
+  it("현재·과거 유저 발화를 감독의 발화 커맨드로 만든다", () => {
     const state = game();
     expect(buildManagerMessage(state, "측면을 더 적극적으로 써.")).toBe(
-      "@김감독: 측면을 더 적극적으로 써.",
+      '<speak name="김감독">측면을 더 적극적으로 써.</speak>',
     );
     push(state, 5);
     const history = buildGmHistory(state);
-    expect(history[0]?.content).toBe("@김감독: 턴 0");
-    expect(history[2]?.content).toBe("@김감독: 턴 2");
+    expect(history[0]?.content).toBe('<speak name="김감독">턴 0</speak>');
+    expect(history[2]?.content).toBe('<speak name="김감독">턴 2</speak>');
   });
 
   it("연속된 턴에서 시작점이 매번 미끄러지지 않는다", () => {
@@ -782,7 +802,12 @@ describe("이력 창 — 시작점을 STEP 단위로만 옮긴다", () => {
   it("이번 턴에 밀어 넣은 것은 조작이든 발화든 이력이 아니다", () => {
     const state = game();
     state.chat.push({ role: "user", text: "지난 발화", toolCalls: [], at: state.date });
-    state.chat.push({ role: "model", text: "@코치: 알겠습니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">알겠습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     // 여기부터가 이번 턴 — 이 호출의 발화 블록이 이미 싣는다
     state.chat.push({
       role: "operator",
@@ -793,8 +818,8 @@ describe("이력 창 — 시작점을 STEP 단위로만 옮긴다", () => {
     state.chat.push({ role: "user", text: "이번 턴 발화", toolCalls: [], at: state.date });
 
     expect(buildGmHistory(state).map((h) => h.content)).toEqual([
-      "@김감독: 지난 발화",
-      "@코치: 알겠습니다",
+      '<speak name="김감독">지난 발화</speak>',
+      '<speak name="코치">알겠습니다</speak>',
     ]);
   });
 
@@ -805,10 +830,20 @@ describe("이력 창 — 시작점을 STEP 단위로만 옮긴다", () => {
   it("킥오프 턴에서 직전 평시 발화가 이력에 그대로 남는다", () => {
     const state = game();
     state.chat.push({ role: "user", text: "선발은 그대로 간다", toolCalls: [], at: state.date });
-    state.chat.push({ role: "model", text: "@코치: 알겠습니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">알겠습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     // 경기를 연 턴 — 화자는 평시 GM이라 평시 이력에 남는다
     state.chat.push({ role: "user", text: "경기장으로 가자", toolCalls: [], at: state.date });
-    state.chat.push({ role: "model", text: "@코치: 라커룸입니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">라커룸입니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     // 킥오프 턴의 발화 — 시작할 때 이미 경기 중이라 경기 턴으로 표시된다
     state.chat.push({
       role: "user",
@@ -820,10 +855,10 @@ describe("이력 창 — 시작점을 STEP 단위로만 옮긴다", () => {
     state.phase = "match"; // 아직 pendingMatch.entered가 아니다 — 이력은 평시를 읽는다
 
     expect(buildGmHistory(state).map((h) => h.content)).toEqual([
-      "@김감독: 선발은 그대로 간다",
-      "@코치: 알겠습니다",
-      "@김감독: 경기장으로 가자",
-      "@코치: 라커룸입니다",
+      '<speak name="김감독">선발은 그대로 간다</speak>',
+      '<speak name="코치">알겠습니다</speak>',
+      '<speak name="김감독">경기장으로 가자</speak>',
+      '<speak name="코치">라커룸입니다</speak>',
     ]);
   });
 
@@ -861,7 +896,7 @@ describe("이력 창 — 시작점을 STEP 단위로만 옮긴다", () => {
       rounds: 1,
     };
     const contents = buildGmHistory(state).map((h) => h.content);
-    expect(contents[0]).toBe("@김감독: 턴 12");
+    expect(contents[0]).toBe('<speak name="김감독">턴 12</speak>');
     expect(contents.some((c) => c.includes("턴 11"))).toBe(false);
   });
 
@@ -947,7 +982,8 @@ describe("도구 구성", () => {
     const captain = tools.find((t) => t.name === "set_captain")!;
     const target = userPlayers(state)[0]!;
     // 헤더 한 줄 + 지문 + 대사까지 쓴 뒤에 불렸다 (빈 줄은 세지 않는다)
-    const written = "[2026-08-15 AM 9:00]\n@: *감독실*\n\n@손흥민: 알겠습니다.";
+    const written =
+      '<scene date="2026-08-15" time="09:00" />\n<narration>감독실</narration>\n<speak name="손흥민">알겠습니다.</speak>';
     const res = await captain.handle({ playerId: target.id }, { text: written });
     expect(res.ok, res.message).toBe(true);
     expect(calls[0]!.line).toBe(3);
@@ -968,11 +1004,16 @@ describe("오퍼레이터 채널 — 감독의 말과 화면 조작은 갈린다
   it("화면 조작은 감독 발화 형식으로 이력에 들어가지 않는다", () => {
     const state = game();
     state.chat.push({ role: "user", text: "선수단 분위기 어때?", toolCalls: [], at: state.date });
-    state.chat.push({ role: "model", text: "@코치: 좋습니다", toolCalls: [], at: state.date });
+    state.chat.push({
+      role: "model",
+      text: '<speak name="코치">좋습니다</speak>',
+      toolCalls: [],
+      at: state.date,
+    });
     state.chat.push({ role: "operator", text: "시간 진행 — 하루", toolCalls: [], at: state.date });
     state.chat.push({
       role: "model",
-      text: "@코치: 하루가 지났습니다",
+      text: '<speak name="코치">하루가 지났습니다</speak>',
       toolCalls: [],
       at: state.date,
     });
@@ -984,15 +1025,15 @@ describe("오퍼레이터 채널 — 감독의 말과 화면 조작은 갈린다
 
     // 감독이 친 말은 감독 화자로 들어간다
     expect(manager.role).toBe("user");
-    expect(manager.content).toContain(`@${state.manager.name}:`);
+    expect(manager.content).toContain(`<speak name="${state.manager.name}">`);
     /**
      * 조작은 감독 화자가 아니다. 갈리지 않으면 GM이 그 문장을 감독의 대사로 읽고
      * 인용하거나 거기서 말투·의도를 추론한다 — 감독은 말한 적이 없고 손잡이를
-     * 눌렀을 뿐이다. 봉투는 모델의 출력 문법 **밖**이다 — `@:`는 GM이 내레이션을
+     * 눌렀을 뿐이다. 봉투는 모델의 출력 문법 **밖**이다 — `<narration>`은 GM이 지문을
      * 쓰는 채널이라, 거기 담으면 손잡이가 모델 자신의 문법으로 이력에 선다.
      */
-    expect(operator.content).not.toContain(`@${state.manager.name}:`);
-    expect(operator.content).not.toMatch(/^@/u);
+    expect(operator.content).not.toContain("<speak");
+    expect(operator.content).not.toContain("<narration");
     expect(operator.content).toBe("<operator>시간 진행 — 하루</operator>");
   });
 });
@@ -1001,114 +1042,78 @@ describe("오퍼레이터 채널 — 감독의 말과 화면 조작은 갈린다
  * 장면 헤더 — 모델의 첫 줄이 시계를 움직인다.
  * 코어는 선언을 그대로 믿지 않는다: 되감기는 막고, 갈 수 없는 곳에서는 멈춘다.
  */
-describe("장면 헤더", () => {
-  it("헤더를 떼어 시점을 읽고 본문만 남긴다", () => {
-    const parsed = parseSceneHeader("[2026-07-13 PM 2:30]\n@브루노: 오셨습니까.");
+describe("장면 표식", () => {
+  const at = (attrs: string) =>
+    parseSceneHeader(`<scene ${attrs} />\n<narration>문이 열린다</narration>`);
+
+  it("여는 표식을 떼어 시점을 읽고 본문만 남긴다", () => {
+    const parsed = parseSceneHeader(
+      '<scene date="2026-07-13" time="14:30" place="훈련장" />\n<speak name="브루노">오셨습니까.</speak>',
+    );
     expect(parsed.point).toEqual({ date: "2026-07-13", clock: "14:30" });
-    expect(parsed.body).toBe("@브루노: 오셨습니까.");
+    expect(parsed.body).toBe('<speak name="브루노">오셨습니까.</speak>');
     expect(parsed.minute).toBeNull();
   });
 
-  it("시각을 빼면 하루의 시작으로 본다", () => {
-    expect(parseSceneHeader("[2026-08-01]\n@:").point).toEqual({
+  /**
+   * 표식은 **본문과 분리하되 버리지는 않는다** — 채팅이 이것으로 장면의 시점을
+   * 세우므로(`scene-stamp`), 저장에서 떼면 스트리밍 중에만 시각이 보이고 턴이
+   * 끝나는 순간 사라진다. 돌려주는 것은 정본의 꼴이다.
+   */
+  it("정본의 표식을 함께 돌려준다", () => {
+    const parsed = at('place="감독실"  time="09:30" date="2026-07-18"');
+    expect(parsed.header).toBe('<scene date="2026-07-18" time="09:30" place="감독실" />');
+    // 표식이 없으면 null — 되붙일 것이 없다
+    expect(parseSceneHeader('<speak name="브루노">오셨습니까.</speak>').header).toBeNull();
+  });
+
+  /** 필수는 날짜 하나다 — 시각·장소 하나를 못 읽었다고 그 턴의 시계가 멎지 않는다 */
+  it("시각이나 장소가 없어도 날짜를 읽는다", () => {
+    expect(at('date="2026-08-01"').point).toEqual({ date: "2026-08-01", clock: "09:00" });
+    expect(at('date="2026-08-01" place="훈련장"').point).toEqual({
       date: "2026-08-01",
       clock: "09:00",
     });
+    expect(at('time="09:30" place="훈련장"').point).toBeNull();
   });
 
-  /**
-   * 모델은 상태 스냅샷이 보여 주는 모양(`2026-07-01 (수) 오전`)을 따라 쓴다.
-   * 요일이 끼거나 시각을 빼먹었다고 시계가 멈추면, 모델만 앞선 날짜를 말하고
-   * 게임은 며칠씩 제자리에 선다 — 실제로 `[2026-07-20 월요일 오전]`을 못 잡아
-   * 그랬다. 날짜만 정확하면 나머지는 흘려 읽는다.
-   */
-  /**
-   * 헤더는 **본문과 분리하되 버리지는 않는다** — 채팅이 이 줄로 장면의 시점을
-   * 세우므로(`scene-stamp`), 저장에서 떼면 스트리밍 중에만 시각이 보이고 턴이
-   * 끝나는 순간 사라진다. 실제로 그랬다.
-   */
-  it("원문 헤더 줄을 함께 돌려준다", () => {
-    const parsed = parseSceneHeader("[2026-07-18 토요일 AM 9:30]\n@브루노: 오셨습니까.");
-    expect(parsed.header).toBe("[2026-07-18 토요일 AM 9:30]");
-    expect(parsed.body).toBe("@브루노: 오셨습니까.");
-    // 헤더가 없으면 null — 되붙일 것이 없다
-    expect(parseSceneHeader("@브루노: 오셨습니까.").header).toBeNull();
-  });
-
-  it("요일이 끼어도, 시각을 빼먹어도 날짜를 읽는다", () => {
-    const at = (header: string) => parseSceneHeader(`${header}\n@:`).point;
-    expect(at("[2026-07-20 월요일 오전]")).toEqual({ date: "2026-07-20", clock: "09:00" });
-    expect(at("[2026-07-18 토요일 AM 9:30]")).toEqual({ date: "2026-07-18", clock: "09:30" });
-    expect(at("[2026-07-18 (수) 오전]")).toEqual({ date: "2026-07-18", clock: "09:00" });
-    expect(at("[2026-07-18 수요일]")).toEqual({ date: "2026-07-18", clock: "09:00" });
-  });
-
-  /**
-   * **장소 필드는 시계를 멈추지 못한다** (prompts.md §1) — 헤더는 시각 다음에 장소를
-   * 싣는데, 파서가 그 꼬리에서 걸리면 그 턴의 날짜가 통째로 흐르지 않는다. 구분자는
-   * 모델이 고르는 것이므로 넷 다 받고, 없어도 받는다.
-   */
-  it("헤더 끝의 장소를 흘려 읽는다 — 시계는 날짜가 민다", () => {
-    const at = (header: string) => parseSceneHeader(`${header}\n@:`).point;
-    expect(at("[2026-07-18 AM 9:30 · 훈련장]")).toEqual({ date: "2026-07-18", clock: "09:30" });
-    expect(at("[2026-07-18 AM 9:30 — 에미레이츠 스타디움]")).toEqual({
-      date: "2026-07-18",
-      clock: "09:30",
-    });
-    expect(at("[2026-07-18 오후, 감독실]")).toEqual({ date: "2026-07-18", clock: "14:00" });
-    expect(at("[2026-07-18 오전 런던 콜니 훈련장]")).toEqual({
-      date: "2026-07-18",
-      clock: "09:00",
-    });
-  });
-
-  it("시간대만 적으면 그 시간대의 기본 시각으로 읽는다", () => {
-    const clock = (header: string) => parseSceneHeader(`${header}\n@:`).point?.clock;
-    // 훈련은 오전, 미팅은 오후, 늦은 전화는 밤 — 프롬프트가 말하는 결 그대로
-    expect(clock("[2026-08-01 오전]")).toBe("09:00");
-    expect(clock("[2026-08-01 오후]")).toBe("14:00");
-    expect(clock("[2026-08-01 저녁]")).toBe("19:00");
-    expect(clock("[2026-08-01 밤]")).toBe("21:00");
+  it("시간대 낱말만 적으면 그 때의 기본 시각으로 읽는다", () => {
+    const clock = (time: string) => at(`date="2026-08-01" time="${time}"`).point?.clock;
+    expect(clock("오전")).toBe("09:00");
+    expect(clock("오후")).toBe("14:00");
+    expect(clock("저녁")).toBe("19:00");
+    expect(clock("밤")).toBe("21:00");
     // 시각이 함께 있으면 그쪽이 이긴다
-    expect(clock("[2026-08-01 밤 10:00]")).toBe("22:00");
-  });
-
-  it("오전 9:30도 오후 7:05도 24시간 값으로 읽는다", () => {
-    expect(parseSceneHeader("[2026-08-01 AM 9:30]\n@:").point?.clock).toBe("09:30");
-    expect(parseSceneHeader("[2026-08-01 PM 7:05]\n@:").point?.clock).toBe("19:05");
-    // 12시는 경계다 — AM 12:00은 자정, PM 12:30은 한낮이다
-    expect(parseSceneHeader("[2026-08-01 AM 12:00]\n@:").point?.clock).toBe("00:00");
-    expect(parseSceneHeader("[2026-08-01 PM 12:30]\n@:").point?.clock).toBe("12:30");
+    expect(clock("밤 10:00")).toBe("22:00");
   });
 
   /**
-   * 스냅샷은 12시간제를 보여 주지만 모델은 `[2026-07-13 14:30]`처럼 적기도 한다.
-   * 시간대 없는 값까지 12로 접으면 `02:30`이 되어 오전으로 뒤집히고, 코어가
-   * 되감기를 막으므로 그 턴의 시계가 통째로 멎는다.
+   * 문법은 24시간 `HH:MM`이지만 모델은 스냅샷이 보여 주는 `AM 9:30`을 따라 적기도 한다.
+   * 시간대가 붙었을 때만 12시간제다 — 시간대 없는 값까지 12로 접으면 `02:30`이 되어
+   * 오전으로 뒤집히고, 코어가 되감기를 막으므로 그 턴의 시계가 통째로 멎는다.
    */
-  it("시간대가 없으면 24시간제로 읽는다 — 정오와 자정의 경계", () => {
-    const clock = (header: string) => parseSceneHeader(`${header}\n@:`).point?.clock;
-    expect(clock("[2026-08-01 14:30]")).toBe("14:30");
-    expect(clock("[2026-08-01 23:59]")).toBe("23:59");
-    expect(clock("[2026-08-01 09:05]")).toBe("09:05");
-    // 12시가 갈리는 자리다 — 시간대가 없으면 정오, `오전`이 붙으면 자정
-    expect(clock("[2026-08-01 12:05]")).toBe("12:05");
-    expect(clock("[2026-08-01 오전 12:05]")).toBe("00:05");
-    expect(clock("[2026-08-01 오후 12:05]")).toBe("12:05");
-    // 있을 수 없는 시각은 읽지 않는다 — 그 날의 기본값으로 물러선다
-    expect(clock("[2026-08-01 25:00]")).toBe("09:00");
-    expect(clock("[2026-08-01 저녁 25:00]")).toBe("19:00");
+  it("시간대가 붙으면 12시간제, 없으면 24시간제로 읽는다 — 정오와 자정의 경계", () => {
+    const clock = (time: string) => at(`date="2026-08-01" time="${time}"`).point?.clock;
+    expect(clock("14:30")).toBe("14:30");
+    expect(clock("23:59")).toBe("23:59");
+    expect(clock("AM 9:30")).toBe("09:30");
+    expect(clock("PM 7:05")).toBe("19:05");
+    expect(clock("12:05")).toBe("12:05");
+    expect(clock("오전 12:05")).toBe("00:05");
+    expect(clock("PM 12:30")).toBe("12:30");
+    // 있을 수 없는 시각은 읽지 않는다 — 그 날의 시작으로 물러선다
+    expect(clock("25:00")).toBe("09:00");
   });
 
-  it("경기 헤더는 분으로 읽는다", () => {
-    const parsed = parseSceneHeader("[67']\n@중계: 이어갑니다.");
+  it("경기 표식은 분으로 읽는다", () => {
+    const parsed = parseSceneHeader('<scene minute="67" />\n<commentary>이어갑니다.</commentary>');
     expect(parsed.minute).toBe(67);
     expect(parsed.point).toBeNull();
-    expect(parsed.body).toBe("@중계: 이어갑니다.");
+    expect(parsed.body).toBe("<commentary>이어갑니다.</commentary>");
   });
 
-  it("헤더가 없으면 시간은 흐르지 않는다 — 본문은 그대로 둔다", () => {
-    const text = "@브루노: 헤더를 잊었습니다.";
+  it("표식이 없으면 시간은 흐르지 않는다 — 본문은 그대로 둔다", () => {
+    const text = '<speak name="브루노">표식을 잊었습니다.</speak>';
     const parsed = parseSceneHeader(text);
     expect(parsed.point).toBeNull();
     expect(parsed.minute).toBeNull();
@@ -1116,29 +1121,30 @@ describe("장면 헤더", () => {
   });
 
   /**
-   * 시계를 정하는 것은 **턴이 닿은 시각**이다 — 위생이 전환 헤더를 남기므로
-   * 헤더가 여럿인 턴이 있고, 첫 것으로만 밀면 상단 띠가 채팅보다 뒤에 남는다.
+   * 시계를 정하는 것은 **턴이 닿은 시각**이다 — 위생이 전환 표식을 남기므로
+   * 표식이 여럿인 턴이 있고, 첫 것으로만 밀면 상단 띠가 채팅보다 뒤에 남는다.
    */
-  it("헤더가 여럿이면 시계는 마지막 것을 따른다", () => {
+  it("표식이 여럿이면 시계는 마지막 것을 따른다", () => {
     const text = [
-      "[2026-07-01 AM 9:45]",
-      "@스티브 홀랜드: 첫 주는 체력입니다.",
-      "[2026-07-01 PM 2:10]",
-      "@스티브 홀랜드: 오후 면담 준비됐습니다.",
+      '<scene date="2026-07-01" time="09:45" />',
+      '<speak name="스티브 홀랜드">첫 주는 체력입니다.</speak>',
+      '<scene date="2026-07-01" time="14:10" />',
+      '<speak name="스티브 홀랜드">오후 면담 준비됐습니다.</speak>',
     ].join("\n");
     expect(lastScenePoint(text)).toEqual({ date: "2026-07-01", clock: "14:10" });
-    // 첫 줄만 보는 파서는 그대로다 — 저장할 때 본문과 갈라 놓는 것이 그쪽 몫이다
+    // 여는 표식만 보는 파서는 그대로다 — 저장할 때 본문과 갈라 놓는 것이 그쪽 몫이다
     expect(parseSceneHeader(text).point).toEqual({ date: "2026-07-01", clock: "09:45" });
   });
 
-  it("첫 줄이 헤더가 아니어도 본문 한복판의 헤더를 읽는다", () => {
-    const text = ["@스티브 홀랜드: 첫 주는 체력입니다.", "[2026-07-01 PM 2:10]", "@:"].join("\n");
-    expect(lastScenePoint(text)).toEqual({ date: "2026-07-01", clock: "14:10" });
-  });
-
-  it("경기 분 헤더는 시점이 아니다", () => {
-    expect(lastScenePoint("[67']\n@중계: 이어갑니다.")).toBeNull();
-    expect(lastScenePoint("@브루노: 헤더를 잊었습니다.")).toBeNull();
+  it("본문 한복판의 표식도 읽고, 경기 분 표식은 시점이 아니다", () => {
+    expect(
+      lastScenePoint(
+        '<speak name="스티브 홀랜드">첫 주는 체력입니다.</speak>\n<scene date="2026-07-01" time="14:10" />',
+      ),
+    ).toEqual({ date: "2026-07-01", clock: "14:10" });
+    expect(
+      lastScenePoint('<scene minute="67" />\n<commentary>이어갑니다.</commentary>'),
+    ).toBeNull();
   });
 
   it("선언한 날짜까지 달력이 움직이고, 과거는 되감지 않는다", () => {
@@ -1156,12 +1162,10 @@ describe("장면 헤더", () => {
   });
 
   /**
-   * 헤더를 못 읽은 턴 — **조용히 지나가면 시계가 영영 멎는다.**
-   *
-   * 자유 텍스트가 상태를 움직이는 유일한 경로라 실패가 누적되는데, 예전에는
-   * `console.warn` 한 줄이 전부였다. 셋이 되면 그 수가 턴 결과로 올라간다.
+   * 표식을 못 읽은 턴 — **조용히 지나가면 시계가 영영 멎는다.**
+   * 셋이 되면 그 수가 턴 결과로 올라간다.
    */
-  it("헤더를 연달아 못 읽으면 그 수가 화면까지 올라간다", () => {
+  it("표식을 연달아 못 읽으면 그 수가 화면까지 올라간다", () => {
     const state: { sceneHeaderMisses?: number } = {};
     for (let turn = 1; turn < STALLED_CLOCK_TURNS; turn++) {
       // 한두 번은 이어지는 대화일 수 있다 — 알리지 않는다
@@ -1291,200 +1295,147 @@ describe("장면을 여는 사람은 그 일에 가장 가까운 사람이다", 
 });
 
 /**
- * 장면 위생 — **도구를 부르는 턴의 작업 로그가 대화에 섞이지 않는다.**
+ * 장면 위생 — **장면 커맨드만 남는다** (prompts.md §1).
  *
- * 도구 반복마다 모델은 시점 헤더와 "…확인하겠습니다" 한 줄을 새로 찍는다.
- * 프롬프트로 눌러도 남는 습성이라 코어가 걷어낸다 — 출력 문법이 허락하는 줄은
- * 맨 앞 헤더 하나, `@`로 시작하는 줄, 빈 줄뿐이다.
+ * 도구 반복마다 모델은 표식과 "…확인하겠습니다" 한 줄을 새로 찍는다. 프롬프트로
+ * 눌러도 남는 습성이라 코어가 걷어낸다. 남은 것은 정본의 꼴로 다시 적힌다.
  */
 describe("sanitizeSceneText", () => {
-  it("도구 앞 서술과 두 번째 헤더를 걷어낸다", () => {
+  const MARK = '<scene date="2026-07-01" time="09:45" />';
+  const LATER = '<scene date="2026-07-01" time="14:10" />';
+  const coach = (text: string) => `<speak name="스티브 홀랜드">${text}</speak>`;
+
+  it("커맨드 밖의 작업 서술과 값이 같은 반복 표식을 걷어낸다", () => {
     const raw = [
-      "[2026-07-01 AM 9:45]",
+      MARK,
       "소집 첫 주는 체력 위주로 잡겠습니다.",
-      "[2026-07-01 AM 9:45]",
-      "[2026-07-01 AM 9:45]",
+      MARK,
+      MARK,
       "소집 첫 주(7/13~7/18)를 새로 짜겠습니다.",
-      "[2026-07-01 AM 9:45]",
-      "@스티브 홀랜드: 첫 주는 다리부터 다시 만드는 걸로 채웠습니다.",
+      MARK,
+      coach("첫 주는 다리부터 다시 만드는 걸로 채웠습니다."),
     ].join("\n");
 
     expect(sanitizeSceneText(raw)).toBe(
+      [MARK, coach("첫 주는 다리부터 다시 만드는 걸로 채웠습니다.")].join("\n"),
+    );
+  });
+
+  it("커맨드를 정본의 꼴로 다시 적는다 — 줄 수가 곧 화면의 줄 수다", () => {
+    const raw = [
+      '<scene place="훈련장" date="2026-07-01" time="09:30"/>',
+      "<narration>",
+      "  문이 열린다",
+      "</narration>",
+      "",
+      '<speak name="손흥민">감독님.',
+      "",
+      "",
+      "*고개를 숙인다* 준비됐습니다.   </speak>",
+    ].join("\n");
+    expect(sanitizeSceneText(raw)).toBe(
       [
-        "[2026-07-01 AM 9:45]",
-        "@스티브 홀랜드: 첫 주는 다리부터 다시 만드는 걸로 채웠습니다.",
+        '<scene date="2026-07-01" time="09:30" place="훈련장" />',
+        "<narration>문이 열린다</narration>",
+        '<speak name="손흥민">감독님.',
+        "*고개를 숙인다* 준비됐습니다.</speak>",
       ].join("\n"),
     );
   });
 
-  it("멀쩡한 장면은 그대로 둔다 (빈 줄은 문단 간격이다)", () => {
-    const scene = ["[2026-07-01 AM 9:30]", "@: *문이 열린다*", "", "@손흥민: 감독님."].join("\n");
-    expect(sanitizeSceneText(scene)).toBe(scene);
+  it("한 줄에 커맨드가 여럿이어도 같은 판정이다", () => {
+    expect(sanitizeSceneText(`${MARK}${coach("네.")}<narration>정적</narration>`)).toBe(
+      [MARK, coach("네."), "<narration>정적</narration>"].join("\n"),
+    );
   });
 
-  it("@ 줄이 하나도 없으면 손대지 않는다 — 빈 턴보다 어긴 장면이 낫다", () => {
-    const broken = "오늘은 조용한 하루였습니다.";
-    expect(sanitizeSceneText(broken)).toBe(broken);
+  it("장면 커맨드가 하나도 없으면 남은 글자를 지문 하나로 감싼다 — 빈 턴보다 어긴 장면이 낫다", () => {
+    expect(sanitizeSceneText("오늘은 조용한 하루였습니다.")).toBe(
+      "<narration>오늘은 조용한 하루였습니다.</narration>",
+    );
+    expect(sanitizeSceneText(`${MARK}\n오늘은 조용했다.`)).toBe(
+      `${MARK}\n<narration>오늘은 조용했다.</narration>`,
+    );
   });
 
   /**
-   * 경계는 **첫 `@` 줄**이다 — 같은 모양의 태그 없는 줄이 그 앞에서는 작업 로그고
-   * 뒤에서는 이어쓰기다 (prompts.md §1).
+   * 소음과 전환을 가르는 것은 **값**이다 — 뒤 표식을 일괄로 걷으면 한 턴 안의 시간
+   * 전환이 화면에서 통째로 사라진다. 비교는 직전에 살린 표식과만 한다.
    */
-  it("첫 @ 줄 앞의 태그 없는 줄만 걷고, 뒤의 것은 이어쓰기로 남긴다", () => {
+  it("시각이 달라진 표식은 장면 전환이라 남고, 전환 뒤 같은 값의 반복은 걷힌다", () => {
     const raw = [
-      "[2026-07-01 AM 9:45]",
-      "훈련 계획을 확인하겠습니다.",
-      "@스티브 홀랜드: 첫 주는 다리부터 다시 만드는 걸로 채웠습니다.",
-      "수요일 오전에 한 번 더 보시죠.",
-      "@: *창밖에서 1군이 몸을 푸는 소리가 올라온다.*",
-      "잔디는 아직 젖어 있다.",
+      MARK,
+      coach("첫 주는 체력입니다."),
+      LATER,
+      '<scene time="14:10"   date="2026-07-01"/>',
+      coach("오후 면담 준비됐습니다."),
     ].join("\n");
 
     expect(sanitizeSceneText(raw)).toBe(
-      [
-        "[2026-07-01 AM 9:45]",
-        "@스티브 홀랜드: 첫 주는 다리부터 다시 만드는 걸로 채웠습니다.",
-        "수요일 오전에 한 번 더 보시죠.",
-        "@: *창밖에서 1군이 몸을 푸는 소리가 올라온다.*",
-        "잔디는 아직 젖어 있다.",
-      ].join("\n"),
+      [MARK, coach("첫 주는 체력입니다."), LATER, coach("오후 면담 준비됐습니다.")].join("\n"),
     );
   });
 
-  /**
-   * 소음과 전환을 가르는 것은 **값**이다 — 뒤 헤더를 일괄로 걷으면 한 턴 안의 시간
-   * 전환이 화면에서 통째로 사라진다 (prompts.md §1).
-   */
-  it("시각이 달라진 헤더는 장면 전환이라 본문 한복판에 남는다", () => {
-    const raw = [
-      "[2026-07-01 AM 9:45]",
-      "@스티브 홀랜드: 첫 주는 체력입니다.",
-      "[2026-07-01 PM 2:10]",
-      "@스티브 홀랜드: 오후 면담 준비됐습니다.",
-    ].join("\n");
-
-    expect(sanitizeSceneText(raw)).toBe(raw);
-  });
-
-  it("장면이 선 뒤라도 값이 같은 헤더는 걷는다 — 헤더 규칙이 이어쓰기보다 앞이다", () => {
-    const raw = [
-      "[2026-07-01 AM 9:45]",
-      "@스티브 홀랜드: 첫 주는 체력입니다.",
-      "[2026-07-01 AM 9:45]",
-      "다음 주는 전술로 넘어가시죠.",
-    ].join("\n");
-
-    expect(sanitizeSceneText(raw)).toBe(
-      [
-        "[2026-07-01 AM 9:45]",
-        "@스티브 홀랜드: 첫 주는 체력입니다.",
-        "다음 주는 전술로 넘어가시죠.",
-      ].join("\n"),
+  it("감독 이름의 발화는 걷는다 — 감독의 말은 유저의 몫이다", () => {
+    const raw = [MARK, '<speak name="장동훈">좋아.</speak>', coach("알겠습니다.")].join("\n");
+    expect(sanitizeSceneText(raw, { manager: "장동훈" })).toBe(
+      [MARK, coach("알겠습니다.")].join("\n"),
     );
   });
 
-  it("비교는 직전에 살린 헤더와만 한다 — 전환 뒤 그 시각을 다시 찍으면 걷힌다", () => {
-    const raw = [
-      "[2026-07-01 AM 9:45]",
-      "@스티브 홀랜드: 첫 주는 체력입니다.",
-      "[2026-07-01 PM 2:10]",
-      "[2026-07-01  PM 2:10]", // 안쪽 공백만 다른 줄도 같은 시각이다
-      "@스티브 홀랜드: 오후 면담 준비됐습니다.",
-    ].join("\n");
-
-    expect(sanitizeSceneText(raw)).toBe(
-      [
-        "[2026-07-01 AM 9:45]",
-        "@스티브 홀랜드: 첫 주는 체력입니다.",
-        "[2026-07-01 PM 2:10]",
-        "@스티브 홀랜드: 오후 면담 준비됐습니다.",
-      ].join("\n"),
+  it("닫히지 않은 채 끝난 발화는 닫아 준다 — 잘린 응답도 거기까지는 장면이다", () => {
+    expect(sanitizeSceneText(`${MARK}\n<speak name="손흥민">감독님, 저`)).toBe(
+      `${MARK}\n<speak name="손흥민">감독님, 저</speak>`,
     );
   });
 
-  it("전환 헤더 뒤의 태그 없는 줄은 여전히 이어쓰기다", () => {
-    const raw = [
-      "[2026-07-01 AM 9:45]",
-      "@스티브 홀랜드: 첫 주는 체력입니다.",
-      "[2026-07-01 PM 2:10]",
-      "그러고 보니 오후엔 비가 온답니다.",
-    ].join("\n");
-
-    // 헤더가 장면을 다시 열어도 화자는 이어진다 — `sceneOpen`은 되돌리지 않는다
-    expect(sanitizeSceneText(raw)).toBe(raw);
+  it("발화 안에서 다른 장면 커맨드가 열리면 앞 발화는 거기서 닫힌다", () => {
+    expect(
+      sanitizeSceneText(`<speak name="손흥민">감독님.\n<narration>문이 닫힌다</narration>`),
+    ).toBe('<speak name="손흥민">감독님.</speak>\n<narration>문이 닫힌다</narration>');
   });
 });
 
 describe("filterSceneStream — 화면에도 같은 위생", () => {
-  const run = (deltas: string[]) => {
+  const run = (deltas: string[], options = {}) => {
     const out: string[] = [];
-    const feed = filterSceneStream((d) => out.push(d));
+    const feed = filterSceneStream((d) => out.push(d), options);
     for (const d of deltas) feed(d);
-    return out.join("");
+    return out;
   };
 
-  it("걸러진 줄은 화면에 잠깐도 뜨지 않는다", () => {
-    const text = run([
-      "[2026-07-01 ",
-      "AM 9:45]\n브루누의 ",
+  it("걸러진 것은 화면에 잠깐도 뜨지 않는다 — 저장과 같은 체다", () => {
+    const deltas = [
+      '<scene date="2026-07-01" ',
+      'time="09:45" />\n브루누의 ',
       "카드를 확인하겠습니다.\n",
-      "[2026-07-01 AM 9:45]\n",
-      "@스티브 홀랜드: 걱정할 게 ",
-      "없습니다.",
-    ]);
-    expect(text).toBe("[2026-07-01 AM 9:45]\n@스티브 홀랜드: 걱정할 게 없습니다.");
+      '<scene date="2026-07-01" time="09:45" />\n',
+      '<speak name="스티브 홀랜드">걱정할 게 ',
+      "없습니다.</speak>",
+    ];
+    expect(run(deltas).join("")).toBe(sanitizeSceneText(deltas.join("")));
   });
 
-  it("장면이 선 뒤의 이어쓰기 줄은 스트리밍에서도 살아남는다", () => {
-    const text = run([
-      "[2026-07-01 AM 9:45]\n훈련 계획을 ",
-      "확인하겠습니다.\n@스티브 홀랜드: 첫 주는 ",
-      "체력입니다.\n수요일에 ",
-      "한 번 더 보시죠.",
-    ]);
-    expect(text).toBe(
-      "[2026-07-01 AM 9:45]\n@스티브 홀랜드: 첫 주는 체력입니다.\n수요일에 한 번 더 보시죠.",
-    );
-  });
-
-  it("시각이 달라진 헤더는 스트리밍에서도 그 자리에 선다", () => {
-    const text = run([
-      "[2026-07-01 AM 9:45]\n@스티브 홀랜드: 첫 주는 체력입니다.\n[2026-07-01 ",
-      "AM 9:45]\n[2026-07-01 PM ",
-      "2:10]\n@스티브 홀랜드: 준비됐습니다.",
-    ]);
-    expect(text).toBe(
-      [
-        "[2026-07-01 AM 9:45]",
-        "@스티브 홀랜드: 첫 주는 체력입니다.",
-        "[2026-07-01 PM 2:10]",
-        "@스티브 홀랜드: 준비됐습니다.",
-      ].join("\n"),
-    );
-  });
-
-  it("닫히지 않은 채 줄이 끝난 헤더도 그 줄에서 판정된다", () => {
-    const text = run(["[2026-07-01 AM 9:45\n@스티브 홀랜드: 첫 주는 체력입니다."]);
-    expect(text).toBe("[2026-07-01 AM 9:45\n@스티브 홀랜드: 첫 주는 체력입니다.");
-  });
-
-  it("살아남는 줄은 델타 그대로 흘러간다", () => {
-    const out: string[] = [];
-    const feed = filterSceneStream((d) => out.push(d));
-    for (const d of ["@손", "흥민: 감독", "님."]) feed(d);
-    // 첫 조각만 줄 앞머리 판정에 쓰이고, 그 뒤는 조각 단위로 그대로 나간다
-    expect(out.join("")).toBe("@손흥민: 감독님.");
+  it("발화의 본문은 도착하는 대로 흘러간다", () => {
+    const out = run(['<speak name="손흥민">감독', "님, ", "준비됐습니다."]);
+    expect(out.join("")).toBe('<speak name="손흥민">감독님, 준비됐습니다.');
     expect(out.length).toBe(3);
+  });
+
+  it("감독 이름의 발화는 스트리밍에서도 뜨지 않는다", () => {
+    const out = run(['<speak name="장동훈">좋', "아.</speak>\n<narration>정적</narration>"], {
+      manager: "장동훈",
+    });
+    expect(out.join("")).toBe("<narration>정적</narration>");
   });
 });
 
 /**
  * 꺾쇠 블록 — **코어가 읽으라고 넣어 준 입력 구조**다(`<points>`·`<ledger>`).
  * 모델이 그것을 되받아 쓰면 프롬프트 내부 배선이 감독이 읽는 자리에 그대로 섰다.
- * 평시와 중계가 **같은 규칙 하나**를 읽는다 (prompts.md §1).
+ * 평시와 중계가 **같은 체 하나**를 읽는다 (prompts.md §1).
  */
-describe("꺾쇠 블록 — 평시와 중계가 같은 규칙을 읽는다", () => {
+describe("꺾쇠 블록 — 평시와 중계가 같은 체를 읽는다", () => {
   const BLOCK = [
     "<points>",
     "- 왼쪽으로 몰리는 상대의 공격",
@@ -1492,61 +1443,64 @@ describe("꺾쇠 블록 — 평시와 중계가 같은 규칙을 읽는다", () 
     "</points>",
   ];
 
-  it("중계 위생은 블록을 걷고 구간 헤더와 이어쓰기는 남긴다", () => {
+  it("중계 위생은 블록과 모델의 표식을 걷는다 — 분 표식은 코어가 세운다", () => {
     const raw = [
-      "[43']",
+      '<scene minute="43" />',
       ...BLOCK,
-      "@중계: 브루노가 중거리 슛을 때립니다!",
-      "골키퍼가 쳐냅니다.",
-      "[45']",
-      "@중계: 전반 종료 휘슬.",
+      "<commentary>브루노가 중거리 슛을 때립니다!",
+      "골키퍼가 쳐냅니다.</commentary>",
+      '<scene minute="45" />',
+      "<commentary>전반 종료 휘슬.</commentary>",
     ].join("\n");
 
     expect(sanitizeCasterText(raw)).toBe(
       [
-        "[43']",
-        "@중계: 브루노가 중거리 슛을 때립니다!",
-        "골키퍼가 쳐냅니다.",
-        "[45']",
-        "@중계: 전반 종료 휘슬.",
+        "<commentary>브루노가 중거리 슛을 때립니다!",
+        "골키퍼가 쳐냅니다.</commentary>",
+        "<commentary>전반 종료 휘슬.</commentary>",
       ].join("\n"),
+    );
+    expect(stampMatchScene(sanitizeCasterText(raw), 45).split("\n")[0]).toBe(
+      '<scene minute="45" />',
     );
   });
 
   it("평시 위생도 같은 블록을 걷는다", () => {
-    const raw = ["[2026-07-01 AM 9:45]", ...BLOCK, "@스티브 홀랜드: 첫 주는 체력입니다."].join(
-      "\n",
-    );
+    const raw = [
+      '<scene date="2026-07-01" time="09:45" />',
+      ...BLOCK,
+      '<speak name="스티브 홀랜드">첫 주는 체력입니다.</speak>',
+    ].join("\n");
 
     expect(sanitizeSceneText(raw)).toBe(
-      ["[2026-07-01 AM 9:45]", "@스티브 홀랜드: 첫 주는 체력입니다."].join("\n"),
+      [
+        '<scene date="2026-07-01" time="09:45" />',
+        '<speak name="스티브 홀랜드">첫 주는 체력입니다.</speak>',
+      ].join("\n"),
     );
   });
 
   /** 짝 없는 꺾쇠 하나가 그 뒤의 장면을 통째로 삼키면 빈 턴이 된다 */
-  it("닫히지 않은 블록은 장면이 다시 서는 줄에서 끝난다", () => {
-    const raw = ["[12']", "<생각>", "어디를 노릴지 고른다", "@중계: 다시 이어갑니다."].join("\n");
-    expect(sanitizeCasterText(raw)).toBe(["[12']", "@중계: 다시 이어갑니다."].join("\n"));
+  it("닫히지 않은 블록은 장면 커맨드가 다시 열리는 자리에서 끝난다", () => {
+    const raw = [
+      "<생각>",
+      "어디를 노릴지 고른다",
+      "<commentary>다시 이어갑니다.</commentary>",
+    ].join("\n");
+    expect(sanitizeCasterText(raw)).toBe("<commentary>다시 이어갑니다.</commentary>");
   });
 
-  it("한 줄로 여닫은 블록도, 짝 없는 닫는 태그도 걷는다 — 대사 안의 꺾쇠는 그대로", () => {
-    const raw = ["[12']", "<stop>구간 종료</stop>", "</ledger>", "@중계: 3 < 4 랬죠."].join("\n");
-    expect(sanitizeCasterText(raw)).toBe(["[12']", "@중계: 3 < 4 랬죠."].join("\n"));
+  it("스스로 닫은 태그도, 짝 없는 닫는 태그도 걷는다 — 대사 안의 부등호는 글자다", () => {
+    const raw = ["<stop/>", "</ledger>", "<commentary>3 < 4 랬죠.</commentary>"].join("\n");
+    expect(sanitizeCasterText(raw)).toBe("<commentary>3 < 4 랬죠.</commentary>");
   });
 
   it("스트리밍에도 같은 규칙 — 블록은 화면에 잠깐도 뜨지 않는다", () => {
     const out: string[] = [];
     const feed = filterCasterStream((d) => out.push(d));
-    for (const d of ["[43']\n<poi", "nts>\n- 왼쪽으로 ", "몰리는 공격\n</points>\n@중계: ", "슛!"])
+    for (const d of ["<poi", "nts>\n- 왼쪽으로 ", "몰리는 공격\n</points>\n<commentary>", "슛!"])
       feed(d);
-    expect(out.join("")).toBe("[43']\n@중계: 슛!");
-  });
-
-  it("스트리밍의 한 줄 블록도 저장과 같은 곳에서 끝난다", () => {
-    const out: string[] = [];
-    const feed = filterCasterStream((d) => out.push(d));
-    for (const d of ["<stop>구간 ", "종료</stop>\n@중계: ", "이어갑니다."]) feed(d);
-    expect(out.join("")).toBe("@중계: 이어갑니다.");
+    expect(out.join("")).toBe("<commentary>슛!");
   });
 });
 
@@ -1582,7 +1536,7 @@ describe("<board_moves> — 이번 턴 판이 움직인 것", () => {
   });
 });
 
-describe("해석기가 읽는 지난 턴 — 이번 턴의 꼬리는 @감독: 줄이 싣는다", () => {
+describe("해석기가 읽는 지난 턴 — 이번 턴의 꼬리는 감독 발화 블록이 싣는다", () => {
   /**
    * 턴 러너는 감독의 말을 모델 호출 전에 채팅에 넣는다. `<recent_turns>`가 그 꼬리를
    * 그대로 실으면 해석기 입력에 같은 말이 두 벌 선다 (agents.md §3) — 화면에는 아무
@@ -1592,13 +1546,13 @@ describe("해석기가 읽는 지난 턴 — 이번 턴의 꼬리는 @감독: �
     const state = game();
     state.chat.push(
       { role: "user", text: "지난 턴의 말", toolCalls: [], at: state.date },
-      { role: "model", text: "@: 지난 장면", toolCalls: [], at: state.date },
+      { role: "model", text: "<narration>지난 장면</narration>", toolCalls: [], at: state.date },
       { role: "operator", text: "전술판에서 라인을 내렸다", toolCalls: [], at: state.date },
       { role: "user", text: "이번 턴의 말", toolCalls: [], at: state.date },
     );
     const block = buildRecentTurnsBlock(state);
-    expect(block).toContain("@감독: 지난 턴의 말");
-    expect(block).toContain("@: 지난 장면");
+    expect(block).toContain('<speak name="감독">지난 턴의 말</speak>');
+    expect(block).toContain("<narration>지난 장면</narration>");
     expect(block).not.toContain("이번 턴의 말");
     expect(block).not.toContain("전술판에서 라인을 내렸다");
   });
@@ -1625,7 +1579,7 @@ describe("main GM starts a spoken-name renewal", () => {
             },
           },
         ],
-        text: `[${state.date} AM 10:00]\n@: 라먼스의 재계약 협상을 열었다.\n@선수 대리인: 계약 조건을 여기서 논의하시죠.`,
+        text: `<scene date="${state.date}" time="10:00" />\n<narration>라먼스의 재계약 협상을 열었다.</narration>\n<speak name="선수 대리인">계약 조건을 여기서 논의하시죠.</speak>`,
       }));
       return client.runTurn(request);
     });

@@ -1,4 +1,5 @@
-import { type GameState, humanizePlayerIds, formatClock, clockOf } from "@gaffer/engine";
+import { type GameState, humanizePlayerIds, clockOf } from "@gaffer/engine";
+import { sceneMarker } from "@gaffer/domain";
 import { normalizeSuggestion } from "../shared/suggest-reply";
 import { parseSceneHeader, sanitizeSceneText } from "../shared/context";
 import { type GameLLM, resolveLlmMode, createGameLLM, agentConfig } from "@gaffer/llm";
@@ -47,10 +48,10 @@ export async function runOnboarding(
     return { report, text, usage: result.usage };
   });
 
-  // 첫 장면은 시계를 옮기지 않는다 — 헤더가 없으면 세워 준다
+  // 첫 장면은 시계를 옮기지 않는다 — 표식이 없으면 세워 준다
   const stamped = parseSceneHeader(turn.text).point
     ? turn.text
-    : `[${state.date} ${formatClock(clockOf(state))}]\n${turn.text}`;
+    : `${sceneMarker({ date: state.date, time: clockOf(state) })}\n${turn.text}`;
   const suggestion = normalizeSuggestion(turn.report.suggestion);
   return {
     text: stamped,
