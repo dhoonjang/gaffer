@@ -9,6 +9,8 @@ import {
   AXIS_KO,
   INCLINATION_AXES,
   cardLine,
+  habitLine,
+  habitSteps,
   placeOf,
   standoutAxes,
   type AttributeAxis,
@@ -31,7 +33,11 @@ function attributeLine(state: GameState, id: string, position: string): string {
   const inclinations = INCLINATION_AXES.filter(
     (axis) => keeper || (axis !== "commandOfArea" && axis !== "rushingOut"),
   );
-  return `강점 ${named(strengths)} · 약점 ${named(weaknesses)} · ${named(inclinations)}`;
+  const habit = habitLine(habitSteps(player.attributes, position));
+  return (
+    `강점 ${named(strengths)} · 약점 ${named(weaknesses)} · ${named(inclinations)}` +
+    (habit ? ` · 버릇 ${habit}` : "")
+  );
 }
 
 /**

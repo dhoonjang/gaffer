@@ -1,4 +1,10 @@
-import { CARD_WORDS, cardWordsAt, type CardSteps, type CardWord } from "./role-card";
+import {
+  CARD_WORDS,
+  CARD_WORD_DEFS,
+  cardWordsAt,
+  type CardSteps,
+  type CardWord,
+} from "./role-card";
 import { INCLINATION_AXES, weightSlotOf, type InclinationAxis } from "./player";
 import { SLOT_INCLINATION } from "./slot-reference";
 
@@ -61,4 +67,13 @@ export function withHabit(card: CardSteps, habit: CardSteps): CardSteps {
     out[word] = round2(step + lean * (against ? HABIT_AGAINST_CARD : 1));
   }
   return out;
+}
+
+/** 버릇을 말로 — `드리블 +1.2 · 압박 −0.5`. 카드 단계와 달리 소수가 선다. 버릇이 없으면 빈 문자열 */
+export function habitLine(habit: CardSteps): string {
+  return CARD_WORDS.flatMap((word) => {
+    const lean = habit[word] ?? 0;
+    if (lean === 0) return [];
+    return [`${CARD_WORD_DEFS[word].ko} ${lean > 0 ? "+" : "−"}${Math.abs(lean).toFixed(1)}`];
+  }).join(" · ");
 }

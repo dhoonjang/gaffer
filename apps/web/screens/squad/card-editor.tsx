@@ -3,11 +3,11 @@
 import {
   AXIS_KO,
   CARD_STEP_MAX,
-  CARD_WORDS,
   CARD_WORD_DEFS,
   PLACES,
   PLACE_KO,
   cardKeyAxes,
+  habitLine,
   cardStep,
   cardTitle,
   cardWordsAt,
@@ -54,10 +54,6 @@ function withPlace(card: RoleCard | null, place: Place | null): RoleCard | null 
  * 대가(적응도)는 칸마다 적지 않는다 — 고르기 전에 대가를 말하면 카드가 가장 싼 쪽으로
  * 접힌다 (player.md §7.2). 명단의 적응 게이지가 지금 상태를 말한다.
  */
-/** 버릇 한 칸 — `드리블 +1.2`. 카드 단계와 달리 소수가 선다 (player.md §3.4) */
-const habitText = (word: CardWord, lean: number) =>
-  `${CARD_WORD_DEFS[word].ko} ${lean > 0 ? "+" : "−"}${Math.abs(lean).toFixed(1)}`;
-
 /** 국면마다 카드가 요구하는 축의 수 — FM의 핵심 능력치 다섯 */
 const KEY_AXES = 5;
 
@@ -116,15 +112,10 @@ export function CardEditor({
         )}
       </div>
       {/* 타고난 버릇 — 같은 쪽의 카드에는 더해지고 반대쪽이면 반만 남는다 (player.md §3.4) */}
-      {CARD_WORDS.some((word) => (habit[word] ?? 0) !== 0) && (
+      {habitLine(habit) && (
         <div className="pd-card-habit">
           <span className="pd-card-phase-name">버릇</span>
-          <span>
-            {CARD_WORDS.flatMap((word) => {
-              const lean = habit[word] ?? 0;
-              return lean === 0 ? [] : [habitText(word, lean)];
-            }).join(" · ")}
-          </span>
+          <span>{habitLine(habit)}</span>
         </div>
       )}
       {PHASES.map((phase) => {

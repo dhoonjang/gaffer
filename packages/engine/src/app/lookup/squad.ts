@@ -13,6 +13,8 @@ import {
   naturalPositionOf,
   cardFit,
   cardLine,
+  habitLine,
+  habitSteps,
   type RoleCard,
 } from "@gaffer/domain";
 import { describeStaffPool } from "../../people/staff-employment";
@@ -68,6 +70,13 @@ interface SquadViewInput {
  * (포지션 코드를 알파벳순으로 세우면 LB·LCB·RB·RCB로 뒤엉켜 라인업으로 읽히지 않는다).
  * y를 12 단위로 뭉쳐 같은 라인으로 묶고 그 안에서 x로 세운다.
  */
+
+/** 그 자리의 버릇 — 카드 위에 얹히는 선수 자신의 기울기 (player.md §3.4). 없으면 아무것도 달지 않는다 */
+function habitOf(p: GamePlayer, position: string): string {
+  const line = habitLine(habitSteps(p.attributes, position));
+  return line ? ` (버릇 ${line})` : "";
+}
+
 function boardOrder(state: GameState, playerId: string, position: string): [number, number] {
   const point = assignmentFor(state, playerId)?.point ?? anchorOf(position);
   return [-Math.round(point.y / 12), point.x];
@@ -115,7 +124,7 @@ function assignedRow(
   ].filter((x): x is string => x !== null);
   return (
     `  ${position.padEnd(4)} ${p.name}${armband(p)} (${p.id}) ${ageOf(p.birthdate, state.date)}세 · ` +
-    `카드 ${cardLine(card)} · OVR${playerOverall(p)} 자리적합${cardFit(p.attributes, position, card)} 포지션적응${proficiencyAt(p, position)} ` +
+    `카드 ${cardLine(card)}${habitOf(p, position)} · OVR${playerOverall(p)} 자리적합${cardFit(p.attributes, position, card)} 포지션적응${proficiencyAt(p, position)} ` +
     `전술적응${familiarity} · 폼 ${formLabel(p.state.form)} 체력${p.state.condition}` +
     // **라인업을 세우는 자리가 계약 만료를 읽는 자리이기도 하다** —
     // 만료일이 없으면 감독은 여름에 사라질 주전을 붙박이로 세운다
