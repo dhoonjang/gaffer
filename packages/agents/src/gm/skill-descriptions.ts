@@ -309,6 +309,12 @@ type SkillDescriptions = Record<SkillName, string>;
 
 export const SKILL_NAMES = SKILL_CATALOG.map((skill) => skill.name);
 
+/**
+ * 기록은 남기되 칩으로 세우지 않는 스킬 — 로어북 갱신은 GM의 메모이고, 메일 읽기는
+ * 읽음 표시만 바꾸는 조회라 감독이 시킨 일이 아니다 (agents.md §8).
+ */
+export const SILENT_SKILLS: ReadonlySet<string> = new Set(["update_character", "read_mail"]);
+
 export const DEFAULT_SKILL_DESCRIPTIONS = Object.fromEntries(
   SKILL_CATALOG.map((skill) => [skill.name, skill.description]),
 ) as SkillDescriptions;

@@ -201,7 +201,7 @@ export function squadView(state: GameState, input: SquadViewInput = {}): LookupR
   const buckets: ReadonlyArray<["starting" | "bench" | "unassigned", string]> = [
     ["starting", "선발"],
     ["bench", "벤치"],
-    ["unassigned", "예비 (배치 없음 — 라인업에 넣으려면 set_lineup)"],
+    ["unassigned", "1군 미배치 (선발·벤치 밖)"],
   ];
   let shown = 0;
   for (const [bucket, label] of buckets) {

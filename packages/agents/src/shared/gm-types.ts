@@ -1,5 +1,5 @@
 import type { TickEvent } from "@gaffer/domain";
-import type { CardMark, GoalMark, CommandBrief } from "@gaffer/engine";
+import type { CardMark, GoalMark, CommandBrief, Exhibit } from "@gaffer/engine";
 
 /** GM 턴 결과 — mock/실모드 공통 계약 */
 export interface GmToolCall {
@@ -83,6 +83,11 @@ export interface GmTurnResult {
    * 한 턴에 둘 다 굴 수 있다. 그때는 **민 순서대로 이어 붙인다**.
    */
   events?: TickEvent[];
+  /**
+   * 이번 턴 본문의 자료 카드 값 — 카드 줄과 순서로 짝짓는다. 턴 러너가
+   * `ChatTurn.exhibits`로 남긴다 (prompts.md §1 「자료 카드」).
+   */
+  exhibits?: Exhibit[];
   /**
    * **시계가 멎은 채로 이어진 평시 턴 수** — 첫 줄 헤더를 연달아 못 읽었다
    * (`STALLED_CLOCK_TURNS` 이상일 때만 실린다).

@@ -308,6 +308,7 @@ row, 지난 일 = 그대로 이력.**
 | ↳ `CommandBrief`                                   | 화면이 세우는 요약 — 머리줄 + 항목. 없는 기록은 말풍선에 서지 않는다                                                                  | `packages/engine/src/core/state.ts`            |
 | ↳ `CommandBriefItem`                               | 항목 하나 — 이름(`label`) · 값(`text`) · 갈래(`note`) · 증감(`delta`)                                                                 | `packages/engine/src/core/state.ts`            |
 | ↳ `GoalMark` `CardMark`                            | 그 턴의 골·카드 — 장부의 사건이지 중계 문장의 파싱이 아니다                                                                           | `packages/engine/src/core/state.ts`            |
+| ↳ `Exhibit`                                        | 그 턴의 자료 카드 값 — 본문의 카드 커맨드와 순서로 짝짓는다. 턴이 닫힐 때의 장부다 (../agents/prompts.md §1)                          | `packages/engine/src/app/exhibits.ts`          |
 | `pendingEdits` `PendingEdit`                       | 아직 GM이 읽지 않은 화면 조작 — 같은 키는 마지막 것만                                                                                 | `packages/engine/src/core/state.ts`            |
 | `pendingNews`                                      | 아직 GM이 읽지 않은 경기 밖 소식 — 결산이 함께 굴린 재정·다른 경기                                                                    | `packages/engine/src/core/state.ts`            |
 | `historyDigest` `HistoryDigest`                    | 접힌 평시 이력의 요약 — 접은 지점 · **지난 일**(`text`) · **열린 일**(`open`) · 후보(`candidates`) · 겹 수 (../agents/agents.md §5-1) | `packages/domain/src/people/memory.ts`         |
@@ -428,7 +429,7 @@ erDiagram
 
 ## 6. 세이브 정책
 
-**`SAVE_VERSION = 27`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
+**`SAVE_VERSION = 28`** (`packages/engine/src/app/persistence.ts`). 버전이 다른 파일은 로드를 거부한다. 모델 입력의 게임 버전은
 세이브 버전과 별도로 `config/game-version.yml`이 소유한다.
 **거부는 하되 감추지는 않는다**(→ [열 수 없는 세이브](#열-수-없는-세이브)).
 

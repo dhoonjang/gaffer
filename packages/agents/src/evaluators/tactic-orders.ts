@@ -22,6 +22,9 @@ export const TACTIC_OPS: readonly string[] = [
   ...MATCH_OPS,
 ];
 
+/** 진행 중인 경기 장부가 있어야 성립하는 명령 — 평시 해석기에는 묻지 않는다. */
+export const LIVE_ONLY_OPS: readonly string[] = ["substitute"];
+
 /**
  * 명령마다 다른 상한 — **규칙이 정한 수가 있는 자리는 그 수를 쓴다** (match.md §5).
  * 교체는 벤치 전체를 옮길 수 있다. 대회별 교체 한도는 장부가 검증한다.

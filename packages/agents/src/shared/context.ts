@@ -1,7 +1,9 @@
 import {
   type GameState,
   type ChatTurn,
+  type Exhibit,
   isPeaceTurn,
+  resolveExhibit,
   type ScenePoint,
   managedTeamId,
   clubHonoursLine,
@@ -11,7 +13,10 @@ import {
 import {
   createMarkupLexer,
   closeVoice,
+  exhibitTag,
+  isExhibitTag,
   isSceneCommand,
+  MATCH_EXHIBIT_TAGS,
   isVoiceTag,
   narration,
   openVoice,
@@ -104,6 +109,12 @@ export function scenePointOf(marker: SceneMarker): ScenePoint | null {
   return { date, clock: sceneClock(marker.time) ?? "09:00" };
 }
 
+/**
+ * 한 턴에 서는 자료 카드의 상한 — 넘치면 채팅이 표 묶음이 되어 장면이 밀려난다
+ * (prompts.md §1 「자료 카드」).
+ */
+export const EXHIBITS_PER_TURN = 3;
+
 /** 위생의 갈래 — 경기는 모델의 표식을 걷고 코어가 장부의 분을 세운다 */
 export interface SieveOptions {
   match?: boolean;
@@ -141,6 +152,8 @@ export function createSceneSieve(options: SieveOptions = {}): SceneSieve {
     | { kind: "voice"; tag: VoiceTag; name: string; started: boolean; gap: string }
     | { kind: "drop"; name: string } = { kind: "outside" };
   let lastMarker: string | null = null;
+  /** 이번 응답에 이미 선 카드의 정본 — 같은 카드는 한 번이다 */
+  const exhibits = new Set<string>();
   let wrote = false;
   let voiced = false;
   let stray = "";
@@ -167,6 +180,17 @@ export function createSceneSieve(options: SieveOptions = {}): SceneSieve {
         // 값이 같은 반복 표식은 도구 반복이 다시 찍은 소음이다 — 시각이 바뀐 것만 전환이다
         if (marker !== lastMarker) element(marker);
         lastMarker = marker;
+        return;
+      }
+      if (isExhibitTag(token.name)) {
+        // 카드는 스스로 닫는다 — 여닫는 꼴로 오면 본문(모델이 쓴 수치)을 버린다
+        if (token.kind === "open") mode = { kind: "drop", name: token.name };
+        const card = exhibitTag(token.name, token.attrs);
+        // 경기 장면에는 선수 카드만 선다 — 재정·협상은 경기의 흐름과 무관하다
+        if (options.match && !MATCH_EXHIBIT_TAGS.includes(token.name)) return;
+        if (exhibits.has(card) || exhibits.size >= EXHIBITS_PER_TURN) return;
+        exhibits.add(card);
+        element(card);
         return;
       }
       if (token.kind === "empty") return;
@@ -203,6 +227,14 @@ export function createSceneSieve(options: SieveOptions = {}): SceneSieve {
         }
         if (token.kind === "close" && token.name === mode.tag) {
           endVoice();
+          continue;
+        }
+        // 목소리 안에 카드가 섰다 — 대사를 거기서 끊고 카드 뒤에 같은 화자로 다시 연다
+        if (token.kind === "empty" && isExhibitTag(token.name)) {
+          const { tag, name } = mode;
+          endVoice();
+          outside(token);
+          mode = { kind: "voice", tag, name, started: false, gap: "" };
           continue;
         }
         // 목소리 안에서 다른 태그가 열렸다 — 닫는 태그를 잊은 발화가 그 뒤를 삼키지 않게
@@ -256,6 +288,47 @@ export function sanitizeSceneText(text: string, options: SieveOptions = {}): str
     .trim();
   if (stray.length === 0) return kept;
   return [kept, narration(stray)].filter((part) => part.length > 0).join("\n");
+}
+
+/**
+ * **자료 카드를 장부로 푼다** — 위생을 지난 평시 본문의 카드 줄마다 코어가 값을 채우고
+ * (`resolveExhibit`), 참조를 이름으로 편 정본으로 다시 적는다 (prompts.md §1 「자료 카드」).
+ *
+ * 값은 본문과 **순서로** 짝짓는다 — n번째 카드 줄이 `exhibits[n]`이다. 풀리지 않는 카드와
+ * 이름으로 편 뒤 겹친 카드는 줄째로 걷고, 걷은 줄의 자리(본문 안 빈 줄 아닌 줄의 1-기준
+ * 번호)를 돌려준다 — 호출 칩의 줄 수(`ToolCallRecord.line`)를 그만큼 당겨야 한다.
+ */
+export function fileExhibits(
+  state: GameState,
+  body: string,
+): { body: string; exhibits: Exhibit[]; dropped: number[] } {
+  const exhibits: Exhibit[] = [];
+  const dropped: number[] = [];
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  let written = 0;
+  for (const line of body.split("\n")) {
+    if (line.trim().length === 0) {
+      kept.push(line);
+      continue;
+    }
+    written += 1;
+    const item = readSceneMarkup(line)[0];
+    if (item?.kind !== "exhibit") {
+      kept.push(line);
+      continue;
+    }
+    const resolved = resolveExhibit(state, item.tag, item.attrs);
+    const canonical = resolved ? exhibitTag(item.tag, resolved.attrs) : null;
+    if (!resolved || canonical === null || seen.has(canonical)) {
+      dropped.push(written);
+      continue;
+    }
+    seen.add(canonical);
+    exhibits.push(resolved.exhibit);
+    kept.push(canonical);
+  }
+  return { body: kept.join("\n"), exhibits, dropped };
 }
 
 /** 중계 위생 — 같은 체다. 모델의 표식은 걷히고 장부의 분은 `stampMatchScene`이 세운다 */

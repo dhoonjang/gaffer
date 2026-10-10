@@ -65,6 +65,40 @@ export function positionGroupOf(position: string): PositionGroup | null {
  */
 export const POSITION_CODES = Object.keys(POSITION_GROUPS);
 
+/** 포지션 코드의 한국어 이름 — 코드만으로는 갈래가 같은 자리끼리 구별되지 않는다 */
+export const POSITION_NAMES: Readonly<Record<string, string>> = {
+  GK: "골키퍼",
+  RB: "오른쪽 풀백",
+  RWB: "오른쪽 윙백",
+  RCB: "오른쪽 센터백",
+  CB: "센터백",
+  LCB: "왼쪽 센터백",
+  LB: "왼쪽 풀백",
+  LWB: "왼쪽 윙백",
+  DM: "수비형 미드필더",
+  CDM: "가운데 수비형 미드필더",
+  LDM: "왼쪽 수비형 미드필더",
+  RDM: "오른쪽 수비형 미드필더",
+  RCM: "오른쪽 중앙 미드필더",
+  CM: "중앙 미드필더",
+  LCM: "왼쪽 중앙 미드필더",
+  AM: "공격형 미드필더",
+  CAM: "가운데 공격형 미드필더",
+  LAM: "왼쪽 공격형 미드필더",
+  RAM: "오른쪽 공격형 미드필더",
+  RM: "오른쪽 미드필더",
+  LM: "왼쪽 미드필더",
+  RW: "오른쪽 윙어",
+  LW: "왼쪽 윙어",
+  SS: "세컨드 스트라이커",
+  ST: "스트라이커",
+  LST: "왼쪽 스트라이커",
+  RST: "오른쪽 스트라이커",
+  CF: "센터포워드",
+  LF: "왼쪽 포워드",
+  RF: "오른쪽 포워드",
+};
+
 /** 라인의 앞뒤 순서 — 자리를 옮길 때 **몇 개의 라인을 넘는지** 세는 데 쓴다 */
 export const POSITION_LINE_ORDER: Record<PositionGroup, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
 

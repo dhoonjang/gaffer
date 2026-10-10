@@ -9,6 +9,7 @@ import {
 import {
   TACTIC_AXES,
   POSITION_CODES,
+  POSITION_NAMES,
   rolesFor,
   roleChoiceText,
   type Point,
@@ -32,7 +33,13 @@ import {
   parseOrdersReport,
   type OpsOrders,
 } from "../evaluators/orders-ops";
-import { TACTIC_OPS, TACTIC_CAPS, MATCH_OPS, buildPeaceContext } from "../evaluators/tactic-orders";
+import {
+  TACTIC_OPS,
+  TACTIC_CAPS,
+  MATCH_OPS,
+  LIVE_ONLY_OPS,
+  buildPeaceContext,
+} from "../evaluators/tactic-orders";
 import { TRAINING_OPS, buildTrainingContext } from "../evaluators/training-orders";
 import { FINANCE_OPS, buildFinanceContext } from "../evaluators/finance-orders";
 import { buildToolSpecs } from "./gm-tools";
@@ -116,10 +123,29 @@ export function instructionCandidates(
       said.includes(p.id) ||
       p.name.split(/\s+/).some((part) => part.length >= 2 && said.includes(part)),
   );
+  const seats = new Map(
+    (state.tactics.find((t) => t.teamId === state.userTeamId)?.assignments ?? []).map((a) => [
+      a.playerId,
+      a,
+    ]),
+  );
+  // Where each player stands now — routing between lineup, level and position moves reads it.
+  const standing = (p: (typeof players)[number]): string => {
+    if (p.teamId !== state.userTeamId) return "다른 팀";
+    const seat = seats.get(p.id);
+    if (seat?.role === "starting") return `선발 ${seat.position}`;
+    if (seat?.role === "bench") return "벤치";
+    return p.squadLevel === "reserve" ? "2군" : "1군 미배치";
+  };
   const people = players.map((p) => ({
-    label: `${p.name} (${p.id}, ${p.positions.map((x) => x.position).join("/")})`,
+    label: `${p.name} (${p.id}, ${p.positions.map((x) => x.position).join("/")}, ${standing(p)})`,
     value: p.id,
   }));
+  const occupant = new Map(
+    [...seats.values()]
+      .filter((seat) => seat.role === "starting")
+      .map((seat) => [seat.position, state.players.find((p) => p.id === seat.playerId)?.name]),
+  );
   const youth = state.youthCandidates
     .filter((c) => c.teamId === state.userTeamId)
     .map((c) => ({ label: c.player.name, value: c.player.id }));
@@ -176,7 +202,13 @@ export function instructionCandidates(
     "set_training.dow": ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"].map(
       (label, value) => ({ label, value }),
     ),
-    position: POSITION_CODES.map((value) => ({ label: value, value })),
+    position: POSITION_CODES.map((value) => {
+      const now = occupant.get(value);
+      return {
+        label: `${value} — ${POSITION_NAMES[value] ?? value}${now ? ` (지금 ${now})` : ""}`,
+        value,
+      };
+    }),
     "set_player_tactic.role": [
       ...new Map(
         POSITION_CODES.flatMap((position) =>
@@ -205,7 +237,19 @@ interface InstructionOutcome {
   applied: number;
 }
 
-/** Every command in one utterance commits together, through existing Zod/core handlers. */
+/** Why the core dropped an effect line — what the GM can ask the manager about. */
+const SHEET_DROP_REASONS: Readonly<Record<string, string>> = {
+  "no-player": "그라운드에 없는 선수",
+  duplicate: "같은 대상에 겹친 효과",
+  "target-cap": "한 선수에게 너무 큰 효과",
+  "team-budget": "팀 전체 효과가 너무 큼",
+  "net-cap": "대가 없는 이득",
+};
+
+/**
+ * Every command in one utterance commits together, through existing Zod/core handlers.
+ * When only the tactical reading fails the core, the commands read with it still commit.
+ */
 export function applyInstructionBatch(
   state: GameState,
   calls: GmToolCall[],
@@ -213,7 +257,7 @@ export function applyInstructionBatch(
   names: readonly string[],
   options: { reading?: Reading; source?: string } = {},
 ): InstructionOutcome {
-  if (orders.unresolved)
+  if (orders.unresolved && Object.keys(orders.ops).length === 0 && !options.reading)
     return {
       notes: [`지시를 적용하지 않았습니다. 확인할 부분: ${orders.unresolved}`],
       rejected: true,
@@ -221,6 +265,35 @@ export function applyInstructionBatch(
     };
   if (Object.keys(orders.ops).length === 0 && !options.reading)
     return { notes: [], rejected: false, applied: 0 };
+  let attempt = commitBatch(state, orders, names, options);
+  if (attempt.readingFailed && Object.keys(orders.ops).length > 0) {
+    const failure = attempt.notes.at(-1)!;
+    attempt = commitBatch(state, orders, names, { ...options, reading: undefined });
+    attempt.notes.push(failure);
+  }
+  const { draft, draftCalls, notes, transaction } = attempt;
+  if (transaction.value.rejected > 0) {
+    return {
+      notes: ["지시 묶음을 적용하지 않았습니다. 함께 요청한 변경은 모두 그대로입니다.", ...notes],
+      rejected: true,
+      applied: 0,
+    };
+  }
+  for (const key of Object.keys(state)) {
+    if (!Object.hasOwn(draft, key)) delete (state as unknown as Record<string, unknown>)[key];
+  }
+  Object.assign(state, draft);
+  calls.push(...draftCalls);
+  for (const entry of transaction.entries) journal(entry);
+  return { notes, rejected: false, applied: transaction.value.applied };
+}
+
+function commitBatch(
+  state: GameState,
+  orders: OpsOrders,
+  names: readonly string[],
+  options: { reading?: Reading | undefined; source?: string | undefined },
+) {
   const draft = structuredClone(state);
   const draftCalls: GmToolCall[] = [];
   const specs = new Map(
@@ -264,19 +337,31 @@ export function applyInstructionBatch(
     ]),
   );
   const notes: string[] = [];
+  let readingFailed = false;
   const transaction = captureJournal(() => {
     const applied = applyOps(specs, orders, names, notes);
     if (applied.rejected > 0) return applied;
     syncLiveTactics(draft);
     if (options.reading) {
       const stored = applyMatchReading(draft, options.reading);
-      if (!stored || !draft.pendingMatch) return { ...applied, rejected: 1 };
-      const folded = liveInputOf(draft.pendingMatch.live).sheet;
-      if (stored.droppedPoints > 0 || folded.dropped.length > 0) {
-        notes.push("전술 효과가 경기의 실재·대가·한도를 충족하지 못했습니다");
+      const folded =
+        stored && draft.pendingMatch ? liveInputOf(draft.pendingMatch.live).sheet : null;
+      if (!stored || !folded || stored.droppedPoints > 0 || folded.dropped.length > 0) {
+        readingFailed = true;
+        const reasons = [
+          ...new Set(
+            (folded?.dropped ?? []).map(
+              (drop) => SHEET_DROP_REASONS[drop.code] ?? "필요한 값 누락",
+            ),
+          ),
+        ];
+        notes.push(
+          `전술 효과를 걸지 못했습니다${reasons.length > 0 ? ` — ${reasons.join(" · ")}` : ""}`,
+        );
         return { ...applied, rejected: 1 };
       }
-      const message = `경기 전술 효과 ${stored.sheet.length}개를 적용했습니다`;
+      const live = folded.applied.length;
+      const message = `경기 전술 효과 ${live}개를 적용했습니다`;
       notes.push(message);
       recordCall(
         draftCalls,
@@ -293,20 +378,7 @@ export function applyInstructionBatch(
     }
     return applied;
   });
-  if (transaction.value.rejected > 0) {
-    return {
-      notes: ["지시 묶음을 적용하지 않았습니다. 함께 요청한 변경은 모두 그대로입니다.", ...notes],
-      rejected: true,
-      applied: 0,
-    };
-  }
-  for (const key of Object.keys(state)) {
-    if (!Object.hasOwn(draft, key)) delete (state as unknown as Record<string, unknown>)[key];
-  }
-  Object.assign(state, draft);
-  calls.push(...draftCalls);
-  for (const entry of transaction.entries) journal(entry);
-  return { notes, rejected: false, applied: transaction.value.applied };
+  return { draft, draftCalls, notes, transaction, readingFailed };
 }
 
 async function runInstructions(
@@ -341,6 +413,7 @@ async function runInstructions(
   const context =
     agent === "match-reader"
       ? [
+          `<manager_side>${userSide(state)} · ${state.teams.find((team) => team.id === state.userTeamId)?.name ?? state.userTeamId}</manager_side>`,
           buildLedgerNote(state, { withState: true }),
           ...buildFactsBlock(state),
           buildRecentFlowBlock(state),
@@ -366,7 +439,10 @@ async function runInstructions(
         ...context,
         ...buildBoardMovesBlock(state, options.boardMoves ?? []),
       ].join("\n"),
-      commands: instructionCommands(specs, names),
+      commands: instructionCommands(
+        specs,
+        live ? names : names.filter((name) => !LIVE_ONLY_OPS.includes(name)),
+      ),
       candidates: instructionCandidates(state, said),
       evaluator: options.evaluator ?? createGameEvaluator(agent),
     };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contractUntil, humanDate, humanMonthYear } from "../../shared/dateline";
+import { contractLeft, contractUntil, humanDate, humanMonthYear } from "../../shared/dateline";
 
 /**
  * 날짜의 사람 표기 — 자는 하나다 (tokens.css 「숫자와 표기」).
@@ -49,5 +49,19 @@ describe("humanMonthYear · contractUntil", () => {
 
   it("ISO가 아니면 「까지」를 붙이지 않는다", () => {
     expect(contractUntil("자유계약")).toBe("자유계약");
+  });
+});
+
+describe("contractLeft", () => {
+  it("달로 세고, 그날이 만료일의 날짜를 넘었으면 그 달은 다 쓴 것이다", () => {
+    expect(contractLeft("2026-07-01", "2028-06-30")).toBe("1년 11개월");
+    expect(contractLeft("2026-06-30", "2028-06-30")).toBe("2년");
+    expect(contractLeft("2027-01-15", "2027-06-30")).toBe("5개월");
+  });
+
+  it("한 달이 안 남은 것과 지난 것은 갈린다", () => {
+    expect(contractLeft("2027-06-15", "2027-06-30")).toBe("1개월 미만");
+    expect(contractLeft("2027-06-30", "2027-06-30")).toBe("만료");
+    expect(contractLeft("2027-07-01", "2027-06-30")).toBe("만료");
   });
 });

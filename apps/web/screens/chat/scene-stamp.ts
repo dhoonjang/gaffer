@@ -1,5 +1,5 @@
 import type { ChatTurn } from "@gaffer/engine";
-import { readSceneMarkup, sceneClock, type SceneMarker } from "@gaffer/domain";
+import { readSceneMarkup, sceneClock, type ExhibitTag, type SceneMarker } from "@gaffer/domain";
 import { humanDate } from "../../shared/dateline";
 
 /**
@@ -22,7 +22,11 @@ export interface SayLine {
  * 정본의 꼴로 적으므로(여는 태그 뒤에 첫 줄, 닫는 태그 앞에 끝 줄) 그 셈이 같고, 호출 칩의
  * 자리(`ToolCallRecord.line`)가 그 셈으로 저장된다.
  */
-export type SceneLine = ({ kind: "say" } & SayLine) | { kind: "stamp"; stamp: string };
+export type SceneLine =
+  | ({ kind: "say" } & SayLine)
+  | { kind: "stamp"; stamp: string }
+  /** 자료 카드 — `index`번째 카드, 값은 `ChatTurn.exhibits[index]`다 */
+  | { kind: "exhibit"; tag: ExhibitTag; index: number };
 
 /**
  * 본문 → 줄. 스트리밍 중 닫히지 않은 커맨드는 지금까지 온 만큼 서고, 끝에 걸린
@@ -31,9 +35,14 @@ export type SceneLine = ({ kind: "say" } & SayLine) | { kind: "stamp"; stamp: st
  */
 export function sceneLines(text: string): SceneLine[] {
   const lines: SceneLine[] = [];
+  let exhibits = 0;
   readSceneMarkup(text).forEach((item, block) => {
     if (item.kind === "scene") {
       lines.push({ kind: "stamp", stamp: sceneStamp(item.marker) });
+      return;
+    }
+    if (item.kind === "exhibit") {
+      lines.push({ kind: "exhibit", tag: item.tag, index: exhibits++ });
       return;
     }
     for (const line of item.text.split("\n")) {
@@ -93,31 +102,42 @@ interface StampCut {
   stamp: string;
 }
 
-/** 표식을 걷어낸 말 줄과, 그것이 서 있던 자리들 */
+/** 걷어낸 자료 카드 하나 — 남은 줄 기준으로 어디에 서 있었나 */
+export interface ExhibitCut {
+  after: number;
+  tag: ExhibitTag;
+  index: number;
+}
+
+/** 표식과 카드를 걷어낸 말 줄과, 그것들이 서 있던 자리들 */
 interface CutScene {
   lines: SayLine[];
   stamps: StampCut[];
+  exhibits: ExhibitCut[];
   /** 걷어낸 줄의 인덱스 — 호출 칩의 자리(`ToolCallRecord.line`)를 당길 때 쓴다 */
   cuts: number[];
 }
 
 /**
- * 줄 목록에서 표식을 **어디에 있든** 걷어낸다 — 한 턴 안에서 시간이 흐르면 표식이
- * 본문 한복판에 선다. 걷힌 자리는 시각 표시로 다시 선다.
+ * 줄 목록에서 표식과 자료 카드를 **어디에 있든** 걷어낸다 — 한 턴 안에서 시간이 흐르면
+ * 표식이 본문 한복판에 선다. 걷힌 자리는 시각 표시와 카드로 다시 선다.
  */
 export function cutStamps(lines: readonly SceneLine[]): CutScene {
   const kept: SayLine[] = [];
   const stamps: StampCut[] = [];
+  const exhibits: ExhibitCut[] = [];
   const cuts: number[] = [];
   lines.forEach((line, i) => {
     if (line.kind === "say") {
       kept.push({ speaker: line.speaker, block: line.block, text: line.text });
       return;
     }
-    if (line.stamp.length > 0) stamps.push({ after: kept.length, stamp: line.stamp });
+    if (line.kind === "exhibit")
+      exhibits.push({ after: kept.length, tag: line.tag, index: line.index });
+    else if (line.stamp.length > 0) stamps.push({ after: kept.length, stamp: line.stamp });
     cuts.push(i);
   });
-  return { lines: kept, stamps, cuts };
+  return { lines: kept, stamps, exhibits, cuts };
 }
 
 /**

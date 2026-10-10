@@ -1035,17 +1035,16 @@ export function GameScreen({ gameId }: { gameId: string }) {
                   onRevealHint={inMatch ? undefined : rail.reveal}
                   revealedCall={rail.revealedCall}
                   onLongPress={traceOpener(turn)}
+                  renderConfirmation={(call) => (
+                    <NegotiationConfirmation
+                      payload={call.payload}
+                      game={game}
+                      blocked={busy || negotiationBusy || pendingMatch !== null}
+                      onGame={setGame}
+                      onBusy={setNegotiationBusy}
+                    />
+                  )}
                 />
-                {turn.toolCalls.map((call, index) => (
-                  <NegotiationConfirmation
-                    key={index}
-                    payload={call.payload}
-                    game={game}
-                    blocked={busy || negotiationBusy || pendingMatch !== null}
-                    onGame={setGame}
-                    onBusy={setNegotiationBusy}
-                  />
-                ))}
               </Fragment>
             );
             prevStamp = turnStamp(turn) ?? prevStamp;
@@ -1071,6 +1070,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     <b className="fig">{matchScoreOf(log)}</b>
                     <span className="match-log-title">{matchTitleOf(log)}</span>
                     <span className="match-log-date">{humanDate(log.date)}</span>
+                    <span className="match-log-rule" aria-hidden />
                     <IconChevron size={14} />
                   </Button>
                 )}

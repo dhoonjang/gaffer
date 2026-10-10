@@ -5,6 +5,8 @@ import type { OpsOrders } from "./orders-ops";
 export interface InstructionCommand {
   name: string;
   description: string;
+  /** Short Korean name for hold reasons sent to the GM; defaults to `description`. */
+  label?: string;
   inputSchema: JsonObjectSchema;
   limit: number;
   /** Tactical effect fields may be inferred from the authorized instruction and observed facts. */

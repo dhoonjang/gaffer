@@ -117,6 +117,28 @@ describe("cutStamps", () => {
   });
 });
 
+describe("자료 카드 줄", () => {
+  it("카드는 말 줄이 아니라 걷혀 자리와 순번으로 선다 — 순번이 저장된 값의 자리다", () => {
+    const cut = cutStamps(
+      sceneLines(
+        [
+          '<scene date="2026-07-15" time="09:05" />',
+          '<speak name="코치">후보 셋입니다.</speak>',
+          '<player_card players="애덤 워튼, 카를로스 발레바" />',
+          '<speak name="코치">협상은 이렇습니다.</speak>',
+          '<negotiation_card player="애덤 워튼" />',
+        ].join("\n"),
+      ),
+    );
+    expect(cut.lines.map((l) => l.text)).toEqual(["후보 셋입니다.", "협상은 이렇습니다."]);
+    expect(cut.exhibits).toEqual([
+      { after: 1, tag: "player_card", index: 0 },
+      { after: 2, tag: "negotiation_card", index: 1 },
+    ]);
+    expect(cut.cuts).toEqual([0, 2, 4]);
+  });
+});
+
 describe("turnStamp", () => {
   it("여는 표식을 때로 읽는다", () => {
     expect(

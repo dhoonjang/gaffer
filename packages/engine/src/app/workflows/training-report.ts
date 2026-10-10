@@ -36,10 +36,10 @@ function markOf(value: unknown): TrainingMark | null {
     : null;
 }
 
-/** 판정값을 −1~3으로 접는다 — 값이 없거나 숫자가 아니면 0 */
+/** 판정 기대값을 −1~3으로 접는다 — 소수 그대로 둔다. 값이 없거나 숫자가 아니면 0 */
 function clampGain(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
-  return Math.max(TACTIC_GAIN_MIN, Math.min(TACTIC_GAIN_MAX, Math.round(value)));
+  return Math.max(TACTIC_GAIN_MIN, Math.min(TACTIC_GAIN_MAX, value));
 }
 
 /** Collapse whitespace in optional report notes; typed training supplies no prose. */
@@ -145,7 +145,7 @@ export function applyTrainingOutcomes(
     const program = state.playerTraining.find((t) => t.gamePlayerId === player.id);
     const rated =
       program?.position && outcome.positionGain
-        ? Math.max(0, Math.min(POSITION_TRAIN_MAX, Math.round(outcome.positionGain)))
+        ? Math.max(0, Math.min(POSITION_TRAIN_MAX, outcome.positionGain))
         : 0;
     if (program?.position && rated > 0) {
       const position = program.position;

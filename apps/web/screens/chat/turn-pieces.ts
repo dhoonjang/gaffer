@@ -1,5 +1,6 @@
 import type { CardMark, GoalMark, ToolCallRecord } from "@gaffer/engine";
-import type { SayLine } from "./scene-stamp";
+import type { ExhibitTag } from "@gaffer/domain";
+import type { ExhibitCut, SayLine } from "./scene-stamp";
 
 /**
  * **표시는 그 일이 벌어진 자리에 선다.**
@@ -20,7 +21,8 @@ type TurnMark =
   | { kind: "goal"; key: string; goal: GoalMark }
   | { kind: "card"; key: string; card: CardMark }
   | { kind: "calls"; key: string; calls: ToolCallRecord[] }
-  | { kind: "stamp"; key: string; stamp: string };
+  | { kind: "stamp"; key: string; stamp: string }
+  | { kind: "exhibit"; key: string; tag: ExhibitTag; index: number };
 
 /** 한 턴을 이루는 조각 — 말 묶음이거나, 그 사이에 낀 표시다 */
 type TurnPiece = { lines: SayLine[]; mark?: undefined } | { mark: TurnMark };
@@ -111,6 +113,8 @@ export function weaveTurn(
     calls?: readonly ToolCallRecord[];
     /** 시각 표시 — 걷어낸 헤더가 서 있던 자리 (`cutStamps`) */
     stamps?: readonly { after: number; stamp: string }[];
+    /** 자료 카드 — 걷어낸 카드 줄이 서 있던 자리 (`cutStamps`) */
+    exhibits?: readonly ExhibitCut[];
     /**
      * 어떤 줄들이 이미 떨어져 나갔나 — 화면은 장면 헤더를 시각 표시로 떼어
      * 세우는데, 호출의 줄 수는 그 헤더까지 세고 저장된다. 여기서 맞춰 준다.
@@ -127,6 +131,11 @@ export function weaveTurn(
     ...(parts.stamps ?? []).map((s, i) => ({
       mark: { kind: "stamp" as const, key: `sp${i}`, stamp: s.stamp },
       after: s.after,
+    })),
+    // 카드는 모델이 장면에 적은 자리다 — 같은 자리의 호출보다 앞, 쓴 순서대로
+    ...(parts.exhibits ?? []).map((e) => ({
+      mark: { kind: "exhibit" as const, key: `ex${e.index}`, tag: e.tag, index: e.index },
+      after: e.after,
     })),
     ...groupCalls(parts.calls ?? []).map((p) => ({
       ...p,

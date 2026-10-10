@@ -184,10 +184,7 @@ export function applyMatchFamiliarity(
     const assignment = tactics.assignments.find((a) => a.playerId === entry.playerId);
     if (!assignment) continue;
     if (!Number.isFinite(entry.gain)) continue;
-    const gain = Math.max(
-      MATCH_FAMILIARITY_MIN,
-      Math.min(MATCH_FAMILIARITY_MAX, Math.round(entry.gain)),
-    );
+    const gain = Math.max(MATCH_FAMILIARITY_MIN, Math.min(MATCH_FAMILIARITY_MAX, entry.gain));
     if (gain === 0) continue;
     const before = assignment.familiarity;
     // 상승은 **위로 갈수록 깎이고, 전술을 잘 읽는 선수가 더 가져간다**

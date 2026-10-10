@@ -1,18 +1,24 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { CardMark, ChatTurn, GoalMark, ToolCallRecord, SpeakerRole } from "@gaffer/engine";
 import { cutStamps, sceneLines } from "./scene-stamp";
 import { hasRailHint } from "./panel-hints";
 import { groupChips, groupPieces, splitStaging, weaveTurn } from "./turn-pieces";
 import type { Utterance } from "./turn-pieces";
-import { BROADCAST_SPEAKER, formatScore, normalizeSpeaker } from "@gaffer/domain";
+import {
+  BROADCAST_SPEAKER,
+  NegotiationConfirmationPayloadSchema,
+  formatScore,
+  normalizeSpeaker,
+} from "@gaffer/domain";
 import type { TickEvent } from "@gaffer/domain";
-import { tickEventLook } from "@/screens/chat/tick-event-display";
+import { tickEventLabel } from "@/screens/chat/tick-event-display";
 import { CALL_LABEL } from "@/screens/chat/call-label";
-import { IconBroadcast, IconMatch, IconPerson, SPEAKER_ICON } from "@/shared/icons";
+import { IconBroadcast, IconPerson, SPEAKER_ICON } from "@/shared/icons";
 import { useProseNames } from "@/shared/player-card";
+import { ExhibitCard } from "./exhibit-card";
 import { Button } from "@/shared/button";
 
 /**
@@ -89,27 +95,26 @@ function UtteranceBlock({
 }
 
 /**
- * 골 카드 — **판을 뒤집은 사실을 문단 밖으로 꺼내 세운다.**
+ * 골 — **판을 뒤집은 사실을 문단 밖으로 꺼내 세운다** (사실의 층 · shared/marks.css).
  *
  * 골은 경기에서 유일하게 결과를 바꾸는 사건인데, 중계 문단 한복판에 문장으로만
  * 남으면 다음 턴 두어 개에 밀려 스크롤에 묻힌다. 감독이 나중에 위로 훑을 때
  * 눈이 걸려야 하는 자리이므로 **줄 하나를 통째로** 준다.
  *
- * 카드의 내용은 전부 장부에서 온 사실이다(`ChatTurn.goals`) — 중계 문장을
- * 되읽어 만들지 않는다. 색은 구단이 아니라 **사건**의 것이다: 우리 골은 승의 초록,
- * 실점은 패의 빨강이라 어느 구단을 맡았든 카드가 답하는 것은 같다 (§2 규칙 1).
+ * 내용은 전부 장부에서 온 사실이다(`ChatTurn.goals`) — 중계 문장을 되읽어 만들지
+ * 않는다. 색은 구단이 아니라 **사건**의 것이다: 우리 골은 승의 초록, 실점은 패의
+ * 빨강이라 어느 구단을 맡았든 답하는 것은 같다 (tokens.css 「구단 색」 규칙 1).
  */
 function GoalCard({ goal }: { goal: GoalMark }) {
   return (
-    <div className={`goal-card${goal.ours ? " ours" : ""}`} data-testid="goal-card">
-      <span className="goal-ball" aria-hidden>
-        <IconMatch size={17} />
+    <div className={`fact goal${goal.ours ? " ours" : ""}`} data-testid="goal-card">
+      <b className="fact-key">{goal.minute}′</b>
+      <span className="fact-body">
+        <b>{goal.scorer}</b>
+        {goal.assist && <span>도움 {goal.assist}</span>}
       </span>
-      <b className="goal-minute">{goal.minute}′</b>
-      <span className="goal-scorer">{goal.scorer}</span>
-      {goal.assist && <span className="goal-assist">도움 {goal.assist}</span>}
-      <span className="goal-score">
-        {goal.team} <span className="fig">{formatScore(goal.score.home, goal.score.away)}</span>
+      <span className="fact-aside">
+        {goal.team} <b className="fig">{formatScore(goal.score.home, goal.score.away)}</b>
       </span>
     </div>
   );
@@ -228,14 +233,18 @@ function BookingCard({ card }: { card: CardMark }) {
     card.kind === "yellow" ? "경고" : card.kind === "second_yellow" ? "경고 누적 퇴장" : "퇴장";
   return (
     <div
-      className={`booking-card ${card.kind}${card.ours ? " ours" : ""}`}
+      className={`fact booking ${card.kind}${card.ours ? " ours" : ""}`}
       data-testid="booking-card"
     >
-      <span className="booking-mark" aria-hidden />
-      <b className="booking-minute">{card.minute}′</b>
-      <span className="booking-player">{card.player}</span>
-      <span className="booking-kind">{label}</span>
-      <span className="booking-team">{card.team}</span>
+      <span className="fact-key">
+        <i className="booking-mark" aria-hidden />
+        {card.minute}′
+      </span>
+      <span className="fact-body">
+        {card.player}
+        <span>{label}</span>
+      </span>
+      <span className="fact-aside">{card.team}</span>
     </div>
   );
 }
@@ -248,20 +257,16 @@ function BookingCard({ card }: { card: CardMark }) {
  * 어디까지가 한 사건인지 눈이 짚지 못한다. 코어가 배열로 내므로(`ChatTurn.events`)
  * 화면은 원소 하나를 줄 하나로 세운다.
  *
- * 종류는 코어의 것이고 **꼬리표와 픽토그램은 화면의 어휘**다
- * (`tick-event-display.ts`) — 레일의 톤은 CSS가 `data-kind`로 고른다.
+ * 종류는 코어의 것이고 **꼬리표는 화면의 어휘**다(`tick-event-display.ts`) — 꼬리표의
+ * 색은 CSS가 `data-kind`로 고른다 (사실의 층 · shared/marks.css).
  */
 function TickEventCard({ event }: { event: TickEvent }) {
   const prose = useProseNames();
-  const { label, Icon } = tickEventLook(event.kind);
   return (
-    <div className="tick-event" data-kind={event.kind} data-testid="tick-event">
-      <span className="te-icon" aria-hidden>
-        <Icon size={15} />
-      </span>
-      <span className="te-tag">{label}</span>
+    <div className="fact" data-kind={event.kind} data-testid="tick-event">
+      <span className="fact-key">{tickEventLabel(event.kind)}</span>
       {/* 사건 문장의 이름도 손잡이다 — 부상 소식을 읽은 자리에서 그 선수를 열 수 있어야 한다 */}
-      <span className="te-text">{prose(event.text, "te")}</span>
+      <span className="fact-body">{prose(event.text, "te")}</span>
     </div>
   );
 }
@@ -287,7 +292,7 @@ function TickEvents({ events }: { events: readonly TickEvent[] }) {
   const rest = visible.length - shown.length;
   if (visible.length === 0) return null;
   return (
-    <div className="tick-events">
+    <div className="facts tick-events">
       {shown.map((event, i) => (
         <TickEventCard event={event} key={i} />
       ))}
@@ -321,6 +326,10 @@ function humanize(text: string, names?: Record<string, string>): string {
 }
 
 export { sceneStamp, turnStamp } from "./scene-stamp";
+
+/** 칩 대신 확인 카드로 서는 호출인가 — 감독의 동의·서명을 받는 협상 조건 */
+const confirms = (call: ToolCallRecord) =>
+  NegotiationConfirmationPayloadSchema.safeParse(call.payload).success;
 
 /** 눌렀다고 치는 시간 — 짧으면 스크롤을 잡는 손에 걸리고, 길면 눌러도 안 열린 줄 안다 */
 const LONG_PRESS_MS = 500;
@@ -400,6 +409,7 @@ export function ChatTurnView({
   onRevealHint,
   revealedCall = null,
   onLongPress,
+  renderConfirmation,
 }: {
   turn: ChatTurn;
   /** 스트리밍 중인 미완성 턴 — 마지막 미완성 줄을 보류해 파싱 깨짐 방지 */
@@ -418,6 +428,11 @@ export function ChatTurnView({
    * 주어지지 않으면 제스처 자체가 없다(프로덕션 · 아직 기록이 없는 턴).
    */
   onLongPress?: (() => void) | undefined;
+  /**
+   * 확인 카드를 그린다 — 조작에 세이브와 전송이 필요해 게임 화면이 준다. 주어지면 그 호출은
+   * 칩이 아니라 **불린 자리의 카드**로 선다. 없으면 칩이다.
+   */
+  renderConfirmation?: ((call: ToolCallRecord) => ReactNode) | undefined;
 }) {
   const text = useMemo(() => humanize(turn.text, playerNames), [turn.text, playerNames]);
   const press = useLongPress(onLongPress);
@@ -474,6 +489,7 @@ export function ChatTurnView({
     cards: turn.cards,
     calls: shownCalls,
     stamps,
+    exhibits: cut.exhibits,
     cuts: cut.cuts,
   });
   /** 조각마다의 말 묶음 — 화자가 조각 경계를 넘어 이어지므로 턴 전체를 한 번에 묶는다 */
@@ -518,20 +534,39 @@ export function ChatTurnView({
               <span>{mark.stamp}</span>
             </div>
           );
+        if (mark.kind === "exhibit")
+          return (
+            <ExhibitCard
+              key={mark.key}
+              tag={mark.tag}
+              exhibit={turn.exhibits?.[mark.index]}
+              streaming={streaming}
+            />
+          );
         if (mark.kind === "goal") return <GoalCard goal={mark.goal} key={mark.key} />;
         if (mark.kind === "card") return <BookingCard card={mark.card} key={mark.key} />;
-        // 같은 자리에서 연달아 불린 호출은 한 줄에 나란히 — 칩마다 문단을 끊지 않는다
+        // 같은 자리에서 연달아 불린 호출은 한 줄에 나란히 — 칩마다 문단을 끊지 않는다.
+        // 확인 카드는 칩 줄 뒤에 — 조건을 기록한 호출들이 먼저고 확인이 그 결과다
+        const carded = renderConfirmation ? mark.calls.filter(confirms) : [];
+        const chips = mark.calls.filter((call) => !carded.includes(call));
         return (
-          <div className="tool-chips" key={mark.key}>
-            {groupChips(mark.calls).map((group, j) => (
-              <ToolChip
-                calls={group}
-                key={j}
-                onReveal={onRevealHint}
-                revealed={group[0] === revealedCall}
-              />
+          <Fragment key={mark.key}>
+            {chips.length > 0 && (
+              <div className="tool-chips">
+                {groupChips(chips).map((group, j) => (
+                  <ToolChip
+                    calls={group}
+                    key={j}
+                    onReveal={onRevealHint}
+                    revealed={group[0] === revealedCall}
+                  />
+                ))}
+              </div>
+            )}
+            {carded.map((call, j) => (
+              <Fragment key={`k${j}`}>{renderConfirmation?.(call)}</Fragment>
             ))}
-          </div>
+          </Fragment>
         );
       })}
     </div>

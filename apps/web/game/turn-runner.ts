@@ -479,6 +479,8 @@ export function runTurnLocked(
             ...(turn.cards && turn.cards.length > 0 ? { cards: turn.cards } : {}),
             // 넘긴 시간이 남긴 사건들 — 화면이 하나를 카드 하나로 세운다 (chat.tsx `TickEvents`)
             ...(turn.events && turn.events.length > 0 ? { events: turn.events } : {}),
+            // 본문의 자료 카드 값 — 턴이 닫힐 때의 장부다 (prompts.md §1 「자료 카드」)
+            ...(turn.exhibits && turn.exhibits.length > 0 ? { exhibits: turn.exhibits } : {}),
             // GM이 낸 감독의 다음 말 — 입력창의 placeholder다. 모델 입력은 이 칸을 읽지 않는다 (agents.md §2)
             ...(turn.suggestion ? { suggestion: turn.suggestion } : {}),
             // 유저 턴과 같은 표식 — 한 턴의 두 줄이 서로 다른 이력으로 갈리면 안 된다

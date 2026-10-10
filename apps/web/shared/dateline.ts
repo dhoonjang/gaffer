@@ -1,3 +1,5 @@
+import { contractEndForYears } from "@gaffer/domain";
+
 /**
  * 날짜의 사람 표기 — **자는 하나다** (tokens.css 「숫자와 표기」).
  *
@@ -69,4 +71,40 @@ export function humanMonthYear(iso: string): string {
 export function contractUntil(iso: string): string {
   const month = humanMonthYear(iso);
   return month === iso ? iso : `${month}까지`;
+}
+
+/**
+ * 계약 기간 — 「3년」. 정해진 연수와 맞지 않으면 날짜 범위로 선다. 협상의 확인 카드와
+ * 채팅의 협상 카드가 같은 조건을 같은 말로 읽어야 한다.
+ */
+export function contractSpan(since: string, until: string): string {
+  const difference = Number(until.slice(0, 4)) - Number(since.slice(0, 4));
+  for (const years of [difference, difference + 1])
+    if (years > 0 && contractEndForYears(since, years) === until) return `${years}년`;
+  return `${humanDate(since, { weekday: false, year: true })} ~ ${humanDate(until, { weekday: false, year: true })}`;
+}
+
+/**
+ * 남은 계약 — 「1년 11개월」「5개월」「1개월 미만」「만료」. 달로 센다: 계약은 달로 읽고(`contractUntil`),
+ * 그날의 날짜가 만료일의 날짜를 넘었으면 그 달은 다 쓴 것이다.
+ */
+export function contractLeft(asOf: string, until: string): string {
+  const [y1, m1, d1] = asOf.split("-").map(Number);
+  const [y2, m2, d2] = until.split("-").map(Number);
+  if (
+    y1 === undefined ||
+    m1 === undefined ||
+    d1 === undefined ||
+    y2 === undefined ||
+    m2 === undefined ||
+    d2 === undefined ||
+    [y1, m1, d1, y2, m2, d2].some(Number.isNaN)
+  )
+    return until;
+  const months = (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0);
+  if (months <= 0) return asOf < until ? "1개월 미만" : "만료";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  if (years === 0) return `${rest}개월`;
+  return rest === 0 ? `${years}년` : `${years}년 ${rest}개월`;
 }

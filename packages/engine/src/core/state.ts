@@ -1,4 +1,5 @@
 import type { GameTables } from "../app/save-schema";
+import type { Exhibit } from "../app/exhibits";
 import type {
   ManagerInterview,
   CallUp,
@@ -181,6 +182,13 @@ export interface ChatTurn {
    * 돌아온 감독이 먼저 읽을 것이 그 사이 벌어진 일이다. 시간이 구르지 않은 턴엔 없다.
    */
   events?: TickEvent[];
+  /**
+   * 이 턴 본문의 **자료 카드 값** — n번째 카드 커맨드가 n번째 값이다. 턴이 닫힐 때의
+   * 장부를 그대로 남긴다: 화면이 지금 장부를 다시 읽으면 지난 대화의 「그때 재정」이
+   * 지금 값으로 바뀌어 보인다 (docs/agents/prompts.md §1 「자료 카드」). 카드가 없던
+   * 턴엔 없다.
+   */
+  exhibits?: Exhibit[];
   /** Exact book snapshots sent with this input; UI does not render prompt metadata. */
   lorebook?: LorebookInjection[];
   /**

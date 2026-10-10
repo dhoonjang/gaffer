@@ -29,8 +29,9 @@ const PlanSchema = z.object({
   sheet: z
     .array(CandidateLineSchema)
     .max(SHEET_MAX)
+    .optional()
     .describe(
-      "For replace: the requested changes and costs plus every existing effect to keep. Keep the active_effects not asked to change. Empty array for clear/keep. behavior is an individual instruction, edge execution quality, focus attacking direction, temper roughness, legs stamina spend, cohesion holding shape. behavior/edge/temper/legs take target.player, focus takes target.side and lane, cohesion takes target.side. behavior needs action and when; mark needs targetPlayer. The direction and strength of numeric effects are rated separately. Reflect the opportunity cost of a gain.",
+      "Only for replace: the requested changes and costs plus every existing effect to keep. Keep the active_effects not asked to change. behavior is an individual instruction, edge execution quality, focus attacking direction, temper roughness, legs stamina spend, cohesion holding shape. behavior/edge/temper/legs take target.player, focus takes target.side and lane, cohesion takes target.side; manager_side names our side. behavior needs action and when; mark needs targetPlayer. One line per player and shape, except edge. Lines apply in order: put a cost before the gain it pays for. A team's edge lines net at most a moderate gain, so a larger gain needs an edge cost on another of its players. The direction and strength of numeric effects are rated separately.",
     ),
 });
 
@@ -45,8 +46,12 @@ type MatchInstructionResult = OpsOrders & {
   reading?: { points: Point[]; sheet: SheetLine[] };
 };
 
-function unresolved(): MatchInstructionResult {
-  return { ops: {}, unresolved: "경기 지시의 대상·효과·강도를 확인해야 합니다" };
+const PLAN_LABEL = "경기 전술 효과";
+/** Probability on each side of no-effect above which a strength reading counts as split. */
+const SPLIT_DIRECTION = 0.3;
+
+function unresolved(reason = "대상·효과·강도를 정하지 못함"): MatchInstructionResult {
+  return { ops: {}, unresolved: `${PLAN_LABEL} — ${reason}` };
 }
 
 function refineTargetSchema(
@@ -90,6 +95,11 @@ function fieldDisposition(
   path: string,
   input: Readonly<Record<string, unknown>>,
 ): "include" | "omit" | "defer" {
+  // The sheet only exists for replace — ask it once the mode is settled.
+  if (path === "$.sheet") {
+    if (typeof input.mode !== "string") return "defer";
+    return input.mode === "replace" ? "include" : "omit";
+  }
   const match = /^\$\.sheet\[(\d+)\]\.(action|when|targetPlayer|band|target\.lane)$/.exec(path);
   if (!match || !Array.isArray(input.sheet)) return "include";
   const row: unknown = input.sheet[Number(match[1])];
@@ -127,8 +137,9 @@ export async function interpretMatchInstructions(
       ...request.commands,
       {
         name: PLAN_COMMAND,
+        label: PLAN_LABEL,
         description:
-          "Applies the manager's in-match tactical instructions: man-marking, cover, runs into space, attacking an opponent's weakness, focusing the attack left/right/centre (focus). Decide the effects and their costs together from the observed facts of the last 10 minutes and the current players' ability, position and stamina. Substitutions, positions, roles and changes to the six team-tactic axes are handled by their own commands.",
+          "Applies the manager's in-match tactical instructions to individual players and lanes: man-marking, cover, runs into space, attacking an opponent's weakness, focusing the attack left/right/centre. Decide the effects and their costs together from the observed facts of the last 10 minutes and the current players' ability, position and stamina. Team-wide mentality, defensive line, pressing, tempo, width and passing belong to set_tactics; substitutions, positions and roles to their own commands.",
         inputSchema: toToolSchema(PlanSchema),
         limit: 1,
         contextual: true,
@@ -137,21 +148,27 @@ export async function interpretMatchInstructions(
       },
     ],
   });
-  if (interpreted.unresolved) return interpreted;
   const ops = { ...interpreted.ops };
   const raw = ops[PLAN_COMMAND];
 
   delete ops[PLAN_COMMAND];
   if (!raw) return { ...interpreted, ops };
-  if (raw.length !== 1) return unresolved();
+  // 효과 시트를 정하지 못해도 함께 읽힌 다른 명령은 그대로 넘긴다
+  const carried = interpreted.unresolved;
+  const withCarried = (result: MatchInstructionResult): MatchInstructionResult =>
+    carried === undefined
+      ? result
+      : { ...result, unresolved: [carried, result.unresolved].filter(Boolean).join(" / ") };
+  const planFailed = (reason?: string) => withCarried({ ...unresolved(reason), ops });
+  if (raw.length !== 1) return planFailed();
   const parsed = PlanSchema.safeParse(raw[0]);
-  if (!parsed.success) return unresolved();
-  const plan = parsed.data;
-  if (plan.mode !== "replace") {
-    if (plan.sheet.length !== 0) return unresolved();
-    return plan.mode === "clear" ? { ops, reading: { points: [], sheet: [] } } : { ops };
-  }
-  if (plan.sheet.length === 0) return unresolved();
+  if (!parsed.success) return planFailed("값이 규칙에 맞지 않음");
+  const { mode, sheet: lines = [] } = parsed.data;
+  if (mode !== "replace" && lines.length !== 0) return planFailed("유지·해제에 효과 줄이 붙음");
+  if (mode === "clear") return withCarried({ ops, reading: { points: [], sheet: [] } });
+  // replace with nothing to add leaves the current effects as they are
+  if (mode === "keep" || lines.length === 0) return withCarried({ ops });
+  const plan = { sheet: lines };
   const playerIds = new Set(players.map((candidate) => candidate.value));
   const targetIds = new Set(targets.map((candidate) => candidate.value));
   if (
@@ -162,7 +179,7 @@ export async function interpretMatchInstructions(
         (line.targetPlayer !== undefined && !targetIds.has(line.targetPlayer)),
     )
   )
-    return unresolved();
+    return planFailed("대상 선수가 후보 밖");
 
   const questions: Record<string, ScoreQuestion> = {};
   plan.sheet.forEach((line, index) => {
@@ -199,7 +216,7 @@ export async function interpretMatchInstructions(
     Object.keys(answers).length !== questionKeys.length ||
     questionKeys.some((key) => !Object.hasOwn(answers, key))
   )
-    return unresolved();
+    return planFailed();
   const sheet: SheetLine[] = [];
   for (let index = 0; index < plan.sheet.length; index++) {
     const candidate = plan.sheet[index]!;
@@ -210,14 +227,26 @@ export async function interpretMatchInstructions(
         : validatedAnswer(questions[`line_${index}`]!, answers[`line_${index}`]);
     const signed =
       candidate.shape === "behavior" ? 1 : answer?.type === "score" ? answer.score - 3 : undefined;
-    if (signed === undefined) return unresolved();
+    if (signed === undefined) return planFailed();
+    // Opposite readings average to no effect; that is a split, not a judgement of zero.
+    if (answer?.type === "score") {
+      const mass = (keep: (level: number) => boolean) =>
+        Object.entries(answer.probabilities)
+          .filter(([level]) => keep(Number(level)))
+          .reduce((sum, [, p]) => sum + p, 0);
+      if (
+        mass((level) => level < 3) > SPLIT_DIRECTION &&
+        mass((level) => level > 3) > SPLIT_DIRECTION
+      )
+        return planFailed("효과의 방향이 갈림");
+    }
     const line = SheetLineSchema.safeParse({
       ...candidate,
       pointId: request.pointId,
       sign: signed < 0 ? -1 : 1,
       step: Math.abs(signed),
     });
-    if (!line.success) return unresolved();
+    if (!line.success) return planFailed();
     sheet.push(line.data);
   }
   const about = [
@@ -229,5 +258,5 @@ export async function interpretMatchInstructions(
       ),
     ),
   ];
-  return { ops, reading: { points: [{ ...source.data, about }], sheet } };
+  return withCarried({ ops, reading: { points: [{ ...source.data, about }], sheet } });
 }

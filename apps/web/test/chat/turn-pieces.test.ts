@@ -236,6 +236,31 @@ describe("시각 표시는 헤더가 서 있던 자리에 선다", () => {
   });
 });
 
+describe("자료 카드는 모델이 적은 자리에 선다", () => {
+  const lines = ["후보 셋입니다.", "워튼이 현실적입니다."];
+
+  it("카드 줄은 걷혀 그 자리에 카드로 서고, 그 뒤 호출의 자리는 한 칸 당겨진다", () => {
+    // 원문: 1 대사 · 2 카드 · 3 대사 — 호출은 3줄을 쓴 뒤에 불렸다
+    expect(
+      shape(lines, {
+        exhibits: [{ after: 1, tag: "player_card", index: 0 }],
+        calls: [call("start_negotiation", 3)],
+        cuts: [1],
+      }),
+    ).toEqual(["후보 셋입니다.", "ex0", "워튼이 현실적입니다.", "start_negotiation"]);
+  });
+
+  it("같은 자리의 호출보다 앞선다 — 카드를 적은 뒤에 부른 호출이다", () => {
+    expect(
+      shape(lines, {
+        exhibits: [{ after: 1, tag: "negotiation_card", index: 0 }],
+        calls: [call("update_negotiation", 2)],
+        cuts: [1],
+      }),
+    ).toEqual(["후보 셋입니다.", "ex0", "update_negotiation", "워튼이 현실적입니다."]);
+  });
+});
+
 describe("아무 표시도 없으면 조각은 하나 — 평시 대화는 그대로다", () => {
   it("쪼개지 않는다", () => {
     const lines = ["훈련 계획입니다", "좋아"];

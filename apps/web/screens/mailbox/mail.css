@@ -273,44 +273,9 @@
   /* 대화 목록의 간격(20px)을 거슬러 말풍선에 4px까지 붙인다 */
   margin: 0 0 -16px auto;
 }
-.negotiation-confirmation {
-  margin: 16px 0;
-  padding: 16px;
-  border-radius: var(--r-sm);
-  background: var(--panel);
-}
-.negotiation-confirmation header {
-  display: grid;
-  gap: 8px;
-}
-.negotiation-confirmation header span {
-  font-size: var(--fs-sm);
-  color: var(--text-3);
-}
-.negotiation-confirmation h4 {
-  font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-2);
-  margin: 16px 0 8px;
-}
-.confirmation-terms {
-  display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 8px;
-  font-size: var(--fs-md);
-}
-.confirmation-terms dt {
-  color: var(--text-3);
-}
-.confirmation-terms dd {
-  margin: 0;
-}
-.confirmation-terms > div {
-  grid-column: 1/-1;
-  color: var(--text-2);
-  line-height: var(--lh-prose);
-}
-.confirmation-actions {
+/* 협상 확인 — 몸은 「감독이 시킨 일」의 한 장이다(shared/marks.css `.sheet[data-layer="order"]`).
+   여기는 조작 줄만 갖는다 */
+.negotiation-confirmation .confirmation-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
