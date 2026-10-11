@@ -1,7 +1,8 @@
 import {
   ATTRIBUTE_AXES,
+  abilityAxesFor,
   currentProposal,
-  mirrorBaseOf,
+  placeOf,
   playerCardType,
   proposalParties,
   totalTransferFee,
@@ -64,7 +65,7 @@ export interface PlayerExhibitEntry {
   overall: number;
   overallMargin: number;
   attributes: Array<{ key: string; value: number }>;
-  /** 관측값이 가장 높은 축 — 같으면 축의 순서대로 */
+  /** 관측값이 가장 높은 능력 축 — 같으면 축의 순서대로 */
   strengths: AttributeAxis[];
   growth: GrowthOutlook | null;
   weeklyWage: number | null;
@@ -199,6 +200,8 @@ function pickPlayer(state: GameState, ref: string): string | null {
 function playerEntry(state: GameState, playerId: string): PlayerExhibitEntry | null {
   const card = buildPlayerCard(state, playerId);
   if (!card) return null;
+  // 성향 축은 얼마나 자주 하려는가라 강점이 아니다 (player.md §1.1)
+  const ability = new Set<string>(abilityAxesFor(card.positionGroup === "GK"));
   return {
     id: card.id,
     name: card.name,
@@ -211,7 +214,8 @@ function playerEntry(state: GameState, playerId: string): PlayerExhibitEntry | n
     overall: card.overall,
     overallMargin: card.overallMargin,
     attributes: card.attributes.map(({ key, value }) => ({ key, value })),
-    strengths: [...card.attributes]
+    strengths: card.attributes
+      .filter((a) => ability.has(a.key))
       .sort(
         (a, b) =>
           b.value - a.value || ATTRIBUTE_AXES.indexOf(a.key) - ATTRIBUTE_AXES.indexOf(b.key),
@@ -254,17 +258,17 @@ function playerEntry(state: GameState, playerId: string): PlayerExhibitEntry | n
 }
 
 /**
- * 주 자리 밖의 자리 — 좌우 변형(RCM·LCM)은 중앙 표기 하나로 접고 그중 높은 전력을 쓴다.
- * 주 자리와 같은 묶음은 다른 자리가 아니다.
+ * 주 자리 밖의 자리 — 칸 코드(RCM·LCM)는 자리 하나로 접고(`placeOf`) 그중 높은 전력을 쓴다.
+ * 주 자리와 같은 자리는 다른 자리가 아니다.
  */
 function otherPositionsOf(
   main: string,
   positions: ReadonlyArray<{ position: string; overall: number }>,
 ): PlayerExhibitEntry["otherPositions"] {
-  const home = mirrorBaseOf(main);
+  const home = placeOf(main) ?? main;
   const best = new Map<string, number>();
   for (const { position, overall } of positions) {
-    const base = mirrorBaseOf(position);
+    const base = placeOf(position) ?? position;
     if (base !== home) best.set(base, Math.max(best.get(base) ?? 0, overall));
   }
   return [...best]
