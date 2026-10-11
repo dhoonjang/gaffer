@@ -7,6 +7,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
   existsSync,
 } from "node:fs";
@@ -27,6 +28,7 @@ import {
   listGames,
   listGameSummaries,
   loadGame,
+  pruneLabGames,
   saveGame,
   sendMail,
   SAVE_VERSION,
@@ -641,6 +643,28 @@ describe("목록과 로드 — 어디서 멈췄는지 가른다", () => {
     } finally {
       rmSync(override, { force: true });
     }
+  });
+
+  it("실험실 판은 목록에 서지 않고, 정리는 최근에 저장한 판부터 남긴다", () => {
+    const labs = ["lab-old", "lab-mid", "lab-new"].map((labId, day) => {
+      lay(labId, () => {});
+      const at = new Date(Date.UTC(2026, 0, 1 + day));
+      utimesSync(path.join(dataDir(), `${labId}.json`), at, at);
+      return labId;
+    });
+    expect(listGames().filter((listed) => labs.includes(listed))).toEqual([]);
+    expect(listGames()).toContain(id);
+    // 잠금을 한 번 거친 판은 빈 잠금 디렉터리를 남긴다 — 판과 함께 걷혀야 쌓이지 않는다
+    mkdirSync(saveLockPath("lab-old"), { recursive: true });
+
+    expect(pruneLabGames(2)).toBe(1);
+    expect(existsSync(saveLockPath("lab-old"))).toBe(false);
+    expect(labs.map((labId) => existsSync(path.join(dataDir(), `${labId}.json`)))).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    for (const labId of labs) deleteGame(labId);
   });
 
   it("스키마와 어긋난 세이브는 로드를 거부한다", () => {

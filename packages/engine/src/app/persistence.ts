@@ -4,6 +4,7 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  rmdirSync,
   statSync,
   writeFileSync,
   existsSync,
@@ -23,6 +24,7 @@ import type { GamePhase, GameState } from "../core/state";
 import type { ClubColours } from "@gaffer/domain";
 import { teamCatalogById } from "../core/catalog/team-catalog";
 import { ensurePotentialFloor, teamNameIn, teamShortNameIn } from "../core/state";
+import { saveLockPath } from "../core/save-lock";
 
 export { dataDir };
 
@@ -447,14 +449,49 @@ function isCatalogId(id: string): boolean {
 }
 
 /**
- * 이 디렉터리에 있는 게임의 id.
+ * 경기 실험실의 세이브 — **id 머리로 가른다** (match/live-match.md §8.6). 읽기·쓰기·
+ * 잠금은 게임과 같은 길이고, 목록에 서지 않고 오래되면 지워진다는 것만 다르다.
+ */
+export const LAB_ID_PREFIX = "lab-";
+
+export function isLabGame(id: string): boolean {
+  return id.startsWith(LAB_ID_PREFIX);
+}
+
+/** 실험실 판을 최근에 저장한 `keep`개만 남긴다 — 지운 수를 돌려준다 */
+export function pruneLabGames(keep: number): number {
+  const labs = savedIds()
+    .filter(isLabGame)
+    .map((id) => ({ id, at: fileTime(id) }))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
+  let removed = 0;
+  for (const { id } of labs.slice(keep)) {
+    if (!deleteGame(id)) continue;
+    removed += 1;
+    // 지운 판의 잠금 자리 — 빈 디렉터리만 걷힌다. 기다리는 시도의 기록이 있으면 남는다
+    try {
+      rmdirSync(saveLockPath(id));
+    } catch {
+      /* 비어 있지 않거나 없다 */
+    }
+  }
+  return removed;
+}
+
+/** 이 디렉터리에 있는 게임의 id — 실험실 판은 목록에 서지 않는다 */
+export function listGames(): string[] {
+  return savedIds().filter((id) => !isLabGame(id));
+}
+
+/**
+ * 이 디렉터리에 세이브가 있는 id 전부.
  *
  * **`.bak`만 남은 세이브도 센다.** 저장은 본 파일을 `.bak`으로 밀어낸 뒤 새 본
  * 파일을 걸어 넣으므로(`saveGame` 3·4단계), 그 사이에 죽으면 디스크에는 `.bak`뿐인
  * 순간이 있다. 읽기는 그 파일로 폴백해 멀쩡히 열리는데 목록이 `.json`만 훑으면
  * 그 게임은 화면에서 사라진다 — 감독에게는 없어진 것과 같다.
  */
-export function listGames(): string[] {
+function savedIds(): string[] {
   const dir = dataDir();
   if (!existsSync(dir)) return [];
   const ids = new Set<string>();

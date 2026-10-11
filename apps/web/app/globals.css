@@ -30,3 +30,5 @@
 @import "../screens/mailbox/mail.css";
 /* 채팅의 자료 카드 — 모델이 고른 자리에 코어가 채운 표 */
 @import "../screens/chat/exhibit.css";
+/* 경기 실험실 — 판과 경기장은 위의 뷰를 빌리고 둘레의 틀만 갖는다. 그 틀이 덮으므로 맨 끝이다 */
+@import "../game/match-lab.css";

@@ -60,6 +60,8 @@ export function useLiveMatch(options: {
   typing: boolean;
   /** 감독의 턴이 도는 중 — x1로 흐르되 확정하지 않는다 */
   turning: boolean;
+  /** 배속 — 없으면 빌드에 박힌 값이다. 실험실이 화면에서 고른다 (live-match.md §8.6) */
+  speed?: number | undefined;
   onView: (view: MatchView | null) => void;
   /** 재개 앞에 보낼 전술판 조작 — 미저장 편집을 먼저 서버에 밀어 넣는다 */
   prepare: () => Promise<MatchBoardOrder[]>;
@@ -91,6 +93,8 @@ export function useLiveMatch(options: {
   typing.current = options.typing;
   const turning = useRef(false);
   turning.current = options.turning;
+  const ticksPerStep = useRef(TICKS_PER_FRAME);
+  ticksPerStep.current = options.speed ? ticksPerFrame(options.speed) : TICKS_PER_FRAME;
   const hidden = useRef(false);
   /** 정지점이 났다 — 서버가 확정할 때까지 시계를 잡아 둔다 */
   const holding = useRef(false);
@@ -337,7 +341,7 @@ export function useLiveMatch(options: {
       }
       setPaused(false);
       const talking = quiet || typing.current;
-      const { events } = advanceLive(match, talking ? TALK_TICKS_PER_FRAME : TICKS_PER_FRAME);
+      const { events } = advanceLive(match, talking ? TALK_TICKS_PER_FRAME : ticksPerStep.current);
       setFrame(liveFrameOf(match));
       if (quiet) {
         ahead.current = true;

@@ -157,6 +157,7 @@ export * from "./app/workflows/board";
 export * from "./app/workflows/lorebook";
 export * from "./app/workflows/manager-employment";
 export * from "./app/workflows/match-flow";
+export * from "./app/workflows/match-lab";
 export * from "./app/workflows/promotion";
 export * from "./app/workflows/training-report";
 export * from "./app/workflows/world-market";

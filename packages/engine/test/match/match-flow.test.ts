@@ -10,6 +10,8 @@ import { describe, expect, it } from "vitest";
 import {
   advanceLiveMatch,
   advanceShootout,
+  applyLabFormation,
+  applyLabTactics,
   applyMatchReading,
   assembleUserLineup,
   assignmentsOf,
@@ -19,10 +21,14 @@ import {
   buildOpponentReport,
   buildRatingBrief,
   commitCheckpoint,
+  createLabGame,
   finalizeMatch,
   firstTeamPlayers,
   groupOf,
   isClubTeam,
+  isLabGame,
+  kickoffLab,
+  labView,
   liveMatchDigest,
   loadGame,
   markEntered,
@@ -32,6 +38,7 @@ import {
   playersOf,
   proficiencyAt,
   resumeLiveInterval,
+  rewindLab,
   saveGame,
   setLineup,
   setPlayerTactic,
@@ -1236,5 +1243,69 @@ describe("같은 시각 타 경기의 라이브 스코어 (match.md §8.6)", () 
     const ours = state.matches.find((m) => m.id === state.pendingMatch!.matchId)!;
     expect(ours.competitionId).toBeNull();
     expect(state.pendingMatch!.otherScores).toEqual([]);
+  });
+});
+
+describe("경기 실험실 (live-match.md §8.6)", () => {
+  /** 리그 둘에 걸친 판 — 18팀 리그도 통째로 담겨야 고른 구단이 세계에 선다 */
+  function lab(): GameState {
+    const made = createLabGame({
+      homeTeamId: "bayern",
+      awayTeamId: "arsenal",
+      managed: "away",
+      seed: 31,
+    });
+    if (!made.ok) throw new Error(made.message);
+    return made.state;
+  }
+
+  it("고른 두 구단의 리그 경기를 맡은 쪽 감독으로 세우고, 적응도를 한 값으로 맞춰 킥오프한다", () => {
+    const state = lab();
+    expect(isLabGame(state.id)).toBe(true);
+    expect(applyLabFormation(state, "theirs", "5-4-1").ok).toBe(true);
+    expect(applyLabTactics(state, "theirs", { pressing: 5, tackling: "hard" }).ok).toBe(true);
+    const kicked = kickoffLab(state, { familiarity: 80 });
+    expect(kicked.ok, kicked.message).toBe(true);
+
+    const live = state.pendingMatch!.live;
+    expect(live.setup.friendly).toBe(false);
+    expect(live.setup.sides.home).toMatchObject({ teamId: "bayern", ai: true });
+    expect(live.setup.sides.away).toMatchObject({ teamId: "arsenal", ai: false });
+    expect(live.setup.sides.home.kickoffTactics).toMatchObject({
+      formation: "5-4-1",
+      pressing: 5,
+      tackling: "hard",
+    });
+    for (const side of ["home", "away"] as const) {
+      expect(new Set(live.slots[side].map((slot) => slot.familiarity))).toEqual(new Set([80]));
+    }
+    expect(labView(state)?.sides.away.ours).toBe(true);
+  });
+
+  it("우리 쪽 프리셋은 전술판의 명령을 지나 그 모양으로 선다", () => {
+    const state = lab();
+    const result = applyLabFormation(state, "ours", "3-5-2");
+    expect(result.ok, result.message).toBe(true);
+    expect(tacticsOf(state, "arsenal").spec.formation).toBe("3-5-2");
+  });
+
+  it("되돌리면 경기 중 고친 우리 판이 킥오프 때로 돌아오고, 다음 경기는 다른 경기다", () => {
+    const state = lab();
+    expect(kickoffLab(state, { familiarity: null }).ok).toBe(true);
+    const kickoffSpec = { ...tacticsOf(state, "arsenal").spec };
+    const firstMatch = state.pendingMatch!.matchId;
+    advanceLiveMatch(state, 20 * 60);
+    expect(setTactics(state, { mentality: kickoffSpec.mentality === 5 ? 1 : 5 }).ok).toBe(true);
+    expect(applyLabTactics(state, "theirs", { pressing: 1 }).ok, "경기 중에 상대 판을 고쳤다").toBe(
+      false,
+    );
+
+    expect(rewindLab(state).ok).toBe(true);
+    expect(state.phase).toBe("matchday");
+    expect(state.pendingMatch).toBeNull();
+    expect(tacticsOf(state, "arsenal").spec).toEqual(kickoffSpec);
+    expect(labView(state)?.matchNo).toBe(2);
+    expect(kickoffLab(state, { familiarity: null }).ok).toBe(true);
+    expect(state.pendingMatch!.matchId).not.toBe(firstMatch);
   });
 });
