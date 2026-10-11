@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
+import { isLabGame } from "@gaffer/domain";
 import {
   applyLabFormation,
   applyLabTactics,
-  isLabGame,
-  kickoffLab,
   labView,
   loadGame,
-  markEventsSeen,
-  rewindLab,
+  openLabMatch,
+  pruneLabGames,
+  replayLabGame,
   saveGame,
-  type GameState,
 } from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 import { invalidGameId } from "@/app/api/games/game-id";
-import { LabActionSchema, type LabSnapshot } from "@/game/lab-protocol";
-import { toPayload } from "@/game/store";
+import { LAB_KEPT, LabActionSchema } from "@/game/lab-protocol";
 import { LOCK_WAIT_MS, busyResponse, withGameLock } from "@/game/turn-runner";
 
 export const runtime = "nodejs";
@@ -32,22 +30,17 @@ function badLab(id: string): Response | null {
 
 const missing = () => NextResponse.json({ error: "실험실 판을 찾을 수 없습니다" }, { status: 404 });
 
-function snapshotOf(state: GameState): LabSnapshot | null {
-  const lab = labView(state);
-  return lab ? { game: toPayload(state), lab } : null;
-}
-
 /** 판 한 장 — 화면이 처음 서거나 새로 고칠 때 */
 export async function GET(_request: Request, context: Context) {
   const { id } = await context.params;
   const bad = badLab(id);
   if (bad) return bad;
   const state = loadGame(id);
-  const snapshot = state ? snapshotOf(state) : null;
-  return snapshot ? NextResponse.json(snapshot) : missing();
+  const lab = state ? labView(state) : null;
+  return lab ? NextResponse.json({ lab }) : missing();
 }
 
-/** 모양 · 전술 · 킥오프 · 정지점 읽음 · 되돌리기 — 게임과 같은 잠금 안에서 읽고 고치고 쓴다 */
+/** 상대 모양 · 상대 전술 · 경기 판 세우기 · 다시 치르기 — 게임과 같은 잠금 안에서 읽고 고치고 쓴다 */
 export const POST = adminWrite(async (request: Request, context: Context) => {
   const { id } = await context.params;
   const bad = badLab(id);
@@ -59,21 +52,21 @@ export const POST = adminWrite(async (request: Request, context: Context) => {
   return withGameLock(id, LOCK_WAIT_MS.lineup, () => {
     const state = loadGame(id);
     if (!state) return missing();
-    if (action.kind === "seen") {
-      markEventsSeen(state);
-      saveGame(state);
-      return NextResponse.json({ lab: labView(state) });
+    if (action.kind === "replay") {
+      const made = replayLabGame(state);
+      if (!made.ok) return NextResponse.json({ error: made.message }, { status: 400 });
+      saveGame(made.state);
+      pruneLabGames(LAB_KEPT);
+      return NextResponse.json({ id: made.state.id });
     }
     const result =
       action.kind === "formation"
-        ? applyLabFormation(state, action.side, action.formation)
+        ? applyLabFormation(state, action.formation)
         : action.kind === "tactics"
-          ? applyLabTactics(state, action.side, action.tactics)
-          : action.kind === "kickoff"
-            ? kickoffLab(state, { familiarity: action.familiarity })
-            : rewindLab(state);
+          ? applyLabTactics(state, action.tactics)
+          : openLabMatch(state, { familiarity: action.familiarity });
     if (!result.ok) return NextResponse.json({ error: result.message }, { status: 400 });
     saveGame(state);
-    return NextResponse.json(snapshotOf(state));
+    return NextResponse.json({ lab: labView(state) });
   }).catch(busyResponse);
 });

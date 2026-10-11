@@ -34,6 +34,7 @@ export * from "./season/schedule";
 export * from "./match/match-records";
 export * from "./players/training-session";
 export * from "./app/turn-operation";
+export * from "./app/lab-game";
 export * from "./core/money";
 export * from "./team/crest";
 export * from "./core/tick-event";

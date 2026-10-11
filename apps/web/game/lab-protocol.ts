@@ -5,17 +5,18 @@ import {
   TACKLING_LEVELS,
   TRANSITION_MODES,
 } from "@gaffer/domain";
-import type { LabView } from "@gaffer/engine";
-import type { GamePayload } from "./store";
 
 /**
  * 경기 실험실의 요청 — 화면과 라우트가 같은 모양을 읽는다 (live-match.md §8.6).
- * 전술판 저장·실시간 경기는 게임의 라우트를 그대로 쓰므로 여기 없다.
+ * 우리 판과 경기는 게임 화면이 게임의 라우트로 다루므로 여기 없다.
  */
+
+/** 남겨 두는 실험실 판 — 다시 치른 판과 탭 두셋을 오가는 동안 앞의 판이 지워지지 않을 만큼 */
+export const LAB_KEPT = 3;
 
 const Scale5 = z.number().int().min(1).max(5);
 
-/** 여섯 축과 갈래 넷 — 실험실은 상대 판까지 고치므로 갈래도 화면에서 받는다 */
+/** 상대의 여섯 축과 갈래 넷 */
 const LabTacticsSchema = z
   .object({
     mentality: Scale5,
@@ -32,8 +33,6 @@ const LabTacticsSchema = z
   .partial();
 export type LabTactics = z.infer<typeof LabTacticsSchema>;
 
-const LabSideSchema = z.enum(["ours", "theirs"]);
-
 export const LabCreateSchema = z.object({
   homeTeamId: z.string().min(1),
   awayTeamId: z.string().min(1),
@@ -43,21 +42,14 @@ export const LabCreateSchema = z.object({
 export type LabCreate = z.infer<typeof LabCreateSchema>;
 
 export const LabActionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("formation"), side: LabSideSchema, formation: FormationSchema }),
-  z.object({ kind: z.literal("tactics"), side: LabSideSchema, tactics: LabTacticsSchema }),
-  /** `familiarity`가 있으면 두 팀의 적응도를 그 값으로 맞춘다 — `null`은 판 그대로 */
+  z.object({ kind: z.literal("formation"), formation: FormationSchema }),
+  z.object({ kind: z.literal("tactics"), tactics: LabTacticsSchema }),
+  /** 경기 판을 세운다 — `familiarity`가 있으면 두 팀의 적응도를 그 값으로 맞춘다. `null`은 판 그대로 */
   z.object({
-    kind: z.literal("kickoff"),
+    kind: z.literal("open"),
     familiarity: z.number().int().min(0).max(100).nullable(),
   }),
-  /** 정지점의 사건을 읽었다 — 실험실에는 그것을 중계할 턴이 없다 */
-  z.object({ kind: z.literal("seen") }),
-  z.object({ kind: z.literal("rewind") }),
+  /** 같은 조합·같은 판으로 새 실험실 판을 짓는다 — 응답은 새 판의 id다 */
+  z.object({ kind: z.literal("replay") }),
 ]);
 export type LabAction = z.infer<typeof LabActionSchema>;
-
-/** 판 한 장 — 화면이 그리는 게임 payload와 실험실의 두 팀 */
-export interface LabSnapshot {
-  game: GamePayload;
-  lab: LabView;
-}

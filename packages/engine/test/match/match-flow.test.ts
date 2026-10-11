@@ -1,5 +1,6 @@
 import {
   ATTRIBUTE_AXES,
+  isLabGame,
   placeOf,
   playerOverall,
   tacticsSignature,
@@ -26,8 +27,7 @@ import {
   firstTeamPlayers,
   groupOf,
   isClubTeam,
-  isLabGame,
-  kickoffLab,
+  openLabMatch,
   labView,
   liveMatchDigest,
   loadGame,
@@ -38,7 +38,7 @@ import {
   playersOf,
   proficiencyAt,
   resumeLiveInterval,
-  rewindLab,
+  replayLabGame,
   saveGame,
   setLineup,
   setPlayerTactic,
@@ -1259,53 +1259,54 @@ describe("경기 실험실 (live-match.md §8.6)", () => {
     return made.state;
   }
 
-  it("고른 두 구단의 리그 경기를 맡은 쪽 감독으로 세우고, 적응도를 한 값으로 맞춰 킥오프한다", () => {
+  it("고른 두 구단의 리그 경기를 맡은 쪽 감독으로 세우고, 적응도를 한 값으로 맞춰 입장 전 판을 세운다", () => {
     const state = lab();
     expect(isLabGame(state.id)).toBe(true);
-    expect(applyLabFormation(state, "theirs", "5-4-1").ok).toBe(true);
-    expect(applyLabTactics(state, "theirs", { pressing: 5, tackling: "hard" }).ok).toBe(true);
-    const kicked = kickoffLab(state, { familiarity: 80 });
-    expect(kicked.ok, kicked.message).toBe(true);
+    expect(applyLabFormation(state, "5-4-1").ok).toBe(true);
+    expect(applyLabTactics(state, { pressing: 5, tackling: "hard" }).ok).toBe(true);
+    const opened = openLabMatch(state, { familiarity: 80 });
+    expect(opened.ok, opened.message).toBe(true);
 
-    const live = state.pendingMatch!.live;
-    expect(live.setup.friendly).toBe(false);
-    expect(live.setup.sides.home).toMatchObject({ teamId: "bayern", ai: true });
-    expect(live.setup.sides.away).toMatchObject({ teamId: "arsenal", ai: false });
-    expect(live.setup.sides.home.kickoffTactics).toMatchObject({
+    const pending = state.pendingMatch!;
+    // 입장은 게임 화면의 킥오프 게이트가 한다
+    expect(pending.entered).toBe(false);
+    expect(pending.live.setup.friendly).toBe(false);
+    expect(pending.live.setup.sides.home).toMatchObject({ teamId: "bayern", ai: true });
+    expect(pending.live.setup.sides.away).toMatchObject({ teamId: "arsenal", ai: false });
+    expect(pending.live.setup.sides.home.kickoffTactics).toMatchObject({
       formation: "5-4-1",
       pressing: 5,
       tackling: "hard",
     });
     for (const side of ["home", "away"] as const) {
-      expect(new Set(live.slots[side].map((slot) => slot.familiarity))).toEqual(new Set([80]));
+      expect(new Set(pending.live.slots[side].map((slot) => slot.familiarity))).toEqual(
+        new Set([80]),
+      );
     }
-    expect(labView(state)?.sides.away.ours).toBe(true);
+    expect(labView(state)).toMatchObject({ stage: "open", sides: { away: { ours: true } } });
+    expect(applyLabTactics(state, { pressing: 1 }).ok, "판이 선 뒤에 상대를 고쳤다").toBe(false);
   });
 
-  it("우리 쪽 프리셋은 전술판의 명령을 지나 그 모양으로 선다", () => {
+  it("다시 치르면 같은 시드의 새 판에 킥오프의 두 판을 옮기고, 경기 id가 달라진다", () => {
     const state = lab();
-    const result = applyLabFormation(state, "ours", "3-5-2");
-    expect(result.ok, result.message).toBe(true);
-    expect(tacticsOf(state, "arsenal").spec.formation).toBe("3-5-2");
-  });
-
-  it("되돌리면 경기 중 고친 우리 판이 킥오프 때로 돌아오고, 다음 경기는 다른 경기다", () => {
-    const state = lab();
-    expect(kickoffLab(state, { familiarity: null }).ok).toBe(true);
+    expect(applyLabFormation(state, "3-4-3").ok).toBe(true);
+    expect(openLabMatch(state, { familiarity: null }).ok).toBe(true);
+    markEntered(state);
     const kickoffSpec = { ...tacticsOf(state, "arsenal").spec };
     const firstMatch = state.pendingMatch!.matchId;
     advanceLiveMatch(state, 20 * 60);
     expect(setTactics(state, { mentality: kickoffSpec.mentality === 5 ? 1 : 5 }).ok).toBe(true);
-    expect(applyLabTactics(state, "theirs", { pressing: 1 }).ok, "경기 중에 상대 판을 고쳤다").toBe(
-      false,
-    );
 
-    expect(rewindLab(state).ok).toBe(true);
-    expect(state.phase).toBe("matchday");
-    expect(state.pendingMatch).toBeNull();
-    expect(tacticsOf(state, "arsenal").spec).toEqual(kickoffSpec);
-    expect(labView(state)?.matchNo).toBe(2);
-    expect(kickoffLab(state, { familiarity: null }).ok).toBe(true);
-    expect(state.pendingMatch!.matchId).not.toBe(firstMatch);
+    const replayed = replayLabGame(state);
+    if (!replayed.ok) throw new Error(replayed.message);
+    const next = replayed.state;
+    expect(next.id).not.toBe(state.id);
+    expect(next.seed).toBe(state.seed);
+    expect(next.pendingMatch).toBeNull();
+    expect(tacticsOf(next, "arsenal").spec).toEqual(kickoffSpec);
+    expect(tacticsOf(next, "bayern").spec.formation).toBe("3-4-3");
+    expect(labView(next)).toMatchObject({ matchNo: 2, stage: "prep" });
+    expect(openLabMatch(next, { familiarity: null }).ok).toBe(true);
+    expect(next.pendingMatch!.matchId).not.toBe(firstMatch);
   });
 });

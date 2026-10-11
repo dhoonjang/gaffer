@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { createLabGame, pruneLabGames, saveGame } from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
-import { LabCreateSchema } from "@/game/lab-protocol";
+import { LAB_KEPT, LabCreateSchema } from "@/game/lab-protocol";
 
 export const runtime = "nodejs";
-
-/** 남겨 두는 실험실 판 — 탭 두셋을 오가는 동안 앞의 판이 지워지지 않을 만큼 */
-const LAB_KEPT = 3;
 
 /** 실험실 판 짓기 — 두 구단 · 맡을 쪽 · 시드 (live-match.md §8.6) */
 export const POST = adminWrite(async (request: Request) => {

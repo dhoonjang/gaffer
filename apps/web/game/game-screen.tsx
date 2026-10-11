@@ -12,6 +12,7 @@ import { humanDate } from "@/shared/dateline";
 import { matchHeadFacts, matchScoreOf, matchTitleOf } from "@/screens/match/match-head";
 import { mergeSlice } from "@/game/game-slice";
 import { reducedMotion } from "@/shared/motion";
+import { isLabGame } from "@gaffer/domain";
 import type { AttentionItemView, ChatTurn } from "@gaffer/engine";
 import type { TurnOperation } from "@gaffer/agents";
 import { ChatTurnFeedback, ChatTurnError } from "../screens/chat/chat-feedback";
@@ -1222,8 +1223,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
         }}
       >
         <header className={`topbar${menuOpen ? " menu-open" : ""}`}>
-          {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) */}
-          <Link href="/" className="brand" data-testid="home-link" title="게임 목록으로">
+          {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) —
+            실험실 판은 목록에 없으므로 그 판의 실험실로 나간다 (live-match.md §8.6) */}
+          <Link
+            href={isLabGame(gameId) ? `/lab?id=${gameId}` : "/"}
+            className="brand"
+            data-testid="home-link"
+            title={isLabGame(gameId) ? "실험실로" : "게임 목록으로"}
+          >
             <IconMark />
           </Link>
           {/**

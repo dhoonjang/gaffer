@@ -1,5 +1,6 @@
 import {
   FAMILIARITY_BASELINE,
+  LAB_ID_PREFIX,
   TacticsSpecSchema,
   type ClubColours,
   type Formation,
@@ -7,7 +8,6 @@ import {
   type MatchSide,
   type TacticsSpec,
 } from "@gaffer/domain";
-import { liveFinished } from "@gaffer/sim";
 import {
   type GameState,
   firstTeamPlayers,
@@ -22,18 +22,16 @@ import type { WorldScope } from "../../core/catalog/scope";
 import { teamCatalog } from "../../core/catalog/team-catalog";
 import { defaultXiIds } from "../../players/catalog/catalog";
 import { buildAssignments } from "../../match/selection";
-import { type FlowResult, markEntered, restoreTactics } from "../../match/match-flow";
-import { setLineup, setTactics } from "../../team/lineup";
+import { type FlowResult, restoreTactics } from "../../match/match-flow";
 import { createGame } from "../create-game";
-import { LAB_ID_PREFIX } from "../persistence";
 import { startMatch } from "./match-flow";
 
 /**
  * ── 경기 실험실 — 두 구단을 골라 경기 하나만 치르는 판 (match/live-match.md §8.6) ──
  *
- * 판은 진짜 세이브라 전술판·체크포인트·경기 중 지시가 게임의 라우트와 명령을 그대로
- * 지난다. 여기 있는 것은 게임에 없는 걸음뿐이다: 판 짓기, 두 팀의 프리셋 모양, 상대의
- * 전술, 적응도를 맞춘 킥오프, 킥오프 전으로 되돌리기.
+ * 판은 진짜 세이브라 경기는 게임 화면이 게임과 같은 길로 치른다 — 입장, 말로 하는 지시,
+ * 정지점의 중계까지. 여기 있는 것은 게임에 없는 걸음뿐이다: 판 짓기, 상대의 모양과 전술,
+ * 적응도를 맞춰 경기 판 세우기, 같은 조합으로 다시 치를 새 판.
  */
 
 export interface LabSetup {
@@ -60,12 +58,13 @@ export interface LabView {
   matchNo: number;
   seed: number;
   sides: Record<MatchSide, LabSideView>;
-  /** 종료 휘슬이 울렸나 */
-  finished: boolean;
+  /**
+   * 경기가 어디까지 왔나 — `prep`은 판을 짜는 중, `open`은 경기 판이 서서 게임 화면이
+   * 치르는 중(입장 전 포함), `played`는 정산까지 끝났다.
+   */
+  stage: "prep" | "open" | "played";
+  result: MatchRecord["result"];
 }
-
-/** 판을 고치는 쪽 — 우리 판은 감독의 명령이, 상대 판은 실험실이 고친다 */
-export type LabSide = "ours" | "theirs";
 
 const LAB_MANAGER = "실험실";
 /** 경기 id의 머리 — 뒤의 수가 몇 번째 경기인가다. 난수 채널이 경기 id를 읽는다 */
@@ -154,81 +153,59 @@ export function labView(state: GameState): LabView | null {
     matchNo: matchNoOf(match),
     seed: state.seed,
     sides: { home: side(match.homeTeamId), away: side(match.awayTeamId) },
-    finished: state.pendingMatch ? liveFinished(state.pendingMatch.live) : false,
+    stage: match.result ? "played" : state.pendingMatch ? "open" : "prep",
+    result: match.result,
   };
 }
 
-/** 경기 전의 실험 경기 — 경기 중 우리 판은 전술판 지시가 고친다 */
-function matchBeforeKickoff(
+/** 판을 짜는 중인 실험 경기 — 경기 판이 선 뒤의 일은 게임 화면의 몫이다 */
+function matchInPrep(
   state: GameState,
 ): { ok: true; match: MatchRecord } | { ok: false; message: string } {
-  if (state.phase === "match") return { ok: false, message: "경기 중에는 고칠 수 없습니다" };
   const match = labMatchOf(state);
-  return match ? { ok: true, match } : { ok: false, message: "실험 경기를 찾지 못했습니다" };
+  if (!match) return { ok: false, message: "실험 경기를 찾지 못했습니다" };
+  if (state.pendingMatch || match.result) return { ok: false, message: "경기 판이 이미 섰습니다" };
+  return { ok: true, match };
 }
 
-/** 그 쪽의 구단 — 상대는 오늘의 실험 경기에서 우리가 아닌 쪽이다 */
-function teamOf(state: GameState, match: MatchRecord, side: LabSide): string {
-  if (side === "ours") return state.userTeamId;
+/** 상대 — 오늘의 실험 경기에서 우리가 아닌 쪽이다 */
+function opponentOf(state: GameState, match: MatchRecord): string {
   return match.homeTeamId === state.userTeamId ? match.awayTeamId : match.homeTeamId;
 }
 
 /**
- * 프리셋 모양으로 다시 짠다 — 우리는 **지금 선발을 앞세우고**, 상대는 구단의 기본 선발을
- * 앞세운다. 우리 판은 전술판 저장과 같은 명령(`setLineup`)을 지나 적응도·카드가 같은
- * 규칙을 밟는다.
+ * 상대를 프리셋 모양으로 다시 짠다 — 구단의 기본 선발을 앞세운다. 우리 판은 게임 화면이
+ * 감독의 말과 전술판으로 고친다.
  */
-export function applyLabFormation(
-  state: GameState,
-  side: LabSide,
-  formation: Formation,
-): FlowResult {
-  const found = matchBeforeKickoff(state);
+export function applyLabFormation(state: GameState, formation: Formation): FlowResult {
+  const found = matchInPrep(state);
   if (!found.ok) return found;
   const { match } = found;
-  const teamId = teamOf(state, match, side);
+  const teamId = opponentOf(state, match);
   const tactics = tacticsOf(state, teamId);
   const available = (id: string) => {
     const player = playerById(state, id);
     return player !== null && isAvailableFor(state, player, match.competitionId);
   };
-  const preferred =
-    side === "ours"
-      ? tactics.assignments.filter((a) => a.role === "starting").map((a) => a.playerId)
-      : defaultXiIds(teamId);
-  const fresh = buildAssignments(
+  tactics.assignments = buildAssignments(
     firstTeamPlayers(state, teamId),
     formation,
     FAMILIARITY_BASELINE,
     available,
-    preferred,
+    defaultXiIds(teamId),
   );
-  if (side === "ours") {
-    return setLineup(state, {
-      starting: fresh
-        .filter((a) => a.role === "starting")
-        .map((a) => ({ playerId: a.playerId, ...(a.point ? { point: a.point } : {}) })),
-      bench: fresh.filter((a) => a.role === "bench").map((a) => a.playerId),
-    });
-  }
-  tactics.assignments = fresh;
   tactics.spec = { ...tactics.spec, formation };
   return { ok: true, message: `상대 모양 ${formation}` };
 }
 
-/**
- * 여섯 축과 갈래 넷 — 우리 판은 감독의 명령(`setTactics`)이 받고, 상대 판은 같은
- * 스키마로 검사해 앉힌다. 모양 이름은 배치의 파생이라 여기서 받지 않는다.
- */
+/** 상대의 여섯 축과 갈래 넷 — 같은 스키마로 검사해 앉힌다. 모양 이름은 배치의 파생이다 */
 export function applyLabTactics(
   state: GameState,
-  side: LabSide,
   patch: { [K in Exclude<keyof TacticsSpec, "formation">]?: TacticsSpec[K] | undefined },
 ): FlowResult {
-  const found = matchBeforeKickoff(state);
+  const found = matchInPrep(state);
   if (!found.ok) return found;
-  if (side === "ours") return setTactics(state, patch);
-  const tactics = tacticsOf(state, teamOf(state, found.match, side));
+  const tactics = tacticsOf(state, opponentOf(state, found.match));
   const given = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   const parsed = TacticsSpecSchema.safeParse({ ...tactics.spec, ...given });
   if (!parsed.success) return { ok: false, message: "상대 전술 형식이 올바르지 않습니다" };
@@ -237,34 +214,48 @@ export function applyLabTactics(
 }
 
 /**
- * 킥오프 — `familiarity`가 있으면 두 팀의 적응도를 그 값 하나로 맞춘다. 전술을 바꾼
- * 쪽만 깎인 적응도로 서면 전술끼리가 아니라 익은 판과 낯선 판을 견주게 된다.
+ * 경기 판을 세운다 — `familiarity`가 있으면 두 팀의 적응도를 그 값 하나로 맞춘다. 전술을
+ * 바꾼 쪽만 깎인 적응도로 서면 전술끼리가 아니라 익은 판과 낯선 판을 견주게 된다.
+ * 입장은 게임 화면의 킥오프 게이트가 한다 — 그 뒤 판을 고치면 게임의 규칙대로 적응도가 움직인다.
  */
-export function kickoffLab(state: GameState, opts: { familiarity: number | null }): FlowResult {
-  const found = matchBeforeKickoff(state);
+export function openLabMatch(state: GameState, opts: { familiarity: number | null }): FlowResult {
+  const found = matchInPrep(state);
   if (!found.ok) return found;
   if (opts.familiarity !== null) {
     for (const teamId of [found.match.homeTeamId, found.match.awayTeamId]) {
       for (const a of tacticsOf(state, teamId).assignments) a.familiarity = opts.familiarity;
     }
   }
-  const started = startMatch(state);
-  if (started.ok) markEntered(state);
-  return started;
+  return startMatch(state);
 }
 
 /**
- * 킥오프 전으로 되돌린다 — 경기 중 고친 우리 판은 킥오프 때로 돌아가고(`restoreTactics`),
- * 다음 경기는 id가 달라 다른 경기가 된다. 정산하지 않았으므로 몸·카드·부상은 그대로다.
+ * 같은 조합을 다시 치를 새 판 — **치른 판을 되감지 않는다.** 경기가 남긴 몸·카드·부상과
+ * 대화가 다음 경기에 묻지 않게 같은 시드의 새 세계에서 다시 짓고, 두 팀의 판(모양·배치·
+ * 전술)만 옮겨 온다. 경기 번호가 하나 늘어 경기 id가 달라지므로 다른 경기가 된다.
  */
-export function rewindLab(state: GameState): FlowResult {
-  const match = labMatchOf(state);
+export function replayLabGame(
+  old: GameState,
+): { ok: true; state: GameState } | { ok: false; message: string } {
+  const match = labMatchOf(old);
   if (!match) return { ok: false, message: "실험 경기를 찾지 못했습니다" };
-  if (state.pendingMatch) restoreTactics(state);
-  state.pendingMatch = null;
-  state.phase = "matchday";
-  state.matches = state.matches.filter((m) => m.id !== match.id);
-  const next = matchNoOf(match) + 1;
-  scheduleLabMatch(state, match.homeTeamId, match.awayTeamId, next);
-  return { ok: true, message: `${next}번째 경기` };
+  const created = createLabGame({
+    homeTeamId: match.homeTeamId,
+    awayTeamId: match.awayTeamId,
+    managed: match.homeTeamId === old.userTeamId ? "home" : "away",
+    seed: old.seed,
+  });
+  if (!created.ok) return created;
+  const { state } = created;
+  // 경기 도중이면 경기 중 조정을 걷은 킥오프의 판을 옮긴다 — 정산한 판은 이미 그렇다
+  const source = old.pendingMatch ? structuredClone(old) : old;
+  if (source.pendingMatch) restoreTactics(source);
+  const teams = new Set([match.homeTeamId, match.awayTeamId]);
+  state.tactics = state.tactics.map((t) =>
+    teams.has(t.teamId) ? structuredClone(tacticsOf(source, t.teamId)) : t,
+  );
+  const no = matchNoOf(match) + 1;
+  state.matches = state.matches.filter((m) => !m.id.startsWith(LAB_MATCH_PREFIX));
+  scheduleLabMatch(state, match.homeTeamId, match.awayTeamId, no);
+  return { ok: true, state };
 }

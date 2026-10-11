@@ -1,9 +1,9 @@
 /**
- * 경기 실험실 — 조합 고르기 · 경기 전 판 · 실시간 경기 (docs/match/live-match.md §8.6).
+ * 경기 실험실 — 조합 고르기 · 상대 판과 적응도 (docs/match/live-match.md §8.6).
  *
- * 전술판·경기장·스코어보드는 게임의 조각을 그대로 쓴다. 여기 있는 것은 그 둘레의 틀과
- * 실험실만의 손잡이(모양·갈래·적응도·배속)뿐이고, 손잡이의 생김새는 전술 패널의 눈금
- * (`.tactic-steps`)을 빌린다 — 같은 조작이 두 생김새로 서지 않게.
+ * 우리 판과 경기는 게임 화면이 그린다. 여기 있는 것은 실험실만의 손잡이(모양·갈래·
+ * 적응도)뿐이고, 생김새는 전술 패널의 눈금(`.tactic-steps`)을 빌린다 — 같은 조작이 두
+ * 생김새로 서지 않게.
  */
 .lab {
   min-height: 100dvh;
@@ -115,24 +115,11 @@
   font-weight: var(--fw-semibold);
 }
 
-/* ── 경기 전 — 왼쪽 전술판, 오른쪽 실험 설정 ── */
-.lab-prep {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  gap: var(--sp-4);
-  align-items: start;
-}
-.lab-board.view-scroll {
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  overflow: visible;
-}
+/* ── 상대 판과 경기 ── */
 .lab-controls {
-  position: sticky;
-  top: var(--sp-3);
   display: grid;
   gap: var(--sp-5);
+  width: min(640px, 100%);
   padding: var(--sp-4);
   border-radius: var(--r-md);
   background: var(--panel);
@@ -152,64 +139,7 @@
   color: var(--text-3);
   font-weight: var(--fw-regular);
 }
-
-/* ── 경기 — 왼쪽 경기장, 오른쪽 곁 탭, 아래 시계 줄 ── */
-.lab-live {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 440px;
-  gap: var(--sp-4);
-  align-items: start;
-}
-.lab-pitch {
-  min-width: 0;
-}
-/* 경기장의 틀은 제 크기를 담는 상자 안에서 맞춰 선다(`container-type: size`) — 상자에 높이를 준다 */
-.lab-pitch .live-pitch-field {
-  aspect-ratio: 105 / 68;
-  max-height: 72dvh;
-}
-/* 우리 팀 탭에서 전술판을 펼치면 곁 칸이 판을 담을 만큼 넓어진다 — 그동안 시계는 서 있다 */
-.lab-live.side-open {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-}
-.lab-side {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: var(--sp-3);
-  border-radius: var(--r-md);
-  background: var(--panel);
-}
-.lab-side-body.view-scroll {
-  max-width: none;
-  max-height: 72dvh;
-  margin: 0;
-  padding: 0;
-}
-.lab-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--line);
-}
-.lab-bar .lab-row {
-  grid-template-columns: auto auto;
-}
-.lab-bar-gap {
-  flex: 1;
-}
-.lab-final {
+.lab-section h2 .lab-final {
+  color: var(--text);
   font-weight: var(--fw-semibold);
-}
-
-@media (max-width: 1023px) {
-  .lab-prep,
-  .lab-live {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .lab-controls {
-    position: static;
-  }
 }

@@ -21,7 +21,7 @@ import {
 } from "../core/catalog/paths";
 import { SaveSchema } from "./save-schema";
 import type { GamePhase, GameState } from "../core/state";
-import type { ClubColours } from "@gaffer/domain";
+import { type ClubColours, isLabGame } from "@gaffer/domain";
 import { teamCatalogById } from "../core/catalog/team-catalog";
 import { ensurePotentialFloor, teamNameIn, teamShortNameIn } from "../core/state";
 import { saveLockPath } from "../core/save-lock";
@@ -446,16 +446,6 @@ function catalogIds(): Set<string> {
 /** 게임이 아닌 이름인가 — 목록도 로드도 삭제도 이 넷을 지나치지 않는다 */
 function isCatalogId(id: string): boolean {
   return catalogIds().has(id);
-}
-
-/**
- * 경기 실험실의 세이브 — **id 머리로 가른다** (match/live-match.md §8.6). 읽기·쓰기·
- * 잠금은 게임과 같은 길이고, 목록에 서지 않고 오래되면 지워진다는 것만 다르다.
- */
-export const LAB_ID_PREFIX = "lab-";
-
-export function isLabGame(id: string): boolean {
-  return id.startsWith(LAB_ID_PREFIX);
 }
 
 /** 실험실 판을 최근에 저장한 `keep`개만 남긴다 — 지운 수를 돌려준다 */
