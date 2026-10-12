@@ -76,10 +76,10 @@ B=.agents/skills/simulation/bin              # 이 스킬의 스크립트 다섯
 | `turn.sh '<json>'`                         | 턴 하나. 끝날 때까지 기다리고 서사 · 도구 줄 · 상태를 찍는다                                                                                     |
 | `state.sh [--fetch] <갈래> [N]`            | 마지막 페이로드 요약 — `brief` `attention` `first` `reserve` `xi` `calendar` `contracts` `finance` `table` `match` `youth` `registration` `chat` |
 | `lineup.sh --dump` · `lineup.sh body.json` | 전술판 — 지금 선발을 body로 뽑고, 고쳐서 결정적으로 저장                                                                                         |
-| `match.sh [--resume \| --shootout]`        | 경기 — 다음 정지점까지 굴리고 정지점 턴을 연다 (§5-2)                                                                                            |
+| `match.sh [--resume \| --shootout]`        | 경기 — 입장하고 다음 정지점까지 굴린다. 턴은 열지 않는다 (§5-2)                                                                                  |
 
 턴 본문의 모양은 `turn.sh` 머리에 있다: `message`(1,000자 이내) · `operation`
-(`skip_days` · `skip_to_next_match` · `enter_match`) · `orders`(교체 · 전술 ·
+(`skip_days` · `skip_to_next_match`) · `orders`(교체 · 전술 ·
 자리 · 역할 — 코어가 그대로 집행한다).
 
 ### 2-3. 시나리오
@@ -173,19 +173,19 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
    템포 · 폭)과 패스 스타일도 같은 body에 싣는다 — 상대와 상황이 정한다.
 4. **팀토크** — 한 턴, 상황에서 나온 말. 약속으로 읽힐 말("다음 경기도 네가
    선발이다")은 뜻이 있을 때만.
-5. `{"operation":{"kind":"enter_match"}}` — 경기장에 들어선다(킥오프의 말). 시계는
-   아직 서 있다.
+5. `match.sh` — 경기장에 들어서고 시계를 민다(§5-2). 입장에는 턴이 없다.
 
 ### 5-2. 경기 중 (phase `match`)
 
 경기 시계는 **실행기**가 민다 — 브라우저와 같은 일을 화면 없이 하는 `match.sh`다.
-`match.sh` 한 번이 정지점(골 · 경고 · 퇴장 · 부상 · 교체 · 상대 벤치의 전술 전환 · 하프의 끝) 하나까지 굴리고, 그
-자리에서 정지점 턴을 연다 — 판독기가 판을 다시 읽고 매치 GM이 그 사건을 중계한다.
+`match.sh` 한 번이 정지점(골 · 경고 · 퇴장 · 부상 · 교체 · 상대 벤치의 전술 전환 · 하프의 끝) 하나까지 굴리고
+멈춘다 — 턴은 열지 않는다. 매치 GM은 감독이 말을 건 턴에만 답하고 사건을 중계하지 않는다.
 휴식(하프타임 · 연장 개시)에서는 라커룸의 말을 한 턴 보내고 `match.sh --resume`,
 승부차기는 `match.sh --shootout`이 한 발이다. 정지점마다:
 
-1. 서사를 읽는다 — 코치가 무엇을 제안했나, 상대가 무엇을 바꿨나.
-2. `state.sh match` — 분 · 스코어 · 교체 창 · 온필드 체력 · `gassed` · 경고 · 벤치.
+1. `state.sh --fetch match` — 분 · 스코어 · 교체 창 · 온필드 체력 · `gassed` · 경고 · 벤치,
+   상대가 무엇을 바꿨나.
+2. 코치의 의견이 필요하면 한 턴 묻는다 — 답은 그 말에 대한 것이다.
 3. 결정한다:
 
    | 상황                                | 한다                                               |
@@ -206,8 +206,8 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
    `state.sh match`의 온필드가 바뀌었는지 본다.
 
 4. 바꿀 것이 없으면 `match.sh`.
-5. 종료 휘슬이 오면 `match.sh`가 마감 턴을 연다 — 결산이 그 턴에 선다. 결과 · 평점 ·
-   부상 · 경고를 읽고 §5-3.
+5. 종료 휘슬이 오면 `match.sh`가 마감을 부른다 — 코어가 결과와 결산을 세운다.
+   `state.sh --fetch brief`로 결과 · 평점 · 부상 · 경고를 읽고 §5-3.
 
 ### 5-3. 경기 뒤
 

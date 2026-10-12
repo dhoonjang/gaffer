@@ -65,7 +65,7 @@ import {
 import {
   advanceLive,
   applyEvents,
-  checkpointReason,
+  liveHalted,
   LIVE_TICKS_PER_SECOND,
   liveDigest,
   liveFinished,
@@ -182,10 +182,11 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
 
   /**
    * **클라이언트와 서버는 같은 경기를 굴린다** (live-match.md §8.2) — 웹의 실행기처럼 확정
-   * 상태를 받아 굴리고, 정지점과 체크포인트 간격마다 제출하고, 서버가 준 상태를 이어받는다.
-   * 하프가 바뀌어도 틱은 앞으로만 간다 — 되감기면 체크포인트가 구간을 잃고 경기가 멈춘다.
+   * 상태를 받아 굴리고, 시계가 스스로 서는 자리(휴식·종료)에서만 제출하고, 서버가 준 상태를
+   * 이어받는다 — 한 체크포인트가 하프 하나를 통째로 담는다. 하프가 바뀌어도 틱은 앞으로만
+   * 간다 — 되감기면 체크포인트가 구간을 잃고 경기가 멈춘다.
    */
-  it("실행기의 왕복은 하프를 넘어 끝까지 전부 확정된다", () => {
+  it("실행기의 왕복은 하프 하나를 한 번에 확정하며 끝까지 간다", () => {
     const state = atMatchday(42);
     expect(startMatch(state).ok).toBe(true);
     markEntered(state);
@@ -201,11 +202,10 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
         client = copy();
         continue;
       }
-      const { events } = advanceLive(client, framesTicks);
+      advanceLive(client, framesTicks);
       expect(client.state.tick, "틱이 되감겼다").toBeGreaterThanOrEqual(lastTick);
       lastTick = client.state.tick;
-      // 실행기와 같은 판정 — 정지점 · 간격 · 하프의 끝
-      if (checkpointReason(client, events)) {
+      if (liveHalted(client)) {
         const verdict = commitCheckpoint(state, {
           fromTick: client.committedTick,
           toTick: client.state.tick,

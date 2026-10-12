@@ -228,15 +228,9 @@ export interface LiveMatchFrame {
   events: MatchEvent[];
 }
 
-/** 체크포인트 간격 (경기 시간 분) — 정지점이 없어도 이만큼 굴리면 확정한다 */
-const CHECKPOINT_MAX_MINUTES = 5;
-/** 체크포인트 간격 (틱) */
-export const CHECKPOINT_TICKS = Math.round((CHECKPOINT_MAX_MINUTES * 60) / LIVE_STEP);
-
 /**
- * **정지점** — 이 사건이 나오면 실행기가 그 자리에서 체크포인트를 내고, 확정되면 시계를 잡고
- * 정지점 턴(`match_stop`)을 연다. 판독기가 판을 다시 읽고 매치 GM이 그 사건을 중계한다
- * (live-match.md §8.3). 종료 휘슬의 정지점 턴이 마감이다.
+ * **정지점** — 판을 바꾸는 사건. 브라우저의 실행기는 여기서 서지 않는다(live-match.md §8.3).
+ * 화면 없는 실행기는 이 사건에서 확정하고 멈춰, 부르는 쪽에 결정할 차례를 넘긴다.
  */
 export const STOP_EVENT_TYPES: ReadonlySet<string> = new Set([
   "goal",

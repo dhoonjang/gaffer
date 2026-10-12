@@ -205,7 +205,6 @@ export type JournalEntry =
   | {
       kind: "scene";
       inMatch: boolean;
-      kickoff: boolean;
       /** 첫 줄 헤더 — 못 읽었으면 null */
       header: string | null;
       /** 경기 장면이 적은 분 · 장부의 분 */

@@ -20,6 +20,7 @@ import {
 } from "@gaffer/engine";
 import {
   GmTurnFailure,
+  closeMatchTurn,
   compactHistory,
   operationLabel,
   runGmTurn,
@@ -558,6 +559,57 @@ export function runTurnLocked(
      */
     if (error instanceof GameBusyError)
       return { ok: false as const, status: 409, error: error.message, retry: true };
+    throw error;
+  });
+}
+
+/**
+ * **종료 휘슬의 마감** — 실행기가 종료를 확정한 뒤 부른다 (live-match.md §8.3 · agents.md §3).
+ *
+ * 매치 GM은 돌지 않는다. 코어가 경기를 닫고 결산 평가를 돌린 뒤, 마감 기록 한 줄을 채팅에
+ * 남긴다 — 경기 중 감독이 말을 걸지 않았어도 그 경기의 기록이 서는 자리다. 이미 닫힌 경기면
+ * 아무것도 하지 않고 지금 상태를 돌려준다(응답을 잃고 다시 부른 마감).
+ */
+export function closeMatchLocked(
+  id: string,
+): Promise<{ ok: true; payload: GamePayload } | { ok: false; status: number; error: string }> {
+  return withGameLock(id, LOCK_WAIT_MS.turn, () =>
+    withGameUsage(id, () =>
+      traceTurn(id, async () => {
+        const state = loadGame(id);
+        if (!state) return { ok: false as const, status: 404, error: "게임을 찾을 수 없습니다" };
+        noteTurn({
+          input: { kind: "close_match", date: state.date, phase: state.phase },
+          before: turnDigestOf(state),
+        });
+        const closed = await closeMatchTurn(state);
+        if (!closed) {
+          noteTurn({ outcome: { ok: true, saved: false }, after: turnDigestOf(state) });
+          return state.pendingMatch
+            ? { ok: false as const, status: 409, error: "아직 마감할 수 없는 경기입니다" }
+            : { ok: true as const, payload: toPayload(state) };
+        }
+        state.chat.push({
+          role: "model",
+          text: "",
+          toolCalls: closed.toolCalls,
+          at: state.date,
+          ...(closed.goals.length > 0 ? { goals: closed.goals } : {}),
+          ...(closed.cards.length > 0 ? { cards: closed.cards } : {}),
+          inMatch: true,
+          matchId: closed.matchId,
+        });
+        bindTurnTrace(id, state.chat.length - 1);
+        const payload = toPayload(state);
+        const after = turnDigestOf(state);
+        saveGame(state);
+        noteTurn({ outcome: { ok: true, saved: true }, after });
+        return { ok: true as const, payload };
+      }),
+    ),
+  ).catch((error: unknown) => {
+    if (error instanceof GameBusyError)
+      return { ok: false as const, status: 409, error: error.message };
     throw error;
   });
 }

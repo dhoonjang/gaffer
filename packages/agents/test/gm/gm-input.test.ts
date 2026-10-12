@@ -1209,8 +1209,6 @@ describe("시간 이동 손잡이", () => {
     expect(operationLabel({ kind: "skip_to_next_match", date: "2026-08-15" })).toBe(
       "시간 진행 — 다음 경기 (2026-08-15)",
     );
-    expect(operationLabel({ kind: "enter_match" })).toBe("경기장에 들어선다");
-    expect(operationLabel({ kind: "match_stop" })).toBe("경기 중단");
 
     // 0일·소수·상한 초과는 시계를 뒤로 돌리거나 세계를 통째로 굴린다
     expect(TurnOperationSchema.safeParse({ kind: "skip_days", days: 0 }).success).toBe(false);

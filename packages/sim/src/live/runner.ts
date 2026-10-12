@@ -16,11 +16,9 @@ import type {
   TacticsSpec,
 } from "@gaffer/domain";
 import {
-  CHECKPOINT_TICKS,
   LIVE_STEP,
   PHASE_END,
   PHASE_START,
-  STOP_EVENT_TYPES,
   cardStepsOf,
   otherSide,
   placeOf,
@@ -303,15 +301,12 @@ export function liveFinished(match: LiveMatch): boolean {
   return finished(match);
 }
 
-/** 체크포인트를 낼 이유 — 정지점 · 간격 · 하프의 끝. 없으면 `null` (live-match.md §8.1) */
-export function checkpointReason(
-  match: LiveMatch,
-  events: readonly MatchEvent[],
-): "stop" | "due" | "closed" | null {
-  if (events.some((e) => STOP_EVENT_TYPES.has(e.type))) return "stop";
-  if (finished(match) || match.state.interval) return "closed";
-  if (match.state.tick - match.committedTick >= CHECKPOINT_TICKS) return "due";
-  return null;
+/**
+ * 시계가 스스로 섰는가 — 하프의 끝(휴식)과 종료 휘슬. 실행기는 여기서 굴린 구간을 확정한다
+ * (live-match.md §8.1).
+ */
+export function liveHalted(match: LiveMatch): boolean {
+  return finished(match) || match.state.interval;
 }
 
 /**

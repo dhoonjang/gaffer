@@ -17,6 +17,7 @@ import {
   advanceTime,
   buildTrainingBrief,
   createGame,
+  markEntered,
   userPlayers,
   type GameState,
 } from "@gaffer/engine";
@@ -153,9 +154,10 @@ async function casterArm(seed: number): Promise<CasterArm> {
     advanceTime(state, "next_match");
   }
   await runGmTurn(state, "경기 시작하자");
+  markEntered(state);
   const arm: CasterArm = { turns: 0, rawLines: 0, keptLines: 0, headers: 0 };
   for (let t = 0; t < MATCH_TURN_CAP && state.phase === "match"; t += 1) {
-    const { text } = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
+    const { text } = await runGmTurn(state, "계속 가자");
     if (text.length === 0) continue;
     arm.turns += 1;
     arm.rawLines += textLines(text).length;

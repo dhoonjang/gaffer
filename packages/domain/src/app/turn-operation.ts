@@ -4,7 +4,7 @@ import { DateString } from "../core/date-string";
 /**
  * ── 조작 — **손잡이가 보내는 것은 문장이 아니라 구조체다** ──────────────────
  *
- * 시간 이동·경기 진행은 감독의 발화가 아니라 화면의 손잡이다
+ * 시간 이동은 감독의 발화가 아니라 화면의 손잡이다
  * (→ docs/overview.md §3). 손잡이가 문장을 보내고 서버가 그것을 되읽으면
  * **UI 문구가 곧 계약**이라 문구 한 글자에 실모드와 mock이 따로 깨진다.
  *
@@ -21,14 +21,7 @@ export type TurnOperation =
    * 시간 이동 — 다음 경기까지. **날짜를 함께 보낸다**: 화면은 달력에서 그것을
    * 이미 알고 있고, 모델에게 물어보면 한 번 더 왕복하고 틀릴 여지도 생긴다.
    */
-  | { kind: "skip_to_next_match"; date: string }
-  /** 경기장에 들어선다 — 킥오프 게이트를 지난다. 그 턴은 킥오프의 말이고 시계는 서 있다 */
-  | { kind: "enter_match" }
-  /**
-   * 경기가 멈췄다 — 정지점(`STOP_EVENT_TYPES`)이 체크포인트로 확정된 자리. 판독기가 판을 다시
-   * 읽고 매치 GM이 그 사건을 중계한다. 시계는 실행기가 민다 (live-match.md §8.3)
-   */
-  | { kind: "match_stop" };
+  | { kind: "skip_to_next_match"; date: string };
 
 /**
  * 한 번의 조작이 넘길 수 있는 최대 일수 — 한 시즌.
@@ -46,8 +39,6 @@ export const TurnOperationSchema = z.discriminatedUnion("kind", [
     days: z.number().int().min(1).max(MAX_SKIP_DAYS),
   }),
   z.object({ kind: z.literal("skip_to_next_match"), date: DateString }),
-  z.object({ kind: z.literal("enter_match") }),
-  z.object({ kind: z.literal("match_stop") }),
 ]);
 
 /**
@@ -63,9 +54,5 @@ export function operationLabel(operation: TurnOperation): string {
       return `시간 진행 — ${operation.days === 1 ? "하루" : operation.days === 7 ? "일주일" : `${operation.days}일`}`;
     case "skip_to_next_match":
       return `시간 진행 — 다음 경기 (${operation.date})`;
-    case "enter_match":
-      return "경기장에 들어선다";
-    case "match_stop":
-      return "경기 중단";
   }
 }

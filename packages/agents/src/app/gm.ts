@@ -13,7 +13,6 @@ import {
   humanizePlayerIds,
   stripLedgerIds,
   journal,
-  markEntered,
   markEventsSeen,
   minutesOfClock,
   takeMedia,
@@ -52,12 +51,7 @@ import type {
 import { hasVoice, narration, sceneMarker } from "@gaffer/domain";
 import { agentConfig, createGameLLM, resolveLlmMode, type TurnResult } from "@gaffer/llm";
 import { reportTraining } from "../evaluators/training-rater";
-import {
-  buildMatchTools,
-  KICKOFF_BLOCK,
-  MATCH_GM_SYSTEM,
-  type MatchToolContext,
-} from "../gm/match-gm";
+import { buildMatchTools, MATCH_GM_SYSTEM, type MatchToolContext } from "../gm/match-gm";
 import { eventsBlockOf, buildLedgerNote } from "../shared/match-context";
 import { finalizeMatchTurn } from "../evaluators/finalize-match";
 import { mockGmLlm } from "./mock-gm";
@@ -177,13 +171,6 @@ export { resolveLlmMode } from "@gaffer/llm";
 interface TurnShape {
   /** 경기 장면인가 — 라우팅이 `match-gm`으로 갈린다 */
   inMatch: boolean;
-  /**
-   * 킥오프 턴 — **경기의 첫 호흡.** 감독이 경기장에 들어선 그 한 턴이다.
-   *
-   * 도구를 주지 않는다. 대신 평시 이력을
-   * 그대로 넘겨(`relevantTurns`) 라커룸에서 이어지는 목소리로 첫 휘슬만 연다.
-   */
-  kickoff: boolean;
   /** 손잡이 턴인가 — 감독이 친 말이 아니다 (`message`는 표시 문구다) */
   operator: boolean;
 }
@@ -273,7 +260,7 @@ async function openTurn(
   operation: TurnOperation | null | undefined,
   ledger: TurnLedger,
 ): Promise<TurnOpening> {
-  const { inMatch, kickoff } = shape;
+  const { inMatch } = shape;
   /** 평시 턴만 하는 일 — 시간 이동은 경기 중에 없다 */
   const peace = !inMatch;
   const from = state.date;
@@ -290,11 +277,10 @@ async function openTurn(
     noteTraining(state, ledger, skipped, from);
   }
   /**
-   * **이 턴이 서술할 사건** — 지난 턴 뒤 장부에 앉은 것 (`<events>`). 킥오프 턴은 아무
-   * 사건도 없다.
+   * **이 턴이 읽을 사건** — 지난 턴 뒤 장부에 앉은 것 (`<events>`).
    */
-  const events = inMatch && !kickoff ? unseenEvents(state) : [];
-  if (inMatch && !kickoff)
+  const events = inMatch ? unseenEvents(state) : [];
+  if (inMatch)
     collectMatchMarks(
       state,
       events,
@@ -343,7 +329,7 @@ async function callGm(
   boardMoves: readonly BoardMove[] | undefined,
   mailAttachments: readonly MailMessage[] | undefined,
 ): Promise<GmCall> {
-  const { inMatch, kickoff, operator } = shape;
+  const { inMatch, operator } = shape;
   const peace = !inMatch;
   const config = agentConfig(inMatch ? "match-gm" : "gm");
   /**
@@ -355,19 +341,15 @@ async function callGm(
     mockGmLlm(config, state, {
       message,
       inMatch,
-      kickoff,
-      operator,
       recorded: () => ledger.calls.length > 0,
     }) ?? createGameLLM(config);
   /**
-   * 경기 중 도구는 **경기 도구 셋**뿐이다 — 코어를 부르는 손잡이이고 경기를 바꾸지
-   * 못한다 (agents.md §3). 손잡이 턴은 마감 하나, 킥오프 턴은 없다. 도구 정의는
-   * 고정층이지만 셋뿐이라 평시와는 눈금이 다르다 (agents.md §5).
+   * 경기 중 도구는 **경기 도구 둘**뿐이다 — 코어를 부르는 손잡이이고 경기를 바꾸지
+   * 못한다 (agents.md §3). 도구 정의는 고정층이지만 둘뿐이라 평시와는 눈금이 다르다
+   * (agents.md §5).
    */
   const tools = inMatch
-    ? kickoff
-      ? []
-      : buildMatchTools(state, matchCtx, { operator })
+    ? buildMatchTools(state, matchCtx)
     : buildGmTools(state, ledger.calls, {
         // 손잡이 셋이 해석기에 넘길 원문 — 감독이 친 말일 때만이다 (agents.md §1)
         ...(operator ? {} : { said: message }),
@@ -379,7 +361,7 @@ async function callGm(
    * 않았는데 통계를 쥐여 주면 첫 마디부터 우열을 읊는다 (agents.md §5).
    */
   const stateNote = inMatch
-    ? buildLedgerNote(state, { withState: !kickoff })
+    ? buildLedgerNote(state, { withState: true })
     : buildGmStateNote(
         state,
         opening.skipped
@@ -435,9 +417,7 @@ async function callGm(
   const news = peace ? takeNews(state) : [];
   // 기사도 같은 규약이다 — 스냅샷과 인물 사전이 둘 다 읽은 뒤에 비운다 (people.md §4-1)
   const media = peace ? takeMedia(state) : [];
-  // 킥오프 턴의 이력은 경기 전 대화다 — `relevantTurns`가 그 한 턴만 평시로 읽는다
-  const history =
-    inMatch && !kickoff ? (state.pendingMatch?.casterHistory ?? []) : buildGmHistory(state);
+  const history = inMatch ? (state.pendingMatch?.casterHistory ?? []) : buildGmHistory(state);
   /**
    * 재시도의 조건 — **이 호출이 아직 아무 자국도 남기지 않았을 때만.** 도구가
    * 돌았으면 상태가 이미 바뀌었고(이중 반영), 글자가 나갔으면 화면에 장면이 두 번
@@ -473,10 +453,8 @@ async function callGm(
         history,
         user: [
           turnMessage,
-          // 킥오프 턴의 표식 — 도구도 대본도 없는 턴이 첫 휘슬이라는 것을 입력이 말한다
-          ...(inMatch && kickoff ? [``, KICKOFF_BLOCK] : []),
-          // 지난 턴 뒤 그라운드에서 일어난 일 — GM은 이 대본을 받아 중계를 쓴다
-          ...(inMatch && !kickoff ? [``, eventsBlockOf(state, opening.events)] : []),
+          // 지난 턴 뒤 그라운드에서 일어난 일 — GM이 답의 근거로 읽는다
+          ...(inMatch ? [``, eventsBlockOf(state, opening.events)] : []),
         ].join("\n"),
         stateNote,
         tools,
@@ -524,7 +502,7 @@ async function closeTurn(
   ledger: TurnLedger,
   call: GmCall,
 ): Promise<GmTurnResult> {
-  const { inMatch, kickoff } = shape;
+  const { inMatch } = shape;
   const { result } = call;
   /**
    * **감독의 다음 말은 본문 마지막 줄의 태그에서 꺼낸다** — 위생이 그 줄을 걷기 전에
@@ -649,10 +627,8 @@ async function closeTurn(
   // 마감된 경기는 장부가 지워졌다 — 이 경기의 중계 이력은 더 쓰이지 않는다
   if (inMatch && state.pendingMatch) {
     state.pendingMatch.casterHistory = result.history;
-    // 이 턴이 서술한 사건은 다 읽혔다 — 다음 턴의 <events>는 그 뒤부터다
+    // 이 턴이 읽은 사건은 다 실렸다 — 다음 턴의 <events>는 그 뒤부터다
     markEventsSeen(state);
-    // 첫 휘슬을 불었다 — 이 뒤로는 경기 도구 셋을 쥔 보통의 진행 턴이다
-    if (kickoff) markEntered(state);
   }
   // 선수 id를 이름으로 바꾸고 헤더를 되붙여 저장한다 — ⚠️ 헤더를 떼면 화면
   // (scene-stamp)의 시각이 스트리밍이 끝나는 순간 사라진다.
@@ -726,7 +702,6 @@ async function closeTurn(
   journal({
     kind: "scene",
     inMatch,
-    kickoff,
     header: marked.header ?? null,
     minute: marked.minute,
     ledgerMinute: opening.matchMinute === null ? null : minuteNow(state, ledger, opening),
@@ -781,7 +756,6 @@ export async function runGmTurn(
   const inMatch = state.phase === "match";
   const shape: TurnShape = {
     inMatch,
-    kickoff: inMatch && state.pendingMatch?.entered !== true,
     operator: operation != null,
   };
   const ledger: TurnLedger = {
@@ -798,7 +772,6 @@ export async function runGmTurn(
     cards: ledger.cards,
     ...(shape.operator ? {} : { said: message }),
     ...(boardMoves ? { boardMoves } : {}),
-    onFinalized: (minute) => (ledger.finalMinute = minute),
   };
   const opening = await openTurn(state, message, shape, operation, ledger);
   const call = await callGm(
@@ -821,4 +794,43 @@ export async function runGmTurn(
   state.pendingNews = [...call.news, ...(state.pendingNews ?? [])];
   state.media = [...call.media, ...state.media];
   return closeTurn(state, shape, opening, ledger, call);
+}
+
+/** 마감 턴이 남기는 것 — 채팅의 코어 기록 한 줄이 된다 */
+export interface MatchCloseResult {
+  matchId: string;
+  toolCalls: GmToolCall[];
+  goals: GoalMark[];
+  cards: CardMark[];
+}
+
+/**
+ * **종료 휘슬의 마감** — 매치 GM 없이 코어가 연다 (agents.md §3 「경기 마감」).
+ *
+ * 아직 턴에 실리지 않은 골·카드를 이 기록에 싣고(경기 중 감독이 한 번도 말하지 않았어도
+ * 그 경기의 기록이 채팅에 선다) 결산을 돈다. 끝나지 않았거나 승부차기가 남았으면 `null`이다.
+ */
+export async function closeMatchTurn(state: GameState): Promise<MatchCloseResult | null> {
+  const pending = state.pendingMatch;
+  if (
+    !pending ||
+    state.phase !== "match" ||
+    pending.live.ledger.phase !== "finished" ||
+    awaitingShootout(state)
+  )
+    return null;
+  const events = unseenEvents(state);
+  const goals: GoalMark[] = [];
+  const cards: CardMark[] = [];
+  collectMatchMarks(
+    state,
+    events,
+    scoreBeforeEvents(pending.live.ledger.score, events),
+    goals,
+    cards,
+  );
+  markEventsSeen(state);
+  const toolCalls: GmToolCall[] = [];
+  const outcome = await finalizeMatchTurn(state, toolCalls);
+  return outcome ? { matchId: pending.matchId, toolCalls, goals, cards } : null;
 }

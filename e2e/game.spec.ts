@@ -222,7 +222,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   /**
    * ── 킥오프는 **세 걸음**이다 ──────────────────────────
    * GM이 `start_match`로 문을 열고(판이 서고 판세가 계산된다), 감독이 입장 확인
-   * 창을 지나면 중계가 첫 휘슬만 연다. 공이 구르는 것은 그다음 진행부터다.
+   * 창을 지나면 곧바로 공이 구른다 — 그 사이에 턴도 중계도 없다.
    */
   await input.fill("경기 시작하자");
   await page.getByTestId("chat-send").click();
@@ -233,24 +233,18 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
    * 줄어들어도 초록이다.
    */
   await expect(page.locator(".kickoff-gate .kg-line")).toHaveCount(22);
-  // 중계는 화자다 — 문구가 아니라 그 화자의 말풍선(`.say.broadcast`)이 섰는지를 본다
-  // (`BROADCAST_SPEAKER`, packages/domain/src/people/persona.ts)
-  const broadcast = page.locator(".say.broadcast");
-  await expect(broadcast).toHaveCount(0);
   await page.getByTestId("kickoff-enter").click();
   /**
-   * **문을 연 것은 감독이고 그 사실은 화면이 먼저 안다** (match.md §2) — 무대는 첫
-   * 중계가 흐르기 전에 이미 경기다. 재시도가 붙는 `expect`로 재면 중계가 끝난 뒤에
-   * 바뀌어도 초록이라, 여기서는 **누른 직후의 지금**을 그대로 센다. 서버의 답을
-   * 기다리던 때는 이 세 줄이 전부 평시였다(장부 레일이 서고 스코어보드가 없었다).
+   * **문을 연 것은 감독이고 그 사실은 화면이 먼저 안다** (match.md §3.1) — 무대는 서버의
+   * 답보다 먼저 경기다. 재시도가 붙는 `expect`로 재면 답이 온 뒤에 바뀌어도 초록이라,
+   * 여기서는 **누른 직후의 지금**을 그대로 센다.
    */
   expect(await page.locator(".app.in-match").count()).toBe(1);
   expect(await page.getByTestId("match-score").count()).toBe(1);
   expect(await page.getByTestId("tab-스쿼드").count()).toBe(0);
   await expect(page.getByTestId("kickoff-gate")).toHaveCount(0);
-  await expect(broadcast.first()).toBeVisible();
-  // 첫 휘슬 턴은 시계를 움직이지 않는다 — 0분에서 감독의 차례로 돌아온다
-  await expect(page.getByTestId("match-clock").locator("b")).toHaveText("0:00");
+  // 중계는 없다 — 매치 GM은 감독이 말을 건 턴에만 답한다 (`.say.broadcast`는 중계 화자다)
+  await expect(page.locator(".say.broadcast")).toHaveCount(0);
 
   /**
    * 킥오프를 지나면 무대에 **실시간 경기판**이 선다 (live-match.md) — 서버가 계산한
@@ -407,8 +401,8 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   await page.getByTestId("fulltime-close").click();
   await expect(fulltime).toHaveCount(0);
   /*
-   * 경기가 끝나면 그 대화는 **한 장으로 접힌다** — 중계 수십 턴이 평시 대화 사이에
-   * 그대로 흐르지 않는다. 결과 카드가 그 자리에 서고, 펼치면 그때의 중계가 나온다.
+   * 경기가 끝나면 그 대화는 **한 장으로 접힌다** — 경기 중의 말이 평시 대화 사이에
+   * 그대로 흐르지 않는다. 결과 카드가 그 자리에 서고, 펼치면 코어의 마감 기록이 나온다.
    */
   const log = page.locator(".match-log-head");
   await expect(log).toHaveCount(1);

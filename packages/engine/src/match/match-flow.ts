@@ -35,7 +35,6 @@ import {
   sameCardWords,
   tacticsSignature,
   type Player,
-  CHECKPOINT_TICKS,
   LIVE_STEP,
   type LiveCheckpoint,
   type LiveCheckpointVerdict,
@@ -461,7 +460,7 @@ export function buildLiveMatch(
   );
 }
 
-/** 감독이 경기장에 들어섰다 — 입장 확인 창이 닫히고 **킥오프 턴**이 열린다 */
+/** 감독이 경기장에 들어섰다 — 입장 확인 창이 닫히고 시계가 구를 수 있다 */
 export function markEntered(state: GameState): void {
   if (state.pendingMatch) state.pendingMatch.entered = true;
 }
@@ -478,8 +477,11 @@ function finished(live: LiveMatch): boolean {
   return live.ledger.phase === "finished";
 }
 
-/** 한 체크포인트가 담을 수 있는 최대 틱 — 체크포인트 간격(`CHECKPOINT_TICKS`)에 하프 끝을 기다리는 여유 */
-const CHECKPOINT_MAX_TICKS = CHECKPOINT_TICKS + Math.round(30 / LIVE_STEP);
+/**
+ * 한 체크포인트가 담을 수 있는 최대 틱 — **하프 하나.** 실행기는 시계가 설 때만 확정하므로
+ * (live-match.md §8.1) 한 구간이 킥오프에서 휴식까지일 수 있다. 45분에 추가시간을 넉넉히 얹는다.
+ */
+const CHECKPOINT_MAX_TICKS = Math.round((60 * 60) / LIVE_STEP);
 
 /**
  * **체크포인트를 확정한다** — 클라이언트가 `fromTick`에서 `toTick`까지 굴린 결과의 digest를

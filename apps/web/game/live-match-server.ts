@@ -1,14 +1,13 @@
-import { STOP_EVENT_TYPES } from "@gaffer/domain";
 import {
   awaitingShootout,
   advanceShootout,
   buildMatchView,
   commitCheckpoint,
   loadGame,
+  markEntered,
   resumeLiveInterval,
   saveGame,
   syncLiveTactics,
-  unseenEvents,
   type GameState,
 } from "@gaffer/engine";
 import { traceBoard } from "@gaffer/llm";
@@ -21,7 +20,7 @@ import { toPayload } from "./store";
  *
  * 서버는 상주 루프도 프레임 전송도 하지 않는다. 클라이언트가 굴린 구간을 같은 함수로
  * 다시 굴려 digest를 견주고(`commitCheckpoint`), 확정된 tick에 감독의 입력을 앉힌다.
- * 정지점의 판독과 중계는 턴(`match_stop`)의 몫이다. 세이브에 남는 것은 서버가 굴린 상태뿐이다.
+ * 실행기는 시계가 설 때만 확정한다. 세이브에 남는 것은 서버가 굴린 상태뿐이다.
  */
 
 /**
@@ -39,9 +38,7 @@ function snapshotOf(state: GameState): LiveSnapshot {
     live: pending.live,
     view: buildMatchView(state),
     awaitingShootout: waitingForShootout,
-    needsStop:
-      unseenEvents(state).some((event) => STOP_EVENT_TYPES.has(event.type)) ||
-      (pending.live.ledger.phase === "finished" && !waitingForShootout),
+    needsClose: pending.live.ledger.phase === "finished" && !waitingForShootout,
   };
 }
 
@@ -66,7 +63,6 @@ export async function handleLiveAction(id: string, action: LiveAction): Promise<
         case "checkpoint": {
           const verdict = commitCheckpoint(state, action.checkpoint);
           const { events, ...rest } = verdict;
-          // 판독과 중계는 정지점 턴의 몫이다 — 실행기가 곧이어 `match_stop` 턴을 연다
           const snapshot = { ...snapshotOf(state), verdict: rest, events };
           saveGame(state);
           return snapshot;
@@ -86,6 +82,12 @@ export async function handleLiveAction(id: string, action: LiveAction): Promise<
             return snapshot;
           }
           return { ...snapshotOf(state), slice: toPayload(state, ["squad", "match"]) };
+        }
+        case "enter": {
+          markEntered(state);
+          const snapshot = snapshotOf(state);
+          saveGame(state);
+          return snapshot;
         }
         case "resume": {
           resumeLiveInterval(state);

@@ -279,12 +279,11 @@ export interface PendingMatch {
   startingXI: { home: string[]; away: string[] };
   /**
    * 감독이 경기장에 들어섰는가 — **킥오프는 두 걸음이다** (match.md §3.1).
-   * `start_match`는 판을 세울 뿐이고, 감독이 들어서면 매치 GM이 첫 휘슬만 여는
-   * 킥오프 턴을 한 번 갖는다. 시계가 구르는 것은 그다음부터다.
+   * `start_match`는 판을 세울 뿐이고, 시계가 구르는 것은 감독이 들어선 다음부터다.
    */
   entered: boolean;
   /**
-   * **캐스터가 이미 서술한 사건 수** — 다음 턴의 `<events>`는 장부의 이 자리 뒤부터다.
+   * **턴에 이미 실린 사건 수** — 다음 턴의 `<events>`는 장부의 이 자리 뒤부터다.
    * 시계는 클라이언트가 밀므로 한 턴 사이에 몇 개가 쌓였는지는 이 수가 말한다.
    */
   eventsSeen: number;

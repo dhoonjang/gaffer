@@ -20,7 +20,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   }
 }
 
-/** 체크포인트 · 전술판 조작 · 재개 · 승부차기 한 발 — 확정 상태에 적용한다 */
+/** 입장 · 체크포인트 · 전술판 조작 · 재개 · 승부차기 한 발 — 확정 상태에 적용한다 */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const bad = invalidGameId(id);

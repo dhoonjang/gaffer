@@ -18,12 +18,8 @@ import { GET as getGame, DELETE as deleteGameRoute } from "../../app/api/games/[
 import { POST as postTurn } from "../../app/api/games/[id]/turn/stream/route";
 import { POST as postLineup } from "../../app/api/games/[id]/lineup/route";
 import { GET as getLive, POST as postLive } from "../../app/api/games/[id]/match/live/route";
-import {
-  ATTRIBUTE_AXES,
-  CHECKPOINT_TICKS,
-  STOP_EVENT_TYPES,
-  FORMATION_LAYOUTS,
-} from "@gaffer/domain";
+import { POST as postClose } from "../../app/api/games/[id]/match/close/route";
+import { ATTRIBUTE_AXES, FORMATION_LAYOUTS, LIVE_STEP } from "@gaffer/domain";
 import { advanceLive, liveDigest, liveFinished, type LiveMatch } from "@gaffer/sim";
 import {
   GET as catalogGet,
@@ -64,6 +60,9 @@ import { buildPlayerNameIndex, playerIdsIn } from "../../shared/player-names";
 import { LOCK_WAIT_MS, withGameLock } from "../../game/turn-runner";
 import type { GamePayload, GameSlice } from "../../game/store";
 
+/** 감독이 멈출 때까지 굴린 길이 — 실행기는 흐르는 동안 서버에 묻지 않는다 (live-match.md §8.1) */
+const PAUSE_TICKS = Math.round((15 * 60) / LIVE_STEP);
+
 /** API 통합 테스트 — 라우트 핸들러를 직접 호출 (mock GM 모드) */
 
 const json = (body: unknown) =>
@@ -98,13 +97,9 @@ const gameList = () =>
  * 한 턴 — 화면이 부르는 그 라우트다. 스트림이 흘린 NDJSON에서 최종 페이로드를
  * 걷는다(`{"type":"done"}`); 실패는 이벤트로 오므로 여기서 사유째 터뜨린다.
  */
-/** 감독의 말 하나, 또는 화면의 손잡이 하나 — 턴 라우트가 받는 두 입구 그대로다 */
-async function turn(
-  id: string,
-  message: string,
-  operation?: { kind: "enter_match" } | { kind: "match_stop" },
-): Promise<GamePayload> {
-  const res = await postTurn(json(operation ? { operation } : { message }), params(id));
+/** 감독의 말 하나 — 화면이 부르는 턴 라우트 그대로다 */
+async function turn(id: string, message: string): Promise<GamePayload> {
+  const res = await postTurn(json({ message }), params(id));
   expect(res.status).toBe(200);
   const events = (await res.text())
     .split("\n")
@@ -247,28 +242,26 @@ describe("API — 온보딩부터 경기까지", () => {
     }
     expect(advanced.phase).toBe("matchday");
 
-    // 킥오프 → 들어서기 → 실행기가 굴리며 정지점마다 중계 턴 → 종료 휘슬 뒤 마감 턴 (match.md §2)
+    // 킥오프 → 들어서기 → 실행기가 굴리며 멈춘 자리에서 확정 → 종료 휘슬 뒤 코어 마감 (match.md §3.1)
     let current = await turn(game.id, "경기 시작하자");
     expect(current.phase).toBe("match");
-    current = await turn(game.id, "", { kind: "enter_match" });
-    let commentaryTurns = 0;
+    expect((await postLive(json({ kind: "enter" }), params(game.id))).status).toBe(200);
+    let spoke = false;
     for (let guard = 0; guard < 400; guard++) {
       const snapshot = (await (
         await getLive(new Request("http://test.local"), params(game.id))
-      ).json()) as {
-        live: LiveMatch;
-      };
+      ).json()) as { live: LiveMatch; needsClose: boolean };
       const live = snapshot.live;
-      if (liveFinished(live)) {
-        current = await turn(game.id, "", { kind: "match_stop" });
+      if (snapshot.needsClose) {
+        current = (await (await postClose(json({}), params(game.id))).json()) as GamePayload;
         break;
       }
       if (live.state.interval) {
         await postLive(json({ kind: "resume" }), params(game.id));
         continue;
       }
-      // 브라우저의 실행기와 같다 — 같은 함수로 굴리고 체크포인트를 낸다
-      const { events } = advanceLive(live, CHECKPOINT_TICKS);
+      // 브라우저의 실행기와 같다 — 같은 함수로 굴리고, 멈춘 자리에서 체크포인트를 낸다
+      advanceLive(live, PAUSE_TICKS);
       const verdict = (await (
         await postLive(
           json({
@@ -281,17 +274,19 @@ describe("API — 온보딩부터 경기까지", () => {
           }),
           params(game.id),
         )
-      ).json()) as { verdict: { ok: boolean }; events: Array<{ type: string }> };
+      ).json()) as { verdict: { ok: boolean } };
       expect(verdict.verdict.ok).toBe(true);
-      if (events.some((e) => STOP_EVENT_TYPES.has(e.type))) {
-        current = await turn(game.id, "", { kind: "match_stop" });
-        commentaryTurns++;
-        // 종료 휘슬의 정지점 턴이 마감이다 — 경기가 닫혔다
-        if (current.phase !== "match") break;
+      // 멈춘 자리에서 감독이 한 번 말을 건다 — 경기 턴으로 실린다
+      if (!spoke && !liveFinished(live)) {
+        spoke = true;
+        const talked = await turn(game.id, "계속 가자");
+        expect(talked.chat.at(-1)?.inMatch).toBe(true);
       }
     }
     expect(current.phase).toBe("idle");
-    expect(commentaryTurns, "정지점 중계 턴이 한 번도 서지 않았다").toBeGreaterThan(0);
+    // 마감은 매치 GM 없이 코어가 한 줄로 남긴다
+    const closing = current.chat.at(-1);
+    expect(closing?.toolCalls.map((c) => c.name)).toContain("finalize_match");
 
     // 시즌 첫 경기는 **프리시즌 친선**이다 — 최근 결과에는 서고 순위표는 그대로다
     const league = current.views.competitions.list[0]!;
