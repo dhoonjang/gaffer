@@ -37,7 +37,7 @@ const DRILL_LEVELS = 6;
 const SCORE_LABEL_DECIMALS = 2;
 
 export const FINALIZE_MATCH_RULES = `Settle every player who appeared in the football match that just ended.
-brief holds the confirmed records, minutes, position, rating anchor and room to grow; commentary is this match's commentary.
+brief holds the confirmed records, minutes, position, rating anchor and room to grow; commentary is what the manager and the bench said during this match, and may be empty.
 The anchor already holds the team result, goals, assists, the clean sheet or goals conceded, and cards, so do not add them again. Adjust for what it does not hold: shots and saves, dominance, handling danger, a player's own fault in a goal conceded, impact after a substitution.
 Weigh minutes and position, and do not judge an individual by the team result alone. Do not invent experiences or achievements that did not happen.
 The rating is ${RATING_MIN}~${RATING_MAX}, within ±${RATING_BAND} of the anchor. Score is the adjustment added to the anchor.
@@ -148,7 +148,7 @@ export async function evaluateSettlement(
   });
 }
 
-/** Existing match commentary only; closing prose never becomes numeric evaluation input. */
+/** 이 경기 중 감독과 벤치가 나눈 말 — 코어의 마감 기록은 본문이 없어 실리지 않는다. */
 function buildCommentaryBlock(state: GameState, matchId: string): string {
   const lines = state.chat
     .filter(
@@ -158,9 +158,11 @@ function buildCommentaryBlock(state: GameState, matchId: string): string {
         (t.matchId === undefined || t.matchId === matchId),
     )
     .map((t) => t.text.slice(0, TURN_EXCERPT_CHARS));
-  return ["<commentary>", ...(lines.length > 0 ? lines : ["(중계가 없다)"]), "</commentary>"].join(
-    "\n",
-  );
+  return [
+    "<commentary>",
+    ...(lines.length > 0 ? lines : ["(경기 중 대화가 없다)"]),
+    "</commentary>",
+  ].join("\n");
 }
 
 /** Number of participants whose settlement reached the core. */
