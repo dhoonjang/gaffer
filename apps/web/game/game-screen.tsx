@@ -1455,7 +1455,15 @@ export function GameScreen({ gameId }: { gameId: string }) {
             }${boardTakesStage ? " board-open" : ""}${boardClosing ? " board-closing" : ""}`}
           >
             {/* 스코어보드는 경기장 칸 위에 붙는다 — 대화 칸은 무대 높이를 통째로 쓴다 */}
-            {liveMatch && <MatchHeadline match={liveMatch} clock={liveClock} />}
+            {liveMatch && (
+              <MatchHeadline
+                match={liveMatch}
+                clock={liveClock}
+                pace={
+                  !liveMatch.live.finished ? { value: live.pace, set: live.setPace } : undefined
+                }
+              />
+            )}
             {chatPane}
             {matchPanelOpen && (
               <section className="match-side-panel" aria-labelledby="match-panel-title">

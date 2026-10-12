@@ -6,6 +6,7 @@ import type { MatchView } from "@gaffer/engine";
 import type { MatchBoardOrder } from "../../shared/match-orders";
 import type { LiveAction, LiveSnapshot } from "./live-match-protocol";
 import type { GameSlice } from "../../game/store";
+import { LIVE_PACES, easeSpeed, sceneSpeedOf, type LivePace } from "./live-speed";
 
 /**
  * 실시간 경기의 **클라이언트 실행기** (live-match.md §8).
@@ -19,12 +20,21 @@ import type { GameSlice } from "../../game/store";
 
 const FRAME_MS = 100;
 /**
- * 배속 — **벽시계와 경기 시계의 비율이다.** 계산 간격도 난수도 판정 규칙도 바꾸지 않으므로
- * 값을 올려도 같은 경기가 빨리 지나갈 뿐이다. e2e가 90분을 벽시계로 기다릴 수는 없어
- * 그 자리에서만 환경으로 올린다 (빌드에 박히는 값이라 `NEXT_PUBLIC_`이다).
+ * 고정 배속 — e2e가 90분을 벽시계로 기다릴 수는 없어 그 자리에서만 환경으로 올린다(빌드에
+ * 박히는 값이라 `NEXT_PUBLIC_`이다). 있으면 장면을 따르는 배속(`live-speed.ts`) 대신 선다.
  */
-const SPEED = Number(process.env.NEXT_PUBLIC_LIVE_MATCH_SPEED) || 8;
-const TICKS_PER_FRAME = Math.max(1, Math.round((SPEED * FRAME_MS) / 1000 / LIVE_STEP));
+const FIXED_SPEED = Number(process.env.NEXT_PUBLIC_LIVE_MATCH_SPEED) || null;
+const TICKS_PER_SPEED = FRAME_MS / 1000 / LIVE_STEP;
+const PACE_KEY = "gaffer.live-pace";
+
+function storedPace(): LivePace {
+  try {
+    const stored = localStorage.getItem(PACE_KEY);
+    return LIVE_PACES.find((p) => p.key === stored)?.key ?? "normal";
+  } catch {
+    return "normal";
+  }
+}
 
 export function useLiveMatch(options: {
   gameId: string;
@@ -51,6 +61,12 @@ export function useLiveMatch(options: {
   const [paused, setPaused] = useState(true);
   const [manual, setManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pace, setPaceState] = useState<LivePace>("normal");
+  const factor = useRef(1);
+  factor.current = LIVE_PACES.find((p) => p.key === pace)?.factor ?? 1;
+  /** 지금 배속과 아직 굴리지 않은 틱의 끝수 — 배속이 정수 틱으로 떨어지지 않는다 */
+  const speed = useRef<number | null>(null);
+  const carry = useRef(0);
   const callbacks = useRef(options);
   callbacks.current = options;
   const live = useRef<LiveMatch | null>(null);
@@ -162,6 +178,9 @@ export function useLiveMatch(options: {
       });
   }, [request]);
 
+  // 고른 속도는 그 브라우저에 남는다 — 렌더가 서버와 어긋나지 않게 붙은 뒤에 읽는다
+  useEffect(() => setPaceState(storedPace()), []);
+
   // 경기가 바뀌면 확정 상태를 새로 받는다
   useEffect(() => {
     setFrame(null);
@@ -245,6 +264,7 @@ export function useLiveMatch(options: {
       if (halted.current || hidden.current || match.state.interval || liveFinished(match)) {
         setPaused(true);
         resuming.current = true;
+        speed.current = null;
         if (match.state.tick !== match.committedTick) void flush().catch(() => undefined);
         return;
       }
@@ -254,7 +274,13 @@ export function useLiveMatch(options: {
         return;
       }
       setPaused(false);
-      advanceLive(match, TICKS_PER_FRAME);
+      const target = FIXED_SPEED ?? sceneSpeedOf(match.state) * factor.current;
+      speed.current = speed.current === null ? target : easeSpeed(speed.current, target);
+      carry.current += speed.current * TICKS_PER_SPEED;
+      const ticks = Math.floor(carry.current);
+      carry.current -= ticks;
+      if (ticks === 0) return;
+      advanceLive(match, ticks);
       setFrame(liveFrameOf(match));
     }, FRAME_MS);
     return () => clearInterval(timer);
@@ -272,6 +298,16 @@ export function useLiveMatch(options: {
     paused,
     error,
     pause,
+    pace,
+    /** 감독이 고르는 속도 — 장면을 따르는 배속 세 갈래에 모두 곱한다 */
+    setPace: (next: LivePace) => {
+      setPaceState(next);
+      try {
+        localStorage.setItem(PACE_KEY, next);
+      } catch {
+        // 저장이 막힌 브라우저 — 이 창에서만 선다
+      }
+    },
     /** 손잡이 — 휴식이면 재개, 승부차기면 한 발, 오류면 다시 받기, 아니면 일시정지 토글 */
     toggle: () => {
       const match = live.current;
