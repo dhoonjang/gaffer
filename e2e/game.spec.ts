@@ -408,7 +408,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   await expect(log).toHaveCount(1);
   await expect(page.locator(".turn-model.in-match"), "경기 이력이 접히지 않았다").toHaveCount(0);
   await log.click();
-  await expect(page.getByTestId("chat-scroll")).toContainText("최종 스코어");
+  await expect(page.getByTestId("chat-scroll").getByTestId("tool-finalize_match")).toBeVisible();
 
   // ── 오피스 4뷰 ──
   await page.getByTestId("tab-스쿼드").click();
