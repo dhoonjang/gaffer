@@ -21,7 +21,8 @@ import type {
   TrainingReport,
   BoardPoint,
   LorebookInjection,
-  RoleMemo,
+  CardMemo,
+  RoleCard,
   TacticsSpec,
 } from "@gaffer/domain";
 import {
@@ -278,12 +279,11 @@ export interface PendingMatch {
   startingXI: { home: string[]; away: string[] };
   /**
    * 감독이 경기장에 들어섰는가 — **킥오프는 두 걸음이다** (match.md §3.1).
-   * `start_match`는 판을 세울 뿐이고, 감독이 들어서면 매치 GM이 첫 휘슬만 여는
-   * 킥오프 턴을 한 번 갖는다. 시계가 구르는 것은 그다음부터다.
+   * `start_match`는 판을 세울 뿐이고, 시계가 구르는 것은 감독이 들어선 다음부터다.
    */
   entered: boolean;
   /**
-   * **캐스터가 이미 서술한 사건 수** — 다음 턴의 `<events>`는 장부의 이 자리 뒤부터다.
+   * **턴에 이미 실린 사건 수** — 다음 턴의 `<events>`는 장부의 이 자리 뒤부터다.
    * 시계는 클라이언트가 밀므로 한 턴 사이에 몇 개가 쌓였는지는 이 수가 말한다.
    */
   eventsSeen: number;
@@ -298,7 +298,7 @@ export interface PendingMatch {
    * **킥오프 시점의 전술** — 경기가 끝나면 여기로 되돌린다 (match.md §3.2).
    *
    * 하프타임에 올린 라인, 후반에 옮긴 자리는 **그 경기의 대응**이지 팀의 전술이
-   * 아니다. 적응도(`familiarity`)와 역할 장부(`roleMemo`)도 함께 담는다 — 경기 중
+   * 아니다. 적응도(`familiarity`)와 카드 장부(`cardMemo`)도 함께 담는다 — 경기 중
    * 조정이 깎은 값을 그 경기 한 번의 대응으로 되돌리기 위해서다.
    */
   tacticsBefore: {
@@ -307,9 +307,9 @@ export interface PendingMatch {
       playerId: string;
       position: string;
       point?: BoardPoint;
-      roleId?: string;
+      card?: RoleCard;
       familiarity: number;
-      roleMemo?: RoleMemo;
+      cardMemo?: CardMemo;
     }>;
   };
   /**

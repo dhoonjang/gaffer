@@ -3,12 +3,12 @@ import {
   TIME_PASSED,
   applyInstructionBatch,
   buildOnboardingTurn,
+  closeMatchTurn,
   runGmTurn,
   takeSuggestion,
   parseSceneHeader,
   sanitizeSceneText,
 } from "@gaffer/agents";
-import { STOP_EVENT_TYPES } from "@gaffer/domain";
 import {
   advanceLiveMatch,
   advanceShootout,
@@ -16,9 +16,11 @@ import {
   awaitingShootout,
   createGame,
   liveFinished,
+  markEntered,
   resumeLiveInterval,
   tacticsOf,
   turnFactLines,
+  unseenEvents,
   type GameState,
 } from "@gaffer/engine";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -198,11 +200,12 @@ describe("다음 말 제안 — 마지막 줄의 태그에서 꺼낸다", () => 
 
 describe("mock 대본 — 경기", () => {
   /**
-   * 킥오프는 세 걸음이다 — 도구가 문을 열고(`start_match`), 감독이 들어서고(첫 휘슬),
-   * 그다음 실행기가 시계를 밀며 정지점마다 중계 턴을 연다. 경기일까지는 코어로 걷는다: 브라우저도 감독도
-   * 없는 자리에서 턴을 서른 번 도는 것은 이 케이스가 재려는 것이 아니다.
+   * 킥오프는 세 걸음이다 — 도구가 문을 열고(`start_match`), 감독이 들어서고(코어),
+   * 그다음 실행기가 시계를 민다. 매치 GM은 감독이 말을 건 턴에만 답하고, 종료 휘슬의 마감은
+   * 코어가 연다. 경기일까지는 코어로 걷는다: 브라우저도 감독도 없는 자리에서 턴을 서른 번
+   * 도는 것은 이 케이스가 재려는 것이 아니다.
    */
-  it("킥오프에서 종료까지 완주하고, 정지점마다 중계가 선다", async () => {
+  it("킥오프에서 종료까지 완주하고, 감독의 말에만 답이 서며, 마감이 사건을 싣는다", async () => {
     const state = build(7);
     for (let guard = 0; guard < 40 && state.phase !== "matchday"; guard += 1) {
       advanceTime(state, "next_match");
@@ -212,16 +215,9 @@ describe("mock 대본 — 경기", () => {
     const opened = await runGmTurn(state, "경기 시작하자");
     expect(namesOf(opened)).toContain("start_match");
     expect(state.pendingMatch?.entered).not.toBe(true);
+    markEntered(state);
 
-    // 입장 턴은 첫 휘슬만 — 사건은 아직 없다. 도구 없는 턴에도 다음 말은 선다
-    const entered = await runGmTurn(state, "진행", undefined, { kind: "enter_match" });
-    expect(entered.text).toContain("<commentary>");
-    expect(entered.suggestion).toBe("계속 가자");
-    expect(state.pendingMatch?.entered).toBe(true);
-    expect(entered.goals ?? []).toHaveLength(0);
-
-    // 실행기가 하는 일 — 1분씩 굴리고, 중계할 사건이 확정되면 정지점 턴을 연다
-    let broadcasts = 0;
+    let answered = false;
     for (let guard = 0; guard < 400 && state.phase === "match"; guard += 1) {
       const live = state.pendingMatch!.live;
       if (liveFinished(live)) {
@@ -229,18 +225,23 @@ describe("mock 대본 — 경기", () => {
           advanceShootout(state);
           continue;
         }
-        // 종료 휘슬 — 마감 턴
-        await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
         break;
       }
       if (live.state.interval) resumeLiveInterval(state);
-      const { events } = advanceLiveMatch(state, 60 * 20);
-      if (!events.some((e) => STOP_EVENT_TYPES.has(e.type))) continue;
-      const turn = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
-      if (turn.text.includes("<commentary>")) broadcasts += 1;
+      advanceLiveMatch(state, 60 * 20 * 15);
+      // 멈춘 자리에서 감독이 한 번 말을 건다 — 그 사이의 사건은 읽힌 것으로 남는다
+      if (!answered) {
+        answered = true;
+        const turn = await runGmTurn(state, "계속 가자");
+        expect(turn.suggestion).toBe("계속 가자");
+        expect(unseenEvents(state)).toHaveLength(0);
+      }
     }
+    const goalsLeft = unseenEvents(state).filter((e) => e.type === "goal").length;
+    const closed = await closeMatchTurn(state);
+    expect(closed?.toolCalls.map((c) => c.name)).toContain("finalize_match");
+    expect(closed?.goals).toHaveLength(goalsLeft);
     expect(state.phase).toBe("idle");
-    expect(broadcasts).toBeGreaterThan(0);
     // 마감이 장부에 섰다 — 첫 라운드의 우리 경기에 결과가 있다
     const played = state.matches.find(
       (m) => m.result !== null && (m.homeTeamId === "arsenal" || m.awayTeamId === "arsenal"),

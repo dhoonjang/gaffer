@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { MatchSideSchema } from "./match-events";
-import {
-  LiveBandSchema,
-  LiveBehaviorActionSchema,
-  LiveBehaviorWhenSchema,
-  LiveLaneSchema,
-} from "./live-match";
+import { LiveLaneSchema } from "./live-match";
+import { CardWordSchema } from "../players/role-card";
 
 /**
  * 경기 지시의 출처와 시트. Point는 감독 원문을 길이 제한해 보관하는 메타데이터다.
@@ -32,16 +28,17 @@ export type Point = z.infer<typeof PointSchema>;
 /**
  * 시트의 모양 여섯 — **전부 말의 규칙에 이미 있는 손잡이다** (live-match.md §6.2).
  *
- * `behavior`는 개인 지시, `edge`는 그 선수의 경기 계수, `focus`는 팀의 공격 방향 선호,
- * `temper`는 파울 확률, `legs`는 부하가 체력으로 바뀌는 배율, `cohesion`은 형태 오차.
- * 새 모양은 말의 규칙에서 움직이는 자리가 여섯과 다를 때만 선다.
+ * `card`는 이번 경기의 카드 수정(낱말 하나의 단계), `edge`는 그 선수의 경기 계수,
+ * `focus`는 팀의 공격 방향 선호, `temper`는 파울 확률, `legs`는 부하가 체력으로 바뀌는
+ * 배율, `cohesion`은 형태 오차. 새 모양은 말의 규칙에서 움직이는 자리가 여섯과 다를 때만
+ * 선다.
  */
-export const SHEET_SHAPES = ["behavior", "edge", "focus", "temper", "legs", "cohesion"] as const;
+export const SHEET_SHAPES = ["card", "edge", "focus", "temper", "legs", "cohesion"] as const;
 const SheetShapeSchema = z.enum(SHEET_SHAPES);
 export type SheetShape = z.infer<typeof SheetShapeSchema>;
 
 export const SHEET_SHAPE_KO: Record<SheetShape, string> = {
-  behavior: "개인 지시",
+  card: "카드 수정",
   edge: "실행 품질",
   focus: "공격 방향",
   temper: "거칠기",
@@ -52,7 +49,7 @@ export const SHEET_SHAPE_KO: Record<SheetShape, string> = {
 /**
  * 한 줄의 표적 — 모양에 따라 채워지는 칸이 다르다.
  *
- * - `behavior` · `edge` · `temper` · `legs`: `player`.
+ * - `card` · `edge` · `temper` · `legs`: `player`.
  * - `focus`: `side` + `lane`.
  * - `cohesion`: `side`.
  *
@@ -74,9 +71,10 @@ export const SheetStepSchema = z.number().min(0).max(3);
  *
  * `sign`은 **손잡이의 방향**이다: `edge` +는 그 말의 실행 품질이 오르고, `focus` +는 그
  * 레인으로 공이 더 가고, `temper` +는 파울 확률이 오르고, `legs` +는 소모가 늘고,
- * `cohesion` +는 형태가 단단해진다. `behavior`는 부호가 없다 — `action`이 무엇을 할지,
- * `when`이 어느 국면에, `targetPlayer`·`lane`·`band`가 누구를·어디를 가리킨다.
- * 어느 편에 이로운가는 부호와 표적의 편에서 코어가 파생한다.
+ * `cohesion` +는 형태가 단단해진다. `card`의 `sign × step`은 `word`의 **이번 경기 단계**다
+ * (0은 그 자리의 기본 행동) — 다른 모양과 달리 0도 값이다. `targetPlayer`는 `mark`
+ * 낱말에만 서고, 대인으로 붙을 상대를 가리킨다. 어느 편에 이로운가는 부호와 표적의
+ * 편에서 코어가 파생한다.
  */
 export const SheetLineSchema = z.object({
   pointId: z.string().min(1).max(40),
@@ -84,18 +82,17 @@ export const SheetLineSchema = z.object({
   shape: SheetShapeSchema,
   sign: SheetSignSchema,
   step: SheetStepSchema,
-  /** `behavior`에만 — 개인 지시의 내용 */
-  action: LiveBehaviorActionSchema.optional(),
-  when: LiveBehaviorWhenSchema.optional(),
+  /** `card`에만 — 고치는 낱말 */
+  word: CardWordSchema.optional(),
+  /** `card`의 `mark`에만 — 대인으로 붙을 상대 */
   targetPlayer: z.string().min(1).optional(),
-  band: LiveBandSchema.optional(),
 });
 export type SheetLine = z.infer<typeof SheetLineSchema>;
 
 /** 어느 편이 이로운가 — **표적 편의 이득이 되는 부호**인가 (live-match.md §6.2) */
 export function sheetLineBenefits(line: Pick<SheetLine, "shape" | "sign">): boolean {
   switch (line.shape) {
-    case "behavior":
+    case "card":
       return true;
     case "edge":
     case "focus":

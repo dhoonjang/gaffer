@@ -1303,7 +1303,6 @@ export function advanceForOperation(
   stopForMailReplies = false,
 ): AdvanceOutcome | null {
   if (state.phase !== "idle") return null;
-  if (operation.kind === "enter_match" || operation.kind === "match_stop") return null;
   if (operation.kind === "skip_days")
     return advanceTime(state, { days: operation.days }, stopForMailReplies);
   const days = diffDays(state.date, operation.date);

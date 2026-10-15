@@ -5,34 +5,44 @@ import {
   ensureSquadNumbers,
   numberBlockText,
   numberLineageOf,
-  DERIVED_AXES,
-  SEEDED_AXES,
   agingDelta,
+  deriveAxes,
   derivePositions,
+  eaRatingOf,
+  synthesizeAxes,
   playerCatalog,
   footOf,
   physiqueOf,
 } from "@gaffer/engine";
 import {
   type GamePlayer,
+  type Place,
   freshPlayerState,
   ATTRIBUTE_AXES,
   AXIS_GROUPS,
   FLOOR_WEIGHT,
+  INCLINATION_AXES,
+  OVERALL_AXES,
   POSITION_WEIGHTS,
-  SLOT_ATTACK_SHARE,
-  SPLIT_TILT,
+  CARD_STEP_MAX,
+  CARD_WORDS,
+  CARD_WORD_DEFS,
+  SLOT_INCLINATION,
+  SLOT_REFERENCE,
+  axisFloorAt,
   bestOverall,
-  defaultRoleOf,
+  cardFit,
+  cardWeights,
   naturalPositionOf,
-  roleFit,
-  roleWeights,
-  rolesFor,
-  splitPositioning,
+  standoutAxes,
   weightSlotOf,
+  type AxisValues,
+  type RoleCard,
   type WeightSlot,
 } from "@gaffer/domain";
 import { describe, expect, it } from "vitest";
+import { eaStatsOf } from "../../src/players/catalog/ea-stats";
+import { SQUAD_SEEDS } from "../../src/players/catalog/squad-seeds";
 import {
   RETARGET_MAX_PASSES,
   depthDropAt,
@@ -43,22 +53,23 @@ import {
 } from "../../src/players/catalog/synthesis";
 
 /**
- * 능력치 16축 · 포지션 가중치 · 노화 곡선 (player.md §1·§2·§6).
+ * 능력치 37축 · 포지션 가중치 · 노화 곡선 (player.md §1·§2·§6).
  */
 
-describe("16축 구성", () => {
-  it("축 묶음이 16축을 빠짐없이·중복 없이 덮는다", () => {
+describe("37축 구성", () => {
+  it("축 묶음이 37축을 빠짐없이·중복 없이 덮는다", () => {
     const grouped = Object.values(AXIS_GROUPS).flat();
     expect(new Set(grouped).size).toBe(ATTRIBUTE_AXES.length);
     expect([...grouped].sort()).toEqual([...ATTRIBUTE_AXES].sort());
   });
 
-  it("실측 7축 + 파생 9축 = 16축 (데이터 부채 목록이 정확하다)", () => {
-    expect(SEEDED_AXES.length + DERIVED_AXES.length).toBe(ATTRIBUTE_AXES.length);
-    expect([...SEEDED_AXES, ...DERIVED_AXES].sort()).toEqual([...ATTRIBUTE_AXES].sort());
+  it("종합 축 · 성향 축 · 타고난 체력이 37축을 겹치지 않게 나눈다", () => {
+    const parts = [...OVERALL_AXES, ...INCLINATION_AXES, "naturalFitness"];
+    expect(new Set(parts).size).toBe(ATTRIBUTE_AXES.length);
+    expect([...parts].sort()).toEqual([...ATTRIBUTE_AXES].sort());
   });
 
-  it("전 선수가 16축 전부를 유효 범위로 갖는다 — 포지션 예외 분기 없음", () => {
+  it("전 선수가 37축 전부를 유효 범위로 갖는다 — 포지션 예외 분기 없음", () => {
     for (const e of playerCatalog()) {
       for (const axis of ATTRIBUTE_AXES) {
         expect(e[axis], `${e.nameEn}.${axis}`).toBeGreaterThanOrEqual(1);
@@ -68,89 +79,109 @@ describe("16축 구성", () => {
   });
 });
 
-describe("파생 축이 실측 축과 같은 눈금에 있다", () => {
+describe("축은 EA 세부 능력치에서 옮긴다", () => {
+  const seeds = Object.values(SQUAD_SEEDS).flat();
+
   /**
-   * **기울임은 값을 만들지 않고 나눠 가진다** (player.md §13.5). 이 항등식이 깨지면
-   * 축을 나눈 것만으로 자리의 눈금이 통째로 움직인다 — 밸런스가 조용히 옮겨간다.
+   * **옮김은 한 열을 한 축으로 직접 잇는다** — 속력은 최고 속도, 마킹은 수비 인지.
+   * 이 짝이 어긋나면 화면의 숫자가 EA의 그 선수와 다른 사람이 된다.
    */
-  it("위치선정과 침투를 지분으로 되섞으면 옛 한 값이다", () => {
-    for (const slot of Object.keys(SLOT_ATTACK_SHARE) as WeightSlot[]) {
-      const share = SLOT_ATTACK_SHARE[slot];
-      for (const [tackling, finishing] of [
-        [80, 30],
-        [40, 78],
-        [65, 65],
-        [99, 1],
-      ]) {
-        const base = tackling! * (1 - share) + finishing! * share;
-        const split = splitPositioning(slot, base, tackling!, finishing!);
-        expect(
-          split.positioning * (1 - share) + split.offTheBall * share,
-          `${slot} 되섞음`,
-        ).toBeCloseTo(base, 9);
-        // 벌어지는 폭은 그 선수의 기울기가 정한다 — 0이면 나눈 적이 없는 것이다
-        expect(split.positioning - split.offTheBall, `${slot} 벌어짐`).toBeCloseTo(
-          (tackling! - finishing!) * SPLIT_TILT,
-          9,
-        );
-      }
+  it("EA에 있는 선수는 EA의 그 열이 곧 그 축이다", () => {
+    const joined = seeds.filter((s) => eaRatingOf(s) !== undefined).slice(0, 200);
+    expect(joined.length).toBe(200);
+    for (const seed of joined) {
+      const ea = eaRatingOf(seed)!;
+      const s = eaStatsOf(ea);
+      const axes = deriveAxes(seed.nameEn, seed.position, seed, { ea, height: seed.height });
+      expect(axes.pace, seed.nameEn).toBe(s.sprintSpeed);
+      expect(axes.acceleration).toBe(s.acceleration);
+      expect(axes.marking).toBe(s.defensiveAwareness);
+      expect(axes.firstTouch).toBe(s.ballControl);
+      expect(axes.offTheBall).toBe(s.positioning);
+      expect(axes.reflexes).toBe(s.gkReflexes);
     }
   });
 
+  it("골키퍼의 민첩성은 다이빙이고 위치 선정은 GK 위치선정이다", () => {
+    const keeper = seeds.find((s) => s.position === "GK" && eaRatingOf(s) !== undefined)!;
+    const ea = eaRatingOf(keeper)!;
+    const axes = deriveAxes(keeper.nameEn, keeper.position, keeper, { ea });
+    expect(axes.agility).toBe(eaStatsOf(ea).gkDiving);
+    expect(axes.positioning).toBe(eaStatsOf(ea).gkPositioning);
+  });
+
   /**
-   * 파생과 가중치가 **같은 지분**을 읽어야 두 축의 가중합이 갈리기 전과 같다.
-   * 표의 값은 0.05 눈금으로 떨어뜨린 것이라 그만큼의 어긋남만 남는다.
+   * **합성 선수는 목표 종합에서 태어난다** — 자리마다 세부 능력치에서 종합으로 가는 낙차가
+   * 달라(골키퍼 −5 · 윙어 0) 되맞춤이 없으면 어느 자리도 노린 자리에 서지 않는다.
+   * 개인 편차가 목표를 흔드므로 한 명이 아니라 무리의 평균으로 본다.
    */
-  it("자리 가중치의 위치선정:침투 비가 그 자리의 공격 지분이다", () => {
-    for (const slot of Object.keys(SLOT_ATTACK_SHARE) as WeightSlot[]) {
-      const w = POSITION_WEIGHTS[slot];
-      const share = w.offTheBall / (w.positioning + w.offTheBall);
-      expect(share, `${slot} ${share.toFixed(3)} vs ${SLOT_ATTACK_SHARE[slot]}`).toBeCloseTo(
-        SLOT_ATTACK_SHARE[slot],
-        1,
-      );
+  it("합성 선수의 종합은 의도한 자리에 선다 — 자리마다 평균이 ±1 안이다", () => {
+    for (const position of ["GK", "CB", "RB", "DM", "CM", "AM", "RW", "CF", "ST"]) {
+      for (const intended of [52, 68, 80]) {
+        const overalls = Array.from({ length: 30 }, (_, i) => {
+          const key = `Synthetic ${position} ${intended} ${i}`;
+          const positions = derivePositions(key, position);
+          return bestOverall(synthesizeAxes(key, position, positions, intended), positions);
+        });
+        const mean = overalls.reduce((a, b) => a + b, 0) / overalls.length;
+        expect(Math.abs(mean - intended), `${position} ${intended} → ${mean}`).toBeLessThan(1);
+      }
+    }
+    const positions = derivePositions("Same Key", "CM");
+    expect(synthesizeAxes("Same Key", "CM", positions, 70)).toEqual(
+      synthesizeAxes("Same Key", "CM", positions, 70),
+    );
+  });
+
+  it("EA에 없는 선수는 대표 수치에서 세운다 — 같은 이름이면 언제나 같은 사람이다", () => {
+    const seed = {
+      pace: 70,
+      shooting: 60,
+      passing: 72,
+      dribbling: 74,
+      defending: 55,
+      physical: 66,
+    };
+    const a = deriveAxes("Nobody Special", "CM", seed);
+    expect(deriveAxes("Nobody Special", "CM", seed)).toEqual(a);
+    expect(deriveAxes("Somebody Else", "CM", seed)).not.toEqual(a);
+    for (const axis of ATTRIBUTE_AXES) {
+      expect(a[axis], axis).toBeGreaterThanOrEqual(1);
+      expect(a[axis], axis).toBeLessThanOrEqual(99);
     }
   });
 });
 
 describe("포지션 가중치", () => {
-  it("자리마다 핵심 축(3)이 있고, 가중치는 0~3에 머문다", () => {
-    for (const [slot, weights] of Object.entries(POSITION_WEIGHTS)) {
-      const values = ATTRIBUTE_AXES.map((a) => weights[a]);
-      expect(Math.max(...values), `${slot}에 핵심 축이 없다`).toBe(3);
-      for (const v of values) {
-        expect(v).toBeGreaterThanOrEqual(0);
-        expect(v).toBeLessThanOrEqual(3);
+  it("가중치는 0~3, 0.05 눈금이다", () => {
+    for (const [slot, w] of Object.entries(POSITION_WEIGHTS)) {
+      for (const axis of OVERALL_AXES) {
+        const v = w[axis];
+        expect(v, `${slot}.${axis}`).toBeGreaterThanOrEqual(0);
+        expect(v, `${slot}.${axis}`).toBeLessThanOrEqual(3);
+        expect(Math.round(v * 20) / 20, `${slot}.${axis}: ${v}는 0.05 눈금이 아니다`).toBe(v);
       }
     }
   });
 
-  it("가중치는 단계가 아니라 소수다 — 같은 칸 안에서도 무게가 갈린다", () => {
-    /**
-     * 3/2/1 세 칸이던 시절엔 센터백의 위치선정과 몸싸움이 **똑같이 3**이었다.
-     * 현대 센터백은 붙기 전에 자리로 막는 쪽이 먼저인데 그 차이를 적을 자리가
-     * 없었다. 여기서는 ① 값이 실제로 0.05 해상도를 쓰는지 ② 자리마다 값이
-     * 뭉치지 않는지를 본다 — 다시 세 칸으로 주저앉으면 걸린다.
-     */
-    for (const [slot, w] of Object.entries(POSITION_WEIGHTS)) {
-      const values = ATTRIBUTE_AXES.map((a) => w[a]);
-      for (const v of values) {
-        expect(Math.round(v * 20) / 20, `${slot}: ${v}는 0.05 눈금이 아니다`).toBe(v);
+  it("0인 칸은 그 자리에 없는 축뿐이다 — 필드 자리의 GK 축, GK 자리의 필드 기술 축", () => {
+    // 스트라이커의 태클도 전방 압박·역습 지연으로 쓰인다. 0으로 두면 태클 30인
+    // 9번과 60인 9번이 완전히 같은 선수가 된다.
+    for (const [slot, w] of Object.entries(POSITION_WEIGHTS) as [
+      WeightSlot,
+      typeof POSITION_WEIGHTS.GK,
+    ][]) {
+      for (const axis of OVERALL_AXES) {
+        if (axisFloorAt(slot, axis) === 0) expect(w[axis], `${slot}.${axis}`).toBe(0);
+        else expect(w[axis], `${slot}.${axis}`).toBeGreaterThanOrEqual(FLOOR_WEIGHT);
       }
-      /**
-       * 16축이 세 값으로 뭉쳐 있으면 소수로 쓴 의미가 없다. **바닥 위에서** 센다 —
-       * 골키퍼는 지구력·결정력·태클처럼 정말 무관한 축이 일곱이라 다 바닥에 깔리고,
-       * 그건 뭉친 게 아니라 그 자리의 사실이다.
-       */
-      const above = values.filter((v) => v > FLOOR_WEIGHT);
-      expect(new Set(above).size, `${slot}의 바닥 위 가중치 종류`).toBeGreaterThanOrEqual(5);
-      expect(new Set(values).size, `${slot}의 서로 다른 가중치 수`).toBeGreaterThanOrEqual(6);
     }
-    // 자리를 정의하는 축은 자리마다 정확히 하나
-    for (const [slot, w] of Object.entries(POSITION_WEIGHTS)) {
-      expect(ATTRIBUTE_AXES.filter((a) => w[a] === 3).length, `${slot}의 3.0 축`).toBe(1);
-    }
-    // 자리를 **가르는** 축이 위로 온다 — 태클은 센터백, 결정력은 최전방의 서명이다
+    expect(POSITION_WEIGHTS.ST.reflexes).toBe(0);
+    expect(POSITION_WEIGHTS.GK.finishing).toBe(0);
+    expect(POSITION_WEIGHTS.GK.reflexes).toBeGreaterThan(POSITION_WEIGHTS.GK.passing);
+  });
+
+  it("자리를 가르는 축이 위로 온다 — 태클은 센터백, 결정력은 최전방의 서명이다", () => {
     expect(POSITION_WEIGHTS.CB.tackling).toBeGreaterThan(POSITION_WEIGHTS.CB.positioning);
     expect(POSITION_WEIGHTS.ST.finishing).toBeGreaterThan(POSITION_WEIGHTS.ST.positioning);
     expect(POSITION_WEIGHTS.CB.tackling).toBeGreaterThan(POSITION_WEIGHTS.ST.tackling * 5);
@@ -158,40 +189,15 @@ describe("포지션 가중치", () => {
 
   it("자리마다 가중치 지문이 서로 다르다 — 같으면 세분화의 의미가 없다", () => {
     const fingerprints = Object.values(POSITION_WEIGHTS).map((w) =>
-      ATTRIBUTE_AXES.map((a) => w[a]).join(","),
+      OVERALL_AXES.map((a) => w[a]).join(","),
     );
     expect(new Set(fingerprints).size).toBe(fingerprints.length);
   });
 
-  it("어느 자리에도 가중치 0인 축이 없다 — 16축 전부가 조금씩은 전력에 닿는다", () => {
-    // 스트라이커의 태클도 전방 압박·역습 지연으로 쓰인다. 0으로 두면 태클 30인
-    // 9번과 60인 9번이 완전히 같은 선수가 된다.
-    for (const [slot, w] of Object.entries(POSITION_WEIGHTS)) {
-      for (const axis of ATTRIBUTE_AXES) {
-        expect(w[axis], `${slot}.${axis}`).toBeGreaterThanOrEqual(FLOOR_WEIGHT);
-      }
-    }
-  });
-
-  it("goalkeeping은 GK 자리에서만 **실질적으로** 들어간다", () => {
-    // 바닥 가중치는 받되(0인 축은 없다) 그 위로 올라가는 건 골키퍼뿐이다
-    for (const [slot, w] of Object.entries(POSITION_WEIGHTS)) {
-      expect(w.goalkeeping === FLOOR_WEIGHT || slot === "GK").toBe(true);
-    }
-    expect(POSITION_WEIGHTS.GK.goalkeeping).toBe(3);
-  });
-
-  it("aggression·leadership은 전력 기여가 낮다 — 별도 경로로 작동하는 축", () => {
-    for (const w of Object.values(POSITION_WEIGHTS)) {
-      expect(w.aggression).toBeLessThanOrEqual(2);
-      expect(w.leadership).toBeLessThanOrEqual(1);
-    }
-  });
-
   it("같은 선수가 자리에 따라 다른 전력을 낸다", () => {
     const cb = playerCatalog().find((e) => naturalPositionOf(e).position === "CB")!;
-    const asCb = roleFit(cb, "CB");
-    const asSt = roleFit(cb, "ST");
+    const asCb = cardFit(cb, "CB");
+    const asSt = cardFit(cb, "ST");
     expect(asCb).not.toBe(asSt);
     // 센터백을 최전방에 세우면 전력이 깎인다
     expect(asSt).toBeLessThan(asCb);
@@ -199,9 +205,9 @@ describe("포지션 가중치", () => {
 
   it("좌우 분화는 같은 가중치를 쓴다 (CB=RCB=LCB · CM=RCM=LCM)", () => {
     const p = playerCatalog()[0]!;
-    expect(roleFit(p, "RCB")).toBe(roleFit(p, "CB"));
-    expect(roleFit(p, "LCB")).toBe(roleFit(p, "CB"));
-    expect(roleFit(p, "RCM")).toBe(roleFit(p, "CM"));
+    expect(cardFit(p, "RCB")).toBe(cardFit(p, "CB"));
+    expect(cardFit(p, "LCB")).toBe(cardFit(p, "CB"));
+    expect(cardFit(p, "RCM")).toBe(cardFit(p, "CM"));
     expect(weightSlotOf("LWB")).toBe(weightSlotOf("RB"));
   });
 
@@ -209,26 +215,27 @@ describe("포지션 가중치", () => {
     expect(weightSlotOf("CF")).not.toBe(weightSlotOf("ST"));
     // 처진 스트라이커는 정통 9번보다 CF 쪽이다
     expect(weightSlotOf("SS")).toBe(weightSlotOf("CF"));
-    // 공중볼·몸싸움은 ST가 더 보고, 드리블·시야는 CF가 더 본다
+    // 점프력·몸싸움은 ST가 더 보고, 드리블·시야는 CF가 더 본다
     const st = POSITION_WEIGHTS.ST;
     const cf = POSITION_WEIGHTS.CF;
-    expect(st.aerial).toBeGreaterThan(cf.aerial);
+    expect(st.jumpingReach).toBeGreaterThan(cf.jumpingReach);
     expect(cf.dribbling).toBeGreaterThan(st.dribbling);
     expect(cf.vision).toBeGreaterThan(st.vision);
-    // 마무리는 둘 다 핵심
-    expect(cf.finishing).toBe(3);
-    expect(st.finishing).toBe(3);
+    // 마무리는 둘 다 가장 무겁다
+    const heaviest = (w: typeof st) => OVERALL_AXES.reduce((a, b) => (w[b] > w[a] ? b : a));
+    expect(heaviest(cf)).toBe("finishing");
+    expect(heaviest(st)).toBe("finishing");
   });
 
-  it("최전방 자원은 예외 없이 CF 적응도를 갖는다", () => {
+  it("최전방 자원은 예외 없이 ST 자리를 갖는다", () => {
     const frontline = playerCatalog().filter((e) =>
-      ["ST", "SS", "RW", "LW", "CAM", "AM"].includes(naturalPositionOf(e).position),
+      ["ST", "RW", "LW", "AM"].includes(naturalPositionOf(e).position),
     );
     expect(frontline.length).toBeGreaterThan(400);
     for (const e of frontline) {
-      const cf = e.positions.find((p) => p.position === "CF");
-      expect(cf, `${e.nameEn} (${naturalPositionOf(e).position})에 CF 없음`).toBeDefined();
-      expect(cf!.proficiency).toBeGreaterThan(0);
+      const st = e.positions.find((p) => p.position === "ST");
+      expect(st, `${e.nameEn} (${naturalPositionOf(e).position})에 ST 없음`).toBeDefined();
+      expect(st!.proficiency).toBeGreaterThan(0);
     }
   });
 });
@@ -246,84 +253,136 @@ const SLOT_SAMPLE: Record<WeightSlot, string> = {
   ST: "ST",
 };
 
-describe("세부 역할 (FM 역할 체계)", () => {
+/** 낱말 하나를 끝까지 민 카드 — 카드의 모든 방향을 도는 표본 */
+const EDGE_CARDS: RoleCard[] = CARD_WORDS.flatMap((word) =>
+  [-CARD_STEP_MAX, CARD_STEP_MAX].map((step) => ({
+    ip: { [word]: step },
+    oop: { [word]: step },
+  })),
+);
+
+describe("역할 카드의 가중치와 적합도 (player.md §3)", () => {
   const cat = playerCatalog();
-  it("자리마다 기본 역할이 있고, 역할 id는 그 자리 안에서 유일하다", () => {
+  it("빈 카드는 그 자리의 기본 가중치다", () => {
     for (const [slot, code] of Object.entries(SLOT_SAMPLE)) {
-      const roles = rolesFor(code);
-      expect(roles.length, `${slot}의 역할 수`).toBeGreaterThanOrEqual(2);
-      expect(new Set(roles.map((r) => r.id)).size).toBe(roles.length);
-      // 첫 항목이 기본 역할이고 델타가 비어 있다 — 그 자리의 제네릭 값 그대로
-      expect(Object.keys(roles[0]!.delta)).toHaveLength(0);
-      expect(defaultRoleOf(code)).toBe(roles[0]!.id);
-      expect(roleWeights(code, roles[0]!.id)).toEqual(POSITION_WEIGHTS[slot as WeightSlot]);
+      expect(cardWeights(code)).toEqual(POSITION_WEIGHTS[slot as WeightSlot]);
+      expect(cardWeights(code, { ip: {}, oop: {} })).toEqual(POSITION_WEIGHTS[slot as WeightSlot]);
     }
   });
 
-  it("역할 가중치도 눈금 안에 있다 — 델타가 표를 벗어나게 하지 않는다", () => {
+  it("카드 가중치도 눈금 안에 있고, 성공 축이 있는 방향은 표를 바꾼다", () => {
     for (const [slot, code] of Object.entries(SLOT_SAMPLE)) {
-      for (const r of rolesFor(code)) {
-        const w = roleWeights(code, r.id);
-        for (const a of ATTRIBUTE_AXES) {
-          expect(w[a], `${slot}:${r.id}.${a}`).toBeGreaterThanOrEqual(FLOOR_WEIGHT);
-          expect(w[a], `${slot}:${r.id}.${a}`).toBeLessThanOrEqual(3);
-        }
-        // 델타가 실제로 뭔가를 바꿔야 한다 (기본 역할 제외)
-        if (r.id !== defaultRoleOf(code)) {
-          expect(w, `${slot}:${r.id}`).not.toEqual(POSITION_WEIGHTS[slot as WeightSlot]);
+      for (const word of CARD_WORDS) {
+        for (const step of [-CARD_STEP_MAX, CARD_STEP_MAX]) {
+          const card = { ip: { [word]: step }, oop: { [word]: step } };
+          const w = cardWeights(code, card);
+          for (const a of OVERALL_AXES) {
+            expect(w[a], `${slot}:${word}${step}.${a}`).toBeGreaterThanOrEqual(
+              axisFloorAt(slot as WeightSlot, a),
+            );
+            expect(w[a], `${slot}:${word}${step}.${a}`).toBeLessThanOrEqual(3);
+          }
+          const def = CARD_WORD_DEFS[word];
+          const axes = step > 0 ? def.plusAxes : def.minusAxes;
+          // 그 자리에 있는 축이 하나라도 있으면 표가 달라진다 (GK 자리의 필드 축은 0이라 그대로다)
+          const present = axes.some((a) => axisFloorAt(slot as WeightSlot, a) > 0);
+          if (present) {
+            expect(w, `${slot}:${word}${step}`).not.toEqual(POSITION_WEIGHTS[slot as WeightSlot]);
+          }
         }
       }
     }
   });
 
-  it("커버와 스토퍼가 스피드로 갈린다 — 라인을 올린 뒤를 덮는 값", () => {
-    /**
-     * 센터백 **기본값**의 스피드는 낮다(0.65). 카탈로그의 센터백 스피드가 다른
-     * 자리와 거의 같아 자리를 가르지 못하기 때문인데, 그렇다고 "느린 센터백은
-     * 공짜"는 아니다 — 대가는 **라인을 올릴 때** 치른다.
-     *
-     * FM은 이걸 듀티(Cover/Stopper)로 표현한다. 우리는 듀티를 두지 않으므로
-     * 역할로 나눴다: 커버는 뒷공간이 곧 일이라 스피드가 핵심(2.5)이고, 스토퍼는
-     * 몸싸움·적극성이 핵심이되 **스피드도 기본값보다는 높다**(1.1) — 나갔다가
-     * 등 뒤로 털리는 게 스토퍼의 고유한 실패 방식이라 나가는 첫 발이 필요하다.
-     * 한때 스토퍼를 기본값보다 **느려도 되는** 자리로 뒀는데(0.3) 그건 틀렸다.
-     */
+  it("카드가 맞는 선수에게 오른다 — 빠른 센터백은 뒷공간을 노리는 카드에서 더 얻는다", () => {
     const cbs = cat.filter((e) => weightSlotOf(naturalPositionOf(e).position) === "CB");
-    const strong = [...cbs].sort((a, b) => roleFit(b, "CB") - roleFit(a, "CB")).slice(0, 40);
+    const strong = [...cbs].sort((a, b) => cardFit(b, "CB") - cardFit(a, "CB")).slice(0, 40);
     const fast = [...strong].sort((a, b) => b.pace - a.pace)[0]!;
     const slow = [...strong].sort((a, b) => a.pace - b.pace)[0]!;
     expect(fast.pace - slow.pace).toBeGreaterThan(20);
-
-    // 빠른 센터백은 커버가 스토퍼보다 낫고, 느린 센터백은 반대다
-    expect(roleFit(fast, "CB", "cover-defender"), fast.nameEn).toBeGreaterThan(
-      roleFit(fast, "CB", "stopper"),
-    );
-    expect(roleFit(slow, "CB", "stopper"), slow.nameEn).toBeGreaterThan(
-      roleFit(slow, "CB", "cover-defender"),
-    );
-    // 커버 > 스토퍼 > 기본값 — 스토퍼도 나가는 첫 발이 필요하다
-    expect(roleWeights("CB", "cover-defender").pace).toBeGreaterThan(
-      roleWeights("CB", "stopper").pace,
-    );
-    expect(roleWeights("CB", "stopper").pace).toBeGreaterThan(POSITION_WEIGHTS.CB.pace);
-    expect(roleWeights("CB", "cover-defender").pace).toBeGreaterThan(POSITION_WEIGHTS.CB.pace * 2);
+    const RUNNING: RoleCard = { ip: { runBehind: 3 }, oop: {} };
+    const gain = (e: typeof fast) => cardFit(e, "CB", RUNNING) - cardFit(e, "CB");
+    expect(gain(fast), fast.nameEn).toBeGreaterThan(gain(slow));
   });
 
-  it("모르는 역할 id는 기본 역할로 떨어진다 — 옛 세이브·오타에 안전하다", () => {
-    const p = cat[0]!;
-    expect(roleFit(p, "CDM", "그런역할없음")).toBe(roleFit(p, "CDM"));
-    expect(roleFit(p, "CDM", undefined)).toBe(roleFit(p, "CDM", defaultRoleOf("CDM")));
+  it("평균적인 선수는 어느 카드에서도 기본 카드와 같은 값이다 — 카드는 공짜 능력치가 아니다", () => {
+    for (const [slot, code] of Object.entries(SLOT_SAMPLE)) {
+      const reference = SLOT_REFERENCE[slot as WeightSlot] as unknown as AxisValues;
+      const base = cardFit(reference, code);
+      for (const card of EDGE_CARDS) {
+        // 반올림 한 칸까지 — 기준점은 평균에서 정확히 0이고 접는 자리만 남는다
+        expect(Math.abs(cardFit(reference, code, card) - base), slot).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("공 있을 때의 자리를 둔 카드는 두 자리의 바탕을 반씩 쓰고, 그 위의 낱말도 공짜가 아니다", () => {
+    const inverted: RoleCard = { ip: { place: "DM" }, oop: {} };
+    const w = cardWeights("RB", inverted);
+    for (const a of OVERALL_AXES) {
+      expect(w[a], a).toBeCloseTo((POSITION_WEIGHTS.FB[a] + POSITION_WEIGHTS.DM[a]) / 2, 1);
+    }
+    const blend = Object.fromEntries(
+      OVERALL_AXES.map((a) => [a, (SLOT_REFERENCE.FB[a] + SLOT_REFERENCE.DM[a]) / 2]),
+    ) as unknown as AxisValues;
+    const base = cardFit(blend, "RB", inverted);
+    for (const card of EDGE_CARDS) {
+      const withPlace: RoleCard = { ...card, ip: { ...card.ip, place: "DM" } };
+      expect(Math.abs(cardFit(blend, "RB", withPlace) - base)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("두드러진 축은 그 자리의 평균에서 잰다 — 스트라이커의 약점이 태클이 되지 않는다", () => {
+    const ref = SLOT_REFERENCE.ST;
+    const axes = {
+      ...Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, 50])),
+      ...ref,
+      pace: ref.pace + 20,
+      heading: ref.heading - 20,
+    } as AxisValues;
+    const { strengths, weaknesses } = standoutAxes(axes, "LST", 3);
+    expect(strengths[0]).toBe("pace");
+    expect(weaknesses[0]).toBe("heading");
+    expect([...strengths, ...weaknesses]).not.toContain("tackling");
+  });
+
+  it("기준 선수와 버릇의 기준은 카탈로그의 그 자리 평균이다 — 어긋나면 pnpm slot-reference --write", () => {
+    const sums = new Map<WeightSlot, { n: number; axes: Record<string, number> }>();
+    for (const e of cat) {
+      const slot = weightSlotOf(naturalPositionOf(e).position);
+      const row = sums.get(slot) ?? { n: 0, axes: {} };
+      row.n += 1;
+      for (const a of [...OVERALL_AXES, ...INCLINATION_AXES])
+        row.axes[a] = (row.axes[a] ?? 0) + e[a];
+      sums.set(slot, row);
+    }
+    for (const slot of Object.keys(SLOT_REFERENCE) as WeightSlot[]) {
+      // CF 묶음에는 주 자리 선수가 없다 — 같은 자리(ST)의 선수가 채운다
+      const row = sums.get(slot === "CF" ? "ST" : slot)!;
+      for (const a of OVERALL_AXES) {
+        expect(
+          Math.abs(SLOT_REFERENCE[slot][a] - row.axes[a]! / row.n),
+          `${slot}.${a}`,
+        ).toBeLessThanOrEqual(1);
+      }
+      for (const a of INCLINATION_AXES) {
+        expect(
+          Math.abs(SLOT_INCLINATION[slot][a] - row.axes[a]! / row.n),
+          `${slot}.${a}`,
+        ).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });
 
-describe("종합(overall) — 가장 잘 맞는 자리 · 기본 역할", () => {
+describe("종합(overall) — 가장 잘 맞는 자리 · 빈 카드", () => {
   it("종합은 그 선수 축의 범위 안에 있다 — 어느 자리·어느 역할에서도", () => {
     /**
      * **이 불변식이 종합의 정의다** (player.md §4). 16축을 함께 펼쳐 놓은 화면에서
      * 종합이 어느 축보다 높으면 감독은 계산이 틀렸다고 읽는다 — 실제로 그랬다:
      * 축 최대 92인 선수의 종합이 93으로 나왔고, 카탈로그 5,780명 중 52명이 그랬다.
      *
-     * 자리·역할을 전부 도는 이유는 역할 기준점(`ROLE_PIVOT`)이 평행 이동이라
+     * 자리·카드를 전부 도는 이유는 카드 기준점이 평행 이동이라
      * **범위 밖으로 밀어낼 수 있는 유일한 항**이기 때문이다.
      */
     const violations: string[] = [];
@@ -332,10 +391,10 @@ describe("종합(overall) — 가장 잘 맞는 자리 · 기본 역할", () => 
       const low = Math.min(...values);
       const high = Math.max(...values);
       for (const { position } of entry.positions) {
-        for (const role of rolesFor(position)) {
-          const fit = roleFit(entry, position, role.id);
+        for (const [i, card] of EDGE_CARDS.entries()) {
+          const fit = cardFit(entry, position, card);
           if (fit >= low && fit <= high) continue;
-          violations.push(`${entry.nameEn} ${position}:${role.id} ${fit} ∉ [${low}, ${high}]`);
+          violations.push(`${entry.nameEn} ${position}:card${i} ${fit} ∉ [${low}, ${high}]`);
         }
       }
       const shown = bestOverall(entry, entry.positions);
@@ -346,11 +405,11 @@ describe("종합(overall) — 가장 잘 맞는 자리 · 기본 역할", () => 
     expect(violations.slice(0, 10)).toEqual([]);
   });
 
-  it("종합은 세부 역할을 타지 않는다 — 숫자 하나가 여러 등급이 되면 안 된다", () => {
+  it("종합은 역할 카드를 타지 않는다 — 숫자 하나가 여러 등급이 되면 안 된다", () => {
     const p = playerCatalog().find((e) => naturalPositionOf(e).position === "ST")!;
     const shown = bestOverall(p, p.positions);
-    // 어떤 역할로 세워도 표시용 종합은 그대로고, 그 자리 값만 달라진다
-    const values = rolesFor("ST").map((r) => roleFit(p, "ST", r.id));
+    // 어떤 카드로 세워도 표시용 종합은 그대로고, 그 자리 값만 달라진다
+    const values = EDGE_CARDS.map((card) => cardFit(p, "ST", card));
     expect(new Set(values).size).toBeGreaterThan(1);
     expect(bestOverall(p, p.positions)).toBe(shown);
   });
@@ -405,16 +464,16 @@ describe("약발 — 실측이 원본, 모르는 실존 선수만 4", () => {
 });
 
 describe("신체 — 능력치와 앞뒤가 맞는다", () => {
-  it("공중볼이 높으면 키가 따라간다 — 화면이 거짓말하지 않게", () => {
-    const tall = physiqueOf("A", "CB", { aerial: 92, strength: 80, pace: 60 });
-    const short = physiqueOf("A", "CB", { aerial: 50, strength: 80, pace: 60 });
+  it("점프력이 높으면 키가 따라간다 — 화면이 거짓말하지 않게", () => {
+    const tall = physiqueOf("A", "CB", { jumpingReach: 92, strength: 80, pace: 60 });
+    const short = physiqueOf("A", "CB", { jumpingReach: 50, strength: 80, pace: 60 });
     expect(tall.height).toBeGreaterThan(short.height + 5);
   });
 
   it("몸싸움은 무겁게, 스피드는 가볍게 — 같은 키라도 몸이 다르다", () => {
-    const power = physiqueOf("B", "ST", { aerial: 70, strength: 92, pace: 60 });
-    const speed = physiqueOf("B", "ST", { aerial: 70, strength: 60, pace: 92 });
-    expect(power.height).toBe(speed.height); // 공중볼이 같으니 키도 같다
+    const power = physiqueOf("B", "ST", { jumpingReach: 70, strength: 92, pace: 60 });
+    const speed = physiqueOf("B", "ST", { jumpingReach: 70, strength: 60, pace: 92 });
+    expect(power.height).toBe(speed.height); // 점프력이 같으니 키도 같다
     expect(power.weight).toBeGreaterThan(speed.weight);
   });
 
@@ -526,7 +585,7 @@ describe("shirt numbers", () => {
    * 배정은 `positions`·`teamId`·`squadNumber`만 읽으므로 세계를 만들 이유가 없다
    * (`createTestGame`은 수천 명을 인스턴스화해 수 초를 쓴다).
    */
-  function player(id: string, teamId: string, position: string, squadNumber?: number): GamePlayer {
+  function player(id: string, teamId: string, position: Place, squadNumber?: number): GamePlayer {
     const axes = Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, 70])) as Record<string, number>;
     return {
       id,
@@ -545,7 +604,7 @@ describe("shirt numbers", () => {
     };
   }
 
-  const POSITIONS = ["GK", "RB", "LB", "CB", "DM", "CM", "AM", "RW", "LW", "ST"];
+  const POSITIONS = ["GK", "RB", "LB", "CB", "DM", "CM", "AM", "RW", "LW", "ST"] as const;
 
   /**
    * 뒤엉킨 명단 하나 — 배정이 밟는 갈래를 전부 담는다.

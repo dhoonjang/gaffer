@@ -7,6 +7,7 @@ import {
   STAFF_ROLES,
   normalizeSpeaker,
   type GamePlayer,
+  type Place,
 } from "@gaffer/domain";
 import { hireStaff, releaseStaff, staffPoolOf } from "../../src/people/staff-employment";
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -428,7 +429,7 @@ describe("인물 이름의 유일성", () => {
 describe("선수 페르소나 — 파생되는 카드", () => {
   // 세계는 세우지 않는다 — 원본 하나를 복제해 나이·포지션만 바꾼 순수 입력을 만든다
   const basePlayer = createTestGame().players[0]!;
-  const playerLike = (id: string, position: string, birthdate: string): GamePlayer => ({
+  const playerLike = (id: string, position: Place, birthdate: string): GamePlayer => ({
     ...basePlayer,
     id,
     name: `가상 ${id}`,
@@ -443,7 +444,7 @@ describe("선수 페르소나 — 파생되는 카드", () => {
     playerLike("p-prime-st", "ST", "1999-09-01"),
     playerLike("p-prime-gk", "GK", "1997-05-30"),
     playerLike("p-young-cm", "CM", "2006-01-15"),
-    playerLike("p-vet-cf", "CF", "1992-11-03"),
+    playerLike("p-vet-am", "AM", "1992-11-03"),
   ];
 
   it("같은 (시드, 선수)는 언제나 같은 사람이다 — 세이브가 담지 않아도 복원된다", () => {

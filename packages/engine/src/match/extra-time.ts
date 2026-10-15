@@ -264,7 +264,7 @@ export function resolveExtraTime(state: GameState, decider: MatchRecord, channel
     away: finishingXi(state, decider, "away"),
   };
   /**
-   * **전력 모델은 90분과 같은 원본에서 선다** — 전술판의 자리·좌표·역할, 팀 전술,
+   * **전력 모델은 90분과 같은 원본에서 선다** — 전술판의 자리·좌표·카드, 팀 전술,
    * 개인 적응도, 감독의 전술 눈금까지 `simSquadFor`가 한 벌로 세운다. 팀 id와
    * 선수 목록만 넘기면 입력이 자연 포지션·기본 전술·적응도 60·감독 65로 서서
    * 연장에서만 약팀이 살아나거나 죽는다 (match.md §7).

@@ -28,10 +28,6 @@ interface MockTurnFacts {
   /** 감독이 친 말 원문 — 표의 키와 맞춘다 */
   message: string;
   inMatch: boolean;
-  /** 첫 휘슬만 여는 턴 */
-  kickoff: boolean;
-  /** 손잡이가 보낸 턴 — 구간은 코어가 이미 굴렸다 */
-  operator: boolean;
   /** 이 턴에 코어가 이미 남긴 기록이 있는가 — 그러면 장면은 그 기록이 세운다 */
   recorded: () => boolean;
 }
@@ -45,11 +41,7 @@ export function mockGmLlm(
   if (resolveLlmMode() !== "mock") return undefined;
   return new ScriptedGameLLM(config, () =>
     turn.inMatch
-      ? matchScript(state, {
-          kickoff: turn.kickoff,
-          operator: turn.operator,
-          message: turn.message,
-        })
+      ? matchScript(state, { message: turn.message })
       : peaceScript(state, turn.message, { recorded: turn.recorded() }),
   );
 }

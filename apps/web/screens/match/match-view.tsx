@@ -22,6 +22,7 @@ import { PitchChip, PitchGround, useRovingMarkers } from "../../shared/pitch";
 import { usePlayerCard } from "../../shared/player-card";
 import { Crest } from "../../shared/crest";
 import { Button } from "@/shared/button";
+import { LIVE_PACES, type LivePace } from "./live-speed";
 
 type Match = NonNullable<OfficeViews["match"]>;
 type MatchPlayer = Match["onPitch"]["home"][number];
@@ -158,15 +159,17 @@ export function MatchTitle({ match }: { match: Match }) {
 export function MatchHeadline({
   match,
   clock,
+  pace,
   closing = false,
 }: {
   match: Match;
   clock?: { seconds: number; status: string; running: boolean } | undefined;
+  pace?: PaceControl | undefined;
   closing?: boolean;
 }) {
   return (
     <div className={closing ? "match-headline closing" : "match-headline"}>
-      <Scoreboard match={match} clock={clock} />
+      <Scoreboard match={match} clock={clock} pace={pace} />
       <GoalLog goals={match.goals} />
       <ShootoutLog shootout={match.shootout} />
     </div>
@@ -182,12 +185,20 @@ export function MatchHeadline({
  * 오른쪽) · **문장**(이 판의 구단 색 한 벌) · **잉크**(우리 1층·상대 3층 —
  * `.mv-team`의 `ours`/`theirs`). 구단 색 면을 하나 더 깔지 않는다 (§2 충돌 규칙 7).
  */
+/** 경기 속도 — 실시간 판이 흐르는 동안만 선다 */
+interface PaceControl {
+  value: LivePace;
+  set: (next: LivePace) => void;
+}
+
 function Scoreboard({
   match,
   clock,
+  pace,
 }: {
   match: Match;
   clock?: { seconds: number; status: string; running: boolean } | undefined;
+  pace?: PaceControl | undefined;
 }) {
   return (
     <div className="mv-score" data-testid="match-score">
@@ -223,6 +234,7 @@ function Scoreboard({
             : `${match.minute}′`}
         </b>
         {clock?.status ?? match.phase}
+        {pace && <PaceButton pace={pace} />}
       </span>
       {/* 퇴장 — 인원이 왜 줄었는지 화면이 설명해야 한다. 표에서 사라진 이름을
           감독이 스스로 추리하게 두면 안 된다 */}
@@ -232,6 +244,25 @@ function Scoreboard({
         </span>
       )}
     </div>
+  );
+}
+
+/** 속도 손잡이 — 누를 때마다 다음 속도로 넘어간다 */
+function PaceButton({ pace }: { pace: PaceControl }) {
+  const index = LIVE_PACES.findIndex((p) => p.key === pace.value);
+  const current = LIVE_PACES[index] ?? LIVE_PACES[1];
+  const next = LIVE_PACES[(index + 1) % LIVE_PACES.length] ?? LIVE_PACES[1];
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      className="mv-pace"
+      data-testid="match-pace"
+      aria-label={`경기 속도 ${current.label}`}
+      onClick={() => pace.set(next.key)}
+    >
+      {current.label}
+    </Button>
   );
 }
 

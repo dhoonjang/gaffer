@@ -23,8 +23,12 @@ import { humanDate } from "@/shared/dateline";
  * 스타일은 `styles/office/squad.css` 한 벌이고 두 화면이 같은 규칙을 읽는다.
  */
 
-/** 상세에서 보여줄 축 묶음 순서 — 라벨·구성은 domain(AXIS_GROUPS)이 단일 소스 */
-const AXIS_GROUP_ORDER = ["physical", "technical", "mental", "goalkeeping"] as const;
+/**
+ * 상세에서 보여줄 축 묶음 순서 — FM처럼 필드 선수는 기술·정신·신체, 골키퍼는 기술 자리에
+ * GK 묶음이 선다. 라벨·구성은 domain(AXIS_GROUPS)이 단일 소스다
+ */
+const FIELD_GROUP_ORDER = ["technical", "mental", "physical"] as const;
+const KEEPER_GROUP_ORDER = ["goalkeeping", "mental", "physical"] as const;
 
 /**
  * 두 발 숙련도를 **발 아이콘 두 개**로 — 숫자 두 개보다 한눈에 읽힌다.
@@ -96,13 +100,16 @@ function ReserveMark({ value }: { value: number }) {
 export function AxisGrid({
   axes,
   margins,
+  keeper = false,
 }: {
   axes: Record<string, number>;
   margins?: Record<string, number>;
+  /** 골키퍼면 기술 묶음 대신 GK 묶음을 보인다 */
+  keeper?: boolean;
 }) {
   return (
     <div className="pd-axis-groups">
-      {AXIS_GROUP_ORDER.map((group) => (
+      {(keeper ? KEEPER_GROUP_ORDER : FIELD_GROUP_ORDER).map((group) => (
         <div className="pd-axis-group" key={group}>
           <span className="pd-axis-group-name">{AXIS_GROUP_KO[group]}</span>
           <div className="pd-axes">

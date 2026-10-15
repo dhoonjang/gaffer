@@ -1,4 +1,8 @@
 export * from "./players/player";
+export * from "./players/place";
+export * from "./players/role-card";
+export * from "./players/habit";
+export * from "./players/slot-reference";
 export * from "./core/log-curves";
 export * from "./players/squad-rules";
 export * from "./core/nationality";
@@ -30,6 +34,7 @@ export * from "./season/schedule";
 export * from "./match/match-records";
 export * from "./players/training-session";
 export * from "./app/turn-operation";
+export * from "./app/lab-game";
 export * from "./core/money";
 export * from "./team/crest";
 export * from "./core/tick-event";

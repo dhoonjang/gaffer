@@ -8,8 +8,9 @@ import {
   FORMATION_SLOTS,
   naturalPositionOf,
   positionGroupOf,
+  samePlace,
   weightSlotOf,
-  roleFit,
+  cardFit,
   proficiencyAt,
   positionGroupOfPlayer as groupOf,
 } from "@gaffer/domain";
@@ -119,9 +120,11 @@ const SAME_GROUP_BONUS = 40;
  */
 function lineupFit(p: GamePlayer, slot: string, prof = proficiencyAt(p, slot)): number {
   const sameGroup = groupOf(p) === positionGroupOf(slot);
+  // 본업 — 주 자리의 칸이거나 같은 가중치 묶음의 칸 (최전방 자리는 두 줄이 묶음을 달리한다)
+  const home = naturalPositionOf(p).position;
   const onNatural =
     prof >= NATURAL_BONUS_FLOOR &&
-    weightSlotOf(naturalPositionOf(p).position) === weightSlotOf(slot);
+    (samePlace(home, slot) || weightSlotOf(home) === weightSlotOf(slot));
   const gkPenalty = slot === "GK" && groupOf(p) !== "GK" ? -400 : 0;
   const nonGkPenalty = slot !== "GK" && groupOf(p) === "GK" ? -400 : 0;
   return (
@@ -140,13 +143,13 @@ function lineupFit(p: GamePlayer, slot: string, prof = proficiencyAt(p, slot)): 
  * 자리와 경기가 계산하는 자리가 조용히 갈린다.
  */
 function slotStrength(p: GamePlayer, slot: string): number {
-  return roleFit(p.attributes, slot) * profFactor(proficiencyAt(p, slot));
+  return cardFit(p.attributes, slot) * profFactor(proficiencyAt(p, slot));
 }
 
 /**
  * 이 스쿼드로 그 모양을 세우면 나오는 **전력**.
  *
- * ⚠️ 채점 전에 **자리를 제대로 배치해야** 한다. `roleFit`만 보고 그리디로 채우면
+ * ⚠️ 채점 전에 **자리를 제대로 배치해야** 한다. `cardFit`만 보고 그리디로 채우면
  * 라이스가 라이트백에, 요케레스가 윙에 서는 라인업이 나오고, 그 배치의 합으로
  * 모양이 정해진다. 배치는 실제 라인업과 같은 기준(`lineupFit`: 포지션 적응도 +
  * OVR + 포지션군)으로 뽑고, **전력 합은** 그렇게 뽑힌 11명의 존 기여로 낸다.

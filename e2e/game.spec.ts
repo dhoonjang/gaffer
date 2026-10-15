@@ -222,7 +222,7 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   /**
    * ── 킥오프는 **세 걸음**이다 ──────────────────────────
    * GM이 `start_match`로 문을 열고(판이 서고 판세가 계산된다), 감독이 입장 확인
-   * 창을 지나면 중계가 첫 휘슬만 연다. 공이 구르는 것은 그다음 진행부터다.
+   * 창을 지나면 곧바로 공이 구른다 — 그 사이에 턴도 중계도 없다.
    */
   await input.fill("경기 시작하자");
   await page.getByTestId("chat-send").click();
@@ -233,24 +233,18 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
    * 줄어들어도 초록이다.
    */
   await expect(page.locator(".kickoff-gate .kg-line")).toHaveCount(22);
-  // 중계는 화자다 — 문구가 아니라 그 화자의 말풍선(`.say.broadcast`)이 섰는지를 본다
-  // (`BROADCAST_SPEAKER`, packages/domain/src/people/persona.ts)
-  const broadcast = page.locator(".say.broadcast");
-  await expect(broadcast).toHaveCount(0);
   await page.getByTestId("kickoff-enter").click();
   /**
-   * **문을 연 것은 감독이고 그 사실은 화면이 먼저 안다** (match.md §2) — 무대는 첫
-   * 중계가 흐르기 전에 이미 경기다. 재시도가 붙는 `expect`로 재면 중계가 끝난 뒤에
-   * 바뀌어도 초록이라, 여기서는 **누른 직후의 지금**을 그대로 센다. 서버의 답을
-   * 기다리던 때는 이 세 줄이 전부 평시였다(장부 레일이 서고 스코어보드가 없었다).
+   * **문을 연 것은 감독이고 그 사실은 화면이 먼저 안다** (match.md §3.1) — 무대는 서버의
+   * 답보다 먼저 경기다. 재시도가 붙는 `expect`로 재면 답이 온 뒤에 바뀌어도 초록이라,
+   * 여기서는 **누른 직후의 지금**을 그대로 센다.
    */
   expect(await page.locator(".app.in-match").count()).toBe(1);
   expect(await page.getByTestId("match-score").count()).toBe(1);
   expect(await page.getByTestId("tab-스쿼드").count()).toBe(0);
   await expect(page.getByTestId("kickoff-gate")).toHaveCount(0);
-  await expect(broadcast.first()).toBeVisible();
-  // 첫 휘슬 턴은 시계를 움직이지 않는다 — 0분에서 감독의 차례로 돌아온다
-  await expect(page.getByTestId("match-clock").locator("b")).toHaveText("0:00");
+  // 중계는 없다 — 매치 GM은 감독이 말을 건 턴에만 답한다 (`.say.broadcast`는 중계 화자다)
+  await expect(page.locator(".say.broadcast")).toHaveCount(0);
 
   /**
    * 킥오프를 지나면 무대에 **실시간 경기판**이 선다 (live-match.md) — 서버가 계산한
@@ -407,14 +401,14 @@ test("게임 목록에서 새 게임 → 첫 경기 완주까지", async ({ page
   await page.getByTestId("fulltime-close").click();
   await expect(fulltime).toHaveCount(0);
   /*
-   * 경기가 끝나면 그 대화는 **한 장으로 접힌다** — 중계 수십 턴이 평시 대화 사이에
-   * 그대로 흐르지 않는다. 결과 카드가 그 자리에 서고, 펼치면 그때의 중계가 나온다.
+   * 경기가 끝나면 그 대화는 **한 장으로 접힌다** — 경기 중의 말이 평시 대화 사이에
+   * 그대로 흐르지 않는다. 결과 카드가 그 자리에 서고, 펼치면 코어의 마감 기록이 나온다.
    */
   const log = page.locator(".match-log-head");
   await expect(log).toHaveCount(1);
   await expect(page.locator(".turn-model.in-match"), "경기 이력이 접히지 않았다").toHaveCount(0);
   await log.click();
-  await expect(page.getByTestId("chat-scroll")).toContainText("최종 스코어");
+  await expect(page.getByTestId("chat-scroll").getByTestId("tool-finalize_match")).toBeVisible();
 
   // ── 오피스 4뷰 ──
   await page.getByTestId("tab-스쿼드").click();
@@ -685,11 +679,13 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   expect(await page.locator(".pitch-slot .slot-name").allTextContents()).toEqual(beforeXI);
 
   /**
-   * **자리가 없으면 역할도 없다** (player.md §3.1). 이 상세는 비선발이라 알약이
-   * 아예 서지 않는다 — 주 포지션을 자리로 치고 목록을 켜 두면 감독은 코어가 받지
+   * **자리가 없으면 카드도 없다** (player.md §3.1). 이 상세는 비선발이라 카드가
+   * 아예 서지 않는다 — 주 포지션을 자리로 치고 카드를 켜 두면 감독은 코어가 받지
    * 않는 값을 고르게 되고, 그 선택이 저장마다 따라가 라인업이 통째로 반려된다.
    */
-  await expect(page.locator('[data-testid="player-detail"] .pd-role')).toHaveCount(0);
+  await expect(page.locator('[data-testid="player-detail"] [data-testid="role-card"]')).toHaveCount(
+    0,
+  );
   // 비선발을 고르면 **선발 행**에 화살표가 뜬다 (어느 쪽을 먼저 골라도 교체가 열린다)
   // 선발 11명은 내려가는 → , 예비·2군은 올라오는 ← (칸이 다르면 전부 열린다)
   await expect(page.locator('.swap-btn[data-dir="down"]')).toHaveCount(11);
@@ -748,11 +744,11 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
   await expect(page.locator(".detail-row")).toContainText("적응");
   await expect(page.locator(".detail-row .fit-gauge").first()).toBeVisible();
   /**
-   * 선발은 자리가 있으니 역할이 있다 — 역할만 **누르는 물건**의 생김새를 갖는다.
-   * (커서로는 못 잰다: 상세가 행 안에 있어 행의 `pointer`를 물려받는다)
+   * 선발은 자리가 있으니 카드가 있다 — 단계를 옮기는 손잡이만 **누르는 물건**의 생김새를
+   * 갖는다. (커서로는 못 잰다: 상세가 행 안에 있어 행의 `pointer`를 물려받는다)
    */
-  const rolePill = page.locator('[data-testid="player-detail"] .pd-role').first();
-  await expect(rolePill).toBeVisible();
+  const cardStep = page.locator('[data-testid="player-detail"] .pd-card-step').first();
+  await expect(cardStep).toBeVisible();
   /**
    * **지금 자리라고 글자색을 바꾸지 않는다.** 밑줄만 얹는다 — 색까지 바꾸면 그 자리가
    * 선호인지 무리한 배치인지가 화면에서 사라진다. 선발은 맡은 자리가 있으니 그 칩이
@@ -760,8 +756,8 @@ test("달력 상세와 전술판 라인업 편집", async ({ page }) => {
    */
   const here = page.locator('[data-testid="player-detail"] .pd-pos.here');
   await expect(here).toHaveCount(1);
-  // 펼치면 16축이 전부 보인다
-  await expect(page.locator(".detail-row .pd-axis")).toHaveCount(16);
+  // 펼치면 그 선수의 능력치가 전부 보인다 — 필드 30(기술·정신·신체) · 골키퍼 25(GK·정신·신체)
+  expect([25, 30]).toContain(await page.locator(".detail-row .pd-axis").count());
   // 명단은 사기·피로 두 열이 아니라 체력 한 열이다
   await expect(page.locator(".squad-table thead")).toContainText("체력");
   await expect(page.locator(".squad-table thead")).not.toContainText("사기");

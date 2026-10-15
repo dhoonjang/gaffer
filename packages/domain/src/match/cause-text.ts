@@ -1,5 +1,6 @@
 import type { EventCause, EventCauseCode, SubCause } from "./match-events";
 import { TACTIC_AXES } from "../team/team-tactics";
+import { josa } from "../core/josa";
 
 /**
  * **원인 코드 → 문장** — 렌더러는 이것 하나다 (match.md §4).
@@ -10,21 +11,26 @@ import { TACTIC_AXES } from "../team/team-tactics";
 
 const CAUSE_TEXT: Record<EventCauseCode, (names: string[], cause: EventCause) => string> = {
   through_ball: ([passer, runner]) =>
-    passer && runner ? `${passer}의 스루패스를 ${runner}가 받아` : "스루패스로 라인 뒤를 뚫어",
+    passer && runner
+      ? `${passer}의 스루패스를 ${josa(runner, "이/가")} 받아`
+      : "스루패스로 라인 뒤를 뚫어",
   high_turnover: ([taker]) =>
-    taker ? `${taker}가 높은 곳에서 공을 뺏어` : "높은 곳에서 공을 뺏어",
+    taker ? `${josa(taker, "이/가")} 높은 곳에서 공을 뺏어` : "높은 곳에서 공을 뺏어",
   counter: () => "역습에서",
   cross: ([crosser]) => (crosser ? `${crosser}의 크로스에서` : "크로스에서"),
   cutback: () => "컷백에서",
   set_piece: ([taker]) => (taker ? `${taker}의 세트피스 전달에서` : "세트피스에서"),
   direct_free_kick: () => "직접 프리킥",
   penalty: () => "페널티킥",
-  individual: ([dribbler, beaten]) =>
-    dribbler ? `${dribbler}가 ${beaten ? `${beaten}를 ` : ""}제치고` : "개인 돌파로",
+  individual: ([dribbler, beaten], cause) =>
+    dribbler
+      ? `${josa(dribbler, "이/가")} ${beaten ? `${josa(beaten, "을/를")} ` : ""}${cause.note ? `${josa(cause.note, "으로/로")} ` : ""}제치고`
+      : "개인 돌파로",
   error: ([culprit]) => (culprit ? `${culprit}의 실수에서` : "실수에서"),
-  keeper_out: ([keeper]) => (keeper ? `나온 ${keeper}가 닿지 못해` : "나온 골키퍼를 넘겨"),
+  keeper_out: ([keeper]) =>
+    keeper ? `나온 ${josa(keeper, "이/가")} 닿지 못해` : "나온 골키퍼를 넘겨",
   long_ball: ([kicker, winner]) =>
-    winner ? `${kicker ? `${kicker}의 ` : ""}긴 공을 ${winner}가 따내` : "긴 공에서",
+    winner ? `${kicker ? `${kicker}의 ` : ""}긴 공을 ${josa(winner, "이/가")} 따내` : "긴 공에서",
   header: () => "헤더",
   rebound: () => "흘러나온 공을 다시 차",
   marking: ([marked]) => (marked ? `${marked}에게 걸어 둔 지시가 닿아` : "걸어 둔 지시가 닿아"),
@@ -35,7 +41,7 @@ const CAUSE_TEXT: Record<EventCauseCode, (names: string[], cause: EventCause) =>
   second_yellow: () => "두 번째 경고",
   dogso: () => "명백한 득점 기회 저지",
   reckless: () => "위험한 태클",
-  contact_injury: ([, other]) => (other ? `${other}와의 접촉` : "접촉 부상"),
+  contact_injury: ([, other]) => (other ? `${josa(other, "과/와")}의 접촉` : "접촉 부상"),
   sprint_injury: () => "스프린트 중 근육 부상",
   bench_chase: (_, cause) => `벤치가 던진다${axesText(cause)}`,
   bench_hold: (_, cause) => `벤치가 잠근다${axesText(cause)}`,

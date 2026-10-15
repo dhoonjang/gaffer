@@ -305,8 +305,7 @@ it("AI roster repair preserves manager control, familiarity, and unique assignme
   for (const a of ai.assignments)
     if (
       before.some(
-        (old) =>
-          old.playerId === a.playerId && old.position === a.position && old.roleId === a.roleId,
+        (old) => old.playerId === a.playerId && old.position === a.position && old.card === a.card,
       )
     )
       expect(a.familiarity).toBe(77);

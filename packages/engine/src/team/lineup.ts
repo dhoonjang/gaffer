@@ -1,7 +1,7 @@
 /**
  * **설정형 — 판을 세우는 명령** (player.md §3 · match.md §1).
  *
- * 1·2군 배치, 라인업과 팀 전술 6축, 선수의 자리·역할, 세트피스, 완장,
+ * 1·2군 배치, 라인업과 팀 전술 6축, 선수의 자리·역할 카드, 세트피스, 완장,
  * 등번호. 검증을 지나면 그대로 장부에 적히고 판정은 끼지 않는다.
  */
 import {
@@ -9,7 +9,9 @@ import {
   registrationBlockText,
   tacticalUptake as uptakeOf,
   MATCHDAY_SQUAD,
-  POSITION_CODES,
+  PLACES,
+  placeOf,
+  samePlace,
   STARTING_XI,
   SET_PIECE_KO,
   SET_PIECE_ROLES,
@@ -32,11 +34,14 @@ import {
   presetOf,
   DEFAULT_FORMATION,
   clampFamiliarity,
-  defaultRoleOf,
-  findRole,
-  inheritedRole,
+  cardTitle,
+  cardWordsText,
+  inheritedCard,
+  normalizeCard,
+  patchCard,
+  RoleCardSchema,
+  sameCardWords,
   storedProficiencyFor,
-  rolesFor,
   separateBoardPoints,
   familiarityForSetup,
   tacticsSignature,
@@ -54,6 +59,8 @@ import type {
   GamePlayer,
   DrilledTactics,
   Player,
+  RoleCard,
+  RoleCardPatch,
   TacticAssignment,
   TacticsSpec,
   SetPieceRole,
@@ -64,11 +71,11 @@ import type {
   TeamTactics,
 } from "@gaffer/domain";
 import {
-  settleRoleCost,
+  settleCardCost,
   shelveFamiliarity,
   unshelveFamiliarity,
 } from "../players/familiarity-memory";
-import { recallRole, rememberRole } from "../players/role-memory";
+import { recallCard, rememberCard } from "../players/card-memory";
 import { diffLineup, type LineupSide, type LineupSlotRef } from "./lineup-diff";
 import { nextMatchFor } from "../core/calendar";
 import { injuryHistoryOf } from "../players/injury";
@@ -854,20 +861,19 @@ export function setLineup(
   const teamLevel = currentFamiliarity(tactics);
   const newcomerFamiliarity = Math.min(FAMILIARITY_BASELINE, teamLevel);
   /**
-   * **덮어쓰기 전에 지금의 역할을 기억으로 넘긴다** (→ docs/players/player.md §3.2).
-   * 배치는 여기서 통째로 다시 써지므로, 벤치·예비로 내려가는 선수의 역할은 이
+   * **덮어쓰기 전에 지금의 카드를 기억으로 넘긴다** (→ docs/players/player.md §3.2).
+   * 배치는 여기서 통째로 다시 써지므로, 벤치·예비로 내려가는 선수의 카드는 이
    * 한 줄이 아니면 사라진다. 자리를 지키는 선수까지 함께 적는 건 같은 값을 다시
    * 쓰는 것뿐이다 — 기억은 언제나 "그 자리에서 마지막에 맡긴 것"이다.
    */
   for (const old of prev.values()) {
-    if (old.roleId) rememberRole(state, old.playerId, old.position, old.roleId);
+    if (old.card) rememberCard(state, old.playerId, old.position, old.card);
   }
   /**
    * 이전 배치에서 물려받는 것 — 적응도·개인 기억·개인 지시, 그리고 **자리가 같을
-   * 때만 역할**. 자리가 바뀌면 그 역할은 존재하지 않는다(센터백의 리베로를 윙에
-   * 데려갈 수 없다). 대신 그 자리의 **기억**이 기본 역할을 갈아끼운다 — 감독이 새로
-   * 고르면 그게 이긴다. 벤치는 자리를 갖지 않으므로 역할도 들지 않는다 (위에서
-   * 기억이 받아 갔다).
+   * 때만 카드**. 자리가 바뀌면 같은 단계가 다른 움직임이 된다. 대신 그 자리의
+   * **기억**이 기본 행동을 갈아끼운다 — 감독이 새로 고치면 그게 이긴다. 벤치는 자리를
+   * 갖지 않으므로 카드도 들지 않는다 (위에서 기억이 받아 갔다).
    *
    * 직전 배치가 없으면 **선반**을 본다 — 2군을 다녀왔거나 매치데이 명단 밖에 있던
    * 선수의 적응도·기억이 거기 있다 (→ docs/players/player.md §7.3).
@@ -877,27 +883,29 @@ export function setLineup(
     const old: Partial<TacticAssignment> | undefined =
       prev.get(playerId) ?? unshelveFamiliarity(tactics, playerId);
     /**
-     * 되찾기 3단은 **도메인이 하나로 갖는다**(`inheritedRole`) — 전술판이 저장을
-     * 기다리는 동안 부르는 그 함수다. 여기서 순서를 따로 밟으면 감독이 누른 적 없는
-     * 역할 변경이 자동 저장 응답과 함께 혼자 일어난다.
+     * 되찾기는 **도메인이 하나로 갖는다**(`inheritedCard`) — 전술판이 저장을 기다리는
+     * 동안 부르는 그 함수다. 여기서 순서를 따로 밟으면 감독이 누른 적 없는 카드
+     * 변경이 자동 저장 응답과 함께 혼자 일어난다. 벤치의 `position`은 주 포지션이라
+     * 자리가 아니다 — 선발이었던 배치에서만 이어 받는다.
      */
-    const roleId = !slotted
+    const from = old?.role === "starting" ? old.position : null;
+    const card = !slotted
       ? undefined
-      : inheritedRole(position, old?.roleId, recallRole(state, playerId, position));
+      : inheritedCard(from, position, old?.card, recallCard(state, playerId, position));
     /**
-     * **오늘 역할을 손댄 흔적은 살려 둔다.** 전술판은 조작마다 배치를 다시
+     * **오늘 카드를 손댄 흔적은 살려 둔다.** 전술판은 조작마다 배치를 다시
      * 쓰는데, 여기서 memo가 사라지면 저장할 때마다 "오늘 아침"이 새로 잡혀
      * 같은 결정에 값을 여러 번 치른다 — 자동 저장에 얹은 의미가 없어진다.
      * 장부의 기준은 (선수·오늘)이라 **자리를 옮겨도 따라간다** — 낸 값을 되돌릴
      * 통로가 이것뿐이라, 여기서 버리면 왕복이 환불이 아니라 두 배가 된다.
-     * 지금 자리에 맞춘 정산은 배치가 다 선 뒤에 한 번에 한다(`settleRoleCost`).
+     * 지금 자리에 맞춘 정산은 배치가 다 선 뒤에 한 번에 한다(`settleCardCost`).
      */
     return {
       familiarity: old?.familiarity ?? newcomerFamiliarity,
       // 개인 기억은 배치보다 오래 산다 — 여기서 흘리면 저장 한 번에 통째로 사라진다
       ...(old?.drilled ? { drilled: old.drilled } : {}),
-      ...(roleId ? { roleId } : {}),
-      ...(old?.roleMemo ? { roleMemo: old.roleMemo } : {}),
+      ...(card ? { card } : {}),
+      ...(old?.cardMemo ? { cardMemo: old.cardMemo } : {}),
     };
   };
   const startingAssignments: TacticAssignment[] = starting.map((s, i) => ({
@@ -921,12 +929,12 @@ export function setLineup(
   });
 
   /**
-   * 오늘 낸 역할 대가를 **지금 자리 기준으로** 정산한다 — 선발은 그 자리의 역할로,
+   * 오늘 낸 카드 대가를 **지금 자리 기준으로** 정산한다 — 선발은 그 자리의 카드로,
    * 벤치는 자리가 없으므로 환불이다. 정산이 없으면 자리를 옮겼다 되돌리는 것만으로
    * 같은 대가를 두 번 문다 (→ docs/players/player.md §7.2).
    */
-  for (const a of startingAssignments) settleRoleCost(a, state.date, a);
-  for (const a of benchAssignments) settleRoleCost(a, state.date, null);
+  for (const a of startingAssignments) settleCardCost(a, state.date, a);
+  for (const a of benchAssignments) settleCardCost(a, state.date, null);
 
   /**
    * 명단에서 빠진 선수의 적응도·기억은 **선반으로** — 매치데이 명단 밖(예비)은
@@ -1068,7 +1076,7 @@ export function lineupChangeNote(
 }
 
 /**
- * 한 선수의 **전술 설정**을 한 번에 — 자리·역할.
+ * 한 선수의 **전술 설정**을 한 번에 — 자리·역할 카드.
  *
  * 둘은 늘 함께 판단되는 것들인데(누구를 어디에 어떤 역할로 세우나) 도구가 갈려
  * 있었다. 감독의 한마디("6번을 레지스타로 내려")가 도구 두세 번이 되면 GM이 하나를
@@ -1087,7 +1095,8 @@ export function setPlayerTactic(
           band?: "defense" | "midfield" | "attack" | undefined;
         }
       | undefined;
-    role?: string | undefined;
+    /** 카드를 고치는 말 — 적은 낱말만 바뀐다 (`patchCard`) */
+    card?: RoleCardPatch | undefined;
   },
 ): CommandResult {
   const notes: string[] = [];
@@ -1129,8 +1138,13 @@ export function setPlayerTactic(
       if (stop) return stop;
     } else take(res);
   }
-  if (input.role !== undefined) {
-    const res = setPlayerRole(state, { playerId: input.playerId, role: input.role });
+  if (input.card !== undefined) {
+    const patch = input.card;
+    const current = userTactics(state).assignments.find((a) => a.playerId === input.playerId);
+    const res = setPlayerCard(state, {
+      playerId: input.playerId,
+      card: patchCard(current?.card, patch) ?? null,
+    });
     if (!res.ok) {
       const stop = reject(res);
       if (stop) return stop;
@@ -1207,7 +1221,7 @@ export function movePlayerSlot(
   const code = asked && !named ? asked : positionAtPoint(point);
   const currentPoint = from;
   if (assignment.position === code && currentPoint.x === point.x && currentPoint.y === point.y) {
-    // 옮길 것이 없었던 것은 실패가 아니다 — 역할·지시만 바꾸는 호출을 막지 않는다
+    // 옮길 것이 없었던 것은 실패가 아니다 — 카드·지시만 바꾸는 호출을 막지 않는다
     return {
       ok: true,
       unchanged: true,
@@ -1215,35 +1229,38 @@ export function movePlayerSlot(
     };
   }
   const before = assignment.position;
-  if (
-    assignment.position !== code &&
-    !(assignment.roleId && rolesFor(code).some((role) => role.id === assignment.roleId))
-  ) {
-    // 버려지는 역할은 **옛 자리 기준으로** 기억에 남는다 (→ docs/players/player.md §3.2)
-    if (assignment.roleId) rememberRole(state, player.id, assignment.position, assignment.roleId);
+  // 같은 자리 안의 이동(LCB → RCB)은 카드를 잇는다 — 단계가 같은 움직임을 뜻한다
+  const card = inheritedCard(
+    assignment.position,
+    code,
+    assignment.card,
+    recallCard(state, player.id, code),
+  );
+  if (card !== assignment.card) {
+    // 내려지는 카드는 **옛 자리 기준으로** 기억에 남는다 (→ docs/players/player.md §3.2)
+    if (assignment.card) rememberCard(state, player.id, assignment.position, assignment.card);
     /**
-     * 새 자리의 기억이 그 자리의 기본 역할을 갈아끼운다. 배치에 적어 두는 이유:
-     * 화면·전력·경기가 모두 `assignment.roleId`를 읽으므로, 기억이 배치 밖에만
-     * 남으면 같은 선수의 역할이 두 값으로 갈린다.
+     * 새 자리의 기억이 그 자리의 기본 행동을 갈아끼운다. 배치에 적어 두는 이유:
+     * 화면·전력·경기가 모두 `assignment.card`를 읽으므로, 기억이 배치 밖에만
+     * 남으면 같은 선수의 카드가 두 값으로 갈린다.
      */
-    const recalled = recallRole(state, player.id, code);
-    if (recalled) assignment.roleId = recalled;
-    else delete assignment.roleId;
+    if (card) assignment.card = card;
+    else delete assignment.card;
   }
   assignment.position = code;
   assignment.point = point;
   /**
-   * 자리가 바뀌었으니 오늘 낸 역할 대가를 다시 정산한다 — `setLineup`과 같은 함수다
+   * 자리가 바뀌었으니 오늘 낸 카드 대가를 다시 정산한다 — `setLineup`과 같은 함수다
    * (→ docs/players/player.md §7.2). 두 경로가 memo를 다르게 다루면, 화면이 어느 쪽으로
    * 저장했느냐에 따라 같은 조작의 값이 달라진다.
    */
-  settleRoleCost(assignment, state.date, assignment);
+  settleCardCost(assignment, state.date, assignment);
   tactics.spec.formation = shapeOf(
     tactics.assignments
       .filter((a) => a.role === "starting")
       .map((a) => a.point ?? anchorOf(a.position)),
   );
-  const fit = player.positions.find((p) => p.position === code)?.proficiency ?? null;
+  const fit = player.positions.find((p) => samePlace(p.position, code))?.proficiency ?? null;
   return {
     ok: true,
     message:
@@ -1269,21 +1286,26 @@ export function movePlayerSlot(
  * overall 공식도 바뀌므로 재산정한다.
  */
 /**
- * 이 선수가 그 자리에서 맡을 **세부 역할**을 정한다 (볼 플레잉 디펜더, 레지스타…).
+ * 이 선수가 그 자리에서 맡을 **역할 카드**를 건다 — 카드 전체를 받는다 (player.md §3).
  *
- * 역할은 자리 위에 얹히는 축이다 — 같은 센터백이라도 노넌센스와 볼 플레잉은 요구
- * 역량이 다르고, 그 차이는 `roleFit`이 낸다. 그 자리에 없는 역할은 받지 않는다.
- *
- * **표기는 이름·id·약어 셋 다 받는다**(`findRole`) — 전술판은 id를 보내고 감독의 말을
- * 옮기는 해석기는 이름을 적는다. 한쪽만 받으면 말로 건 역할만 반려되고, 한 번 부르는
- * 해석기에는 그 반려를 보고 다시 시도할 자리가 없다 (player.md §3.1).
+ * 카드는 자리 위에 얹히는 지시다 — 같은 센터백이라도 공을 몰고 나가는 카드와 뒤를 지키는
+ * 카드는 요구 역량이 다르고, 그 차이는 `cardFit`이 낸다. 빈 카드(`null`)는 그 자리의 기본
+ * 행동으로 돌린다. 말로 고치는 쪽(`set_player_tactic`)은 지금 카드에 고칠 말을 얹어
+ * (`patchCard`) 여기로 보낸다.
  *
  * ⚠️ **선발만 자리를 갖는다** — 벤치 배치의 `position`은 좌표가 아니라 주 포지션이라,
- * 그걸로 검증하면 화면이 말하는 자리와 다른 목록으로 반려한다 (player.md §3.1).
+ * 그 자리의 카드를 걸면 화면이 말하는 자리와 다른 곳에 걸린다 (player.md §3.1).
  */
-export function setPlayerRole(
+/** 공 있을 때의 자리를 걷은 카드 */
+function withoutIpPlace(card: RoleCard): RoleCard {
+  const ip = { ...card.ip };
+  delete ip.place;
+  return { ...card, ip };
+}
+
+export function setPlayerCard(
   state: GameState,
-  input: { playerId: string; role: string },
+  input: { playerId: string; card: RoleCard | null },
 ): CommandResult {
   const pick = pickOurPlayer(state, input.playerId);
   if (!pick.ok) return pick;
@@ -1302,66 +1324,87 @@ export function setPlayerRole(
       message: `${josa(player.name, "은/는")} 자리가 없습니다 — 먼저 선발로 세우세요`,
     };
   }
-  const options = rolesFor(assignment.position);
-  // 감독이 부른 표기 그대로 견준다 — 화면은 id를, 해석기는 이름을 보낸다 (player.md §3.1)
-  const def = findRole(assignment.position, input.role);
-  if (!def) {
+  const parsed = input.card === null ? null : RoleCardSchema.safeParse(input.card);
+  if (parsed && !parsed.success) {
     return {
       ok: false,
-      message: `${assignment.position}에 없는 역할입니다 — ${options.map((r) => `${r.ko}(${r.id})`).join(" / ")}`,
+      message: `카드를 읽지 못했습니다 — ${parsed.error.issues[0]?.message ?? "형식 오류"}`,
     };
   }
-  const from = assignment.roleId ?? defaultRoleOf(assignment.position);
-  if (from === def.id) {
+  const boardPlace = placeOf(assignment.position);
+  const ipPlace = parsed?.data.ip.place;
+  if (ipPlace && (boardPlace === "GK" || ipPlace === "GK")) {
+    return {
+      ok: false,
+      message: "골키퍼 자리는 공 있을 때의 자리를 갖지도, 공 있을 때의 자리가 되지도 않습니다",
+    };
+  }
+  // 전술판의 자리와 같은 자리는 같은 뜻이다 — 적어 두면 대가만 문다 (player.md §3.3)
+  const next = normalizeCard(
+    parsed && ipPlace === boardPlace ? withoutIpPlace(parsed.data) : parsed?.data,
+  );
+  const from = assignment.card;
+  if (sameCardWords(from, next) && from?.label === next?.label) {
     // 바뀐 것이 없다는 사실은 **반환값이** 말한다 (→ docs/players/player.md §3.1) —
     // 표식이 없으면 `setPlayerTactic`이 이 걸음을 "바꿨다"로 세어 뒤따르는 반려를 접는다
     return {
       ok: true,
       unchanged: true,
-      message: `${josa(player.name, "은/는")} 이미 ${def.ko}입니다`,
+      message: `${josa(player.name, "은/는")} 이미 ${cardTitle(next)}입니다`,
     };
   }
 
   /**
-   * 역할을 바꾸면 **그 선수의 전술 적응도가 깎인다** — 자리는 그대로여도 하는 일이
-   * 달라지기 때문이다. 대가는 하드코딩하지 않고 **역할 델타의 거리**에서 뽑는다
-   * (`roleChangeCost`): 볼 플레잉 → 리베로는 둘 다 발로 푸는 수비수라 싸고,
-   * 볼 플레잉 → 노넌센스는 요구가 정반대라 비싸다.
+   * 카드를 바꾸면 **그 선수의 전술 적응도가 깎인다** — 자리는 그대로여도 하는 일이
+   * 달라지기 때문이다. 대가는 낱말 단계 차의 합에서 뽑는다(`cardChangeCost`). 이름만
+   * 바꾸면 대가가 없다 — 엔진이 읽지 않는다.
    *
-   * 팀 전체가 아니라 **그 선수만** 깎인다. 옆 사람의 역할이 바뀌었다고 내 적응도가
+   * 팀 전체가 아니라 **그 선수만** 깎인다. 옆 사람의 카드가 바뀌었다고 내 적응도가
    * 떨어질 이유가 없다 (전술 6축을 바꿀 때와 다른 점이다).
+   *
+   * ⚠️ **고르는 동안은 벌하지 않는다.** 기준은 **그날 아침의 카드**이고, 이미 낸
+   * 만큼과의 차액만 가감한다(`cardMemo`). 되돌아오면 복구되고, 하루가 지나면 기준이
+   * 새로 잡힌다 — 몸에 밴 것이기 때문이다.
+   *
+   * 경기 중의 수정은 대가가 없다 — 그 경기의 대응이고, 경기가 끝나면 킥오프의 카드로
+   * 되돌아간다(`restoreTactics`).
    */
-  /**
-   * ⚠️ **고르는 동안은 벌하지 않는다.** 감독은 알약을 눌러 보며 정하는데,
-   * 누를 때마다 매기면 결정 하나에 값을 여러 번 치른다 — 아직 그 역할로 훈련도
-   * 경기도 하지 않았는데. 기준은 **그날 아침의 역할**이고, 이미 낸 만큼과의
-   * 차액만 가감한다(`roleMemo`). 되돌아오면 복구되고, 그 사이 훈련으로 오른
-   * 값은 남는다. 하루가 지나면 기준이 새로 잡힌다 — 몸에 밴 것이기 때문이다.
-   */
-  assignment.roleMemo =
-    assignment.roleMemo?.date === state.date
-      ? assignment.roleMemo
-      : { date: state.date, position: assignment.position, role: from, paid: 0 };
-  assignment.roleId = def.id;
-  // 감독이 고른 것이 그 자리의 새 기억이다 — 벤치를 다녀와도 이 결정이 남는다
-  rememberRole(state, player.id, assignment.position, def.id);
+  const inMatch = state.phase === "match";
+  if (!inMatch && assignment.cardMemo?.date !== state.date && boardPlace !== null) {
+    assignment.cardMemo = {
+      date: state.date,
+      place: boardPlace,
+      ...(from ? { card: from } : {}),
+      paid: 0,
+    };
+  }
+  if (next) assignment.card = next;
+  else delete assignment.card;
+  // 감독이 고친 것이 그 자리의 새 기억이다 — 벤치를 다녀와도 이 결정이 남는다
+  rememberCard(state, player.id, assignment.position, next);
   // 오늘 이미 낸 것과의 차액만 — 왔다 갔다 해도 누적되지 않는다
-  settleRoleCost(assignment, state.date, assignment);
+  if (!inMatch) settleCardCost(assignment, state.date, assignment);
 
   /**
-   * 결과는 **무엇을 시키기로 했는지**만 말한다 (player.md §7.2). 적응도 증감을
-   * 붙이면 역할 선택이 가장 싼 역할 고르기가 된다 — 하루면 기준이 다시 잡히는
-   * 값이라 그 대가가 화면에서 가장 눈에 띌 이유가 없다. 명단의 적응도 게이지가
-   * 지금 상태를 말한다.
+   * 결과는 **무엇을 시키기로 했는지**만 말한다 (player.md §7.2). 적응도 증감을 붙이면
+   * 카드 고르기가 가장 싼 카드 고르기가 된다. 명단의 적응도 게이지가 지금 상태를 말한다.
    */
+  const words = cardWordsText(next);
+  const title = cardTitle(next);
   return {
     ok: true,
-    message: `${player.name} ${assignment.position} 역할 → ${def.ko}`,
+    message:
+      `${player.name} ${assignment.position} 카드 → ${title}` +
+      (next?.label && words ? ` (${words})` : ""),
     brief: {
       head: player.name,
-      // 역할 이름은 **전술판 칩과 같은 표기로** 낸다 — 화면이 긴 이름을 줄이면
-      // 그 치환이 코어 문구를 되쪼개는 일이 되고, 표가 바뀌면 조용히 어긋난다
-      items: [item({ label: `${assignment.position} 역할`, text: def.abbr })],
+      items: [
+        item({
+          label: `${assignment.position} 카드`,
+          text: title,
+          ...(next?.label && words ? { note: words } : {}),
+        }),
+      ],
     },
   };
 }
@@ -1373,30 +1416,32 @@ export function setPlayerPosition(
   const pick = pickOurPlayer(state, input.playerId);
   if (!pick.ok) return pick;
   const player = pick.player;
+  // 주 포지션은 자리다 — 슬롯 코드로 불러도 그 자리로 접힌다 (player.md §8)
   const code = normalizePositionCode(input.position);
-  if (!code) {
+  const place = code === null ? null : placeOf(code);
+  if (!place) {
     return {
       ok: false,
-      message: `알 수 없는 포지션: ${input.position} (${POSITION_CODES.join("/")})`,
+      message: `알 수 없는 포지션: ${input.position} (${PLACES.join("/")})`,
     };
   }
   for (const p of player.positions) p.isNatural = false;
-  const existing = player.positions.find((p) => p.position === code);
+  const existing = player.positions.find((p) => p.position === place);
   if (existing) {
     existing.isNatural = true;
   } else {
     // 처음 맡는 자리 — 인접도 기반 초기 적응도로 시작한다. 저장은 **주발을 벗긴
     // 원값**이다: 보정을 적어 두면 조회가 다시 얹는다 (player.md §8)
     player.positions.push({
-      position: code,
-      proficiency: storedProficiencyFor(player.positions, code),
+      position: place,
+      proficiency: storedProficiencyFor(player.positions, place),
       isNatural: true,
     });
   }
   ensurePotentialFloor(player);
   return {
     ok: true,
-    message: `${player.name} 주 포지션 → ${code} (OVR ${playerOverall(player)})`,
+    message: `${player.name} 주 포지션 → ${place} (OVR ${playerOverall(player)})`,
   };
 }
 
@@ -1529,9 +1574,7 @@ export function setCaptain(
     player.isCaptain = true;
     if (player.isViceCaptain) player.isViceCaptain = false;
     notes.push(`${josa(player.name, "을/를")} 주장으로 지명했습니다`);
-    items.push(
-      item({ label: "주장", text: player.name, note: `리더십 ${player.attributes.leadership}` }),
-    );
+    items.push(item({ label: "주장", text: player.name }));
   }
 
   if (input.vice !== undefined) {
@@ -1547,9 +1590,7 @@ export function setCaptain(
       for (const p of userPlayers(state)) p.isViceCaptain = false;
       vice.isViceCaptain = true;
       notes.push(`${josa(vice.name, "을/를")} 부주장으로 지명했습니다`);
-      items.push(
-        item({ label: "부주장", text: vice.name, note: `리더십 ${vice.attributes.leadership}` }),
-      );
+      items.push(item({ label: "부주장", text: vice.name }));
     }
   }
 
@@ -1676,11 +1717,11 @@ export function rememberTactics(tactics: TeamTactics, on: string): void {
 }
 
 /**
- * 전술 이해가 빠른 선수 — **시야·위치선정·침착성**이 새 지시를 덜 흔든다.
+ * 전술 이해가 빠른 선수 — **판단력·예측력·시야**가 새 지시를 덜 흔든다.
  *
- * 세 축을 고른 이유: 시야는 그림을 그리는 힘, 위치선정은 그 그림에서 제 자리를 찾는
- * 힘, 침착성은 익숙지 않은 상황에서도 판단이 무너지지 않는 힘이다. 셋 다
- * **판단 계열**이라 관측으로도 오차가 남는 축이고(player.md §9),
+ * 세 축을 고른 이유: 시야는 그림을 그리는 힘, 예측력은 그 그림이 어떻게 움직일지 읽는
+ * 힘, 판단력은 그 안에서 맞는 것을 고르는 힘이다. 셋 다 **판단 계열**이라 관측으로도
+ * 오차가 남는 축이고(player.md §9),
  * 그래서 "왜 쟤만 못 따라오지"가 감독에게 흥미로운 질문이 된다.
  */
 export function tacticalUptake(player: Player): number {

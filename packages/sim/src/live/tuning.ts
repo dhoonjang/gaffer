@@ -72,11 +72,49 @@ export const TACKLE_ATTEMPT = 0.002;
 export const TACKLE_IN_PATH = 0.007;
 
 /**
- * 1대1의 수비 쪽 여유 (능력치 점) — 능력이 같으면 태클이 약 80% 이긴다. 드리블은 제칠 수 있는 상대에게만
+ * 1대1의 수비 쪽 여유 (능력치 점) — 능력이 같으면 태클이 약 84% 이긴다. 드리블은 제칠 수 있는 상대에게만
  * 거는 선택이라 실제 드리블 성공이 실측 45%쯤에, 태클 성공이 실측 61%(StatsBomb 12.0/19.7) 아래
- * 밴드에 선다 (football-reference.md §5). 여유가 클수록 확률이 끝에 붙어 능력 차가 결과를 덜 움직인다
+ * 밴드에 선다 (football-reference.md §5). 공격진의 태클 축이 실측(EA)대로 낮아 여유가 작으면 태클이
+ * 밴드 밑으로 털리고, 뚫린 압박이 드리블·슈팅을 실측 위로 띄운다. 여유가 클수록 확률이 끝에 붙어
+ * 능력 차가 결과를 덜 움직인다
  */
-export const DUEL_TACKLER_EDGE = 30;
+export const DUEL_TACKLER_EDGE = 36;
+
+/**
+ * 태클의 기량 — 발을 넣는 기술(태클)에 **타이밍**(예측력)이 거든다 (live-match.md §2).
+ * 태클 하나로만 재면 수비 축이 낮은 공격수·측면 자원의 압박이 거의 다 털려, 드리블이
+ * 실측(성공 45%)보다 잘 통하고 경기의 득점이 크게 뛴다.
+ */
+export const TACKLE_SKILL = { tackling: 0.85, anticipation: 0.15 } as const;
+
+/**
+ * 드리블의 기량 — 공을 붙이는 기술(드리블)에 제치는 몸놀림(민첩성)과 몸이 닿아도 버티는
+ * 균형 감각이 거든다 (live-match.md §2). 카드의 「드리블」 낱말이 보는 성공 축과 같은 갈래다.
+ */
+export const DRIBBLE_SKILL = { dribbling: 0.7, agility: 0.15, balance: 0.15 } as const;
+
+/** 1대1에서 몸싸움이 양쪽 기량에 얹히는 몫 — 태클 쪽과 공 가진 쪽이 같은 무게다 */
+export const DUEL_STRENGTH = 0.4;
+
+/** 수비를 제친 드리블이 득점의 원인(`individual`)으로 붙는 시간 (초) */
+export const INDIVIDUAL_SECONDS = 8;
+
+/**
+ * **수비 읽기** — 공이 상대에게 있을 때 어디에 서는가. 위치 선정이 중심이고 예측력·집중력이
+ * 거든다. 공 없는 수비 가치장의 온도, 수비 형태 오차, 슛 블록이 읽는다.
+ */
+export const DEFENSIVE_READING = {
+  positioning: 0.4,
+  anticipation: 0.3,
+  concentration: 0.3,
+} as const;
+
+/**
+ * **공격 자리 읽기** — 공이 우리에게 있을 때 어디로 가는가. 오프 더 볼과 위치 선정이 반씩이다 —
+ * 동료와의 간격을 지키는 것이 공격 자리의 절반이다. 오프 더 볼 하나로 재면 최전방이 공격에서만
+ * 갑자기 날카로워져 득점이 실측보다 크게 뛴다.
+ */
+export const ATTACKING_READING = { offTheBall: 0.5, positioning: 0.5 } as const;
 
 /** 1대1 능력치 차의 눈금 — 10점 차가 로짓 0.45(약 11%p) */
 export const DUEL_SCALE = 22;
@@ -103,12 +141,12 @@ export const PENALTY_WRONG_WAY_SECONDS = 1.5;
 export const BLOCK_REACH = 1.2;
 
 /**
- * 경로에 닿는 필드 상대가 슛을 실제로 막는 확률 — 위치선정 `BLOCK_SKILL_PIVOT`에서.
+ * 경로에 닿는 필드 상대가 슛을 실제로 막는 확률 — 수비 읽기 `BLOCK_SKILL_PIVOT`에서.
  * 실측 1.4m 길목에 상대 하나가 선 슛의 33%, 둘 45%, 셋 51%가 막힌다 (StatsBomb 일반 플레이)
  */
 export const BLOCK_CHANCE = 0.55;
 
-/** 몸 막기의 위치선정 기준점과 1점당 확률 배율 — 슛 길을 읽는 수비가 몸을 먼저 넣는다 */
+/** 몸 막기의 수비 읽기 기준점과 1점당 확률 배율 — 슛 길을 읽는 수비가 몸을 먼저 넣는다 */
 export const BLOCK_SKILL_PIVOT = 65;
 
 export const BLOCK_SKILL_SLOPE = 0.012;
@@ -163,8 +201,17 @@ export const PASS_SKILL_HALVING = 15;
 /** 3.5m 안의 상대 하나가 오차에 더하는 몫 */
 export const PASS_PRESSURE_ERROR = 0.45;
 
-/** 뜬 패스의 오차 배수 */
+/**
+ * 뜬 패스의 오차 배수 — 차는 선수의 테크닉(골키퍼는 킥)이 리그 평균(`LOFT_SKILL_PIVOT`)일 때의
+ * 값이다. 1점마다 `LOFT_SKILL_PER_POINT`씩 줄고 `LOFT_SKILL_RANGE` 안에 선다 (live-match.md §5.3)
+ */
 export const PASS_LOFT_ERROR = 1.7;
+
+export const LOFT_SKILL_PIVOT = 55;
+
+export const LOFT_SKILL_PER_POINT = 0.012;
+
+export const LOFT_SKILL_RANGE = [0.7, 1.3] as const;
 
 /** 패스 속도 (m/s) — 짧게 12, 길게 22 */
 export const PASS_SPEED_MIN = 12;
@@ -467,7 +514,18 @@ export const FIELD_PRESS = 8;
 
 export const FIELD_MARK = 10;
 
-export const FIELD_COVER = 3;
+/**
+ * 마크 성향의 중립 — 카드의 「마크」 낱말이 옮긴 `mark`가 이 값이면 마크 항의 무게가 그대로고,
+ * 대인 쪽(+)이면 그만큼 무겁고 지역 쪽(−)이면 가볍다 (live-match.md §4).
+ */
+export const MARK_TENDENCY_NEUTRAL = 0.5;
+
+/**
+ * 골 쪽 커버의 무게 — 공과 우리 골문 사이에 서는 가치. 슈팅 순간 공보다 골 쪽에 선 수비 수
+ * (기준판 밴드 ≥ 3.2)가 이 무게로 선다. 가벼우면 수비가 늦게 돌아와 문전 기회가 넘치고,
+ * 슈팅·xG가 실측 위로 뜬다
+ */
+export const FIELD_COVER = 9;
 
 export const FIELD_LINE_BEHIND = 0.6;
 
@@ -491,6 +549,12 @@ export const FIELD_DANGER_SIGMA = 28;
  * 공보다 앞(상대 쪽)에 선 말은 `FIELD_PRESS_BEHIND`초 늦게 닿는 것으로 친다 — 등 뒤에서는 길을 막지 못한다
  */
 export const FIELD_PRESS_TAU = 0.5;
+
+/**
+ * 「압박」 낱말이 압박 몫의 점수에 얹는 무게 — 자리 기본값에서 옮긴 `press` 한 단위당.
+ * +3(성향 +0.39)이면 같은 거리의 동료보다 두 배 남짓 나선다
+ */
+export const PRESS_WORD_BIAS = 2;
 
 export const FIELD_PRESS_BEHIND = 1;
 
@@ -523,10 +587,15 @@ export const FIELD_CHASE_TAU = 0.6;
 
 export const FIELD_CHASE_SIGMA = 3;
 
-/** 판독기의 개인 지시 — 지시가 가리키는 자리의 무게와 폭 (m) */
-export const FIELD_BEHAVIOR = 1.5;
+/**
+ * 대인 마크 — 시트가 `mark`에 표적을 준 말이 그 상대의 골 쪽에 받는 가치. 끝 단계(+3)의
+ * 무게와 폭 (m), 붙는 자리가 상대보다 골 쪽으로 물러선 거리 (m)
+ */
+export const FIELD_MAN_MARK = 1.5;
 
-export const FIELD_BEHAVIOR_SIGMA = 3;
+export const FIELD_MAN_MARK_SIGMA = 3;
+
+export const MAN_MARK_GOAL_SIDE = 1.5;
 
 /** 붐빔 — 동료 둘레에서 값이 준다. 무게와 폭 (m) */
 export const FIELD_CROWD = 0.5;
@@ -614,8 +683,59 @@ export const TOP_SPEED_FLOOR = 6.95;
 /** 스피드 99가 더하는 속도 (m/s) — 35 km/h까지 */
 export const TOP_SPEED_SPAN = 2.75;
 
-/** 가속 (m/s²) — 약 4초에 최고 속도에 닿는다 */
+/**
+ * 가속 (m/s²) — 가속력이 리그 평균(`ACCELERATION_PIVOT`)인 필드 선수가 약 4초에 최고 속도에
+ * 닿는다. 가속력 1점마다 `ACCELERATION_PER_POINT`씩 다르고 `ACCELERATION_RANGE` 안에 선다
+ * (live-match.md §5.3). 골키퍼의 걸음은 이 값 그대로다 — 골키퍼의 몸은 다이빙과 나오기가 맡는다
+ */
 export const ACCELERATION = 2.3;
+
+export const ACCELERATION_PIVOT = 65;
+
+export const ACCELERATION_PER_POINT = 0.012;
+
+export const ACCELERATION_RANGE = [0.6, 1.4] as const;
+
+/**
+ * 박스 안 골키퍼의 손이 닿는 높이 (m) — 공중볼 처리가 리그 평균의 골키퍼(`KEEPER_AERIAL_PIVOT`)일
+ * 때의 값이고 1점마다 `KEEPER_REACH_PER_POINT`씩 다르다 (live-match.md §5.6)
+ */
+export const KEEPER_REACH_HEIGHT = 2.9;
+
+export const KEEPER_AERIAL_PIVOT = 60;
+
+export const KEEPER_REACH_PER_POINT = 0.01;
+
+/**
+ * **크로스에 나오는 거리** (m) — 상대 크로스가 우리 박스 안, 골문 중심에서 이 거리 안에 떨어지면
+ * 골키퍼가 공의 길로 나온다. 공중볼 장악이 골키퍼 평균(`SLOT_INCLINATION`)일 때의 값이고
+ * 1점마다 `KEEPER_CLAIM_PER_POINT`씩, `KEEPER_CLAIM_LIMITS` 안에 선다 (live-match.md §5.6).
+ * 골문에서 떨어진 거리별 차단(5.5m 안 · 5.5–8m · 8–11m)이 실측(football-reference §5)에 선다
+ */
+export const KEEPER_CLAIM_RANGE = 7;
+
+export const KEEPER_CLAIM_PER_POINT = 0.1;
+
+export const KEEPER_CLAIM_LIMITS = [3, 12] as const;
+
+/**
+ * 크로스에 나오는 골키퍼의 가속 배수 — 짧은 거리에 몸을 던지는 걸음이다. 필드 선수의 가속
+ * (`ACCELERATION`)은 최고 속도까지의 평균이라 첫 몇 미터를 실제(5m ≈ 1.1초)보다 느리게 간다
+ */
+export const KEEPER_CLAIM_BURST = 3.5;
+
+/** 크로스에 나왔다가 닿지 못한 골키퍼의 골문에 난 골이 `keeper_out`을 다는 시간 (초) */
+export const KEEPER_OUT_SECONDS = 4;
+
+/**
+ * 받는 순간 붙은 상대 한 명이 얹는 압박의 무게 — 마킹이 리그 평균(`MARKING_PIVOT`)이면 1이고
+ * 1점마다 `MARKING_PRESSURE_PER_POINT`씩, `MARKING_PRESSURE_RANGE` 안에 선다 (live-match.md §5.3)
+ */
+export const MARKING_PIVOT = 51;
+
+export const MARKING_PRESSURE_PER_POINT = 0.015;
+
+export const MARKING_PRESSURE_RANGE = [0.4, 1.6] as const;
 
 /** 감속은 가속보다 빠르다 */
 export const DECELERATION = 5.5;
@@ -656,10 +776,14 @@ export const SETTLE: Partial<Record<LiveAction, number>> = {
   press: 0.5,
 };
 
-/** 서두르지 않는 행동의 기본 걸음 (m/s)과 남은 거리 1m마다 더하는 속도 */
-export const AMBLE_SPEED = 1.0;
+/**
+ * 서두르지 않는 행동의 기본 걸음 (m/s)과 남은 거리 1m마다 더하는 속도 — 블록이 공을 따라
+ * 움직일 때마다 자리를 고치는 걸음이라 팀 총 거리(실측 104~122km)의 몸통이다. 급한 행동
+ * (압박·침투·되돌아가기)은 이 값을 쓰지 않는다
+ */
+export const AMBLE_SPEED = 0.7;
 
-export const AMBLE_PER_METRE = 0.35;
+export const AMBLE_PER_METRE = 0.2;
 
 /** 순간 여력 — 고속 주행이 태우고 걷는 동안 찬다 (초당) */
 export const FUEL_BURN_SPRINT = 0.11;
@@ -691,6 +815,12 @@ export const ATTACK_FOLLOW_MAX = 16;
 export const DEFEND_SHIFT_BASE = 0.7;
 
 export const DEFEND_SHIFT_PER_COVER = 0.6;
+
+/**
+ * 「수비 복귀」 낱말이 수비 형태의 깊이를 옮기는 폭 (m) — 자리 기본값에서 옮긴 `cover` 한
+ * 단위당. +3(성향 +0.36)이면 3.6m 더 깊이 선다 (live-match.md §3.2)
+ */
+export const RECOVER_WORD_DEPTH = 10;
 
 /** 수비 형태가 공보다 앞에 서지 않는 여유 (m) — 첫 수비수만 공으로 간다 */
 export const DEFEND_FRONT_MARGIN = 8;

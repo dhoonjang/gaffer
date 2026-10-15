@@ -2,13 +2,15 @@
 
 import { GrowthOutlook } from "@/shared/growth-outlook";
 import {
-  defaultRoleOf,
   formatRating,
+  habitSteps,
   isNaturalAt,
   physiqueLabel,
-  rolesFor,
+  placeOf,
+  proficiencyLabel,
   injuryHistoryBrief,
   injuryHistoryText,
+  type RoleCard,
 } from "@gaffer/domain";
 import { contractUntil } from "@/shared/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/shared/player-facts";
@@ -20,15 +22,16 @@ import {
   StatusBadges,
 } from "../../shared/player-marks";
 import type { SetPieceTakersView, SquadRow } from "./types";
-import { Button } from "@/shared/button";
+import { CardEditor } from "./card-editor";
+import { slotOverallOf } from "./slot-overall";
 
-/** 선택한 선수 상세 — 그 자리 적응도와 능력치 16축 */
+/** 선택한 선수 상세 — 그 자리 적응도와 능력치 */
 export function PlayerDetail({
   p,
   slotCode,
   action,
-  onRole,
-  roleId,
+  onCard,
+  card,
   setPieces,
 }: {
   p: SquadRow;
@@ -37,36 +40,24 @@ export function PlayerDetail({
   slotCode: string | null;
   /** 이 선수에게 거는 조작 — 1·2군 이동. **선수 옆에 둔다** */
   action?: React.ReactNode | undefined;
-  /** 세부 역할 선택 (배치가 없거나 경기 중이면 없다) */
-  onRole?: ((roleId: string) => void) | undefined;
+  /** 역할 카드 고치기 (배치가 없거나 판이 잠겨 있으면 없다) */
+  onCard?: ((card: RoleCard | null) => void) | undefined;
   /**
-   * 지금 켜져 있는 역할 — **아직 저장되지 않은 선택까지 포함한다.**
-   * `p.roleId`만 보면 서버 왕복이 끝나기 전까지 방금 고른 역할이 안 켜져서,
+   * 지금 판 위의 카드 — **아직 저장되지 않은 선택까지 포함한다.**
+   * `p.card`만 보면 서버 왕복이 끝나기 전까지 방금 고친 단계가 안 보여서,
    * 눌렀는데 아무 일도 일어나지 않은 것처럼 보인다.
    */
-  roleId?: string | null;
+  card?: RoleCard | null;
   /** 경기 중인가 — 심경 한 줄은 지난 경기까지의 것이라 그동안 서지 않는다 */
   inMatch?: boolean;
 }) {
   /**
-   * 역할이 성립하는 자리 — 고른 칩이면 그 자리, 아니면 이 행이 지금 선 자리.
+   * 카드가 성립하는 자리 — 고른 칩이면 그 자리, 아니면 이 행이 지금 선 자리.
    * `p`는 명단 사본이라 `assignedPosition`이 곧 판 위의 좌표에서 읽은 코드고,
-   * 판에 없으면 null이다. **자리가 없으면 역할도 없다** (player.md §3.1).
+   * 판에 없으면 null이다. **자리가 없으면 카드도 없다** (player.md §3.1).
    */
-  const rolePosition = slotCode ?? p.assignedPosition;
-  /**
-   * 목록도 값도 **서버 행이 아니라 지금 전술판의 자리**에서 읽는다. 끌어 옮긴
-   * 직후에는 `slotCode`만 먼저 바뀌고 `p.roleOptions`는 자동 저장 응답 전까지
-   * 이전 자리의 목록이라, 그대로 그리면 포지션 칩은 CM인데 역할은 DM(앵커·하프백)인
-   * 모순이 생긴다.
-   */
-  const roleOptions = rolePosition ? rolesFor(rolePosition) : p.roleOptions;
-  const requestedRole = roleId ?? p.roleId;
-  const activeRole = roleOptions.some((r) => r.id === requestedRole)
-    ? requestedRole
-    : rolePosition
-      ? defaultRoleOf(rolePosition)
-      : null;
+  const cardPosition = slotCode ?? p.assignedPosition;
+  const cardPlace = cardPosition ? placeOf(cardPosition) : null;
   /**
    * 포지션 칩 — 보유 목록에 **지금 맡은 자리**를 합친다.
    *
@@ -78,18 +69,24 @@ export function PlayerDetail({
    * 있는데(감독이 생소한 자리에 세웠다) 그걸 "소화 가능"과 같은 색으로 두면
    * 무리한 배치라는 사실이 화면에서 사라진다.
    */
-  const chips: Array<{ position: string; isNatural?: boolean; known: boolean }> =
-    slotCode && !p.positions.some((x) => x.position === slotCode)
+  // 칸은 자리로 접혀 칩에 선다 — LCB에 선 센터백은 CB 칩이 "지금 맡은 자리"다
+  const slotPlace = slotCode ? (placeOf(slotCode) ?? slotCode) : null;
+  const chips: Array<{
+    position: string;
+    isNatural?: boolean;
+    proficiency?: number;
+    known: boolean;
+  }> =
+    slotPlace && !p.positions.some((x) => x.position === slotPlace)
       ? [
           ...p.positions.map((x) => ({ ...x, known: true })),
-          { position: slotCode, isNatural: false, known: false },
+          { position: slotPlace, isNatural: false, known: false },
         ]
       : p.positions.map((x) => ({ ...x, known: true }));
   /**
-   * **선호 포지션은 여럿이다.** 주 포지션 자체가 여럿일 수 있고(두 자리를 다 자기
-   * 자리로 삼는 선수), 하나여도 좌우 분화(`CB`↔`LCB`↔`RCB`)는 같은 자리다.
-   * 판정은 도메인의 `isNaturalAt` 하나가 갖는다 — 화면이 따로 계산하면 대표 자리
-   * 하나만 보고 나머지 주 포지션을 "소화 가능"으로 밀어내기 쉽다.
+   * **선호 포지션은 여럿이다.** 주 포지션 자체가 여럿일 수 있다(두 자리를 다 자기
+   * 자리로 삼는 선수). 판정은 도메인의 `isNaturalAt` 하나가 갖는다 — 화면이 따로
+   * 계산하면 대표 자리 하나만 보고 나머지 주 포지션을 "소화 가능"으로 밀어내기 쉽다.
    */
   const preferred = (code: string) => isNaturalAt(p, code);
   /**
@@ -227,7 +224,7 @@ export function PlayerDetail({
                 <span
                   className={
                     `pd-pos` +
-                    (x.position === slotCode ? " here" : "") +
+                    (x.position === slotPlace ? " here" : "") +
                     (preferred(x.position) ? " natural" : x.known ? "" : " foreign")
                   }
                   key={x.position}
@@ -237,7 +234,8 @@ export function PlayerDetail({
                       : x.known
                         ? "소화 가능"
                         : "익숙하지 않은 자리") +
-                    (x.position === slotCode ? " · 지금 맡고 있는 자리" : "")
+                    (x.proficiency === undefined ? "" : ` · ${proficiencyLabel(x.proficiency)}`) +
+                    (x.position === slotPlace ? " · 지금 맡고 있는 자리" : "")
                   }
                 >
                   {x.position}
@@ -246,42 +244,25 @@ export function PlayerDetail({
             </div>
           </div>
 
-          {/* 세부 역할 — **자리 위에 얹히는 축**이다. 같은 센터백이라도 노넌센스와
-            볼 플레잉은 요구 역량이 다르고, 그 차이는 옆의 자리 전력이 곧바로 답한다.
-            자리를 옮기면 목록이 통째로 바뀐다 (그 자리에 없는 역할은 고를 수 없다) */}
-          {roleOptions.length > 1 && (
-            <div className="pd-roles">
-              <span className="pd-axis-group-name">역할</span>
-              <div className="pd-role-list">
-                {/**
-                 * 알약은 **그 역할이 무슨 일을 하는지만** 말한다 (player.md §7.2).
-                 * 전환 대가를 알약마다 적으면 "이 선수에게 무엇을 시킬까"가
-                 * 가장 싼 역할 고르기로 바뀐다 — 적응도는 하루면 기준이 다시 잡힌다.
-                 */}
-                {roleOptions.map((r) => (
-                  <Button
-                    variant="bare"
-                    className={`pd-role${r.id === activeRole ? " on" : ""}`}
-                    key={r.id}
-                    title={r.desc}
-                    disabled={!onRole}
-                    aria-pressed={r.id === activeRole}
-                    onClick={(e) => {
-                      // 상세는 행 안에 있다 — 막지 않으면 행 토글로 새어 나가 접힌다
-                      e.stopPropagation();
-                      onRole?.(r.id);
-                    }}
-                  >
-                    {r.ko}
-                  </Button>
-                ))}
-              </div>
-            </div>
+          {/* 역할 카드 — **자리 위에 얹히는 지시**다. 같은 센터백이라도 몰고 나가는 카드와
+            뒤를 지키는 카드는 요구 역량이 다르고, 그 차이는 자리 전력이 곧바로 답한다 */}
+          {cardPlace && cardPosition && (
+            <CardEditor
+              card={card ?? null}
+              place={cardPlace}
+              habit={habitSteps(p, cardPlace)}
+              fit={{
+                card: slotOverallOf(p, cardPosition, card ?? undefined) ?? 0,
+                base: slotOverallOf(p, cardPosition, undefined) ?? 0,
+              }}
+              axes={p}
+              onCard={onCard}
+            />
           )}
         </div>
 
-        {/* 능력치 16축 — 카드와 나눠 쓰는 조각 (`player-facts.tsx`) */}
-        <AxisGrid axes={p as unknown as Record<string, number>} />
+        {/* 능력치 — 카드와 나눠 쓰는 조각 (`player-facts.tsx`) */}
+        <AxisGrid axes={p as unknown as Record<string, number>} keeper={p.position === "GK"} />
       </div>
 
       {/* 커리어 — 시즌 × 팀의 표와 그 옆의 마일스톤. **머리글 줄이 아니라 제

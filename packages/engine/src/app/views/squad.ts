@@ -17,7 +17,9 @@ import {
   type SetPieceRoutineKey,
   type SetPieceRoutineLevel,
   type MatchSide,
-  rolesFor,
+  type Place,
+  type RoleCard,
+  samePlace,
   type SeasonStat,
   separateBoardPoints,
   anchorOf,
@@ -25,12 +27,12 @@ import {
   capsOf,
   internationalGoalsOf,
   fatigueOf,
-  defaultRoleOf,
   seasonRating,
   SET_PIECE_ROUTINE_KEYS,
   setPieceRoutineLevel,
   type GrowthOutlook,
   observedFit,
+  observedPlaceFit,
 } from "@gaffer/domain";
 import {
   type Observation,
@@ -99,7 +101,7 @@ interface SetPieceTakerView {
   designated: string | null;
   /**
    * 지금 선발로 치면 **실제로 차는 사람** — 지정이 없거나 그가 선발 밖이면 코어의
-   * 기본값(코너·프리킥은 킥력 최고, 페널티는 `penaltySkill` 최고)이다. 선발이 비면
+   * 기본값(코너는 크로스, 프리킥은 프리킥, 페널티는 `penaltySkill` 최고)이다. 선발이 비면
    * `null`.
    *
    * 경기 중에는 **지금 그라운드에 선 자리에서 같은 규칙으로 고른 값**이다 — 교체로
@@ -280,39 +282,36 @@ export interface SquadViewRowMeta {
   /** 이 전술에서 맡는 포지션 (배치가 있을 때) */
   assignedPosition: string | null;
   /**
-   * 그 자리에서 맡는 **세부 역할** — 감독이 고른 것, 없으면 그 자리의 기본 역할.
-   * `roleOptions`가 고를 수 있는 목록이고, 자리를 옮기면 목록이 통째로 바뀐다.
+   * 그 자리에서 맡는 **역할 카드** — 감독이 건 것, 없으면 null(그 자리의 기본 행동).
    *
-   * **자리가 있어야 역할이 있다** (player.md §3.1) — 벤치·예비는 `null`에 빈
-   * 목록이다. 주 포지션은 자리가 아니라서, 그 자리 기준의 역할을 켜 두면 화면이
-   * 코어가 받지 않는 값을 고르게 한다.
+   * **자리가 있어야 카드가 있다** (player.md §3.1) — 벤치·예비는 언제나 null이다.
+   * 주 포지션은 자리가 아니라서, 그 자리 기준의 카드를 켜 두면 화면이 코어가 받지
+   * 않는 값을 고르게 한다. 카드를 고칠 수 있는지는 `role`이 「선발」인지가 말한다.
    */
-  roleId: string | null;
-  roleOptions: Array<{ id: string; ko: string; abbr: string; desc: string }>;
+  card: RoleCard | null;
   /**
-   * **그 선수가 자리마다 마지막에 맡던 역할** — 자리 코드 → 역할 id
-   * (`GameState.roleMemory` → player.md §3.2).
+   * **그 선수가 자리마다 마지막에 맡던 카드** — 자리 → 카드
+   * (`GameState.cardMemory` → player.md §3.2).
    *
    * 화면이 코어 `inherit`와 **같은 순서로** 되찾기를 재현하는 근거다. 없으면
-   * 전술판은 벤치에서 올린 선수에게 기본 역할을 걸어 두었다가 자동 저장 응답이
-   * 와서야 기억한 역할로 튄다 — 감독이 누른 적 없는 변경이다.
-   *
-   * 자리 목록에서 사라진 역할은 싣지 않는다 (`recallRole`과 같은 기준).
+   * 전술판은 벤치에서 올린 선수를 기본 행동으로 세웠다가 자동 저장 응답이 와서야
+   * 기억한 카드로 튄다 — 감독이 누른 적 없는 변경이다.
    */
-  roleMemory: Record<string, string>;
+  cardMemory: Partial<Record<Place, RoleCard>>;
   /**
-   * 오늘 역할을 손댄 흔적 (`TacticAssignment.roleMemo`) — **화면이 대가를 저장 전에
-   * 낼 수 있게** 함께 보낸다. `role`은 그날 아침의 역할(대가의 기준)이고 `paid`는
-   * 오늘 이미 깎인 총량이다. 오늘 손대지 않았으면 null이고 기준은 `roleId`다.
+   * 오늘 카드를 손댄 흔적 (`TacticAssignment.cardMemo`) — **화면이 대가를 저장 전에
+   * 낼 수 있게** 함께 보낸다. `card`는 그날 아침의 카드(대가의 기준, null이면 기본
+   * 행동)이고 `paid`는 오늘 이미 깎인 총량이다. 오늘 손대지 않았으면 null이고 기준은
+   * 지금 카드(`card`)다.
    *
    * **자리 없는 행에도 싣는다** — 코어의 장부는 (선수·오늘)이라 벤치를 다녀와도
    * 흔적이 이어지는데, 선발 행에만 실으면 돌아온 선수의 적응도 미리보기가 서버와
    * 다른 자로 잰 값이 된다. 기준이 되는 자리는 `assignedPosition`이다.
    *
-   * **아침의 자리를 벗어나 있으면 null이다** — 역할 목록은 자리마다 다르므로 옛
-   * 자리의 역할을 기준으로 재면 화면이 서버와 다른 값을 예고한다 (player.md §7.2).
+   * **아침의 자리를 벗어나 있으면 null이다** — 다른 자리의 카드는 아침의 카드와 견줄
+   * 자가 없어 코어가 낸 값을 되돌린다 (player.md §7.2).
    */
-  roleToday: { role: string; paid: number } | null;
+  cardToday: { card: RoleCard | null; paid: number } | null;
   /** 전술판 좌표 (배치가 있을 때) — 자유 배치 UI의 그리기 기준 */
   assignedPoint: BoardPoint | null;
   /** 전술 적응도 — 이 전술을 얼마나 익혔나 */
@@ -423,7 +422,7 @@ export function recentRatingsOf(state: GameState, playerId: string, limit = 5): 
  * 죽은 공 키커 셋 — **지정과 지금 실제로 설 사람** (`SetPieceTakerView`).
  *
  * 기본값을 내는 것은 코어의 함수 하나다(`setPieceTakersOf` — 경기가 부르는 바로
- * 그것). 여기서 「킥력 최고」를 다시 재면 명단이 예고한 키커와 90분이 세우는 키커가
+ * 그것). 여기서 「크로스 최고」를 다시 재면 명단이 예고한 키커와 90분이 세우는 키커가
  * 갈리고, 그때 감독이 믿는 것은 화면이지 판정이 아니다.
  *
  * 경기 중이면 `live`가 지금 그라운드에서 고른 값이라 그것이 이긴다 (match.md §8).
@@ -576,7 +575,7 @@ export function buildSquadView(state: GameState): SquadView {
       : null;
   const liveSlots = new Map<
     string,
-    { role: "starting" | "bench"; position?: string; roleId?: string; point?: BoardPoint }
+    { role: "starting" | "bench"; position?: string; card?: RoleCard; point?: BoardPoint }
   >(
     liveMatch && liveSide
       ? [
@@ -587,7 +586,7 @@ export function buildSquadView(state: GameState): SquadView {
                 {
                   role: "starting" as const,
                   position: s.position,
-                  ...(s.roleId ? { roleId: s.roleId } : {}),
+                  ...(s.card ? { card: s.card } : {}),
                   ...(s.point ? { point: s.point } : {}),
                 },
               ] as const,
@@ -607,16 +606,14 @@ export function buildSquadView(state: GameState): SquadView {
   const liveMatchId = liveMatch && liveSide ? (state.pendingMatch?.matchId ?? null) : null;
 
   /**
-   * 역할 기억 — 선수마다 (자리 → 역할). 화면이 코어 `inherit`의 되찾기를 같은
-   * 순서로 재현하는 근거다 (player.md §3.2). 자리 목록에서 사라진 역할은 없는
-   * 것으로 본다 — `recallRole`과 같은 기준이라 화면과 코어가 갈리지 않는다.
+   * 카드 기억 — 선수마다 (자리 → 카드). 화면이 코어 `inherit`의 되찾기를 같은
+   * 순서로 재현하는 근거다 (player.md §3.2).
    */
-  const roleMemoryOf = new Map<string, Record<string, string>>();
-  for (const memory of state.roleMemory) {
-    if (!rolesFor(memory.position).some((r) => r.id === memory.roleId)) continue;
-    const byPosition = roleMemoryOf.get(memory.gamePlayerId) ?? {};
-    byPosition[memory.position] = memory.roleId;
-    roleMemoryOf.set(memory.gamePlayerId, byPosition);
+  const cardMemoryOf = new Map<string, Partial<Record<Place, RoleCard>>>();
+  for (const memory of state.cardMemory) {
+    const byPlace = cardMemoryOf.get(memory.gamePlayerId) ?? {};
+    byPlace[memory.place] = memory.card;
+    cardMemoryOf.set(memory.gamePlayerId, byPlace);
   }
 
   /**
@@ -721,19 +718,19 @@ export function buildSquadView(state: GameState): SquadView {
        * 함수를 부르므로 어디서 계산해도 같은 값이 나온다.
        */
       const { observation, attributes: observed } = facts;
-      // 역할을 함께 넘긴다 — 같은 센터백이라도 노넌센스와 볼 플레잉은 요구가 다르다.
-      // 그래야 감독이 역할을 바꿨을 때 화면의 숫자가 그 자리에서 곧바로 답한다.
-      const slotFit = (position: string, role?: string) =>
-        observedFit(observed, observation, position, role);
+      // 카드를 함께 넘긴다 — 같은 센터백이라도 몰고 나가는 카드와 뒤를 지키는 카드는
+      // 요구가 다르다. 그래야 감독이 카드를 고쳤을 때 화면의 숫자가 곧바로 답한다.
+      const slotFit = (position: string, card?: RoleCard) =>
+        observedFit(observed, observation, position, card);
       const assignedSlot = liveSlot?.position ?? assignment?.position ?? null;
       /**
-       * 선발 배치가 있을 때만 배치의 역할을 표시한다. 벤치·예비의 주 포지션은 역할 배치가 아니다.
-       * 역할 기억의 복원은 setLineup이 맡으며 화면은 확정된 배치를 읽는다.
+       * 선발 배치가 있을 때만 배치의 카드를 표시한다. 벤치·예비의 주 포지션은 카드 배치가 아니다.
+       * 카드 기억의 복원은 setLineup이 맡으며 화면은 확정된 배치를 읽는다.
        */
       const slotted = (liveSlot?.role ?? assignment?.role) === "starting";
-      const assignedRoleId = slotted ? (liveSlot?.roleId ?? assignment?.roleId) : undefined;
+      const assignedCard = slotted ? (liveSlot?.card ?? assignment?.card) : undefined;
       const shownOverall = facts.overall;
-      const slotValue = assignedSlot ? slotFit(assignedSlot, assignedRoleId) : null;
+      const slotValue = assignedSlot ? slotFit(assignedSlot, assignedCard) : null;
       return {
         id: p.id,
         name: p.name,
@@ -741,15 +738,17 @@ export function buildSquadView(state: GameState): SquadView {
         age: facts.age,
         position: facts.position,
         positionGroup: groupOf(p),
-        positions: p.positions.map((x) => ({ ...x, overall: slotFit(x.position) })),
+        positions: p.positions.map((x) => ({
+          ...x,
+          overall: observedPlaceFit(observed, observation, x.position),
+        })),
         overall: shownOverall,
         observation,
         /**
-         * 이 자리·이 **역할**에서 내는 전력 — 기본값과 다를 때만 채운다.
+         * 이 자리·이 **카드**에서 내는 전력 — 기본값과 다를 때만 채운다.
          *
-         * ⚠️ 자리 묶음만 보지 않는다. 센터백이 센터백 자리에 선 채로 **역할만**
-         * 바꿔도(볼 플레잉 디펜더 ↔ 노넌센스) 요구 역량이 달라지므로, 자리든
-         * 역할이든 기본과 달라지면 그 값을 낸다.
+         * ⚠️ 자리 묶음만 보지 않는다. 센터백이 센터백 자리에 선 채로 **카드만**
+         * 고쳐도 요구 역량이 달라지므로, 자리든 카드든 기본과 달라지면 그 값을 낸다.
          */
         slotOverall: slotValue !== null && slotValue !== shownOverall ? slotValue : null,
         // 오피스는 우리 선수의 숫자를 그대로 보여준다 (player.md §10).
@@ -788,30 +787,23 @@ export function buildSquadView(state: GameState): SquadView {
             ? ROLE_KO[assignment.role]
             : "스쿼드",
         assignedPosition: assignedSlot,
-        roleId: slotted && assignedSlot ? (assignedRoleId ?? defaultRoleOf(assignedSlot)) : null,
-        roleOptions:
-          slotted && assignedSlot
-            ? rolesFor(assignedSlot).map((r) => ({
-                id: r.id,
-                ko: r.ko,
-                abbr: r.abbr,
-                desc: r.desc,
-              }))
-            : [],
-        roleMemory: roleMemoryOf.get(p.id) ?? {},
+        card: slotted && assignedSlot ? (assignedCard ?? null) : null,
+        cardMemory: cardMemoryOf.get(p.id) ?? {},
         /**
          * **자리가 없어도 싣는다.** 코어의 장부는 (선수·오늘)이라 벤치를 다녀와도
          * 흔적이 이어진다. 선발 행에만 실으면 돌아온 선수의 적응도 미리보기가
          * 서버와 다른 자로 잰 값이 된다.
          *
          * 다만 **아침의 자리가 아니면 싣지 않는다** — 코어는 그 자리에서만 아침의
-         * 역할과 견주고 나머지 자리에서는 낸 값을 되돌린다(`settleRoleCost`).
-         * 옛 자리의 역할을 기준으로 재면 화면이 서버가 매기지 않을 값을 예고한다.
+         * 카드와 견주고 나머지 자리에서는 낸 값을 되돌린다(`settleCardCost`).
+         * 옛 자리의 카드를 기준으로 재면 화면이 서버가 매기지 않을 값을 예고한다.
          * 어느 자리의 흔적인지는 `assignedPosition`이 말한다.
          */
-        roleToday:
-          assignment?.roleMemo?.date === state.date && assignment.roleMemo.position === assignedSlot
-            ? { role: assignment.roleMemo.role, paid: assignment.roleMemo.paid }
+        cardToday:
+          assignment?.cardMemo?.date === state.date &&
+          assignedSlot !== null &&
+          samePlace(assignment.cardMemo.place, assignedSlot)
+            ? { card: assignment.cardMemo.card ?? null, paid: assignment.cardMemo.paid }
             : null,
         assignedPoint: liveSlot?.point ?? pointOf.get(p.id) ?? null,
         // 저장은 소수지만 화면은 눈금이다 — 87.4와 87.7을 감독이 구분할 일은 없다

@@ -11,6 +11,7 @@ import {
 } from "@gaffer/engine";
 import {
   type MatchEvent,
+  cardLine,
   TACTIC_TOGGLES,
   tacticToggleValue,
   tacticToggleWord,
@@ -98,7 +99,7 @@ export function buildStandingBlock(state: GameState): string[] {
    */
   const ourTeamTactics = tacticsOf(state, state.userTeamId);
   const ourTactics = ourTeamTactics.spec;
-  const assignments = ourTeamTactics.assignments.filter((a) => a.role === "starting" && a.roleId);
+  const assignments = ourTeamTactics.assignments.filter((a) => a.role === "starting" && a.card);
   /**
    * 걸어 둔 갈래 — **중립인 것은 세우지 않는다** (`tacticsBrief`와 같은 규칙).
    * 낱말은 `TACTIC_TOGGLES` 하나에서 온다 — 손으로 적으면 해석 프롬프트가 가르치는
@@ -126,10 +127,10 @@ export function buildStandingBlock(state: GameState): string[] {
       (ourToggles.length > 0 ? ` · ${ourToggles.join(" · ")}` : ``) +
       (ourRoutine.length > 0 ? ` · ${SET_PIECE_KO} ${ourRoutine.join(" · ")}` : ``),
     assignments.length > 0
-      ? `자리별 역할: ${assignments
-          .map((a) => `${playerName(state, a.playerId)}(${a.position} ${a.roleId})`)
+      ? `자리별 카드: ${assignments
+          .map((a) => `${playerName(state, a.playerId)}(${a.position} ${cardLine(a.card)})`)
           .join(", ")}`
-      : `자리별 역할: 없음`,
+      : `자리별 카드: 없음`,
     armbandLine(state),
     `세트피스 키커: 코너 ${takerName(takers.corner)} · 프리킥 ${takerName(takers.freeKick)} · 페널티 ${takerName(takers.penalty)}`,
     `</standing>`,
@@ -158,8 +159,8 @@ export function buildBoardMovesBlock(state: GameState, moves: readonly BoardMove
       }
       case "position":
         return `- ${who(move.playerId)} 자리 → ${move.position}`;
-      case "role":
-        return `- ${who(move.playerId)} 역할 → ${move.role}`;
+      case "card":
+        return `- ${who(move.playerId)} 카드 → ${cardLine(move.card)}`;
       case "substitution":
         return `- 교체: ${who(move.out)} → ${who(move.in)}`;
       case "setPiece":

@@ -33,6 +33,7 @@ import {
   buildEventsBlock,
   buildLedgerNote,
   buildMatchTools,
+  closeMatchTurn,
   buildShootoutMessage,
   collectMatchMarks,
   eventsBlockOf,
@@ -439,7 +440,7 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     }
   });
 
-  it("벤치 선수를 넣으며 주는 개인 지시는 교체 뒤 명단으로 검증한다", async () => {
+  it("벤치 선수를 넣으며 주는 카드 수정은 교체 뒤 명단으로 검증한다", async () => {
     const state = rolling();
     const before = structuredClone(state);
     const side = userSide(state);
@@ -453,11 +454,10 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
         {
           pointId: "combined",
           target: { player: incoming },
-          shape: "behavior",
+          shape: "card",
           sign: 1,
-          step: 1,
-          action: "mark",
-          when: "defend",
+          step: 3,
+          word: "mark",
           targetPlayer: target,
         },
       ],
@@ -517,11 +517,11 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     ];
     state.pendingMatch!.live.sheet = [onPitch, bench].map((player) => ({
       pointId: "prior",
-      shape: "behavior",
+      shape: "card",
       target: { player },
-      sign: 1,
+      sign: -1,
       step: 1,
-      action: "hold",
+      word: "passRisk",
     }));
     interpretMatch.mockImplementationOnce(async (request: MatchInstructionRequest) => {
       const block = request.context.match(/<active_effects>(.*?)<\/active_effects>/s)?.[1];
@@ -547,11 +547,10 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
           {
             pointId: "plan",
             target: { player: actor },
-            shape: "behavior",
-            sign: 1,
+            shape: "card",
+            sign: -1,
             step: 1,
-            action: "hold",
-            when: "always",
+            word: "freedom",
           },
         ],
       },
@@ -653,25 +652,28 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
     expect(state.pendingMatch!.live).toEqual(before);
   });
 
-  it("정지점은 자동 판독 없이 사건을 한 번 중계하고 시계를 움직이지 않는다", async () => {
+  it("감독이 말을 건 턴은 그 사이의 사건을 한 번 읽고, 판독 없이 답하며 시계를 움직이지 않는다", async () => {
     const state = rolling();
     const side = userSide(state);
     const scorer = state.pendingMatch!.live.ledger[side].onPitch[10]!;
     const heard: string[] = [];
     runTurn.mockImplementation(async (req: TurnRequest) => {
-      expect(req.tools?.map((tool) => tool.name)).toEqual(["finalize_match"]);
+      expect(req.tools?.map((tool) => tool.name).sort()).toEqual([
+        "tactic_orders",
+        "update_character",
+      ]);
       heard.push(req.user);
-      return answered('<scene minute="8" />\n<commentary>골이 들어갑니다!</commentary>');
+      return answered('<speak name="레오 카스텔라노">좋은 골이었습니다.</speak>');
     });
     seat(state, [{ minute: 8, type: "goal", team: side, actors: [scorer], causes: [] }]);
     const tick = state.pendingMatch!.live.state.tick;
-    const first = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
+    const first = await runGmTurn(state, "방금 골 어땠어?");
     expect(heard[0]).toContain("<events>");
     expect(heard[0]).toContain("- 8′");
     expect(first.goals!.some((goal) => goal.ours)).toBe(true);
     expect(state.pendingMatch!.live.state.tick).toBe(tick);
     expect(state.pendingMatch!.eventsSeen).toBe(state.pendingMatch!.live.ledger.events.length);
-    await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
+    await runGmTurn(state, "계속 지켜보자");
     expect(heard[1]).toContain("(사건 없음)");
     expect(createEvaluator).not.toHaveBeenCalled();
     expect(evaluate).not.toHaveBeenCalled();
@@ -679,15 +681,14 @@ describe("경기 턴 — 매치 GM이 도구로 지시를 판에 건다", () => 
   });
 });
 
-/** GM supplies prose in its existing tool call; Jev evaluates the numeric settlement. */
-describe("경기 마감 — GM의 메모와 Jev 결산", () => {
+/** 종료 휘슬의 마감은 매치 GM 없이 코어가 열고, Jev가 수치 결산을 낸다 (agents.md §3). */
+describe("경기 마감 — 코어 마감과 Jev 결산", () => {
   realMode();
 
-  const nearlyDone = (): GameState => late().state;
   let finishedOrigin: GameState | undefined;
   const finishedState = (): GameState => {
     if (!finishedOrigin) {
-      finishedOrigin = nearlyDone();
+      finishedOrigin = late().state;
       playToEnd(finishedOrigin);
     }
     return structuredClone(finishedOrigin);
@@ -737,146 +738,75 @@ describe("경기 마감 — GM의 메모와 Jev 결산", () => {
     };
   }
 
-  it("GM 메모는 출전 선수에게만 남고 Jev 수치 결산은 코어 앵커 안에 선다", async () => {
-    const state = nearlyDone();
+  it("마감은 매치 GM 없이 Jev 수치 결산을 코어 앵커 안에 세우고, 남은 사건을 기록에 싣는다", async () => {
+    const state = finishedState();
     const matchId = state.pendingMatch!.matchId;
-    const seen = {
-      anchors: {} as Record<string, number>,
-      commentary: "",
-    };
+    const seen = { anchors: {} as Record<string, number>, commentary: "" };
     evaluate.mockImplementation(settler(state, matchId, seen));
-    const playerId = state.pendingMatch!.live.ledger[userSide(state)].onPitch[0]!;
-    const matchSquad = new Set(Object.keys(state.pendingMatch!.live.setup.players));
-    const outsider = state.players.find((player) => !matchSquad.has(player.id))!;
-    const outsiderState = structuredClone(outsider.state);
-    let finalizeReply = "";
-    runTurn.mockImplementation(async (req: TurnRequest) => {
-      const finalize = req.tools!.find((t) => t.name === "finalize_match")!;
-      // 장부가 끝났으면 마감, 아니면 중계만
-      if (state.pendingMatch?.live.ledger.phase === "finished") {
-        const reply = await finalize.handle({
-          notes: [
-            { playerId, note: "상대의 공격을 차분하게 막아냈다" },
-            { playerId: outsider.id, note: "출전하지 않은 선수의 평점 근거" },
-          ],
-        });
-        expect(reply.ok).toBe(true);
-        finalizeReply = reply.message;
-        return answered(
-          '<scene minute="90" />\n<commentary>경기 종료 휘슬이 울립니다.</commentary>\n<speak name="레오 카스텔라노">수고하셨습니다.</speak>',
-          1,
-        );
-      }
-      expect((await finalize.handle({})).ok).toBe(false); // 아직 안 끝난 경기는 반려
-      return answered('<scene minute="85" />\n<commentary>경기가 이어집니다.</commentary>');
+    const goalsLeft = unseenEvents(state).filter((event) => event.type === "goal").length;
+    // 경기 중 감독과 나눈 말 — 결산이 읽는 경기 대화의 원본이다
+    state.chat.push({
+      role: "model",
+      text: '<speak name="레오 카스텔라노">수비 라인이 잘 버텨 줍니다.</speak>',
+      toolCalls: [],
+      at: state.date,
+      inMatch: true,
+      matchId,
     });
 
-    /** 턴 러너처럼 장면을 채팅에 남긴다 — 마감 에이전트가 읽는 중계의 원본이다 */
-    const keep = (text: string) =>
-      state.chat.push({
-        role: "model",
-        text,
-        toolCalls: [],
-        at: state.date,
-        inMatch: true,
-        matchId,
-      });
-    let last = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
-    expect(state.pendingMatch).toBeTruthy();
-    keep(last.text);
-    playToEnd(state);
-    last = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
+    const closed = await closeMatchTurn(state);
     expect(state.pendingMatch).toBeFalsy();
-    expect(finalizeReply).toContain("결산");
-    expect(finalizeReply).not.toContain("<closing>");
-
-    // 앵커가 먼저 박혔고, 도구는 그 위에 ±RATING_BAND 안으로 매겼다
+    expect(runTurn).not.toHaveBeenCalled();
+    expect(closed?.matchId).toBe(matchId);
+    expect(closed?.goals).toHaveLength(goalsLeft);
     const result = state.matches.find((m) => m.id === matchId)!.result!;
     expect(Object.keys(seen.anchors).length).toBeGreaterThan(0);
     expect(result.rated).toBe(true);
     for (const [id, anchor] of Object.entries(seen.anchors)) {
       expect(Math.abs(result.ratings![id]! - anchor)).toBeLessThanOrEqual(RATING_BAND);
     }
-    expect(result.ratingNotes?.[playerId]).toBe("상대의 공격을 차분하게 막아냈다");
-    expect(result.ratingNotes).not.toHaveProperty(outsider.id);
-    expect(state.players.find((player) => player.id === outsider.id)!.state).toEqual(outsiderState);
-    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(result.ratingNotes ?? {}).toEqual({});
     expect(createEvaluator).toHaveBeenCalledWith("finalize-match");
-    // 타입 평가도 이 경기의 중계를 읽었다
-    expect(seen.commentary).toContain("경기가 이어집니다");
+    expect(seen.commentary).toContain("수비 라인이 잘 버텨 줍니다");
     // 마감 기록과 결산 기록이 함께 서고, 결산은 칩이 아니다
-    expect(last.toolCalls.map((c) => c.name)).toContain("finalize_match");
-    expect(last.toolCalls.find((c) => c.name === "settle_match")?.silent).toBe(true);
-    expect(last.text).toContain("경기 종료 휘슬");
+    expect(closed?.toolCalls.map((c) => c.name)).toContain("finalize_match");
+    expect(closed?.toolCalls.find((c) => c.name === "settle_match")?.silent).toBe(true);
   });
 
-  it("GM이 마감을 빠뜨려도 추가 생성 호출이나 새 메모 없이 결산한다", async () => {
+  it("감독의 턴이 끝난 경기를 먼저 만나면 그 턴이 같은 마감을 부른다", async () => {
     const state = finishedState();
     const matchId = state.pendingMatch!.matchId;
     const seen = { anchors: {} as Record<string, number>, commentary: "" };
     evaluate.mockImplementation(settler(state, matchId, seen));
-    runTurn.mockResolvedValue(
-      answered('<scene minute="90" />\n<commentary>휘슬이 울립니다.</commentary>'),
-    );
+    runTurn.mockResolvedValue(answered('<speak name="레오 카스텔라노">끝났습니다.</speak>'));
 
-    const last = await runGmTurn(state, "경기 중단", undefined, { kind: "match_stop" });
-    const result = state.matches.find((match) => match.id === matchId)!.result!;
+    const last = await runGmTurn(state, "수고했어");
     expect(state.pendingMatch).toBeFalsy();
-    expect(result.rated).toBe(true);
-    expect(result.ratingNotes ?? {}).toEqual({});
+    expect(state.matches.find((match) => match.id === matchId)!.result!.rated).toBe(true);
     expect(last.toolCalls.map((call) => call.name)).toContain("finalize_match");
     expect(runTurn).toHaveBeenCalledTimes(1);
     expect(evaluate).toHaveBeenCalledTimes(1);
-    expect(last.text).toContain("휘슬이 울립니다");
-  });
-
-  it("수치 인자가 섞인 마감 도구는 검증 단계에서 거절하고 상태를 바꾸지 않는다", async () => {
-    const state = finishedState();
-    const calls: GmToolCall[] = [];
-    const tools = buildMatchTools(state, {
-      calls,
-      goals: [],
-      cards: [],
-      finalizeEvaluator: { evaluate },
-    });
-    const finalize = tools.find((tool) => tool.name === "finalize_match")!;
-    const before = structuredClone(state);
-    for (const args of [
-      { ratings: [{ playerId: "player", rating: 10 }] },
-      { notes: [{ playerId: "player", note: "근거", rating: 10 }] },
-      { notes: [{ playerId: "player", note: 10 }] },
-    ])
-      expect((await finalize.handle(args)).ok).toBe(false);
-    expect(state).toEqual(before);
-    expect(calls).toEqual([]);
-    expect(evaluate).not.toHaveBeenCalled();
+    expect(await closeMatchTurn(state)).toBeNull();
   });
 
   it("평가 오류 뒤에도 종료 결과와 코어 평점 앵커는 남고 마감을 중복 적용하지 않는다", async () => {
     const state = finishedState();
     const matchId = state.pendingMatch!.matchId;
-    const calls: GmToolCall[] = [];
     let anchors: Record<string, number> = {};
     evaluate.mockImplementation(async () => {
       anchors = { ...state.matches.find((match) => match.id === matchId)!.result!.ratings };
       throw new LlmCallError("overloaded", "evaluation unavailable");
     });
-    const finalize = buildMatchTools(state, {
-      calls,
-      goals: [],
-      cards: [],
-      finalizeEvaluator: { evaluate },
-    }).find((tool) => tool.name === "finalize_match")!;
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      expect((await finalize.handle({})).ok).toBe(true);
+      const closed = await closeMatchTurn(state);
+      expect(closed?.toolCalls.filter((call) => call.name === "finalize_match")).toHaveLength(1);
       expect(state.pendingMatch).toBeFalsy();
       const result = state.matches.find((match) => match.id === matchId)!.result!;
       expect(Object.keys(anchors).length).toBeGreaterThan(0);
       expect(result.ratings).toEqual(anchors);
       expect(result.rated).not.toBe(true);
-      expect((await finalize.handle({})).ok).toBe(false);
-      expect(calls.filter((call) => call.name === "finalize_match")).toHaveLength(1);
+      expect(await closeMatchTurn(state)).toBeNull();
       expect(evaluate).toHaveBeenCalledTimes(1);
     } finally {
       warning.mockRestore();
@@ -916,9 +846,7 @@ describe("중계 위생 — 꺾쇠 블록은 화면에도 저장에도 서지 �
     );
 
     const streamed: string[] = [];
-    const result = await runGmTurn(state, "경기 중단", (d) => streamed.push(d), {
-      kind: "match_stop",
-    });
+    const result = await runGmTurn(state, "방금 슛 어땠어?", (d) => streamed.push(d));
 
     for (const text of [result.text, streamed.join("")]) {
       expect(text).not.toContain("<points");

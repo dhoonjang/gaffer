@@ -1,10 +1,10 @@
 import type {
+  AttributeAxis,
   BallFlight,
   EventCause,
   FieldPoint,
   LiveAction,
   LiveBall,
-  LiveBehavior,
   LiveLane,
   LiveMatchState,
   LivePhase,
@@ -20,12 +20,18 @@ import type {
   WeightSlot,
 } from "@gaffer/domain";
 import {
+  AXIS_KO,
+  CARD_STEP_MAX,
   FIELD,
   LIVE_STEP,
   PHASE_END,
+  cardStepsOf,
+  habitSteps,
   otherSide,
+  positionProficiency,
   setPieceRoutineCount,
   weightSlotOf,
+  withHabit,
 } from "@gaffer/domain";
 import { makeRng } from "../rng";
 import { emptyStatLine } from "../match-ledger";
@@ -54,8 +60,18 @@ import {
   yAtLateral,
 } from "./geometry";
 import { teamParamsOf, type TeamParams } from "./params";
-import { advanceFlight, maxSpeedOf, movePlayer, reachHeightOf, reachOf } from "./physics";
-import { SLOT_TENDENCY, roleTendencyOf, type RoleTendency } from "./roles";
+import {
+  accelerationFactor,
+  advanceFlight,
+  claimRangeOf,
+  loftErrorOf,
+  markingPressureOf,
+  maxSpeedOf,
+  movePlayer,
+  reachHeightOf,
+  reachOf,
+} from "./physics";
+import { SLOT_TENDENCY, stepsTendencyOf, type RoleTendency } from "./roles";
 import {
   heatmapLogDensityAt,
   heatmapOf,
@@ -65,6 +81,7 @@ import {
 } from "./heatmap";
 import { backLineOf, frontLimitOf, shapePosition } from "./shape";
 import { sideInputOf, type LiveInput, type LiveStepResult } from "./types";
+import type { LiveSheet } from "../sheet";
 import { xThreatAt, xThreatSmooth } from "./xt";
 import { onTarget, shotXg } from "./xg";
 import {
@@ -97,8 +114,14 @@ import {
   DUEL_RANGE,
   DUEL_SCALE,
   DUEL_TACKLER_EDGE,
-  FIELD_BEHAVIOR,
-  FIELD_BEHAVIOR_SIGMA,
+  TACKLE_SKILL,
+  DRIBBLE_SKILL,
+  DUEL_STRENGTH,
+  INDIVIDUAL_SECONDS,
+  DEFENSIVE_READING,
+  ATTACKING_READING,
+  FIELD_MAN_MARK,
+  FIELD_MAN_MARK_SIGMA,
   FIELD_CHASE,
   FIELD_CHASE_SIGMA,
   FIELD_CHASE_TAU,
@@ -114,6 +137,8 @@ import {
   FIELD_LINE_BEHIND,
   FIELD_LINE_SIGMA,
   FIELD_MARK,
+  MAN_MARK_GOAL_SIDE,
+  MARK_TENDENCY_NEUTRAL,
   FIELD_MARK_SIGMA,
   FIELD_MARK_NEAREST,
   FIELD_MARK_TAU,
@@ -130,6 +155,7 @@ import {
   FIELD_PRESS_DANGER,
   FIELD_PRESS_SIGMA,
   FIELD_PRESS_TAU,
+  PRESS_WORD_BIAS,
   FIELD_PRESS_ZONE_SIGMA,
   FIELD_PROPOSALS_EACH,
   FIELD_PROPOSALS_HEATMAP,
@@ -165,6 +191,9 @@ import {
   KEEPER_ATTACK_ADVANCE,
   KEEPER_ATTACK_MAX_OUT,
   KEEPER_REACTION_SECONDS,
+  KEEPER_OUT_SECONDS,
+  KEEPER_CLAIM_BURST,
+  DECELERATION,
   KEEP_VALUE,
   LINE_STEP_UP,
   LINE_STEP_UP_SPEED,
@@ -272,7 +301,6 @@ interface PreparedInput {
   backLine: Record<MatchSide, number>;
   tendency: Map<string, RoleTendency>;
   slot: Map<string, LineupSlot>;
-  behavior: Map<string, LiveBehavior>;
 }
 
 interface Ctx extends PreparedInput {
@@ -282,6 +310,8 @@ interface Ctx extends PreparedInput {
   events: MatchEvent[];
   stats: Record<string, MatchStatLine>;
   factor: Map<string, number>;
+  /** 공 있을 때의 자리가 있는 말만 — 공을 가진 동안의 경기 계수 */
+  factorInPossession: Map<string, number>;
   /** 이 틱의 가치장 몫 — 편마다, 판단하는 말이 있을 때 한 번 */
   field: Partial<Record<MatchSide, SideField>>;
   /** 이 틱에 이미 세운 히트맵 — 말 id → 그 말의 지금 국면 히트맵 */
@@ -343,7 +373,14 @@ export function createLiveState(input: LiveInput, options: CreateLiveOptions): L
     const backLine = backLineOf(sideInput.slots);
     for (const slot of sideInput.slots) {
       const player = input.players.get(slot.player.id) ?? slot.player;
-      const at = kickoffPosition(slot, side, params, backLine, options.kickoffSide === side);
+      const at = kickoffPosition(
+        slot,
+        slotTendency(slot, input.sheet),
+        side,
+        params,
+        backLine,
+        options.kickoffSide === side,
+      );
       players.push(
         newPlayer(
           slot.player.id,
@@ -367,6 +404,8 @@ export function createLiveState(input: LiveInput, options: CreateLiveOptions): L
     possessionSince: tick,
     lastPass: null,
     lastTurnover: null,
+    lastBeat: null,
+    lastClaim: null,
     restart: {
       kind: "kickoff",
       side: options.kickoffSide,
@@ -386,15 +425,29 @@ export function createLiveState(input: LiveInput, options: CreateLiveOptions): L
   };
 }
 
+/**
+ * 그 말의 성향 — 저장된 카드에 시트의 경기 중 수정을 덮고, 선수의 버릇을 얹는다
+ * (live-match.md §4·§6.2 · player.md §3.4). 수정은 적은 낱말만 바꾼다.
+ */
+function slotTendency(slot: LineupSlot, sheet: LiveSheet): RoleTendency {
+  const card = { ...cardStepsOf(slot.card), ...sheet.cards[slot.player.id] };
+  return stepsTendencyOf(
+    slot.position,
+    withHabit(card, habitSteps(slot.player.attributes, slot.position)),
+    slot.card?.ip.place,
+  );
+}
+
 /** 킥오프 배치 — 형태 자리를 자기 진영 안으로 조인다 */
 function kickoffPosition(
   slot: LineupSlot,
+  tendency: RoleTendency,
   side: MatchSide,
   params: TeamParams,
   backLine: number,
   kicking: boolean,
 ): FieldPoint {
-  const at = shapePosition(slot, roleTendencyOf(slot.position, slot.roleId), {
+  const at = shapePosition(slot, tendency, {
     side,
     params,
     attacking: kicking,
@@ -419,20 +472,24 @@ function synchronize(ctx: Ctx): void {
       keep.add(slot.player.id);
       if (known.has(slot.player.id)) continue;
       const player = input.players.get(slot.player.id) ?? slot.player;
-      const at = shapePosition(slot, roleTendencyOf(slot.position, slot.roleId), {
-        side,
-        params: ctx.params[side],
-        attacking: state.possession === side,
-        phase: "build_up",
-        ballDepth: depthOf(state.ball.x, side),
-        ballLateral: lateralOf(state.ball.y, side),
-        backLine: ctx.backLine[side],
-        frontLimit: frontLimitOf(
-          state.possession === side,
-          depthOf(state.ball.x, side),
-          FIELD.length - ctx.defensiveLine[otherSide(side)],
-        ),
-      });
+      const at = shapePosition(
+        slot,
+        ctx.tendency.get(slot.player.id) ?? slotTendency(slot, input.sheet),
+        {
+          side,
+          params: ctx.params[side],
+          attacking: state.possession === side,
+          phase: "build_up",
+          ballDepth: depthOf(state.ball.x, side),
+          ballLateral: lateralOf(state.ball.y, side),
+          backLine: ctx.backLine[side],
+          frontLimit: frontLimitOf(
+            state.possession === side,
+            depthOf(state.ball.x, side),
+            FIELD.length - ctx.defensiveLine[otherSide(side)],
+          ),
+        },
+      );
       state.players.push(
         newPlayer(slot.player.id, side, at, startingCondition(player, side), state.tick),
       );
@@ -503,6 +560,8 @@ function cloneState(s: LiveMatchState): LiveMatchState {
       : null,
     lastPass: s.lastPass ? { ...s.lastPass } : null,
     lastTurnover: s.lastTurnover ? { ...s.lastTurnover, at: { ...s.lastTurnover.at } } : null,
+    lastBeat: s.lastBeat ? { ...s.lastBeat } : null,
+    lastClaim: s.lastClaim ? { ...s.lastClaim } : null,
     possessionTime: { ...s.possessionTime },
     lastShotAt: { ...s.lastShotAt },
     bench: { ...s.bench },
@@ -519,26 +578,31 @@ function prepareInput(input: LiveInput): PreparedInput {
   for (const side of ["home", "away"] as const) {
     for (const s of sideInputOf(input, side).slots) {
       slot.set(s.player.id, s);
-      tendency.set(s.player.id, roleTendencyOf(s.position, s.roleId));
+      tendency.set(s.player.id, slotTendency(s, input.sheet));
     }
   }
-  const behavior = new Map<string, LiveBehavior>();
-  for (const b of input.sheet.behaviors) behavior.set(b.player, b);
   return {
     params,
     backLine: { home: backLineOf(input.home.slots), away: backLineOf(input.away.slots) },
     tendency,
     slot,
-    behavior,
   };
 }
 
 function buildContext(state: LiveMatchState, input: LiveInput, prepared: PreparedInput): Ctx {
   const factor = new Map<string, number>();
+  const factorInPossession = new Map<string, number>();
   for (const p of state.players) {
     const s = prepared.slot.get(p.id);
     if (!s) continue;
-    factor.set(p.id, matchFactor(s, p.condition, input.sheet.edge[p.id] ?? 0));
+    const edge = input.sheet.edge[p.id] ?? 0;
+    factor.set(p.id, matchFactor(s, p.condition, edge));
+    // 공 있을 때의 자리가 있으면 공을 가진 동안은 그 자리의 적응도로 낸다 (player.md §3.3)
+    const ipPlace = s.card?.ip.place;
+    if (ipPlace) {
+      const proficiency = positionProficiency(s.player.positions, ipPlace, s.player.foot);
+      factorInPossession.set(p.id, matchFactor({ ...s, proficiency }, p.condition, edge));
+    }
   }
   return {
     state,
@@ -548,6 +612,7 @@ function buildContext(state: LiveMatchState, input: LiveInput, prepared: Prepare
     stats: {},
     ...prepared,
     factor,
+    factorInPossession,
     field: {},
     zones: new Map(),
     defensiveLine: { home: 12, away: 12 },
@@ -579,7 +644,36 @@ function isKeeper(ctx: Ctx, p: LivePlayer): boolean {
 }
 
 function attr(ctx: Ctx, p: LivePlayer, axis: Parameters<typeof matchAttribute>[1]): number {
-  return matchAttribute(playerOf(ctx, p.id).attributes, axis, ctx.factor.get(p.id) ?? 1);
+  const inPossession =
+    ctx.state.possession === p.side ? ctx.factorInPossession.get(p.id) : undefined;
+  return matchAttribute(
+    playerOf(ctx, p.id).attributes,
+    axis,
+    inPossession ?? ctx.factor.get(p.id) ?? 1,
+  );
+}
+
+type Blend = ReadonlyArray<readonly [Parameters<typeof matchAttribute>[1], number]>;
+
+/** 가중치 표를 한 번만 펼친다 — 판단마다 새 배열을 짓지 않게 */
+const blendOf = (
+  weights: Readonly<Partial<Record<Parameters<typeof matchAttribute>[1], number>>>,
+) => Object.entries(weights) as unknown as Blend;
+const TACKLE_BLEND = blendOf(TACKLE_SKILL);
+const DRIBBLE_BLEND = blendOf(DRIBBLE_SKILL);
+const DEFENSIVE_BLEND = blendOf(DEFENSIVE_READING);
+const ATTACKING_BLEND = blendOf(ATTACKING_READING);
+
+/** 축 몇 개의 가중 합 — 판정 하나가 여러 축을 읽을 때 (`DEFENSIVE_READING` 등) */
+function blendAttr(ctx: Ctx, p: LivePlayer, blend: Blend): number {
+  let sum = 0;
+  for (const [axis, weight] of blend) sum += attr(ctx, p, axis) * weight;
+  return sum;
+}
+
+/** 공 없는 말이 자리를 읽는 기량 — 수비 땐 수비 읽기, 공격 땐 공격 자리 읽기 (live-match.md §2) */
+function readingOf(ctx: Ctx, p: LivePlayer, attacking: boolean): number {
+  return blendAttr(ctx, p, attacking ? ATTACKING_BLEND : DEFENSIVE_BLEND);
 }
 
 function stat(ctx: Ctx, id: string): MatchStatLine {
@@ -680,7 +774,7 @@ function zoneOf(ctx: Ctx, p: LivePlayer): Heatmap {
     };
   }
   const zone = heatmapOf(
-    slotOf(ctx, p),
+    phaseSlotOf(ctx, p, attacking),
     ctx.tendency.get(p.id) ?? SLOT_TENDENCY[slotOf(ctx, p)],
     { depth: depthOf(center.x, p.side), lateral: lateralOf(center.y, p.side) },
     {
@@ -697,9 +791,10 @@ function zoneOf(ctx: Ctx, p: LivePlayer): Heatmap {
 function shapeOf(ctx: Ctx, p: LivePlayer, attacking: boolean): FieldPoint {
   if (!ctx.slot.has(p.id)) return { x: p.x, y: p.y };
   const base = baseShapeOf(ctx, p, attacking);
-  // 형태 오차 — 위치선정이 좋으면 작다. 소유가 바뀔 때만 새로 선다: 판단마다 흔들면 말이
-  // 제자리 근처를 쉬지 않고 조깅한다
-  const noise = ctx.params[p.side].shapeNoise * (1.3 - attr(ctx, p, "positioning") / 120);
+  // 형태 오차 — 자리를 읽는 기량이 좋으면 작다. 소유가 바뀔 때만 새로 선다: 판단마다
+  // 흔들면 말이 제자리 근처를 쉬지 않고 조깅한다
+  const skill = readingOf(ctx, p, attacking);
+  const noise = ctx.params[p.side].shapeNoise * (1.3 - skill / 120);
   const jitter = makeRng(
     ctx.input.seed,
     `shape:${ctx.input.matchId}:${p.id}:${ctx.state.possessionSince}`,
@@ -708,42 +803,30 @@ function shapeOf(ctx: Ctx, p: LivePlayer, attacking: boolean): FieldPoint {
   const phase = makeRng(ctx.input.seed, `drift:${p.id}`)() * 6.283;
   const w = (6.283 / SHAPE_DRIFT_PERIOD) * ctx.state.seconds;
   return inside({
-    x: base.x + (jitter() - 0.5) * 2 * noise + sinApprox(w + phase) * SHAPE_DRIFT[slotOf(ctx, p)],
+    x:
+      base.x +
+      (jitter() - 0.5) * 2 * noise +
+      sinApprox(w + phase) * SHAPE_DRIFT[phaseSlotOf(ctx, p, attacking)],
     y:
       base.y +
       (jitter() - 0.5) * 2 * noise +
-      cosApprox(w * 0.7 + phase * 1.3) * SHAPE_DRIFT[slotOf(ctx, p)],
+      cosApprox(w * 0.7 + phase * 1.3) * SHAPE_DRIFT[phaseSlotOf(ctx, p, attacking)],
   });
 }
 
-function behaviorTarget(ctx: Ctx, p: LivePlayer, b: LiveBehavior): FieldPoint | null {
-  const { state } = ctx;
-  const attacking = state.possession === p.side;
-  if (b.when === "attack" && !attacking) return null;
-  if (b.when === "defend" && attacking) return null;
-  const d = direction(p.side);
-  const marked = b.targetPlayer ? state.players.find((q) => q.id === b.targetPlayer) : undefined;
-  const lane = b.lane === "left" ? 13 : b.lane === "right" ? 55 : 34;
-  const depth = b.band === "defense" ? 25 : b.band === "attack" ? 82 : 52.5;
-  const region = { x: xAtDepth(depth, p.side), y: yAtLateral(lane, p.side) };
-  switch (b.action) {
-    case "press":
-      return marked ?? state.ball;
-    case "mark":
-      if (!marked) return null;
-      // 골 쪽 1.5m
-      return { x: marked.x - d * 1.5, y: marked.y };
-    case "cover":
-      return marked ? { x: marked.x - d * 8, y: marked.y } : { x: region.x, y: region.y };
-    case "support":
-      return marked
-        ? { x: marked.x - d * 5, y: region.y }
-        : { x: state.ball.x - d * 6, y: region.y };
-    case "run":
-      return region;
-    case "hold":
-      return shapeOf(ctx, p, attacking);
-  }
+/**
+ * 대인 마크의 자리 — 시트가 표적을 준 말은 그 상대의 골 쪽에 붙는다 (live-match.md §5.2).
+ * 무게는 이번 경기 마크 단계의 몫이다. 표적이 그라운드에 없으면 서지 않는다.
+ */
+function manMarkOf(ctx: Ctx, p: LivePlayer): ManMarkSpot | null {
+  const man = ctx.input.sheet.manMarks[p.id];
+  if (!man) return null;
+  const marked = ctx.state.players.find((q) => q.id === man.player);
+  if (!marked) return null;
+  return {
+    spot: { x: marked.x - direction(p.side) * MAN_MARK_GOAL_SIDE, y: marked.y },
+    weight: Math.min(1, man.step / CARD_STEP_MAX),
+  };
 }
 
 // ── 가치장 — 공 없는 말의 목표 (live-match.md §5.2) ───────────────────────────────
@@ -837,9 +920,14 @@ function sideField(ctx: Ctx, side: MatchSide): SideField {
         distance(q, spot) / Math.max(1, speedOf(ctx, q)) +
         FIELD_PRESS_BEHIND * dsigmoid((depthOf(q.x, side) - ballDepth) / 2),
     );
+    // 「압박」 낱말이 옮긴 몫 — 자리 기본값에서 벗어난 만큼만. 카드 없는 말은 0이다
+    const pressWord = (q: LivePlayer) => {
+      const base = SLOT_TENDENCY[slotOf(ctx, q)].press;
+      return (ctx.tendency.get(q.id)?.press ?? base) - base;
+    };
     softmaxInto(
       mates.map((q) => q.id),
-      times.map((t) => -t / FIELD_PRESS_TAU),
+      mates.map((q, i) => -times[i]! / FIELD_PRESS_TAU + PRESS_WORD_BIAS * pressWord(q)),
       intensity,
       field.press,
     );
@@ -922,18 +1010,26 @@ function sideField(ctx: Ctx, side: MatchSide): SideField {
   return field;
 }
 
+interface ManMarkSpot {
+  spot: FieldPoint;
+  /** 0..1 — 마크 단계 ÷ 끝 단계 */
+  weight: number;
+}
+
 /** 판단 한 번 동안 변하지 않는 것 — 제안점마다 다시 셈하지 않는다 */
 interface FieldLocal {
   f: SideField;
   zone: Heatmap;
   line: number | null;
-  behavior: FieldPoint | null;
+  manMark: ManMarkSpot | null;
   /** 우리 편이 발밑에 둔 공의 주인 */
   owner: LivePlayer | undefined;
   /** 오프사이드 선 — 상대 라인과 공 가운데 깊은 쪽 */
   offsideDepth: number;
   forward: number;
   cover: number;
+  /** 마크 성향 — 마크 항의 무게를 옮긴다 */
+  mark: number;
   own: FieldPoint;
 }
 
@@ -946,13 +1042,12 @@ interface FieldTerms {
   chase: number;
   support: number;
   run: number;
-  behavior: number;
 }
 
 function fieldValue(ctx: Ctx, p: LivePlayer, x: FieldPoint, local: FieldLocal): FieldTerms {
   const { state } = ctx;
   const side = p.side;
-  const { f, zone, line, behavior } = local;
+  const { f, zone, line, manMark } = local;
   const params = ctx.params[side];
   const g = (d2: number, s: number) => dexp(-d2 / (s * s));
   const d2 = (a: FieldPoint, b: FieldPoint) => sq(a.x - b.x) + sq(a.y - b.y);
@@ -1002,7 +1097,9 @@ function fieldValue(ctx: Ctx, p: LivePlayer, x: FieldPoint, local: FieldLocal): 
       press = FIELD_PRESS * share * g(d2(x, f.pressSpot), FIELD_PRESS_SIGMA);
     const willing = 0.2 + 0.8 * local.cover;
     for (const m of f.marks.get(p.id) ?? []) mark += m.weight * g(d2(x, m.spot), FIELD_MARK_SIGMA);
-    mark *= FIELD_MARK * willing;
+    mark *= FIELD_MARK * willing * (1 + local.mark - MARK_TENDENCY_NEUTRAL);
+    if (manMark)
+      mark += FIELD_MAN_MARK * manMark.weight * g(d2(x, manMark.spot), FIELD_MAN_MARK_SIGMA);
     const seg = segmentDistance(x, state.ball, local.own);
     let occupied = 1;
     for (const q of state.players) {
@@ -1029,13 +1126,12 @@ function fieldValue(ctx: Ctx, p: LivePlayer, x: FieldPoint, local: FieldLocal): 
     linePenalty *= defend;
   }
 
-  // 공통 — 추격 · 지시 · 역할의 분포 · 붐빔 · 이동 비용 · 관성
+  // 공통 — 추격 · 역할의 분포 · 붐빔 · 이동 비용 · 관성
   const chaseShare = f.chase.get(p.id) ?? 0;
   const chase =
     f.chaseSpot && chaseShare > 0
       ? FIELD_CHASE * chaseShare * g(d2(x, f.chaseSpot), FIELD_CHASE_SIGMA)
       : 0;
-  const behaviorTerm = behavior ? FIELD_BEHAVIOR * g(d2(x, behavior), FIELD_BEHAVIOR_SIGMA) : 0;
   const total =
     OFFBALL_DENSITY_WEIGHT * heatmapLogDensityAt(zone, x, side) +
     support +
@@ -1045,12 +1141,11 @@ function fieldValue(ctx: Ctx, p: LivePlayer, x: FieldPoint, local: FieldLocal): 
     mark +
     cover -
     linePenalty +
-    chase +
-    behaviorTerm -
+    chase -
     FIELD_CROWD * crowd -
     FIELD_MOVE_COST * distance(p, x) +
     FIELD_INERTIA * g(d2(x, p.target), FIELD_INERTIA_SIGMA);
-  return { total, press, mark, cover, chase, support, run, behavior: behaviorTerm };
+  return { total, press, mark, cover, chase, support, run };
 }
 
 /** 2차원 정규 밀도 (1/m²) */
@@ -1069,8 +1164,7 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
   const f = sideField(ctx, p.side);
   const zone = zoneOf(ctx, p);
   const shape = shapeOf(ctx, p, attacking);
-  const b = ctx.behavior.get(p.id);
-  const behavior = b ? behaviorTarget(ctx, p, b) : null;
+  const manMark = manMarkOf(ctx, p);
   const slot = slotOf(ctx, p);
   const line = slot === "CB" || slot === "FB" ? depthOf(shape.x, p.side) + f.lineStep : null;
 
@@ -1104,7 +1198,7 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
       sigma: FIELD_PROPOSAL_SIGMA.cover,
     });
   }
-  if (behavior) anchors.push({ at: behavior, sigma: FIELD_PROPOSAL_SIGMA.target });
+  if (manMark && !attacking) anchors.push({ at: manMark.spot, sigma: FIELD_PROPOSAL_SIGMA.mark });
   const nAnchor = FIELD_PROPOSALS_EACH;
   const nHeat = FIELD_PROPOSALS_HEATMAP;
   const n = nHeat + anchors.length * nAnchor;
@@ -1133,7 +1227,7 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
   points.push(inside(p.target));
 
   // P(x) ∝ exp(U ÷ T) — 제안 밀도로 나눈 가중치로 하나를 뽑는다
-  const skill = attr(ctx, p, attacking ? "offTheBall" : "positioning");
+  const skill = readingOf(ctx, p, attacking);
   const temperature =
     OFFBALL_TEMPERATURE_MIN +
     OFFBALL_TEMPERATURE_SPAN *
@@ -1143,7 +1237,7 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
     f,
     zone,
     line,
-    behavior,
+    manMark,
     owner: owner && owner.side === p.side ? owner : undefined,
     offsideDepth: Math.max(
       FIELD.length - ctx.defensiveLine[otherSide(p.side)],
@@ -1151,6 +1245,7 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
     ),
     forward: Math.max(tendency.advance, tendency.runBehind, tendency.boxPresence),
     cover: tendency.cover,
+    mark: tendency.mark,
     own: ownGoalOf(p.side),
   };
   const terms = points.map((x) => fieldValue(ctx, p, x, local));
@@ -1182,7 +1277,6 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
     ["chase", t.chase],
     ["support", t.support],
     ["run", t.run],
-    ["hold", t.behavior],
     ["shape", FIELD_SHAPE_LABEL],
   ];
   let best = labels[labels.length - 1]!;
@@ -1190,7 +1284,10 @@ function decideOffBall(ctx: Ctx, p: LivePlayer): void {
   p.action = best[0];
 }
 
-/** 골키퍼 — 공과 골문을 잇는 선 위, 가까우면 나온다; 박스 안의 느슨한 공은 잡으러 간다 */
+/**
+ * 골키퍼 — 공과 골문을 잇는 선 위, 가까우면 나온다; 박스 안의 느슨한 공과 장악 거리 안에
+ * 떨어지는 크로스는 잡으러 간다
+ */
 function keeperTarget(ctx: Ctx, p: LivePlayer): FieldPoint {
   const { state } = ctx;
   const own = ownGoalOf(p.side);
@@ -1207,6 +1304,16 @@ function keeperTarget(ctx: Ctx, p: LivePlayer): FieldPoint {
     const dx = flight.to.x - state.ball.x;
     const t = Math.abs(dx) > 0.01 ? clamp((p.x - state.ball.x) / dx, 0, 1) : 1;
     return inside({ x: p.x, y: state.ball.y + (flight.to.y - state.ball.y) * t });
+  }
+  if (flight && claimsCross(ctx, p, flight)) {
+    // 공이 지나가는 길에서 가장 가까운 점 — 떨어지는 자리에서는 머리들이 먼저 닿는다
+    p.action = "chase";
+    state.lastClaim = { by: p.id, side: p.side, tick: state.tick };
+    const { t } = segmentDistance(p, state.ball, flight.to);
+    return {
+      x: state.ball.x + (flight.to.x - state.ball.x) * t,
+      y: state.ball.y + (flight.to.y - state.ball.y) * t,
+    };
   }
   const attacking = state.possession === p.side;
   const out = attacking
@@ -1232,8 +1339,40 @@ function keeperTarget(ctx: Ctx, p: LivePlayer): FieldPoint {
   });
 }
 
+/** 크로스를 잡으러 나가는 중인가 — 크로스가 떠 있는 동안 공을 쫓는 골키퍼 */
+function claiming(ctx: Ctx, keeper: LivePlayer): boolean {
+  return keeper.action === "chase" && ctx.state.ball.flight?.kind === "cross";
+}
+
+/**
+ * 크로스를 잡으러 나간 골키퍼는 그 점에 멈춰 설 수 있는 속도까지만 낸다 — 지나치면 공이 등 뒤로
+ * 간다
+ */
+function arriving(ctx: Ctx, keeper: LivePlayer): number {
+  const player = playerOf(ctx, keeper.id);
+  const top = maxSpeedOf(keeper, player.attributes.pace, ctx.input.injured.has(keeper.id));
+  return Math.min(1, Math.sqrt(2 * DECELERATION * distance(keeper, keeper.target)) / top);
+}
+
+/** 상대 크로스가 우리 박스 안, 골문 중심에서 이 골키퍼의 장악 거리 안에 떨어지는가 (§5.6) */
+function claimsCross(ctx: Ctx, keeper: LivePlayer, flight: BallFlight): boolean {
+  return (
+    flight.kind === "cross" &&
+    flight.side !== keeper.side &&
+    inOwnBox(flight.to, keeper.side) &&
+    distance(flight.to, ownGoalOf(keeper.side)) <
+      claimRangeOf(playerOf(ctx, keeper.id).attributes.commandOfArea)
+  );
+}
+
 function slotOf(ctx: Ctx, p: LivePlayer): WeightSlot {
   return weightSlotOf(ctx.slot.get(p.id)?.position ?? "");
+}
+
+/** 그 국면의 자리 묶음 — 공을 가졌고 카드에 공 있을 때의 자리가 있으면 그 자리다 (player.md §3.3) */
+function phaseSlotOf(ctx: Ctx, p: LivePlayer, attacking: boolean): WeightSlot {
+  const ipPlace = attacking ? ctx.slot.get(p.id)?.card?.ip.place : undefined;
+  return ipPlace ? weightSlotOf(ipPlace) : slotOf(ctx, p);
 }
 
 /**
@@ -1242,7 +1381,8 @@ function slotOf(ctx: Ctx, p: LivePlayer): WeightSlot {
  */
 function urgencyOf(ctx: Ctx, p: LivePlayer): number | undefined {
   const { state } = ctx;
-  if (state.restart || isKeeper(ctx, p)) return undefined;
+  if (state.restart) return undefined;
+  if (isKeeper(ctx, p)) return claiming(ctx, p) ? arriving(ctx, p) : undefined;
   const slot = slotOf(ctx, p);
   const gap = distance(p, p.target);
   const myDepth = depthOf(p.x, p.side);
@@ -1305,6 +1445,11 @@ function moveAll(ctx: Ctx): void {
       ctx.input.injured.has(p.id),
       player.attributes.stamina,
       ctx.input.sheet.legs[p.id] ?? 1,
+      isKeeper(ctx, p)
+        ? claiming(ctx, p)
+          ? KEEPER_CLAIM_BURST
+          : 1
+        : accelerationFactor(player.attributes.acceleration),
       urgencyOf(ctx, p),
     );
     const line = stat(ctx, p.id);
@@ -1353,7 +1498,7 @@ function stepBall(ctx: Ctx): void {
 /**
  * 골키퍼의 1대1 — 박스 안에서 공 가진 상대에게 몸이 닿는 거리면 발밑으로 몸을 던진다
  * (live-match.md §5.6). 덤비는 판단은 골키퍼가 다가온 결과(`keeperTarget`)이고, 덮칠지는
- * 골키핑 대 드리블이 정한다. 놓치면 골키퍼는 쓰러져 있고 골문이 빈다.
+ * 1대1 대 드리블이 정한다. 놓치면 골키퍼는 쓰러져 있고 골문이 빈다.
  */
 function keeperSmothers(ctx: Ctx, owner: LivePlayer): boolean {
   const { state } = ctx;
@@ -1363,7 +1508,7 @@ function keeperSmothers(ctx: Ctx, owner: LivePlayer): boolean {
   if (ctx.rng() >= KEEPER_SMOTHER_ATTEMPT) return false;
   stat(ctx, owner.id).dribbles += 1;
   const win = dsigmoid(
-    (attr(ctx, keeper, "goalkeeping") - attr(ctx, owner, "dribbling") + KEEPER_SMOTHER_EDGE) /
+    (attr(ctx, keeper, "oneOnOnes") - attr(ctx, owner, "dribbling") + KEEPER_SMOTHER_EDGE) /
       DUEL_SCALE,
   );
   if (ctx.rng() < win) {
@@ -1383,11 +1528,11 @@ function keeperSmothers(ctx: Ctx, owner: LivePlayer): boolean {
 }
 
 /**
- * 상대의 패스를 끊는 반경 (m) — 패스를 읽는 위치선정과 발을 뻗는 태클이 정한다. 리그 평균의
+ * 상대의 패스를 끊는 반경 (m) — 패스를 미리 읽는 예측력과 발을 뻗는 태클이 정한다. 리그 평균의
  * 수비가 `reachOf`의 필드 반경에 선다
  */
 function interceptReachOf(ctx: Ctx, p: LivePlayer): number {
-  const reading = attr(ctx, p, "positioning") * 0.6 + attr(ctx, p, "tackling") * 0.4;
+  const reading = attr(ctx, p, "anticipation") * 0.6 + attr(ctx, p, "tackling") * 0.4;
   return Math.max(
     INTERCEPT_REACH_MIN,
     INTERCEPT_REACH_BASE + (reading - INTERCEPT_REACH_PIVOT) * INTERCEPT_REACH_PER_POINT,
@@ -1421,6 +1566,7 @@ function looseBall(ctx: Ctx): void {
 
 function takeBall(ctx: Ctx, p: LivePlayer, opts: { fromPass?: boolean } = {}): void {
   const { state } = ctx;
+  if (state.lastClaim?.by === p.id) state.lastClaim = null;
   const previous = state.possession;
   if (previous !== p.side) {
     state.lastTurnover = {
@@ -1434,12 +1580,14 @@ function takeBall(ctx: Ctx, p: LivePlayer, opts: { fromPass?: boolean } = {}): v
     state.lastPass = null;
     state.setPiece = null;
   }
-  // 첫 터치 — 드리블·침착성이 정한다, 압박이 흔든다
-  const pressure = state.players.filter(
-    (q) => q.side !== p.side && distance(q, p) < PRESSURE_RADIUS,
-  ).length;
+  // 첫 터치 — 퍼스트 터치가 정하고 침착성이 거든다, 붙은 상대의 마킹이 흔든다
+  let pressure = 0;
+  for (const q of state.players) {
+    if (q.side !== p.side && distance(q, p) < PRESSURE_RADIUS)
+      pressure += markingPressureOf(attr(ctx, q, "marking"));
+  }
   const control = dsigmoid(
-    (attr(ctx, p, "dribbling") * 0.6 + attr(ctx, p, "composure") * 0.4 - 55) / 14,
+    (attr(ctx, p, "firstTouch") * 0.7 + attr(ctx, p, "composure") * 0.3 - 55) / 14,
   );
   const bobble =
     TOUCH_ERROR_BASE * (1 - control) * (1 + pressure * 0.5) * (opts.fromPass ? 1 : 0.6);
@@ -1454,7 +1602,7 @@ function takeBall(ctx: Ctx, p: LivePlayer, opts: { fromPass?: boolean } = {}): v
     return;
   }
   // 받은 뒤 고개를 드는 시간 — 침착할수록 짧다
-  p.readyAt = state.tick + dead(FIRST_TOUCH_SECONDS + (100 - attr(ctx, p, "composure")) / 150);
+  p.readyAt = state.tick + dead(FIRST_TOUCH_SECONDS + (100 - attr(ctx, p, "firstTouch")) / 150);
   p.action = "carry";
 }
 
@@ -1503,7 +1651,8 @@ function stepFlight(ctx: Ctx): void {
     if (
       flight.kind === "cross" &&
       flight.side !== caught.side &&
-      flight.travelled < CROSS_BLOCK_WINDOW
+      flight.travelled < CROSS_BLOCK_WINDOW &&
+      !isKeeper(ctx, caught)
     ) {
       // 크로스를 몸으로 막았다 — 공은 튄다. 골라인 밖이면 코너다
       state.ball.flight = null;
@@ -1549,7 +1698,8 @@ function stepFlight(ctx: Ctx): void {
     }
     // 골문 안 — 골키퍼가 몸을 던져 닿는 거리면 선방 판정이 정한다
     const keeper = state.players.find((p) => p.side !== flight.side && isKeeper(ctx, p));
-    const reach = keeper ? DIVE_REACH + attr(ctx, keeper, "goalkeeping") / 120 : 0;
+    // 골키퍼의 민첩성은 다이빙이다 — 몸을 던져 닿는 범위
+    const reach = keeper ? DIVE_REACH + attr(ctx, keeper, "agility") / 120 : 0;
     const canDive =
       keeper &&
       state.tick >= keeper.readyAt &&
@@ -1597,7 +1747,11 @@ function stepFlight(ctx: Ctx): void {
 function blocks(ctx: Ctx, p: LivePlayer, shooting: MatchSide): boolean {
   const chance =
     BLOCK_CHANCE *
-    clamp(1 + (attr(ctx, p, "positioning") - BLOCK_SKILL_PIVOT) * BLOCK_SKILL_SLOPE, 0.5, 1.5);
+    clamp(
+      1 + (blendAttr(ctx, p, DEFENSIVE_BLEND) - BLOCK_SKILL_PIVOT) * BLOCK_SKILL_SLOPE,
+      0.5,
+      1.5,
+    );
   return (
     makeRng(
       ctx.input.seed,
@@ -1689,8 +1843,13 @@ function aerialContest(ctx: Ctx, intended?: LivePlayer): void {
   let winner: LivePlayer | null = null;
   let best = -Infinity;
   for (const p of around) {
+    // 박스 안 골키퍼는 손으로 겨룬다 — 점프력·헤더의 몫을 공중볼 처리가 갖는다 (§5.6)
+    const reach =
+      isKeeper(ctx, p) && inOwnBox(p, p.side)
+        ? attr(ctx, p, "aerialReach") * 0.6
+        : attr(ctx, p, "jumpingReach") * 0.45 + attr(ctx, p, "heading") * 0.15;
     const score =
-      attr(ctx, p, "aerial") * 0.6 +
+      reach +
       attr(ctx, p, "strength") * 0.25 +
       attr(ctx, p, "positioning") * 0.15 +
       (intended && p.id === intended.id ? 6 : 0) -
@@ -1785,9 +1944,11 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
   const pressure = opponents.filter((p) => distance(p, owner) < PRESSURE_RADIUS).length;
   const vision = attr(ctx, owner, "vision");
   const passing = attr(ctx, owner, "passing");
-  const kicking = attr(ctx, owner, "kicking");
-  const composure = attr(ctx, owner, "composure");
-  const noiseScale = (0.4 + pressure * 0.3) * (1.3 - composure / 130);
+  const crossing = attr(ctx, owner, "crossing");
+  const technique = attr(ctx, owner, "technique");
+  // 판단의 잡음 — 압박이 키우고 판단력이 줄인다
+  const decisions = attr(ctx, owner, "decisions");
+  const noiseScale = (0.4 + pressure * 0.3) * (1.3 - decisions / 130);
   const here = threatAt(owner, owner.side);
   const lossHere = here * THREAT_VALUE * LOSS_SHARE;
   const focus = ctx.input.sheet.focus[owner.side];
@@ -1897,7 +2058,7 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
           owner.side,
         ),
       };
-      const p = dsigmoid((kicking - 50) / 20) * 0.5 * (1 + (tendency?.cross ?? 0.5) * 0.3);
+      const p = dsigmoid((crossing - 50) / 20) * 0.5 * (1 + (tendency?.cross ?? 0.5) * 0.3);
       const gain = 0.03 + inBox.length * 0.01;
       const util =
         p * (gain * THREAT_VALUE * 0.8 + KEEP_VALUE) -
@@ -1987,13 +2148,13 @@ function decideCarrier(ctx: Ctx, owner: LivePlayer): void {
       return;
     case "pass":
     case "through":
-      pass(ctx, owner, best.receiver!, best.to!, best.kind === "through", passing, kicking);
+      pass(ctx, owner, best.receiver!, best.to!, best.kind === "through", passing, technique);
       return;
     case "cross":
-      cross(ctx, owner, best.to!, kicking);
+      cross(ctx, owner, best.to!, crossing);
       return;
     case "clear":
-      clear(ctx, owner, kicking);
+      clear(ctx, owner, passing);
       return;
     case "dribble":
       owner.action = "carry";
@@ -2162,7 +2323,8 @@ function pass(
   target: FieldPoint,
   through: boolean,
   passing: number,
-  kicking: number,
+  /** 공에 싣는 힘 — 필드 선수는 테크닉, 골키퍼의 롱 배급은 킥 */
+  zip: number,
 ): void {
   const { state } = ctx;
   const dist = distance(owner, target);
@@ -2171,8 +2333,12 @@ function pass(
   const pressure = state.players.filter(
     (q) => q.side !== owner.side && distance(q, owner) < PRESSURE_RADIUS,
   ).length;
-  const sloppiness =
-    passSloppiness(passing) * (1 + pressure * PASS_PRESSURE_ERROR) * (lofted ? PASS_LOFT_ERROR : 1);
+  // 뜬 공의 배수는 테크닉이 줄인다 — 골키퍼의 롱 배급은 킥
+  const loft = lofted
+    ? PASS_LOFT_ERROR *
+      loftErrorOf(attr(ctx, owner, isKeeper(ctx, owner) ? "kicking" : "technique"))
+    : 1;
+  const sloppiness = passSloppiness(passing) * (1 + pressure * PASS_PRESSURE_ERROR) * loft;
   const along =
     dist > 0.01
       ? { x: (target.x - owner.x) / dist, y: (target.y - owner.y) / dist }
@@ -2195,8 +2361,7 @@ function pass(
     offside: offsideAt(ctx, receiver, owner.side),
     offsideIds: offsideIdsAt(ctx, owner),
     to,
-    speed:
-      PASS_SPEED_MIN + (PASS_SPEED_MAX - PASS_SPEED_MIN) * clamp(dist / 40, 0, 1) + kicking / 60,
+    speed: PASS_SPEED_MIN + (PASS_SPEED_MAX - PASS_SPEED_MIN) * clamp(dist / 40, 0, 1) + zip / 60,
     travelled: 0,
     distance: distance(owner, to),
     height: lofted ? 2.6 + dist / 40 : 0,
@@ -2208,10 +2373,11 @@ function pass(
   }
 }
 
-function cross(ctx: Ctx, owner: LivePlayer, spot: FieldPoint, kicking: number): void {
+/** 크로스·세트피스 배달 — `delivery`는 그 킥을 차는 기량(크로스·프리킥)이다 */
+function cross(ctx: Ctx, owner: LivePlayer, spot: FieldPoint, delivery: number): void {
   const { state } = ctx;
   const dist = distance(owner, spot);
-  const error = 3.5 * (1.1 - kicking / 110) * (0.5 + ctx.rng());
+  const error = 3.5 * (1.1 - delivery / 110) * (0.5 + ctx.rng());
   const angle = ctx.rng() * 6.283;
   const to = outOfPlayBound({
     x: spot.x + cosApprox(angle) * error,
@@ -2227,19 +2393,24 @@ function cross(ctx: Ctx, owner: LivePlayer, spot: FieldPoint, kicking: number): 
     side: owner.side,
     offsideIds: offsideIdsAt(ctx, owner),
     to,
-    speed: 17 + kicking / 30,
+    speed: 17 + delivery / 30,
     travelled: 0,
     distance: dist,
     height: 2.6,
   };
+  // 장악 거리 안에 떨어지는 크로스에는 골키퍼가 반응 시간 뒤 나온다
+  const keeper = state.players.find((q) => q.side !== owner.side && isKeeper(ctx, q));
+  if (keeper && claimsCross(ctx, keeper, state.ball.flight))
+    keeper.decideAt = Math.min(keeper.decideAt, state.tick + dead(KEEPER_REACTION_SECONDS));
 }
 
-function clear(ctx: Ctx, owner: LivePlayer, kicking: number): void {
+/** 걷어내기 — 멀리 보내는 긴 킥이라 패스가 거리와 속도를 정한다 */
+function clear(ctx: Ctx, owner: LivePlayer, kick: number): void {
   const { state } = ctx;
   const d = direction(owner.side);
   // 걷어낸 공은 자주 줄 밖으로 나간다 — 폭보다 넓게 흩어진다
   const to = outOfPlayBound({
-    x: owner.x + d * (30 + kicking / 4),
+    x: owner.x + d * (30 + kick / 4),
     y: owner.y + (ctx.rng() - 0.5) * CLEARANCE_SPREAD,
   });
   state.ball.owner = null;
@@ -2249,12 +2420,29 @@ function clear(ctx: Ctx, owner: LivePlayer, kicking: number): void {
     from: owner.id,
     side: owner.side,
     to,
-    speed: 20 + kicking / 25,
+    speed: 20 + kick / 25,
     travelled: 0,
     distance: distance(owner, to),
     height: 4,
   };
 }
+
+/**
+ * 이 슛을 차는 기량 — 머리면 헤더, 직접 프리킥이면 프리킥, 박스 밖이면 중거리 슛,
+ * 나머지는 결정력이다 (player.md §1). 한 축이 모든 슛을 맡으면 박스 밖에서 때리는
+ * 선수와 골문 앞에서 미는 선수가 같은 사람이 된다.
+ */
+function shotSkillAxis(
+  opts: { header: boolean; origin: string },
+  dist: number,
+): "heading" | "freeKicks" | "longShots" | "finishing" {
+  if (opts.header) return "heading";
+  if (opts.origin === "set_piece") return "freeKicks";
+  return dist > FIELD.boxDepth + LONG_SHOT_MARGIN ? "longShots" : "finishing";
+}
+
+/** 박스 선에서 이만큼 더 멀어야 중거리 슛이다 — 선 위에서 찬 슛은 아직 박스의 슛이다 */
+const LONG_SHOT_MARGIN = 1.5;
 
 function shoot(
   ctx: Ctx,
@@ -2277,9 +2465,10 @@ function shoot(
     keeperOffset: keeperOffsetOf(owner, goal, oppKeeper),
     blockers: blockersOf(ctx, owner, goal),
   });
-  const finishing = attr(ctx, owner, "finishing");
-  const probability = finishingGoalProbability(xg, playerOf(ctx, owner.id).attributes.finishing);
   const dist = distance(owner, goal);
+  const skillAxis = shotSkillAxis(opts, dist);
+  const finishing = attr(ctx, owner, skillAxis);
+  const probability = finishingGoalProbability(xg, playerOf(ctx, owner.id).attributes[skillAxis]);
   // 조준 — 골키퍼에서 먼 쪽 골대 안
   const keeperY = oppKeeper?.y ?? goal.y;
   const aimY = goal.y + (keeperY <= goal.y ? 1 : -1) * (FIELD.goalWidth / 2 - 0.9);
@@ -2296,8 +2485,10 @@ function shoot(
     (state.lastPass && state.lastPass.to === owner.id && state.tick - state.lastPass.tick < dead(6)
       ? state.lastPass.from
       : undefined);
+  // 슛의 힘 — 중거리 슛이 슈팅 파워를 담는다
   const speed =
-    SHOT_SPEED_MIN + (attr(ctx, owner, "kicking") / 99) * SHOT_SPEED_SPAN * (opts.header ? 0.6 : 1);
+    SHOT_SPEED_MIN +
+    (attr(ctx, owner, "longShots") / 99) * SHOT_SPEED_SPAN * (opts.header ? 0.6 : 1);
   const origin: ShotOrigin =
     state.setPiece && state.tick <= state.setPiece.untilTick && state.setPiece.side === owner.side
       ? state.setPiece.origin
@@ -2339,7 +2530,7 @@ function finishShot(
     const placement = Math.abs(flight.to.y - actor.y);
     const logit =
       SAVE_LOGIT_BASE +
-      (attr(ctx, actor, "goalkeeping") - 60) / SAVE_KEEPER_SCALE -
+      (attr(ctx, actor, "reflexes") - 60) / SAVE_KEEPER_SCALE -
       placement * SAVE_PLACEMENT -
       (flight.speed - 24) * 0.04;
     if (!onTarget(flight.to.y, 1)) result = "off_target";
@@ -2374,8 +2565,8 @@ function finishShot(
     stat(ctx, actor.id).saves += 1;
     emit(ctx, "save", actor.side, [actor.id]);
     state.ball.flight = null;
-    // 잡았는가 튕겼는가 — 골키핑이 정한다
-    if (ctx.rng() < dsigmoid((attr(ctx, actor, "goalkeeping") - 55) / 18)) {
+    // 잡았는가 튕겼는가 — 핸들링이 정한다
+    if (ctx.rng() < dsigmoid((attr(ctx, actor, "handling") - 55) / 18)) {
       state.ball.owner = actor.id;
       state.ball.z = 0;
       actor.readyAt = state.tick + dead(2);
@@ -2479,12 +2670,29 @@ function goalCauses(ctx: Ctx, scorer: string, assist: string | null): EventCause
       causes.push({ code: "high_turnover", playerIds: [turnover.by] });
     else causes.push({ code: "counter", playerIds: [turnover.by] });
   }
-  // 시트의 개인 지시가 걸린 말이 관여했다
+  // 슈터나 도움이 직전에 수비를 제쳤다 — 그 경합을 가른 축을 낱말로 싣는다
+  const beat = state.lastBeat;
+  if (
+    beat &&
+    beat.side === side &&
+    state.tick - beat.tick < dead(INDIVIDUAL_SECONDS) &&
+    (beat.by === scorer || beat.by === assist)
+  ) {
+    causes.push({
+      code: "individual",
+      playerIds: [beat.by, beat.beaten],
+      note: AXIS_KO[beat.axis],
+    });
+  }
+  // 크로스에 나온 골키퍼가 닿지 못한 골문
+  const claim = state.lastClaim;
+  if (claim && claim.side !== side && state.tick - claim.tick < dead(KEEPER_OUT_SECONDS)) {
+    causes.push({ code: "keeper_out", playerIds: [claim.by] });
+  }
+  // 시트의 카드 수정이 걸린 말이 관여했다
   const involved = [scorer, ...(assist ? [assist] : []), ...(turnover ? [turnover.by] : [])];
   for (const id of involved) {
-    const tag = ctx.input.sheet.applied.find(
-      (t) => t.shape === "behavior" && t.playerIds.includes(id),
-    );
+    const tag = ctx.input.sheet.applied.find((t) => t.shape === "card" && t.playerIds.includes(id));
     if (tag) {
       causes.push({ code: "marking", playerIds: [id], pointId: tag.pointId });
       break;
@@ -2495,13 +2703,13 @@ function goalCauses(ctx: Ctx, scorer: string, assist: string | null): EventCause
 
 // ── 태클 · 파울 · 카드 · 부상 ──────────────────────────────────────────────
 
-/** 태클이 공을 따낼 확률 — 태클·힘 대 드리블·힘 */
+/** 태클이 공을 따낼 확률 — 태클(타이밍 포함)·힘 대 드리블·힘 */
 function tackleWinChance(ctx: Ctx, tackler: LivePlayer, owner: LivePlayer): number {
   return dsigmoid(
-    (attr(ctx, tackler, "tackling") +
-      attr(ctx, tackler, "strength") * 0.4 -
-      attr(ctx, owner, "dribbling") -
-      attr(ctx, owner, "strength") * 0.4 +
+    (blendAttr(ctx, tackler, TACKLE_BLEND) +
+      attr(ctx, tackler, "strength") * DUEL_STRENGTH -
+      blendAttr(ctx, owner, DRIBBLE_BLEND) -
+      attr(ctx, owner, "strength") * DUEL_STRENGTH +
       DUEL_TACKLER_EDGE) /
       DUEL_SCALE,
   );
@@ -2534,7 +2742,41 @@ function duel(ctx: Ctx, owner: LivePlayer, tackler: LivePlayer): void {
     return;
   }
   stat(ctx, owner.id).dribblesWon += 1;
+  ctx.state.lastBeat = {
+    by: owner.id,
+    beaten: tackler.id,
+    side: owner.side,
+    tick: ctx.state.tick,
+    axis: beatAxisOf(ctx, owner, tackler),
+  };
   beaten(ctx, tackler);
+}
+
+/**
+ * 제친 경합을 가른 축 — 드리블 대 태클 · 민첩성 대 예측력 · 균형 감각 대 몸싸움 · 몸싸움 대
+ * 몸싸움 가운데 공 가진 쪽이 경합의 무게만큼 가장 크게 앞선 축 (live-match.md §9.1)
+ */
+function beatAxisOf(ctx: Ctx, owner: LivePlayer, tackler: LivePlayer): AttributeAxis {
+  const edges: [AttributeAxis, number][] = [
+    [
+      "dribbling",
+      DRIBBLE_SKILL.dribbling * attr(ctx, owner, "dribbling") -
+        TACKLE_SKILL.tackling * attr(ctx, tackler, "tackling"),
+    ],
+    [
+      "agility",
+      DRIBBLE_SKILL.agility * attr(ctx, owner, "agility") -
+        TACKLE_SKILL.anticipation * attr(ctx, tackler, "anticipation"),
+    ],
+    [
+      "balance",
+      DRIBBLE_SKILL.balance * (attr(ctx, owner, "balance") - attr(ctx, tackler, "strength")),
+    ],
+    ["strength", DUEL_STRENGTH * (attr(ctx, owner, "strength") - attr(ctx, tackler, "strength"))],
+  ];
+  let best = edges[0]!;
+  for (const edge of edges) if (edge[1] > best[1]) best = edge;
+  return best[0];
 }
 
 /** 제쳐진 수비 — 한 박자 그 자리에 남는다. 공 가진 말은 그 사이에 지나간다 */
@@ -2876,7 +3118,6 @@ function stepRestart(ctx: Ctx): void {
     };
   }
   if (r.kind === "corner") stat(ctx, taker.id).corners += 1;
-  const kicking = attr(ctx, taker, "kicking");
   switch (r.kind) {
     case "penalty": {
       const keeper = state.players.find((p) => p.side !== r.side && isKeeper(ctx, p));
@@ -2935,7 +3176,7 @@ function stepRestart(ctx: Ctx): void {
           ctx,
           taker,
           { x: xAtDepth(FIELD.length - 9, r.side), y: FIELD.width / 2 + (ctx.rng() - 0.5) * 12 },
-          kicking,
+          attr(ctx, taker, "freeKicks"),
         );
         return;
       }
@@ -2947,7 +3188,7 @@ function stepRestart(ctx: Ctx): void {
         ctx,
         taker,
         { x: xAtDepth(FIELD.length - 7, r.side), y: FIELD.width / 2 + (ctx.rng() - 0.5) * 10 },
-        kicking,
+        attr(ctx, taker, "crossing"),
       );
       noOffsideFromRestart(ctx);
       return;
@@ -2959,9 +3200,13 @@ function stepRestart(ctx: Ctx): void {
         (params.keeperDistribution === "none" && ctx.rng() < 0.5)
       ) {
         const mates = state.players.filter((p) => p.side === r.side && depthOf(p.x, r.side) > 40);
-        const target = mates.sort((a, b) => attr(ctx, b, "aerial") - attr(ctx, a, "aerial"))[0];
+        const target = mates.sort(
+          (a, b) => attr(ctx, b, "jumpingReach") - attr(ctx, a, "jumpingReach"),
+        )[0];
         if (target) {
-          pass(ctx, taker, target, { x: target.x, y: target.y }, false, kicking, kicking);
+          // 골키퍼의 롱 배급 — 정확도와 힘을 킥 하나가 쥔다
+          const kick = attr(ctx, taker, "kicking");
+          pass(ctx, taker, target, { x: target.x, y: target.y }, false, kick, kick);
           noOffsideFromRestart(ctx);
           if (state.ball.flight) state.ball.flight.height = 5;
           return;
@@ -3037,7 +3282,7 @@ function restartPosition(
     // 올라가는 사람은 공중볼로 고른다 — 박스 성향은 동점을 가르는 몫이다. 성향을 앞에 두면
     // 코너마다 공격수만 올라가고 헤더의 주인인 센터백이 하프라인에 남는다
     const presence = (q: LivePlayer) =>
-      attr(ctx, q, "aerial") / 100 +
+      attr(ctx, q, "jumpingReach") / 100 +
       (ctx.tendency.get(q.id)?.boxPresence ?? 0.5) * SET_PIECE_PRESENCE_WEIGHT;
     const groupRank = state.players
       .filter((q) => q.side === p.side && !isKeeper(ctx, q))
@@ -3069,9 +3314,9 @@ function restartPosition(
       .filter((q) => q.side === p.side && !isKeeper(ctx, q))
       .sort(
         (a, b) =>
-          attr(ctx, b, "aerial") +
+          attr(ctx, b, "jumpingReach") +
           attr(ctx, b, "positioning") -
-          attr(ctx, a, "aerial") -
+          attr(ctx, a, "jumpingReach") -
           attr(ctx, a, "positioning"),
       );
     const rank = defenders.findIndex((q) => q.id === p.id);

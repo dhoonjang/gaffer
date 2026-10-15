@@ -1,7 +1,6 @@
 import type { AgentName } from "@gaffer/llm";
 import {
   ATTRIBUTE_AXES,
-  mirrorBaseOf,
   type AttributeAxis,
   type LorebookContent,
   type MatchStage,
@@ -108,39 +107,15 @@ export function clampAttr(v: number): number {
 }
 
 /**
- * 목록 한 칸이 보여 줄 자리 — **선호(본업)와 겸업**으로 가른다 (player.md §4).
- *
- * 좌우 분화(LCB·RCB)는 부르는 이름만 다른 같은 자리라 중앙 표기로 접는다. 접지
- * 않으면 센터백 한 명이 세 자리를 가진 것처럼 읽히고, 접은 자리 중 하나만
- * `isNatural`이라 나머지가 겸업으로 밀린다 — 그래서 접은 뒤 **하나라도 선호면
- * 선호**다 (`isNaturalAt`과 같은 판정).
- *
- * 접은 자리는 **카탈로그에 실제로 있는 코드**로 부른다 (중앙 표기로 갈아 끼우지
- * 않는다) — 편집 창의 셀렉트에 없는 이름이 목록에만 뜨면 같은 자리를 못 찾는다.
- * 대표는 선호 · 적응도 순으로 고른다.
- *
- * 두 줄 다 적응도 내림차순 — 잘 보는 자리가 앞이다.
+ * 목록 한 칸이 보여 줄 자리 — **선호(본업)와 겸업**으로 가른다 (player.md §8).
+ * 보유 목록이 이미 자리 단위라 한 자리는 한 줄이다. 두 줄 다 적응도 내림차순 — 잘 보는
+ * 자리가 앞이다.
  */
 export function splitPositions(positions: CatalogPosition[]): {
   natural: string[];
   other: string[];
 } {
-  const folded = new Map<string, CatalogPosition>();
-  for (const p of positions) {
-    const key = mirrorBaseOf(p.position);
-    const cur = folded.get(key);
-    if (!cur) {
-      folded.set(key, p);
-      continue;
-    }
-    const better = p.isNatural !== cur.isNatural ? p.isNatural : p.proficiency > cur.proficiency;
-    folded.set(key, {
-      position: better ? p.position : cur.position,
-      proficiency: Math.max(cur.proficiency, p.proficiency),
-      isNatural: cur.isNatural || p.isNatural,
-    });
-  }
-  const sorted = [...folded.values()].sort((a, b) => b.proficiency - a.proficiency);
+  const sorted = [...positions].sort((a, b) => b.proficiency - a.proficiency);
   return {
     natural: sorted.filter((p) => p.isNatural).map((p) => p.position),
     other: sorted.filter((p) => !p.isNatural).map((p) => p.position),

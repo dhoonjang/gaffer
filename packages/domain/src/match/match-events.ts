@@ -95,7 +95,7 @@ const EVENT_CAUSE_CODES = [
   "header",
   /** 흘러나온 공을 다시 찼다 */
   "rebound",
-  /** 시트의 `behavior`가 걸린 말이 관여했다 — `pointId`가 그 포인트 문장을 가리킨다 */
+  /** 시트의 `card` 줄이 걸린 말이 관여했다 — `pointId`가 그 포인트 문장을 가리킨다 */
   "marking",
   // ── 파울·카드·부상의 성질 ──
   /** 역습을 끊은 파울 */

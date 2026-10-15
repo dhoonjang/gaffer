@@ -1,5 +1,7 @@
 import {
   ATTRIBUTE_AXES,
+  isLabGame,
+  placeOf,
   playerOverall,
   tacticsSignature,
   weightSlotOf,
@@ -9,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import {
   advanceLiveMatch,
   advanceShootout,
+  applyLabFormation,
+  applyLabTactics,
   applyMatchReading,
   assembleUserLineup,
   assignmentsOf,
@@ -18,10 +22,13 @@ import {
   buildOpponentReport,
   buildRatingBrief,
   commitCheckpoint,
+  createLabGame,
   finalizeMatch,
   firstTeamPlayers,
   groupOf,
   isClubTeam,
+  openLabMatch,
+  labView,
   liveMatchDigest,
   loadGame,
   markEntered,
@@ -31,6 +38,7 @@ import {
   playersOf,
   proficiencyAt,
   resumeLiveInterval,
+  replayLabGame,
   saveGame,
   setLineup,
   setPlayerTactic,
@@ -57,7 +65,7 @@ import {
 import {
   advanceLive,
   applyEvents,
-  checkpointReason,
+  liveHalted,
   LIVE_TICKS_PER_SECOND,
   liveDigest,
   liveFinished,
@@ -174,10 +182,11 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
 
   /**
    * **클라이언트와 서버는 같은 경기를 굴린다** (live-match.md §8.2) — 웹의 실행기처럼 확정
-   * 상태를 받아 굴리고, 정지점과 체크포인트 간격마다 제출하고, 서버가 준 상태를 이어받는다.
-   * 하프가 바뀌어도 틱은 앞으로만 간다 — 되감기면 체크포인트가 구간을 잃고 경기가 멈춘다.
+   * 상태를 받아 굴리고, 시계가 스스로 서는 자리(휴식·종료)에서만 제출하고, 서버가 준 상태를
+   * 이어받는다 — 한 체크포인트가 하프 하나를 통째로 담는다. 하프가 바뀌어도 틱은 앞으로만
+   * 간다 — 되감기면 체크포인트가 구간을 잃고 경기가 멈춘다.
    */
-  it("실행기의 왕복은 하프를 넘어 끝까지 전부 확정된다", () => {
+  it("실행기의 왕복은 하프 하나를 한 번에 확정하며 끝까지 간다", () => {
     const state = atMatchday(42);
     expect(startMatch(state).ok).toBe(true);
     markEntered(state);
@@ -193,11 +202,10 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
         client = copy();
         continue;
       }
-      const { events } = advanceLive(client, framesTicks);
+      advanceLive(client, framesTicks);
       expect(client.state.tick, "틱이 되감겼다").toBeGreaterThanOrEqual(lastTick);
       lastTick = client.state.tick;
-      // 실행기와 같은 판정 — 정지점 · 간격 · 하프의 끝
-      if (checkpointReason(client, events)) {
+      if (liveHalted(client)) {
         const verdict = commitCheckpoint(state, {
           fromTick: client.committedTick,
           toTick: client.state.tick,
@@ -453,7 +461,11 @@ describe("회귀: 부상·정지 선수는 경기에 나설 수 없다", () => {
     const starter = original[1]!;
     const later = playerById(state, original[2]!.playerId)!;
     for (const axis of ATTRIBUTE_AXES) later.attributes[axis] = 99;
-    later.positions.push({ position: starter.position, proficiency: 99, isNatural: false });
+    later.positions.push({
+      position: placeOf(starter.position)!,
+      proficiency: 99,
+      isNatural: false,
+    });
     state.injuries.push({
       id: "inj-r1",
       gamePlayerId: starter.playerId,
@@ -545,7 +557,7 @@ describe("회귀: 부상·정지 선수는 경기에 나설 수 없다", () => {
     const assigned = new Set(assignmentsOf(state, teamId).map((a) => a.playerId));
     const spare = playersOf(state, teamId).find((p) => !assigned.has(p.id))!;
     spare.squadLevel = "reserve";
-    spare.positions = [{ position: starter.position, proficiency: 99, isNatural: true }];
+    spare.positions = [{ position: placeOf(starter.position)!, proficiency: 99, isNatural: true }];
     state.injuries.push({
       id: "inj-r4",
       gamePlayerId: starter.playerId,
@@ -1032,7 +1044,11 @@ describe("지시가 판에 닿는 길", () => {
  * **교체 투입은 자리를 잇고 역할은 자기 것을 쓴다** (match.md §3.2) — 나간 선수의 역할을
  * 물려주면 감독이 그 선수에게 시킨 적 없는 값이 승부를 움직인다.
  */
-describe("교체 투입의 역할 (match.md §3.2)", () => {
+/** 센터백 자리의 두 카드 — 걸려 있던 것과 교체 선수가 기억하는 것 */
+const PLAYING_OUT = { label: "볼 플레잉", ip: { passRisk: 2 }, oop: {} };
+const STEP_UP = { label: "리베로", ip: { freedom: 2, dribble: 1 }, oop: {} };
+
+describe("교체 투입의 카드 (match.md §3.2)", () => {
   function kickoffWithCbSub(state: GameState) {
     const started = startMatch(state);
     if (!started.ok) throw new Error(started.message);
@@ -1046,40 +1062,40 @@ describe("교체 투입의 역할 (match.md §3.2)", () => {
       (id) => groupOf(userPlayers(state).find((p) => p.id === id)!) !== "GK",
     );
     if (!out || !sub) throw new Error("CB 선발 또는 벤치 자원을 찾지 못했습니다");
-    out.roleId = "ball-playing-defender";
+    out.card = PLAYING_OUT;
     syncLiveTactics(state);
     const slotOf = (id: string) =>
       state.pendingMatch!.live.slots[side].find((s) => s.playerId === id);
     return { out, sub, slotOf };
   }
 
-  it("역할 기억이 있는 교체 선수는 자리를 잇고 자기 역할로 뛴다", () => {
+  it("카드 기억이 있는 교체 선수는 자리를 잇고 자기 카드로 뛴다", () => {
     const state = atMatchday();
     const { out, sub, slotOf } = kickoffWithCbSub(state);
-    state.roleMemory.push({ gamePlayerId: sub, position: out.position, roleId: "libero" });
+    state.cardMemory.push({ gamePlayerId: sub, place: placeOf(out.position)!, card: STEP_UP });
     expect(substitutePlayer(state, { out: out.playerId, in: sub }).ok).toBe(true);
     const slot = slotOf(sub);
-    expect(slot?.roleId).toBe("libero");
+    expect(slot?.card).toEqual(STEP_UP);
     expect(slot?.position).toBe(out.position);
     expect(slot?.point).toEqual(out.point);
   });
 
-  it("기억이 없는 교체 선수는 그 자리에 걸려 있던 역할을 잇는다", () => {
+  it("기억이 없는 교체 선수는 그 자리에 걸려 있던 카드를 잇는다", () => {
     const state = atMatchday();
     const { out, sub, slotOf } = kickoffWithCbSub(state);
-    expect(state.roleMemory.some((m) => m.gamePlayerId === sub)).toBe(false);
+    expect(state.cardMemory.some((m) => m.gamePlayerId === sub)).toBe(false);
     expect(substitutePlayer(state, { out: out.playerId, in: sub }).ok).toBe(true);
     const slot = slotOf(sub);
-    expect(slot?.roleId).toBe("ball-playing-defender");
+    expect(slot?.card).toEqual(PLAYING_OUT);
     expect(slot?.position).toBe(out.position);
   });
 
-  it("다른 자리의 역할 기억은 교체 투입에 쓰이지 않는다", () => {
+  it("다른 자리의 카드 기억은 교체 투입에 쓰이지 않는다", () => {
     const state = atMatchday();
     const { out, sub, slotOf } = kickoffWithCbSub(state);
-    state.roleMemory.push({ gamePlayerId: sub, position: "DM", roleId: "anchor" });
+    state.cardMemory.push({ gamePlayerId: sub, place: "DM", card: STEP_UP });
     expect(substitutePlayer(state, { out: out.playerId, in: sub }).ok).toBe(true);
-    expect(slotOf(sub)?.roleId).toBe("ball-playing-defender");
+    expect(slotOf(sub)?.card).toEqual(PLAYING_OUT);
   });
 
   it("두 자리가 비어도 각자 나간 선수의 자리를 잇는다", () => {
@@ -1227,5 +1243,70 @@ describe("같은 시각 타 경기의 라이브 스코어 (match.md §8.6)", () 
     const ours = state.matches.find((m) => m.id === state.pendingMatch!.matchId)!;
     expect(ours.competitionId).toBeNull();
     expect(state.pendingMatch!.otherScores).toEqual([]);
+  });
+});
+
+describe("경기 실험실 (live-match.md §8.6)", () => {
+  /** 리그 둘에 걸친 판 — 18팀 리그도 통째로 담겨야 고른 구단이 세계에 선다 */
+  function lab(): GameState {
+    const made = createLabGame({
+      homeTeamId: "bayern",
+      awayTeamId: "arsenal",
+      managed: "away",
+      seed: 31,
+    });
+    if (!made.ok) throw new Error(made.message);
+    return made.state;
+  }
+
+  it("고른 두 구단의 리그 경기를 맡은 쪽 감독으로 세우고, 적응도를 한 값으로 맞춰 입장 전 판을 세운다", () => {
+    const state = lab();
+    expect(isLabGame(state.id)).toBe(true);
+    expect(applyLabFormation(state, "5-4-1").ok).toBe(true);
+    expect(applyLabTactics(state, { pressing: 5, tackling: "hard" }).ok).toBe(true);
+    const opened = openLabMatch(state, { familiarity: 80 });
+    expect(opened.ok, opened.message).toBe(true);
+
+    const pending = state.pendingMatch!;
+    // 입장은 게임 화면의 킥오프 게이트가 한다
+    expect(pending.entered).toBe(false);
+    expect(pending.live.setup.friendly).toBe(false);
+    expect(pending.live.setup.sides.home).toMatchObject({ teamId: "bayern", ai: true });
+    expect(pending.live.setup.sides.away).toMatchObject({ teamId: "arsenal", ai: false });
+    expect(pending.live.setup.sides.home.kickoffTactics).toMatchObject({
+      formation: "5-4-1",
+      pressing: 5,
+      tackling: "hard",
+    });
+    for (const side of ["home", "away"] as const) {
+      expect(new Set(pending.live.slots[side].map((slot) => slot.familiarity))).toEqual(
+        new Set([80]),
+      );
+    }
+    expect(labView(state)).toMatchObject({ stage: "open", sides: { away: { ours: true } } });
+    expect(applyLabTactics(state, { pressing: 1 }).ok, "판이 선 뒤에 상대를 고쳤다").toBe(false);
+  });
+
+  it("다시 치르면 같은 시드의 새 판에 킥오프의 두 판을 옮기고, 경기 id가 달라진다", () => {
+    const state = lab();
+    expect(applyLabFormation(state, "3-4-3").ok).toBe(true);
+    expect(openLabMatch(state, { familiarity: null }).ok).toBe(true);
+    markEntered(state);
+    const kickoffSpec = { ...tacticsOf(state, "arsenal").spec };
+    const firstMatch = state.pendingMatch!.matchId;
+    advanceLiveMatch(state, 20 * 60);
+    expect(setTactics(state, { mentality: kickoffSpec.mentality === 5 ? 1 : 5 }).ok).toBe(true);
+
+    const replayed = replayLabGame(state);
+    if (!replayed.ok) throw new Error(replayed.message);
+    const next = replayed.state;
+    expect(next.id).not.toBe(state.id);
+    expect(next.seed).toBe(state.seed);
+    expect(next.pendingMatch).toBeNull();
+    expect(tacticsOf(next, "arsenal").spec).toEqual(kickoffSpec);
+    expect(tacticsOf(next, "bayern").spec.formation).toBe("3-4-3");
+    expect(labView(next)).toMatchObject({ matchNo: 2, stage: "prep" });
+    expect(openLabMatch(next, { familiarity: null }).ok).toBe(true);
+    expect(next.pendingMatch!.matchId).not.toBe(firstMatch);
   });
 });

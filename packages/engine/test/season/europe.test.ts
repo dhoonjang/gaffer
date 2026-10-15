@@ -22,7 +22,13 @@ import {
   teamsOfLeague,
   transitionSeason,
 } from "@gaffer/engine";
-import { advanceAndPlay, createTestGame, resultOf } from "../helpers";
+import {
+  advanceToMatchday,
+  createTestGame,
+  playMockMatch,
+  resultOf,
+  settleMatchdayQuick,
+} from "../helpers";
 
 /**
  * 유럽 대항전 — 참가 배정 · 리그 페이즈 편성 · 리그 일정과의 공존.
@@ -395,7 +401,13 @@ describe("게임 연결", () => {
           m.competitionId === cup &&
           (m.homeTeamId === playing.userTeamId || m.awayTeamId === playing.userTeamId),
       );
-    for (let i = 0; i < 12 && !ourCupMatches().some((m) => m.result); i++) advanceAndPlay(playing);
+    // 대항전 앞의 경기는 간이 정산으로 넘긴다 — 실시간으로 치를 것은 대항전 경기일 하나다
+    for (let i = 0; i < 12 && !ourCupMatches().some((m) => m.result); i++) {
+      advanceToMatchday(playing);
+      const cupDay = ourCupMatches().some((m) => m.date === playing.date && !m.result);
+      if (cupDay) playMockMatch(playing);
+      else settleMatchdayQuick(playing);
+    }
 
     const played = ourCupMatches().filter((m) => m.result);
     expect(played.length, "대항전 경기일에 도달하지 못했다").toBeGreaterThan(0);

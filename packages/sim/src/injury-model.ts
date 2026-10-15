@@ -37,7 +37,7 @@ const INJURY_WEIGHT_FLOOR = 40;
 const INJURY_CONDITION_WEIGHT = 0.8;
 /** 시즌이 쌓아 둔 잔고가 얹는 몫 (player.md §5.5) — 오늘 다리가 무겁다는 것과 다른 사실 */
 const INJURY_LOAD_WEIGHT = 0.3;
-const INJURY_STRENGTH_WEIGHT = 0.3;
+const INJURY_FITNESS_WEIGHT = 0.3;
 
 /** 오늘 지친 만큼 얹히는 몫 — 체력 100이면 0 */
 function conditionLift(player: Player, extraFatigue: number): number {
@@ -47,13 +47,13 @@ function conditionLift(player: Player, extraFatigue: number): number {
 function loadLift(player: Player): number {
   return fatigueOf(player.state) * INJURY_LOAD_WEIGHT;
 }
-/** 몸싸움이 약한 만큼 얹히는 몫 — 축의 천장(99)이면 0 */
-function strengthLift(player: Player): number {
-  return (99 - player.attributes.strength) * INJURY_STRENGTH_WEIGHT;
+/** 타고난 체력이 약한 만큼 얹히는 몫 — 축의 천장(99)이면 0 */
+function fitnessLift(player: Player): number {
+  return (99 - player.attributes.naturalFitness) * INJURY_FITNESS_WEIGHT;
 }
 
 /**
- * 부상 가중 — 지친 선수, 몸싸움이 약한 선수, **유리몸** 쪽으로 기운다.
+ * 부상 가중 — 지친 선수, 타고난 체력이 약한 선수, **유리몸** 쪽으로 기운다.
  * `proneness`는 부상 이력에서 나온 배수다(`engine/squad/injury.ts`).
  * **상대 가중이지 발생 확률이 아니다** — 유리몸이 늘어난다고 건수가 불지 않는다.
  */
@@ -62,13 +62,13 @@ export function injuryWeight(player: Player, extraFatigue = 0, proneness = 1): n
     (INJURY_WEIGHT_FLOOR +
       conditionLift(player, extraFatigue) +
       loadLift(player) +
-      strengthLift(player)) *
+      fitnessLift(player)) *
     proneness
   );
 }
 
 export type InjuryRiskGrade = "low" | "elevated" | "high";
-export type InjuryRiskCause = "condition" | "load" | "proneness" | "strength";
+export type InjuryRiskCause = "condition" | "load" | "proneness" | "fitness";
 
 /** 등급의 문턱 — 저울의 값이다 (player.md §5.3) */
 const INJURY_RISK_FLOOR = { high: 88, elevated: 62 } as const;
@@ -78,7 +78,7 @@ const INJURY_CAUSE_ORDER: readonly InjuryRiskCause[] = [
   "condition",
   "load",
   "proneness",
-  "strength",
+  "fitness",
 ];
 
 export interface InjuryRisk {
@@ -94,8 +94,8 @@ export interface InjuryRisk {
 export function injuryRiskOf(player: Player, proneness = 1): InjuryRisk {
   const condition = conditionLift(player, 0);
   const load = loadLift(player);
-  const strength = strengthLift(player);
-  const weight = (INJURY_WEIGHT_FLOOR + condition + load + strength) * proneness;
+  const fitness = fitnessLift(player);
+  const weight = (INJURY_WEIGHT_FLOOR + condition + load + fitness) * proneness;
   const grade: InjuryRiskGrade =
     weight >= INJURY_RISK_FLOOR.high
       ? "high"
@@ -103,11 +103,11 @@ export function injuryRiskOf(player: Player, proneness = 1): InjuryRisk {
         ? "elevated"
         : "low";
   if (grade === "low") return { grade, causes: [] };
-  const base = INJURY_WEIGHT_FLOOR + condition + load + strength;
+  const base = INJURY_WEIGHT_FLOOR + condition + load + fitness;
   const lift: Record<InjuryRiskCause, number> = {
     condition,
     load,
-    strength,
+    fitness,
     proneness: base * (proneness - 1),
   };
   const excess = weight - INJURY_WEIGHT_FLOOR;

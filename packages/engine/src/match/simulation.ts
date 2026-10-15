@@ -1,4 +1,4 @@
-import { recallRole } from "../players/role-memory";
+import { recallCard } from "../players/card-memory";
 import { pickVacancy } from "./vacancy";
 import {
   playerOverall,
@@ -7,7 +7,7 @@ import {
   naturalPositionOf,
   FAMILIARITY_BASELINE,
   fatigueOf,
-  rolesFor,
+  inheritedCard,
 } from "@gaffer/domain";
 import {
   type GameState,
@@ -76,7 +76,7 @@ export const ROTATION_FRESHER = 15;
 export const EXHAUSTED_CONDITION = 35;
 
 /**
- * 전술판이 이 선수에게 준 자리 — 좌표·역할은 판의 것, 숙련도는 사람의 것.
+ * 전술판이 이 선수에게 준 자리 — 좌표·카드는 판의 것, 숙련도는 사람의 것.
  * 배치가 없으면 자연 포지션에 기준선 적응도로 선다.
  */
 function boardSlotOf(state: GameState, player: GamePlayer) {
@@ -85,7 +85,7 @@ function boardSlotOf(state: GameState, player: GamePlayer) {
   return {
     position,
     ...(assignment?.point ? { point: assignment.point } : {}),
-    ...(assignment?.roleId ? { roleId: assignment.roleId } : {}),
+    ...(assignment?.card ? { card: assignment.card } : {}),
     proficiency: proficiencyAt(player, position),
     familiarity: assignment?.familiarity ?? FAMILIARITY_BASELINE,
   };
@@ -181,16 +181,19 @@ export function simSquadOf(
     starters.push(player);
     usedIds.add(player.id);
     const personal = boardSlotOf(state, player);
-    const roleId =
-      personal.roleId && rolesFor(a.position).some((role) => role.id === personal.roleId)
-        ? personal.roleId
-        : recallRole(state, player.id, a.position);
+    // 그 자리에 다시 서면 카드를 잇고, 다른 자리면 그 자리의 기억이다 (player.md §3.2)
+    const card = inheritedCard(
+      personal.position,
+      a.position,
+      personal.card,
+      recallCard(state, player.id, a.position),
+    );
     slotSetups.push({
       position: a.position,
       proficiency: proficiencyAt(player, a.position),
       familiarity: personal.familiarity,
       ...(a.point ? { point: a.point } : {}),
-      ...(roleId ? { roleId } : {}),
+      ...(card ? { card } : {}),
     });
   }
   // 불완전한 배치에서도 골키퍼를 먼저 확보한다.
@@ -261,7 +264,7 @@ export function simSquadOf(
     const picked = replacement ?? fallback;
     if (!picked) continue;
     /**
-     * **자리는 사람과 함께 움직인다.** 전술판의 자리(좌표·역할)는 그대로 두되
+     * **자리는 사람과 함께 움직인다.** 전술판의 자리(좌표·카드)는 그대로 두되
      * 숙련도·적응도는 들어온 선수의 것으로 다시 선다. 물려받으면 경기 입력이
      * 그라운드에 없는 사람의 숫자로 서서, 약해진 라인업이라는 로테이션의 대가가
      * 장부에 안 잡히거나 엉뚱하게 잡힌다.

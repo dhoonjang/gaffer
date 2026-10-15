@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ageOf, bestOverall, weightSlotOf, type WeightSlot } from "@gaffer/domain";
-import { deriveAxes, type SeedAxes } from "../src/players/catalog/attributes";
+import { deriveAxes, eaRatingOf, type SeedAxes } from "../src/players/catalog/attributes";
 import { CATALOG_AGE_REF, derivePositions } from "../src/players/catalog/catalog";
 import {
   RETARGET_TOLERANCE,
@@ -51,6 +51,7 @@ interface SeedRow extends SeedAxes {
   birthdate: string;
   position: string;
   potential: number;
+  height?: number;
 }
 
 function quantile(sorted: number[], q: number): number {
@@ -75,7 +76,10 @@ function seedSquad(tier: 1 | 2 | 3 | 4, seeds: readonly SeedRow[]): Measured[] {
     seeds.map((s) => {
       const age = ageOf(s.birthdate, CATALOG_AGE_REF);
       const positions = derivePositions(s.nameEn, s.position);
-      const overall = bestOverall(deriveAxes(s.nameEn, s.position, s, age), positions);
+      const overall = bestOverall(
+        deriveAxes(s.nameEn, s.position, s, { ea: eaRatingOf(s), height: s.height }),
+        positions,
+      );
       return {
         tier,
         position: s.position,

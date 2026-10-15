@@ -1,18 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import type { PlayerCatalogEntry, PlayerPosition, PositionGroup } from "@gaffer/domain";
 import {
+  PLACE_PAIR_PENALTY,
   PlayerCatalogEntrySchema,
-  ageOf,
   associationOfCountry,
   bestOverall,
-  clusterOf,
-  isMirrorPair,
+  pairedPlaceOf,
+  placeOf,
   positionGroupOf,
   sideOf,
   weightSlotOf,
   type Foot,
+  type Place,
 } from "@gaffer/domain";
-import { deriveAxes } from "./attributes";
+import { SYNTHETIC_BASE_LIFT, deriveAxes, eaRatingOf, synthesizeAxes } from "./attributes";
 import { hashOf } from "../../core/catalog/name-hash";
 import { catalogPath, dataDir } from "../../core/catalog/paths";
 import { catalogCacheKey } from "../../core/catalog/catalog-source";
@@ -55,9 +56,10 @@ export const CATALOG_AGE_REF = "2026-08-15";
 const CATALOG_AGE_REF_YEAR = Number(CATALOG_AGE_REF.slice(0, 4));
 
 /**
- * 포지션 인접 관계 — 멀티 포지션 파생의 근거 (**다른 라인·다른 역할**로의 확장).
- * 좌우·중앙 분화만 다른 자리(CB↔RCB/LCB, CM↔RCM/LCM 등)는 여기가 아니라
- * POSITION_CLUSTERS가 다룬다 — 인접이 아니라 사실상 같은 자리이기 때문이다.
+ * 확장 이웃 — 멀티 포지션 파생의 근거 (**다른 라인·다른 자리**로의 확장).
+ * 열쇠는 **시드의 슬롯 코드**다 — 자리로 접기 전의 좌우가 이웃을 가른다(왼쪽 센터백은
+ * 왼쪽 풀백으로, 오른쪽 센터백은 오른쪽 풀백으로). 값은 자리로 접혀 목록에 선다.
+ * 이웃 쌍(풀백↔윙백 · 측면 미드↔윙어)은 여기가 아니라 `pairedPlaceOf`가 준다.
  */
 const POSITION_NEIGHBORS: Record<string, string[]> = {
   GK: [],
@@ -73,30 +75,23 @@ const POSITION_NEIGHBORS: Record<string, string[]> = {
   RCM: ["RM", "CDM", "AM"],
   CM: ["CDM", "AM"],
   LCM: ["LM", "CDM", "AM"],
-  AM: ["CM", "SS"],
-  CAM: ["CM", "SS"],
+  AM: ["CM"],
+  CAM: ["CM"],
   RM: ["RW", "RCM", "RB"],
   LM: ["LW", "LCM", "LB"],
   RW: ["RM", "CF", "LW"],
   LW: ["LM", "CF", "RW"],
-  SS: ["ST", "CF", "AM"],
-  ST: ["CF", "SS"],
-  CF: ["ST", "SS", "RW"],
+  SS: [],
+  ST: [],
+  CF: ["RW", "SS"],
 };
 
 /**
- * 최전방(CF)을 맡을 수 있는 자원 — 윙어·공격형 미드필더.
- * 현대 축구에서 이들은 대체로 최전방 한 자리를 소화하므로 예외 없이 CF를 준다
- * (측면 미드필더 RM/LM은 제외 — 그쪽은 중원 계열이다).
- * ST·SS는 CF와 같은 묶음(`POSITION_CLUSTERS`)이라 이 블록을 타지 않는다.
+ * 최전방(ST 자리)을 맡을 수 있는 자원 — 윙어·공격형 미드필더.
+ * 현대 축구에서 이들은 대체로 최전방 한 자리를 소화하므로 예외 없이 ST를 준다
+ * (측면 미드필더 LM·RM은 제외 — 그쪽은 중원 계열이다).
  */
-const CF_CAPABLE = new Set(["RW", "LW", "CAM", "AM"]);
-
-/**
- * 같은 묶음이어도 **역할이 다른** 쌍의 감점 (RB↔RWB · RM↔RW · ST↔CF↔SS).
- * 좌우 분화에는 쓰지 않는다 — 그쪽은 같은 자리라 감점이 없다.
- */
-const CLUSTER_ROLE_PENALTY = 2;
+const FORWARD_CAPABLE: ReadonlySet<Place> = new Set(["RW", "LW", "AM"]);
 
 /**
  * 주발 — **실측이 있으면 실측, 없으면 5/4**.
@@ -181,17 +176,17 @@ const HEIGHT_BASE: Record<string, number> = {
 
 /**
  * 기준치는 **파생 후 평균이 실제 자리 평균에 닿도록** 뒤에서 맞춘 값이다.
- * 공중볼이 낮은 자리(윙어·공격형 미드필더)는 보정이 음수라 기준치를 그만큼 올려
+ * 점프력이 낮은 자리(윙어·공격형 미드필더)는 보정이 음수라 기준치를 그만큼 올려
  * 두지 않으면 평균이 3cm쯤 낮게 깔린다.
  */
 export function physiqueOf(
   nameEn: string,
   position: string,
-  axes: { aerial: number; strength: number; pace: number },
+  axes: { jumpingReach: number; strength: number; pace: number },
 ): { height: number; weight: number } {
   const base = HEIGHT_BASE[weightSlotOf(position)] ?? 180;
-  // 공중볼이 자리 평균(65)에서 벗어난 만큼 키가 따라간다 — ±7cm 폭
-  const aerialLift = Math.round(((axes.aerial - 65) / 35) * 7);
+  // 점프력이 자리 평균(70)에서 벗어난 만큼 키가 따라간다 — ±7cm 폭
+  const aerialLift = Math.round(((axes.jumpingReach - 70) / 35) * 7);
   const jitter = (hashOf(`height:${nameEn}`) % 7) - 3;
   const height = Math.max(160, Math.min(206, base + aerialLift + jitter));
 
@@ -205,68 +200,57 @@ export function physiqueOf(
 }
 
 /**
- * 가능 포지션 목록 — 주 포지션은 88~96.
- * 같은 묶음(CB↔RCB/LCB, 풀백↔윙백, 측면미드↔윙어, ST↔CF↔SS)은 주 포지션에서
- * 0~3만 낮고, 그 밖의 인접 1~2곳은 70~82.
+ * 가능 자리 목록 — 주 자리는 88~96이고, 이웃 쌍은 그보다 2 낮고, 그 밖의 확장
+ * 1~2곳은 70~82다 (player.md §8). 받는 코드는 시드의 슬롯 코드이고, 목록에는 자리로
+ * 접혀 적힌다 — LCB 시드는 CB 자리다.
  *
- * 인접을 62~80에서 70~82로 올린 이유: 프로 1군 선수가 **바로 옆 자리**를 62로
- * 소화한다는 건 실제 축구와 어긋난다(라이스의 CDM이 65로 나와 "수비형으로 내려"
- * 지시가 손해처럼 보였다). 인접은 "최적은 아니지만 충분히 맡는다"는 뜻이어야 한다.
- * 상한을 82로 묶어 계층은 지킨다 — 주 포지션(88~96) > 묶음(85~96) > 인접(70~82).
+ * 확장이 70~82인 이유: 프로 1군 선수가 **바로 옆 자리**를 62로 소화한다는 건 실제
+ * 축구와 어긋난다(라이스의 수비형이 65로 나와 "수비형으로 내려" 지시가 손해처럼
+ * 보였다). 확장은 "최적은 아니지만 충분히 맡는다"는 뜻이어야 하고, 상한을 82로 묶어
+ * 계층은 지킨다 — 주 자리(88~96) > 이웃 쌍(86~94) > 확장(70~82).
  * 결정적(이름 해시)이라 카탈로그가 시드와 무관하게 안정적이다.
  */
 export function derivePositions(nameEn: string, natural: string): PlayerPosition[] {
   const code = natural.toUpperCase();
+  const home = placeOf(code);
+  // 시드·템플릿·어드민 입력이 모두 아는 코드만 싣는다 — 모르는 표기를 아무 자리로 접으면
+  // 데이터의 오타가 멀쩡한 선수로 선다
+  if (home === null) throw new Error(`자리로 접히지 않는 포지션 코드: ${natural}`);
   const h = hashOf(`pos:${nameEn}`);
   const base = 88 + (h % 9);
-  const positions: PlayerPosition[] = [{ position: code, proficiency: base, isNatural: true }];
+  const positions: PlayerPosition[] = [{ position: home, proficiency: base, isNatural: true }];
   // GK는 전문 포지션 — 부포지션을 주지 않는다
-  if (code === "GK") return positions;
+  if (home === "GK") return positions;
+  const holds = (place: Place) => positions.some((p) => p.position === place);
+  const add = (place: Place, proficiency: number) =>
+    positions.push({ position: place, proficiency: clamp99(proficiency), isNatural: false });
 
   /**
-   * ① 사실상 같은 자리는 모두 갖는다.
+   * ① 이웃 쌍은 언제나 갖는다 — 같은 일을 라인 높이·폭만 달리 하는 자리다.
+   * 처진 스트라이커(SS)는 공격형 미드필더 자리지만 최전방도 바로 그만큼 본다.
    *
-   * **좌우 분화(CB↔LCB↔RCB)는 같은 값**이다 — 부르는 이름만 다른 같은 자리다.
-   * 갈리는 건 주발뿐이지만(`footAdjust` ±3) **여기서 얹지 않는다** — 저장은
-   * 원값이고 좌우는 조회할 때 `positionProficiency`가 한 번 가른다
-   * (player.md §4·§8). ⚠️ 여기서 얹으면 조회가 다시 얹어 폭이 두 배가 된다.
+   * 주발은 **여기서 얹지 않는다** — 저장은 원값이고 좌우는 조회할 때
+   * `positionProficiency`가 한 번 가른다 (player.md §4·§8).
    */
-  for (const pos of clusterOf(code) ?? []) {
-    if (pos === code) continue;
-    positions.push({
-      position: pos,
-      proficiency: clamp99(isMirrorPair(code, pos) ? base : base - CLUSTER_ROLE_PENALTY),
-      isNatural: false,
-    });
-  }
+  const pair = pairedPlaceOf(home);
+  if (pair) add(pair, base - PLACE_PAIR_PENALTY);
+  if (code === "SS") add("ST", base - PLACE_PAIR_PENALTY);
 
-  // ② 최전방 자원은 CF 적응도를 **반드시** 갖는다 — 정통 9번이 아니어도 4-2-3-1의
+  // ② 최전방 자원은 ST 적응도를 **반드시** 갖는다 — 정통 9번이 아니어도 4-2-3-1의
   // "1"을 맡는 일이 흔하다(쿠냐·음뵈모·래시포드). 해시 추첨에 맡기면 이 사실이
   // 선수마다 들쭉날쭉해져 "그 선수는 최전방을 못 본다"는 잘못된 결론이 나온다.
-  if (CF_CAPABLE.has(code) && !positions.some((p) => p.position === "CF")) {
-    positions.push({
-      position: "CF",
-      // 72~82 — 윙어·공격형 미드필더의 최전방. CF는 ST·SS와 같은 묶음이라 이 값이
-      // 곧 "그 선수의 9번 소화력"이 된다(묶음 감점 2를 빼고).
-      proficiency: clamp99(72 + (h % 11)),
-      isNatural: false,
-    });
-  }
+  if (FORWARD_CAPABLE.has(home) && !holds("ST")) add("ST", 72 + (h % 11));
 
-  // ③ 다른 라인·역할로의 확장은 중간 적응도로 1~2곳
-  const neighbors = (POSITION_NEIGHBORS[code] ?? []).filter(
-    (p) => !positions.some((x) => x.position === p),
-  );
+  // ③ 다른 라인·자리로의 확장은 중간 적응도로 1~2곳
+  const neighbors = [
+    ...new Set((POSITION_NEIGHBORS[code] ?? []).flatMap((p) => placeOf(p) ?? [])),
+  ].filter((p) => !holds(p));
   if (neighbors.length === 0) return positions;
   const count = 1 + (h % 2); // 1~2곳
   for (let i = 0; i < count && i < neighbors.length; i++) {
-    const pos = neighbors[(h + i * 7) % neighbors.length]!;
-    if (positions.some((p) => p.position === pos)) continue;
-    positions.push({
-      position: pos,
-      proficiency: 70 + ((h >> (i + 2)) % 13), // 70~82
-      isNatural: false,
-    });
+    const place = neighbors[(h + i * 7) % neighbors.length]!;
+    if (holds(place)) continue;
+    add(place, 70 + ((h >> (i + 2)) % 13)); // 70~82
   }
   return positions;
 }
@@ -324,8 +308,8 @@ type CatalogDraft = Omit<PlayerCatalogEntry, "id">;
 function entryFromSeed(teamId: string, s: RealPlayerSeed): CatalogDraft {
   const homegrownCountry = deriveHomegrownCountry(s, teamId, s.homegrown);
   const nationality = deriveNationality(teamId, s.nationality);
-  // 시드는 6축 + GK — 16축은 여기서 파생한다 (attributes.ts, 부채는 §8 2단계)
-  const axes = deriveAxes(s.nameEn, s.position, s, ageOf(s.birthdate, CATALOG_AGE_REF));
+  // 37축은 EA 세부 능력치에서 옮긴다 — EA에 없는 선수만 대표 수치에서 세운다 (attributes.ts)
+  const axes = deriveAxes(s.nameEn, s.position, s, { ea: eaRatingOf(s), height: s.height });
   const positions = derivePositions(s.nameEn, s.position);
   return {
     teamId,
@@ -458,20 +442,15 @@ const GROUP_TARGET: Record<PositionGroup, number> = { GK: 3, DF: 9, MF: 9, FW: 5
 const TEMPLATE_GROUPS: PositionGroup[] = FALLBACK_TEMPLATE.map((p) => positionGroupOf(p) ?? "MF");
 
 /**
- * 합성 선수가 기준선 위로 올라갈 수 있는 최대폭 — `strong()`이 주는 상한이다.
- * 보충 선수의 기준선을 정하는 자리(`topUpBase`)가 같은 값을 읽는다: 그만큼 뺀
- * 자리에서 출발해야 어떤 굴림도 그 팀 최고 선수를 넘지 못한다.
+ * 합성 선수가 기준선 위로 올라갈 수 있는 최대폭 — 얹는 몫과 개인 편차의 끝
+ * (`synthesizeAxes` — 1.5 + 4.4)보다 넉넉하다. 보충 선수의 기준선을 정하는 자리
+ * (`topUpBase`)가 같은 값을 읽는다: 그만큼 뺀 자리에서 출발해야 어떤 굴림도 그 팀 최고
+ * 선수를 넘지 못한다.
  */
 const SYNTHETIC_UPSIDE = 8;
 
 /** 아카데미 자원이 1군 기준선에서 내려앉는 폭 */
 const ACADEMY_DROP = { min: 12, max: 20 } as const;
-
-/**
- * 기준선에서 축이 흩어지는 폭 — 자리에 맞는 축은 위로(`strong`), 무관한 축은
- * 아래로(`weak`) 치우친다. 폭이 좁으면 합성 선수가 전부 같은 모양이 된다.
- */
-const SPREAD = { ordinary: 6, weakMin: -18, weakMax: -8 } as const;
 
 /** 합성 선수의 나이 — 아카데미와 1군이 다른 구간에 선다 */
 const ACADEMY_AGE = { min: 16, max: 20 } as const;
@@ -585,59 +564,15 @@ function fallbackEntries(
   return slots.map((i) => {
     const position = template[i]!;
     const rng = makeRng(hashOf(`${teamId}:${i}`), `catalog:${teamId}:${i}`);
-    const group = positionGroupOf(position) ?? "MF";
     const { ko: nameKo, en: nameEn } = claimSyntheticName(rng, pool, takenNames);
     // 아카데미는 1군보다 한참 낮게 출발한다 (잠재력은 아래에서 크게 잡는다)
     const base =
       i >= academyFrom ? squadBase - randInt(rng, ACADEMY_DROP.min, ACADEMY_DROP.max) : squadBase;
-    const v = (d = SPREAD.ordinary) => clamp99(base + randInt(rng, -d, d));
-    const strong = () => clamp99(base + randInt(rng, 0, SYNTHETIC_UPSIDE));
-    const weak = () => clamp99(base + randInt(rng, SPREAD.weakMin, SPREAD.weakMax));
     // 아카데미 자원은 어리고, 능력치는 낮지만 잠재력 폭이 크다
     const academy = i >= academyFrom;
     const age = academy
       ? randInt(rng, ACADEMY_AGE.min, ACADEMY_AGE.max)
       : randInt(rng, SENIOR_AGE.min, SENIOR_AGE.max);
-    const attrs =
-      group === "GK"
-        ? {
-            pace: weak(),
-            shooting: weak(),
-            passing: v(),
-            dribbling: weak(),
-            defending: v(),
-            physical: v(),
-            goalkeeping: strong(),
-          }
-        : group === "DF"
-          ? {
-              pace: v(),
-              shooting: weak(),
-              passing: v(),
-              dribbling: v(),
-              defending: strong(),
-              physical: strong(),
-              goalkeeping: 0,
-            }
-          : group === "MF"
-            ? {
-                pace: v(),
-                shooting: v(),
-                passing: strong(),
-                dribbling: v(),
-                defending: v(),
-                physical: v(),
-                goalkeeping: 0,
-              }
-            : {
-                pace: strong(),
-                shooting: strong(),
-                passing: v(),
-                dribbling: strong(),
-                defending: weak(),
-                physical: v(),
-                goalkeeping: 0,
-              };
     const foot = syntheticFoot(nameEn, position);
     const birthdate = `${CATALOG_AGE_REF_YEAR - age}-${String(randInt(rng, 1, 12)).padStart(2, "0")}-${String(randInt(rng, 1, 28)).padStart(2, "0")}`;
     // 아카데미 자원은 그 클럽이 키운 선수다 — 정의상 홈그로운
@@ -647,7 +582,8 @@ function fallbackEntries(
       academy ? true : undefined,
     );
     const positions = derivePositions(nameEn, position);
-    const axes = deriveAxes(nameEn, position, attrs, age);
+    // 기준선에서 37축이 선다 — 실선수와 같은 옮김을 지나되 대표 수치를 지어내지 않는다
+    const axes = synthesizeAxes(nameEn, position, positions, base + SYNTHETIC_BASE_LIFT);
     return {
       teamId,
       foot,

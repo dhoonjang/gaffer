@@ -3,16 +3,15 @@ import {
   playerOverall,
   bestOverall,
   DEFAULT_TACTICS,
-  defaultRoleOf,
   POSITION_ALIASES,
+  cardChangeCost,
+  cardDistance,
+  cardFit,
   naturalPositionOf,
   positionAtPoint,
   positionGroupOf,
-  roleChangeCost,
-  roleDistance,
-  rolesFor,
-  roleFit,
   weightSlotOf,
+  type RoleCard,
 } from "@gaffer/domain";
 import {
   MATCHDAY_BENCH,
@@ -38,8 +37,8 @@ import {
   setCaptain,
   setSetPieceRoutine,
   setLineup,
+  setPlayerCard,
   setPlayerPosition,
-  setPlayerRole,
   setPlayerTactic,
   setPlayerTraining,
   setSquadLevel,
@@ -58,20 +57,31 @@ import {
 } from "@gaffer/engine";
 import { createTestGame } from "../helpers";
 
+/** 몰고 나가는 센터백의 카드 — 과감한 패스와 드리블을 올린다 */
+const BALL_PLAYING: RoleCard = { label: "볼 플레잉", ip: { passRisk: 2, dribble: 1 }, oop: {} };
+/** 걷어 내는 센터백의 카드 — 안전하게, 덜 몬다 */
+const NO_NONSENSE: RoleCard = { label: "노넌센스", ip: { passRisk: -2, dribble: -1 }, oop: {} };
+/** 자리를 벗어나 앞으로 나가는 센터백의 카드 */
+const LIBERO: RoleCard = {
+  label: "리베로",
+  ip: { freedom: 2, dribble: 1, passRisk: 1 },
+  oop: { recover: -1 },
+};
+
 /**
- * **역할이 값을 실제로 움직이는** 선발 센터백. `roleFit`은 정수로 접히므로 두 역할이
- * 같은 숫자에 앉는 선수가 있고(힌카피는 어느 역할로도 79다), 그 선수로는 "역할을
- * 바꾸면 그 자리 전력이 달라진다"를 잴 수 없다 — 라인업이 흔들릴 때마다 그런 선수가
- * 첫 센터백이 되면 케이스가 이유 없이 붉어진다.
+ * **카드가 값을 실제로 움직이는** 선발 센터백. `cardFit`은 정수로 접히므로 두 카드가
+ * 같은 숫자에 앉는 선수가 있고, 그 선수로는 "카드를 바꾸면 그 자리 전력이 달라진다"를
+ * 잴 수 없다 — 라인업이 흔들릴 때마다 그런 선수가 첫 센터백이 되면 케이스가 이유 없이
+ * 붉어진다.
  */
 function pickCentreBack(state: ReturnType<typeof createTestGame>) {
   return assignmentsOf(state, state.userTeamId, "starting").find((a) => {
     if (weightSlotOf(a.position) !== "CB") return false;
     const attrs = playerById(state, a.playerId)!.attributes;
-    const fit = (role: string) => roleFit(attrs, a.position, role);
+    const fit = (card: RoleCard) => cardFit(attrs, a.position, card);
     return (
-      fit("ball-playing-defender") !== fit("no-nonsense-cb") &&
-      fit("ball-playing-defender") !== bestOverall(attrs, playerById(state, a.playerId)!.positions)
+      fit(BALL_PLAYING) !== fit(NO_NONSENSE) &&
+      fit(BALL_PLAYING) !== bestOverall(attrs, playerById(state, a.playerId)!.positions)
     );
   })!;
 }
@@ -484,15 +494,15 @@ describe("라인업 명령은 검증 뒤에 적용한다 (team.md §6)", () => {
     setSquadLevels(state, back); // 뒤 케이스를 위해 제자리로
   });
 
-  it("자리를 옮기고 역할이 반려되면 결과로 알린다 — 옮긴 자리를 되돌리지 않는다", () => {
+  it("자리를 옮기고 카드가 반려되면 결과로 알린다 — 옮긴 자리를 되돌리지 않는다", () => {
     const mover = assignmentsOf(state, state.userTeamId, "starting").find(
       (a) => positionGroupOf(a.position) === "DF",
     )!;
-    // 리베로는 센터백의 역할이라 CAM에는 없다 — 자리는 옮기고 역할만 걸린다
+    // 단계는 ±3까지다 — 자리는 옮기고 카드만 걸린다
     const res = setPlayerTactic(state, {
       playerId: mover.playerId,
       position: "CAM",
-      role: "libero",
+      card: { ip: { attack: 9 } },
     });
     expect(res.ok).toBe(true);
     expect(res.message).toContain("반려");
@@ -517,10 +527,10 @@ describe("포지션 명령 (멀티 포지션)", () => {
     /**
      * 종합은 **가장 잘 맞는 자리**의 값이라 주 포지션 표기를 옮겨도 그 자리의
      * 값으로 갈아치워지지 않는다 (player.md §4) — 어드민 표와 같은 함수다.
-     * 실제로 최전방에 세웠을 때의 전력은 `roleFit`이 따로 낸다.
+     * 실제로 최전방에 세웠을 때의 전력은 `cardFit`이 따로 낸다.
      */
     expect(playerOverall(df)).toBe(bestOverall(df.attributes, df.positions));
-    expect(roleFit(df.attributes, "ST")).toBeLessThanOrEqual(playerOverall(df));
+    expect(cardFit(df.attributes, "ST")).toBeLessThanOrEqual(playerOverall(df));
   });
 
   it("처음 맡는 포지션은 낮은 적응도로 추가된다", () => {
@@ -797,7 +807,7 @@ describe("주장·전술·개인 지시", () => {
     for (const a of tactics.assignments) a.familiarity = 70;
     const uptake = (id: string) => {
       const at = playerById(state, id)!.attributes;
-      return (at.vision + at.positioning + at.composure) / 3;
+      return (at.decisions + at.anticipation + at.vision) / 3;
     };
     const starters = tactics.assignments.filter((a) => a.role === "starting");
     const sorted = [...starters].sort((a, b) => uptake(a.playerId) - uptake(b.playerId));
@@ -821,11 +831,21 @@ describe("주장·전술·개인 지시", () => {
     const tactics = userTactics(state);
     for (const a of tactics.assignments) a.familiarity = 60;
     const starters = assignmentsOf(state, state.userTeamId, "starting");
-    // 킥·제공권으로 먹고사는 선수와, 짧게 주고받는 기술자
+    // 긴 킥·제공권으로 먹고사는 선수와, 짧게 주고받는 기술자
     const longBall = playerById(state, starters[1]!.playerId)!;
-    Object.assign(longBall.attributes, { kicking: 92, aerial: 88, passing: 55, composure: 55 });
+    Object.assign(longBall.attributes, {
+      technique: 92,
+      jumpingReach: 88,
+      passing: 55,
+      composure: 55,
+    });
     const shortPass = playerById(state, starters[2]!.playerId)!;
-    Object.assign(shortPass.attributes, { kicking: 50, aerial: 48, passing: 92, composure: 90 });
+    Object.assign(shortPass.attributes, {
+      technique: 50,
+      jumpingReach: 48,
+      passing: 92,
+      composure: 90,
+    });
 
     setTactics(state, { passStyle: 5 }); // 3 → 5, 롱볼로
     const famOf = (id: string) =>
@@ -844,7 +864,12 @@ describe("주장·전술·개인 지시", () => {
     for (const a of tactics.assignments) a.familiarity = 60;
     const starters = assignmentsOf(state, state.userTeamId, "starting");
     const longBall = playerById(state, starters[1]!.playerId)!;
-    Object.assign(longBall.attributes, { kicking: 92, aerial: 88, passing: 55, composure: 55 });
+    Object.assign(longBall.attributes, {
+      technique: 92,
+      jumpingReach: 88,
+      passing: 55,
+      composure: 55,
+    });
 
     setTactics(state, { passStyle: 5, tempo: 5 });
     const away = assignmentsOf(state, state.userTeamId, "starting").map((a) => a.familiarity);
@@ -895,60 +920,54 @@ describe("주장·전술·개인 지시", () => {
     expect(squadFamiliarity(state, state.userTeamId)).toBeCloseTo(home, 0);
   });
 
-  it("역할은 이름·id·약어로 걸리고, 자리를 옮겨도 호환 역할은 유지된다", () => {
+  it("카드는 같은 자리 안에서 이어지고, 다른 자리로 옮기면 내려간다", () => {
     const state = createTestGame(7);
     const cb = pickCentreBack(state);
     expect(cb, "센터백 배치를 찾지 못했다").toBeTruthy();
 
-    // 그 자리에 없는 역할은 표기가 무엇이든 거부하고 고를 수 있는 목록을 알려 준다
-    for (const spelling of ["poacher", "포처", "P"]) {
-      const bad = setPlayerRole(state, { playerId: cb.playerId, role: spelling });
-      expect(bad.ok, spelling).toBe(false);
-      expect(bad.message, spelling).toContain("센터백");
-    }
-
-    /**
-     * 이름·id·약어는 **한 역할로 모인다** (player.md §3.1) — 전술판은 id를 보내고
-     * 감독의 말을 옮기는 해석기는 이름을 적는다. 이름으로 건 뒤의 둘이 `unchanged`인
-     * 것이 셋이 같은 역할에 닿았다는 뜻이다.
-     */
-    const ok = setPlayerRole(state, { playerId: cb.playerId, role: "볼 플레잉 디펜더" });
+    const ok = setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING });
     expect(ok.ok, ok.message).toBe(true);
-    for (const same of ["ball-playing-defender", "BPD"]) {
-      expect(setPlayerRole(state, { playerId: cb.playerId, role: same }).unchanged, same).toBe(
-        true,
-      );
-    }
-    expect(
-      assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!.roleId,
-    ).toBe("ball-playing-defender");
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING }).unchanged).toBe(
+      true,
+    );
+    const cardOf = () =>
+      assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!.card;
+    expect(cardOf()).toEqual(BALL_PLAYING);
 
-    // 역할은 자리 위에 얹히는 축이다 — 요구 역량이 달라지므로 그 자리 전력도 달라진다
+    // 카드는 자리 위에 얹히는 지시다 — 요구 역량이 달라지므로 그 자리 전력도 달라진다
     const player = playerById(state, cb.playerId)!;
-    expect(roleFit(player.attributes, cb.position, "ball-playing-defender")).not.toBe(
-      roleFit(player.attributes, cb.position, "no-nonsense-cb"),
+    expect(cardFit(player.attributes, cb.position, BALL_PLAYING)).not.toBe(
+      cardFit(player.attributes, cb.position, NO_NONSENSE),
     );
 
-    expect(setPlayerTactic(state, { playerId: cb.playerId, position: "LCB" }).ok).toBe(true);
-    expect(
-      assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!.roleId,
-    ).toBe("ball-playing-defender");
+    // 같은 자리(CB)의 다른 칸 — 카드가 이어진다
+    const sideways = cb.position === "LCB" ? "RCB" : "LCB";
+    expect(setPlayerTactic(state, { playerId: cb.playerId, position: sideways }).ok).toBe(true);
+    expect(cardOf()).toEqual(BALL_PLAYING);
 
+    // 다른 자리 — 같은 단계가 다른 움직임이라 내려간다
     expect(setPlayerTactic(state, { playerId: cb.playerId, position: "ST" }).ok).toBe(true);
-    expect(
-      assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!.roleId,
-    ).toBeUndefined();
+    expect(cardOf()).toBeUndefined();
   });
 
-  it("벤치 선수에겐 역할을 걸 수 없다 — 주 포지션으로 대신 검증하지 않는다", () => {
+  it("말로 고치는 카드는 적은 낱말만 바꾼다 — 나머지는 지금 카드 그대로", () => {
     const state = createTestGame(7);
-    // 최전방 선수를 CF 라인으로 옮겨 CF 역할을 준다 — 선발 정상 경로는 그대로 통과한다
-    const fw = assignmentsOf(state, state.userTeamId, "starting").find((a) => a.position === "ST")!;
-    expect(setPlayerTactic(state, { playerId: fw.playerId, position: "CF" }).ok).toBe(true);
-    const onPitch = setPlayerRole(state, { playerId: fw.playerId, role: "false-nine" });
-    expect(onPitch.ok, onPitch.message).toBe(true);
+    const cb = pickCentreBack(state);
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING }).ok).toBe(true);
+    const res = setPlayerTactic(state, {
+      playerId: cb.playerId,
+      card: { ip: { dribble: 0, width: 1 } },
+    });
+    expect(res.ok, res.message).toBe(true);
+    const card = assignmentsOf(state, state.userTeamId).find(
+      (a) => a.playerId === cb.playerId,
+    )!.card;
+    expect(card).toEqual({ label: "볼 플레잉", ip: { passRisk: 2, width: 1 }, oop: {} });
+  });
 
-    // 명단 화살표로 벤치와 맞바꾼다 — 벤치 배치엔 좌표가 없어 position이 주 포지션이 된다
+  it("벤치 선수에겐 카드를 걸 수 없다 — 주 포지션으로 대신 검증하지 않는다", () => {
+    const state = createTestGame(7);
+    const fw = assignmentsOf(state, state.userTeamId, "starting").find((a) => a.position === "ST")!;
     const spare = assignmentsOf(state, state.userTeamId, "bench").find((a) => a.position === "ST")!;
     const swapped = setLineup(state, {
       starting: currentLineup(state).map((s) =>
@@ -959,64 +978,55 @@ describe("주장·전술·개인 지시", () => {
     expect(swapped.ok, swapped.message).toBe(true);
     const benched = assignmentsOf(state, state.userTeamId).find((a) => a.playerId === fw.playerId)!;
     expect(benched.role).toBe("bench");
-    expect(benched.position).toBe("ST");
 
-    const res = setPlayerRole(state, { playerId: fw.playerId, role: "false-nine" });
-    expect(res.ok, "자리 없는 배치에 역할이 걸렸다").toBe(false);
-
-    // 버그의 핵심: 주 포지션으로 대신 검증하면 화면은 CF라 말하는데 반려는 ST 목록을 내민다
-    expect(res.message).not.toContain("없는 역할입니다");
-    for (const r of rolesFor(benched.position)) {
-      expect(res.message, `주 포지션 역할 목록이 새어 나왔다: ${r.id}`).not.toContain(r.id);
-    }
+    const res = setPlayerCard(state, { playerId: fw.playerId, card: LIBERO });
+    expect(res.ok, "자리 없는 배치에 카드가 걸렸다").toBe(false);
     expect(res.message).toContain("선발");
   });
 
-  it("역할을 바꾸면 화면의 전력과 적응도가 실제로 움직인다", () => {
+  it("카드를 바꾸면 화면의 전력과 적응도가 실제로 움직인다", () => {
     const state = createTestGame(7);
     const cb = pickCentreBack(state);
     const row = () => buildOfficeViews(state).squad.players.find((x) => x.id === cb.playerId)!;
     const before = row();
     const famBefore = cb.familiarity;
 
-    setPlayerRole(state, { playerId: cb.playerId, role: "ball-playing-defender" });
+    setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING });
     const after = row();
 
-    // ① 그 자리 전력이 역할을 반영한다.
-    //    예전엔 "자리 묶음이 주 포지션과 다를 때"만 냈더니, 센터백이 센터백 자리에서
-    //    역할만 바꿨을 땐 화면 숫자가 꿈쩍도 하지 않았다
-    expect(after.slotOverall, "역할을 바꿨는데 자리 전력이 안 나온다").not.toBeNull();
+    // ① 그 자리 전력이 카드를 반영한다 — 센터백이 센터백 자리에서 카드만 바꿔도 움직인다
+    expect(after.slotOverall, "카드를 바꿨는데 자리 전력이 안 나온다").not.toBeNull();
     expect(after.slotOverall).not.toBe(before.slotOverall ?? before.overall);
-    expect(after.roleId).toBe("ball-playing-defender");
+    expect(after.card).toEqual(BALL_PLAYING);
 
     // ② 하는 일이 달라졌으니 그 선수의 전술 적응도가 깎인다 (팀 전체가 아니다)
     const now = assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!;
     expect(now.familiarity).toBeLessThan(famBefore);
   });
 
-  it("역할 변경 비용은 하드코딩이 아니라 **역할 사이 거리**에서 나온다", () => {
-    // 볼 플레잉 ↔ 리베로는 둘 다 발로 푸는 수비수라 가깝고,
-    // 볼 플레잉 ↔ 노넌센스는 요구가 정반대라 멀다
-    const near = roleDistance("CB", "ball-playing-defender", "libero");
-    const far = roleDistance("CB", "ball-playing-defender", "no-nonsense-cb");
+  it("카드 변경 비용은 하드코딩이 아니라 **낱말 단계 차**에서 나온다", () => {
+    // 둘 다 발로 푸는 카드는 가깝고, 정반대로 미는 카드는 멀다
+    const near = cardDistance(BALL_PLAYING, LIBERO);
+    const far = cardDistance(BALL_PLAYING, NO_NONSENSE);
     expect(near).toBeGreaterThan(0);
     expect(far).toBeGreaterThan(near);
-    // 같은 역할이면 0 — 다시 눌러도 손해가 없다
-    expect(roleDistance("CB", "libero", "libero")).toBe(0);
+    // 같은 카드면 0 — 다시 눌러도 손해가 없다 · 이름은 세지 않는다
+    expect(cardDistance(LIBERO, LIBERO)).toBe(0);
+    expect(cardDistance(LIBERO, { ...LIBERO, label: "자유로운 센터백" })).toBe(0);
 
     const state = createTestGame(7);
     const cb = assignmentsOf(state, state.userTeamId, "starting").find(
       (a) => weightSlotOf(a.position) === "CB",
     )!;
     const fam = cb.familiarity;
-    setPlayerRole(state, { playerId: cb.playerId, role: "ball-playing-defender" });
+    setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING });
     const again = assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!;
     const dropped = fam - again.familiarity;
     const unchanged = again.familiarity;
-    setPlayerRole(state, { playerId: cb.playerId, role: "ball-playing-defender" });
+    setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING });
     expect(
       assignmentsOf(state, state.userTeamId).find((a) => a.playerId === cb.playerId)!.familiarity,
-      "같은 역할을 다시 눌렀는데 또 깎였다",
+      "같은 카드를 다시 걸었는데 또 깎였다",
     ).toBe(unchanged);
     expect(dropped).toBeGreaterThan(0);
   });
@@ -1202,14 +1212,14 @@ describe("훈련 명령 = 일정 생성 (규칙 테이블 없음)", () => {
 });
 
 /**
- * 역할 기억 — **감독의 결정은 배치보다 오래 산다** (docs/players/player.md §3.1).
+ * 카드 기억 — **감독의 결정은 배치보다 오래 산다** (docs/players/player.md §3.2).
  *
  * 배치는 로테이션마다 다시 써지고 벤치·예비는 자리를 갖지 않는다. 기억이 없으면
- * 감독이 고른 역할이 로테이션 한 번에 지워지고, 그 역할은 `roleFit`으로 경기
+ * 감독이 건 카드가 로테이션 한 번에 지워지고, 그 카드는 `cardFit`으로 경기
  * 결과에 그대로 닿는다.
  */
-describe("역할 기억 — 벤치를 다녀와도 감독의 결정이 남는다", () => {
-  /** 리베로를 고를 수 있는 선발 센터백 하나 */
+describe("카드 기억 — 벤치를 다녀와도 감독의 결정이 남는다", () => {
+  /** 선발 센터백 하나 */
   const cbOf = (state: GameState) =>
     assignmentsOf(state, state.userTeamId, "starting").find(
       (a) => weightSlotOf(a.position) === "CB",
@@ -1237,14 +1247,14 @@ describe("역할 기억 — 벤치를 다녀와도 감독의 결정이 남는다
     );
   }
 
-  it("선발 → 벤치 → 예비 → 다시 선발: 리베로로 돌아온다", () => {
+  it("선발 → 벤치 → 예비 → 다시 선발: 리베로 카드로 돌아온다", () => {
     const state = createTestGame(7);
     const cb = cbOf(state);
     const slot = cb.position;
     const lineup = currentLineup(state);
-    expect(setPlayerRole(state, { playerId: cb.playerId, role: "libero" }).ok).toBe(true);
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: LIBERO }).ok).toBe(true);
 
-    // 벤치 — 자리가 없으니 배치는 역할을 들지 않는다
+    // 벤치 — 자리가 없으니 배치는 카드를 들지 않는다
     expect(
       setLineup(state, {
         starting: without(state, cb.playerId),
@@ -1252,46 +1262,44 @@ describe("역할 기억 — 벤치를 다녀와도 감독의 결정이 남는다
       }).ok,
     ).toBe(true);
     expect(assignmentOf(state, cb.playerId)!.role).toBe("bench");
-    expect(assignmentOf(state, cb.playerId)!.roleId).toBeUndefined();
+    expect(assignmentOf(state, cb.playerId)!.card).toBeUndefined();
 
     // 예비 — 벤치 지정을 거두면 배치째 사라진다 (생략은 "지금 벤치 그대로"다 · team.md §6)
     expect(setLineup(state, { starting: without(state, cb.playerId), bench: [] }).ok).toBe(true);
     expect(assignmentOf(state, cb.playerId)).toBeUndefined();
 
-    // 다시 선발 — 그 자리의 기본 역할이 아니라 마지막에 맡긴 역할로 선다
+    // 다시 선발 — 그 자리의 기본 행동이 아니라 마지막에 맡긴 카드로 선다
     expect(setLineup(state, { starting: lineup }).ok).toBe(true);
     const back = assignmentOf(state, cb.playerId)!;
     expect(back.position).toBe(slot);
-    expect(back.roleId).toBe("libero");
-    expect(defaultRoleOf(slot)).not.toBe("libero");
+    expect(back.card).toEqual(LIBERO);
   });
 
   /**
-   * 화면은 기억을 따로 읽지 않는다 (§3.1 · §3.2) — 벤치 행에는 역할이 없고,
-   * 다시 선발이 될 때 코어가 배치에 적어 넣은 값이 그대로 알약에 선다.
-   * 화면만 기억을 읽으면 장부에 없는 역할을 화면이 말하게 된다.
+   * 벤치 행에는 카드가 없고 (§3.1 · §3.2), 다시 선발이 될 때 코어가 배치에 적어 넣은
+   * 값이 그대로 선다. 행이 기억을 따로 싣는 것은 화면이 저장 전 판을 같은 순서로
+   * 재현하기 위해서다 (`cardMemory`).
    */
-  it("벤치 행엔 역할이 없고, 다시 선발이 되면 그 역할로 선다", () => {
+  it("벤치 행엔 카드가 없고, 다시 선발이 되면 그 카드로 선다", () => {
     const state = createTestGame(7);
     const cb = cbOf(state);
     const slot = cb.position;
     const lineup = currentLineup(state);
-    setPlayerRole(state, { playerId: cb.playerId, role: "libero" });
+    setPlayerCard(state, { playerId: cb.playerId, card: LIBERO });
     const onPitch = rowOf(state, cb.playerId);
-    expect(onPitch.roleId).toBe("libero");
+    expect(onPitch.card).toEqual(LIBERO);
 
     setLineup(state, {
       starting: without(state, cb.playerId),
       bench: [{ playerId: cb.playerId, position: slot }],
     });
     const onBench = rowOf(state, cb.playerId);
-    // 자리가 없으면 역할도 없다 — 알약도, 목록도 서지 않는다
-    expect(onBench.roleId).toBeNull();
-    expect(onBench.roleOptions).toHaveLength(0);
+    // 자리가 없으면 카드도 없다
+    expect(onBench.card).toBeNull();
 
     setLineup(state, { starting: lineup });
     const back = rowOf(state, cb.playerId);
-    expect(back.roleId).toBe("libero");
+    expect(back.card).toEqual(LIBERO);
     expect(back.slotOverall).toBe(onPitch.slotOverall);
   });
 
@@ -1300,21 +1308,21 @@ describe("역할 기억 — 벤치를 다녀와도 감독의 결정이 남는다
     const cb = cbOf(state);
     const slot = cb.position;
     const lineup = currentLineup(state);
-    setPlayerRole(state, { playerId: cb.playerId, role: "libero" });
-    setPlayerRole(state, { playerId: cb.playerId, role: "ball-playing-defender" });
+    setPlayerCard(state, { playerId: cb.playerId, card: LIBERO });
+    setPlayerCard(state, { playerId: cb.playerId, card: BALL_PLAYING });
 
     setLineup(state, {
       starting: without(state, cb.playerId),
       bench: [{ playerId: cb.playerId, position: slot }],
     });
     setLineup(state, { starting: lineup });
-    expect(assignmentOf(state, cb.playerId)!.roleId).toBe("ball-playing-defender");
+    expect(assignmentOf(state, cb.playerId)!.card).toEqual(BALL_PLAYING);
   });
 
   it("자리가 다르면 기억이 닿지 않는다 — 키는 (선수, 자리)다", () => {
     const state = createTestGame(7);
     const cb = cbOf(state);
-    setPlayerRole(state, { playerId: cb.playerId, role: "libero" });
+    setPlayerCard(state, { playerId: cb.playerId, card: LIBERO });
 
     const moved = currentLineup(state).map((s) =>
       s.playerId === cb.playerId ? { playerId: s.playerId, position: "DM" } : s,
@@ -1322,19 +1330,19 @@ describe("역할 기억 — 벤치를 다녀와도 감독의 결정이 남는다
     expect(setLineup(state, { starting: moved }).ok).toBe(true);
     const now = assignmentOf(state, cb.playerId)!;
     expect(weightSlotOf(now.position)).not.toBe("CB");
-    expect(now.roleId).toBeUndefined();
-    expect(rowOf(state, cb.playerId).roleId).toBe(defaultRoleOf(now.position));
+    expect(now.card).toBeUndefined();
+    expect(rowOf(state, cb.playerId).card).toBeNull();
   });
 
-  it("같은 날 벤치를 다녀와도 역할 대가를 두 번 물지 않는다", () => {
+  it("같은 날 벤치를 다녀와도 카드 대가를 두 번 물지 않는다", () => {
     const state = createTestGame(7);
     const cb = cbOf(state);
     const slot = cb.position;
     const lineup = currentLineup(state);
-    const morning = cb.roleId ?? defaultRoleOf(slot);
+    const morning = cb.card ?? null;
     const start = famOf(state, cb.playerId);
 
-    setPlayerRole(state, { playerId: cb.playerId, role: "libero" });
+    setPlayerCard(state, { playerId: cb.playerId, card: LIBERO });
     expect(famOf(state, cb.playerId)).toBeLessThan(start);
 
     setLineup(state, {
@@ -1343,8 +1351,8 @@ describe("역할 기억 — 벤치를 다녀와도 감독의 결정이 남는다
     });
     setLineup(state, { starting: lineup });
 
-    // 아침의 역할로 되돌아오면 낸 값도 돌아온다 — 장부(roleMemo)가 벤치를 건너 이어진다
-    expect(setPlayerRole(state, { playerId: cb.playerId, role: morning }).ok).toBe(true);
+    // 아침의 카드로 되돌아오면 낸 값도 돌아온다 — 장부(cardMemo)가 벤치를 건너 이어진다
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: morning }).ok).toBe(true);
     expect(famOf(state, cb.playerId)).toBeCloseTo(start, 6);
   });
 });
@@ -1429,42 +1437,41 @@ describe("적응도 왕복 — 2군 · 자리 · 천장 100", () => {
     expect(assignmentOf(state, cb.playerId)!.drilled).toEqual(drilled);
   });
 
-  it("자리를 옮겼다 되돌리면 역할도 적응도도 그날 아침 값으로 닫힌다", () => {
+  it("자리를 옮겼다 되돌리면 카드도 적응도도 그날 아침 값으로 닫힌다", () => {
     const state = createTestGame(7);
     const cb = cbOf(state);
     const slot = cb.position;
-    const morning = cb.roleId ?? defaultRoleOf(slot);
+    const morning = cb.card ?? null;
     const start = assignmentOf(state, cb.playerId)!.familiarity;
-    const cost = roleChangeCost(slot, morning, "libero");
+    const cost = cardChangeCost(morning, LIBERO);
     expect(cost).toBeGreaterThan(0);
 
-    expect(setPlayerRole(state, { playerId: cb.playerId, role: "libero" }).ok).toBe(true);
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: LIBERO }).ok).toBe(true);
     expect(assignmentOf(state, cb.playerId)!.familiarity).toBeCloseTo(start - cost, 6);
 
-    // 자리를 벗어나면 낸 값은 되돌아온다 — 아침의 역할과 견줄 자가 없다
+    // 자리를 벗어나면 낸 값은 되돌아온다 — 아침의 카드와 견줄 자가 없다
     expect(setPlayerTactic(state, { playerId: cb.playerId, position: "DM" }).ok).toBe(true);
     expect(assignmentOf(state, cb.playerId)!.familiarity).toBeCloseTo(start, 6);
 
     // 되돌아오면 기억이 리베로를 되살리고, 그 대가를 다시 문다 (떠난 적 없는 것과 같다)
     expect(setPlayerTactic(state, { playerId: cb.playerId, position: slot }).ok).toBe(true);
     const back = assignmentOf(state, cb.playerId)!;
-    expect(back.roleId).toBe("libero");
+    expect(back.card).toEqual(LIBERO);
     expect(back.familiarity).toBeCloseTo(start - cost, 6);
 
-    // 아침의 역할로 되돌리면 환불이다 — 왕복 한 번에 두 배가 아니다
-    expect(setPlayerRole(state, { playerId: cb.playerId, role: morning }).ok).toBe(true);
+    // 아침의 카드로 되돌리면 환불이다 — 왕복 한 번에 두 배가 아니다
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: morning }).ok).toBe(true);
     expect(assignmentOf(state, cb.playerId)!.familiarity).toBeCloseTo(start, 6);
   });
 
   it("전술판이 자리를 옮겨도(라인업 저장) 같은 값으로 닫힌다", () => {
     const state = createTestGame(7);
     const cb = cbOf(state);
-    const slot = cb.position;
-    const morning = cb.roleId ?? defaultRoleOf(slot);
+    const morning = cb.card ?? null;
     const start = assignmentOf(state, cb.playerId)!.familiarity;
     const lineup = currentLineup(state);
 
-    expect(setPlayerRole(state, { playerId: cb.playerId, role: "libero" }).ok).toBe(true);
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: LIBERO }).ok).toBe(true);
     const moved = lineup.map((s) =>
       s.playerId === cb.playerId ? { playerId: s.playerId, position: "DM" } : s,
     );
@@ -1472,7 +1479,7 @@ describe("적응도 왕복 — 2군 · 자리 · 천장 100", () => {
     expect(assignmentOf(state, cb.playerId)!.familiarity).toBeCloseTo(start, 6);
 
     expect(setLineup(state, { starting: lineup }).ok).toBe(true);
-    expect(setPlayerRole(state, { playerId: cb.playerId, role: morning }).ok).toBe(true);
+    expect(setPlayerCard(state, { playerId: cb.playerId, card: morning }).ok).toBe(true);
     expect(assignmentOf(state, cb.playerId)!.familiarity).toBeCloseTo(start, 6);
   });
 

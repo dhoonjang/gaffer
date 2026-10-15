@@ -1,7 +1,7 @@
 import {
   shelveFamiliarity,
   unshelveFamiliarity,
-  settleRoleCost,
+  settleCardCost,
 } from "../players/familiarity-memory";
 import {
   type GameState,
@@ -534,7 +534,7 @@ export function applyTransition(state: GameState): string[] {
       const memory = unshelveFamiliarity(tactics, assignment.playerId);
       if (!memory) continue;
       Object.assign(assignment, memory);
-      settleRoleCost(
+      settleCardCost(
         assignment,
         nextCalendar.preseasonStart,
         assignment.role === "starting" ? assignment : null,
@@ -544,7 +544,7 @@ export function applyTransition(state: GameState): string[] {
 
   /**
    * 주장이 비면 부주장이 우선 승계한다 (people.md §5-1).
-   * 부주장도 없으면 포지션과 무관하게 1군에서 리더십·생일·id 순으로 배정한다.
+   * 부주장도 없으면 포지션과 무관하게 1군에서 나이(생일)·id 순으로 배정한다.
    */
   const userSquad = playersOf(state, state.userTeamId);
   if (!userSquad.some((p) => p.isCaptain)) {

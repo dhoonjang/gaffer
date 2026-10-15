@@ -1,4 +1,4 @@
-import type { BoardPoint, SetPieceRole } from "@gaffer/domain";
+import { RoleCardSchema, type BoardPoint, type RoleCard, type SetPieceRole } from "@gaffer/domain";
 import { z } from "zod";
 
 export const MatchBoardOrderSchema = z.discriminatedUnion("kind", [
@@ -8,7 +8,11 @@ export const MatchBoardOrderSchema = z.discriminatedUnion("kind", [
     position: z.string(),
     point: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }),
   }),
-  z.object({ kind: z.literal("role"), playerId: z.string().min(1), role: z.string() }),
+  z.object({
+    kind: z.literal("card"),
+    playerId: z.string().min(1),
+    card: RoleCardSchema.nullable(),
+  }),
   z.object({ kind: z.literal("substitution"), out: z.string().min(1), in: z.string().min(1) }),
   z.object({
     kind: z.literal("tactic"),
@@ -24,7 +28,7 @@ export const MatchBoardOrderSchema = z.discriminatedUnion("kind", [
 
 export type MatchBoardOrder =
   | { kind: "position"; playerId: string; position: string; point: BoardPoint }
-  | { kind: "role"; playerId: string; role: string }
+  | { kind: "card"; playerId: string; card: RoleCard | null }
   | { kind: "substitution"; out: string; in: string }
   | {
       kind: "tactic";
@@ -40,7 +44,7 @@ export type MatchBoardOrder =
 function orderKey(order: MatchBoardOrder): string {
   switch (order.kind) {
     case "position":
-    case "role":
+    case "card":
       return `${order.kind}:${order.playerId}`;
     case "tactic":
       return `tactic:${order.axis}`;

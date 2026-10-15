@@ -1,5 +1,5 @@
 import type { GamePlayer } from "@gaffer/domain";
-import { ageOf, josaOf } from "@gaffer/domain";
+import { ageOf, josaOf, normalizePositionCode, placeOf } from "@gaffer/domain";
 import { cupCatalog, isCup } from "../core/catalog/cup-catalog";
 import { domesticCupCatalog, isDomesticCup } from "../core/catalog/domestic-cup-catalog";
 import { marketLeagues, topLeagues } from "../core/catalog/league-catalog";
@@ -116,7 +116,7 @@ function teamsInCompetition(state: GameState, competitionId: string): Set<string
 export interface PlayerPool {
   /** null이면 대회로 좁히지 않는다 */
   teams: Set<string> | null;
-  /** 포지션 코드 (주 포지션 또는 소화 가능 포지션) — 이미 대문자 */
+  /** 자리 (주 포지션 또는 소화 가능 자리) — 슬롯 코드로 물어도 자리로 접혀 있다 */
   position?: string;
   minAge?: number;
   maxAge?: number;
@@ -128,10 +128,16 @@ export function playerPoolOf(
 ): PlayerPool {
   return {
     teams: input.competitionId ? teamsInCompetition(state, input.competitionId) : null,
-    ...(input.position === undefined ? {} : { position: input.position.toUpperCase() }),
+    ...(input.position === undefined ? {} : { position: placeOfAsked(input.position) }),
     ...(input.minAge === undefined ? {} : { minAge: input.minAge }),
     ...(input.maxAge === undefined ? {} : { maxAge: input.maxAge }),
   };
+}
+
+/** 물은 표기를 자리로 — 읽지 못하면 그 표기 그대로 남아 아무와도 맞지 않는다 */
+function placeOfAsked(raw: string): string {
+  const code = normalizePositionCode(raw);
+  return (code === null ? null : placeOf(code)) ?? raw.toUpperCase();
 }
 
 /** 이 선수가 풀 안에 있는가 */

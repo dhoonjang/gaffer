@@ -1,4 +1,14 @@
-import { FORMATIONS, type Formation } from "@gaffer/domain";
+import {
+  AXIS_KO,
+  CARD_WORDS,
+  CARD_WORD_DEFS,
+  FORMATIONS,
+  INCLINATION_AXES,
+  OVERALL_AXES,
+  type AttributeAxis,
+  type CardWord,
+  type Formation,
+} from "@gaffer/domain";
 import { HISTORY_CHAR_KEEP } from "../src/core/history-window";
 import { defineHarness, type Band, type BandRole, type Harness } from "./harness";
 
@@ -403,6 +413,9 @@ export const LIVE_MATCH_STATS = defineHarness({
     { metric: "볼 인플레이 몫", role: "reference", min: 0.5, max: 0.66, unit: "ratio", why: "EPL 55~59% — 재시작의 멈춤이 경기의 리듬을 정한다" },
     { metric: "슈팅 순간 골 쪽 수비 수", role: "reference", min: 3.2, why: "히트맵 이전의 실시간 경기 2.8 — 슛 길목·존 커버가 골 앞을 채우면 는다 (live-match.md §5.2)" },
     { metric: "슈팅 순간 골 쪽 수비 수 sd", role: "measure", why: "슛마다의 퍼짐 — 역습의 빈 골문과 내려앉은 블록이 함께 있어야 한다" },
+    { metric: "박스 안 오픈 플레이 크로스", role: "reference", min: 6, max: 14, why: "[SB] EPL 10.2 (football-reference §5)" },
+    { metric: "골키퍼 크로스 차단 — 오픈 플레이", role: "reference", min: 0.05, max: 0.11, unit: "ratio", why: "[SB] EPL 7.7% — 골문 8m 안에 떨어지는 공을 주로 잡는다 (live-match.md §5.6)" },
+    { metric: "골키퍼 크로스 차단 — 코너·프리킥", role: "reference", min: 0.08, max: 0.16, unit: "ratio", why: "[SB] EPL 코너 11.9% · 프리킥 12.0%" },
     { metric: "풀백 깊이 폭 (p10~p90, m)", role: "reference", min: 37, why: "히트맵 이전 35.2m — 풀백의 분포는 자기 박스 근처부터 상대 진영까지다 (live-match.md §3.3)" },
     { metric: "풀백 깊이 폭 sd (m)", role: "measure", why: "풀백마다의 퍼짐 — 윙백과 노-넌센스 풀백이 갈려야 역할이 공간에 선다" },
     { metric: "풀백 앞 끝 (p90 깊이, m)", role: "reference", min: 55, why: "히트맵 이전 52.2m — 공이 전진하면 가담 성분이 무거워진다" },
@@ -540,6 +553,192 @@ export const LIVE_TACTICS = defineHarness({
     ...everyShape("압박 5 상대 패스 변화", { role: "reference", max: 0, why: "공을 돌릴 시간을 뺏는다" }),
     ...everyShape("수비 라인 1 상대 점유 변화", { role: "reference", min: 0, unit: "ratio", why: "내려앉으면 공을 내준다 — 모은 칸이 `reference`라 모양 칸도 그 역할이다" }),
     ...everyShape("템포 5 우리 패스 변화", { role: "measure", why: "직접성과 판단 간격이 함께 움직인다" }),
+  ],
+});
+
+// ── 역할 카드의 낱말 ──
+//
+// 낱말 하나가 읽히는 자리 — 단계 +3이 −3보다 그 값을 어느 쪽으로 옮겨야 하는가(`sign`). 낱말표
+// 자체가 정의이므로(live-match.md §4 「이 표는 낱말의 정의」) 방향은 가드다. 크기와 득실은 잰다.
+
+/** `card-words` 하네스가 판마다 재는 값 — 본체가 이 이름으로 측정값을 낸다 */
+export type CardWordProbe =
+  | "wideIn"
+  | "depthIn"
+  | "spreadIn"
+  | "runs"
+  | "boxIn"
+  | "dribbles"
+  | "progressiveShare"
+  | "shots"
+  | "crosses"
+  | "pressOut"
+  | "depthOut"
+  | "markOut"
+  | "keeperOut";
+
+interface CardWordProbeDef {
+  probe: CardWordProbe;
+  label: string;
+  sign: 1 | -1;
+  unit?: "ratio";
+  why: string;
+}
+
+export const CARD_WORD_PROBES: Readonly<Record<CardWord, CardWordProbeDef>> = {
+  width: {
+    probe: "wideIn",
+    label: "공 있을 때 터치라인 쪽 (m)",
+    sign: 1,
+    why: "넓게 벌리면 터치라인 쪽에 선다 — 형태의 폭과 측면 성분",
+  },
+  attack: {
+    probe: "depthIn",
+    label: "공 있을 때 깊이 (m)",
+    sign: 1,
+    why: "올라가면 깊이가 는다 — 형태의 전진과 앞쪽 성분",
+  },
+  freedom: {
+    probe: "spreadIn",
+    label: "공 있을 때 퍼짐 (m)",
+    sign: 1,
+    why: "공을 찾아 움직이면 한 자리에 머물지 않는다 — 옆 퍼짐과 자리 지키기",
+  },
+  dropDeep: {
+    probe: "depthIn",
+    label: "공 있을 때 깊이 (m)",
+    sign: -1,
+    why: "받으러 내려오면 공이 뒤에 있을 때 깊이가 준다",
+  },
+  runBehind: {
+    probe: "runs",
+    label: "침투 시작/경기",
+    sign: 1,
+    why: "뒷공간을 노리면 위협 항이 무거워져 침투가 는다",
+  },
+  boxPresence: {
+    probe: "boxIn",
+    label: "공 있을 때 상대 박스 안 몫",
+    sign: 1,
+    unit: "ratio",
+    why: "박스 성분이 무거워진다",
+  },
+  dribble: {
+    probe: "dribbles",
+    label: "드리블/경기",
+    sign: 1,
+    why: "공 가진 선택에서 드리블의 효용이 오른다",
+  },
+  passRisk: {
+    probe: "progressiveShare",
+    label: "전진 패스 몫",
+    sign: 1,
+    unit: "ratio",
+    why: "과감한 패스는 라인을 넘기는 패스를 더 고른다",
+  },
+  shoot: { probe: "shots", label: "슈팅/경기", sign: 1, why: "슈팅 문턱이 내려가고 효용이 오른다" },
+  cross: { probe: "crosses", label: "크로스/경기", sign: 1, why: "크로스의 효용이 오른다" },
+  press: {
+    probe: "pressOut",
+    label: "공 없을 때 압박 몫",
+    sign: 1,
+    unit: "ratio",
+    why: "달려들면 공 없을 때 압박하는 시간이 는다 — 낱말은 누가 나서는지를 가르는데 하네스는 전원에게 걸어 몫이 동료 사이에서 그대로라, 이 칸은 히트맵 쪽 효과만 본다",
+  },
+  recover: {
+    probe: "depthOut",
+    label: "공 없을 때 깊이 (m)",
+    sign: -1,
+    why: "끝까지 따라 내려오면 공 없을 때 깊이가 준다",
+  },
+  mark: {
+    probe: "markOut",
+    label: "공 없을 때 가장 가까운 상대까지 (m)",
+    sign: -1,
+    why: "대인 쪽이면 상대에게 붙는다",
+  },
+  sweep: {
+    probe: "keeperOut",
+    label: "골키퍼의 공 없을 때 깊이 (m)",
+    sign: 1,
+    why: "뒤를 덮으면 골키퍼가 라인에서 나와 선다",
+  },
+};
+
+/** 낱말 하나의 밴드 이름 — 본체와 서술자가 같은 함수로 부른다 */
+export const cardWordMetric = (word: CardWord, what: "방향" | "+3 득실 xG" | "−3 득실 xG") =>
+  what === "방향"
+    ? `${CARD_WORD_DEFS[word].ko} — ${CARD_WORD_PROBES[word].label} (+3 − −3)`
+    : `${CARD_WORD_DEFS[word].ko} — ${what} 변화`;
+
+export const CARD_WORDS_HARNESS = defineHarness({
+  id: "card-words",
+  what: "홈 팀 카드에 낱말 하나만 −3·+3으로 걸었을 때 그 낱말이 읽히는 자리가 뜻한 쪽으로 움직이는가 · 그 대가",
+  doc: "docs/players/player.md §3 · docs/match/live-match.md §4",
+  cost: "팔 29(기준 + 낱말 14 × −3·+3) × 시드 둘 × 리그 3경기 = 174경기 · 40분 남짓",
+  bands: [
+    { metric: "기준 — 우리 xG", role: "measure", why: "아래 득실 변화의 눈금 — 카드가 없는 판" },
+    { metric: "기준 — 상대 xG", role: "measure", why: "같은 판" },
+    ...CARD_WORDS.flatMap((word): Band[] => {
+      const probe = CARD_WORD_PROBES[word];
+      return [
+        {
+          metric: cardWordMetric(word, "방향"),
+          role: "guard",
+          ...(probe.sign > 0 ? { min: 0 } : { max: 0 }),
+          ...(probe.unit ? { unit: probe.unit } : {}),
+          why: `${probe.why} — 낱말의 정의라 방향이 뒤집히면 표기 오류다`,
+        },
+        {
+          metric: cardWordMetric(word, "+3 득실 xG"),
+          role: "measure",
+          why: "기준 대비 (우리 xG − 상대 xG)의 변화 — 극단 카드가 이득만 보는가 (player.md §3)",
+        },
+        {
+          metric: cardWordMetric(word, "−3 득실 xG"),
+          role: "measure",
+          why: "같은 셈의 반대쪽",
+        },
+      ];
+    }),
+  ],
+});
+
+// ── 축 한 칸의 경기 가치 ──
+//
+// 축 하나를 한 팀 전원 `AXIS_VALUE_STEP`만큼 올린 판과 기준 판의 차를 10점당으로 접는다
+// (player.md §1 「크기」). 공격 가치는 우리 xG가 오른 만큼, 수비 가치는 상대 xG가 내려간 만큼이다.
+
+/** 재는 축 — 종합에 드는 능력 축과 성향 축 */
+export const AXIS_VALUE_AXES: readonly AttributeAxis[] = [...OVERALL_AXES, ...INCLINATION_AXES];
+
+/** 한 판에서 올리는 폭 — 잡음에 묻히지 않을 만큼 크고, 99에 많이 걸리지 않을 만큼 작다 */
+export const AXIS_VALUE_STEP = 15;
+
+/** 축 하나의 밴드 이름 — 본체와 서술자가 같은 함수로 부른다 */
+export const axisValueMetric = (axis: AttributeAxis, what: "득실" | "공격" | "수비") =>
+  `${AXIS_KO[axis]} — ${what} xG / 10점`;
+
+export const AXIS_VALUE = defineHarness({
+  id: "axis-value",
+  what: "축 하나를 홈 팀 전원 +15로 올렸을 때의 공격·수비·득실 xG — 축 한 칸의 경기 가치",
+  doc: "docs/players/player.md §1",
+  cost: "팔 38(기준 + 축 37) × 시드 둘 × 리그 4경기 = 304경기 · 1시간 30분 남짓",
+  bands: [
+    {
+      metric: "기준 — 우리 xG",
+      role: "measure",
+      why: "아래 변화의 눈금 — 능력치를 건드리지 않은 판",
+    },
+    ...AXIS_VALUE_AXES.flatMap((axis): Band[] => [
+      {
+        metric: axisValueMetric(axis, "득실"),
+        role: "measure",
+        why: "공격 가치 + 수비 가치 — 0에 붙은 축은 통로가 없거나 약하다",
+      },
+      { metric: axisValueMetric(axis, "공격"), role: "measure", why: "우리 xG가 오른 만큼" },
+      { metric: axisValueMetric(axis, "수비"), role: "measure", why: "상대 xG가 내려간 만큼" },
+    ]),
   ],
 });
 
@@ -1030,6 +1229,8 @@ export const HARNESSES: readonly Harness[] = [
   LIVE_GOAL_ANATOMY,
   LIVE_PLAYER_LOAD,
   LIVE_TACTICS,
+  CARD_WORDS_HARNESS,
+  AXIS_VALUE,
   SIM_PARITY,
   INJURY_RATE,
   FINANCE_TIER1,

@@ -2,7 +2,7 @@ import { writeOffPlayerContract } from "./transfer-accounting";
 import { FREE_AGENT_TEAM, type Contract, type GamePlayer } from "@gaffer/domain";
 export { FREE_AGENT_TEAM } from "@gaffer/domain";
 import { activeContract, type GameState, releaseFromTactics } from "../core/state";
-import { forgetRoles } from "../players/role-memory";
+import { forgetCards } from "../players/card-memory";
 
 /**
  * **계약이 끝나면 선수는 어느 구단에도 속하지 않는다** — 모든 구단이 같은 규칙을
@@ -32,7 +32,7 @@ export function contractExpiresBy(contract: Contract, on: string): boolean {
 /**
  * **떠나는 선수가 남기고 가는 것을 지운다** — 팀을 떠나는 문은 이것 하나다.
  *
- * 전술 배치·개인 훈련·불만·약속·역할 기억·완장은 선수가 이 팀에 있을 때만
+ * 전술 배치·개인 훈련·불만·약속·카드 기억·완장은 선수가 이 팀에 있을 때만
  * 뜻이 있는 값이다. 팀을 떠나면 불만도 끝나고(people.md §5), 떠난 사람에게 한 약속은
  * 지킬 자리가 없다 (people.md §5-2).
  */
@@ -42,7 +42,7 @@ export function clearDepartedState(state: GameState, player: GamePlayer, from: s
     (listing) => listing.gamePlayerId !== player.id,
   );
   state.playerTraining = state.playerTraining.filter((t) => t.gamePlayerId !== player.id);
-  forgetRoles(state, player.id);
+  forgetCards(state, player.id);
   player.isCaptain = false;
   player.isViceCaptain = false;
 }

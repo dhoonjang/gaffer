@@ -2,21 +2,23 @@ import { describe, expect, it } from "vitest";
 import { mergeMatchOrders, type MatchBoardOrder } from "@/shared/match-orders";
 
 describe("경기 중 전술판 지시", () => {
-  it("같은 선수의 자리·역할은 각각 마지막 선택만 남긴다", () => {
+  it("같은 선수의 자리·카드는 각각 마지막 선택만 남긴다", () => {
+    const playmaker = { label: "플레이메이커", ip: { passRisk: 2 }, oop: {} };
+    const enganche = { label: "엔간체", ip: { freedom: -2, passRisk: 2 }, oop: { press: -2 } };
     expect(
       mergeMatchOrders(
         [
           { kind: "position", playerId: "bruno", position: "CAM", point: { x: 50, y: 30 } },
-          { kind: "role", playerId: "bruno", role: "playmaker" },
+          { kind: "card", playerId: "bruno", card: playmaker },
         ],
         [
           { kind: "position", playerId: "bruno", position: "LAM", point: { x: 40, y: 30 } },
-          { kind: "role", playerId: "bruno", role: "enganche" },
+          { kind: "card", playerId: "bruno", card: enganche },
         ],
       ),
     ).toEqual([
       { kind: "position", playerId: "bruno", position: "LAM", point: { x: 40, y: 30 } },
-      { kind: "role", playerId: "bruno", role: "enganche" },
+      { kind: "card", playerId: "bruno", card: enganche },
     ]);
   });
 
@@ -41,12 +43,12 @@ describe("경기 중 전술판 지시", () => {
             position: i === 78 ? "CAM" : "CM",
             point: { x: 50, y: i === 78 ? 30 : 48 },
           }
-        : { kind: "role", playerId: "a", role: `role-${i}` },
+        : { kind: "card", playerId: "a", card: { label: `card-${i}`, ip: {}, oop: {} } },
     );
 
     expect(mergeMatchOrders([], restored)).toEqual([
       { kind: "position", playerId: "a", position: "CAM", point: { x: 50, y: 30 } },
-      { kind: "role", playerId: "a", role: "role-79" },
+      { kind: "card", playerId: "a", card: { label: "card-79", ip: {}, oop: {} } },
     ]);
   });
 });

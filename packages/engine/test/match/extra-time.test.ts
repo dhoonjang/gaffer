@@ -124,12 +124,12 @@ function withAttributes(attrs: Partial<PlayerAttributes>): GamePlayer {
 
 /** 승부차기 기량이 정확히 이 값인 키커 */
 function penaltyKicker(skill: number): GamePlayer {
-  return withAttributes({ finishing: skill, composure: skill, kicking: skill });
+  return withAttributes({ penalties: skill, composure: skill });
 }
 
 /** 승부차기 기량이 정확히 이 값인 골키퍼 */
 function penaltyKeeper(skill: number): GamePlayer {
-  return withAttributes({ goalkeeping: skill, composure: skill });
+  return withAttributes({ reflexes: skill, composure: skill });
 }
 
 describe("연장 시뮬 (30분)", () => {
@@ -969,22 +969,12 @@ describe("연장·승부차기의 입력 (match.md §7)", () => {
     expect(total(true)).not.toBe(total(false));
   });
 
-  it("승부차기 기량은 결정력·침착성·킥력과 골키핑·침착성이 정한다", () => {
+  it("승부차기 기량은 페널티킥·침착성과 반사 신경·침착성이 정한다", () => {
     // 가중치는 competition.md §6이 쥔다 — 한 능력치만 세워 그 몫을 직접 읽는다
-    expect(penaltySkill(withAttributes({ finishing: 100, composure: 0, kicking: 0 }))).toBeCloseTo(
-      50,
-      10,
-    );
-    expect(penaltySkill(withAttributes({ finishing: 0, composure: 100, kicking: 0 }))).toBeCloseTo(
-      30,
-      10,
-    );
-    expect(penaltySkill(withAttributes({ finishing: 0, composure: 0, kicking: 100 }))).toBeCloseTo(
-      20,
-      10,
-    );
-    expect(keeperSkill(withAttributes({ goalkeeping: 100, composure: 0 }))).toBeCloseTo(70, 10);
-    expect(keeperSkill(withAttributes({ goalkeeping: 0, composure: 100 }))).toBeCloseTo(30, 10);
+    expect(penaltySkill(withAttributes({ penalties: 100, composure: 0 }))).toBeCloseTo(70, 10);
+    expect(penaltySkill(withAttributes({ penalties: 0, composure: 100 }))).toBeCloseTo(30, 10);
+    expect(keeperSkill(withAttributes({ reflexes: 100, composure: 0 }))).toBeCloseTo(70, 10);
+    expect(keeperSkill(withAttributes({ reflexes: 0, composure: 100 }))).toBeCloseTo(30, 10);
     // 골키퍼가 없는 옛 세이브 — 평균적인 키커와 같은 자리에 선다
     expect(keeperSkill(null)).toBeCloseTo(60, 10);
   });

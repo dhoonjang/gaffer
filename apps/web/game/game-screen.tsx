@@ -12,6 +12,7 @@ import { humanDate } from "@/shared/dateline";
 import { matchHeadFacts, matchScoreOf, matchTitleOf } from "@/screens/match/match-head";
 import { mergeSlice } from "@/game/game-slice";
 import { reducedMotion } from "@/shared/motion";
+import { isLabGame } from "@gaffer/domain";
 import type { AttentionItemView, ChatTurn } from "@gaffer/engine";
 import type { TurnOperation } from "@gaffer/agents";
 import { ChatTurnFeedback, ChatTurnError } from "../screens/chat/chat-feedback";
@@ -24,6 +25,7 @@ import { streamTurn, type TurnStreamFailure } from "@/game/turn-stream";
 import { Composer } from "../screens/chat/composer";
 import { useMatchViewport } from "@/screens/match/use-match-viewport";
 import { useLiveMatch } from "@/screens/match/use-live-match";
+import type { LiveSnapshot } from "@/screens/match/live-match-protocol";
 import { LiveEvents, LivePitch, liveClockOf } from "../screens/match/live-pitch";
 import { RailHints, useRailHints } from "../screens/chat/rail-hints";
 import { Loading } from "../shared/loading";
@@ -204,15 +206,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
    */
   const pendingMatch = game?.views.match ?? null;
   /**
-   * 감독이 지금 문을 지나는 중인 경기 — **그 턴이 도는 동안만 산다.**
+   * 감독이 지금 문을 지나는 중인 경기 — **입장 요청이 도는 동안만 산다.**
    *
    * 문을 연 것은 감독이고 그 사실은 화면이 먼저 안다. 코어가 `entered`를 세워
-   * 돌려줄 때까지 기다리면 첫 휘슬이 평시 채팅에서 울리고, 중계가 끝나는 순간
-   * 화면이 통째로 갈아 끼워진다 (match.md §2). 그래서 누른 순간을 여기 적고
-   * `liveMatch`가 그것을 장부와 **함께** 읽는다.
-   *
-   * 낙관이 `busy`에 매여 있으므로 되돌리는 코드가 따로 없다 — 턴이 끝나면 장부가
-   * 말한다. 실패한 턴은 문을 열지 못했으므로 `fail`이 이 값을 지운다.
+   * 돌려줄 때까지 기다리지 않고 누른 순간을 여기 적어 `liveMatch`가 장부와 **함께**
+   * 읽는다 (match.md §3.1). 요청이 끝나면 어느 쪽이든 지운다 — 그 뒤는 장부가 말한다.
    */
   const [entering, setEntering] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -227,8 +225,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const storyScrollStamp = useRef("");
   const [negotiationBusy, setNegotiationBusy] = useState(false);
   const liveMatch =
-    pendingMatch === null ||
-    (pendingMatch.beforeKickoff && !(busy && entering === pendingMatch.matchId))
+    pendingMatch === null || (pendingMatch.beforeKickoff && entering !== pendingMatch.matchId)
       ? null
       : pendingMatch;
   /** 열린 장부 뷰 — null이면 무대(채팅 / 경기+채팅)가 보인다 */
@@ -425,15 +422,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
     liveMatch !== null &&
     ((panel === null && matchTab === "팀" && squadSide === "ours") || panel === "스쿼드");
   const liveBlocked = editingMatch || error !== null;
-  /** 실행기가 정지점에서 여는 턴 — `send`는 이 훅보다 뒤에 서므로 ref로 건넨다 */
-  const sendRef = useRef<(text?: string, operation?: TurnOperation) => Promise<unknown>>(() =>
-    Promise.resolve(null),
-  );
   const live = useLiveMatch({
     gameId,
     matchId: liveMatch && !liveMatch.beforeKickoff ? liveMatch.matchId : null,
     blocked: liveBlocked,
-    typing: input.length > 0 || matchViewport.focused,
+    typing: input.length > 0,
     turning: busy,
     onView: (view) =>
       setGame((current) =>
@@ -450,8 +443,16 @@ export function GameScreen({ gameId }: { gameId: string }) {
       ordersRef.current = ordersRef.current.filter((order) => !orders.includes(order));
     },
     onSlice: applyLineupSave,
-    // 정지점 — 판독기가 판을 다시 읽고 매치 GM이 그 사건을 중계한다
-    onStop: () => sendRef.current(undefined, { kind: "match_stop" }),
+    // 종료 휘슬 — 코어가 마감하고 게임 전체를 돌려준다. 판이 사라지면 종료 카드가 선다
+    onClose: async () => {
+      const response = await fetch(`/api/games/${gameId}/match/close`, { method: "POST" });
+      const data = (await response.json()) as GamePayload | { error: string };
+      if ("error" in data) {
+        setError(data.error);
+        throw new Error(data.error);
+      }
+      setGame(data);
+    },
   });
   const liveClock = liveMatch
     ? liveClockOf(live.frame, liveMatch, live.paused, liveBlocked, live.error)
@@ -504,7 +505,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
   useEffect(() => {
     const now = liveMatch?.matchId ?? null;
     /**
-     * **끝난 경기와 되돌아간 문은 다르다.** 킥오프 턴이 실패하면 무대가 게이트로
+     * **끝난 경기와 되돌아간 문은 다르다.** 입장 요청이 실패하면 무대가 게이트로
      * 돌아가는데(`entering`), 그때 판은 아직 장부에 서 있다. 그것까지 「끝났다」로
      * 읽으면 시작도 안 한 경기의 종료 카드가 선다 — `matchLogs`는 채팅에 그
      * `matchId`가 한 번이라도 실리면 이미 항목을 갖는다.
@@ -623,15 +624,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
         if (optimistic) {
           setGame((g) => (g ? { ...g, chat: g.chat.filter((t) => t !== optimistic) } : g));
         }
-        /**
-         * 실패한 턴은 문을 열지 못했다 — 무대는 게이트로 돌아간다.
-         *
-         * 서버가 확실히 버린 턴이 아니어도(`settled`가 거짓) 되돌린다: 되돌린 자리에서
-         * 다시 **경기장 입장**을 눌러도 코어가 하는 일은 같고(`entered`가 이미 서 있으면
-         * 그 턴은 보통의 진행 턴이 된다 — match.md §2), 재조회가 곧 진실을 가져온다.
-         * 지시·입력과 달리 이 낙관은 서버에 두 번 실릴 것이 없다.
-         */
-        setEntering(null);
         setError(failure.reason);
         setErrorDetail(failure.detail ?? null);
         setErrorRetry(failure.retry);
@@ -776,10 +768,9 @@ export function GameScreen({ gameId }: { gameId: string }) {
       pauseLive,
     ],
   );
-  sendRef.current = send;
 
   /**
-   * 경기의 문을 지난다 — **무대를 먼저 바꾸고 턴을 보낸다.**
+   * 경기의 문을 지난다 — **무대를 먼저 바꾸고 입장을 알린다.**
    *
    * 순서가 곧 이 화면의 규칙이다(match.md §2): 문을 연 것은 감독이므로 스코어보드와
    * 경기 판은 누름과 함께 서고, 코어가 `entered`를 세워 돌려주는 것은 그다음이다.
@@ -803,8 +794,28 @@ export function GameScreen({ gameId }: { gameId: string }) {
       if (gateLeaveTimer.current) clearTimeout(gateLeaveTimer.current);
       gateLeaveTimer.current = setTimeout(() => setGateLeaving(false), GATE_LEAVE_MS);
     }
-    void send(undefined, { kind: "enter_match" });
-  }, [pendingMatch?.matchId, send]);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/games/${gameId}/match/live`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "enter" }),
+        });
+        const data = (await response.json()) as LiveSnapshot | { error: string };
+        if ("error" in data) throw new Error(data.error);
+        setGame((current) =>
+          current && current.views.match?.matchId === id
+            ? { ...current, views: { ...current.views, match: data.view } }
+            : current,
+        );
+      } catch (cause) {
+        // 문을 열지 못했다 — 무대는 게이트로 돌아간다
+        setError(cause instanceof Error ? cause.message : "경기장에 들어서지 못했습니다");
+      } finally {
+        setEntering(null);
+      }
+    })();
+  }, [pendingMatch?.matchId, gameId]);
   /**
    * 마지막으로 화면에 선 시각 — 흘러오는 턴이 같은 시각을 다시 적지 않게 한다.
    * ⚠️ 훅이라 **이른 반환 전부보다 앞**에 서야 한다 — 하나라도 뒤에 두면 그 갈래를
@@ -1222,8 +1233,14 @@ export function GameScreen({ gameId }: { gameId: string }) {
         }}
       >
         <header className={`topbar${menuOpen ? " menu-open" : ""}`}>
-          {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) */}
-          <Link href="/" className="brand" data-testid="home-link" title="게임 목록으로">
+          {/* 로고 = 게임 목록으로 나가는 문 (진행 중 턴은 서버가 마무리해 저장한다) —
+            실험실 판은 목록에 없으므로 그 판의 실험실로 나간다 (live-match.md §8.6) */}
+          <Link
+            href={isLabGame(gameId) ? `/lab?id=${gameId}` : "/"}
+            className="brand"
+            data-testid="home-link"
+            title={isLabGame(gameId) ? "실험실로" : "게임 목록으로"}
+          >
             <IconMark />
           </Link>
           {/**
@@ -1438,7 +1455,15 @@ export function GameScreen({ gameId }: { gameId: string }) {
             }${boardTakesStage ? " board-open" : ""}${boardClosing ? " board-closing" : ""}`}
           >
             {/* 스코어보드는 경기장 칸 위에 붙는다 — 대화 칸은 무대 높이를 통째로 쓴다 */}
-            {liveMatch && <MatchHeadline match={liveMatch} clock={liveClock} />}
+            {liveMatch && (
+              <MatchHeadline
+                match={liveMatch}
+                clock={liveClock}
+                pace={
+                  !liveMatch.live.finished ? { value: live.pace, set: live.setPace } : undefined
+                }
+              />
+            )}
             {chatPane}
             {matchPanelOpen && (
               <section className="match-side-panel" aria-labelledby="match-panel-title">

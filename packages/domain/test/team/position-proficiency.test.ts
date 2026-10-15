@@ -3,8 +3,11 @@ import {
   ADAPTATION_GAUGE_BAND,
   adaptationOf,
   adaptationWeightsOf,
-  clusterOf,
   footAdjust,
+  pairedPlaceOf,
+  PLACES,
+  placeOf,
+  POSITION_CODES,
   positionDistance,
   positionProficiency,
   proficiencyReadiness,
@@ -83,34 +86,31 @@ describe("positionProficiency", () => {
     expect(footAdjust("CB", { left: 5, right: 1 })).toBe(0); // 중앙은 어느 발도 아니다
   });
 
-  it("저장된 미러 자리도 보정을 한 번만 받는다 — 저장은 원값이다", () => {
+  it("저장된 자리는 좌우 보정을 한 번만 받는다 — 저장은 원값이다", () => {
     /**
-     * 카탈로그는 좌·중·우를 **같은 값**으로 적고, 좌우는 조회할 때 갈린다
-     * (player.md §8). 생성이 미리 얹어 두던 때는 조회가 한 번 더 얹어 힌카피
-     * (5/2)의 LCB가 96 · RCB가 90 — 의도한 ±2가 ±3으로 벌어졌다.
+     * 목록은 자리(CB) 하나를 적고 좌우는 조회할 때 갈린다 (player.md §8). 생성이
+     * 미리 얹어 두던 때는 조회가 한 번 더 얹어 힌카피(5/2)의 LCB가 96 · RCB가 90 —
+     * 의도한 ±2가 ±3으로 벌어졌다.
      */
-    const stored = [
-      { position: "CB", proficiency: 93 },
-      { position: "LCB", proficiency: 93 },
-      { position: "RCB", proficiency: 93 },
-    ];
     const leftFooted = { left: 5, right: 2 };
-    expect(positionProficiency(stored, "LCB", leftFooted)).toBe(95);
-    expect(positionProficiency(stored, "CB", leftFooted)).toBe(93);
-    expect(positionProficiency(stored, "RCB", leftFooted)).toBe(91);
-    // 목록에 있든 없든 같은 값이어야 한다 — 카탈로그와 폴백이 어긋나면 안 된다
     expect(positionProficiency(held("CB", 93), "LCB", leftFooted)).toBe(95);
+    expect(positionProficiency(held("CB", 93), "CB", leftFooted)).toBe(93);
     expect(positionProficiency(held("CB", 93), "RCB", leftFooted)).toBe(91);
   });
 
-  it("역할이 다른 묶음은 여전히 2점 깎는다 — 라인 높이·역할은 좌우와 다르다", () => {
+  it("이웃 쌍은 2점 깎는다 — 같은 자리의 다른 칸은 깎지 않는다", () => {
     // 풀백 ↔ 윙백 — 라인 높이만 다르다
     expect(positionProficiency(held("LB", 93), "LWB")).toBe(91);
     // 측면 미드 ↔ 윙어 — 4-4-2의 RM과 4-3-3의 RW는 같은 선수다
     expect(positionProficiency(held("RW", 91), "RM")).toBe(89);
-    // 최전방 3형
-    expect(positionProficiency(held("ST", 96), "CF")).toBe(94);
-    expect(positionProficiency(held("ST", 96), "SS")).toBe(94);
+    // 최전방 두 줄은 자리 하나다
+    expect(positionProficiency(held("ST", 96), "CF")).toBe(96);
+    expect(positionProficiency(held("ST", 96), "LF")).toBe(96);
+    // 처진 스트라이커 칸은 공격형 미드필더 자리다 — 9번에게는 다른 자리다
+    expect(positionProficiency(held("ST", 96), "SS")).toBe(
+      positionProficiency(held("ST", 96), "AM"),
+    );
+    expect(positionProficiency(held("ST", 96), "SS")).toBeLessThan(90);
   });
 
   it("묶음 밖은 전술판 거리로 깎는다 — 가까운 자리가 항상 더 높다", () => {
@@ -155,12 +155,27 @@ describe("positionProficiency", () => {
     expect(positionProficiency([], "CM")).toBe(25); // 보유 목록이 비어도 무너지지 않는다
   });
 
-  it("묶음 표는 좌우 짝을 빠뜨리지 않는다", () => {
+  it("이웃 쌍은 좌우를 빠뜨리지 않고 양방향이다", () => {
     // 한쪽만 있으면 반대쪽 선수가 조용히 불리해진다
-    expect(clusterOf("RB")).toContain("RWB");
-    expect(clusterOf("LB")).toContain("LWB");
-    expect(clusterOf("RM")).toContain("RW");
-    expect(clusterOf("LM")).toContain("LW");
+    for (const [a, b] of [
+      ["RB", "RWB"],
+      ["LB", "LWB"],
+      ["RM", "RW"],
+      ["LM", "LW"],
+    ] as const) {
+      expect(pairedPlaceOf(a)).toBe(b);
+      expect(pairedPlaceOf(b)).toBe(a);
+    }
+    expect(pairedPlaceOf("CB")).toBeNull();
+  });
+});
+
+describe("placeOf", () => {
+  it("전술판의 모든 슬롯 코드는 자리 하나로 접히고, 자리는 자기 자신이다", () => {
+    // 접히지 않는 코드가 있으면 그 칸에서 뛴 경기·훈련이 장부 어디에도 닿지 않는다
+    for (const code of POSITION_CODES) expect(placeOf(code), code).not.toBeNull();
+    for (const place of PLACES) expect(placeOf(place)).toBe(place);
+    expect(new Set(POSITION_CODES.map((code) => placeOf(code))).size).toBe(PLACES.length);
   });
 });
 

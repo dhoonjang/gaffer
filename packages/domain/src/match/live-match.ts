@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { MatchEvent, MatchSide, ShotOrigin } from "./match-events";
 import type { PlayPhase } from "./match";
+import type { AttributeAxis } from "../players/player";
 
 /**
  * 실시간 경기의 상태 — **말 22개와 공** (live-match.md).
@@ -45,34 +46,9 @@ export const LIVE_ACTIONS = [
 ] as const;
 export type LiveAction = (typeof LIVE_ACTIONS)[number];
 
-/**
- * 판독기가 말 하나에 주는 개인 지시 — 시트의 `behavior` 줄이 싣는 것 (live-match.md §6.2).
- * 코어가 실재를 검증한 뒤 그 말의 자리 규칙을 덮는다.
- */
-const LIVE_BEHAVIOR_ACTIONS = ["press", "mark", "cover", "support", "run", "hold"] as const;
-export const LiveBehaviorActionSchema = z.enum(LIVE_BEHAVIOR_ACTIONS);
-type LiveBehaviorAction = z.infer<typeof LiveBehaviorActionSchema>;
-
-const LIVE_BEHAVIOR_WHEN = ["attack", "defend", "always"] as const;
-export const LiveBehaviorWhenSchema = z.enum(LIVE_BEHAVIOR_WHEN);
-type LiveBehaviorWhen = z.infer<typeof LiveBehaviorWhenSchema>;
-
 const LIVE_LANES = ["left", "center", "right"] as const;
 export const LiveLaneSchema = z.enum(LIVE_LANES);
 export type LiveLane = z.infer<typeof LiveLaneSchema>;
-
-const LIVE_BANDS = ["defense", "midfield", "attack"] as const;
-export const LiveBandSchema = z.enum(LIVE_BANDS);
-type LiveBand = z.infer<typeof LiveBandSchema>;
-
-export interface LiveBehavior {
-  player: string;
-  action: LiveBehaviorAction;
-  when: LiveBehaviorWhen;
-  targetPlayer?: string;
-  lane?: LiveLane;
-  band?: LiveBand;
-}
 
 /** 속도 구간별 누적 — 부하의 원본이다 (live-match.md §7) */
 export interface LiveLoad {
@@ -193,6 +169,22 @@ export interface LiveMatchState {
   lastPass: { from: string; to: string; tick: number } | null;
   /** 공을 잃은 자리 — `high_turnover`의 근거 */
   lastTurnover: { by: string; side: MatchSide; tick: number; at: FieldPoint } | null;
+  /**
+   * 가장 최근에 수비를 제친 드리블 — `individual`의 근거. `axis`는 그 경합을 가른 공 가진
+   * 쪽의 축이다 (live-match.md §9.1)
+   */
+  lastBeat: {
+    by: string;
+    beaten: string;
+    side: MatchSide;
+    tick: number;
+    axis: AttributeAxis;
+  } | null;
+  /**
+   * 크로스에 나온 골키퍼 — 그 공을 잡으면 지운다. 남아 있는 동안 그 골문에 난 골이
+   * `keeper_out`의 근거다 (live-match.md §5.6)
+   */
+  lastClaim: { by: string; side: MatchSide; tick: number } | null;
   restart: LiveRestart | null;
   setPiece: {
     origin: ShotOrigin;
@@ -236,15 +228,9 @@ export interface LiveMatchFrame {
   events: MatchEvent[];
 }
 
-/** 체크포인트 간격 (경기 시간 분) — 정지점이 없어도 이만큼 굴리면 확정한다 */
-const CHECKPOINT_MAX_MINUTES = 5;
-/** 체크포인트 간격 (틱) */
-export const CHECKPOINT_TICKS = Math.round((CHECKPOINT_MAX_MINUTES * 60) / LIVE_STEP);
-
 /**
- * **정지점** — 이 사건이 나오면 실행기가 그 자리에서 체크포인트를 내고, 확정되면 시계를 잡고
- * 정지점 턴(`match_stop`)을 연다. 판독기가 판을 다시 읽고 매치 GM이 그 사건을 중계한다
- * (live-match.md §8.3). 종료 휘슬의 정지점 턴이 마감이다.
+ * **정지점** — 판을 바꾸는 사건. 브라우저의 실행기는 여기서 서지 않는다(live-match.md §8.3).
+ * 화면 없는 실행기는 이 사건에서 확정하고 멈춰, 부르는 쪽에 결정할 차례를 넘긴다.
  */
 export const STOP_EVENT_TYPES: ReadonlySet<string> = new Set([
   "goal",

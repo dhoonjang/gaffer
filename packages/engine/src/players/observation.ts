@@ -35,26 +35,47 @@ export const KNOWLEDGE_KO: Record<Knowledge, string> = {
 type Observability = "observable" | "analytical";
 
 const AXIS_OBSERVABILITY: Record<AttributeAxis, Observability> = {
-  // 관측형 — 패스 성공률·파울 수처럼 한 경기에도 드러난다
+  // 관측형 — 패스 성공률·파울 수·스프린트처럼 한 경기에도 드러난다
+  acceleration: "observable",
   pace: "observable",
-  stamina: "observable",
+  agility: "observable",
+  balance: "observable",
+  jumpingReach: "observable",
   strength: "observable",
-  aerial: "observable",
+  stamina: "observable",
   dribbling: "observable",
+  firstTouch: "observable",
   passing: "observable",
-  kicking: "observable",
+  crossing: "observable",
+  heading: "observable",
   tackling: "observable",
   aggression: "observable",
-  // GK는 매 경기 슛을 받으니 표본이 빨리 쌓인다
-  goalkeeping: "observable",
-  // 분석형 — 결정력은 경기당 유효 슈팅이 2~3회뿐이고, 위치선정·침투·시야는 화면 밖에서
-  // 일어나며, 침착성·리더십은 큰 경기와 라커룸에서만 확인된다
+  workRate: "observable",
+  // GK는 매 경기 슛과 크로스를 받으니 표본이 빨리 쌓인다
+  reflexes: "observable",
+  handling: "observable",
+  oneOnOnes: "observable",
+  aerialReach: "observable",
+  kicking: "observable",
+  commandOfArea: "observable",
+  rushingOut: "observable",
+  // 분석형 — 슈팅·세트피스는 경기당 표본이 몇 번뿐이고, 위치선정·침투·시야·예측은 화면
+  // 밖에서 일어나며, 침착성·집중력은 큰 경기와 막판에만 드러난다. 회복은 경기 사이의 일이다
   finishing: "analytical",
+  longShots: "analytical",
+  freeKicks: "analytical",
+  penalties: "analytical",
+  technique: "analytical",
+  marking: "analytical",
+  anticipation: "analytical",
   vision: "analytical",
-  positioning: "analytical",
-  offTheBall: "analytical",
+  decisions: "analytical",
   composure: "analytical",
-  leadership: "analytical",
+  offTheBall: "analytical",
+  positioning: "analytical",
+  concentration: "analytical",
+  flair: "analytical",
+  naturalFitness: "analytical",
 };
 
 /** 지식 수준별 표시 오차 (±) */

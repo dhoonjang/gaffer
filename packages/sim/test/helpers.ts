@@ -6,7 +6,7 @@ import type {
   TacticsSpec,
   LiveSlot,
 } from "@gaffer/domain";
-import { ATTRIBUTE_AXES, DEFAULT_TACTICS } from "@gaffer/domain";
+import { ATTRIBUTE_AXES, AXIS_GROUPS, DEFAULT_TACTICS, placeOf } from "@gaffer/domain";
 import {
   createLedger,
   createLiveMatch,
@@ -15,7 +15,13 @@ import {
   type LiveSetup,
 } from "@gaffer/sim";
 
-/** 테스트용 선수 — 16축 전부 보유, positions[], 부상은 상태에 없음 */
+/**
+ * 선수를 세운 칸 — 보유 목록은 자리(LCB → CB)라 칸의 좌우를 잃는다. 배치를 세울 때
+ * 칸을 되찾는 자리다 (`makeLiveSlots`).
+ */
+const SLOT_OF = new WeakMap<GamePlayer, string>();
+
+/** 테스트용 선수 — 37축 전부 보유, positions[], 부상은 상태에 없음 */
 export function makePlayer(
   id: string,
   teamId: string,
@@ -25,18 +31,20 @@ export function makePlayer(
   overrides: Partial<PlayerAttributes> = {},
   state: Partial<GamePlayer["state"]> = {},
 ): GamePlayer {
-  return {
+  const player: GamePlayer = {
     id,
     catalogId: null,
     teamId,
     squadLevel: "first",
     name: id,
     birthdate: "2000-01-01",
-    positions: [{ position, proficiency: 90, isNatural: true }],
+    positions: [{ position: placeOf(position)!, proficiency: 90, isNatural: true }],
     attributes: {
-      // 16축 전부를 base로 채우고, GK만 goalkeeping을 따로 준다
+      // 37축 전부를 base로 채우고, GK 축만 골키퍼가 아니면 낮게 준다
       ...(Object.fromEntries(ATTRIBUTE_AXES.map((a) => [a, base])) as AxisValues),
-      goalkeeping: group === "GK" ? base : 22,
+      ...(Object.fromEntries(
+        AXIS_GROUPS.goalkeeping.map((a) => [a, group === "GK" ? base : 22]),
+      ) as Partial<AxisValues>),
       potential: Math.min(99, base + 5),
       ...overrides,
     },
@@ -52,6 +60,8 @@ export function makePlayer(
     isViceCaptain: false,
     growthCarry: {},
   };
+  SLOT_OF.set(player, position);
+  return player;
 }
 
 /** 4-4-2 구성 스쿼드 — 선발 11 + 벤치 4. id는 기존 테스트 관례 유지 */
@@ -99,7 +109,7 @@ export function makeSquad(
 export function makeLiveSlots(players: GamePlayer[], familiarity = 99): LiveSlot[] {
   return players.map((p) => ({
     playerId: p.id,
-    position: p.positions[0]!.position,
+    position: SLOT_OF.get(p) ?? p.positions[0]!.position,
     proficiency: p.positions[0]!.proficiency,
     familiarity,
   }));

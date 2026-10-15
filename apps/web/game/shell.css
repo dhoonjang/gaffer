@@ -1796,6 +1796,12 @@ textarea {
   font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
+/* 경기 속도 — 시계 곁의 작은 손잡이. 글자는 상태와 같은 크기, 면이 손잡이임을 말한다 */
+.mv-clock .mv-pace {
+  height: 22px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
+}
 
 /**
  * 선수 탭의 하위 갈래 — **둘 중 하나를 고르는 세그먼트.**

@@ -18,7 +18,7 @@
 | 설정 자리                    | 계약과 책임                                |
 | ---------------------------- | ------------------------------------------ |
 | `agents.gm`                  | 평시 장면·관계·사건·판정 스킬              |
-| `agents.match-gm`            | 확정 사건 중계·벤치 대화·경기 마무리       |
+| `agents.match-gm`            | 경기 중 감독의 말에 대한 답·벤치 대화      |
 | `evaluators.finalize-match`  | 경기 평점·성장. 평점 근거는 매치 GM        |
 | `evaluators.training-rater`  | 훈련 구간 결산                             |
 | `agents.history-compactor`   | 지난 일·열린 이야기·인물 후보 요약         |
@@ -639,7 +639,7 @@ system 블록 · 이력 · 발화 · 상태 스냅샷 · 도구 스펙, 응답�
   (§5-3). 거르는 손잡이는 `--game` · `--turn` · `--failed` · `--kind` · `--since 2h` · `--limit`.
 
 **턴은 호출들의 목록이 아니라 나무다.** 역할별 Jev 평가는 해당 지시 스킬 안에서,
-경기 결산은 `finalize_match` 안에서 도는 GM의 자식 호출이다. `seq`·`parentId`·
+경기 결산은 종료 휘슬의 마감 턴(`closeMatchTurn`)에서 도는 코어의 호출이다. `seq`·`parentId`·
 `viaTool`이 실제 실행 관계를 남긴다. Jev의 질문·답·분포·모델·시도·보고된 토큰도
 평가자 기록에 남는다. 실패한 평가도 보고된 사용량과 완전성을 보존하고 `error`와
 `stopReason: "other"`로 성공과 구분한다. 명령 적용은 별도의 코어 사실이다.
@@ -656,7 +656,6 @@ system 블록 · 이력 · 발화 · 상태 스냅샷 · 도구 스펙, 응답�
 turn
   match-gm
     tactic_orders → match-reader → orders.intent → 코어 명령 묶음 · match.reading
-    finalize_match → finalize-match → 코어 결산
   scene
 ```
 
@@ -748,7 +747,7 @@ turn
 - **production에서는 아무 파일도 쓰지 않는다** — 켜지는 조건이 위의 하나뿐이고,
   mock의 모델 호출 원문은 없지만 코어 사실의 타임라인은 남는다.
 - **한 채팅 턴은 호출 하나가 아니다.** 평시 턴은 `gm` + 훈련 결산, 경기 턴은
-  `match-gm`과 지시 도구 안의 `match-reader`, 마감 도구 안의 `finalize-match`가 필요에 따라 돈다. 그래서 타임라인이
+  `match-gm`과 지시 도구 안의 `match-reader`가, 마감 턴은 `finalize-match`가 돈다. 그래서 타임라인이
   그 전부를 **순서대로** 들고, 한 턴을 열면 그 턴에 오간 왕복이 코어의 사실 사이에 선다.
 - **어느 호출이 이 턴의 것인가는 실행 문맥이 정한다**(`AsyncLocalStorage`). 시각이나
   전역 큐로 가르면 두 게임이 같은 프로세스에서 동시에 턴을 돌릴 때 남의 호출이

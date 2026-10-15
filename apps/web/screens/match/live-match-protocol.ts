@@ -9,11 +9,13 @@ import type { GameSlice } from "../../game/store";
 /**
  * 실시간 경기의 왕복 — **클라이언트가 굴리고 서버가 확정한다** (live-match.md §8).
  *
- * 클라이언트는 확정 상태(`LiveMatch`)를 받아 같은 함수로 시계를 밀고, 정지점과 5분마다
+ * 클라이언트는 확정 상태(`LiveMatch`)를 받아 같은 함수로 시계를 밀고, 시계가 설 때
  * 체크포인트를 낸다. 서버는 같은 틱 수를 굴려 digest를 견주고 자기 상태를 돌려준다 —
  * 어느 쪽이든 클라이언트가 이어받는 것은 서버가 굴린 상태다.
  */
 export const LiveActionSchema = z.discriminatedUnion("kind", [
+  /** 감독이 경기장에 들어섰다 — 킥오프 게이트를 지난다 */
+  z.object({ kind: z.literal("enter") }),
   /** 굴린 구간의 확정 요청 */
   z.object({ kind: z.literal("checkpoint"), checkpoint: LiveCheckpointSchema }),
   /** 전술판의 조작 — 확정 tick에 적용된다. `commandId`는 응답을 잃고 다시 보낸 같은 명령을 가른다 */
@@ -35,8 +37,8 @@ export interface LiveSnapshot {
   view: MatchView | null;
   /** 120분이 끝나고 승부차기가 남았다 — 마감은 승부가 갈린 뒤다 */
   awaitingShootout: boolean;
-  /** 저장된 사건 중 아직 중계하지 않은 정지점 또는 마감이 남았다. 조회/재시도에서도 보존된다. */
-  needsStop: boolean;
+  /** 종료 휘슬이 울렸고 승부차기도 남지 않았다 — 마감(`POST …/match/close`)을 부를 차례다 */
+  needsClose: boolean;
   /** 체크포인트의 판정 — 체크포인트 요청에만 */
   verdict?: LiveCheckpointVerdict;
   /** 이 구간에 장부에 앉은 사건 — 체크포인트 요청에만 */

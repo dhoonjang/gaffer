@@ -3,6 +3,7 @@ import type {
   BoardPoint,
   Player,
   PlayerAttributes,
+  RoleCard,
   TacticsSpec,
 } from "@gaffer/domain";
 import {
@@ -29,8 +30,8 @@ export interface LineupSlot {
   position: string;
   /** 프리셋이 아닌 실제 전술판 좌표 */
   point?: BoardPoint;
-  /** 실제 세부 역할 — 없으면 그 자리 기본 역할 */
-  roleId?: string;
+  /** 그 자리의 역할 카드 — 없으면 그 자리의 기본 행동 (player.md §3) */
+  card?: RoleCard;
   /** 그 포지션 적응도 0~99 — 낯선 자리면 기여가 깎인다 */
   proficiency: number;
   /**

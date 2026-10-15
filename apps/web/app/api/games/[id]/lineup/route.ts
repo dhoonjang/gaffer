@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   MATCHDAY_BENCH,
+  RoleCardSchema,
   SET_PIECE_ROLES,
   SetPieceRoutineSchema,
   type SetPieceRole,
@@ -16,7 +17,7 @@ import {
   recordEdit,
   saveGame,
   setLineup,
-  setPlayerRole,
+  setPlayerCard,
   setSetPieceRoutine,
   setSetPieceTakers,
   setTactics,
@@ -91,8 +92,13 @@ const LineupSchema = z.object({
    * 세부 역할 — **서버와 달라진 것만** 온다. 알약을 누를 때마다 요청을 보내면
    * 결정 하나가 요청 여럿이 되므로, 다른 조작과 함께 자동 저장에 실린다.
    */
-  roles: z
-    .array(z.object({ playerId: z.string().min(1), role: z.string().min(1) }))
+  /**
+   * 카드는 **한 장씩 검사한다** — 모양이 틀린 카드 한 장이 요청 전체를 400으로 만들면
+   * 옳게 바꾼 배치까지 함께 날아간다 (player.md §3.1). 여기서는 자리만 받아 두고
+   * 아래에서 장마다 읽는다.
+   */
+  cards: z
+    .array(z.object({ playerId: z.string().min(1), card: z.unknown() }))
     .max(30)
     .optional(),
   setPieceTakers: SetPieceTakersSchema.optional(),
@@ -206,29 +212,36 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
 
       /**
-       * 역할은 **배치 뒤에** — 방금 선발이 된 선수에게도 걸 수 있어야 한다.
+       * 카드는 **배치 뒤에** — 방금 선발이 된 선수에게도 걸 수 있어야 한다.
        *
-       * 그리고 **역할 하나의 반려가 배치를 되돌리지 않는다** (player.md §3.1).
-       * 역할은 한 요청에 묶여 오는 값 중 가장 늦게 정해지고 가장 잘 어긋나는 것이라
+       * 그리고 **카드 하나의 반려가 배치를 되돌리지 않는다** (player.md §3.1).
+       * 카드는 한 요청에 묶여 오는 값 중 가장 늦게 정해지고 가장 잘 어긋나는 것이라
        * (자리를 옮긴 직후의 화면이 보낸다) 400으로 빠져나오면 옳게 바꾼 배치까지
-       * 함께 날아가고, 화면은 같은 역할을 계속 보내 저장 불가 상태로 굳는다.
+       * 함께 날아가고, 화면은 같은 카드를 계속 보내 저장 불가 상태로 굳는다.
        * 걸리는 것만 걸고, 반려는 삼키지 않고 결과로 남긴다.
        */
-      const rejectedRoles: string[] = [];
-      for (const pick of body.data.roles ?? []) {
-        const applied = setPlayerRole(state, { playerId: pick.playerId, role: pick.role });
-        command("set_player_role", pick, applied);
-        if (!applied.ok) {
-          rejectedRoles.push(applied.message);
+      const rejectedCards: string[] = [];
+      for (const pick of body.data.cards ?? []) {
+        const card = RoleCardSchema.nullable().safeParse(pick.card);
+        if (!card.success) {
+          rejectedCards.push(
+            `카드를 읽지 못했습니다(${pick.playerId}) — ${card.error.issues[0]?.message ?? "형식 오류"}`,
+          );
           continue;
         }
-        recordEdit(state, `role:${pick.playerId}`, applied.message);
+        const applied = setPlayerCard(state, { playerId: pick.playerId, card: card.data });
+        command("set_player_card", pick, applied);
+        if (!applied.ok) {
+          rejectedCards.push(applied.message);
+          continue;
+        }
+        if (applied.unchanged !== true) recordEdit(state, `card:${pick.playerId}`, applied.message);
       }
       // 사유는 코어가 쓴 문장 그대로다. 고정 키라 열 번 저장해도 마지막 것만 남는다
-      if (rejectedRoles.length > 0) recordEdit(state, "role:rejected", rejectedRoles.join(" · "));
+      if (rejectedCards.length > 0) recordEdit(state, "card:rejected", rejectedCards.join(" · "));
 
       /**
-       * 죽은 공 키커 — **역할과 같은 자리, 같은 규약.** 반려가 배치를 되돌리지 않는다:
+       * 죽은 공 키커 — **카드와 같은 자리, 같은 규약.** 반려가 배치를 되돌리지 않는다:
        * 지정은 배치 뒤에 정해지는 값이라 400으로 빠져나오면 옳게 바꾼 판까지 함께 날아간다.
        *
        * 화면이 달라진 자리만 보내므로(`lineupBody`) 여기 온 것은 감독이 방금 고른

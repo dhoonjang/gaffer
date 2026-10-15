@@ -9,6 +9,7 @@ const memory = vi.hoisted(() => ({
     phase: "match",
     pendingMatch: {
       eventsSeen: 0,
+      entered: false,
       live: {
         state: { tick: 0, interval: false },
         committedTick: 0,
@@ -51,8 +52,9 @@ vi.mock("@gaffer/engine", () => ({
   },
   advanceShootout: () => ({ ok: true, kick: null, done: true, message: "끝" }),
   awaitingShootout: () => false,
-  unseenEvents: (s: TestState) =>
-    s.pendingMatch.live.ledger.events.slice(s.pendingMatch.eventsSeen),
+  markEntered: (s: TestState) => {
+    s.pendingMatch.entered = true;
+  },
   syncLiveTactics: () => {
     memory.synced++;
   },
@@ -79,6 +81,7 @@ beforeEach(() => {
     phase: "match",
     pendingMatch: {
       eventsSeen: 0,
+      entered: false,
       live: {
         state: { tick: 0, interval: false },
         committedTick: 0,
@@ -169,15 +172,17 @@ describe("실시간 경기 체크포인트", () => {
     expect(memory.db.pendingMatch.live.state.interval).toBe(false);
     expect(memory.writes).toBe(1);
   });
-  it("lost stop responses remain discoverable by GET until commentary marks the events seen", async () => {
-    memory.db.pendingMatch.live.ledger.events.push({ type: "half_time" });
+  it("종료 휘슬 뒤의 조회는 마감할 차례를 알린다 — 휴식은 마감이 아니다", async () => {
     memory.db.pendingMatch.live.state.interval = true;
-    expect((await readLiveMatch("recover-stop")).needsStop).toBe(true);
-    memory.db.pendingMatch.eventsSeen = 1;
-    expect((await readLiveMatch("recover-stop")).needsStop).toBe(false);
+    expect((await readLiveMatch("recover-close")).needsClose).toBe(false);
     memory.db.pendingMatch.live.ledger.phase = "finished";
-    expect((await readLiveMatch("recover-stop")).needsStop).toBe(true);
+    expect((await readLiveMatch("recover-close")).needsClose).toBe(true);
     expect(memory.writes).toBe(0);
+  });
+  it("입장은 경기에 들어섰다고 적고 저장한다", async () => {
+    await handleLiveAction("live", { kind: "enter" });
+    expect(memory.db.pendingMatch.entered).toBe(true);
+    expect(memory.writes).toBe(1);
   });
 
   it("확정 상태 읽기는 아무것도 쓰지 않는다", async () => {

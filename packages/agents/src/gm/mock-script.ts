@@ -1,32 +1,19 @@
 import { TACTIC_OPS } from "../evaluators/tactic-orders";
 import { TRAINING_OPS } from "../evaluators/training-orders";
 import { FINANCE_OPS } from "../evaluators/finance-orders";
-import type { MatchEvent, ShootoutOutcome } from "@gaffer/domain";
-import {
-  commentary,
-  contractEndForYears,
-  eventCauseText,
-  formatScore,
-  narration,
-  sceneMarker,
-  shootoutTally,
-} from "@gaffer/domain";
+import { contractEndForYears, formatScore, narration, sceneMarker } from "@gaffer/domain";
 import {
   addDays,
   buildMailView,
-  BIG_CHANCE_XG,
   clockOf,
   describeNextFixture,
   minutesOfClock,
   managedTeamId,
   nextMatchFor,
-  playerName,
   teamName,
-  unseenEvents,
   type GameState,
 } from "@gaffer/engine";
 import type { ScriptedCall, ScriptedTurn } from "@gaffer/llm";
-import { eventMinuteText, scoreBeforeEvents } from "../shared/match-script";
 import type { OpsInput } from "../evaluators/orders-ops";
 import { SUGGEST_REPLY_TAG } from "../shared/suggest-reply";
 
@@ -190,11 +177,11 @@ const SCRIPT: readonly ScriptLine[] = [
   },
   {
     say: "평일 오전은 세트피스 반복 훈련 잡아줘",
-    ops: () => weekly(WEEKDAYS, "세트피스", ["kicking", "finishing"]),
+    ops: () => weekly(WEEKDAYS, "세트피스", ["freeKicks", "crossing"]),
   },
   {
     say: "월요일 오전은 세트피스 반복 훈련 잡아줘",
-    ops: () => weekly([1], "세트피스", ["kicking", "finishing"]),
+    ops: () => weekly([1], "세트피스", ["freeKicks", "crossing"]),
   },
   {
     say: "훈련 쉬자",
@@ -338,11 +325,10 @@ export function ordersScript(state: GameState, said: string): ScriptedTurn {
 /** 벤치의 다음 말 — 표에 없는 말이라 장면만 선다. 경기를 굴리는 것은 손잡이다 */
 const MATCH_SUGGESTION = "계속 가자";
 
-// ── 중계 ───────────────────────────────────────────────
+// ── 경기 ───────────────────────────────────────────────
 //
-// **장면을 대본이 쓰는 유일한 자리다.** 지난 턴 뒤의 사건은 장부에 있고(`unseenEvents`),
-// 그것을 문장으로 옮기는 자가 없으면 경기 화면이 빈 채로 돈다. 실모드에서 이 자리를
-// 맡는 것이 캐스터 LLM이다.
+// 매치 GM은 감독의 말에만 답한다 — 사건을 중계하지 않는다(agents.md §3). 대본도 장부의
+// 분과 스코어를 짚는 한 줄로 답하고, 표의 지시면 해석기를 부른다.
 
 /** 스코어 한 줄 — 자는 `formatScore` 하나다 (tokens.css 「숫자와 표기」) */
 function scoreLine(state: GameState, score: { home: number; away: number }): string {
@@ -353,186 +339,18 @@ function scoreLine(state: GameState, score: { home: number; away: number }): str
   return `${teamName(record.homeTeamId)} ${formatScore(score.home, score.away)} ${teamName(record.awayTeamId)}`;
 }
 
-/** 죽은 공에서 나온 슛인가 — 대본도 그 사실을 문장에 싣는다 (match.md §4) */
-const SHOT_ORIGIN_KO: Record<string, string> = {
-  corner: "코너에서 ",
-  free_kick: "프리킥에서 ",
-  penalty: "페널티킥 — ",
-};
-
-/**
- * **빗나간 슛의 갈래** — 장부가 슛마다 들고 있는 결과다(`shotOutcome`). 한 문형으로
- * 뭉뚱그리면 슛 일곱 개가 같은 문장으로 선다 (prompts.md §1) — 같은 갈래가 다시 오면
- * 다음 꼴로 넘어간다.
- */
-const SHOT_KO: Record<string, ReadonlyArray<(who: string) => string>> = {
-  saved: [
-    (who) => `${who}의 슈팅, 골키퍼가 몸을 날려 쳐냅니다.`,
-    (who) => `${who}의 노림수 — 골키퍼 손끝에 걸립니다.`,
-  ],
-  blocked: [
-    (who) => `${who}의 슛, 수비 몸에 맞고 굴절됩니다.`,
-    (who) => `${who}의 마무리 — 앞에 선 수비가 몸으로 막아 냅니다.`,
-  ],
-  off_target: [
-    (who) => `${who}의 슛 — 골문을 크게 벗어납니다.`,
-    (who) => `${who}의 감아 찬 공, 골대 옆으로 흐릅니다.`,
-  ],
-};
-
-/** 한 문형이 한 턴에서 되풀이되지 않게 — 같은 갈래가 몇 번째로 오는지를 센다 */
-function shapeTurns(): (key: string) => number {
-  const used = new Map<string, number>();
-  return (key) => {
-    const n = used.get(key) ?? 0;
-    used.set(key, n + 1);
-    return n;
-  };
-}
-
-function renderEvent(
-  state: GameState,
-  ev: MatchEvent,
-  /** 이 사건까지의 스코어 — 골 줄이 그 골 뒤의 값을 적는다 */
-  score: { home: number; away: number },
-  turnOf: (key: string) => number,
-): string[] {
-  const nameOf = (id: string) => playerName(state, id);
-  const name = ev.actors[0] ? nameOf(ev.actors[0]) : "";
-  const from = ev.shotOrigin ? (SHOT_ORIGIN_KO[ev.shotOrigin] ?? "") : "";
-  const at = eventMinuteText(ev);
-  switch (ev.type) {
-    case "kickoff":
-      return [commentary(`킥오프! 경기가 시작됩니다.`)];
-    case "goal": {
-      const cause = ev.causes[0] ? ` — ${eventCauseText(ev.causes[0], nameOf)}` : "";
-      return [
-        commentary(`골! ${scoreLine(state, score)} (${from}${name} ${at})${cause}`.trimEnd()),
-      ];
-    }
-    case "shot": {
-      const big = (ev.xg ?? 0) >= BIG_CHANCE_XG ? "결정적인 장면! " : "";
-      const shapes = ev.shotOutcome ? SHOT_KO[ev.shotOutcome] : undefined;
-      const shape = shapes?.[turnOf(ev.shotOutcome ?? "shot") % shapes.length];
-      return [
-        commentary(
-          `${at} ${big}${shape ? shape(`${from}${name}`) : `${from}${name}의 슛이 이어집니다.`}`,
-        ),
-      ];
-    }
-    case "foul":
-      return [commentary(`${at} ${name}의 반칙 — 주심이 점을 가리킵니다!`)];
-    case "chance":
-      return [commentary(`${at} ${name}에게 기회가 왔지만 마무리가 아쉽습니다.`)];
-    case "save":
-      return [commentary(`${at} 골키퍼의 선방!`)];
-    case "yellow_card":
-      return [commentary(`${at} ${name}에게 옐로카드.`)];
-    case "red_card":
-      return [commentary(`*${at} ${name} 퇴장!*`)];
-    case "injury":
-      return [commentary(`${at} ${name}, 그라운드에 쓰러집니다 — 의료진이 들어옵니다.`)];
-    case "half_time":
-      return [commentary(`*하프타임 — 라커룸으로 향한다* ${scoreLine(state, score)}`)];
-    case "extra_time_start":
-      return [commentary(`*90분 종료 — 승부는 연장으로 넘어갑니다.* ${scoreLine(state, score)}`)];
-    case "extra_half_time":
-      return [commentary(`*연장 전반 종료.* ${scoreLine(state, score)}`)];
-    case "full_time":
-      return [commentary(`*경기 종료 휘슬* 최종 스코어 ${scoreLine(state, score)}.`)];
-    case "substitution":
-      return [
-        narration(
-          `교체 보드가 올라간다 — ${nameOf(ev.actors[0] ?? "")} OUT, ${nameOf(ev.actors[1] ?? "")} IN`,
-        ),
-      ];
-    // 상대 벤치가 판을 옮겼다 — 문장은 원인 렌더러가 만든다 (match.md §3.3)
-    case "tactical_shift":
-      return ev.causes[0]
-        ? [commentary(`${at} 상대 벤치가 움직입니다 — ${eventCauseText(ev.causes[0], nameOf)}.`)]
-        : [];
-    default:
-      return [];
-  }
-}
-
-const SHOOTOUT_KO: Record<ShootoutOutcome, string> = {
-  scored: "성공입니다!",
-  saved: "골키퍼가 막아냅니다!",
-  missed: "골문을 벗어납니다!",
-};
-
-/**
- * **같은 분의 슛과 선방은 한 장면이다** (prompts.md §1) — 슛 줄이 이미 「골키퍼가
- * 쳐냅니다」를 말하므로 그 분의 선방 줄은 서지 않는다.
- */
-function savesToldByShots(events: readonly MatchEvent[]): ReadonlySet<number> {
-  return new Set(
-    events.filter((ev) => ev.type === "shot" && ev.shotOutcome === "saved").map((ev) => ev.minute),
-  );
-}
-
-/** 승부차기 한 발 — 코어가 굴린 그 발을 문장으로 옮긴다 (match.md §3.4) */
-function shootoutLines(state: GameState): string[] {
-  const kicks = state.pendingMatch?.shootout?.kicks ?? [];
-  const last = kicks.at(-1);
-  const tally = shootoutTally(kicks);
-  return [
-    ...(last
-      ? [
-          commentary(
-            `${last.round}번째 키커 ${playerName(state, last.taker)} — ${SHOOTOUT_KO[last.outcome]}`,
-          ),
-        ]
-      : [commentary(`*120분이 승부를 가르지 못했습니다 — 승부차기로 갑니다.*`)]),
-    commentary(`*승부차기 ${formatScore(tally.home, tally.away)}.*`),
-  ];
-}
-
-/**
- * **경기 턴의 대본.** 시계를 미는 것은 클라이언트의 실행기이고 여기서 하는 일은 지난 턴
- * 뒤의 사건(`unseenEvents`)을 중계로 옮기는 것뿐이다. 마감도 코어가 부른다.
- */
-export function matchScript(
-  state: GameState,
-  options: { kickoff: boolean; operator: boolean; message?: string },
-): ScriptedTurn {
-  const suggested = suggestLine(MATCH_SUGGESTION);
+/** **경기 턴의 대본** — 감독의 말에 대한 한 줄. 시계는 실행기가, 마감은 코어가 맡는다 */
+export function matchScript(state: GameState, options: { message?: string }): ScriptedTurn {
   const pending = state.pendingMatch;
-  if (options.kickoff) {
-    const record = state.matches.find((m) => m.id === pending?.matchId);
-    const fixture = record
-      ? `${teamName(record.homeTeamId)} 대 ${teamName(record.awayTeamId)}`
-      : "양 팀";
-    return {
-      text: [
-        narration(`터널을 나선 스물두 명이 자리를 잡는다`),
-        commentary(`${fixture}, 곧 킥오프입니다.`),
-        suggested,
-      ].join("\n"),
-    };
-  }
   const now = pending?.live.ledger.score ?? { home: 0, away: 0 };
   const minute = pending?.live.ledger.minute ?? 0;
-  if (pending?.shootout) return { text: [...shootoutLines(state), suggested].join("\n") };
-  const events = unseenEvents(state);
-  const running = scoreBeforeEvents(now, events);
-  const told = savesToldByShots(events);
-  const turnOf = shapeTurns();
-  const lines = events.flatMap((ev) => {
-    if (ev.type === "save" && told.has(ev.minute)) return [];
-    if (ev.type === "goal" && ev.team) running[ev.team] += 1;
-    return renderEvent(state, ev, running, turnOf);
-  });
-  // 사건 없이 멈춘 턴에도 한 줄은 선다 — 빈 장면은 턴이 취소되는 자리다
-  if (lines.length === 0) lines.push(commentary(`${minute}′ — ${scoreLine(state, now)}.`));
-  lines.push(suggested);
   const hit = options.message ? findLine(options.message) : null;
   const commands = hit?.line.ops?.({ state, named: hit.named }) ?? {};
   return {
-    text: lines.join("\n"),
-    ...(!options.operator && Object.keys(commands).length > 0
-      ? { calls: [{ tool: "tactic_orders", input: {} }] }
-      : {}),
+    text: [
+      narration(`${minute}′ ${scoreLine(state, now)} — 감독의 말이 벤치에 닿는다.`),
+      suggestLine(MATCH_SUGGESTION),
+    ].join("\n"),
+    ...(Object.keys(commands).length > 0 ? { calls: [{ tool: "tactic_orders", input: {} }] } : {}),
   };
 }

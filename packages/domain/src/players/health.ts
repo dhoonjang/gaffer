@@ -112,4 +112,4 @@ export type InjuryRiskGrade = "low" | "elevated" | "high";
  * ⚠️ **`condition`은 오늘의 몸이고 `load`는 시즌의 몸이다** (player.md §5.3·§5.5).
  * 한 낱말로 접으면 감독이 "하루 쉬면 되는가"와 "몇 주를 빼야 하는가"를 가르지 못한다.
  */
-export type InjuryRiskCause = "condition" | "load" | "proneness" | "strength";
+export type InjuryRiskCause = "condition" | "load" | "proneness" | "fitness";

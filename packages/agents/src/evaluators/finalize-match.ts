@@ -16,7 +16,7 @@ import {
   finalizeMatch,
   pushNews,
 } from "@gaffer/engine";
-import { ATTRIBUTE_AXES, AXIS_KO } from "@gaffer/domain";
+import { AXIS_KO, abilityAxesFor, weightSlotOf } from "@gaffer/domain";
 import { agingDeclineLine } from "../shared/aging-line";
 import { TURN_EXCERPT_CHARS } from "../shared/context";
 import { ModelOutputError, retryOnce, anchorStands } from "../shared/retry";
@@ -37,7 +37,7 @@ const DRILL_LEVELS = 6;
 const SCORE_LABEL_DECIMALS = 2;
 
 export const FINALIZE_MATCH_RULES = `Settle every player who appeared in the football match that just ended.
-brief holds the confirmed records, minutes, position, rating anchor and room to grow; commentary is this match's commentary.
+brief holds the confirmed records, minutes, position, rating anchor and room to grow; commentary is what the manager and the bench said during this match, and may be empty.
 The anchor already holds the team result, goals, assists, the clean sheet or goals conceded, and cards, so do not add them again. Adjust for what it does not hold: shots and saves, dominance, handling danger, a player's own fault in a goal conceded, impact after a substitution.
 Weigh minutes and position, and do not judge an individual by the team result alone. Do not invent experiences or achievements that did not happen.
 The rating is ${RATING_MIN}~${RATING_MAX}, within ±${RATING_BAND} of the anchor. Score is the adjustment added to the anchor.
@@ -45,14 +45,20 @@ Tactical adaptation is ${MATCH_FAMILIARITY_MIN}~${MATCH_FAMILIARITY_MAX}. Having
 Attributes: 0~${MATCH_ATTR_CAP} players across the whole match, one axis each by +${ATTR_STEP_MAX} or ${ATTR_STEP_MIN}. none if there is no change. ${agingDeclineLine()}
 The numbers are the expected value of a probability distribution; do not multiply classification confidence into the growth. The core checks the final limits, potential, rounding and duplicate settlement.`;
 
-const attributeOptions = ATTRIBUTE_AXES.flatMap((axis) =>
-  [ATTR_STEP_MIN, ATTR_STEP_MAX].map((step) => ({
-    key: `${axis}_${step < 0 ? "down" : "up"}`,
-    axis,
-    step,
-    label: `${AXIS_KO[axis]} ${step > 0 ? "+" : ""}${step}`,
-  })),
-);
+/**
+ * 한 경기가 움직일 수 있는 축 — 그 선수의 자리에 뜻이 있는 능력 축뿐이다. 성향은 한
+ * 경기로 바뀌지 않고, 골키퍼의 결정력이나 윙어의 반사 신경은 그 경기가 보여 준 적이 없다.
+ */
+function attributeOptionsFor(position: string) {
+  return abilityAxesFor(weightSlotOf(position) === "GK").flatMap((axis) =>
+    [ATTR_STEP_MIN, ATTR_STEP_MAX].map((step) => ({
+      key: `${axis}_${step < 0 ? "down" : "up"}`,
+      axis,
+      step,
+      label: `${AXIS_KO[axis]} ${step > 0 ? "+" : ""}${step}`,
+    })),
+  );
+}
 
 export function buildSettlementRequest(
   brief: MatchRatingBrief,
@@ -91,7 +97,9 @@ export function buildSettlementRequest(
       instructions: `One attribute axis and direction that changed for ${who} in the match they actually played. At most ${MATCH_ATTR_CAP} players across the whole match; none if the grounds are thin.`,
       criteria: {
         none: "no attribute change",
-        ...Object.fromEntries(attributeOptions.map(({ key, label }) => [key, label])),
+        ...Object.fromEntries(
+          attributeOptionsFor(player.position).map(({ key, label }) => [key, label]),
+        ),
       },
     };
   });
@@ -126,7 +134,7 @@ export async function evaluateSettlement(
     if (rating?.type !== "score" || drill?.type !== "score" || attribute?.type !== "choice")
       throw new ModelOutputError("경기 결산 응답 유형이 다릅니다");
     const selected = majorityChoice(attribute);
-    const option = attributeOptions.find(({ key }) => key === selected);
+    const option = attributeOptionsFor(player.position).find(({ key }) => key === selected);
     return {
       playerId: player.playerId,
       rating:
@@ -140,7 +148,7 @@ export async function evaluateSettlement(
   });
 }
 
-/** Existing match commentary only; closing prose never becomes numeric evaluation input. */
+/** 이 경기 중 감독과 벤치가 나눈 말 — 코어의 마감 기록은 본문이 없어 실리지 않는다. */
 function buildCommentaryBlock(state: GameState, matchId: string): string {
   const lines = state.chat
     .filter(
@@ -150,9 +158,11 @@ function buildCommentaryBlock(state: GameState, matchId: string): string {
         (t.matchId === undefined || t.matchId === matchId),
     )
     .map((t) => t.text.slice(0, TURN_EXCERPT_CHARS));
-  return ["<commentary>", ...(lines.length > 0 ? lines : ["(중계가 없다)"]), "</commentary>"].join(
-    "\n",
-  );
+  return [
+    "<commentary>",
+    ...(lines.length > 0 ? lines : ["(경기 중 대화가 없다)"]),
+    "</commentary>",
+  ].join("\n");
 }
 
 /** Number of participants whose settlement reached the core. */

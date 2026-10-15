@@ -1,9 +1,24 @@
 import type { FieldPoint, LiveAction, LivePlayer, Player } from "@gaffer/domain";
-import { FIELD, LIVE_STEP, RATING_MAX } from "@gaffer/domain";
+import { FIELD, LIVE_STEP, RATING_MAX, SLOT_INCLINATION } from "@gaffer/domain";
 import { SPEED_BAND, conditionAfterLoad } from "../load";
 import { clamp, distance } from "./geometry";
 import {
   ACCELERATION,
+  ACCELERATION_PER_POINT,
+  ACCELERATION_PIVOT,
+  ACCELERATION_RANGE,
+  KEEPER_AERIAL_PIVOT,
+  KEEPER_CLAIM_LIMITS,
+  KEEPER_CLAIM_PER_POINT,
+  KEEPER_CLAIM_RANGE,
+  KEEPER_REACH_HEIGHT,
+  KEEPER_REACH_PER_POINT,
+  LOFT_SKILL_PER_POINT,
+  LOFT_SKILL_PIVOT,
+  LOFT_SKILL_RANGE,
+  MARKING_PIVOT,
+  MARKING_PRESSURE_PER_POINT,
+  MARKING_PRESSURE_RANGE,
   AMBLE_PER_METRE,
   AMBLE_SPEED,
   CONDITION_SPEED_FLOOR,
@@ -55,12 +70,34 @@ interface MoveResult {
  * `urgency`는 국면이 행동의 급함을 갈아 끼울 때만 온다 — 되돌아 뛰기·오버래핑처럼 같은
  * 행동이 그 순간에만 서두르는 경우다. 오면 걸음 상한(`AMBLE_*`)도 걸지 않는다.
  */
+/** 뜬 패스의 오차에 곱하는 배율 — 테크닉(골키퍼는 킥)이 리그 평균이면 1 (live-match.md §5.3) */
+export function loftErrorOf(skill: number): number {
+  const [low, high] = LOFT_SKILL_RANGE;
+  return clamp(1 - (skill - LOFT_SKILL_PIVOT) * LOFT_SKILL_PER_POINT, low, high);
+}
+
+/** 받는 순간 붙은 상대 한 명의 압박 무게 — 마킹이 리그 평균이면 1 (live-match.md §5.3) */
+export function markingPressureOf(marking: number): number {
+  const [low, high] = MARKING_PRESSURE_RANGE;
+  return clamp(1 + (marking - MARKING_PIVOT) * MARKING_PRESSURE_PER_POINT, low, high);
+}
+
+/** 가속의 배율 — 가속력이 리그 평균이면 1 (live-match.md §5.3) */
+export function accelerationFactor(acceleration: number): number {
+  const [low, high] = ACCELERATION_RANGE;
+  return clamp(1 + (acceleration - ACCELERATION_PIVOT) * ACCELERATION_PER_POINT, low, high);
+}
+
+/**
+ * @param accel 가속의 배율 — 필드 선수는 `accelerationFactor`, 골키퍼는 1
+ */
 export function movePlayer(
   p: LivePlayer,
   player: Player,
   injured: boolean,
   stamina: number,
   legs: number,
+  accel: number,
   urgency?: number,
 ): MoveResult {
   const dx = p.target.x - p.x;
@@ -76,7 +113,7 @@ export function movePlayer(
   const wx = gap > 0.05 ? (dx / gap) * wanted : 0;
   const wy = gap > 0.05 ? (dy / gap) * wanted : 0;
   const speedNow = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-  const rate = wanted >= speedNow ? ACCELERATION : DECELERATION;
+  const rate = wanted >= speedNow ? ACCELERATION * accel : DECELERATION;
   const maxDelta = rate * LIVE_STEP;
   p.vx += clamp(wx - p.vx, -maxDelta, maxDelta);
   p.vy += clamp(wy - p.vy, -maxDelta, maxDelta);
@@ -132,12 +169,34 @@ export function advanceFlight(ball: {
   return { arrived: remaining <= step + 1e-6 || f.speed <= 0.3, step };
 }
 
-/** 이 말이 지금 공에 손을 댈 수 있는 반경 (m) — 골키퍼는 박스 안에서 더 멀다 */
+/**
+ * 이 말이 지금 공에 손을 댈 수 있는 반경 (m) — 골키퍼는 박스 안에서 더 멀다.
+ * 골키퍼의 민첩성은 다이빙이다(몸을 던져 닿는 범위 — player.md §1).
+ */
 export function reachOf(player: Player, keeperInBox: boolean): number {
-  return keeperInBox ? 1.1 + player.attributes.goalkeeping / 90 : 0.85;
+  return keeperInBox ? 1.1 + player.attributes.agility / 90 : 0.85;
 }
 
-/** 이 말이 지금 다룰 수 있는 공의 높이 (m) */
+/**
+ * 이 말이 지금 다룰 수 있는 공의 높이 (m) — 점프력이 키를 담는다. 박스 안 골키퍼는 손이 닿는
+ * 높이라 공중볼 처리가 정한다
+ */
 export function reachHeightOf(player: Player, keeperInBox: boolean): number {
-  return keeperInBox ? 2.9 : 1.2 + player.attributes.aerial / 80;
+  return keeperInBox
+    ? KEEPER_REACH_HEIGHT +
+        (player.attributes.aerialReach - KEEPER_AERIAL_PIVOT) * KEEPER_REACH_PER_POINT
+    : 1.2 + player.attributes.jumpingReach / 80;
+}
+
+/**
+ * 골키퍼가 크로스에 나오는 거리 (m) — 골문 중심에서 잰다. 공중볼 장악(성향)이 정하는 선택이고,
+ * 나와서 잡는지는 닿는 높이와 먼저 닿는 말이 정한다 (live-match.md §5.6)
+ */
+export function claimRangeOf(commandOfArea: number): number {
+  return clamp(
+    KEEPER_CLAIM_RANGE +
+      (commandOfArea - SLOT_INCLINATION.GK.commandOfArea) * KEEPER_CLAIM_PER_POINT,
+    KEEPER_CLAIM_LIMITS[0],
+    KEEPER_CLAIM_LIMITS[1],
+  );
 }

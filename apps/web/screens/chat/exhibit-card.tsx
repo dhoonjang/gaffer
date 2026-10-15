@@ -272,7 +272,10 @@ function PlayerSingle({
         </div>
       )}
       {AXES_SHOWN.has(view) && (
-        <AxisGrid axes={Object.fromEntries(p.attributes.map((a) => [a.key, a.value]))} />
+        <AxisGrid
+          axes={Object.fromEntries(p.attributes.map((a) => [a.key, a.value]))}
+          keeper={p.goalkeeper}
+        />
       )}
     </>
   );

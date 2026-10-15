@@ -45,7 +45,7 @@ import {
   penaltyRate,
   planAiTacticalShift,
   planBenchSubs,
-  roleTendencyOf,
+  cardTendencyOf,
   samplePoisson,
   sampleShot,
   savedShare,
@@ -79,7 +79,7 @@ export interface SimSquad {
   teamId: string;
   /** 선발 11명 (이미 부상·정지 필터를 거친 상태) */
   starters: GamePlayer[];
-  /** 전술판 자리·역할·적응도. 없으면 주 포지션의 자연스러운 슬롯으로 조립한다. */
+  /** 전술판 자리·카드·적응도. 없으면 주 포지션의 자연스러운 슬롯으로 조립한다. */
   slots?: LineupSlot[] | undefined;
   tactics?: TacticsSpec | undefined;
   managerTactics?: number | undefined;
@@ -150,15 +150,17 @@ const ZONE_AXES: Record<QuickZone, ReadonlyArray<[axis: AttributeKey, weight: nu
     ["tackling", 0.28],
     ["positioning", 0.28],
     ["strength", 0.16],
-    ["aerial", 0.16],
+    ["jumpingReach", 0.16],
     ["pace", 0.12],
   ],
 };
 type AttributeKey = keyof (typeof POSITION_WEIGHTS)["CM"];
 
-/** 골키퍼의 수비 기여 — 골키핑과 위치선정만 읽는다 */
+/** 골키퍼의 수비 기여 — 선방(반사 신경·핸들링·1대1)과 위치선정만 읽는다 */
 const KEEPER_AXES: ReadonlyArray<[axis: AttributeKey, weight: number]> = [
-  ["goalkeeping", 0.75],
+  ["reflexes", 0.45],
+  ["handling", 0.15],
+  ["oneOnOnes", 0.15],
   ["positioning", 0.25],
 ];
 
@@ -473,10 +475,10 @@ function weightedPick(
   return players[players.length - 1]!;
 }
 
-/** 누가 차는가 — 자리 몫 × 역할의 `shoot` 성향 × 결정력·침투 */
+/** 누가 차는가 — 자리 몫 × 카드의 `shoot` 성향 × 결정력·침투 */
 function shooterWeight(slot: LineupSlot): number {
   const share = QUICK_SHOT_SHARE[weightSlotOf(slot.position)];
-  const tendency = 0.5 + roleTendencyOf(slot.position, slot.roleId).shoot;
+  const tendency = 0.5 + cardTendencyOf(slot.position, slot.card).shoot;
   const skill = (slot.player.attributes.finishing + slot.player.attributes.offTheBall) / 2;
   return share * tendency * (0.5 + skill / RATING_MAX);
 }
@@ -1006,23 +1008,26 @@ function runTimeline(input: TimelineInput): TimelineResult {
               active,
             );
             const field = outfield(active);
+            // 죽은 공의 슛은 대개 머리다 — 점프력이 고르고 헤더가 넣는다
             const shooter = weightedPick(
               rng,
               field,
-              (p) => p.attributes.aerial + p.attributes.finishing / 2,
+              (p) => p.attributes.jumpingReach + p.attributes.heading / 2,
             );
             if (!shooter) continue;
-            // 죽은 공의 질 — 키커의 킥력과 슈터의 공중볼이 평균 xG를 조금 움직인다.
-            // 둘 다 70인 짝에서 배율이 1이다
+            // 죽은 공의 질 — 키커의 배달(코너는 크로스, 프리킥은 프리킥)과 슈터의 점프력이
+            // 평균 xG를 조금 움직인다. 둘 다 70인 짝에서 배율이 1이다
+            const delivery = taker
+              ? corner
+                ? taker.attributes.crossing
+                : taker.attributes.freeKicks
+              : 60;
             const quality =
               meanXg *
               SET_PIECE_SHOT_QUALITY *
               routine.setPiece *
-              (0.65 +
-                (((taker?.attributes.kicking ?? 60) + shooter.attributes.aerial) /
-                  (2 * RATING_MAX)) *
-                  0.5);
-            const result = sampleShot(rng, { meanXg: quality }, shooter.attributes.finishing);
+              (0.65 + ((delivery + shooter.attributes.jumpingReach) / (2 * RATING_MAX)) * 0.5);
+            const result = sampleShot(rng, { meanXg: quality }, shooter.attributes.heading);
             const assister = taker && taker.id !== shooter.id ? taker : null;
             rolled.push({
               side,

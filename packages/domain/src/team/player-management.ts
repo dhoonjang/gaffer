@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DateString } from "../core/date-string";
+import { PlaceSchema } from "../players/place";
 
 /**
  * 이적 리스트 등재 — **감독이 "이 선수는 팔겠다"고 시장에 알린 사실.**
@@ -30,8 +31,8 @@ export const PlayerTrainingSchema = z.object({
   gamePlayerId: z.string().min(1),
   /** 겨냥한 능력치 축 — 훈련 결산에 실린다 */
   axis: z.string().min(1).optional(),
-  /** 배우는 자리 — 훈련 결산이 적응도를 조금씩 올린다 */
-  position: z.string().min(1).optional(),
+  /** 배우는 자리 (자리 14개 중 하나) — 훈련 결산이 적응도를 조금씩 올린다 */
+  position: PlaceSchema.optional(),
   /**
    * **감독이 이 선수를 훈련에서 뺀 기간** — 누적 피로의 유일한 손잡이
    * (→ docs/players/training.md · docs/players/player.md §5.5).

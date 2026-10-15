@@ -9,6 +9,7 @@ import {
   type Slot,
   type TrainingSession,
   ATTRIBUTE_AXES,
+  AXIS_GROUPS,
 } from "@gaffer/domain";
 import { addDays, diffDays, dayOfWeek } from "../core/dates";
 import { squadReturnOf, sortEntries } from "../core/calendar";
@@ -245,11 +246,12 @@ interface SessionPlan extends MenuItem {
 }
 
 /**
- * 본훈련 메뉴 — 순환하며 16축을 모두 훑는다. 요일 고정이 아닌 이유는, 경기 전후를
+ * 본훈련 메뉴 — 순환하며 37축을 모두 훑는다. 요일 고정이 아닌 이유는, 경기 전후를
  * 걷어내고 나면 주에 두어 번밖에 남지 않아 요일로 묶으면 같은 축만 계속 훈련하게
  * 되기 때문이다. 10개라 7일 주기와 서로소여서 돌아 요일 편중도 없다.
  *
- * 넷은 한 축만 겨냥한다 — 10개가 모두 2축이면 네 축이 중복돼 그쪽만 빨리 자란다.
+ * **한 축은 한 메뉴에만 있다** — 두 메뉴에 걸친 축은 그쪽만 빨리 자란다. 팀 빌딩은
+ * 능력치가 아니라 전술 적응도를 겨냥한다.
  *
  * **나열 순서에도 뜻이 있다.** 본훈련이 잡히는 날은 경기 일정이 정하므로 순환이
  * 고르게 돌지 않고, 한 자리는 시즌 내내 손에 꼽게 걸린다. 거기에는 프리시즌 기초
@@ -260,44 +262,56 @@ const GENERAL_MENU: ReadonlyArray<MenuItem> = [
   {
     menuId: "general-possession",
     label: "볼 소유 — 론도·짧은 패스 연결",
-    focus: ["passing", "vision"],
+    focus: ["passing", "vision", "firstTouch", "decisions"],
   },
   {
     menuId: "general-finishing",
-    label: "마무리 훈련 — 박스 안 슈팅 반복",
-    focus: ["finishing", "composure"],
+    label: "마무리 훈련 — 박스 안팎 슈팅 반복",
+    focus: ["finishing", "longShots", "composure", "technique"],
   },
   {
     menuId: "general-defending",
     label: "수비 조직 — 라인 간격·커버",
-    focus: ["tackling", "positioning"],
+    focus: ["tackling", "marking", "positioning", "concentration"],
   },
   {
     menuId: "general-transition",
     label: "스피드·전환 — 역습 상황 반복",
-    focus: ["pace", "dribbling"],
+    focus: ["acceleration", "pace", "dribbling", "agility"],
   },
   {
     menuId: "general-set-piece",
-    label: "세트피스·제공권 — 코너·프리킥",
-    focus: ["kicking", "aerial"],
+    label: "세트피스·제공권 — 코너·프리킥·페널티",
+    focus: ["crossing", "freeKicks", "penalties", "heading", "jumpingReach"],
   },
-  { menuId: "general-pressing", label: "압박 강도 — 전방 압박 트리거", focus: ["aggression"] },
+  {
+    menuId: "general-pressing",
+    label: "압박 강도 — 전방 압박 트리거",
+    focus: ["workRate", "aggression", "anticipation"],
+  },
   {
     menuId: "general-conditioning",
     label: "체력 강화 — 인터벌 러닝·웨이트",
-    focus: ["stamina", "strength"],
+    focus: ["stamina", "strength", "naturalFitness", "balance"],
   },
   {
     menuId: "general-goalkeeping",
     label: "GK 전담 — 슈팅 스톱·크로스 대응",
-    focus: ["goalkeeping"],
+    focus: [
+      "reflexes",
+      "handling",
+      "oneOnOnes",
+      "aerialReach",
+      "kicking",
+      "commandOfArea",
+      "rushingOut",
+    ],
   },
-  { menuId: "general-team-building", label: "팀 빌딩 — 소통·리더십 세션", focus: ["leadership"] },
+  { menuId: "general-team-building", label: "팀 빌딩 — 소통·호흡 세션", focus: ["tactical"] },
   {
     menuId: "general-off-the-ball",
     label: "오프더볼 — 뒷공간 침투·마킹 이탈",
-    focus: ["offTheBall"],
+    focus: ["offTheBall", "flair"],
   },
 ];
 
@@ -319,15 +333,15 @@ const RETURN_WEEK: ReadonlyArray<MenuItem> = [
 /**
  * 프리시즌 **기초 체력기** 메뉴 — 복귀 주가 끝난 뒤 2주.
  *
- * 이 시기의 훈련장은 전술판이 아니라 러닝 트랙과 웨이트룸이다. 신체 4축
- * (지구력·몸싸움·스피드·공중볼)에만 집중하는 건 그래서고, 이중 세션도 이 구간에만
+ * 이 시기의 훈련장은 전술판이 아니라 러닝 트랙과 웨이트룸이다. 신체 축
+ * (지구력·몸싸움·속력·가속력·점프력)에만 집중하는 건 그래서고, 이중 세션도 이 구간에만
  * 둔다 — 실제 캠프도 강도를 앞에 싣고 개막이 가까울수록 전술로 옮겨 간다.
  */
 const PRESEASON_BASE: ReadonlyArray<MenuItem> = [
   { menuId: "base-endurance", label: "기초 체력 — 장거리 러닝·유산소", focus: ["stamina"] },
   { menuId: "base-strength", label: "근력 서킷 — 웨이트룸", focus: ["strength"] },
-  { menuId: "base-sprint", label: "스프린트·가속 — 반복 질주", focus: ["pace"] },
-  { menuId: "base-duel", label: "경합 훈련 — 몸싸움·제공권", focus: ["aerial"] },
+  { menuId: "base-sprint", label: "스프린트·가속 — 반복 질주", focus: ["pace", "acceleration"] },
+  { menuId: "base-duel", label: "경합 훈련 — 몸싸움·제공권", focus: ["jumpingReach"] },
 ];
 
 /** 복귀 주의 마지막 날 (소집일 = 월요일 기준 금요일) */
@@ -434,11 +448,11 @@ function makeSession(
 
 // ── 개인 훈련의 축 (season.md §2 "개인 훈련의 축") ─────────────────────
 
-/** 개인 훈련이 걷을 몫에서 빠지는 축 — 필드 축을 겨냥하면 `goalkeeping`은 그대로다 */
-const UNTOUCHED_AXIS: AttributeAxis = "goalkeeping";
+/** 개인 훈련이 걷을 몫에서 빠지는 축 — 필드 축을 겨냥하면 GK 축은 그대로다 */
+const UNTOUCHED_AXES: ReadonlySet<AttributeAxis> = new Set(AXIS_GROUPS.goalkeeping);
 
 /** 걷을 몫의 분모 — 축 목록에서 파생한다(축이 늘면 여기가 따라온다) */
-const FIELD_AXIS_COUNT = ATTRIBUTE_AXES.filter((axis) => axis !== UNTOUCHED_AXIS).length;
+const FIELD_AXIS_COUNT = ATTRIBUTE_AXES.filter((axis) => !UNTOUCHED_AXES.has(axis)).length;
 
 /** 개인 훈련이 겨냥한 한 축의 성장 확률 배율 */
 export const PERSONAL_TRAINING_AIM = 2;
@@ -446,11 +460,11 @@ export const PERSONAL_TRAINING_AIM = 2;
 /**
  * 월간 성장이 이 축에 곱하는 배율 — **총량을 옮길 뿐 늘리지 않는다** (season.md §2).
  * 개인 훈련이 겨냥한 축이 오른 만큼을 나머지 필드 축에서 고르게 걷으므로 필드
- * 15축의 배율 합은 15로 남는다.
+ * 30축의 배율 합은 30으로 남는다.
  *
- * 개인 축이 `goalkeeping`이면 제 갈래에 걷을 자리가 없어 필드 15축에서 걷는다 —
- * 그때는 필드 합이 `16 − PERSONAL_TRAINING_AIM`으로 내려가고 **16축 합이 16**이다.
- * 골키퍼 유망주가 겨냥할 축을 잃지 않으면서 규약도 지키는 쪽 (season.md §8 불변식).
+ * 개인 축이 GK 축이면 GK 축에서는 걷지 않고 필드 30축에서 걷는다 — 그때는 필드 합이
+ * `30 − (PERSONAL_TRAINING_AIM − 1)`로 내려가고 **37축 합이 37**이다. 골키퍼 유망주가
+ * 겨냥할 축을 잃지 않으면서 규약도 지키는 쪽 (season.md §8 불변식).
  */
 export function monthlyGrowthMultiplier(
   axis: AttributeAxis,
@@ -458,7 +472,7 @@ export function monthlyGrowthMultiplier(
 ): number {
   if (!personal) return 1;
   if (axis === personal) return PERSONAL_TRAINING_AIM;
-  if (axis === UNTOUCHED_AXIS) return 1;
-  const pool = FIELD_AXIS_COUNT - (personal === UNTOUCHED_AXIS ? 0 : 1);
+  if (UNTOUCHED_AXES.has(axis)) return 1;
+  const pool = FIELD_AXIS_COUNT - (UNTOUCHED_AXES.has(personal) ? 0 : 1);
   return (pool - (PERSONAL_TRAINING_AIM - 1)) / pool;
 }

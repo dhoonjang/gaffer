@@ -13,10 +13,10 @@ import {
   seasonRating,
   competitionRowsOf,
   type GamePlayer,
-  rolesFor,
-  defaultRoleOf,
+  cardTitle,
+  cardWordsText,
   fatigueOf,
-  observedFit,
+  observedPlaceFit,
   observedOverall,
   type GrowthOutlook,
 } from "@gaffer/domain";
@@ -117,14 +117,17 @@ interface PlayerCardOursView {
    *
    * **카드는 고르는 자리가 아니다** — 역할을 바꾸는 손잡이는 전술판 하나뿐이라
    * (읽는 값과 조작 대상은 생김새가 다르다 — overview.md §5) 여기 실리는 것은
-   * 지금 무엇을 맡고 있는가뿐이다. **자리가 있어야 역할이 있다**(player.md §3.1) —
-   * 좌표가 없는 벤치 배치는 역할 칸이 비어 있다.
+   * 지금 무엇을 맡고 있는가뿐이다. **자리가 있어야 카드가 있다**(player.md §3.1) —
+   * 좌표가 없는 벤치 배치는 카드 칸이 비어 있다.
    */
   assignment: {
     tier: "선발" | "벤치";
     position: string;
-    /** 그 자리의 세부 역할 — 자리가 없는 벤치 배치는 null */
-    role: { id: string; ko: string } | null;
+    /**
+     * 그 자리의 역할 카드 — 이름(없으면 낱말 줄)과 낱말 줄. 자리가 없는 벤치 배치는 null,
+     * 선발인데 카드가 없으면 `title`이 「기본」이다.
+     */
+    card: { title: string; words: string } | null;
     familiarity: number;
   } | null;
   away: SquadViewRow["away"];
@@ -156,7 +159,7 @@ export interface PlayerCardView {
   internationalGoals: number;
   position: string;
   positionGroup: string;
-  /** 소화 가능한 자리 — 적응도와 **관측 축에서 낸** 그 자리 전력 (`observedFit`) */
+  /** 소화 가능한 자리 — 적응도와 **관측 축에서 낸** 그 자리 전력 (`observedPlaceFit`) */
   positions: SquadPositionView[];
   foot: Foot;
   height: number | null;
@@ -245,7 +248,7 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
     positionGroup: groupOf(p),
     positions: p.positions.map((x) => ({
       ...x,
-      overall: observedFit(observed, observation, x.position),
+      overall: observedPlaceFit(observed, observation, x.position),
     })),
     foot: p.foot ?? { left: 3, right: 3 },
     height: p.height ?? null,
@@ -312,17 +315,15 @@ export function buildPlayerCard(state: GameState, playerId: string): PlayerCardV
 /**
  * 카드의 우리 칸 — **명단 행이 내는 것과 같은 값**이다.
  *
- * 다른 것은 전술뿐이다: 명단은 역할을 고를 수 있는 목록을 싣지만 카드는 지금 맡은
- * 것 하나를 사실로 싣는다 (카드에는 전술판이 없다).
+ * 다른 것은 전술뿐이다: 명단은 카드를 고칠 수 있게 싣지만 선수 카드는 지금 맡은
+ * 것 하나를 사실로 싣는다 (선수 카드에는 전술판이 없다).
  */
 function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView {
   const assignment = assignmentFor(state, p.id);
   const slotted = assignment?.role === "starting";
-  /** 자리가 있어야 역할이 있다 — 벤치 배치의 `position`은 주 포지션이 채운 값이다 */
-  const role = slotted
-    ? (rolesFor(assignment.position).find(
-        (r) => r.id === (assignment.roleId ?? defaultRoleOf(assignment.position)),
-      ) ?? null)
+  /** 자리가 있어야 카드가 있다 — 벤치 배치의 `position`은 주 포지션이 채운 값이다 */
+  const card = slotted
+    ? { title: cardTitle(assignment.card), words: cardWordsText(assignment.card) }
     : null;
   return {
     squadNumber: p.squadNumber ?? null,
@@ -341,7 +342,7 @@ function oursCardOf(state: GameState, p: GamePlayer): PlayerCardOursView {
       ? {
           tier: assignment.role === "starting" ? "선발" : "벤치",
           position: assignment.position,
-          role: role ? { id: role.id, ko: role.ko } : null,
+          card,
           familiarity: assignment.familiarity,
         }
       : null,

@@ -1,50 +1,32 @@
-import type { AttributeAxis, AxisValues, WeightSlot } from "@gaffer/domain";
-import {
-  normalizedLogCurve,
-  SLOT_ATTACK_SHARE,
-  splitPositioning,
-  weightSlotOf,
-} from "@gaffer/domain";
+import type { AttributeAxis, AxisValues } from "@gaffer/domain";
+import { bestOverall, normalizedLogCurve, weightSlotOf } from "@gaffer/domain";
 import { hashOf } from "../../core/catalog/name-hash";
+import { EA_FACE_MODEL, EA_LEVEL_MODEL, EA_RATINGS } from "./ea-ratings";
+import {
+  EA_FACE_OF,
+  EA_STAT_KEYS,
+  eaStatsOf,
+  hasPlayStyle,
+  type EaRating,
+  type EaStats,
+} from "./ea-stats";
 
 /**
- * 16축 파생 — 능력치 모델의 데이터 계층 (player.md §1 · §12).
+ * 37축 파생 — 능력치 모델의 데이터 계층 (player.md §1 · core/sources.md §4.2).
  *
- * 시드 데이터(epl-players.ts)는 EA FC 계열 **6축 + GK**만 갖는다. 16축 중 7축은
- * 1:1로 옮겨오고, 나머지 9축은 여기서 **결정적으로 파생**한다 (1단계).
- * 실측값은 별도 데이터 마일스톤에서 채워 파생값을 교체한다 (2단계).
+ * 축은 EA SPORTS FC 공식 레이팅의 **세부 능력치 34개**에서 옮긴다(`ea-ratings.ts`).
+ * EA에 없는 선수는 세부 능력치를 먼저 세우고 같은 옮김을 지난다 — 대표 수치만 아는
+ * 실선수는 대표 수치에서(`estimateStats` · `EA_FACE_MODEL`), 실력 하나로 태어나는 절차 생성
+ * 선수는 그 실력에서(`levelStats` · `EA_LEVEL_MODEL`). 그래서 실측 선수와 추정 선수가 한
+ * 공식으로 같은 눈금에 선다.
  *
- * 파생 규칙은 두 가지를 지킨다.
+ * 추정은 두 가지를 지킨다.
  * 1. **결정적** — 이름 해시만 쓴다. 같은 선수는 언제나 같은 값.
- * 2. **근거 있는 상관** — 기존 축·자리·나이에서 끌어온다. 난수로 채우면 카탈로그가
- *    노이즈가 되고, 완전히 종속시키면 축을 늘린 의미가 없다. 그래서 상관 + 소폭 편차.
+ * 2. **근거 있는 흩어짐** — 편차의 가운데값에 그 흩어짐만큼 개인차를 얹는다. 흩어짐을
+ *    빼면 같은 자리 선수가 전부 같은 모양이 되고, 난수로 채우면 카탈로그가 노이즈가 된다.
  */
 
-/** 시드에 실측이 없어 파생으로 채우는 9축 — 부채 목록 (2단계에서 비운다) */
-export const DERIVED_AXES: readonly AttributeAxis[] = [
-  "stamina",
-  "aerial",
-  "kicking",
-  "vision",
-  "positioning",
-  "offTheBall",
-  "composure",
-  "aggression",
-  "leadership",
-];
-
-/** 시드에 실측이 있는 7축 (이름만 정리한 것 포함) */
-export const SEEDED_AXES: readonly AttributeAxis[] = [
-  "pace",
-  "passing",
-  "dribbling",
-  "goalkeeping",
-  "finishing", // ← shooting
-  "tackling", // ← defending
-  "strength", // ← physical
-];
-
-/** 6축 + GK 시드 (RealPlayerSeed의 능력치 부분) */
+/** 대표 수치 여섯 + GK 종합 (RealPlayerSeed의 능력치 부분) */
 export interface SeedAxes {
   pace: number;
   shooting: number;
@@ -55,219 +37,311 @@ export interface SeedAxes {
   goalkeeping?: number;
 }
 
+/** 대표 수치 말고 시드가 더 아는 것 — EA 한 줄과 실측 키 */
+export interface SeedDetail {
+  ea?: EaRating | undefined;
+  height?: number | undefined;
+}
+
 const clamp99 = (x: number) => Math.max(1, Math.min(99, Math.round(x)));
 
 /** [-spread, +spread] 결정적 편차 — 축마다 다른 해시 채널 */
 function jitter(nameEn: string, axis: string, spread: number): number {
-  if (spread <= 0) return 0;
-  return (hashOf(`axis:${axis}:${nameEn}`) % (spread * 2 + 1)) - spread;
+  const span = Math.round(spread);
+  if (span <= 0) return 0;
+  return (hashOf(`axis:${axis}:${nameEn}`) % (span * 2 + 1)) - span;
 }
 
-type SlotBias = Partial<Record<WeightSlot, number>>;
+/** 추정 개인차의 폭 — 편차 흩어짐의 이만큼을 해시로 얹는다 */
+const ESTIMATE_SPREAD = 0.8;
 
-/** 자리별 가산·감산 — 파생의 "근거" (센터백은 공중볼이 높고 윙어는 낮다) */
-function bias(slot: WeightSlot, table: SlotBias): number {
-  return table[slot] ?? 0;
+/**
+ * 대표 수치 → 세부 능력치 34개. 세부 능력치 = 그것을 묶는 대표 수치 + 그 자리의
+ * 편차 가운데값 ± 개인차. 필드 선수의 GK 세부 능력치는 대표 수치가 없어(0) 편차가
+ * 곧 값이다.
+ */
+export function estimateStats(nameEn: string, position: string, seed: SeedAxes): EaStats {
+  const model = EA_FACE_MODEL[weightSlotOf(position)];
+  return Object.fromEntries(
+    EA_STAT_KEYS.map((stat) => {
+      const [offset, spread] = model[stat];
+      const face = seed[EA_FACE_OF[stat]] ?? 0;
+      return [stat, clamp99(face + offset + jitter(nameEn, stat, spread * ESTIMATE_SPREAD))];
+    }),
+  ) as EaStats;
 }
 
 /**
- * 필드 플레이어의 goalkeeping — 15~40. 피지컬이 좋은 선수가 약간 높게
- * (GK 퇴장 시 대신 서는 선수 선택에 미세한 근거가 된다).
+ * 실력 하나 → 세부 능력치 34개. 세부 능력치 = 실력 + 그 자리의 편차 가운데값 ± 개인차.
+ * 생성기가 대표 수치를 지어내지 않는다 — 지어낸 대표 수치의 모양이 실선수와 다르면
+ * 그 차이가 편차 표를 지나며 부푼다(스트라이커의 높은 수비 수치가 헤더 90이 된다).
  */
-function derivedGoalkeeping(nameEn: string, physical: number): number {
-  const base = 15 + (hashOf(`gk:${nameEn}`) % 16); // 15~30
-  return clamp99(base + Math.round((physical - 60) / 8));
+export function levelStats(nameEn: string, position: string, level: number): EaStats {
+  const model = EA_LEVEL_MODEL[weightSlotOf(position)];
+  return Object.fromEntries(
+    EA_STAT_KEYS.map((stat) => {
+      const [offset, spread] = model[stat];
+      return [stat, clamp99(level + offset + jitter(nameEn, stat, spread * ESTIMATE_SPREAD))];
+    }),
+  ) as EaStats;
 }
 
-/**
- * **골키퍼의 침투** — 뜻이 없는 축이라 낮게 깔린다. 화면에는 서므로 수준은 맞추되
- * 전력 가중치가 바닥(0.05)이라 종합에는 닿지 않는다. 기울임 식(`splitPositioning`)
- * 밖에 있는 이유는 골키퍼의 위치선정이 태클·결정력이 아니라 **골문 커맨드**라,
- * 그 값을 기울이면 태클 낮은 골키퍼의 침투가 천장까지 밀려 올라가기 때문이다.
- */
-function keeperOffTheBall(goalkeeping: number): number {
-  return goalkeeping * 0.28 + 9.5;
+/** 개인기 별 추정 — EA 분포의 문턱을 드리블 수치에 건다 (EA에 없는 선수만) */
+function estimateSkillMoves(dribbling: number): number {
+  return dribbling < 50 ? 1 : dribbling < 66 ? 2 : dribbling < 77 ? 3 : dribbling < 85 ? 4 : 5;
 }
 
-/**
- * 시드 6축 + 자리 + 나이 → 16축.
- *
- * `age`는 카탈로그 기준일(CATALOG_AGE_REF) 나이다 — composure·leadership이
- * 나이와 상관을 갖기 때문에 필요하다. 성장·쇠퇴는 게임 중 별도 경로가 다룬다.
- */
+/** 키가 점프에 얹는 몫 — 182cm에서 0, 1cm당 0.8 ("200cm면 점프가 나빠도 높다") */
+const HEIGHT_PIVOT = 182;
+const HEIGHT_REACH = 0.8;
+/** 골키퍼 키의 기준선 — 골키퍼끼리 견주는 자리다 */
+const KEEPER_HEIGHT_PIVOT = 188;
+
+/** 창의성의 밑값 — 개인기 별 하나당 */
+const FLAIR_BY_SKILL_MOVES = [30, 40, 52, 66, 80] as const;
+/** 창의성에 얹는 플레이스타일 — 정형에서 벗어나는 선택을 즐기는 표식 */
+const FLAIR_STYLES: readonly (readonly [string, number])[] = [
+  ["Trickster", 8],
+  ["Inventive", 6],
+  ["Gamechanger", 5],
+  ["Technical", 3],
+];
+/** 활동량에 얹는 플레이스타일 — 끝까지 뛰고 무는 표식 */
+const WORK_RATE_STYLES: readonly (readonly [string, number])[] = [
+  ["Relentless", 8],
+  ["Press Proven", 6],
+];
+
+function styleBonus(
+  ea: EaRating | undefined,
+  table: readonly (readonly [string, number])[],
+): number {
+  if (!ea) return 0;
+  return table.reduce((sum, [style, bonus]) => sum + (hasPlayStyle(ea, style) ? bonus : 0), 0);
+}
+
+/** 시드 선수의 EA 한 줄 — 조인 키는 (이름 + 생년월일)이다 (`scripts/ea-ratings.ts`) */
+export function eaRatingOf(seed: { nameEn: string; birthdate: string }): EaRating | undefined {
+  return EA_RATINGS[`${seed.nameEn}|${seed.birthdate}`];
+}
+
+/** 시드 → 37축. EA 한 줄이 있으면 그것을, 없으면 대표 수치에서 세운 세부 능력치를 옮긴다 */
 export function deriveAxes(
   nameEn: string,
   position: string,
   seed: SeedAxes,
-  age: number,
+  detail: SeedDetail = {},
 ): AxisValues {
-  const slot = weightSlotOf(position);
-  const isGk = slot === "GK";
+  const ea = detail.ea;
+  const stats = ea ? eaStatsOf(ea) : estimateStats(nameEn, position, seed);
+  return axesFromStats(nameEn, position, stats, {
+    skillMoves: ea?.sm ?? estimateSkillMoves(seed.dribbling),
+    ea,
+    height: detail.height ?? ea?.h,
+  });
+}
 
-  // ── 실측 7축 (이름 정리) ──
-  const pace = clamp99(seed.pace);
-  const passing = clamp99(seed.passing);
-  const dribbling = clamp99(seed.dribbling);
-  const finishing = clamp99(seed.shooting);
-  const tackling = clamp99(seed.defending);
-  const goalkeeping = isGk
-    ? clamp99(seed.goalkeeping ?? 70)
-    : derivedGoalkeeping(nameEn, seed.physical);
-  /**
-   * 골키퍼의 몸싸움·공중볼은 시드의 `physical`에서 오면 **아무 뜻이 없다** —
-   * 그 값은 필드 6축 자리를 채우려고 밴드에서 만든 맛내기라 실측과 r=0.08이다.
-   * 골키퍼에게 실측이 있는 축은 `goalkeeping` 하나뿐이므로 거기서 끌어온다
-   * (EA 실측 회귀: 몸싸움 r=0.26, 공중볼 r=0.46 — 잡음보다 낫다).
-   */
-  const strength = isGk ? clamp99(goalkeeping * 0.348 + 37.4) : clamp99(seed.physical);
+/** 실력 하나 → 37축 — 절차 생성 선수(유스·영입 후보·2부 스쿼드)가 태어나는 문 */
+export function deriveLevelAxes(nameEn: string, position: string, level: number): AxisValues {
+  const stats = levelStats(nameEn, position, level);
+  return axesFromStats(nameEn, position, stats, {
+    skillMoves: estimateSkillMoves(stats.dribbling),
+    ea: undefined,
+    height: undefined,
+  });
+}
 
-  /** 그 선수의 대략적 수준 — composure·leadership의 기준선 */
-  const level = isGk
-    ? goalkeeping
-    : (pace + finishing + passing + dribbling + tackling + strength) / 6;
+/**
+ * 합성 선수의 종합이 기준선 위에 서는 몫 — 체급 기준선(`TIER_BASE`)과 명단 분위
+ * (`topUpBase`)는 생성 선수가 이만큼 위에 선다는 것을 전제로 맞춰져 있다.
+ */
+export const SYNTHETIC_BASE_LIFT = 1.5;
 
-  // ── 파생 9축 ──
-  // 패스가 지구력을 예측한다 — 중원 자원이 많이 뛰기 때문이다. 빼고 재면
-  // 상관이 0.51에 그치는데 넣으면 0.64로 오른다 (EA 실측 회귀).
-  const stamina = clamp99(
-    (isGk
-      ? // 골키퍼는 뛰지 않는다 — 실측 평균 33이고 실력과 상관도 거의 없다(r=0.09).
-        // 전력 가중치가 0이라 OVR엔 닿지 않지만 화면에는 보이므로 수준은 맞춘다.
-        goalkeeping * 0.129 + 23.3
-      : strength * 0.507 +
-        pace * 0.209 +
-        passing * 0.539 -
-        16.3 +
-        bias(slot, { DM: 2, CM: 1, AM: 1, FB: 0, W: 0, CB: -1, CF: -1, ST: -2 })) +
-      jitter(nameEn, "stamina", 4),
-  );
+/** 합성 선수 종합의 개인 편차(표준편차) — 같은 기준선에서도 사람마다 실력이 다르다 */
+const SYNTHETIC_OVERALL_SPREAD = 1.8;
 
-  const aerial = clamp99(
-    (isGk
-      ? goalkeeping * 0.503 + 24.8
-      : strength * 0.98 +
-        pace * 0.07 -
-        5.95 +
-        bias(slot, { ST: 5, CB: 3, CF: 3, FB: 0, W: 0, DM: -3, AM: -3, CM: -5 })) +
-      jitter(nameEn, "aerial", 5),
-  );
+/** 되맞춤 반복 상한 — 못 닿으면 닿은 만큼으로 멈춘다 */
+const SYNTHETIC_PASSES = 5;
 
-  const kicking = clamp99(
-    (isGk ? passing * 1.49 - 20 : passing * 0.737 + finishing * 0.252 - 3.9) +
-      bias(slot, { CF: 6, CB: 3, DM: 2, CM: 0, ST: 0, AM: -1, FB: -2, W: -2, GK: 0 }) +
-      jitter(nameEn, "kicking", 5),
-  );
+/** 균등 둘의 합 — 평균 0 · 표준편차 1, 끝이 ±√6에서 끊기는 결정적 지문 */
+function fingerprint(key: string, channel: string): number {
+  const unit = (part: string) =>
+    (hashOf(`synthetic:${channel}:${part}:${key}`) % 100_000) / 100_000;
+  return (unit("a") + unit("b") - 1) * Math.sqrt(6);
+}
 
-  // 패스 정확도와 시야는 상관은 있지만 같은 것이 아니다 — "정확하지만 상상력 없는"
-  // 선수가 나오도록 드리블에도 기대고 편차를 남긴다 (라이스 vs 외데고르)
-  const vision = clamp99(
-    passing * 0.943 +
-      dribbling * 0.277 -
-      17.8 +
-      bias(slot, { ST: 3, DM: 1, CB: 0, CM: 0, AM: 0, W: -1, CF: -1, FB: -2, GK: -8 }) +
-      jitter(nameEn, "vision", 6),
-  );
+/**
+ * **목표 종합에서 태어나는 합성 선수** — 유스·영입 후보·절차 생성 스쿼드가 지나는 문.
+ *
+ * 목표 = 의도한 종합 + 개인 편차. 그 목표에서 세부 능력치를 세우고(`levelStats`), 37축의
+ * 종합이 목표에 닿을 때까지 실력을 민다 — 자리마다 세부 능력치에서 종합으로 가는 낙차가
+ * 달라(골키퍼 −5 · 윙어 0) 한 상수로는 어느 자리도 노린 자리에 서지 않는다.
+ *
+ * `positions`는 그 선수가 볼 줄 아는 자리 목록이다 — 종합은 `bestOverall`이 그 목록에서 낸다.
+ */
+export function synthesizeAxes(
+  key: string,
+  position: string,
+  positions: readonly { position: string }[],
+  intended: number,
+): AxisValues {
+  const target = intended + fingerprint(key, "overall") * SYNTHETIC_OVERALL_SPREAD;
+  let level = target;
+  let axes = deriveLevelAxes(key, position, level);
+  for (let pass = 0; pass < SYNTHETIC_PASSES; pass++) {
+    const gap = target - bestOverall(axes, positions);
+    if (Math.abs(gap) <= 0.5) break;
+    level += gap;
+    axes = deriveLevelAxes(key, position, level);
+  }
+  return axes;
+}
 
-  /**
-   * **위치선정과 침투는 한 값을 기울여 가른다** (player.md §13.5).
-   *
-   * 밑값은 옛 한 축 그대로다 — 수비 자리는 수비 지표에서, 공격 자리는 마무리
-   * 지표에서 끌어온다. 거기서 그 선수의 기울기(태클 − 결정력)만큼 한쪽을 올리고
-   * 다른 쪽을 내린다. 자리 가중치가 **같은 공격 지분**으로 갈리므로 두 축의
-   * 가중합은 나누기 전과 같다 — 갈린 것은 선수 사이의 순서지 자리의 눈금이 아니다.
-   *
-   * 편차는 축마다 따로 굴린다. 같은 밑값을 가진 두 선수가 통째로 같은 짝을 갖는
-   * 것은 축을 나눈 뜻을 지운다.
-   */
-  const positioningBase =
-    tackling * (1 - SLOT_ATTACK_SHARE[slot]) +
-    finishing * SLOT_ATTACK_SHARE[slot] +
-    bias(slot, { FB: 3, CF: 2, W: 1, CB: -1, DM: -1, CM: -1, AM: -1, ST: -1 });
-  const split = splitPositioning(slot, positioningBase, tackling, finishing);
-  const positioning = clamp99(
-    (isGk ? goalkeeping * 1.3 - 26.4 : split.positioning) + jitter(nameEn, "positioning", 5),
-  );
-  const offTheBall = clamp99(
-    (isGk ? keeperOffTheBall(goalkeeping) : split.offTheBall) + jitter(nameEn, "offTheBall", 5),
-  );
-
-  const composure = clamp99(
-    (isGk ? level * 0.534 + age * 0.712 - 9.1 : level * 1.054 + age * 0.59 - 14.7) +
-      bias(slot, { CF: 4, CB: 2, ST: 2, AM: 1, W: 1, DM: 0, CM: -1, FB: -4 }) +
-      jitter(nameEn, "composure", 5),
-  );
-
-  // 성향은 실력과 독립적이어야 재미가 있다 — 약하지만 거친 선수, 강하지만 얌전한 선수.
-  // 그래서 능력 기여를 낮추고 개인 편차를 크게 잡는다. 다만 **수준은 실측에 맞춘다**:
-  // 종속을 낮추는 것과 전체가 낮게 깔리는 것은 다른 문제다.
-  const aggression = clamp99(
-    tackling * 0.2 +
-      strength * 0.2 +
-      42 +
-      bias(slot, { DM: 5, CF: 5, CB: 3, FB: 1, CM: 1, ST: 1, AM: -4, W: -6, GK: -14 }) +
-      jitter(nameEn, "aggression", 14),
-  );
-
-  // 나이·수준과 함께 오르지만, 다른 축과 같은 0~99 스케일에서 읽혀야 한다
-  // (어린 선수도 30대, 베테랑 주장은 70대 — 성향이라 편차를 크게 잡는다)
-  const leadership = clamp99(
-    32 +
-      Math.min(22, Math.max(0, age - 18) * 1.3) +
-      (level - 70) * 0.5 +
-      bias(slot, { GK: 4, CB: 3, DM: 2, CM: 0, FB: 0, AM: 0, W: -2, ST: 0 }) +
-      jitter(nameEn, "leadership", 11),
-  );
+/** 세부 능력치 34개 → 37축 — 실측 선수와 추정 선수가 지나는 한 공식 */
+function axesFromStats(
+  nameEn: string,
+  position: string,
+  s: EaStats,
+  detail: { skillMoves: number; ea: EaRating | undefined; height: number | undefined },
+): AxisValues {
+  const isGk = weightSlotOf(position) === "GK";
+  const { ea, height, skillMoves } = detail;
+  const reachOf = (pivot: number) => (height === undefined ? 0 : (height - pivot) * HEIGHT_REACH);
+  const mix = (...parts: (readonly [number, number])[]) =>
+    clamp99(parts.reduce((sum, [value, w]) => sum + value * w, 0));
 
   return {
-    pace,
-    stamina,
-    strength,
-    aerial,
-    finishing,
-    dribbling,
-    passing,
-    kicking,
-    tackling,
-    vision,
-    positioning,
-    offTheBall,
-    composure,
-    aggression,
-    leadership,
-    goalkeeping,
+    // ── 기술 12
+    finishing: mix([s.finishing, 0.8], [s.volleys, 0.2]),
+    longShots: mix([s.longShots, 0.7], [s.shotPower, 0.3]),
+    heading: clamp99(s.headingAccuracy),
+    dribbling: clamp99(s.dribbling),
+    firstTouch: clamp99(s.ballControl),
+    passing: mix([s.shortPassing, 0.7], [s.longPassing, 0.3]),
+    crossing: mix([s.crossing, 0.85], [s.curve, 0.15]),
+    technique: clamp99(
+      (s.curve + s.volleys + s.longPassing + s.ballControl) / 4 + (skillMoves - 3) * 3,
+    ),
+    tackling: mix([s.standingTackle, 0.6], [s.slidingTackle, 0.4]),
+    marking: clamp99(s.defensiveAwareness),
+    freeKicks: mix([s.freeKickAccuracy, 0.8], [s.curve, 0.2]),
+    penalties: clamp99(s.penalties),
+    // ── 정신 10 — 골키퍼의 판단은 골키퍼 위치선정에서 읽는다(EA는 골키퍼의 필드 판단 축을
+    // 따로 재지 않는다 — 수비 인지가 한 자릿수다)
+    anticipation: clamp99(s.reactions),
+    vision: clamp99(s.vision),
+    decisions: isGk
+      ? mix([s.reactions, 0.5], [s.gkPositioning, 0.5])
+      : mix([s.reactions, 0.5], [s.composure, 0.5]),
+    composure: clamp99(s.composure),
+    offTheBall: clamp99(s.positioning),
+    positioning: isGk
+      ? clamp99(s.gkPositioning)
+      : mix([s.defensiveAwareness, 0.6], [s.interceptions, 0.4]),
+    concentration: isGk
+      ? mix([s.reactions, 0.5], [s.gkPositioning, 0.5])
+      : mix([s.reactions, 0.5], [s.composure, 0.3], [s.defensiveAwareness, 0.2]),
+    aggression: clamp99(s.aggression),
+    flair: clamp99(
+      FLAIR_BY_SKILL_MOVES[Math.max(1, Math.min(5, skillMoves)) - 1]! +
+        styleBonus(ea, FLAIR_STYLES) +
+        jitter(nameEn, "flair", 5),
+    ),
+    workRate: clamp99(
+      s.stamina * 0.6 +
+        s.aggression * 0.4 +
+        styleBonus(ea, WORK_RATE_STYLES) +
+        jitter(nameEn, "workRate", 5),
+    ),
+    // ── 신체 8 — 골키퍼의 민첩성은 다이빙이다(몸을 던져 닿는 범위)
+    acceleration: clamp99(s.acceleration),
+    pace: clamp99(s.sprintSpeed),
+    agility: clamp99(isGk ? s.gkDiving : s.agility),
+    balance: clamp99(s.balance),
+    jumpingReach: clamp99(s.jumping + reachOf(HEIGHT_PIVOT)),
+    strength: clamp99(s.strength),
+    stamina: clamp99(s.stamina),
+    naturalFitness: clamp99(
+      s.stamina * 0.6 + s.strength * 0.4 + jitter(nameEn, "naturalFitness", 4),
+    ),
+    // ── GK 7 — 필드 선수는 EA의 GK 세부 능력치(한 자릿수~십 대) 그대로다
+    reflexes: clamp99(s.gkReflexes),
+    handling: clamp99(s.gkHandling),
+    oneOnOnes: mix([s.gkReflexes, 0.4], [s.gkPositioning, 0.4], [s.gkDiving, 0.2]),
+    aerialReach: isGk
+      ? clamp99(s.jumping + reachOf(KEEPER_HEIGHT_PIVOT - 3))
+      : clamp99(s.gkHandling),
+    kicking: clamp99(s.gkKicking),
+    commandOfArea: isGk
+      ? clamp99(
+          45 +
+            reachOf(KEEPER_HEIGHT_PIVOT) +
+            styleBonus(ea, [["Cross Claimer", 20]]) +
+            jitter(nameEn, "commandOfArea", 8),
+        )
+      : clamp99(s.gkHandling),
+    rushingOut: isGk
+      ? clamp99(
+          40 +
+            (s.gkDiving - 75) * 0.4 +
+            styleBonus(ea, [["Rush Out", 25]]) +
+            jitter(nameEn, "rushingOut", 8),
+        )
+      : clamp99(s.gkPositioning),
   };
 }
 
 // ── 노화 곡선 (player.md §6.3) ────────────────────
 
 /**
- * 축별 노화 곡선 — 16축 분리의 최대 수확.
+ * 축별 노화 곡선 — 축을 가른 최대 수확.
  * "다리는 죽었지만 머리로 뛰는 베테랑"이 데이터에서 자동으로 나온다.
  */
 export type AgingCurve = "early" | "mid" | "late" | "flat";
 
 export const AXIS_AGING: Record<AttributeAxis, AgingCurve> = {
-  // 이르게 정점, 28+ 급락
+  // 이르게 정점, 28+ 급락 — 다리
+  acceleration: "early",
   pace: "early",
+  agility: "early",
   stamina: "early",
   dribbling: "early",
-  // 30~32 유지 후 완만한 하락
+  // 30~32 유지 후 완만한 하락 — 몸과 몸으로 하는 기술
   strength: "mid",
-  aerial: "mid",
+  balance: "mid",
+  jumpingReach: "mid",
+  naturalFitness: "mid",
   finishing: "mid",
+  heading: "mid",
   tackling: "mid",
-  goalkeeping: "mid",
-  // 34+까지 계속 성장
+  marking: "mid",
+  crossing: "mid",
+  firstTouch: "mid",
+  reflexes: "mid",
+  aerialReach: "mid",
+  // 34+까지 계속 성장 — 머리와 발끝
   passing: "late",
-  kicking: "late",
+  longShots: "late",
+  technique: "late",
+  freeKicks: "late",
+  penalties: "late",
+  anticipation: "late",
   vision: "late",
-  positioning: "late",
+  decisions: "late",
+  composure: "late",
   // 침투는 다리가 아니라 머리가 한다 — 서른 넘어서도 자리를 찾는 9번이 그것이다
   offTheBall: "late",
-  composure: "late",
-  leadership: "late",
+  positioning: "late",
+  concentration: "late",
+  handling: "late",
+  oneOnOnes: "late",
+  kicking: "late",
   // 성향 — 거의 불변
   aggression: "flat",
+  flair: "flat",
+  workRate: "flat",
+  commandOfArea: "flat",
+  rushingOut: "flat",
 };
 
 export function agingDelta(axis: AttributeAxis, age: number): number {

@@ -1,0 +1,145 @@
+/**
+ * 경기 실험실 — 조합 고르기 · 상대 판과 적응도 (docs/match/live-match.md §8.6).
+ *
+ * 우리 판과 경기는 게임 화면이 그린다. 여기 있는 것은 실험실만의 손잡이(모양·갈래·
+ * 적응도)뿐이고, 생김새는 전술 패널의 눈금(`.tactic-steps`)을 빌린다 — 같은 조작이 두
+ * 생김새로 서지 않게.
+ */
+.lab {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  background: var(--bg);
+}
+.lab-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.lab-head h1 {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.lab-matchup {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-left: auto;
+  font-size: var(--fs-md);
+}
+.lab-team {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--text-2);
+}
+.lab-team.ours {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+.lab-team em {
+  font-style: normal;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  padding: 0 var(--sp-1);
+  border-radius: var(--r-xs);
+  background: var(--panel-2);
+  color: var(--text-2);
+}
+.lab-vs,
+.lab-meta {
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+.lab-error {
+  margin: 0;
+}
+.lab-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+
+/* ── 조합 고르기 ── */
+.lab-pick {
+  display: grid;
+  gap: var(--sp-4);
+  width: min(560px, 100%);
+  margin-top: var(--sp-4);
+}
+.lab-field {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+}
+.lab-field > span {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.lab-field select,
+.lab-field input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+.lab-pick-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* ── 손잡이 한 줄 — 이름 칸과 눈금 ── */
+.lab-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+}
+.lab-row-label {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.lab-row-label b {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
+/* ── 상대 판과 경기 ── */
+.lab-controls {
+  display: grid;
+  gap: var(--sp-5);
+  width: min(640px, 100%);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.lab-section {
+  display: grid;
+  gap: var(--sp-2);
+}
+.lab-section h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.lab-section h2 span {
+  color: var(--text-3);
+  font-weight: var(--fw-regular);
+}
+.lab-section h2 .lab-final {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}

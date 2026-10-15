@@ -419,7 +419,7 @@ export function synthesizeSeed(input: SynthesisInput): SynthesizedPlayer {
   for (let pass = 1; pass <= RETARGET_MAX_PASSES; pass++) {
     passes = pass;
     const seed = seedOf(raw, isGk);
-    const overall = bestOverall(deriveAxes(key, natural, seed, age), positions);
+    const overall = bestOverall(deriveAxes(key, natural, seed), positions);
     const diff = target - overall;
     if (Math.abs(diff) < best.gap) best = { seed, overall, gap: Math.abs(diff) };
     if (best.gap <= RETARGET_TOLERANCE) break;

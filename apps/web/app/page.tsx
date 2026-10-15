@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { ClubColours } from "@gaffer/domain";
-import { IconDatabase, IconMark, IconPlus, IconTrash } from "@/shared/icons";
+import { IconDatabase, IconMark, IconMatch, IconPlus, IconTrash } from "@/shared/icons";
 import { GameListSkeleton } from "@/shared/skeleton";
 import { Crest, clubStyle } from "@/shared/crest";
 import { humanDate } from "@/shared/dateline";
@@ -105,6 +105,10 @@ export default function HomePage() {
           <Link href="/admin" className={buttonClass("secondary")} data-testid="admin-link">
             <IconDatabase />
             DB
+          </Link>
+          <Link href="/lab" className={buttonClass("secondary")} data-testid="lab-link">
+            <IconMatch />
+            실험실
           </Link>
           <Link href="/new" className={buttonClass("primary")} data-testid="new-game">
             <IconPlus />새 게임

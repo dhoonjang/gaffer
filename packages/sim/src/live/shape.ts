@@ -1,8 +1,8 @@
 import type { BoardPoint, FieldPoint, LivePhase, MatchSide } from "@gaffer/domain";
-import { FIELD, anchorOf, weightSlotOf } from "@gaffer/domain";
+import { FIELD, anchorOf, inPossessionPoint, weightSlotOf } from "@gaffer/domain";
 import type { LineupSlot } from "../match-ability";
 import type { TeamParams } from "./params";
-import type { RoleTendency } from "./roles";
+import { SLOT_TENDENCY, type RoleTendency } from "./roles";
 import { clamp, inside, xAtDepth, yAtLateral } from "./geometry";
 import {
   ATTACK_FOLLOW_HOLD,
@@ -15,6 +15,7 @@ import {
   DEFEND_LINE_FLOOR,
   DEFEND_SHIFT_BASE,
   DEFEND_SHIFT_PER_COVER,
+  RECOVER_WORD_DEPTH,
 } from "./tuning";
 
 /**
@@ -24,12 +25,20 @@ import {
  * 판단(`step.ts`)은 그 분포 위에서 후보점을 고른다.
  */
 
-/** 전술판 좌표 → 우리 골라인 기준 깊이(m)와 가로(m) */
-function anchorDepthLateral(slot: Pick<LineupSlot, "position" | "point">): {
+/**
+ * 전술판 좌표 → 우리 골라인 기준 깊이(m)와 가로(m). 공을 가졌을 때 카드에 공 있을 때의
+ * 자리가 있으면 그 자리에 선다 (player.md §3.3) — 전술판은 수비 형태다.
+ */
+function anchorDepthLateral(
+  slot: Pick<LineupSlot, "position" | "point" | "card">,
+  attacking = false,
+): {
   depth: number;
   lateral: number;
 } {
-  const point: BoardPoint = slot.point ?? anchorOf(slot.position);
+  const board: BoardPoint = slot.point ?? anchorOf(slot.position);
+  const ipPlace = attacking ? slot.card?.ip.place : undefined;
+  const point = ipPlace ? inPossessionPoint(board, ipPlace) : board;
   if (weightSlotOf(slot.position) === "GK") return { depth: 5.5, lateral: FIELD.width / 2 };
   // 전술판 y는 자기 골문이 100 — 8m(수비 라인의 바닥)에서 시작해 0.69m/칸
   const depth = 8 + (100 - point.y) * 0.69;
@@ -64,11 +73,11 @@ interface ShapeContext {
  *   공을 따라 오르내린다. 공 쪽으로 쏠린다.
  */
 export function shapePosition(
-  slot: Pick<LineupSlot, "position" | "point">,
+  slot: Pick<LineupSlot, "position" | "point" | "card">,
   tendency: RoleTendency,
   ctx: ShapeContext,
 ): FieldPoint {
-  const { depth: anchorDepth, lateral: anchorLateral } = anchorDepthLateral(slot);
+  const { depth: anchorDepth, lateral: anchorLateral } = anchorDepthLateral(slot, ctx.attacking);
   const isKeeper = weightSlotOf(slot.position) === "GK";
   if (isKeeper) {
     // 골키퍼는 공 위치에 따라 5~14m 사이에서 앞뒤로 — 스위퍼 키퍼가 더 나온다
@@ -97,12 +106,15 @@ export function shapePosition(
     }
     lateral += (ctx.ballLateral - FIELD.width / 2) * 0.1;
   } else {
-    // 공을 따라 블록이 오르내린다 — 뒤를 덜 지키는 역할(최전방)은 높은 자리에 남아 역습을 기다린다
-    const shiftScale = Math.min(1, DEFEND_SHIFT_BASE + tendency.cover * DEFEND_SHIFT_PER_COVER);
+    // 공을 따라 블록이 오르내린다 — 뒤를 덜 지키는 자리(최전방)는 높은 자리에 남아 역습을
+    // 기다린다. 따라가는 정도는 **자리**가 정한다: 낱말을 여기 실으면 공이 멀 때 더 올라간다
+    const slotCover = SLOT_TENDENCY[weightSlotOf(slot.position)].cover;
+    const shiftScale = Math.min(1, DEFEND_SHIFT_BASE + slotCover * DEFEND_SHIFT_PER_COVER);
     const shift = clamp((ctx.ballDepth - 50) * p.blockFollow, -22, 26) * shiftScale;
     depth = p.lineHeight + (anchorDepth - ctx.backLine) * p.compactness + shift;
-    // 커버 역할은 수비 때 더 뒤에 선다
+    // 커버 성향은 수비 때 더 뒤에 선다 — 「수비 복귀」 낱말이 옮긴 몫은 따로 더 깊이 간다
     depth -= (tendency.cover - 0.5) * 6;
+    depth -= (tendency.cover - slotCover) * RECOVER_WORD_DEPTH;
     depth = Math.max(depth, defendFloorOf(ctx.ballDepth));
     lateral =
       FIELD.width / 2 +

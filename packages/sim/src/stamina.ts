@@ -41,10 +41,10 @@ export const RECOVERY_BASE = {
 } as const;
 export type RecoveryKind = keyof typeof RECOVERY_BASE;
 
-/** 지구력 0이 받는 회복 배율 */
-const RECOVERY_AT_ZERO_STAMINA = 0.84;
-/** 지구력이 최고까지 더해 주는 몫 — 소모 쪽(±25%)보다 좁다 */
-const RECOVERY_STAMINA_BONUS = 0.33;
+/** 타고난 체력 0이 받는 회복 배율 */
+const RECOVERY_AT_ZERO_FITNESS = 0.84;
+/** 타고난 체력이 최고까지 더해 주는 몫 — 소모 쪽(±25%)보다 좁다 */
+const RECOVERY_FITNESS_BONUS = 0.33;
 
 /**
  * **누적 피로가 하루 회복에서 덜어 가는 몫** — 잔고 100에서 이만큼이다
@@ -62,13 +62,15 @@ const RECOVERY_STAMINA_BONUS = 0.33;
 const RECOVERY_FATIGUE_DRAG = 0.42;
 
 /**
- * 회복 배율 — 지구력 90이면 3일 연전을 버틸 만큼 빠르되 소모 차이보다 작다.
+ * 회복 배율 — 타고난 체력 90이면 3일 연전을 버틸 만큼 빠르되 소모 차이보다 작다.
+ * 경기 중 소모는 지구력, 경기 사이 회복은 타고난 체력이다 (player.md §1).
  * 그 위에 **시즌의 몸**(누적 피로)이 곱해진다 (player.md §5.5).
  */
 export function recoveryFactor(player: Player): number {
-  const stamina =
-    RECOVERY_AT_ZERO_STAMINA + (player.attributes.stamina / RATING_MAX) * RECOVERY_STAMINA_BONUS;
-  return stamina * (1 - (fatigueOf(player.state) / FATIGUE_MAX) * RECOVERY_FATIGUE_DRAG);
+  const fitness =
+    RECOVERY_AT_ZERO_FITNESS +
+    (player.attributes.naturalFitness / RATING_MAX) * RECOVERY_FITNESS_BONUS;
+  return fitness * (1 - (fatigueOf(player.state) / FATIGUE_MAX) * RECOVERY_FATIGUE_DRAG);
 }
 
 /** 오늘 이 선수가 되찾는 체력 */

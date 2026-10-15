@@ -809,7 +809,7 @@ export function createGame(input: CreateGameInput): GameState {
     lorebookJobs: [],
     staffPool: [],
     playerTraining: [],
-    roleMemory: [],
+    cardMemory: [],
     managerInterviews: [],
     // 새 게임의 풀은 비어 있다 — 아직 아무도 자리를 잃지 않았다
     managerPool: [],

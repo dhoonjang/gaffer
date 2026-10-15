@@ -13,7 +13,7 @@ import {
   growthLabel,
   milestoneTitle,
   naturalPositionOf,
-  rolesFor,
+  cardLine,
   seasonRating,
 } from "@gaffer/domain";
 import { formatMoney } from "../../team/finance";
@@ -231,12 +231,6 @@ function historyLines(state: GameState, p: GamePlayer): string[] {
   return lines;
 }
 
-/** 그 자리에서 맡고 있는 세부 역할의 한글 이름 (미지정이면 기본 역할) */
-export function roleLabel(position: string, roleId?: string): string {
-  const defs = rolesFor(position);
-  return (defs.find((r) => r.id === roleId) ?? defs[0])?.ko ?? "기본";
-}
-
 /** 되물을 후보 줄 — 이름과 id를 함께 준다 (모델이 다음 호출에 쓸 것은 id다) */
 export const candidateLine = (players: readonly GamePlayer[]): string =>
   players
@@ -361,7 +355,7 @@ export function playerCard(state: GameState, playerId: string): LookupResult {
     lines.push(
       assignment
         ? `전술: ${assignment.role === "starting" ? "선발" : "벤치"} ${assignment.position}` +
-            ` (${roleLabel(assignment.position, assignment.roleId)})` +
+            ` (카드 ${cardLine(assignment.card)})` +
             ` · 전술적응 ${assignment.familiarity}`
         : "전술: 배치 없음 (예비 스쿼드)",
     );

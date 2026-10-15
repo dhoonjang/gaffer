@@ -5,14 +5,39 @@ import {
   playerName,
   playerById,
 } from "@gaffer/engine";
-import { ATTRIBUTE_AXES, AXIS_KO } from "@gaffer/domain";
+import {
+  AXIS_KO,
+  INCLINATION_AXES,
+  cardLine,
+  habitLine,
+  habitSteps,
+  placeOf,
+  standoutAxes,
+  type AttributeAxis,
+} from "@gaffer/domain";
 
+/** 선수 한 줄에 싣는 강점·약점 축의 수 (agents.md 「경기 판독」) */
+const STANDOUT_AXES = 3;
+
+/**
+ * 한 선수의 능력치 줄 — 그 자리의 평균과 견준 강점·약점, 그다음 성향 축. 능력 축 전부를
+ * 실으면 스물두 명에 육백 개가 넘는 숫자가 서고, 축이 늘 때마다 맥락이 같이 큰다.
+ */
 function attributeLine(state: GameState, id: string, position: string): string {
   const player = playerById(state, id);
   if (!player) return "";
-  return ATTRIBUTE_AXES.filter((axis) => position === "GK" || axis !== "goalkeeping")
-    .map((axis) => `${AXIS_KO[axis]}${player.attributes[axis]}`)
-    .join(" ");
+  const keeper = placeOf(position) === "GK";
+  const named = (axes: readonly AttributeAxis[]) =>
+    axes.map((axis) => `${AXIS_KO[axis]}${player.attributes[axis]}`).join(" ");
+  const { strengths, weaknesses } = standoutAxes(player.attributes, position, STANDOUT_AXES);
+  const inclinations = INCLINATION_AXES.filter(
+    (axis) => keeper || (axis !== "commandOfArea" && axis !== "rushingOut"),
+  );
+  const habit = habitLine(habitSteps(player.attributes, position));
+  return (
+    `강점 ${named(strengths)} · 약점 ${named(weaknesses)} · ${named(inclinations)}` +
+    (habit ? ` · 버릇 ${habit}` : "")
+  );
 }
 
 /**
@@ -58,7 +83,7 @@ export function buildFactsBlock(state: GameState): string[] {
       ];
       const row = view.onPitch[side].find((p) => p.id === slot.playerId);
       return (
-        `  ${slot.playerId}(${playerName(state, slot.playerId)} ${slot.position}${slot.roleId ? ` ${slot.roleId}` : ""}) ` +
+        `  ${slot.playerId}(${playerName(state, slot.playerId)} ${slot.position}${slot.card ? ` 카드 ${cardLine(slot.card)}` : ""}) ` +
         `전력 ${row?.effective ?? "-"} · ${attributeLine(state, slot.playerId, slot.position)}` +
         (tail.length > 0 ? ` · ${tail.join(" · ")}` : "")
       );

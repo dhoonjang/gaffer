@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { playerOverall, defaultRoleOf, formatMoney } from "@gaffer/domain";
+import { playerOverall, observedPlaceFit, formatMoney } from "@gaffer/domain";
 import { buildOfficeViews, createGame, playersOf, type GameState } from "@gaffer/engine";
 import { slotOverallOf } from "../../screens/squad/slot-overall";
 import { ratingTone } from "../../shared/scout-report-display";
@@ -48,18 +48,17 @@ describe("화면과 서버가 같은 값을 낸다", () => {
     const placed = shared().rows.filter((p) => p.assignedPosition !== null);
     expect(placed.length).toBeGreaterThanOrEqual(11);
     for (const p of placed) {
-      const mine = slotOverallOf(p, p.assignedPosition, p.roleId ?? undefined);
+      const mine = slotOverallOf(p, p.assignedPosition, p.card ?? undefined);
       // 서버는 주 포지션과 값이 같으면 null로 접는다 — 그때는 overall이 그 자리 값이다
       expect(mine, p.name).toBe(p.slotOverall ?? p.overall);
     }
   });
 
-  it("자리별 목록의 전력도 같다 — 옮겨 보기 전에 이미 맞는다", () => {
+  it("자리별 목록의 전력도 화면이 가진 축으로 다시 낸다 — 자리를 재는 함수 하나", () => {
+    // 목록은 칸이 아니라 자리를 잰다 — 최전방(ST)은 두 줄의 묶음 중 높은 쪽 (player.md §4)
     for (const p of shared().rows) {
       for (const listed of p.positions) {
-        expect(slotOverallOf(p, listed.position, defaultRoleOf(listed.position)), p.name).toBe(
-          listed.overall,
-        );
+        expect(observedPlaceFit(p, p.observation, listed.position), p.name).toBe(listed.overall);
       }
     }
   });
@@ -85,15 +84,21 @@ describe("안개는 축에만 있고, 합성값은 거기서 파생된다", () =
   });
 });
 
-describe("자리와 역할이 값을 움직인다", () => {
+describe("자리와 카드가 값을 움직인다", () => {
   it("배치 밖이면 자리 값이 없다", () => {
     const p = shared().rows[0]!;
     expect(slotOverallOf(p, null, undefined)).toBeNull();
   });
 
-  it("같은 자리라도 역할이 다르면 요구가 다르다", () => {
+  it("같은 자리라도 카드가 다르면 요구가 다르다", () => {
     const cb = shared().rows.find((p) => p.positions.some((x) => x.position === "CB"))!;
-    expect(slotOverallOf(cb, "CB", "stopper")).not.toBe(slotOverallOf(cb, "CB", "cover-defender"));
+    const cards = [
+      { ip: { dribble: 3, runBehind: 3 }, oop: {} },
+      { ip: { passRisk: 3, width: -3 }, oop: {} },
+      { ip: {}, oop: { mark: 3, recover: 3 } },
+      { ip: {}, oop: { press: 3 } },
+    ];
+    expect(new Set(cards.map((card) => slotOverallOf(cb, "CB", card))).size).toBeGreaterThan(1);
   });
 });
 

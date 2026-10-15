@@ -28,7 +28,7 @@ import {
   tacticWord,
   type MatchRecord,
   awardTitle,
-  mirrorBaseOf,
+  placeOf,
   normalizeSpeaker,
 } from "@gaffer/domain";
 import {
@@ -1209,8 +1209,6 @@ describe("시간 이동 손잡이", () => {
     expect(operationLabel({ kind: "skip_to_next_match", date: "2026-08-15" })).toBe(
       "시간 진행 — 다음 경기 (2026-08-15)",
     );
-    expect(operationLabel({ kind: "enter_match" })).toBe("경기장에 들어선다");
-    expect(operationLabel({ kind: "match_stop" })).toBe("경기 중단");
 
     // 0일·소수·상한 초과는 시계를 뒤로 돌리거나 세계를 통째로 굴린다
     expect(TurnOperationSchema.safeParse({ kind: "skip_days", days: 0 }).success).toBe(false);
@@ -1494,7 +1492,7 @@ describe("자료 카드", () => {
     expect(card?.kind === "player" && card.players[0]?.knowledge).toBe("own");
   });
 
-  it("다른 자리는 좌우 변형을 중앙 표기 하나로 접고, 주 자리의 묶음은 싣지 않는다", () => {
+  it("다른 자리는 칸 코드를 자리 하나로 접고, 주 자리는 싣지 않는다", () => {
     const state = game();
     const ours = state.players.filter((p) => p.teamId === state.userTeamId);
     const filed = fileExhibits(
@@ -1503,11 +1501,12 @@ describe("자료 카드", () => {
     );
     const [card] = filed.exhibits;
     if (card?.kind !== "player") throw new Error("선수 카드가 서지 않았다");
+    const placed = (code: string) => placeOf(code) ?? code;
     for (const p of card.players) {
       const codes = p.otherPositions.map((o) => o.position);
-      expect(new Set(codes.map(mirrorBaseOf)).size).toBe(codes.length);
-      expect(codes.map(mirrorBaseOf)).not.toContain(mirrorBaseOf(p.position));
-      expect(codes.every((code) => mirrorBaseOf(code) === code)).toBe(true);
+      expect(new Set(codes.map(placed)).size).toBe(codes.length);
+      expect(codes.map(placed)).not.toContain(placed(p.position));
+      expect(codes.every((code) => placed(code) === code)).toBe(true);
     }
     expect(card.players.some((p) => p.otherPositions.length > 0)).toBe(true);
   });

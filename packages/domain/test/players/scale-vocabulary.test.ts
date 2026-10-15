@@ -5,12 +5,22 @@ import {
   FAMILIARITY_BASELINE,
   FAMILIARITY_MAX,
   FAMILIARITY_TIERS,
-  POSITION_CODES,
+  CARD_PLACE_STEPS,
+  CARD_WORDS,
+  CARD_WORD_DEFS,
+  PROFICIENCY_TIERS,
+  cardDistance,
+  HABIT_AGAINST_CARD,
+  HABIT_MAX,
+  HABIT_SCALE,
+  SLOT_INCLINATION,
+  habitSteps,
+  withHabit,
+  cardWordsAt,
   familiarityLabel,
-  findRole,
-  roleChoiceText,
-  roleVocabularyText,
-  rolesFor,
+  normalizeCard,
+  patchCard,
+  proficiencyLabel,
 } from "@gaffer/domain";
 
 /**
@@ -64,42 +74,84 @@ describe("팀 전술 적응 구간 → 어휘", () => {
  * 그쪽 경로의 역할 지시만 조용히 반려되고, 한 번 부르는 해석기에는 그 반려를 보고 다시
  * 시도할 자리가 없다. 표기가 서로 부딪혀도 같은 실패라, 50종 전부를 견준다.
  */
-describe("자리별 역할 → 어휘", () => {
-  it("이름·id·약어가 저마다 그 역할 하나로 걸린다", () => {
-    for (const position of POSITION_CODES) {
-      for (const def of rolesFor(position)) {
-        for (const spelling of [def.ko, def.id, def.abbr]) {
-          expect(findRole(position, spelling)?.id, `${position}: ${spelling}`).toBe(def.id);
-        }
-      }
+describe("역할 카드의 낱말 (player.md §3)", () => {
+  it("낱말마다 양 끝의 뜻과 +쪽 성공 축이 선다 — 뜻 없는 낱말은 모델에게 토큰뿐이다", () => {
+    for (const word of CARD_WORDS) {
+      const def = CARD_WORD_DEFS[word];
+      expect(def.minus.length, word).toBeGreaterThan(0);
+      expect(def.plus.length, word).toBeGreaterThan(0);
+      expect(def.plusAxes.length, word).toBeGreaterThan(0);
     }
   });
 
-  it("대소문자·공백·붙임표는 견줄 때 지운다", () => {
-    for (const spelling of ["인사이드 포워드", "인사이드포워드", "Inside Forward", "if"]) {
-      expect(findRole("LW", spelling)?.id, spelling).toBe("inside-forward");
-    }
+  it("고치는 말은 적은 낱말만 바꾸고, 0은 지우고, reset은 빈 카드에서 시작한다", () => {
+    const current = { label: "윙백", ip: { attack: 2, cross: 1 }, oop: { press: 1 } };
+    expect(patchCard(current, { ip: { cross: 0, width: 1 } })).toEqual({
+      label: "윙백",
+      ip: { attack: 2, width: 1 },
+      oop: { press: 1 },
+    });
+    expect(patchCard(current, { reset: true, ip: { dribble: 1 } })).toEqual({
+      ip: { dribble: 1 },
+      oop: {},
+    });
+    // 빈 이름은 이름을 지운다 — 낱말까지 없으면 카드가 없는 것이다
+    expect(patchCard({ label: "x", ip: {}, oop: {} }, { label: "" })).toBeUndefined();
+    expect(normalizeCard({ ip: { attack: 0 }, oop: {} })).toBeUndefined();
   });
 
-  it("그 자리에 없는 역할과 빈 말은 걸리지 않는다", () => {
-    expect(findRole("CB", "포처")).toBeUndefined();
-    expect(findRole("CB", "  ")).toBeUndefined();
+  it("공 있을 때의 자리는 고치는 말이 주면 서고 null이면 걷히며, 바꾸면 낱말 셋을 옮긴 값이다", () => {
+    const current = { ip: { width: -2 }, oop: {} };
+    const inverted = patchCard(current, { ip: { place: "DM" } });
+    expect(inverted).toEqual({ ip: { place: "DM", width: -2 }, oop: {} });
+    expect(patchCard(inverted, { ip: { passRisk: 1 } })?.ip.place).toBe("DM");
+    expect(patchCard(inverted, { ip: { place: null } })).toEqual(current);
+    // 자리만 있는 카드도 카드다 — 기본 행동으로 접히지 않는다
+    expect(normalizeCard({ ip: { place: "DM" }, oop: {} })).toEqual({
+      ip: { place: "DM" },
+      oop: {},
+    });
+    expect(cardDistance(current, inverted)).toBe(CARD_PLACE_STEPS);
   });
 
-  /**
-   * 표의 왼쪽은 **모델이 명단·스냅샷에서 읽는 포지션 코드**다. 코드가 하나라도 빠지면
-   * 그 자리의 역할은 모델에게 없는 것과 같고, `weightSlotOf`의 폴백이 조용히 CM의
-   * 역할을 걸어 준다.
-   */
-  it("역할 표가 포지션 코드 전부를 세우고 그 자리의 역할을 싣는다", () => {
-    const table = roleVocabularyText();
-    const codes = table.split("\n").flatMap((line) => line.split(" — ")[0]!.split("/"));
-    expect([...codes].sort()).toEqual([...POSITION_CODES].sort());
-    for (const position of POSITION_CODES) {
-      for (const def of rolesFor(position)) {
-        expect(table, `${position}: ${def.id}`).toContain(roleChoiceText(def));
-      }
+  it("골키퍼는 「과감한 패스」와 「나오기」만, 필드는 「나오기」를 뺀 전부를 고른다", () => {
+    expect(cardWordsAt(true)).toEqual(["passRisk", "sweep"]);
+    expect(cardWordsAt(false)).not.toContain("sweep");
+    expect(cardWordsAt(false)).toHaveLength(CARD_WORDS.length - 1);
+  });
+});
+
+describe("타고난 버릇 (player.md §3.4)", () => {
+  const average = SLOT_INCLINATION.W;
+
+  it("그 자리의 평균 선수는 버릇이 없고, 벗어난 만큼 ±HABIT_MAX까지 기운다", () => {
+    expect(habitSteps(average, "RW")).toEqual({});
+    const showman = { ...average, flair: average.flair + HABIT_SCALE };
+    expect(habitSteps(showman, "RW")).toEqual({ dribble: 1 });
+    const extreme = { ...average, workRate: 0 };
+    expect(habitSteps(extreme, "RW")).toEqual({ attack: -HABIT_MAX, recover: -HABIT_MAX });
+    // 골키퍼는 자기 자리의 낱말만 — 창의성이 높아도 드리블 버릇은 없다
+    expect(habitSteps({ ...SLOT_INCLINATION.GK, flair: 99 }, "GK")).toEqual({});
+  });
+
+  it("카드와 같은 쪽이거나 카드가 0이면 더하고, 반대쪽이면 버릇은 반만 남는다", () => {
+    expect(withHabit({}, { dribble: 1 })).toEqual({ dribble: 1 });
+    expect(withHabit({ dribble: 2 }, { dribble: 1 })).toEqual({ dribble: 3 });
+    expect(withHabit({ dribble: -2 }, { dribble: 1 })).toEqual({
+      dribble: -2 + HABIT_AGAINST_CARD,
+    });
+    expect(withHabit({ width: 2 }, {})).toEqual({ width: 2 });
+  });
+});
+
+describe("포지션 적응도 → 단계 이름 (player.md §8)", () => {
+  it("단계가 0~99를 빈틈없이 덮고, 경계에서 넘어간다", () => {
+    expect(PROFICIENCY_TIERS[PROFICIENCY_TIERS.length - 1]!.min).toBe(0);
+    for (const tier of PROFICIENCY_TIERS) {
+      expect(proficiencyLabel(tier.min)).toBe(tier.ko);
+      if (tier.min > 0) expect(proficiencyLabel(tier.min - 1)).not.toBe(tier.ko);
     }
+    expect(proficiencyLabel(99)).toBe(PROFICIENCY_TIERS[0].ko);
   });
 });
 

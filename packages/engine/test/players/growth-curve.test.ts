@@ -102,18 +102,45 @@ describe("노화 곡선의 나이 경계", () => {
   const axesOf = (curve: AgingCurve) => ATTRIBUTE_AXES.filter((a) => AXIS_AGING[a] === curve);
 
   it("곡선별 축 목록 — 다리·유지·머리·성향", () => {
-    expect(axesOf("early")).toEqual(["pace", "stamina", "dribbling"]);
-    expect(axesOf("mid")).toEqual(["strength", "aerial", "finishing", "tackling", "goalkeeping"]);
-    expect(axesOf("late")).toEqual([
-      "passing",
-      "kicking",
-      "vision",
-      "positioning",
-      "offTheBall",
-      "composure",
-      "leadership",
+    expect(axesOf("early")).toEqual(["dribbling", "acceleration", "pace", "agility", "stamina"]);
+    expect(axesOf("mid")).toEqual([
+      "finishing",
+      "heading",
+      "firstTouch",
+      "crossing",
+      "tackling",
+      "marking",
+      "balance",
+      "jumpingReach",
+      "strength",
+      "naturalFitness",
+      "reflexes",
+      "aerialReach",
     ]);
-    expect(axesOf("flat")).toEqual(["aggression"]);
+    expect(axesOf("late")).toEqual([
+      "longShots",
+      "passing",
+      "technique",
+      "freeKicks",
+      "penalties",
+      "anticipation",
+      "vision",
+      "decisions",
+      "composure",
+      "offTheBall",
+      "positioning",
+      "concentration",
+      "handling",
+      "oneOnOnes",
+      "kicking",
+    ]);
+    expect(axesOf("flat")).toEqual([
+      "aggression",
+      "flair",
+      "workRate",
+      "commandOfArea",
+      "rushingOut",
+    ]);
   });
 
   it("이르게 정점 — 스물여덟에 처음 꺾이고 서른·서른셋에 한 칸씩 깊어진다", () => {

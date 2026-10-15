@@ -20,3 +20,7 @@ apps/web/next-env.d.ts
 packages/engine/src/players/catalog/epl-players.ts
 packages/engine/src/players/catalog/eu-squads.ts
 packages/engine/src/players/catalog/market-leagues.ts
+# EA 세부 능력치 표 — `pnpm ea-ratings --write`가 쓰는 생성 파일이고 같은 이유로 한 줄에 한 명이다
+packages/engine/src/players/catalog/ea-ratings.ts
+# 카드 기준점의 자리별 평균 축 — `pnpm slot-reference --write`가 쓰는 생성 파일이고 한 줄에 한 자리다
+packages/domain/src/players/slot-reference.ts
