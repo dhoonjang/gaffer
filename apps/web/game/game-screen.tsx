@@ -475,14 +475,33 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    fetch(`/api/games/${gameId}`)
-      .then((r) => r.json() as Promise<GamePayload | { error: string }>)
-      .then((data) => {
-        if ("error" in data) setError(data.error);
-        else setGame(data);
-      })
-      .catch(() => setError("게임을 불러오지 못했습니다"));
+    const mounted = { alive: true };
+    /**
+     * 처음 열 때도 `settled=1`로 읽는다 — 떠나기 전에 보낸 턴이 아직 돌고 있으면 그 턴이
+     * 커밋한 뒤의 상태를 받아야 한다. 바로 읽으면 그 턴이 빠진 옛 대화가 선다.
+     */
+    void (async () => {
+      for (let tries = 0; tries < RESYNC_TRIES; tries++) {
+        try {
+          const res = await fetch(`/api/games/${gameId}?settled=1`);
+          const data = (await res.json()) as GamePayload | { error: string; retry?: boolean };
+          if (!mounted.alive) return;
+          if (!("error" in data)) {
+            setGame(data);
+            return;
+          }
+          if (data.retry !== true || tries === RESYNC_TRIES - 1) {
+            setError(data.error);
+            return;
+          }
+        } catch {
+          if (mounted.alive) setError("게임을 불러오지 못했습니다");
+          return;
+        }
+      }
+    })();
     return () => {
+      mounted.alive = false;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
