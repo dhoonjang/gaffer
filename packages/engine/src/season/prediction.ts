@@ -58,6 +58,7 @@ export function preseasonPrediction(state: GameState, leagueId: string): string[
   const min = Math.min(...values);
   const max = Math.max(...values);
   const lastSeason = lastSeasonPlaces(state, leagueId);
+  const overallOf = overallMemo(state);
   const scored = teamIds.map((teamId) => {
     // 폭이 0이면 전력이 아무것도 가르지 않는다 — 전원 가운데로 둔다(0으로 두면 이 항이 죽는다)
     const strength = max > min ? ((strengths.get(teamId) ?? 0) - min) / (max - min) : 0.5;
@@ -67,7 +68,7 @@ export function preseasonPrediction(state: GameState, leagueId: string): string[
      * 0으로 두면 승격 팀이 언제나 꼴찌로 예상되고, 그러면 이 항이 「승격했는가」만 잰다.
      */
     const last = lastSeason.get(teamId) ?? stature;
-    const net = netTransferScore(state, teamId, strengths.get(teamId) ?? 0);
+    const net = netTransferScore(state, teamId, strengths.get(teamId) ?? 0, overallOf);
     return {
       teamId,
       score: W_STRENGTH * strength + W_LAST * last + W_STATURE * stature + W_NET * net,
@@ -99,13 +100,32 @@ function lastSeasonPlaces(state: GameState, leagueId: string): Map<string, numbe
  * 상위 열한 명 평균(`rating`) 아래의 합류는 그 열한 명을 바꾸지 못하므로 0으로 센다.
  * 계약 만료로 떠난 선수도 같은 자로 재어 뺀다.
  */
-function netTransferScore(state: GameState, teamId: string, rating: number): number {
+/** 선수 id → 종합 능력 — 이적 기록에 나온 선수만, 처음 물을 때 한 번 잰다 */
+function overallMemo(state: GameState): (playerId: string) => number | undefined {
+  const players = new Map(state.players.map((p) => [p.id, p]));
+  const memo = new Map<string, number>();
+  return (playerId) => {
+    const cached = memo.get(playerId);
+    if (cached !== undefined) return cached;
+    const player = players.get(playerId);
+    if (!player) return undefined;
+    const overall = playerOverall(player);
+    memo.set(playerId, overall);
+    return overall;
+  };
+}
+
+function netTransferScore(
+  state: GameState,
+  teamId: string,
+  rating: number,
+  overallOf: (playerId: string) => number | undefined,
+): number {
   const from = state.calendar.preseasonStart;
-  const overallOf = new Map(state.players.map((p) => [p.id, playerOverall(p)]));
   let net = 0;
   for (const move of state.moves) {
     if (move.date < from || move.date > state.date) continue;
-    const overall = overallOf.get(move.gamePlayerId);
+    const overall = overallOf(move.gamePlayerId);
     if (overall === undefined) continue;
     const above = Math.max(0, overall - rating);
     if (above === 0) continue;

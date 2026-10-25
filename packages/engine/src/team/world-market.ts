@@ -99,7 +99,8 @@ function activeCase(n: Negotiation): boolean {
 function marketQueries(state: GameState) {
   const levels = new Map<string, number>();
   const groups = new Map<string, PositionGroup>();
-  const contracts = new Map<string, ReturnType<typeof activeContract>>();
+  /** 선수 id → 첫 활성 계약(`activeContract`와 같은 답) — 처음 물을 때 한 번에 세운다 */
+  let contracts: Map<string, NonNullable<ReturnType<typeof activeContract>>> | null = null;
   const injuries = new Map<string, ReturnType<typeof openInjury>>();
   return {
     overall: (p: GameState["players"][number]) => {
@@ -111,7 +112,12 @@ function marketQueries(state: GameState) {
       return groups.get(p.id)!;
     },
     contract: (id: string) => {
-      if (!contracts.has(id)) contracts.set(id, activeContract(state, id));
+      if (!contracts) {
+        contracts = new Map();
+        for (const c of state.contracts)
+          if (c.status === "active" && !contracts.has(c.gamePlayerId))
+            contracts.set(c.gamePlayerId, c);
+      }
       return contracts.get(id) ?? null;
     },
     injury: (id: string) => {
