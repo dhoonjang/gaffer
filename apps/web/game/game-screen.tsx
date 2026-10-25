@@ -419,6 +419,24 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const [errorRetry, setErrorRetry] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * 답이 끝나면 **커서를 입력칸으로 돌려준다** — 감독은 대개 이어서 말한다.
+   *
+   * 입력칸은 `disabled={busy}`라 잠금이 풀린 렌더가 **커밋된 뒤에야** 포커스가 걸린다.
+   * 그래서 턴의 끝은 차례만 적고(`refocusRef`), 걸기는 `busy`가 풀린 커밋의 effect가 한다 —
+   * 다음 프레임으로 미루면 바쁜 기기에서 렌더보다 프레임이 먼저 와 잠긴 칸에 포커스를
+   * 걸고 끝난다.
+   *
+   * 장부 뷰(스쿼드·달력…)를 열어 두었으면 입력칸 자체가 없어 `ref`가 null이다 — 그때는
+   * 아무 일도 하지 않는다. 읽고 있는 화면에서 커서를 뺏지 않는다.
+   */
+  const refocusRef = useRef(false);
+  useEffect(() => {
+    if (busy || !refocusRef.current) return;
+    refocusRef.current = false;
+    const input = inputRef.current;
+    if (input && !input.closest("[hidden], [inert]")) input.focus();
+  }, [busy]);
   const matchViewport = useMatchViewport(Boolean(liveMatch), inputRef);
   const editingMatch =
     liveMatch !== null &&
@@ -695,20 +713,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
         // 지난 알림의 "읽음"은 새 GM 턴이 들어오는 렌더에서 함께 풀린다 (`hintTurn`)
         if (payload) adoptPayload(payload);
         setStreamText("");
+        refocusRef.current = true;
         setBusy(false);
-        /**
-         * 답이 끝나면 **커서를 입력칸으로 돌려준다** — 감독은 대개 이어서 말한다.
-         *
-         * 한 틱 미루는 이유: 입력칸은 `disabled={busy}`라 이 시점의 DOM은 아직
-         * 잠겨 있고, 잠긴 요소에는 포커스가 걸리지 않는다.
-         *
-         * 장부 뷰(스쿼드·달력…)를 열어 두었으면 입력칸 자체가 없어 `ref`가 null이다 —
-         * 그때는 아무 일도 하지 않는다. 읽고 있는 화면에서 커서를 뺏지 않는다.
-         */
-        requestAnimationFrame(() => {
-          const input = inputRef.current;
-          if (input && !input.closest("[hidden], [inert]")) input.focus();
-        });
       };
       // 글자 공개 속도: 기본 ~60자/초, 밀린 만큼 가속. 진행량은 경과 시간
       // 기준이라 rAF·인터벌 어느 틱이 와도 총 속도는 같다.
