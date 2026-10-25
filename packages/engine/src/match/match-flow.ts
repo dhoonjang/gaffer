@@ -55,6 +55,7 @@ import {
   positionGrowthTarget,
   type MilestoneCode,
   milestonePhrase,
+  FULL_TIME_MINUTES,
 } from "@gaffer/domain";
 import { recallCard } from "../players/card-memory";
 import {
@@ -862,6 +863,36 @@ export function markEventsSeen(state: GameState): void {
 /** 이 경기가 연장까지 갔는가 — **장부의 사건이 원본**이다 */
 export function wentToExtraTime(ledger: { events: readonly MatchEvent[] }): boolean {
   return ledger.events.some((e) => e.type === "extra_time_start");
+}
+
+/** 하프를 닫는 사건마다 이어지는 휴식(분) — 하프타임 · 연장 앞 · 연장 하프타임 */
+const BREAK_MINUTES: Partial<Record<MatchEvent["type"], number>> = {
+  half_time: 15,
+  extra_time_start: 5,
+  extra_half_time: 1,
+};
+
+/** 승부차기 한 판이 차지하는 분 */
+const SHOOTOUT_MINUTES = 10;
+
+/**
+ * **경기가 차지한 시간(분)** — 킥오프에서 마지막 휘슬까지 (match.md §7).
+ *
+ * 규정 시간(90, 연장이면 120)에 하프마다 그 하프를 닫은 사건의 추가시간을 더하고,
+ * 하프 사이의 휴식과 승부차기를 더한다. 마감이 하루의 시계를 이만큼 킥오프 뒤로 민다.
+ */
+export function matchSpanMinutes(events: readonly MatchEvent[], shootout: boolean): number {
+  let regulation = FULL_TIME_MINUTES;
+  let added = 0;
+  let breaks = 0;
+  for (const e of events) {
+    const rest = BREAK_MINUTES[e.type];
+    if (rest === undefined && e.type !== "full_time") continue;
+    regulation = Math.max(regulation, e.minute);
+    added += e.added ?? 0;
+    breaks += rest ?? 0;
+  }
+  return regulation + added + breaks + (shootout ? SHOOTOUT_MINUTES : 0);
 }
 
 /**

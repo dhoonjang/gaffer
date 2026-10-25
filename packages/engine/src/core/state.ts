@@ -350,6 +350,22 @@ export function minutesOfClock(clock: string): number {
   return Number(h ?? 0) * 60 + Number(m ?? 0);
 }
 
+/** 하루의 마지막 분 — 시계는 날짜를 넘기지 않는다 (23:59) */
+const LAST_MINUTE_OF_DAY = 24 * 60 - 1;
+
+/** 분 → "HH:MM" — 그 날 안에 묶는다. 날짜를 넘기는 것은 tick뿐이다 */
+export function clockAtMinutes(total: number): string {
+  const minutes = Math.max(0, Math.min(LAST_MINUTE_OF_DAY, Math.round(total)));
+  const hh = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const mm = String(minutes % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+/** 시계를 앞으로만 옮긴다 — 이미 지난 시각을 받으면 그대로 둔다 */
+export function advanceClock(state: GameState, clock: string): void {
+  if (minutesOfClock(clock) > minutesOfClock(clockOf(state))) state.clock = clock;
+}
+
 /**
  * "HH:MM" → `AM 9:30` — 모델이 쓰고 화면이 읽는 표기.
  * 24시간 값을 저장하고 표시만 12시간제로 옮긴다 (정렬·비교는 저장값으로).
@@ -378,9 +394,9 @@ export interface GameState extends GameTables {
   /**
    * 하루 안의 시각 "HH:MM" — **장부의 시간(날짜)과 장면의 시간을 가른다.**
    *
-   * 훈련·성장·부상·재정은 전부 하루 단위로 돌기 때문에 같은 날 안에서
-   * 아침이 저녁이 되어도 굴릴 것이 없다. 그래서 이 축은 tick 없이 움직이고,
-   * 날짜가 넘어갈 때 하루의 시작으로 돌아온다.
+   * 성장·재정·회복은 하루 단위로 돌아 같은 날 안에서 굴릴 것이 없다. 하루 안에서
+   * 시각에 매인 것은 **훈련 세션**뿐이다 — 시계가 그 시작 시각을 지나야 소화된다
+   * (`settleTrainingUntil`). 날짜가 넘어갈 때 하루의 시작으로 돌아온다.
    *
    * 없으면 하루의 시작(09:00)이다 — 읽는 문은 `clockOf` 하나다.
    */

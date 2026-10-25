@@ -34,6 +34,7 @@ import {
   familiarityOf,
   addDays,
   advanceTime,
+  applyScenePoint,
   CALL_UP_FATIGUE_PER_APP,
   CALL_UP_TRAVEL_FATIGUE,
   diffDays,
@@ -60,6 +61,7 @@ import {
 import {
   advanceDays,
   advanceToMatchday,
+  afterSquadReturn,
   createMiniGame,
   createTestGame,
   drillUserTactics,
@@ -298,10 +300,82 @@ describe("advance_time — 시간은 도구로만 흐른다 (season.md §5)", ()
 
 /**
  * 하루 안의 시각 — 장부의 시간(날짜)과 장면의 시간을 가른다.
- * 같은 날 안에서는 굴릴 것이 없으므로 tick이 돌지 않아야 한다.
+ * 같은 날 안에서는 하루를 굴리지 않는다 — 시각에 매인 것은 훈련 세션뿐이다.
  */
 describe("시각 축", () => {
-  it("같은 날 안의 이동은 날짜도 장부도 건드리지 않는다", () => {
+  /** 소집 뒤 하루 — 다음 날 오전·오후에 몸을 쓰는 세션을 건다 */
+  function trainingDay(): { state: GameState; date: string; am: string; pm: string } {
+    const state = afterSquadReturn(createTestGame(9));
+    const date = addDays(state.date, 1);
+    const set = setTraining(state, {
+      sessions: [
+        { date, slot: "am", label: "체력", focus: ["stamina"] },
+        { date, slot: "pm", label: "체력", focus: ["stamina"] },
+      ],
+    });
+    expect(set.ok, set.message).toBe(true);
+    const id = (time: string) =>
+      state.schedule.find((e) => e.type === "training" && e.date === date && e.time === time)!.id;
+    return { state, date, am: id("10:00"), pm: id("15:00") };
+  }
+  const statusOf = (state: GameState, id: string) =>
+    state.schedule.find((e) => e.id === id)?.status;
+
+  it("새 날은 그날의 훈련보다 먼저 열린다 — 세션은 시계가 그 시각을 지날 때 소화된다", () => {
+    const { state, date, am, pm } = trainingDay();
+    const arrived = applyScenePoint(state, { date, clock: "09:30" }, "header");
+    expect(state.date).toBe(date);
+    expect(clockOf(state)).toBe("09:30");
+    expect(statusOf(state, am), "10:00 세션이 09:30에 끝나 있다").toBe("scheduled");
+    expect(statusOf(state, pm)).toBe("scheduled");
+    expect(arrived.trained?.sessions.filter((s) => s.date === date)).toEqual([]);
+
+    const morning = applyScenePoint(state, { date, clock: "11:00" }, "header");
+    expect(statusOf(state, am)).toBe("done");
+    expect(statusOf(state, pm)).toBe("scheduled");
+    expect(morning.trained?.sessions.map((s) => s.entryId)).toEqual([am]);
+
+    // 날짜를 넘기면 떠나는 날의 남은 세션을 마저 소화한다 — 지난 날짜에 「예정」이 남지 않는다
+    const next = advanceTime(state, { days: 1 });
+    expect(statusOf(state, pm)).toBe("done");
+    expect(next.trained?.sessions.map((s) => s.entryId)).toContain(pm);
+  });
+
+  /**
+   * 세션을 언제 소화했든 하루가 끝난 잔고는 (아침 잔고 + 그날 적립) × 그날의 감쇠다 —
+   * 남의 구단이 하루에 한 번 굴리는 눈금(`tickOtherClubs`)과 같다. 세션 적립에 감쇠를
+   * 빼면 감독 팀만 훈련 몫이 4%씩 더 쌓여 리그와 다른 눈금으로 지친다.
+   */
+  it("세션을 나눠 소화해도 하루의 잔고는 하루 한 번 굴린 눈금과 같다", () => {
+    const { state: split, date } = trainingDay();
+    const whole = structuredClone(split);
+
+    applyScenePoint(split, { date, clock: "09:30" }, "header");
+    const player = userPlayers(split).find((p) => trainsWithFirstTeam(split, p))!;
+    player.state.fatigue = 30;
+    const day = fatigueDayOf("training", false);
+    const raw = 30 / fatigueAfterDay(1, day);
+    const moved = [
+      applyScenePoint(split, { date, clock: "11:00" }, "header"),
+      applyScenePoint(split, { date, clock: "16:00" }, "header"),
+    ];
+    expect(moved.flatMap((m) => m.events).filter((e) => e.kind === "injury")).toEqual([]);
+    expect(fatigueOf(player.state)).toBeCloseTo(
+      fatigueAfterDay(raw + fatigueFromTraining(2 * sessionLoad(["stamina"])), day),
+      10,
+    );
+
+    // 같은 하루를 한 번에 지나가도 같은 자리에 닿는다
+    applyScenePoint(whole, { date, clock: "09:30" }, "header");
+    const same = userPlayers(whole).find((p) => p.id === player.id)!;
+    same.state.fatigue = 30;
+    advanceTime(whole, { days: 1 });
+    advanceTime(split, { days: 1 });
+    expect(whole.date).toBe(split.date);
+    expect(fatigueOf(same.state)).toBe(fatigueOf(player.state));
+  });
+
+  it("같은 날 안의 이동은 하루를 굴리지 않는다 — 날짜도 성장도 그대로다", () => {
     const state = createTestGame(9);
     const date = state.date;
     const growthBefore = state.growthLog.length;

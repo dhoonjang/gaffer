@@ -21,6 +21,7 @@ import {
   buildOfficeViews,
   buildOpponentReport,
   buildRatingBrief,
+  clockOf,
   commitCheckpoint,
   createLabGame,
   finalizeMatch,
@@ -34,6 +35,8 @@ import {
   markEntered,
   MATCH_PROFICIENCY_GAIN,
   MATCHDAY_BENCH,
+  matchSpanMinutes,
+  minutesOfClock,
   playerById,
   playersOf,
   proficiencyAt,
@@ -178,6 +181,46 @@ describe("경기 흐름 (overview §4 · live-match.md §8)", () => {
     expect(state.pendingMatch).toBeNull();
     expect(state.matches.some((m) => m.result?.events !== undefined)).toBe(true);
     expect(digest.ours.some((d) => d.includes("최종 스코어"))).toBe(true);
+  });
+
+  /**
+   * 하루의 시계는 경기를 지나간다 — 마감 뒤에도 킥오프 전 시각에 서 있으면 경기를 마친
+   * 감독이 아직 오전에 있는 장면을 받는다.
+   */
+  it("경기는 킥오프 시각에 열리고, 마감 뒤 시계는 마지막 휘슬 뒤에 선다", () => {
+    const state = atMatchday(42);
+    const kickoff = state.matches.find(
+      (m) =>
+        m.date === state.date &&
+        !m.result &&
+        (m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId),
+    )!.time;
+    expect(minutesOfClock(clockOf(state))).toBeLessThan(minutesOfClock(kickoff));
+    expect(startMatch(state).ok).toBe(true);
+    expect(clockOf(state)).toBe(kickoff);
+    markEntered(state);
+    closeByHand(state);
+    // 추가시간 없는 90분 + 하프타임 15분
+    expect(minutesOfClock(clockOf(state))).toBe(minutesOfClock(kickoff) + 90 + 15);
+  });
+
+  it("경기가 차지한 시간 — 하프마다 추가시간, 하프 사이 휴식, 승부차기를 더한다", () => {
+    const closer = (type: MatchEvent["type"], minute: number, added: number): MatchEvent => ({
+      type,
+      minute,
+      added,
+      actors: [],
+      causes: [],
+    });
+    const regular = [closer("half_time", 45, 2), closer("full_time", 90, 4)];
+    expect(matchSpanMinutes(regular, false)).toBe(90 + 2 + 4 + 15);
+    const extra = [
+      closer("half_time", 45, 1),
+      closer("extra_time_start", 90, 3),
+      closer("extra_half_time", 105, 1),
+      closer("full_time", 120, 2),
+    ];
+    expect(matchSpanMinutes(extra, true)).toBe(120 + (1 + 3 + 1 + 2) + (15 + 5 + 1) + 10);
   });
 
   /**

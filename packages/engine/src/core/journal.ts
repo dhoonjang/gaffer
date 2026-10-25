@@ -120,10 +120,19 @@ export type JournalEntry =
       kind: "tick.day";
       date: string;
       events: TickEvent[];
-      /** 이 날 소화된 훈련 세션 수 */
-      trained: number;
       /** 이 날에서 시계가 선 이유 — 계속 갔으면 null */
       stopped: string | null;
+    }
+  | {
+      /** 시계가 시작 시각을 지난 훈련 세션을 소화했다 (`settleTrainingUntil`) */
+      kind: "tick.training";
+      date: string;
+      /** 어느 시각까지 시작한 세션인가 — 날짜를 넘기며 마저 소화하면 `24:00` */
+      until: string;
+      /** 소화한 세션 수 — 휴식 세션은 세지 않는다 */
+      sessions: number;
+      /** 그 세션들에서 다친 선수 (gamePlayerId) */
+      injured: string[];
     }
   | {
       kind: "tick.match";

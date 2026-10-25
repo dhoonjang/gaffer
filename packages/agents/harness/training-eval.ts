@@ -21,6 +21,7 @@ import {
 import {
   addDays,
   advanceTime,
+  applyScenePoint,
   applyTrainingOutcomes,
   trainingSlots,
   assignmentsOf,
@@ -140,7 +141,13 @@ function fixture(): { state: GameState; brief: TrainingBrief } {
   });
   if (!training.ok) throw new Error("Fixture training was rejected");
   const progressed = advanceTime(state, { days: TRAINING_DAYS });
-  const sessions = progressed.trained?.sessions ?? [];
+  // 마지막 날의 세션은 시계가 그 시각을 지나야 소화된다 — 그 날 저녁까지 보낸다
+  const evening = applyScenePoint(state, { date: state.date, clock: "20:00" }, "header");
+  // 깔아 둔 날짜의 세션만 — 출발한 날의 기본 세션은 이 판정의 대상이 아니다
+  const sessions = [
+    ...(progressed.trained?.sessions ?? []),
+    ...(evening.trained?.sessions ?? []),
+  ].filter((session) => session.date > from);
   const brief = buildTrainingBrief(state, sessions, { from, to: state.date });
   if (
     !brief ||

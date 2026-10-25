@@ -11,6 +11,7 @@ import {
   TACTIC_GAIN_MIN,
   advanceTime,
   applyAttributeStep,
+  applyScenePoint,
   applyTrainingOutcomes,
   assignmentsOf,
   buildTrainingBrief,
@@ -47,15 +48,19 @@ function everyDay(brief: TrainingBrief, axis: AttributeAxis, step = 1) {
  * 한 번에 게임을 크게 흔들 수 있으면 안 된다.
  */
 
-/** 다음 날 오전에 훈련을 하나 걸고 하루 진행 — 브리프를 돌려준다 */
+/**
+ * 다음 날 오전에 훈련을 하나 걸고 그 날 저녁까지 보낸다 — 브리프를 돌려준다.
+ * 하루는 09:00에 열리므로 그 날의 세션은 시계가 세션 시각을 지나야 소화된다.
+ */
 function trainOneDay(state: GameState, focus: string[], label = "훈련"): TrainingBrief | null {
   afterSquadReturn(state); // 휴가 중이면 훈련을 걸 수 없다
   const date = addDays(state.date, 1);
   setTraining(state, {
     sessions: [{ date, slot: "am", label, focus: focus as never }],
   });
+  advanceTime(state, { days: 1 });
   const from = state.date;
-  const result = advanceTime(state, { days: 1 });
+  const result = applyScenePoint(state, { date, clock: "20:00" }, "header");
   return buildTrainingBrief(state, result.trained?.sessions ?? [], { from, to: state.date });
 }
 

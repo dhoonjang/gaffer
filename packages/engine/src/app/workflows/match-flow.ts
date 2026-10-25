@@ -7,6 +7,9 @@ import {
   ensureSeasonStat,
   firstTeamPlayers,
   isInjured,
+  advanceClock,
+  clockAtMinutes,
+  minutesOfClock,
 } from "../../core/state";
 import {
   type MatchRecord,
@@ -50,6 +53,7 @@ import {
   makeInjuryRng,
   milestoneNote,
   restoreTactics,
+  matchSpanMinutes,
 } from "../../match/match-flow";
 import { matchesOn, isFriendly } from "../../core/calendar";
 import { quickSimulate, quickSimKeyOf, quickSimOptionsOf } from "../../match/quick-sim";
@@ -176,6 +180,11 @@ export function startMatch(state: GameState): FlowResult {
     otherScores: rollConcurrentMatches(state, match),
   };
   state.phase = "match";
+  /**
+   * 경기는 킥오프 시각에 열린다 — 하루의 시계를 거기까지 민다(되감지 않는다).
+   * 경기일엔 1군 훈련이 없으므로(`cancelTrainingOn`) 소화할 세션 없이 시계만 옮긴다.
+   */
+  advanceClock(state, match.time);
   {
     const sideOf = (side: MatchSide): KickoffSide => ({
       teamId: teamIdOf[side],
@@ -460,6 +469,16 @@ export function finalizeMatch(state: GameState): MatchDigest {
   const restored = restoreTactics(state);
   if (restored) digest.push(restored);
 
+  /**
+   * **마감 뒤 시계는 마지막 휘슬 뒤에 선다** — 킥오프에 경기가 차지한 시간을 더한 자리
+   * (`matchSpanMinutes`). 그 사이 장면이 더 늦은 시각을 적었으면 그대로 둔다.
+   */
+  advanceClock(
+    state,
+    clockAtMinutes(
+      minutesOfClock(match.time) + matchSpanMinutes(ledger.events, pens !== undefined),
+    ),
+  );
   state.phase = "idle";
   state.pendingMatch = null;
   /** **우리보다 늦게 시작하는 경기는 지금 굴린다** — tick은 우리 킥오프 전까지만 소화했다 */

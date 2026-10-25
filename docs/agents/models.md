@@ -891,7 +891,8 @@ turn
 | `match.shootout`           | `advanceShootout`                               | 승부차기 한 발                                                                                                             |
 | `match.ruling`             | `applyMatchRatings`                             | 마감 판정 — 선수마다 모델이 준 평점·코어 앵커·한도로 자른 값. **앵커 ± 한도가 실제로 어디서 잘렸는가**                     |
 | `match.finalized`          | `finalizeMatch`                                 | 결과(스코어·슛·xG·점유·연장·승부차기)·평점 앵커·정산된 피로·다이제스트 세 갈래                                             |
-| `tick.day`                 | `advanceTime`                                   | 하루 — 그 날의 사건 배열·소화된 훈련 수·멈춘 사유                                                                          |
+| `tick.day`                 | `advanceTime`                                   | 하루 — 그 날의 사건 배열·멈춘 사유                                                                                         |
+| `tick.training`            | `settleTrainingUntil`                           | 시계가 시작 시각을 지난 훈련 세션의 소화 — 날짜·어느 시각까지·세션 수·다친 선수                                            |
 | `tick.match`               | `simulateOtherMatches` · `simulateReserveMatch` | 남의 경기와 2군 경기의 간이 시뮬 결과 — 스코어·슛·xG·기대 득점·점유·부상·카드·교체 수·난수 키                              |
 | `tick.season_end`          | `advanceTime`                                   | 시즌 전환                                                                                                                  |
 | `command`                  | `buildToolSpecs`의 `wrap` · 전술판 조작         | **코어 명령 하나** — 이름·인자·성공/반려·메시지·항목·카드. 반려도 남는다 — 화면의 칩(`recordCall`)은 성공만 세운다         |

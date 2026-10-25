@@ -51,6 +51,7 @@ import {
   isAvailable,
   reservePlayers,
   clockOf,
+  advanceClock,
   minutesOfClock,
   formatClock,
   DAY_START,
@@ -131,8 +132,8 @@ export {
  * advance_time — 캘린더 시계가 흐르는 유일한 경로 (season.md §5).
  * 하루 단위 tick을 결정적으로 적용하고, 감독의 결정이 필요한 이벤트에서 멈춘다.
  *
- * 훈련·경기가 모두 SCHEDULE_ENTRY로 등록돼 있으므로, 하루의 처리는
- * "그 날짜의 엔트리를 시간 순으로 소화"하는 일이 된다. 성장·부상·징계·주급은
+ * 훈련·경기가 모두 SCHEDULE_ENTRY로 등록돼 있다. 훈련 엔트리는 시계가 그 시각을
+ * 지날 때 시간 순으로 소화된다(`settleTrainingUntil`). 성장·부상·징계·주급은
  * 각각 기록 테이블에 남는다 (로그 없는 변화 없음).
  */
 
@@ -169,21 +170,170 @@ function sessionById(state: GameState, id: string): TrainingSession | null {
 }
 
 /**
- * **오늘 세션들이 몸에 지운 부하** — 세션마다 그 종류의 부하(`sessionLoad`)를 더한다.
+ * **그날 훈련장이 서지 않는가** — 맡은 팀이 없거나 우리 1군 경기가 있는 날이다.
  *
- * ⚠️ **코어는 능력치도 전술 적응도도 올리지 않는다.**
- *
- * 세션 횟수를 세어 여기서 올리면 성장이 **달력을 넘긴 횟수**의 함수가 되어,
- * 같은 메뉴를 반복하는 것이 가장 효율적인 육성법이 된다. 무엇이 남았는지는 그
- * 구간을 읽는 결산이 정한다
- * (`training-report.ts` — 능력치와 전술 적응도를 한 템플릿에서 함께 판정한다).
- *
- * 회복도 여기서 더하지 않는다 — **하루의 회복은 하루에 한 번**이라
- * `dailyTick`이 그날의 성격(`RecoveryKind`)을 정해 한 번만 얹는다. 세션마다
- * 더하면 회복 세션이 있는 날은 일일 회복까지 이중으로 받는다.
+ * 경기일엔 훈련하지 않는다 — 나중에 편성된 컵 경기가 이미 깔린 훈련과 겹칠 수 있고,
+ * 감독이 그날 굳이 잡아 둔 세션이라도 경기가 이긴다. 2군 경기일에는 1군 훈련이 그대로
+ * 선다 — 뛰는 스쿼드가 다르다. 커리어가 끝났으면 훈련장 자체가 없다.
  */
-function trainingLoadOf(sessions: readonly (TrainingSession | null)[]): number {
-  return sessions.reduce((n, session) => n + (session ? sessionLoad(session.focus) : 0), 0);
+function trainingCancelledOn(state: GameState, date: string): boolean {
+  const managed = managedTeamId(state);
+  return (
+    managed === null ||
+    matchesOn(state.matches, date).some(
+      (m) => !isReserveMatch(m) && (m.homeTeamId === managed || m.awayTeamId === managed),
+    )
+  );
+}
+
+/**
+ * **그날의 성격** — 회복량(`RECOVERY_BASE`)과 잔고의 감쇠가 이 하나를 읽는다.
+ *
+ * 휴식 세션은 훈련이 아니다 — 감독이 "이 날은 쉬자"고 못 박은 자리라
+ * (`TRAINING_SESSION.rest`) 성장도 부상 위험도 없고, 회복은 훈련이 아예 없는 날과
+ * 같아야 한다. 회복 세션은 감독이 회복에 하루를 쓴 것이라 쉬는 날보다 낫고, 본훈련이
+ * 있는 날은 회복하면서 동시에 쓴다. 소화했는지와 무관하게 그날 달력에 선 세션으로
+ * 재므로, 아침의 회복과 오후 세션의 적립이 같은 하루를 본다.
+ */
+function recoveryKindOn(state: GameState, date: string): RecoveryKind {
+  const work = state.schedule
+    .filter((e) => e.type === "training" && e.date === date)
+    .map((e) => sessionById(state, e.refId))
+    .filter((session) => session?.rest !== true);
+  if (work.length === 0) return "idle";
+  return work.some((session) => session?.focus.includes("recovery")) ? "recovery" : "training";
+}
+
+/** 하루가 끝나는 자리 — 날짜를 넘기기 전에 그날의 남은 세션을 모두 소화하는 기준 */
+const END_OF_DAY = "24:00";
+
+/**
+ * **시계가 `until`에 닿을 때까지 시작한 오늘의 훈련을 소화한다** (training.md §1 ·
+ * season.md §5). 세션은 그 시작 시각이 지나야 끝난 일이 된다 — 하루가 09:00에 열릴 때
+ * 10:00·15:00 세션은 아직 예정이고, 장면이 그 시각을 지나거나 날짜가 넘어갈 때
+ * (`END_OF_DAY`) 소화된다.
+ *
+ * 소화가 남기는 것: 엔트리의 `done`, 결산 판정에 넘길 세션(`trained`), 누적 피로의 적립,
+ * 훈련 부상. ⚠️ **코어는 능력치도 전술 적응도도 올리지 않는다** — 세션 횟수로 올리면
+ * 성장이 달력을 넘긴 횟수의 함수가 된다. 무엇이 남았는지는 그 구간을 읽는 결산이 정한다
+ * (`training-report.ts`). 회복도 여기서 더하지 않는다 — 하루의 회복은 하루에 한 번이라
+ * `dailyTick`이 그날의 성격으로 한 번만 얹는다.
+ */
+export function settleTrainingUntil(
+  state: GameState,
+  until: string,
+  digest: TickSink,
+  trained?: { sessions: TrainedSession[] },
+): void {
+  const date = state.date;
+  const due = entriesOn(state, date).filter(
+    (e) =>
+      e.type === "training" &&
+      e.status === "scheduled" &&
+      minutesOfClock(e.time) <= minutesOfClock(until),
+  );
+  if (due.length === 0) return;
+  if (trainingCancelledOn(state, date)) {
+    cancelTrainingOn(state, date);
+    return;
+  }
+  const dayKind = recoveryKindOn(state, date);
+  let settled = 0;
+  const injured: string[] = [];
+  for (const entry of due) {
+    const session = sessionById(state, entry.refId);
+    entry.status = "done";
+    // 휴식은 소화할 것이 없다 — 지나갔다는 표시만 남긴다
+    if (!session || session.rest === true) continue;
+    settled += 1;
+    const load = sessionLoad(session.focus);
+    trained?.sessions.push({
+      entryId: entry.id,
+      date: entry.date,
+      slot: slotOfTime(entry.time),
+      label: session.label,
+      focus: [...session.focus],
+      ordered: session.auto !== true,
+    });
+    accrueTrainingFatigue(state, load, dayKind);
+    const victim = rollTrainingInjury(state, load, entry, digest);
+    if (victim) injured.push(victim);
+  }
+  if (settled > 0) journal({ kind: "tick.training", date, until, sessions: settled, injured });
+}
+
+/**
+ * **세션의 부하가 누적 피로에 얹힌다** (player.md §5.5) — 그 세션에 훈련장에 선 선수만.
+ *
+ * 감독이 기간을 정해 뺐거나, 재활 중이거나, 대표팀에 가 있는 선수는 세션을 소화하지
+ * 않았으므로 적립도 없다. 같은 날 앞 세션에서 다친 선수는 뒤 세션에 서지 않는다.
+ *
+ * 적립도 **그날의 감쇠를 받는다**(`fatigueAfterDay`) — 감쇠는 선형이라 하루가 끝난
+ * 잔고가 (아침 잔고 + 그날 적립) × 감쇠로 세션을 언제 소화했든 같고, 남의 구단이 하루에
+ * 한 번 굴리는 눈금(`tickOtherClubs`)과도 같다.
+ */
+function accrueTrainingFatigue(state: GameState, load: number, dayKind: RecoveryKind): void {
+  const injured = openInjuryIds(state);
+  const accrued = fatigueAfterDay(fatigueFromTraining(load), fatigueDayOf(dayKind, false));
+  for (const player of userPlayers(state)) {
+    const away =
+      restingOn(state, player.id) || isAwayFromClub(state, player) || injured.has(player.id);
+    if (away) continue;
+    player.state.fatigue = clampFatigue(fatigueOf(player.state) + accrued);
+  }
+}
+
+/**
+ * 훈련 부상 — 세션의 부하에 비례한다 (결정적 시드 — 세션마다 제 채널). 다친 선수의 id를
+ * 돌려준다.
+ *
+ * 빈도도 대상도 **개인 성향**을 탄다: 유리몸이 많은 선수단은 실제로 더 자주
+ * 쓰러지고, 그중 누가 걸리는지도 경기와 같은 저울(`injuryWeight`)로 정한다.
+ *
+ * ⚠️ **대상은 결산과 같은 문을 지난다**(`trainsWithFirstTeam` — season.md §8
+ * 불변식). 갈라 두면 훈련장에 서지도 않은 2군이 훈련 중에 다친다.
+ */
+function rollTrainingInjury(
+  state: GameState,
+  load: number,
+  entry: ScheduleEntry,
+  digest: TickSink,
+): string | null {
+  if (load <= 0) return null;
+  const candidates = userPlayers(state).filter((p) => trainsWithFirstTeam(state, p));
+  if (candidates.length === 0) return null;
+  const rng = makeRng(state.seed, `training-injury:${entry.date}:${entry.time}`);
+  const avgProneness =
+    candidates.reduce((s, p) => s + injuryProneness(state, p.id), 0) / candidates.length;
+  if (rng() >= TRAINING_INJURY_PER_SESSION * load * avgProneness) return null;
+  const weights = candidates.map((p) => injuryWeight(p, 0, injuryProneness(state, p.id)));
+  const total = weights.reduce((s, w) => s + w, 0);
+  let roll = rng() * total;
+  let victim = candidates[candidates.length - 1]!;
+  for (let i = 0; i < candidates.length; i++) {
+    roll -= weights[i] ?? 0;
+    if (roll <= 0) {
+      victim = candidates[i]!;
+      break;
+    }
+  }
+  const { days, part } = openInjuryFor(state, victim, "training", rng);
+  pushEvent(digest, "injury", `훈련 중 부상: ${victim.name} — ${part}, 약 ${days}일 결장 예상`);
+  return victim.id;
+}
+
+/**
+ * **시계를 앞으로 옮긴다** — 되감지 않고, 옮긴 시각까지 시작한 오늘의 훈련을 소화한다.
+ * 장면이 하루 안에서 시계를 미는 자리는 전부 여기를 지난다.
+ */
+export function moveClockTo(
+  state: GameState,
+  clock: string,
+  digest: TickSink,
+  trained?: { sessions: TrainedSession[] },
+): void {
+  advanceClock(state, clock);
+  settleTrainingUntil(state, clockOf(state), digest, trained);
 }
 
 /**
@@ -213,64 +363,22 @@ function tickKinds(digest: TickSink): Record<TickEventKind, TickSink> {
   };
 }
 
-function dailyTick(
-  state: GameState,
-  digest: TickSink,
-  trained?: { sessions: TrainedSession[] },
-): boolean {
+function dailyTick(state: GameState, digest: TickSink): boolean {
   const kind = tickKinds(digest);
   const managed = managedTeamId(state);
   const players = managed ? userPlayers(state) : [];
   const dow = dayOfWeek(state.date);
-  const rng = makeRng(state.seed, `tick:${state.date}`);
-  // 복귀일이 지난 임대는 오늘 돌아온다
-  // 경기일엔 훈련하지 않는다 — 나중에 편성된 컵 경기가 이미 깔린 훈련과 겹칠 수 있다.
-  // 커리어가 끝났으면 훈련장 자체가 없으므로 깔려 있던 것을 그날로 거둔다.
-  if (
-    managed === null ||
-    matchesOn(state.matches, state.date).some(
-      (m) =>
-        !m.result &&
-        // 2군 경기일에도 1군 훈련은 그대로 선다 — 뛰는 스쿼드가 다르다
-        !isReserveMatch(m) &&
-        (m.homeTeamId === managed || m.awayTeamId === managed),
-    )
-  ) {
-    cancelTrainingOn(state, state.date);
-  }
-  const todays = entriesOn(state, state.date);
-  const trainingEntries = todays.filter((e) => e.type === "training" && e.status === "scheduled");
+  // 경기일·커리어가 끝난 날에는 깔려 있던 훈련을 그날로 거둔다
+  if (trainingCancelledOn(state, state.date)) cancelTrainingOn(state, state.date);
   /**
-   * **휴식 세션은 훈련이 아니다** — 감독이 "이 날은 쉬자"고 못 박은 자리다
-   * (`TRAINING_SESSION.rest`). 달력에는 서지만 성장도 부상 위험도 없고, 회복은
-   * 훈련이 아예 없는 날과 같아야 한다. 이걸 가르지 않으면 "쉬라"는 지시가
-   * 회복을 8로 깎아 **안 쉬느니만 못한 하루**가 된다.
+   * 오늘의 성격 — 회복량은 이 하나가 정한다. 세션은 아직 소화되지 않았다: 하루는
+   * 09:00에 열리고 세션은 시계가 그 시각을 지날 때 소화된다(`settleTrainingUntil`).
    */
-  const workEntries = trainingEntries.filter((e) => sessionById(state, e.refId)?.rest !== true);
-  const idleDay = workEntries.length === 0;
-  /**
-   * 오늘의 성격 — 회복량은 이 하나가 정한다 (`stamina.ts`의 `RECOVERY_BASE`).
-   * 회복 세션은 감독이 회복에 하루를 쓴 것이라 쉬는 날보다 낫고, 본훈련이 있는
-   * 날은 회복하면서 동시에 쓴다.
-   */
-  const recoveryKind: RecoveryKind = idleDay
-    ? "idle"
-    : workEntries.some((e) => sessionById(state, e.refId)?.focus.includes("recovery"))
-      ? "recovery"
-      : "training";
+  const recoveryKind = recoveryKindOn(state, state.date);
 
   resolveInjuries(state, kind.injury);
   // 오늘 재활 중인 선수 — 적응도가 끌리는 자리(재활 30 · 떠나 있음 55)를 가르는 사실
   const injuredPlayers = openInjuryIds(state);
-  /**
-   * **오늘 세션들의 부하 합** — 누적 피로와 훈련 부상이 같은 이 값을 읽는다.
-   *
-   * 여기서 한 번만 세는 것은 순서 때문이다: 잔고를 적립하는 루프가 세션 루프보다
-   * 앞에 서야 하고(회복·폼·적응도와 한 하루에 얹힌다), 세션 루프는 엔트리에 `done`을
-   * 찍으므로 뒤로 옮길 수 없다. 두 곳에서 따로 세면 프리시즌 이중 세션이 한쪽에만
-   * 잡히는 날이 온다.
-   */
-  const trainingLoad = trainingLoadOf(workEntries.map((e) => sessionById(state, e.refId)));
 
   for (const player of players) {
     /**
@@ -300,18 +408,12 @@ function dailyTick(
       player.state.condition + dailyRecovery(player, dayKind),
     );
     /**
-     * **시즌이 쌓아 둔 잔고** (player.md §5.5) — 본훈련이 얹고 하루가 뺀다.
-     * 경기 분은 경기 마감이 따로 얹는다(`finalizeMatch` · 간이 시뮬), 그쪽이
-     * 자리·분·킥오프 체력을 아는 유일한 자리여서다.
-     *
-     * 쉬는 선수는 세션을 소화하지 않았으므로 적립도 없다 — 훈련장에 서지 않은
-     * 사람에게 세션 수를 물리면 "빼 줬다"가 장부에서 거짓이 된다.
+     * **시즌이 쌓아 둔 잔고** (player.md §5.5) — 하루가 빼고, 세션이 소화될 때
+     * 얹는다(`accrueTrainingFatigue`). 경기 분은 경기 마감이 따로 얹는다
+     * (`finalizeMatch` · 간이 시뮬), 그쪽이 자리·분·킥오프 체력을 아는 유일한 자리여서다.
      */
     player.state.fatigue = clampFatigue(
-      fatigueAfterDay(
-        fatigueOf(player.state) + (away ? 0 : fatigueFromTraining(trainingLoad)),
-        fatigueDayOf(recoveryKind, away),
-      ),
+      fatigueAfterDay(fatigueOf(player.state), fatigueDayOf(recoveryKind, away)),
     );
     /**
      * 폼은 **매일** 평균으로 조금 끌린다 (form.ts).
@@ -368,62 +470,6 @@ function dailyTick(
   // 감독 팀은 기억(`drilled`)만 갱신한다 — **시간은 적응도를 올리지 않는다**
   // (commands/index.ts의 계약). 상승 경로는 훈련·경기 결산 판정뿐이다.
   if (managed) settleTactics(state, state.date);
-
-  // 휴식은 소화할 것이 없다 — 지나갔다는 표시만 남긴다
-  for (const entry of trainingEntries) {
-    if (sessionById(state, entry.refId)?.rest === true) entry.status = "done";
-  }
-
-  // 훈련 세션 적용 — 등록된 엔트리만 (기본 훈련 없음)
-  for (const entry of workEntries) {
-    const session = sessionById(state, entry.refId);
-    entry.status = "done";
-    if (!session) continue;
-    trained?.sessions.push({
-      entryId: entry.id,
-      date: entry.date,
-      slot: slotOfTime(entry.time),
-      label: session.label,
-      focus: [...session.focus],
-      ordered: session.auto !== true,
-    });
-  }
-
-  /**
-   * 훈련 부상 — 그날 세션들의 부하 합에 비례 (결정적 시드).
-   *
-   * 빈도도 대상도 **개인 성향**을 탄다: 유리몸이 많은 선수단은 실제로 더 자주
-   * 쓰러지고, 그중 누가 걸리는지도 경기와 같은 저울(`injuryWeight`)로 정한다.
-   *
-   * ⚠️ **대상은 결산과 같은 문을 지난다**(`trainsWithFirstTeam` — season.md §8
-   * 불변식). 갈라 두면 훈련장에 서지도 않은 2군이 훈련 중에 다친다.
-   */
-  if (trainingLoad > 0) {
-    const candidates = players.filter((p) => trainsWithFirstTeam(state, p));
-    if (candidates.length > 0) {
-      const avgProneness =
-        candidates.reduce((s, p) => s + injuryProneness(state, p.id), 0) / candidates.length;
-      if (rng() < TRAINING_INJURY_PER_SESSION * trainingLoad * avgProneness) {
-        const weights = candidates.map((p) => injuryWeight(p, 0, injuryProneness(state, p.id)));
-        const total = weights.reduce((s, w) => s + w, 0);
-        let roll = rng() * total;
-        let victim = candidates[candidates.length - 1]!;
-        for (let i = 0; i < candidates.length; i++) {
-          roll -= weights[i] ?? 0;
-          if (roll <= 0) {
-            victim = candidates[i]!;
-            break;
-          }
-        }
-        const { days, part } = openInjuryFor(state, victim, "training", rng);
-        pushEvent(
-          digest,
-          "injury",
-          `훈련 중 부상: ${victim.name} — ${part}, 약 ${days}일 결장 예상`,
-        );
-      }
-    }
-  }
 
   /**
    * **유스 인테이크의 마감 — 선수단 소집일** (season.md §6).
@@ -998,10 +1044,11 @@ export function advanceTime(
   }
 
   /**
-   * 같은 날 안의 이동 — **tick을 돌리지 않는다.**
+   * 같은 날 안의 이동 — **하루를 굴리지 않는다.**
    *
-   * 훈련·성장·부상·재정은 전부 하루 단위라 아침에서 저녁으로 가는 동안
-   * 굴릴 것이 없다. 되감기만 막는다 — 어제로 돌아가려면 날짜를 넘겨야 한다.
+   * 성장·재정·회복은 하루 단위라 아침에서 저녁으로 가는 동안 굴릴 것이 없다. 그 사이
+   * 시작 시각이 지난 훈련 세션만 소화된다. 되감기는 막는다 — 어제로 돌아가려면 날짜를
+   * 넘겨야 한다.
    */
   if (typeof until === "object" && "clock" in until) {
     const now = clockOf(state);
@@ -1017,8 +1064,10 @@ export function advanceTime(
         stopped: "blocked",
       };
     }
-    state.clock = until.clock;
-    return { ok: true, events: [], stopped: "reached" };
+    const sink = tickEvents();
+    const trained = { sessions: [] as TrainedSession[] };
+    moveClockTo(state, until.clock, sink, trained);
+    return { ok: true, events: sink.events, stopped: "reached", trained };
   }
 
   const sink = tickEvents();
@@ -1031,6 +1080,11 @@ export function advanceTime(
     typeof until === "object" ? Math.min(until.days, MAX_REQUESTED_DAYS) : MAX_OPEN_ENDED_DAYS;
 
   for (let d = 0; d < maxDays; d++) {
+    /**
+     * **떠나는 날을 마저 산다** — 시계가 아직 닿지 않은 세션도 날짜를 넘기기 전에
+     * 소화한다. 여기서 거르면 그 세션은 지난 날짜에 「예정」으로 영영 남는다.
+     */
+    settleTrainingUntil(state, END_OF_DAY, digest, trained);
     // 시즌 종료 체크 — 남은 경기가 없으면 시즌 리뷰 + 전환
     if (allMatchesDone(state)) {
       // 남은 만료 문턱은 여기서 낸다 — 이 뒤로 그 계약에 닿는 tick이 없다
@@ -1054,20 +1108,19 @@ export function advanceTime(
     state.clock = DAY_START;
     deliverMedicalReportMail(state);
     /**
-     * 하루의 사실 — 이 날에 쌓인 사건과 소화된 훈련, 시계가 선 이유 (models.md §5-3).
+     * 하루의 사실 — 이 날에 쌓인 사건과 시계가 선 이유 (models.md §5-3). 소화된 훈련은
+     * 세션이 소화되는 자리가 따로 낸다(`tick.training`) — 하루가 열릴 때는 아직 예정이다.
      * 이 아래의 어느 `return`도 이 문을 지난다 — 멈춘 날이 기록에 없으면 멈춘 이유도 없다.
      */
     const dayMark = events.length;
-    const trainedMark = trained.sessions.length;
     const closeDay = (stopped: string | null): void =>
       journal({
         kind: "tick.day",
         date: state.date,
         events: events.slice(dayMark),
-        trained: trained.sessions.length - trainedMark,
         stopped,
       });
-    const needsAttention = dailyTick(state, digest, trained);
+    const needsAttention = dailyTick(state, digest);
     /**
      * 감독의 자리와 계약 (career.md §5·§5.4) — 판정은 여기서 하되 **시계는 세계의
      * 하루가 끝난 뒤에 세운다.** 판정과 동시에 리턴하면 그날로 편성돼 있던 다른
@@ -1253,18 +1306,23 @@ export function applyScenePoint(
   /**
    * **날짜는 안 흐르지만 시계는 흐른다.**
    *
-   * 날짜가 고정된 턴과 오늘 안에서 끝나는 턴이 같은 자리로 온다 — 굴릴 것이 없고
-   * 되감기만 막는다. 시계까지 묶으면 화면 상단이 킥오프 직전 시각에 얼어붙는데
-   * (실제로 09:00에 멈춘 세이브를 봤다) 채팅의 장면 시각은 계속 흐르므로 **같은
-   * 화면의 두 시계가 어긋난다.** 막아야 할 것은 날짜가 넘어가는 것뿐이다 — 경기
-   * 중에 하루가 지나면 훈련·성장이 통째로 굴러 버린다.
+   * 날짜가 고정된 턴과 오늘 안에서 끝나는 턴이 같은 자리로 온다 — 하루를 굴리지 않고
+   * 되감기만 막는다. 그 사이 시작 시각이 지난 훈련 세션은 소화된다. 시계까지 묶으면
+   * 화면 상단이 킥오프 직전 시각에 얼어붙는데 (실제로 09:00에 멈춘 세이브를 봤다) 채팅의
+   * 장면 시각은 계속 흐르므로 **같은 화면의 두 시계가 어긋난다.** 막아야 할 것은 날짜가
+   * 넘어가는 것뿐이다 — 경기 중에 하루가 지나면 훈련·성장이 통째로 굴러 버린다.
    */
   if (dateIsPinned(state, source) || target.date === state.date) {
-    if (minutesOfClock(target.clock) > minutesOfClock(clockOf(state))) state.clock = target.clock;
+    const sink = tickEvents();
+    const trained = { sessions: [] as TrainedSession[] };
+    moveClockTo(state, target.clock, sink, trained);
     const held = target.date !== state.date && reportsHeldDate(source);
     return {
       ok: !held,
-      events: held ? [{ kind: "news" as const, text: dateHeldText() }] : [],
+      events: held
+        ? [...sink.events, { kind: "news" as const, text: dateHeldText() }]
+        : sink.events,
+      trained,
       stopped: held ? "blocked" : "reached",
       reached: here(),
       short: held,
@@ -1277,13 +1335,16 @@ export function applyScenePoint(
   const days = diffDays(state.date, target.date);
   const result = advanceTime(state, { days }, stopForMailReplies);
   // 목표 날짜에 닿았을 때만 시각을 옮긴다 — 중간에 멈췄으면 그 날의 시작이다
-  if (state.date === target.date && minutesOfClock(target.clock) > minutesOfClock(DAY_START)) {
-    state.clock = target.clock;
-  }
+  if (state.date !== target.date) return { ...result, reached: here(), short: true };
+  const sink = tickEvents();
+  const trained = result.trained ?? { sessions: [] as TrainedSession[] };
+  moveClockTo(state, target.clock, sink, trained);
   return {
     ...result,
+    events: [...result.events, ...sink.events],
+    trained,
     reached: here(),
-    short: state.date !== target.date,
+    short: false,
   };
 }
 
