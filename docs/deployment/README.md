@@ -25,7 +25,7 @@ flowchart LR
   C[Cloud Scheduler] --> M[maintenance]
   M --> D
   M --> R
-  M --> BK[(암호화 R2 + 독립 GCS 백업)]
+  M --> BK[(암호화 R2 + 다른 리전 GCS 백업)]
 ```
 
 | 역할        | 실행 상한                          | 책임                                 |
@@ -208,7 +208,7 @@ GC는 하루가 지났고 게임·작업·진단 어디서도 가리키지 않�
 바이트만 지우므로, 그사이 다시 쓰인 조각은 살아남는다.
 
 매일 private SQL의 repeatable-read snapshot과 현재 게임/view·그 세이브의 조각, 동의된 진단 객체를
-AES-GCM 암호화해 별도 R2 bucket과 독립 GCS 프로젝트에 복제·검증한다. 과거 job 결과
+AES-GCM 암호화해 별도 R2 bucket과 다른 리전(US-WEST1)의 GCS bucket에 복제·검증한다. 과거 job 결과
 전체를 백업하지 않는다. 복원 후 영수증과 최신 게임은 남고, 만료된 결과 조회는 최신 화면으로
 복구한다. 백업 pin은 실행 중 갱신하며 실패 시 해제하고, 죽은 실행의 pin은 15분 뒤 재취득한다.
 복원 pin은 자동 만료하지 않는다. 마지막 두 사본의 성공이 26시간 넘으면 알리고 48시간
@@ -230,9 +230,10 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
 
 ## 첫 배포와 재배포
 
-1. production/staging의 PostgreSQL·R2 bucket·GCP 프로젝트를 분리한다. 환경마다 Google OAuth
-   클라이언트(웹 애플리케이션)를 만들고 승인된 리디렉션 URI를 `<APP_ORIGIN>/api/auth/callback`
-   하나로 둔다. Supabase PostgreSQL을 쓰면 `private`는 Data API 노출 schema에 추가하지 않는다.
+1. 환경은 운영 하나다(로컬이 개발 환경). 운영 전용 Google OAuth 클라이언트(웹 애플리케이션)를
+   만들고 승인된 리디렉션 URI를 `<APP_ORIGIN>/api/auth/callback` 하나로 둔다. 범위가
+   `openid email`뿐이므로 동의 화면은 검수 없이 프로덕션으로 게시한다. Supabase PostgreSQL을
+   쓰면 `private`는 Data API 노출 schema에 추가하지 않는다.
 2. `pnpm service:ops migrate`를 migration owner로 실행한다. 런타임 역할 `gaffer_api`,
    `gaffer_worker`, `gaffer_maintenance`에 각각 비밀번호를 부여한다. runtime에는 owner URL을
    넣지 않는다. Supavisor transaction URL과 CA를 실제 연결해 검증한다.
@@ -248,6 +249,14 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
    GitHub production environment에 repository 숫자 ID와 맞는 WIF 변수를 설정한다.
    CI 통과 후 Deploy beta를 `publish_image_only=true`로 실행해 이미지를 올린 다음 전체
    Terraform plan/apply를 실행한다. 운영 정보가 없는 상태에서 자동 apply하지 않는다.
+   state는 운영 프로젝트의 versioned GCS bucket에 둔다(`backend.gcs`, prefix `production`).
+
+   ```sh
+   export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud --configuration=gaffer auth print-access-token)
+   terraform -chdir=infra/terraform init -backend-config=bucket=STATE_BUCKET
+   terraform -chdir=infra/terraform apply -var-file=production.tfvars
+   ```
+
 6. Cloudflare Pages는 Direct Upload 프로젝트로 만들고 `API_ORIGIN`을 Terraform의 api URL로,
    `APP_ORIGIN`을 실제 pages.dev 또는 도메인으로 설정한다. R2 live/backup bucket은 private로
    두고 공개 접근을 끈다. **backup bucket에만** lifecycle을 적용한다.
@@ -270,7 +279,7 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
    revision 전환 도중 실패하면 점검을 유지한다. 모든 서비스와 Pages를 같은 검증된 commit으로
    돌린 뒤 `tsx apps/api/src/release.ts resume`으로 재개한다.
 10. 최초 백업·격리 복원·Google 초대 로그인·다른 계정 접근 차단·실제 R2 conditional write·
-    Cloud Tasks 재전달·선택 진단/삭제·10세션 mock 부하를 staging에서 검증한 뒤 초대한다.
+    Cloud Tasks 재전달·선택 진단/삭제·10세션 mock 부하를 초대 전의 빈 운영 환경에서 검증한 뒤 초대한다.
     소수의 실제 LLM 호출로 price/usage와 provider 제한을 대조한다. `billing_account_id`를 지정하면 월 예산 50/90/100% 경보도 생성한다. 이 경보는 LLM 코드 예산과 혼동하지 않는다.
 
 설정 참고: [Google OAuth 웹 서버 흐름](https://developers.google.com/identity/protocols/oauth2/web-server),
