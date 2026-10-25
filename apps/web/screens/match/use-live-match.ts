@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LIVE_STEP, type LiveMatchFrame } from "@gaffer/domain";
 import { advanceLive, liveDigest, liveFinished, liveFrameOf, type LiveMatch } from "@gaffer/sim";
@@ -23,7 +24,7 @@ const FRAME_MS = 100;
  * 고정 배속 — e2e가 90분을 벽시계로 기다릴 수는 없어 그 자리에서만 환경으로 올린다(빌드에
  * 박히는 값이라 `NEXT_PUBLIC_`이다). 있으면 장면을 따르는 배속(`live-speed.ts`) 대신 선다.
  */
-const FIXED_SPEED = Number(process.env.NEXT_PUBLIC_LIVE_MATCH_SPEED) || null;
+const FIXED_SPEED = Number(import.meta.env.VITE_LIVE_MATCH_SPEED) || null;
 const TICKS_PER_SPEED = FRAME_MS / 1000 / LIVE_STEP;
 const PACE_KEY = "gaffer.live-pace";
 

@@ -763,3 +763,47 @@ button:disabled,
 .growth-bars.top i.on {
   background: var(--gold);
 }
+
+.service-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.service-shell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.service-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.service-content > .app {
+  height: 100%;
+}
+.service-toolbar {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.service-shell > p {
+  padding: var(--sp-2) var(--sp-4);
+}
+
+.service-login {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+  text-align: center;
+}
+.service-login h1 {
+  font-size: var(--fs-2xl);
+}

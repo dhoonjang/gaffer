@@ -1,0 +1,538 @@
+{
+  "terraform": {
+    "required_version": ">= 1.7",
+    "required_providers": {
+      "google": {
+        "source": "hashicorp/google",
+        "version": "~> 6.0"
+      }
+    }
+  },
+  "provider": {
+    "google": {
+      "project": "${var.project_id}",
+      "region": "${var.region}"
+    }
+  },
+  "variable": {
+    "project_id": {
+      "type": "string"
+    },
+    "image": {
+      "type": "string"
+    },
+    "app_origin": {
+      "type": "string"
+    },
+    "google_client_id": {
+      "type": "string"
+    },
+    "admin_emails": {
+      "type": "string",
+      "default": ""
+    },
+    "r2_endpoint": {
+      "type": "string"
+    },
+    "r2_bucket": {
+      "type": "string"
+    },
+    "backup_project_id": {
+      "type": "string"
+    },
+    "backup_gcs_bucket": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string",
+      "default": "asia-northeast1"
+    },
+    "secret_ids": {
+      "type": "map(string)"
+    },
+    "database_secret_ids": {
+      "type": "map(string)"
+    },
+    "llm_secret_ids": {
+      "type": "map(string)",
+      "default": {}
+    },
+    "maintenance_secret_ids": {
+      "type": "map(string)"
+    },
+    "observability_secret_ids": {
+      "type": "map(string)",
+      "default": {}
+    },
+    "user_daily_budget_micros": {
+      "type": "number",
+      "default": 5000000
+    },
+    "global_daily_budget_micros": {
+      "type": "number",
+      "default": 10000000
+    },
+    "github_repository": {
+      "type": "string"
+    },
+    "github_repository_id": {
+      "type": "string"
+    },
+    "notification_channels": {
+      "type": "list(string)",
+      "default": []
+    },
+    "billing_account_id": {
+      "type": "string",
+      "default": null
+    },
+    "monthly_budget_usd": {
+      "type": "number",
+      "default": 10
+    }
+  },
+  "data": {
+    "google_project": {
+      "current": {
+        "project_id": "${var.project_id}"
+      }
+    }
+  },
+  "locals": {
+    "roles": {
+      "api": {
+        "max": 2,
+        "concurrency": 20,
+        "timeout": "65s"
+      },
+      "worker": {
+        "max": 2,
+        "concurrency": 2,
+        "timeout": "660s"
+      },
+      "sim": {
+        "max": 4,
+        "concurrency": 1,
+        "timeout": "60s"
+      },
+      "maintenance": {
+        "max": 1,
+        "concurrency": 1,
+        "timeout": "660s"
+      }
+    },
+    "urls": "${{for role in keys(local.roles): role => \"https://gaffer-${role}-${data.google_project.current.number}.${var.region}.run.app\"}}",
+    "role_secrets": "${{for role in keys(local.roles):role=>merge(var.secret_ids,{DATABASE_URL=var.database_secret_ids[role]},role==\"worker\"?var.llm_secret_ids:{},role==\"maintenance\"?var.maintenance_secret_ids:{},var.observability_secret_ids)}}",
+    "secret_grants": "${merge([for role,secrets in local.role_secrets:{for name,secret in secrets:\"${role}-${name}\"=>{role=role,secret=secret}}]...)}"
+  },
+  "resource": {
+    "google_project_service": {
+      "apis": {
+        "for_each": "${toset([\"iam.googleapis.com\",\"iamcredentials.googleapis.com\",\"sts.googleapis.com\",\"monitoring.googleapis.com\",\"logging.googleapis.com\",\"run.googleapis.com\",\"cloudtasks.googleapis.com\",\"cloudscheduler.googleapis.com\",\"secretmanager.googleapis.com\",\"artifactregistry.googleapis.com\"])}",
+        "service": "${each.value}",
+        "disable_on_destroy": false
+      }
+    },
+    "google_service_account": {
+      "runtime": {
+        "for_each": "${local.roles}",
+        "account_id": "gaffer-${each.key}"
+      },
+      "tasks": {
+        "account_id": "gaffer-tasks"
+      },
+      "deploy": {
+        "account_id": "gaffer-deploy"
+      }
+    },
+    "google_artifact_registry_repository": {
+      "images": {
+        "location": "${var.region}",
+        "repository_id": "gaffer",
+        "format": "DOCKER",
+        "depends_on": ["google_project_service.apis"]
+      }
+    },
+    "google_cloud_tasks_queue": {
+      "jobs": {
+        "name": "${each.key}",
+        "location": "${var.region}",
+        "rate_limits": {
+          "max_dispatches_per_second": 2,
+          "max_concurrent_dispatches": "${each.value}"
+        },
+        "retry_config": {
+          "max_attempts": 5,
+          "max_retry_duration": "1800s",
+          "min_backoff": "5s",
+          "max_backoff": "60s",
+          "max_doublings": 4
+        },
+        "depends_on": ["google_project_service.apis"],
+        "for_each": "${{ \"gaffer-jobs\"=4,\"gaffer-sim\"=4,\"gaffer-background\"=1 }}"
+      }
+    },
+    "google_cloud_run_v2_service": {
+      "services": {
+        "for_each": "${local.roles}",
+        "name": "gaffer-${each.key}",
+        "location": "${var.region}",
+        "deletion_protection": true,
+        "template": {
+          "service_account": "${google_service_account.runtime[each.key].email}",
+          "timeout": "${each.value.timeout}",
+          "max_instance_request_concurrency": "${each.value.concurrency}",
+          "scaling": {
+            "min_instance_count": 0,
+            "max_instance_count": "${each.value.max}"
+          },
+          "containers": {
+            "image": "${var.image}",
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "${each.key==\"worker\"?\"2Gi\":\"1Gi\"}"
+              },
+              "cpu_idle": true,
+              "startup_cpu_boost": true
+            },
+            "env": [
+              {
+                "name": "GAFFER_MODE",
+                "value": "production"
+              },
+              {
+                "name": "SERVICE_ROLE",
+                "value": "${each.key}"
+              },
+              {
+                "name": "APP_ORIGIN",
+                "value": "${var.app_origin}"
+              },
+              {
+                "name": "GOOGLE_CLIENT_ID",
+                "value": "${var.google_client_id}"
+              },
+              {
+                "name": "ADMIN_EMAILS",
+                "value": "${var.admin_emails}"
+              },
+              {
+                "name": "R2_ENDPOINT",
+                "value": "${var.r2_endpoint}"
+              },
+              {
+                "name": "R2_BUCKET",
+                "value": "${var.r2_bucket}"
+              },
+              {
+                "name": "GCP_PROJECT",
+                "value": "${var.project_id}"
+              },
+              {
+                "name": "GCP_REGION",
+                "value": "${var.region}"
+              },
+              {
+                "name": "TASK_QUEUE",
+                "value": "gaffer-jobs"
+              },
+              {
+                "name": "TASK_SERVICE_ACCOUNT",
+                "value": "${google_service_account.tasks.email}"
+              },
+              {
+                "name": "API_SERVICE_ACCOUNT",
+                "value": "${google_service_account.runtime[\"api\"].email}"
+              },
+              {
+                "name": "WORKER_URL",
+                "value": "${local.urls.worker}"
+              },
+              {
+                "name": "SIM_URL",
+                "value": "${local.urls.sim}"
+              },
+              {
+                "name": "MAINTENANCE_URL",
+                "value": "${local.urls.maintenance}"
+              },
+              {
+                "name": "USER_DAILY_BUDGET_MICROS",
+                "value": "${tostring(var.user_daily_budget_micros)}"
+              },
+              {
+                "name": "GLOBAL_DAILY_BUDGET_MICROS",
+                "value": "${tostring(var.global_daily_budget_micros)}"
+              },
+              {
+                "name": "BACKUP_GCS_BUCKET",
+                "value": "${var.backup_gcs_bucket}"
+              }
+            ],
+            "dynamic": {
+              "env": {
+                "for_each": "${local.role_secrets[each.key]}",
+                "content": {
+                  "name": "${env.key}",
+                  "value_source": {
+                    "secret_key_ref": {
+                      "secret": "${env.value}",
+                      "version": "latest"
+                    }
+                  }
+                }
+              }
+            },
+            "startup_probe": {
+              "http_get": {
+                "path": "/health"
+              },
+              "period_seconds": 10,
+              "failure_threshold": 12
+            },
+            "liveness_probe": {
+              "http_get": {
+                "path": "/health"
+              },
+              "period_seconds": 30
+            }
+          }
+        },
+        "depends_on": [
+          "google_project_service.apis",
+          "google_secret_manager_secret_iam_member.runtime"
+        ],
+        "lifecycle": {
+          "ignore_changes": ["template[0].containers[0].image", "traffic"]
+        }
+      }
+    },
+    "google_cloud_run_v2_service_iam_member": {
+      "public_api": {
+        "project": "${var.project_id}",
+        "location": "${var.region}",
+        "name": "${google_cloud_run_v2_service.services[\"api\"].name}",
+        "role": "roles/run.invoker",
+        "member": "allUsers"
+      },
+      "private_workers": {
+        "for_each": "${toset([\"worker\",\"sim\",\"maintenance\"])}",
+        "project": "${var.project_id}",
+        "location": "${var.region}",
+        "name": "${google_cloud_run_v2_service.services[each.key].name}",
+        "role": "roles/run.invoker",
+        "member": "serviceAccount:${google_service_account.tasks.email}"
+      },
+      "api_sim": {
+        "project": "${var.project_id}",
+        "location": "${var.region}",
+        "name": "${google_cloud_run_v2_service.services[\"sim\"].name}",
+        "role": "roles/run.invoker",
+        "member": "serviceAccount:${google_service_account.runtime[\"api\"].email}"
+      }
+    },
+    "google_project_iam_member": {
+      "enqueue": {
+        "for_each": "${google_service_account.runtime}",
+        "project": "${var.project_id}",
+        "role": "roles/cloudtasks.enqueuer",
+        "member": "serviceAccount:${each.value.email}"
+      },
+      "deploy_run": {
+        "project": "${var.project_id}",
+        "role": "roles/run.developer",
+        "member": "serviceAccount:${google_service_account.deploy.email}"
+      }
+    },
+    "google_service_account_iam_member": {
+      "task_identity": {
+        "for_each": "${google_service_account.runtime}",
+        "service_account_id": "${google_service_account.tasks.name}",
+        "role": "roles/iam.serviceAccountUser",
+        "member": "serviceAccount:${each.value.email}"
+      },
+      "deploy_federation": {
+        "service_account_id": "${google_service_account.deploy.name}",
+        "role": "roles/iam.workloadIdentityUser",
+        "member": "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repository_id}"
+      },
+      "deploy_runtime": {
+        "for_each": "${google_service_account.runtime}",
+        "service_account_id": "${each.value.name}",
+        "role": "roles/iam.serviceAccountUser",
+        "member": "serviceAccount:${google_service_account.deploy.email}"
+      }
+    },
+    "google_secret_manager_secret_iam_member": {
+      "runtime": {
+        "for_each": "${local.secret_grants}",
+        "secret_id": "${each.value.secret}",
+        "role": "roles/secretmanager.secretAccessor",
+        "member": "serviceAccount:${google_service_account.runtime[each.value.role].email}"
+      }
+    },
+    "google_cloud_scheduler_job": {
+      "reconcile": {
+        "name": "gaffer-reconcile",
+        "region": "${var.region}",
+        "schedule": "*/5 * * * *",
+        "time_zone": "Etc/UTC",
+        "attempt_deadline": "600s",
+        "http_target": {
+          "http_method": "POST",
+          "uri": "${local.urls.maintenance}/internal/reconcile",
+          "body": "${base64encode(\"{}\")}",
+          "oidc_token": {
+            "service_account_email": "${google_service_account.tasks.email}",
+            "audience": "${local.urls.maintenance}"
+          }
+        },
+        "depends_on": ["google_project_service.apis"]
+      },
+      "backup": {
+        "name": "gaffer-backup",
+        "region": "${var.region}",
+        "schedule": "0 18 * * *",
+        "time_zone": "Etc/UTC",
+        "attempt_deadline": "600s",
+        "http_target": {
+          "http_method": "POST",
+          "uri": "${local.urls.maintenance}/internal/backup",
+          "body": "${base64encode(\"{}\")}",
+          "oidc_token": {
+            "service_account_email": "${google_service_account.tasks.email}",
+            "audience": "${local.urls.maintenance}"
+          }
+        },
+        "depends_on": ["google_project_service.apis"]
+      }
+    },
+    "google_storage_bucket": {
+      "backup": {
+        "project": "${var.backup_project_id}",
+        "name": "${var.backup_gcs_bucket}",
+        "location": "US-WEST1",
+        "uniform_bucket_level_access": true,
+        "public_access_prevention": "enforced",
+        "force_destroy": false,
+        "lifecycle_rule": {
+          "condition": {
+            "age": 8,
+            "matches_prefix": ["backups/"]
+          },
+          "action": {
+            "type": "Delete"
+          }
+        }
+      }
+    },
+    "google_storage_bucket_iam_member": {
+      "backup_writer": {
+        "bucket": "${google_storage_bucket.backup.name}",
+        "role": "roles/storage.objectCreator",
+        "member": "serviceAccount:${google_service_account.runtime[\"maintenance\"].email}"
+      },
+      "backup_reader": {
+        "bucket": "${google_storage_bucket.backup.name}",
+        "role": "roles/storage.objectViewer",
+        "member": "serviceAccount:${google_service_account.runtime[\"maintenance\"].email}"
+      }
+    },
+    "google_iam_workload_identity_pool": {
+      "github": {
+        "workload_identity_pool_id": "gaffer-github",
+        "depends_on": ["google_project_service.apis"]
+      }
+    },
+    "google_iam_workload_identity_pool_provider": {
+      "github": {
+        "workload_identity_pool_id": "${google_iam_workload_identity_pool.github.workload_identity_pool_id}",
+        "workload_identity_pool_provider_id": "github",
+        "attribute_mapping": {
+          "google.subject": "assertion.sub",
+          "attribute.repository": "assertion.repository",
+          "attribute.repository_id": "assertion.repository_id"
+        },
+        "attribute_condition": "assertion.repository_id == '${var.github_repository_id}' && assertion.repository == '${var.github_repository}' && assertion.ref == 'refs/heads/main' && assertion.sub == 'repo:${var.github_repository}:environment:production'",
+        "oidc": {
+          "issuer_uri": "https://token.actions.githubusercontent.com"
+        }
+      }
+    },
+    "google_artifact_registry_repository_iam_member": {
+      "deploy": {
+        "location": "${var.region}",
+        "repository": "${google_artifact_registry_repository.images.name}",
+        "role": "roles/artifactregistry.writer",
+        "member": "serviceAccount:${google_service_account.deploy.email}"
+      }
+    },
+    "google_monitoring_alert_policy": {
+      "service": {
+        "display_name": "Gaffer: job, backup or deletion failure",
+        "combiner": "OR",
+        "notification_channels": "${var.notification_channels}",
+        "conditions": {
+          "display_name": "Operational failure",
+          "condition_matched_log": {
+            "filter": "resource.type=\"cloud_run_revision\" AND (jsonPayload.event=\"backup_overdue\" OR jsonPayload.event=\"job_failed\" OR jsonPayload.event=\"maintenance_failed\" OR jsonPayload.event=\"lorebook_held\" OR jsonPayload.event=\"service_attention\")"
+          }
+        },
+        "alert_strategy": {
+          "notification_rate_limit": {
+            "period": "3600s"
+          },
+          "auto_close": "86400s"
+        },
+        "depends_on": ["google_project_service.apis"]
+      }
+    },
+    "google_billing_budget": {
+      "beta": {
+        "count": "${var.billing_account_id==null?0:1}",
+        "billing_account": "${var.billing_account_id}",
+        "display_name": "Gaffer beta monthly infrastructure",
+        "amount": {
+          "specified_amount": {
+            "currency_code": "USD",
+            "units": "${tostring(var.monthly_budget_usd)}"
+          }
+        },
+        "budget_filter": {
+          "projects": ["projects/${data.google_project.current.number}"],
+          "credit_types_treatment": "INCLUDE_ALL_CREDITS"
+        },
+        "threshold_rules": [
+          {
+            "threshold_percent": 0.5
+          },
+          {
+            "threshold_percent": 0.9
+          },
+          {
+            "threshold_percent": 1
+          }
+        ],
+        "all_updates_rule": {
+          "monitoring_notification_channels": "${var.notification_channels}",
+          "disable_default_iam_recipients": false
+        }
+      }
+    }
+  },
+  "output": {
+    "service_urls": {
+      "value": "${local.urls}"
+    },
+    "repository": {
+      "value": "${google_artifact_registry_repository.images.id}"
+    },
+    "workload_identity_provider": {
+      "value": "${google_iam_workload_identity_pool_provider.github.name}"
+    },
+    "deployment_service_account": {
+      "value": "${google_service_account.deploy.email}"
+    }
+  }
+}

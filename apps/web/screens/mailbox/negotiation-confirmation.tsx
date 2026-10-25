@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   NegotiationConfirmationPayloadSchema,

@@ -11,13 +11,8 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
       "@/*": ["./*"]
     },
@@ -26,15 +21,9 @@
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["vite/client", "node"]
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".next-e2e*/types/**/*.ts",
-    ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".next-e2e/types/**/*.ts"
-  ],
-  "exclude": ["node_modules"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "dist", ".next", ".next-e2e"]
 }

@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-import { buildMatchReport, loadGame } from "@gaffer/engine";
+import { loadGame } from "../../../../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../../../../api/src/game/persistence";
+import { buildMatchReport } from "@gaffer/engine";
 import { invalidGameId } from "@/app/api/games/game-id";
 
 /**

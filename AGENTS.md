@@ -56,7 +56,7 @@ narrative; contracts, employment, finances and match records remain validated le
 ## 3. Stack
 
 - **Language** — TypeScript, strict, full stack
-- **Runtime** — Next.js (App Router) + Node.js
+- **Runtime** — React/Vite + NestJS + Node.js
 - **Packages** — pnpm monorepo workspaces
 - **LLM** — multi-provider, configured **per agent**. `config/llm.yml` is the
   single source for providers and model IDs (→ [docs/agents/models.md](docs/agents/models.md))
@@ -70,11 +70,12 @@ docs/              # present service — one folder per domain, same names as th
 config/            # providers, models and game version
 apps/
   web/
-    app/           # Next routes and API transport
+    app/           # React pages and reused framework-neutral game handlers
     game/          # game shell and server plumbing (turn runner, store, stream)
     screens/       # chat · mailbox · office (calendar, finance, cups, career) · squad · match
     shared/        # pieces and styles several screens use
     dev/           # turn trace viewer
+  api/             # Nest transport, SQL jobs, auth, workers and operations
   match-cli/       # headless live match
 packages/
   domain/src/      # browser-safe Zod models and pure rules, by domain
@@ -127,7 +128,7 @@ hypot/pow`, which differ in the last bit between JavaScript engines and would ma
   enforces all of it (→ [docs/architecture.md](docs/architecture.md) §2).
   Internal imports use the owning module, never the package's own public barrel.
 - **The screen imports `@gaffer/engine` for types only.** A value import pulls
-  `node:fs` into the browser bundle and `next build` dies — `typecheck` passes, so
+  `node:fs` into the browser bundle and `vite build` dies — `typecheck` passes, so
   **`pnpm lint` is what catches it**: `eslint.config.js` bans the value import
   across `apps/web` — the server-only modules that would drag the engine in with
   them included — and lists the files exempt from it. A pure rule the screen and
@@ -246,9 +247,9 @@ red change merged green. How the gate is sharded and what it runs on is
 
 - **While working** — `pnpm typecheck`, `pnpm lint` and `pnpm format`, plus
   `pnpm test <path>` for the file you just wrote. That is the whole local loop.
-- **`pnpm typecheck` is three projects, not one** — `tsconfig.json` (packages ·
-  match-cli · vitest configs), `apps/web/tsconfig.json` (the Next app, its tests
-  and `next.config.ts`) and `tsconfig.e2e.json` (`e2e/` · `playwright.config.ts`).
+- **`pnpm typecheck` is four projects, not one** — `tsconfig.json` (packages ·
+  match-cli · vitest configs), `apps/web/tsconfig.json` (the React app, its tests
+  and Vite config) and `tsconfig.e2e.json` (`e2e/` · `playwright.config.ts`), plus `apps/api/tsconfig.json` (Nest service · infra proxy).
   They stay apart because the app and the specs need the DOM lib and the
   deterministic core must not see it. A new top-level folder of `.ts` belongs to
   one of the three — a folder no config includes is a folder nothing checks.

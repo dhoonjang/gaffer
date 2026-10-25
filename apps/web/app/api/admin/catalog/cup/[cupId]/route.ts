@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../../../../../../api/src/game/persistence";
 import { z } from "zod";
 import { MatchStageSchema, type MatchStage } from "@gaffer/domain";
 import {

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { loadGame, saveGame } from "../../../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../../../api/src/game/persistence";
 import { z } from "zod";
 import { MailUiSendSchema, MailRecipientSearchSchema } from "@gaffer/domain";
 import {
@@ -8,8 +9,6 @@ import {
   getMailRequestResult,
   readMailThread,
   sendMail,
-  loadGame,
-  saveGame,
   journal,
 } from "@gaffer/engine";
 import { traceBoard, withGameUsage } from "@gaffer/llm";

@@ -1,7 +1,9 @@
 "use client";
+import { useSession } from "@/shared/session";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/shared/navigation";
 import type { ClubColours } from "@gaffer/domain";
 import { IconDatabase, IconMark, IconMatch, IconPlus, IconTrash } from "@/shared/icons";
 import { GameListSkeleton } from "@/shared/skeleton";
@@ -49,6 +51,7 @@ function unreadableReason(g: UnreadableGame): string {
 }
 
 export default function HomePage() {
+  const { local } = useSession();
   const [games, setGames] = useState<GameListEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -102,14 +105,18 @@ export default function HomePage() {
           </div>
         </div>
         <div className="home-head-actions">
-          <Link href="/admin" className={buttonClass("secondary")} data-testid="admin-link">
-            <IconDatabase />
-            DB
-          </Link>
-          <Link href="/lab" className={buttonClass("secondary")} data-testid="lab-link">
-            <IconMatch />
-            실험실
-          </Link>
+          {local && (
+            <>
+              <Link href="/admin" className={buttonClass("secondary")} data-testid="admin-link">
+                <IconDatabase />
+                DB
+              </Link>
+              <Link href="/lab" className={buttonClass("secondary")} data-testid="lab-link">
+                <IconMatch />
+                실험실
+              </Link>
+            </>
+          )}
           <Link href="/new" className={buttonClass("primary")} data-testid="new-game">
             <IconPlus />새 게임
           </Link>

@@ -10,6 +10,7 @@
  * (agents.md §4), 압축은 접지 않은 채 다음 기회를 기다린다(agents.md §5-1).
  */
 
+import { withHttpAgent } from "./http-meter";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
@@ -315,23 +316,23 @@ export function meterLlm(llm: GameLLM, agent: AgentName, env: LlmEnv = process.e
       // 남는 전부다. 결과를 받은 뒤에만 적으면 여덟 번을 왕복하다 시한에 걸린
       // 턴, 곧 **가장 많이 쓴 호출**이 0으로 적힌다 (models.md §4).
       let reported = emptyUsage();
-      const result = await llm
-        .runTurn({
+      const result = await withHttpAgent(agent, () =>
+        llm.runTurn({
           ...req,
           onUsage: (delta) => {
             reported = addUsage(reported, delta);
             req.onUsage?.(delta);
           },
-        })
-        .catch((error: unknown) => {
-          // 보고된 것이 없으면 적지 않는다 — 예산에 걸려 부르지도 않은 호출과
-          // 즉시 끊긴 연결 오류가 `calls`를 부풀리면 `cacheAlerts`의 평균 입력이
-          // 흐려진다.
-          if (billedTokens(reported) > 0) {
-            session.ledger = recordUsage(session.ledger, agent, reported);
-          }
-          throw error;
-        });
+        }),
+      ).catch((error: unknown) => {
+        // 보고된 것이 없으면 적지 않는다 — 예산에 걸려 부르지도 않은 호출과
+        // 즉시 끊긴 연결 오류가 `calls`를 부풀리면 `cacheAlerts`의 평균 입력이
+        // 흐려진다.
+        if (billedTokens(reported) > 0) {
+          session.ledger = recordUsage(session.ledger, agent, reported);
+        }
+        throw error;
+      });
       // 성공 경로는 어댑터가 돌려준 합계만 적는다 — 왕복 몫과 두 번 세지 않는다
       session.ledger = recordUsage(session.ledger, agent, result.usage);
       for (const broken of cacheAlerts(session.ledger)) {

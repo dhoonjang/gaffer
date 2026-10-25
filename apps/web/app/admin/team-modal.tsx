@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { useState } from "react";
 import {

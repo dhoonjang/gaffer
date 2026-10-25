@@ -1,7 +1,7 @@
-import { processLorebookJobs } from "@/game/lorebook-jobs";
-import { after, NextResponse } from "next/server";
+import { loadGame, deleteGame } from "../../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../../api/src/game/persistence";
 import { noteTurn, traceBoard } from "@gaffer/llm";
-import { deleteGame, loadGame } from "@gaffer/engine";
+import {} from "@gaffer/engine";
 import { toPayload } from "@/game/store";
 import { LOCK_WAIT_MS, busyResponse, withGameLock } from "@/game/turn-runner";
 import { invalidGameId } from "@/app/api/games/game-id";
@@ -28,7 +28,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     : loadGame(id);
   if (state instanceof Response) return state;
   if (!state) return NextResponse.json({ error: "게임을 찾을 수 없습니다" }, { status: 404 });
-  if (state.lorebookJobs.length > 0) after(() => processLorebookJobs(id));
   return NextResponse.json(toPayload(state));
 }
 

@@ -43,8 +43,9 @@ AI는 의미를 해석하고 인물의 반응과 이야기를 판단한다. 코�
 화면은 문서가 아니라 코드가 소유한다. `apps/web`은 화면 단위로 나뉜다 — `game/`(게임 화면과
 경기 실험실의 껍데기, 서버 배관: 턴 실행·저장·스트림·실시간 경기 확정), `screens/<화면>`(채팅 · 메일함과 협상
 확인 · 장부 뷰 `office`(일정·대회·재정·커리어) · 선수단 · 경기), `shared/`(여러 화면이 쓰는 조각과
-스타일), `dev/`(턴 원문 뷰어). 화면은 `shared/`만 부르고 서로를 부르지 않는다. Next 라우트
-(`app/`)는 URL과 API의 경계다. 디자인 시스템의 단일 소스는
+스타일), `dev/`(턴 원문 뷰어). 화면은 `shared/`만 부르고 서로를 부르지 않는다. React Router가 화면 URL을 맡고 `apps/api`의 Nest가 공개 API 경계를 맡는다.
+`app/api`의 Request/Response 핸들러는 서버 실행기가 재사용한다. 인증·SQL 저장·작업·배포는
+[배포 런타임](deployment/README.md)을 따른다. 디자인 시스템의 단일 소스는
 [`apps/web/shared/tokens.css`](../apps/web/shared/tokens.css)이고, 화면별 규약은 그 화면의 CSS·TSX
 머리 주석이 갖는다.
 

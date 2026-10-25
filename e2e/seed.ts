@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { APIRequestContext } from "@playwright/test";
 import {
   advanceTime,
   allMatchesDone,
@@ -65,6 +67,7 @@ function appoint(opts: {
 
     ...(opts.world ? { world: opts.world } : {}),
   });
+  state.id = randomUUID();
   const intro = buildOnboardingTurn(state);
   state.chat.push({ role: "model", text: intro.text, toolCalls: intro.toolCalls, at: state.date });
   return state;
@@ -97,7 +100,11 @@ function playMatch(state: GameState): void {
  * 그 한 번이 이 픽스처가 브라우저에 넘기는 몫이므로, 남은 경기가 없어지는 순간
  * 멈춘다.
  */
-export function seedFinishedSeason(teamId = "arsenal", seed = 406): string {
+export async function seedFinishedSeason(
+  request: APIRequestContext,
+  teamId = "arsenal",
+  seed = 406,
+): Promise<string> {
   const state = appoint({ teamId, managerName: "결산", seed, world: ONE_LEAGUE });
   for (let guard = 0; guard < 400 && !allMatchesDone(state); guard++) {
     const advanced = advanceTime(state, "next_match");
@@ -111,11 +118,14 @@ export function seedFinishedSeason(teamId = "arsenal", seed = 406): string {
   }
   if (!allMatchesDone(state)) throw new Error("400번 안에 시즌을 끝내지 못했다");
   saveGame(state);
+  await request.get("/api/auth/me");
+  const registered = await request.post("/api/dev/import", { data: { id: state.id } });
+  if (!registered.ok()) throw new Error("Fixture registration failed");
   return state.id;
 }
 
 /** Inquiry and renewal use the same persisted world as the main GM. */
-export function seedMailNegotiation() {
+export async function seedMailNegotiation(request: APIRequestContext) {
   const state = appoint({
     teamId: "arsenal",
     managerName: "협상 감독",
@@ -132,6 +142,9 @@ export function seedMailNegotiation() {
   const contract = activeContract(state, own.id)!;
   contract.until = addDays(state.date, 90);
   saveGame(state);
+  await request.get("/api/auth/me");
+  const registered = await request.post("/api/dev/import", { data: { id: state.id } });
+  if (!registered.ok()) throw new Error("Fixture registration failed");
   return {
     gameId: state.id,
     teamId: state.userTeamId,
@@ -145,7 +158,7 @@ export function seedMailNegotiation() {
 }
 
 /** A buyer offer is confirmed by the seller without exposing the player's private terms. */
-export function seedSellerAgreement() {
+export async function seedSellerAgreement(request: APIRequestContext) {
   const state = appoint({
     teamId: "arsenal",
     managerName: "매각 감독",
@@ -214,6 +227,9 @@ export function seedSellerAgreement() {
     toolCalls: [{ name: "request_negotiation_confirmation", summary: "매각 조건 확인", payload }],
   });
   saveGame(state);
+  await request.get("/api/auth/me");
+  const registered = await request.post("/api/dev/import", { data: { id: state.id } });
+  if (!registered.ok()) throw new Error("Fixture registration failed");
   return {
     gameId: state.id,
     negotiationId: item.id,

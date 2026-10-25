@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/shared/navigation";
 import { IconArrowLeft } from "@/shared/icons";
 import { useAdminCatalog } from "./catalog-store";
 import { CupsPanel } from "./cups-panel";

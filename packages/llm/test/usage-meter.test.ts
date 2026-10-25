@@ -588,3 +588,87 @@ describe("모델 호출 시한", () => {
     void pending.catch(() => undefined);
   });
 });
+
+describe("durable HTTP attempt accounting", () => {
+  it("reserves each transport retry and includes Gemini thinking tokens", async () => {
+    const { withHttpMeter, meteredFetch } = await import("@gaffer/llm");
+    const reserve = vi.fn(async () => `permit-${reserve.mock.calls.length}`);
+    const settle = vi.fn(async () => {});
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ error: "busy" }, { status: 503 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 3, thoughtsTokenCount: 7 },
+        }),
+      );
+    vi.stubGlobal("fetch", transport);
+    try {
+      await withHttpMeter({ reserve, settle }, async () => {
+        for (let n = 0; n < 2; n++) {
+          const response = await meteredFetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent",
+            {
+              method: "POST",
+              body: JSON.stringify({ generationConfig: { maxOutputTokens: 100 }, contents: [] }),
+            },
+          );
+          await response.json();
+        }
+      });
+      expect(reserve).toHaveBeenCalledTimes(2);
+      expect(settle).toHaveBeenNthCalledWith(1, "permit-1", null);
+      expect(settle).toHaveBeenNthCalledWith(2, "permit-2", { inputTokens: 12, outputTokens: 10 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("never sends a paid HTTP request when its reservation fails", async () => {
+    const { withHttpMeter, meteredFetch } = await import("@gaffer/llm");
+    const transport = vi.fn();
+    vi.stubGlobal("fetch", transport);
+    try {
+      await expect(
+        withHttpMeter(
+          {
+            reserve: async () => {
+              throw new Error("budget");
+            },
+            settle: async () => {},
+          },
+          () =>
+            meteredFetch("https://api.openai.com/v1/responses", {
+              method: "POST",
+              body: JSON.stringify({ model: "test-model", max_output_tokens: 50 }),
+            }),
+        ),
+      ).rejects.toThrow("budget");
+      expect(transport).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("rejected HTTP attempts", () => {
+  it("releases reservations for a definite rate-limit rejection", async () => {
+    const { withHttpMeter, meteredFetch } = await import("@gaffer/llm");
+    const settle = vi.fn(async () => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ error: "rate_limit" }, { status: 429 })),
+    );
+    try {
+      const response = await withHttpMeter({ reserve: async () => "request", settle }, () =>
+        meteredFetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          body: JSON.stringify({ model: "test-model", max_output_tokens: 100 }),
+        }),
+      );
+      expect(response.status).toBe(429);
+      expect(settle).toHaveBeenCalledWith("request", { inputTokens: 0, outputTokens: 0 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

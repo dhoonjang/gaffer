@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { execution } from "../../../../api/src/game/persistence";
+import { saveGame } from "../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../api/src/game/persistence";
 import { z } from "zod";
 import {
   createGame,
   leagueTones,
   listGameSummaries,
-  saveGame,
   teamCatalog,
   teamsOfLeague,
   topLeagues,
@@ -67,6 +68,8 @@ export async function POST(request: Request) {
     background,
     // 부임 구단도 판정에 넣는다 — 빅클럽이 뽑았다는 사실이 이력에 대한 정보다
   });
+
+  if (execution()) state.id = execution()!.id;
 
   // 토큰 예산의 단위는 게임이다 — 새 게임의 장부는 첫 호출부터 센다 (models.md §4)
 

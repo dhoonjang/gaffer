@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { useEffect, useState } from "react";
 import { LorebookContentSchema, personaRoleLabel, type LorebookContent } from "@gaffer/domain";

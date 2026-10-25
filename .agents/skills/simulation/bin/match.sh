@@ -11,7 +11,7 @@ set -uo pipefail
 : "${SIM_GAME:?SIM_GAME이 비었다}" "${SIM_DIR:?SIM_DIR이 비었다}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
-SIM_HOST="${SIM_HOST:-http://localhost:3000}" SIM_GAME="$SIM_GAME" \
+SIM_HOST="${SIM_HOST:-http://localhost:5173}" SIM_GAME="$SIM_GAME" \
   pnpm --silent --dir "$ROOT/apps/match-cli" exec tsx src/client.ts "$@"
 CODE=$?
 case $CODE in

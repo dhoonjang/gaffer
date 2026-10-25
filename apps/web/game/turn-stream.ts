@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from "@/shared/api";
 import type { TurnOperation } from "@gaffer/agents";
 import type { GamePayload } from "@/game/store";
 import type { MatchBoardOrder } from "@/shared/match-orders";
@@ -13,6 +14,7 @@ import type { MatchBoardOrder } from "@/shared/match-orders";
 /** 서버가 흘려보내는 이벤트 — 모르는 `type`은 조용히 흘려보낸다 */
 type TurnStreamEvent = {
   type: string;
+  settled?: boolean;
   text?: string;
   payload?: GamePayload;
   error?: string;
@@ -58,6 +60,7 @@ export type TurnStreamFailure = {
 type TurnStreamHandlers = {
   /** 글자가 왔다 — 화면의 공개 펌프가 받는다 */
   onDelta: (text: string) => void;
+  onReset?: () => void;
   /**
    * 턴이 끝났다. **여기서 화면에 앉히지는 않는다** — 흘러오던 글자가 다 공개된
    * 뒤에 앉아야 중계가 중간에 끊기지 않는다.
@@ -154,7 +157,9 @@ export async function streamTurn(
         } catch {
           continue; // 불완전한 조각은 건너뛴다 — 다음 줄에서 회복
         }
-        if (evt.type === "delta" && evt.text) {
+        if (evt.type === "attempt_reset") {
+          handlers.onReset?.();
+        } else if (evt.type === "delta" && evt.text) {
           handlers.onDelta(evt.text);
         } else if (evt.type === "done" && evt.payload) {
           handlers.onDone(evt.payload);
@@ -169,7 +174,7 @@ export async function streamTurn(
           failure = {
             reason: evt.error ?? "턴을 처리하지 못했습니다",
             detail: evt.detail,
-            settled: true,
+            settled: evt.settled !== false,
             retry: evt.retry !== false,
           };
           closed = true;

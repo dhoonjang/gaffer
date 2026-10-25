@@ -234,7 +234,7 @@ export function saveGame(state: GameState): void {
    * 것을 알아차릴 수 있는 자리는 이 로그뿐이다.
    */
   try {
-    writeSummary(state.id, { readable: true, ...summaryOf(state) });
+    writeSummary(state.id, { readable: true, ...gameSummary(state) });
     pruneShards(state.id, shards);
   } catch (error) {
     console.warn(`[save] ${state.id}: 저장은 끝났으나 뒷정리가 넘어졌습니다:`, error);
@@ -360,7 +360,7 @@ const REQUIRED_TABLES = [
  * 파일을 못 읽는 것과 코어의 스키마가 그 파일을 막는 것을 한 사유로 뭉치면
  * 멀쩡한 세이브가 "손상"으로 서고, 고칠 것이 파일인지 코드인지 아무도 모른다.
  */
-function validate(raw: unknown): LoadResult {
+export function validateSave(raw: unknown): LoadResult {
   if (!raw || typeof raw !== "object") {
     return { ok: false, reason: "corrupt", saveVersion: null, createdAt: null };
   }
@@ -397,7 +397,7 @@ function validate(raw: unknown): LoadResult {
  */
 function readState(id: string, file: string): LoadResult {
   try {
-    return validate(attachShards(JSON.parse(readFileSync(file, "utf8")), id));
+    return validateSave(attachShards(JSON.parse(readFileSync(file, "utf8")), id));
   } catch {
     return { ok: false, reason: "corrupt", saveVersion: null, createdAt: null };
   }
@@ -536,7 +536,7 @@ export interface UnreadableGame {
 /** 목록 한 줄 — 열리는 세이브와 못 여는 세이브가 같은 배열에 선다 */
 export type GameListEntry = ({ readable: true } & GameSummary) | UnreadableGame;
 
-function summaryOf(state: GameState): GameSummary {
+export function gameSummary(state: GameState): GameSummary {
   return {
     id: state.id,
     teamId: state.userTeamId,
@@ -722,7 +722,7 @@ export function listGameSummaries(): GameListEntry[] {
       if (cached) return cached;
       const result = readGame(id);
       const entry: GameListEntry = result.ok
-        ? { readable: true, ...summaryOf(result.state) }
+        ? { readable: true, ...gameSummary(result.state) }
         : {
             readable: false,
             id,

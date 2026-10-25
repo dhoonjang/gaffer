@@ -5,16 +5,17 @@
 #         | {"operation":{"kind":"skip_to_next_match","date":"YYYY-MM-DD"}}
 #         (입장과 경기 중의 시계는 match.sh가 맡는다)
 #   message에 orders를 함께 실을 수 있다: {"message":"…","orders":[{"kind":"substitution","out":"id","in":"id"}]}
-# env: SIM_GAME(게임 id) · SIM_DIR(작업 폴더) · SIM_HOST(기본 http://localhost:3000)
+# env: SIM_GAME(게임 id) · SIM_DIR(작업 폴더) · SIM_HOST(기본 http://localhost:5173)
 set -uo pipefail
 : "${SIM_GAME:?SIM_GAME이 비었다}" "${SIM_DIR:?SIM_DIR이 비었다}"
-HOST="${SIM_HOST:-http://localhost:3000}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../../.." && pwd)"
+HOST="${SIM_HOST:-http://localhost:5173}"
 RAW="$SIM_DIR/raw.ndjson"
 mkdir -p "$SIM_DIR"
 printf '%s\n' "$1" > "$SIM_DIR/last-request.json"
 
-curl -N -s -m 900 -X POST "$HOST/api/games/$SIM_GAME/turn/stream" \
-  -H 'content-type: application/json' -d "$1" > "$RAW"
+pnpm --silent --dir "$ROOT" exec tsx apps/match-cli/src/request.ts "$HOST/api/games/$SIM_GAME/turn/stream" POST "$1" "$RAW" stream >/dev/null
 CURL=$?
 
 echo "=== 서사 ==="

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../../../../api/src/game/persistence";
 import {
   AGENT_NAMES,
   agentConfig,

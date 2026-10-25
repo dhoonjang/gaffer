@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 import { SquadView } from "@/screens/squad/squad-view";
 import { Mailbox, type MailDraft } from "../screens/mailbox/mailbox";
 import { NegotiationConfirmation } from "../screens/mailbox/negotiation-confirmation";
@@ -6,7 +7,7 @@ import { PlayerContactActions } from "../screens/mailbox/player-contact-actions"
 import { PlayerCardProvider, type PlayerCardDefaultActions } from "../shared/player-card";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/shared/navigation";
 import type { GamePayload, GameSlice } from "@/game/store";
 import { humanDate } from "@/shared/dateline";
 import { matchHeadFacts, matchScoreOf, matchTitleOf } from "@/screens/match/match-head";
@@ -736,6 +737,11 @@ export function GameScreen({ gameId }: { gameId: string }) {
           ...(talkTo ? { addresseeId: talkTo.playerId } : {}),
         },
         {
+          onReset: () => {
+            streamAccRef.current = "";
+            revealedRef.current = 0;
+            setStreamText("");
+          },
           onDelta: (text) => {
             streamAccRef.current += text;
           },

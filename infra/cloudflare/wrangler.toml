@@ -1,0 +1,5 @@
+name = "gaffer"
+pages_build_output_dir = "../../apps/web/dist"
+compatibility_date = "2026-10-16"
+# Set API_ORIGIN and APP_ORIGIN per production/preview environment in Pages.
+# Preview deployments must use a separate beta API and auth redirect allowlist.

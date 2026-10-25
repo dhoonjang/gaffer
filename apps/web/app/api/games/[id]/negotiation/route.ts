@@ -1,12 +1,7 @@
-import { after, NextResponse } from "next/server";
+import { loadGame, saveGame } from "../../../../../../api/src/game/persistence";
+import { after, NextResponse } from "../../../../../../api/src/game/persistence";
 import { NegotiationRequestSchema } from "@gaffer/domain";
-import {
-  applyNegotiationRequest,
-  buildNegotiationView,
-  loadGame,
-  saveGame,
-  journal,
-} from "@gaffer/engine";
+import { applyNegotiationRequest, buildNegotiationView, journal } from "@gaffer/engine";
 import { traceBoard, withGameUsage } from "@gaffer/llm";
 import { toPayload } from "@/game/store";
 import { processLorebookJobs } from "@/game/lorebook-jobs";

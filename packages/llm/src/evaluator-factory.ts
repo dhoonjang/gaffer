@@ -1,3 +1,4 @@
+import { withHttpAgent } from "./http-meter";
 import { LLM_CONFIG, type EvaluatorName } from "./config";
 import type { GameEvaluator } from "./game-evaluator";
 import { TypesafeEvaluationError, TypesafeGameEvaluator } from "./typesafe-adapter";
@@ -26,7 +27,7 @@ export function createGameEvaluator(name: EvaluatorName): GameEvaluator {
   return {
     async evaluate(request) {
       assertAgentBudget(name);
-      return evaluator.evaluate(request);
+      return withHttpAgent(name, () => evaluator.evaluate(request));
     },
   };
 }

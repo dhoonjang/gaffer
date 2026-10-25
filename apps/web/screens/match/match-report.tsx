@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 import { kickOutcome } from "./kick-outcome";
 
 import { Fragment, useEffect, useState } from "react";

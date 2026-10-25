@@ -14,7 +14,7 @@ import { COLD_MS } from "./timeouts";
  */
 
 test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", async ({ page }) => {
-  const gameId = seedFinishedSeason();
+  const gameId = await seedFinishedSeason(page.request);
   await page.goto(`/game/${gameId}`);
 
   const date = page.getByTestId("game-date");
@@ -56,7 +56,7 @@ test("시즌 마지막 경기 뒤 하루를 넘기면 새 시즌이 선다", asy
 });
 
 test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 이어진다", async ({ page }) => {
-  const fixture = seedMailNegotiation();
+  const fixture = await seedMailNegotiation(page.request);
   await page.goto(`/game/${fixture.gameId}`);
   const input = page.getByTestId("chat-input");
   await expect(input).toBeVisible({ timeout: COLD_MS });
@@ -180,13 +180,13 @@ test("메일 스레드와 첨부, 메인 대화의 협상이 같은 장부로 �
   await expect(page.getByTestId("mail-attachment")).toHaveAttribute("data-message-id", incoming.id);
 });
 
-test("매각 감독은 비공개 선수 조건 없이 구단 이적 조건에 합의한다", async ({ page, request }) => {
-  const fixture = seedSellerAgreement();
+test("매각 감독은 비공개 선수 조건 없이 구단 이적 조건에 합의한다", async ({ page }) => {
+  const fixture = await seedSellerAgreement(page.request);
   await page.goto(`/game/${fixture.gameId}`);
   const card = page.getByTestId("negotiation-confirmation");
   await expect(card).toBeVisible({ timeout: COLD_MS });
   const read = async () => {
-    const response = await request.get(`/api/games/${fixture.gameId}/negotiation`);
+    const response = await page.request.get(`/api/games/${fixture.gameId}/negotiation`);
     return (
       (await response.json()) as { negotiation: OfficeViews["negotiation"] }
     ).negotiation.cases.find((n) => n.id === fixture.negotiationId)!;

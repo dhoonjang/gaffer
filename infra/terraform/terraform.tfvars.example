@@ -1,0 +1,42 @@
+project_id = "your-gaffer-project"
+image = "asia-northeast1-docker.pkg.dev/your-gaffer-project/gaffer/service:COMMIT_SHA"
+app_origin = "https://your-gaffer-domain"
+google_client_id = "NUMBER-xxxx.apps.googleusercontent.com" # Web application OAuth client
+admin_emails = "operator@example.com" # Verified Google emails that join as operators without an invite
+r2_endpoint = "https://ACCOUNT.r2.cloudflarestorage.com"
+r2_bucket = "gaffer-saves"
+backup_project_id = "your-independent-backup-project"
+backup_gcs_bucket = "globally-unique-gaffer-backups"
+secret_ids = {
+  # DATABASE_CA_CERT = "gaffer-database-ca" # If the PostgreSQL certificate needs an explicit CA
+  LLM_PRICES_JSON = "gaffer-llm-prices"
+  GOOGLE_CLIENT_SECRET = "gaffer-google-client-secret"
+  SESSION_KEY = "gaffer-session-key"
+  EMAIL_HASH_KEY = "gaffer-email-hash-key"
+  R2_ACCESS_KEY_ID = "gaffer-r2-key-id"
+  R2_SECRET_ACCESS_KEY = "gaffer-r2-key-secret"
+}
+database_secret_ids = {
+  api = "gaffer-db-api"
+  worker = "gaffer-db-worker"
+  sim = "gaffer-db-worker"
+  maintenance = "gaffer-db-maintenance"
+}
+llm_secret_ids = {
+  GOOGLE_API_KEY = "gaffer-google-key"
+  TYPESAFE_API_KEY = "gaffer-typesafe-key"
+}
+maintenance_secret_ids = {
+  BACKUP_KEY = "gaffer-backup-key"
+  BACKUP_R2_BUCKET = "gaffer-backup-r2-bucket"
+  BACKUP_R2_ACCESS_KEY_ID = "gaffer-backup-r2-key-id"
+  BACKUP_R2_SECRET_ACCESS_KEY = "gaffer-backup-r2-key-secret"
+}
+
+github_repository = "OWNER/gaffer"
+github_repository_id = "NUMERIC_GITHUB_REPOSITORY_ID"
+notification_channels = [] # Add verified Cloud Monitoring notification channel IDs before inviting users.
+
+# Optional billing-account budget (requires billing budget management permission).
+# billing_account_id = "XXXXXX-XXXXXX-XXXXXX"
+monthly_budget_usd = 10

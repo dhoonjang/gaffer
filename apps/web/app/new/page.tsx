@@ -1,8 +1,9 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { type CSSProperties, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useRouter } from "@/shared/navigation";
+import Link from "@/shared/navigation";
 import { IconArrowLeft } from "@/shared/icons";
 import { LeagueListSkeleton } from "@/shared/skeleton";
 import { Loading } from "@/shared/loading";

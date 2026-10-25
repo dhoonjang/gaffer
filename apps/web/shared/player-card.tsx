@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { GrowthOutlook } from "@/shared/growth-outlook";
 import { ConditionBar } from "@/shared/condition-bar";

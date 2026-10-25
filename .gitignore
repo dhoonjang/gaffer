@@ -50,3 +50,15 @@ balance-report/
 
 # 외부 참고 자료 — 사내 프롬프트 등 공개 저장소에 올리면 안 되는 로컬 전용 문서
 docs/agents/reference/
+
+# Deployment secrets, local Terraform state and downloaded providers.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+config/llm-prices.json
+
+gha-creds-*.json
+
+server-image.tar.gz

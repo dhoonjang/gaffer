@@ -76,44 +76,24 @@ export default defineConfig({
     trace: process.env.CI ? "retain-on-failure" : "off",
     screenshot: process.env.CI ? "only-on-failure" : "off",
   },
-  /**
-   * CI는 **빌드된 앱**을 본다. 로컬은 dev 서버 그대로다.
-   *
-   * dev 서버는 라우트를 처음 두드릴 때마다 컴파일한다. 코어가 열둘이면 그 값이
-   * 묻히지만(43초 → 40초) 둘이면 그게 시간의 절반이다. 2코어 러너에서 잰 값:
-   *
-   *   dev 서버 · 1워커                194초
-   *   dev 서버 · 4워커                197초 (+ 재시도 1회)
-   *   빌드 + `next start` · 4워커      91초 = 빌드 39초 + 테스트 52초
-   *
-   * 빌드 값을 다 물고도 절반이 넘게 줄고, 재시도도 사라진다 — 컴파일이 없어져야
-   * 워커 넷이 비로소 겹쳐 돈다.
-   *
-   * 로컬까지 빌드로 바꾸지 않는 이유는 로컬에는 그 병목이 없기 때문이다. 매번
-   * 12초짜리 빌드를 물리고 3초를 벌 자리가 아니고, `reuseExistingServer`가 주는
-   * 반복 실행의 이점도 사라진다.
-   */
+  // Vite and Nest share an isolated local database and object directory.
   webServer: {
-    command: process.env.CI
-      ? "pnpm --filter @gaffer/web build && pnpm --filter @gaffer/web start"
-      : "pnpm --filter @gaffer/web dev",
+    command: "pnpm dev",
     url,
     reuseExistingServer: !process.env.CI,
     // 빌드가 앞에 붙는다 — dev 서버가 서기만 기다리던 2분으로는 모자란다
     timeout: 300_000,
     env: {
       PORT: String(PORT),
+      API_PORT: String(PORT + 100),
+      GAFFER_TEST_FIXTURES: "1",
+      GAFFER_AUTH_MODE: "development",
       LLM_MODE: "mock",
       // 90분을 벽시계로 기다리지 않는다 — 배속은 판정을 바꾸지 않는다(live-match.md)
-      NEXT_PUBLIC_LIVE_MATCH_SPEED: "180",
-      // CI는 `next start`로 도므로 NODE_ENV가 production이다 — 어드민 쓰기 라우트의
-      // 기본 문이 닫히는 자리다(game-state.md §2). 어드민 스펙이 카탈로그를 고쳐야
-      // 하므로 여기서 명시적으로 연다.
+      VITE_LIVE_MATCH_SPEED: "180",
+      // The isolated local fixture server permits catalog edits.
       ADMIN_ENABLED: "1",
       GAFFER_DATA_DIR: DATA_DIR,
-      // 개발 서버(.next)와 빌드 산출물을 나눠 쓴다 — 공유하면 재컴파일 때
-      // 서로의 청크를 지워 테스트가 무작위로 깨진다
-      NEXT_DIST_DIR: `.next-e2e${SUFFIX}`,
     },
   },
 });

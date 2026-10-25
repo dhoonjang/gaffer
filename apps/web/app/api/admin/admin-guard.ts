@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../../../api/src/game/persistence";
 
 /**
  * 어드민 카탈로그 쓰기의 문 (game-state.md §2).

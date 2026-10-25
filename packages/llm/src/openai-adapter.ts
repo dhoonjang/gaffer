@@ -1,3 +1,4 @@
+import { meteredFetch } from "./http-meter";
 import OpenAI from "openai";
 import { resolveApiKey, type OpenAiAgentConfig } from "./config";
 import {
@@ -44,7 +45,7 @@ let sharedClient: OpenAI | undefined;
 function newSharedClient(maxRetries: number): OpenAI {
   // 키를 읽는 자리는 설정 하나다 (models.md §2)
   const apiKey = resolveApiKey("openai");
-  return new OpenAI({ maxRetries, ...(apiKey ? { apiKey } : {}) });
+  return new OpenAI({ fetch: meteredFetch, maxRetries, ...(apiKey ? { apiKey } : {}) });
 }
 
 /**

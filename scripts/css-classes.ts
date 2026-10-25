@@ -37,7 +37,8 @@ const HOOK_ONLY = new Set<string>([
 
 const walk = (dir: string, ext: RegExp): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === "node_modules" || entry.name.startsWith(".next")) return [];
+    if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".next"))
+      return [];
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return walk(full, ext);
     return ext.test(entry.name) ? [full] : [];

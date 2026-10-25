@@ -23,38 +23,18 @@ pnpm install
 pnpm dev
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000)을 엽니다. API 키가 없으면
+브라우저에서 [http://localhost:5173](http://localhost:5173)을 열고 Google로 로그인합니다.
+인증 설정은 [배포 운영 문서](docs/deployment/README.md)의 로컬 실행을 따릅니다. API 키가 없으면
 mock 모드로 실행되며, 실제 LLM을 사용하려면 [`config/llm.yml`](config/llm.yml)에
 설정된 제공자의 API 키를 환경 변수로 지정합니다.
 
-## 밖에서 열어 볼 때
+## 초대 베타 배포
 
-터널(cloudflared 등)이나 같은 LAN의 다른 기기로 이 앱을 열 때 알아 둘 것 셋입니다.
-
-- **외부 오리진 허용** — dev 서버는 `/_next/*` 요청의 Origin을
-  [`apps/web/next.config.ts`](apps/web/next.config.ts)의 `allowedDevOrigins`와
-  대조합니다. 사설망 대역과 `*.trycloudflare.com`은 이미 들어 있고, 그 밖의
-  오리진은 `ALLOWED_DEV_ORIGINS`에 쉼표로 이어 붙입니다.
-
-  ```bash
-  ALLOWED_DEV_ORIGINS=my-tunnel.example.com pnpm dev
-  ```
-
-- **자동 번역은 꺼져 있습니다** — 화면 전체가 한국어라 기기 언어가 다르면
-  브라우저가 자동 번역을 걸고, 그러면 React가 하이드레이션하기 **전에** 텍스트
-  노드가 바뀌어 불일치가 납니다. `<html translate="no">`로 막습니다.
-
-- **남에게 보여줄 URL이면 dev 서버 대신 프로덕션 빌드를 터널 뒤에 둡니다.**
-  dev 서버는 첫 요청에서 라우트를 컴파일하고 HMR 소켓을 열어 두어, 터널의 왕복
-  지연 위에서는 첫 로드가 눈에 띄게 느립니다.
-
-  ```bash
-  pnpm --filter @gaffer/web build
-  pnpm --filter @gaffer/web start -p 3000
-  ```
-
-  `NODE_ENV=production`이 되므로 `/admin`의 쓰기 라우트는 닫힙니다 —
-  열어야 하면 `ADMIN_ENABLED=1`을 함께 줍니다.
+React/Vite와 NestJS는 `pnpm dev`에서 함께 실행됩니다. 로컬 기본 데이터는
+`/tmp/gaffer-service`의 PGlite·객체 저장소에 있으며 기존 `.data`는 자동 이전하지 않습니다.
+공개 운영 구성·인증·가격/예산·백업·배포 절차는 [배포 운영 문서](docs/deployment/README.md)를
+따릅니다. 인증을 제외한 격리 테스트에는 `GAFFER_AUTH_MODE=development`를 명시합니다.
+이 인증 우회 모드는 운영에서 사용할 수 없습니다.
 
 ## 개발 명령
 

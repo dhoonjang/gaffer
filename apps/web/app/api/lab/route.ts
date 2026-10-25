@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-import { createLabGame, pruneLabGames, saveGame } from "@gaffer/engine";
+import { saveGame } from "../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../api/src/game/persistence";
+import { createLabGame, pruneLabGames } from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 import { LAB_KEPT, LabCreateSchema } from "@/game/lab-protocol";
 

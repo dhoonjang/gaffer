@@ -1,11 +1,11 @@
+import { execution } from "../../api/src/game/persistence";
+import { loadGame, saveGame } from "../../api/src/game/persistence";
 import {
   acquireSaveLock,
   bindJournal,
   journal,
-  loadGame,
   mailMessageForViewer,
   playerById,
-  saveGame,
   setPlayerCard,
   setPlayerTactic,
   setSetPieceTakers,
@@ -37,7 +37,7 @@ import {
   type LlmErrorKind,
 } from "@gaffer/llm";
 import type { BoardMove } from "@gaffer/domain";
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../api/src/game/persistence";
 import { toPayload, type GamePayload } from "./store";
 import type { MatchBoardOrder } from "../shared/match-orders";
 
@@ -207,6 +207,7 @@ export async function withGameLock<T>(
   waitMs: number,
   fn: () => T | Promise<T>,
 ): Promise<T> {
+  if (execution()) return fn();
   const deadline = Date.now() + waitMs;
   const local = await acquireLocal(id, waitMs);
   if (!local) throw new GameBusyError(id);
@@ -270,7 +271,7 @@ const TURN_ERROR: Record<LlmErrorKind, { message: string; retry: boolean }> = {
   timeout: { message: "응답이 지연돼 턴을 취소했습니다", retry: true },
   auth: { message: "LLM 인증 정보가 올바르지 않습니다", retry: false },
   filtered: { message: "모델이 이 요청을 거절했습니다", retry: true },
-  budget: { message: "이 게임의 토큰 예산 상한에 닿았습니다", retry: false },
+  budget: { message: "설정된 생성 한도에 도달했습니다", retry: false },
   invalid_request: {
     message: "요청이나 설정이 잘못됐습니다 — 서버 로그를 확인하세요",
     retry: false,

@@ -8,6 +8,7 @@ name: CI
 # 필요한 순간은 `merge`가 ready로 올릴 때 하나뿐이고, `ready_for_review`가
 # 그때 실행을 시작한다.
 on:
+  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
@@ -103,6 +104,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           truncated=0
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             # 리네임은 새 이름만 오면 반쪽이다 — `.ts`를 `.md`로 옮긴 변경이 목록에
@@ -147,6 +152,17 @@ jobs:
       # Prettier — 어긋난 파일 이름만 뱉는다. 고치는 명령은 `pnpm format`.
       - if: ${{ !cancelled() }}
         run: pnpm format:check
+      - run: pnpm --filter @gaffer/web build
+      - run: docker build --build-arg BUILD_ID="$GITHUB_SHA" -f infra/Dockerfile -t gaffer-ci .
+      - name: Save verified production image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: docker save gaffer-ci | gzip > server-image.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          name: server-image
+          path: server-image.tar.gz
+          retention-days: 1
       # match-cli 픽스처는 도메인 스키마로 **런타임에** 파싱된다 — tsc도 eslint도
       # JSON 안을 보지 않으므로 스키마가 움직이면 아무 잡도 빨개지지 않은 채 썩는다.
       # `--dry`는 LLM을 부르지 않고 전력 패킷까지만 굴린다(키 불필요, 1초).
@@ -233,7 +249,7 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
 
       # playwright.config.ts가 LLM_MODE=mock·포트·데이터 디렉터리를 모두 쥔다.
-      # CI에서는 reuseExistingServer가 꺼져 매번 **빌드한 앱**을 띄운다(`next start`).
+      # CI에서는 reuseExistingServer가 꺼져 매번 격리된 Vite + Nest 앱을 띄운다.
       - run: pnpm e2e
 
       # 빨간 e2e를 읽는 유일한 창 — 러너 로그에는 실패한 단언 한 줄뿐이고 그 순간

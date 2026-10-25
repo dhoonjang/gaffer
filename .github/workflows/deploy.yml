@@ -1,0 +1,94 @@
+name: Deploy beta
+on:
+  workflow_dispatch:
+    inputs:
+      publish_image_only:
+        description: Bootstrap only - push verified image before the first Terraform apply
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast1' }}
+      DATABASE_CA_CERT: ${{ secrets.DATABASE_CA_CERT }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.DEPLOY_DATABASE_URL }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Require successful CI on this exact commit
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main" > "$RUNNER_TEMP/ci.json"
+          node -e 'const fs=require("node:fs");const p=process.env.RUNNER_TEMP+"/ci.json";const r=JSON.parse(fs.readFileSync(p));r.workflow_runs=r.workflow_runs.filter(x=>x.head_sha===process.env.GITHUB_SHA&&x.conclusion==="success"&&["push","workflow_dispatch"].includes(x.event));if(!r.workflow_runs.length)process.exit(1);fs.writeFileSync(p,JSON.stringify(r))'
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gaffer/web build
+      - name: Load the exact image built by successful CI
+        run: |
+          CI_RUN=$(node -e 'const r=require(process.env.RUNNER_TEMP+"/ci.json");console.log(r.workflow_runs.find(x=>x.head_sha===process.env.GITHUB_SHA&&x.conclusion==="success").id)')
+          gh run download "$CI_RUN" --name server-image --dir "$RUNNER_TEMP/image"
+          docker load -i "$RUNNER_TEMP/image/server-image.tar.gz"
+          docker tag gaffer-ci "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$GITHUB_SHA"
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Push image
+        run: |
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          docker push "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$GITHUB_SHA"
+      - name: Apply compatible SQL expansion
+        if: ${{ !inputs.publish_image_only }}
+        run: pnpm service:ops migrate
+      - name: Pause admission, drain running work, check match and save compatibility
+        if: ${{ !inputs.publish_image_only }}
+        run: pnpm exec tsx apps/api/src/release.ts pause
+      - name: Start all revisions without serving traffic
+        if: ${{ !inputs.publish_image_only }}
+        run: |
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$GITHUB_SHA"
+          for role in api worker sim maintenance; do
+            gcloud run services update "gaffer-$role" --image "$IMAGE" --region "$GCP_REGION" --project "$GCP_PROJECT" --no-traffic --tag candidate --quiet
+          done
+      - name: Smoke the candidate API before switching traffic
+        if: ${{ !inputs.publish_image_only }}
+        run: |
+          gcloud run services describe gaffer-api --region "$GCP_REGION" --project "$GCP_PROJECT" --format=json > "$RUNNER_TEMP/api.json"
+          CANDIDATE=$(node -e 'const r=require(process.env.RUNNER_TEMP+"/api.json");console.log(r.status.traffic.find(x=>x.tag==="candidate").url)')
+          curl --fail --silent --show-error "$CANDIDATE/health"
+      - name: Switch all ready revisions
+        if: ${{ !inputs.publish_image_only }}
+        run: |
+          for role in worker sim maintenance api; do
+            gcloud run services update-traffic "gaffer-$role" --to-latest --region "$GCP_REGION" --project "$GCP_PROJECT" --quiet
+          done
+      - name: Deploy matching static frontend and API proxy
+        if: ${{ !inputs.publish_image_only }}
+        working-directory: infra/cloudflare
+        run: pnpm exec wrangler pages deploy ../../apps/web/dist --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+      - name: Resume admission
+        if: ${{ !inputs.publish_image_only }}
+        run: pnpm exec tsx apps/api/src/release.ts resume
+      - name: Deployment failure is intentionally closed
+        if: failure()
+        run: echo 'If admission was paused, it remains paused. Inspect revisions, roll back all services and Pages to the same commit, then explicitly resume. See docs/deployment/README.md.'

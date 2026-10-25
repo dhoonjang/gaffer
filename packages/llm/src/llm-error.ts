@@ -141,6 +141,7 @@ export async function withErrorKind<T>(
     return await run();
   } catch (error) {
     if (error instanceof LlmCallError) throw error;
+    if (error instanceof Error && error.cause instanceof LlmCallError) throw error.cause;
     const message = error instanceof Error ? error.message : String(error);
     throw new LlmCallError(classify(error), message, { cause: error });
   }

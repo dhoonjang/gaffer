@@ -1,3 +1,4 @@
+import { meteredFetch } from "./http-meter";
 import Anthropic from "@anthropic-ai/sdk";
 import { resolveApiKey, type AnthropicAgentConfig, type ThinkingLevel } from "./config";
 import {
@@ -132,7 +133,7 @@ let sharedClient: Anthropic | undefined;
 function newSharedClient(maxRetries: number): Anthropic {
   // 키를 명시로 싣되, 없으면 SDK가 스스로 환경(프로필 포함)에서 찾게 둔다
   const apiKey = resolveApiKey("anthropic");
-  return new Anthropic({ maxRetries, ...(apiKey ? { apiKey } : {}) });
+  return new Anthropic({ fetch: meteredFetch, maxRetries, ...(apiKey ? { apiKey } : {}) });
 }
 
 /** Anthropic의 종료 사유를 중립 계약으로 옮긴다 (models.md §3-1) */

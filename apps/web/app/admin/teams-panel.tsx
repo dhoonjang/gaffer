@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { useCallback, useMemo, useState } from "react";
 import type { CatalogLayer } from "./catalog-store";

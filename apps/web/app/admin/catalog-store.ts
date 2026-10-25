@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {

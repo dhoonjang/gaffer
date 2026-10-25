@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/.data
+**/.log
+**/.next*
+**/dist
+**/*.tsbuildinfo
+.env*
+**/.env*
+playwright-report*
+test-results*
+plans
+
+gha-creds-*.json
+
+server-image.tar.gz

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../../../../../../api/src/game/persistence";
 import { z } from "zod";
 import {
   LEAGUE_KINDS,

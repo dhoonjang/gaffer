@@ -3,7 +3,9 @@
 # usage: state.sh [--fetch] brief|attention|first|reserve|xi|calendar|contracts|finance|table|match|youth|registration|chat [N]
 set -uo pipefail
 : "${SIM_GAME:?SIM_GAME이 비었다}" "${SIM_DIR:?SIM_DIR이 비었다}"
-HOST="${SIM_HOST:-http://localhost:3000}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../../.." && pwd)"
+HOST="${SIM_HOST:-http://localhost:5173}"
 S="$SIM_DIR/state.json"
 if [ "${1:-}" = "--fetch" ]; then
   shift

@@ -1,7 +1,6 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
-import next from "@next/eslint-plugin-next";
 import comments from "@eslint-community/eslint-plugin-eslint-comments/configs";
 
 const browserImports = {
@@ -10,7 +9,7 @@ const browserImports = {
       name: "@gaffer/engine",
       allowTypeImports: true,
       message:
-        "화면은 엔진을 타입으로만 가져온다 — 값 import는 node:fs를 브라우저 번들에 끌어와 next build를 죽인다. 화면과 코어가 함께 쓰는 순수 규칙은 packages/domain에 두고 엔진이 re-export한다 (AGENTS.md 5장). 서버에서만 도는 모듈이면 eslint.config.js의 예외 목록에 그 파일을 올려라.",
+        "화면은 엔진을 타입으로만 가져온다 — 값 import는 node:fs를 브라우저 번들에 끌어와 프론트엔드 빌드를 죽인다. 화면과 코어가 함께 쓰는 순수 규칙은 packages/domain에 두고 엔진이 re-export한다 (AGENTS.md 5장). 서버에서만 도는 모듈이면 eslint.config.js의 예외 목록에 그 파일을 올려라.",
     },
     {
       // agents는 엔진을 값으로 부른다 — 화면이 값으로 가져오면 같은 일이 벌어진다
@@ -34,7 +33,7 @@ const browserImports = {
       ],
       allowTypeImports: true,
       message:
-        "store.ts·turn-runner.ts는 서버에서만 돈다 — 값으로 부르면 엔진이 딸려 들어와 next build가 죽는다. 화면은 타입만 가져오고, 값이 필요하면 API 라우트를 거쳐라.",
+        "store.ts·turn-runner.ts는 서버에서만 돈다 — 값으로 부르면 엔진이 딸려 들어와 프론트엔드 빌드가 죽는다. 화면은 타입만 가져오고, 값이 필요하면 API 라우트를 거쳐라.",
     },
   ],
 };
@@ -175,6 +174,12 @@ export default tseslint.config(
     files: ["**/*.{js,mjs,cjs}"],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  {
+    files: ["infra/cloudflare/functions/**/*.ts"],
+    languageOptions: {
+      parserOptions: { projectService: false, project: "./apps/api/tsconfig.json" },
+    },
+  },
   comments.recommended,
   {
     rules: {
@@ -184,7 +189,7 @@ export default tseslint.config(
     },
   },
   /**
-   * 화면에만 거는 규칙 — 훅과 Next 규약은 `apps/web` 밖에 걸 곳이 없다.
+   * 화면에만 거는 규칙 — React 훅 규약은 `apps/web` 밖에 걸 곳이 없다.
    * 코어 패키지에 얹으면 React를 쓰지 않는 파일마다 규칙을 헛돌린다.
    *
    * 훅 규칙은 **둘만** 켠다. 플러그인의 `recommended-latest`는 React Compiler
@@ -197,13 +202,11 @@ export default tseslint.config(
   {
     files: ["apps/web/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
-    extends: [next.flatConfig.coreWebVitals],
     rules: {
       "react-hooks/rules-of-hooks": "error",
       // 경고로 두면 CI가 초록이라 아무도 읽지 않는다 — 예외는 이유를 적고 끈다
       "react-hooks/exhaustive-deps": "error",
       // App Router 앱이라 `pages/`가 없다 — 규칙이 매번 못 찾겠다고 말한다
-      "@next/next/no-html-link-for-pages": "off",
     },
   },
   /**
@@ -230,7 +233,7 @@ export default tseslint.config(
   /**
    * 화면은 엔진을 **타입으로만** 가져온다 (AGENTS.md 5장).
    *
-   * 값 import 하나가 `node:fs`를 브라우저 번들에 끌어와 `next build`를 죽이는데
+   * 값 import 하나가 `node:fs`를 브라우저 번들에 끌어와 `프론트엔드 빌드`를 죽이는데
    * 타입 검사는 통과한다 — 이 규칙이 없으면 CI e2e가 빌드에서 터질 때에야 잡히고
    * 메시지는 원인과 멀다. 그래서 `apps/web` 전체에 기본으로 걸고, 서버에서만 도는
    * 파일을 아래 블록에서 되돌린다. 새로 생긴 폴더가 규칙 밖으로 빠져나가는 쪽보다
@@ -248,7 +251,7 @@ export default tseslint.config(
   /**
    * 서버에서만 도는 파일 — 값 import가 정당하다. 라우트 핸들러는 클라이언트가
    * import할 수 없고, `store.ts`·`turn-runner.ts`는 위 그룹이 화면 쪽에서 막는다.
-   * (`test/`는 번들이 아니라 vitest가 node에서 돌리고, `next.config.ts`는 빌드 설정이다.)
+   * (`test/`는 번들이 아니라 vitest가 node에서 돌리고, `vite.config.ts`는 빌드 설정이다.)
    */
   {
     files: [
@@ -258,7 +261,7 @@ export default tseslint.config(
       "apps/web/game/lorebook-jobs.ts",
       "apps/web/game/live-match-server.ts",
       "apps/web/test/**/*.ts",
-      "apps/web/next.config.ts",
+      "apps/web/vite.config.ts",
     ],
     rules: { "@typescript-eslint/no-restricted-imports": "off" },
   },

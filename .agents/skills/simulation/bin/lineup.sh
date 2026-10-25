@@ -4,7 +4,9 @@
 #        lineup.sh --dump           지금 선발·벤치를 body 꼴로 찍는다 (고쳐서 다시 넣는 출발점)
 set -uo pipefail
 : "${SIM_GAME:?SIM_GAME이 비었다}" "${SIM_DIR:?SIM_DIR이 비었다}"
-HOST="${SIM_HOST:-http://localhost:3000}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../../.." && pwd)"
+HOST="${SIM_HOST:-http://localhost:5173}"
 S="$SIM_DIR/state.json"
 if [ "${1:-}" = "--dump" ]; then
   jq '{starting: [.views.squad.players[] | select(.role=="선발") | {playerId: .id, position: .assignedPosition}],
@@ -14,7 +16,7 @@ if [ "${1:-}" = "--dump" ]; then
 fi
 BODY="$1"
 jq -e '(.starting|length)==11 and (.bench|length)<=9' "$BODY" >/dev/null || { echo "!!! 선발 11명·벤치 9명 이하가 아니다"; exit 2; }
-CODE=$(curl -s -m 60 -o "$SIM_DIR/lineup.out" -w '%{http_code}' -X POST "$HOST/api/games/$SIM_GAME/lineup" -H 'content-type: application/json' --data-binary "@$BODY")
+CODE=$(pnpm --silent --dir "$ROOT" exec tsx apps/match-cli/src/request.ts "$HOST/api/games/$SIM_GAME/lineup" POST "$(cat "$BODY")" "$SIM_DIR/lineup.out")
 echo "HTTP $CODE"
 if [ "$CODE" = "200" ] && jq -e '.views' "$SIM_DIR/lineup.out" >/dev/null 2>&1; then
   cp "$SIM_DIR/lineup.out" "$S"

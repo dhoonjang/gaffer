@@ -7,15 +7,16 @@
  * (`STOP_EVENT_TYPES`)에서 확정하고 멈춘다 — 그 자리에서 감독의 턴을 보낼지는 부르는 쪽이
  * 정한다. 아직 입장 전이면 처음 부를 때 들어서고, 종료 휘슬에는 브라우저와 같은 마감을 부른다.
  *
- *   SIM_HOST=http://localhost:3000 SIM_GAME=<id> tsx src/client.ts [--resume | --shootout]
+ *   SIM_HOST=http://localhost:5173 SIM_GAME=<id> tsx src/client.ts [--resume | --shootout]
  *
  * 종료 코드: 0 정지점 · 10 휴식(하프타임·연장 개시 — `--resume`으로 재개) ·
  * 20 경기 마감 · 21 승부차기가 남았다(`--shootout`으로 한 발씩) · 1 오류
  */
+import { serviceFetch as fetch } from "./service-client";
 import { LIVE_STEP, STOP_EVENT_TYPES, type MatchEvent } from "@gaffer/domain";
 import { advanceLive, liveDigest, liveHalted, type LiveMatch } from "@gaffer/sim";
 
-const host = process.env.SIM_HOST ?? "http://localhost:3000";
+const host = process.env.SIM_HOST ?? "http://localhost:5173";
 const game = process.env.SIM_GAME;
 if (!game) {
   console.error("SIM_GAME이 비었다");

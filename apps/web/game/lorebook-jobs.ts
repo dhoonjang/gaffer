@@ -1,4 +1,5 @@
-import { completeCharacterUpdate, loadGame, saveGame } from "@gaffer/engine";
+import { loadGame, saveGame } from "../../api/src/game/persistence";
+import { completeCharacterUpdate } from "@gaffer/engine";
 import { editLorebook } from "@gaffer/agents";
 import { noteTurn, noteFact, traceBoard, withGameUsage } from "@gaffer/llm";
 import { withGameLock } from "./turn-runner";

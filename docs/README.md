@@ -22,3 +22,5 @@ Gaffer는 자연어로 감독이 되어 서사·협상·경기를 즐기는 게�
 [하네스](balance-harness.md)다.
 
 문서는 현재 동작과 소유권을 설명한다.
+
+- [배포 런타임·인증·작업·백업과 운영](deployment/README.md)

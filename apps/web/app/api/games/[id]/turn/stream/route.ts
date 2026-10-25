@@ -1,4 +1,4 @@
-import { after } from "next/server";
+import { after } from "../../../../../../../api/src/game/persistence";
 import { processLorebookJobs } from "@/game/lorebook-jobs";
 import { z } from "zod";
 import { TurnOperationSchema } from "@gaffer/agents";
@@ -7,7 +7,7 @@ import { errorDetail, runTurnLocked, turnErrorMessage, turnErrorRetry } from "@/
 import { invalidGameId } from "@/app/api/games/game-id";
 import { MatchBoardOrderSchema } from "@/shared/match-orders";
 
-const TurnSchema = z
+export const TurnSchema = z
   .object({
     /**
      * 감독이 친 말. **조작 턴에는 오지 않는다** — 손잡이가 무엇을 눌렀는지는

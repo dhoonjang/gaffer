@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../../../../../../api/src/game/persistence";
 import { resolveLlmMode } from "@gaffer/agents";
 import { traceEnabled, turnRecord, turnTrace } from "@gaffer/llm";
 import { invalidGameId } from "@/app/api/games/game-id";

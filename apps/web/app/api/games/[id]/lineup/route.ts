@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { loadGame, saveGame } from "../../../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../../../api/src/game/persistence";
 import { z } from "zod";
 import {
   MATCHDAY_BENCH,
@@ -12,10 +13,8 @@ import {
   journal,
   lineupChangeNote,
   lineupSignature,
-  loadGame,
   managedTeamId,
   recordEdit,
-  saveGame,
   setLineup,
   setPlayerCard,
   setSetPieceRoutine,

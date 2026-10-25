@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "start": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
     "@gaffer/agents": "workspace:*",
@@ -13,13 +13,16 @@
     "@gaffer/engine": "workspace:*",
     "@gaffer/llm": "workspace:*",
     "@gaffer/sim": "workspace:*",
-    "next": "^15.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "react-router-dom": "^7.9.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
-  }
+    "@types/react-dom": "^19.0.0",
+    "vite": "^7.2.0",
+    "@vitejs/plugin-react": "^5.1.0"
+  },
+  "type": "module"
 }

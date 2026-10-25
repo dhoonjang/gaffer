@@ -214,7 +214,7 @@ function addUsage(total: TurnUsage, response: GenerateContentResponse): TurnUsag
     // promptTokenCount는 캐시분(cachedContentTokenCount)을 이미 품고 있다 —
     // 계약이 요구하는 "입력 전부"와 같은 값이라 그대로 더한다.
     inputTokens: usage?.promptTokenCount ?? 0,
-    outputTokens: usage?.candidatesTokenCount ?? 0,
+    outputTokens: (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0),
     cacheReadTokens: usage?.cachedContentTokenCount ?? 0,
     // Gemini의 implicit cache는 별도 cache creation 토큰을 보고하지 않는다.
     cacheWriteTokens: 0,

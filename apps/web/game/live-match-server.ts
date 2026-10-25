@@ -1,12 +1,11 @@
+import { loadGame, saveGame } from "../../api/src/game/persistence";
 import {
   awaitingShootout,
   advanceShootout,
   buildMatchView,
   commitCheckpoint,
-  loadGame,
   markEntered,
   resumeLiveInterval,
-  saveGame,
   syncLiveTactics,
   type GameState,
 } from "@gaffer/engine";

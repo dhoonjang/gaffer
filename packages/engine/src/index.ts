@@ -161,3 +161,5 @@ export * from "./app/workflows/match-lab";
 export * from "./app/workflows/promotion";
 export * from "./app/workflows/training-report";
 export * from "./app/workflows/world-market";
+
+export { validateSave, gameSummary } from "./app/persistence";

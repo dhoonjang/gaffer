@@ -178,7 +178,13 @@ export default {
   reportDescriptionlessDisables: true,
   reportNeedlessDisables: true,
   reportInvalidScopeDisables: true,
-  ignoreFiles: ["**/node_modules/**", "**/.next/**", "**/.next-*/**", "apps/web/shared/fonts.css"],
+  ignoreFiles: [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/.next-*/**",
+    "apps/web/shared/fonts.css",
+  ],
   rules: {
     "gaffer/color-tokens": true,
     "gaffer/spacing-scale": true,

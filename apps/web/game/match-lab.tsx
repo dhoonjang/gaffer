@@ -1,8 +1,9 @@
 "use client";
+import { apiFetch as fetch } from "@/shared/api";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/shared/navigation";
+import { useRouter } from "@/shared/navigation";
 import {
   FAMILIARITY_BASELINE,
   FAMILIARITY_MAX,

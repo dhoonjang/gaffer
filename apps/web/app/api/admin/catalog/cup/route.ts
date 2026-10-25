@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "../../../../../../api/src/game/persistence";
 import { adminCupCatalog, adminResetCupCatalog, isCupCatalogEdited } from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 

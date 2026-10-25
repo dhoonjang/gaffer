@@ -47,7 +47,7 @@ description: >-
 ### 2-1. 서버
 
 - 게임은 **`http://localhost:3000`의 dev 서버**를 통해 돌린다. 유저의 서버다 —
-  절대 죽이지 않는다. `curl -s localhost:3000/api/games`가 답하면 그대로 쓴다.
+  절대 죽이지 않는다. `curl -s localhost:5173/api/games`가 답하면 그대로 쓴다.
 - 아무것도 듣지 않으면 `pnpm dev`를 백그라운드로 띄우고(에이전트의 백그라운드 실행 기능)
   `GET /api/games`가 200을 줄 때까지 기다린다. 띄운 서버는 시뮬이 끝나도
   그대로 둔다 — 로그 · 세이브를 유저가 열어 볼 자리다.
@@ -311,3 +311,10 @@ GM이 "확정됐다"고 써도 `views`에 없으면 **되지 않은 것**이다 
   [career.md](../../../docs/people/career.md) §4–§5 ·
   [people.md](../../../docs/people/people.md) §4 · §5-2
 - 기록: `pnpm log` · `pnpm log <turn-id>` · `pnpm log --facts <kind> --game <id>`
+
+### 배포 API 전송
+
+로컬 기본 주소는 `http://localhost:5173`이다. 스크립트는 요청 키를 보관하고
+202 응답의 job을 최종 결과까지 조회한다. 경기 CLI는 창 제어권·epoch·sim build를
+검증한다. 같은 `SIM_DIR`을 재사용하며 끊긴 요청의 영수증을 임의 삭제하지 않는다.
+공개 서비스의 로그인 우회에는 이 도구를 사용하지 않는다.

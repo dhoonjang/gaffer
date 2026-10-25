@@ -1,14 +1,13 @@
-import { NextResponse } from "next/server";
+import { loadGame, saveGame } from "../../../../../api/src/game/persistence";
+import { NextResponse } from "../../../../../api/src/game/persistence";
 import { isLabGame } from "@gaffer/domain";
 import {
   applyLabFormation,
   applyLabTactics,
   labView,
-  loadGame,
   openLabMatch,
   pruneLabGames,
   replayLabGame,
-  saveGame,
 } from "@gaffer/engine";
 import { adminWrite } from "@/app/api/admin/admin-guard";
 import { invalidGameId } from "@/app/api/games/game-id";
