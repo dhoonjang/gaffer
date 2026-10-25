@@ -85,7 +85,8 @@ jobs:
       - name: Deploy matching static frontend and API proxy
         if: ${{ !inputs.publish_image_only }}
         working-directory: infra/cloudflare
-        run: pnpm exec wrangler pages deploy ../../apps/web/dist --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        # pnpm exec would run from the workspace root and miss functions/ and wrangler.toml here.
+        run: $GITHUB_WORKSPACE/node_modules/.bin/wrangler pages deploy ../../apps/web/dist --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
       - name: Resume admission
         if: ${{ !inputs.publish_image_only }}
         run: pnpm exec tsx apps/api/src/release.ts resume
