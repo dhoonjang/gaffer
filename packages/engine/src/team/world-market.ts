@@ -96,9 +96,19 @@ function activeCase(n: Negotiation): boolean {
     (n.status === "completed" && n.registration !== "registered")
   );
 }
-function marketQueries(state: GameState) {
-  const levels = new Map<string, number>();
-  const groups = new Map<string, PositionGroup>();
+/**
+ * 하루 시장 처리 내내 그대로인 선수 값 — 종합 능력과 포지션 군은 능력치·포지션만 읽고,
+ * 시장은 그 둘을 바꾸지 않는다. 구단마다 다시 재지 않도록 그날의 판정들이 함께 쓴다.
+ */
+export interface MarketMemo {
+  levels: Map<string, number>;
+  groups: Map<string, PositionGroup>;
+}
+export function marketMemo(): MarketMemo {
+  return { levels: new Map(), groups: new Map() };
+}
+function marketQueries(state: GameState, memo: MarketMemo = marketMemo()) {
+  const { levels, groups } = memo;
   /** 선수 id → 첫 활성 계약(`activeContract`와 같은 답) — 처음 물을 때 한 번에 세운다 */
   let contracts: Map<string, NonNullable<ReturnType<typeof activeContract>>> | null = null;
   const injuries = new Map<string, ReturnType<typeof openInjury>>();
@@ -142,10 +152,14 @@ function viableSquad(state: GameState, teamId: string, queries = marketQueries(s
     ),
   };
 }
-export function decideWorldMarket(state: GameState, buyerId: string): WorldMarketIntent | null {
+export function decideWorldMarket(
+  state: GameState,
+  buyerId: string,
+  memo: MarketMemo = marketMemo(),
+): WorldMarketIntent | null {
   const managed = managedTeamId(state);
   if (buyerId === managed) return null;
-  const queries = marketQueries(state);
+  const queries = marketQueries(state, memo);
   // canRegisterFor reads only the destination first-team squad from players.
   const registrationState = {
     ...state,
@@ -279,8 +293,18 @@ export function decideWorldMarket(state: GameState, buyerId: string): WorldMarke
   }
   return null;
 }
+/**
+ * 드라이런 상태 — 실패한 시도가 원장에 아무것도 남기지 않도록 사본에서 먼저 끝까지 가 본다.
+ * 이적·자유계약 영입은 개시·제안·동의·메디컬 요청까지만 가서 **협상 원장만 쓴다** — 그 표만
+ * 복제하고 나머지는 원본을 읽는다. 재계약은 서명이 정산(`settleNegotiations`)까지 돌려
+ * 여러 원장을 쓰므로 상태 전체를 복제한다.
+ */
+function dryRunState(state: GameState, intent: WorldMarketIntent): GameState {
+  if (intent.kind === "renewal") return structuredClone(state);
+  return { ...state, negotiations: structuredClone(state.negotiations) };
+}
 export function applyWorldMarketIntent(state: GameState, intent: WorldMarketIntent): string | null {
-  if (!executeWorldMarketIntent(structuredClone(state), intent)) return null;
+  if (!executeWorldMarketIntent(dryRunState(state, intent), intent)) return null;
   // Identical deterministic commands preserve existing ledger object references.
   return executeWorldMarketIntent(state, intent);
 }

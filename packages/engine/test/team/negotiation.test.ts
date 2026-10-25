@@ -1006,6 +1006,31 @@ describe("deterministic world market", () => {
     expect(s.state.injuries).toEqual(injuries);
     expect(financeOf(s.state, s.n.buyerId).balance).toBe(balance);
   });
+  it("an NPC transfer opening writes only the negotiations ledger, so its dry run copies only that", () => {
+    const state = structuredClone(base),
+      player = state.players.find(
+        (p) => p.teamId !== state.userTeamId && activeContract(state, p.id),
+      )!,
+      buyer = state.finances.find(
+        (f) => f.teamId !== state.userTeamId && f.teamId !== player.teamId,
+      )!;
+    buyer.balance = 10 ** 12;
+    const freeze = (value: unknown): void => {
+      if (value === null || typeof value !== "object" || Object.isFrozen(value)) return;
+      Object.freeze(value);
+      for (const child of Object.values(value)) freeze(child);
+    };
+    for (const [key, value] of Object.entries(state)) if (key !== "negotiations") freeze(value);
+    const id = applyWorldMarketIntent(state, {
+      playerId: player.id,
+      buyerId: buyer.teamId,
+      kind: "transfer",
+      interest: false,
+      reason: "포지션 보강",
+    });
+    expect(id).not.toBeNull();
+    expect(state.negotiations.find((n) => n.id === id)?.medical).not.toBeNull();
+  });
   it("rejects attempts to use deterministic automation to renew a managed player", () => {
     const state = structuredClone(base),
       player = state.players.find((p) => p.teamId === state.userTeamId)!;

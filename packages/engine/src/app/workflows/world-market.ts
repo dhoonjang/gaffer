@@ -11,6 +11,7 @@ import {
   progressWorldMarketDeals,
   marketReviewCohort,
   marketClubFingerprint,
+  marketMemo,
   MARKET_DAILY_DEALS,
 } from "../../team/world-market";
 interface WorldMarketResult {
@@ -55,6 +56,7 @@ export function processWorldMarket(state: GameState, sink: TickSink = []): World
   }
   if (state.marketReview.lastDate === state.date) return result;
   const cohort = marketReviewCohort(state);
+  const memo = marketMemo();
   for (const teamId of cohort) {
     const board = decideWorldManager(state, teamId);
     if (board && reviewBoard(state, board).ok) {
@@ -62,7 +64,7 @@ export function processWorldMarket(state: GameState, sink: TickSink = []): World
       else result.dismissals++;
     }
     if (result.transfers + result.renewals + result.interests < MARKET_DAILY_DEALS) {
-      const intent = decideWorldMarket(state, teamId);
+      const intent = decideWorldMarket(state, teamId, memo);
       if (intent?.interest) {
         const p = state.players.find((p) => p.id === intent.playerId)!;
         const source = state.contracts.find(
