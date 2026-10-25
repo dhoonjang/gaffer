@@ -1,5 +1,5 @@
 import { capture } from "./diagnostics";
-import { configuration } from "./config";
+import { configuration, HttpError } from "./config";
 import { LlmCallError, llmErrorKind, type LlmErrorKind } from "@gaffer/llm";
 import { setTimeout as pause } from "node:timers/promises";
 import { decode } from "./objects";
@@ -10,15 +10,54 @@ import type { Jobs, Job } from "./jobs";
 import type { Usage } from "./usage";
 import type { Command, Executed } from "./game/execute";
 
+/**
+ * How long a read waits in line for a Worker before it answers 503. A read Worker
+ * finishes in about a second, so a full line drains well inside this.
+ */
+export const READ_WAIT_MS = 15_000;
+
 export class Runner {
   private active = 0;
+  /** Reads have their own Worker slots: a long turn must not turn a player card into a 503. */
+  private reading = 0;
+  private readonly readers: (() => void)[] = [];
   constructor(
     readonly jobs: Jobs,
     readonly usage: Usage,
     readonly capacity = 2,
+    readonly readCapacity = 2,
+    readonly readWaitMs = READ_WAIT_MS,
   ) {}
   available(): boolean {
     return this.active < this.capacity;
+  }
+  /** Job slots not taken right now. */
+  free(): number {
+    return Math.max(0, this.capacity - this.active);
+  }
+  private async readSlot(): Promise<void> {
+    if (this.reading < this.readCapacity) {
+      this.reading++;
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const grant = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        const at = this.readers.indexOf(grant);
+        if (at >= 0) this.readers.splice(at, 1);
+        reject(new HttpError(503, "Busy"));
+      }, this.readWaitMs);
+      this.readers.push(grant);
+    });
+  }
+  /** A released slot passes straight to the oldest waiting read. */
+  private releaseRead(): void {
+    const next = this.readers.shift();
+    if (next) next();
+    else this.reading--;
   }
   async run(command: Command, job?: Job, reserved = false): Promise<Executed> {
     if (!reserved && !this.available()) throw new Error("Runner capacity exhausted");
@@ -145,8 +184,7 @@ export class Runner {
     }
   }
   async read(game: Game, path: string): Promise<Executed> {
-    if (!this.available()) throw new Error("Runner capacity exhausted");
-    this.active++;
+    await this.readSlot();
     try {
       return await this.run(
         {
@@ -160,7 +198,7 @@ export class Runner {
         true,
       );
     } finally {
-      this.active--;
+      this.releaseRead();
     }
   }
   private async lore(job: Job): Promise<void> {

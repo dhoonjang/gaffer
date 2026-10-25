@@ -764,15 +764,6 @@ button:disabled,
   background: var(--gold);
 }
 
-.service-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--sp-2);
-  padding: var(--sp-2);
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-}
-
 .service-shell {
   height: 100dvh;
   display: flex;
@@ -786,10 +777,6 @@ button:disabled,
 }
 .service-content > .app {
   height: 100%;
-}
-.service-toolbar {
-  flex-shrink: 0;
-  flex-wrap: wrap;
 }
 .service-shell > p {
   padding: var(--sp-2) var(--sp-4);
@@ -806,4 +793,84 @@ button:disabled,
 }
 .service-login h1 {
   font-size: var(--fs-2xl);
+}
+
+/**
+ * 설정 — 톱니바퀴 하나. 누르면 계정·피드백·로그아웃을 펴는 작은 팝오버다(띠 아래로
+ * 내려온다 — `.topbar`의 세로 overflow는 열려 있다). 게임 화면에서는 메뉴 줄의 마지막
+ * 칸이라 구분선(`.account-sep` = `.rail-sep`)과 칸 크기를 메뉴 줄이 정한다.
+ */
+.account-controls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.account-menu {
+  position: absolute;
+  top: calc(100% + var(--sp-1));
+  right: 0;
+  z-index: var(--z-menu);
+  display: grid;
+  justify-items: stretch;
+  gap: var(--sp-1);
+  min-width: 180px;
+  padding: var(--sp-2);
+  background: var(--pop);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+}
+.account-menu > .btn {
+  justify-content: flex-start;
+}
+.account-email {
+  padding: var(--sp-1) var(--sp-2) var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+/* 메뉴 줄의 버튼 규칙(`.rail button` — 정사각 아이콘 칸)이 팝오버 안 버튼에는 걸리지 않게 */
+.rail .account-menu .btn {
+  width: auto;
+  height: 28px;
+  display: inline-flex;
+  justify-content: flex-start;
+}
+/* 서랍 하단의 계정 묶음 — 넓은 화면과 경기 탭 줄에서는 톱니바퀴가 대신한다 */
+.account-drawer {
+  display: none;
+}
+.account-drawer-link {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font: inherit;
+  text-decoration: none;
+}
+.account-drawer-link:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+/* 700 아래 — 메뉴가 서랍으로 접히면 톱니바퀴 대신 계정 묶음이 서랍 하단에 그대로 선다 */
+@media (max-width: 699px) {
+  .rail-panels > .account-sep,
+  .rail-panels > .account-controls {
+    display: none;
+  }
+  .rail-panels > .account-drawer {
+    display: grid;
+    margin-top: auto;
+    gap: var(--sp-1);
+  }
+  .account-drawer .account-email {
+    padding: 0 var(--sp-3) var(--sp-1);
+    font-size: var(--fs-xs);
+  }
+  /* 서랍 항목 이름(`.rail-label`)과 같은 크기 — 로그아웃 버튼의 서랍 버튼 규칙도 이긴다 */
+  .rail .rail-panels .account-drawer-link {
+    font-size: var(--fs-xs);
+  }
 }

@@ -37,6 +37,33 @@ export const TurnSchema = z
   });
 
 /**
+ * 턴 요청을 읽는다 — 틀리면 화면이 읽을 400을 돌려준다. 접수하는 서버와 실행하는
+ * Worker가 같은 판정을 쓴다.
+ */
+export function parseTurn(
+  raw: unknown,
+): { ok: true; turn: z.infer<typeof TurnSchema> } | { ok: false; response: Response } {
+  const body = TurnSchema.safeParse(raw);
+  if (body.success) return { ok: true, turn: body.data };
+  const messageIssue = body.error.issues.some(
+    (issue) => issue.path[0] === "message" || issue.path[0] === "operation",
+  );
+  const detail = body.error.issues
+    .map((issue) => `${issue.path.join(".") || "요청"}: ${issue.message}`)
+    .join(" / ");
+  return {
+    ok: false,
+    response: json(
+      {
+        error: messageIssue ? "메시지가 필요합니다" : "전술판 지시가 올바르지 않습니다",
+        detail,
+      },
+      400,
+    ),
+  };
+}
+
+/**
  * ⚠️ **서버리스 배포에서만 읽힌다** — `next start`로 띄운 프로세스는 이 값을 보지
  * 않으므로 여기에 마감을 기대면 안 된다. 응답이 반드시 끝나는 근거는 모델 호출마다
  * 걸리는 시한 하나뿐이고(`config/llm.yml`의 `timeout_ms` · `withDeadline`), 게임
@@ -67,22 +94,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   } catch {
     return json({ error: "잘못된 요청 본문입니다" }, 400);
   }
-  const body = TurnSchema.safeParse(raw);
-  if (!body.success) {
-    const messageIssue = body.error.issues.some(
-      (issue) => issue.path[0] === "message" || issue.path[0] === "operation",
-    );
-    const detail = body.error.issues
-      .map((issue) => `${issue.path.join(".") || "요청"}: ${issue.message}`)
-      .join(" / ");
-    return json(
-      {
-        error: messageIssue ? "메시지가 필요합니다" : "전술판 지시가 올바르지 않습니다",
-        detail,
-      },
-      400,
-    );
-  }
+  const parsed = parseTurn(raw);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.turn;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -107,12 +121,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       try {
         const outcome = await runTurnLocked(
           id,
-          body.data.message,
+          body.message,
           (text) => send({ type: "delta", text }),
-          body.data.operation,
-          body.data.orders,
-          body.data.mailMessageIds,
-          body.data.addresseeId,
+          body.operation,
+          body.orders,
+          body.mailMessageIds,
+          body.addresseeId,
         );
         if (outcome.ok) {
           send({ type: "done", payload: outcome.payload });

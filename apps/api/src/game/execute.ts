@@ -4,7 +4,7 @@ import { toPayload } from "../../../web/game/store";
 import { SAVE_VERSION, validateSave, gameSummary, type GameState } from "@gaffer/engine";
 import { execution, withExecution, type Execution } from "./persistence";
 import { runTurnLocked } from "../../../web/game/turn-runner";
-import { TurnSchema } from "../../../web/app/api/games/[id]/turn/stream/route";
+import { parseTurn } from "../../../web/app/api/games/[id]/turn/stream/route";
 import * as games from "../../../web/app/api/games/route";
 import * as game from "../../../web/app/api/games/[id]/route";
 import * as lineup from "../../../web/app/api/games/[id]/lineup/route";
@@ -88,11 +88,10 @@ export async function execute(
     if (url.pathname === "/api/games")
       response = command.method === "GET" ? games.GET(req) : await games.POST(req);
     else if (suffix === "/turn/stream") {
-      const parsed = TurnSchema.safeParse(command.payload);
-      if (!parsed.success)
-        response = Response.json({ error: "올바르지 않은 턴 요청입니다" }, { status: 400 });
+      const parsed = parseTurn(command.payload);
+      if (!parsed.ok) response = parsed.response;
       else {
-        const b = parsed.data;
+        const b = parsed.turn;
         const out = await runTurnLocked(
           command.id,
           b.message,
@@ -104,7 +103,11 @@ export async function execute(
         );
         response = out.ok
           ? Response.json(out.payload)
-          : Response.json({ error: out.error, retry: out.retry }, { status: out.status });
+          : // `detail` is present only in development (turn-runner `errorDetail`)
+            Response.json(
+              { error: out.error, retry: out.retry, ...(out.detail ? { detail: out.detail } : {}) },
+              { status: out.status },
+            );
       }
     } else if (suffix === "") response = await game.GET(req, context);
     else if (suffix === "/lineup") response = await lineup.POST(req, context);

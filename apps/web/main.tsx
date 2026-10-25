@@ -1,4 +1,4 @@
-import { SessionContext } from "./shared/session";
+import { SessionContext, useSession } from "./shared/session";
 import { StrictMode, useEffect, useState, Suspense, lazy, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -14,7 +14,7 @@ import NewGame from "./app/new/page";
 const Admin = lazy(() => import("./app/admin/page"));
 import { GameScreen } from "./game/game-screen";
 const MatchLab = lazy(() => import("./game/match-lab").then((m) => ({ default: m.MatchLab })));
-import { Button, buttonClass } from "./shared/button";
+import { Button } from "./shared/button";
 import { pollJob } from "./shared/api";
 import "./app/globals.css";
 function Game() {
@@ -28,6 +28,7 @@ function Lab() {
 function Shell({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<"loading" | "in" | "out">("loading");
   const [local, setLocal] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
   // Google callback이 실패하면 `/#login_error=`로 돌아온다 — 문구는 보이고 주소에서는 지운다
   const [notice, setNotice] = useState(
     () => new URLSearchParams(window.location.hash.slice(1)).get("login_error") ?? "",
@@ -52,8 +53,9 @@ function Shell({ children }: { children: ReactNode }) {
       .then(async (r) => {
         if (!active) return;
         if (r.ok) {
-          const data = (await r.json()) as { local: boolean };
+          const data = (await r.json()) as { local: boolean; email?: string | null };
           setLocal(data.local);
+          setEmail(data.email ?? null);
           setAuth("in");
         } else setAuth("out");
       })
@@ -118,38 +120,22 @@ function Shell({ children }: { children: ReactNode }) {
       </main>
     );
   }
+  const logout = () => {
+    setNotice("");
+    void fetch("/api/auth/logout", { method: "POST" })
+      .then((response) => {
+        if (!response.ok) throw new Error("logout");
+        for (const key of Object.keys(localStorage))
+          if (key.startsWith("gaffer:request:")) localStorage.removeItem(key);
+        sessionStorage.removeItem("gaffer:client");
+        window.location.replace("/");
+      })
+      .catch(() => setNotice("로그아웃하지 못했습니다. 다시 시도해 주세요"));
+  };
+  // 계정·피드백 손잡이는 각 화면의 상단 띠가 든다(`AccountControls`) — 셸은 줄을 따로 쓰지 않는다
   return (
-    <SessionContext.Provider value={{ local }}>
+    <SessionContext.Provider value={{ local, email, logout }}>
       <div className="service-shell">
-        <nav className="service-toolbar" aria-label="계정">
-          <a className={buttonClass("ghost", "sm")} href="mailto:dhoonjang@gmail.com">
-            dhoonjang@gmail.com
-          </a>
-          {/* 로컬 인증은 다시 불러오면 같은 로컬 계정으로 들어오므로 로그아웃이 없다 */}
-          {!local && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => {
-                setPending(true);
-                setNotice("");
-                void fetch("/api/auth/logout", { method: "POST" })
-                  .then((response) => {
-                    if (!response.ok) throw new Error("logout");
-                    for (const key of Object.keys(localStorage))
-                      if (key.startsWith("gaffer:request:")) localStorage.removeItem(key);
-                    sessionStorage.removeItem("gaffer:client");
-                    window.location.replace("/");
-                  })
-                  .catch(() => setNotice("로그아웃하지 못했습니다. 다시 시도해 주세요"))
-                  .finally(() => setPending(false));
-              }}
-            >
-              로그아웃
-            </Button>
-          )}
-        </nav>
         {notice && <p role="alert">{notice}</p>}
         <div className="service-content" key={generation}>
           <Suspense fallback={<p>불러오는 중…</p>}>{children}</Suspense>
@@ -158,18 +144,25 @@ function Shell({ children }: { children: ReactNode }) {
     </SessionContext.Provider>
   );
 }
+/** 실험실·DB는 로컬 인증에서만 길이 있다 — 공개 모드에서는 없는 페이지다 */
+function AppRoutes() {
+  const { local } = useSession();
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/new" element={<NewGame />} />
+      <Route path="/game/:id" element={<Game />} />
+      {local && <Route path="/lab" element={<Lab />} />}
+      {local && <Route path="/admin" element={<Admin />} />}
+      <Route path="*" element={<p>페이지를 찾을 수 없습니다</p>} />
+    </Routes>
+  );
+}
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <Shell>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/new" element={<NewGame />} />
-          <Route path="/game/:id" element={<Game />} />
-          <Route path="/lab" element={<Lab />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="*" element={<p>페이지를 찾을 수 없습니다</p>} />
-        </Routes>
+        <AppRoutes />
       </Shell>
     </BrowserRouter>
   </StrictMode>,

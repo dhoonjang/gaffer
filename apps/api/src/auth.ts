@@ -18,6 +18,8 @@ export const LOCAL_OWNER = "00000000-0000-4000-8000-000000000001";
 export interface Identity {
   id: string;
   role: string;
+  /** 로그인한 Google 이메일 — 화면 표시용. 로컬 인증과 옛 세션에는 없다 */
+  email?: string | undefined;
 }
 
 /** ID token에서 로그인이 읽는 칸 — 서명·발급자·`aud`·만료는 `verify`가 이미 확인했다 */
@@ -133,12 +135,26 @@ export class Auth {
     }
     const token = this.cookies(req)["gaffer_session"];
     if (!token) throw new HttpError(401, "로그인이 필요합니다");
-    const [session] = await this.db.query<{ id: string; role: string }>(
-      "SELECT m.id,m.role FROM private.sessions s JOIN private.members m ON m.id=s.owner_id WHERE s.token_hash=$1 AND s.expires_at>now() AND m.active",
+    const [session] = await this.db.query<{
+      id: string;
+      role: string;
+      email_cipher: string | null;
+    }>(
+      "SELECT m.id,m.role,s.email_cipher FROM private.sessions s JOIN private.members m ON m.id=s.owner_id WHERE s.token_hash=$1 AND s.expires_at>now() AND m.active",
       [hash(token)],
     );
     if (!session) throw new HttpError(401, "세션이 만료되었습니다");
-    return session;
+    return { id: session.id, role: session.role, email: this.sessionEmail(session.email_cipher) };
+  }
+  /** 표시용 이메일 — 못 읽으면 표시만 빠지고 로그인은 그대로다 */
+  private sessionEmail(cipher: string | null): string | undefined {
+    if (!cipher) return undefined;
+    try {
+      const value = this.decrypt(cipher);
+      return typeof value === "string" ? value : undefined;
+    } catch {
+      return undefined;
+    }
   }
   async invite(email: string): Promise<string> {
     const token = randomToken();
@@ -320,8 +336,8 @@ export class Auth {
         );
       }
       await sql.query(
-        `INSERT INTO private.sessions(token_hash,owner_id,expires_at) VALUES($1,$2,now()+interval '${SESSION_SECONDS} seconds')`,
-        [hash(token), id],
+        `INSERT INTO private.sessions(token_hash,owner_id,expires_at,email_cipher) VALUES($1,$2,now()+interval '${SESSION_SECONDS} seconds',$3)`,
+        [hash(token), id, this.encrypt(email)],
       );
     });
     return token;

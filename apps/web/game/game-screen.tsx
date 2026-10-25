@@ -1,4 +1,5 @@
 "use client";
+import { AccountControls } from "@/shared/account-controls";
 import { apiFetch as fetch } from "@/shared/api";
 import { SquadView } from "@/screens/squad/squad-view";
 import { Mailbox, type MailDraft } from "../screens/mailbox/mailbox";
@@ -1316,6 +1317,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
                   <Icon />
                 </Button>
               ))}
+              {/* 설정 — 경기 중에도 탭 줄 끝에 남는다 */}
+              <AccountControls inRail />
             </nav>
           )}
           {/*
@@ -1375,6 +1378,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
                     )}
                   </Button>
                 ))}
+                {/* 설정 — 메뉴 줄의 마지막 칸. 서랍으로 접히면 서랍 맨 아래다 */}
+                <AccountControls inRail />
               </div>
               <Button
                 variant="bare"

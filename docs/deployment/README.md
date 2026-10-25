@@ -52,12 +52,15 @@ pnpm dev
 # 화면 http://localhost:5173 · API 5174
 ```
 
+화면 포트는 API가 `/health`에 답한 뒤에 열린다.
 `PORT`, `API_PORT`, `GAFFER_DATA_DIR`로 각 실행을 분리한다. PGlite와 로컬 객체 폴더는
 해당 디렉터리에 생성한다. `.env.local`, `apps/web/.env.local`을 읽되 명시한 환경변수를
 덮어쓰지 않는다. 실모드는 제공자 키와 `LLM_PRICES_JSON` 또는 `LLM_PRICES_FILE`이 필요하다.
 사용자의 기존 `apps/web/.data`, `.log`를 옮기거나 지우지 않는다. 기존 파일 세이브는
 CLI용이며 서비스 SQL에 자동 등록되지 않는다. 테스트 import는 local + mock +
-`GAFFER_TEST_FIXTURES=1`일 때만 노출된다. 기존 세이브 공개 전환은 별도 검증이 필요하다.
+`GAFFER_TEST_FIXTURES=1`일 때만 노출되고, 작업이 확정한 게임처럼 세이브와 화면 view를 함께
+등록한다. 기존 세이브 공개 전환은 별도 검증이 필요하다. 로컬 API 프로세스는 모든 역할을
+겸한다. 접수한 작업을 곧바로 실행하고, 배포 worker 계층 전체와 같은 작업 슬롯 4개를 쓴다.
 
 `pnpm dev`는 `GAFFER_AUTH_MODE`를 따로 주지 않으면 `development` 인증으로 뜬다. 로그인 화면
 없이 브라우저마다 로컬 운영자 계정으로 들어가고(쿠키 `gaffer_local`, 쿠키 없는 요청은 고정 로컬
@@ -75,9 +78,12 @@ CLI용이며 서비스 SQL에 자동 등록되지 않는다. 테스트 import는
 
 ## 인증과 요청
 
-- 최초 화면에는 Google 로그인 버튼만 보이며, 인증 후 게임 화면과 로그아웃을 제공한다.
-  피드백은 `dhoonjang@gmail.com` 메일 링크로 받는다. 데이터·계정 설정, 비용 표시,
-  피드백 폼·응답 평가 버튼은 제공하지 않는다.
+- 최초 화면에는 Google 로그인 버튼만 보인다. 인증 후에는 설정(톱니바퀴) 버튼 하나가
+  계정·피드백·로그아웃을 맡고, 누르면 로그인한 계정, 피드백 보내기(운영자 메일로 연결되며
+  주소는 화면에 드러내지 않는다), 로그아웃이 펼쳐진다. 게임 화면에서는 게임 메뉴(경기 중에는
+  경기 탭 줄)의 마지막 칸으로 메뉴 안의 구분선 뒤에 서고, 게임 목록에서는 머리의 버튼 줄
+  끝에 선다. 700px 아래에서 메뉴가 서랍으로 접히면 톱니바퀴 없이 같은 세 항목이 서랍 하단에
+  바로 보인다. 데이터·계정 설정, 비용 표시, 피드백 폼·응답 평가 버튼은 제공하지 않는다.
 - 서버가 Google OAuth 인가 코드 흐름을 직접 수행한다. 시작할 때 state·nonce·PKCE
   verifier를 AES-GCM으로 봉인한 10분 쿠키에 담고, callback에서 state를 대조한 뒤
   client secret과 verifier로 코드를 교환한다. ID token은 Google 공개키 서명·발급자·
@@ -86,20 +92,27 @@ CLI용이며 서비스 SQL에 자동 등록되지 않는다. 테스트 import는
   처음 가입하는 계정은 그 이메일로 발급된 초대(`/#invite=...`, token과 이메일은 해시로
   저장)나 `ADMIN_EMAILS`가 필요하다. 실패한 callback은 `/#login_error=...`로 돌아간다.
 - 서버가 발급한 7일 opaque 세션 쿠키는 HttpOnly·Secure·SameSite=Lax다. Google의
-  access·refresh token은 저장하지 않는다. 로그아웃·계정 삭제는 세션 행을 지운다.
+  access·refresh token은 저장하지 않는다. 화면에 보일 이메일만 세션 행에 AES-GCM으로
+  암호화해 두며, 로그아웃·만료·계정 삭제로 세션 행과 함께 지워진다.
 - 모든 게임·job 요청에서 활성 membership과 소유권을 확인한다. 변경 요청의 Origin은
   `APP_ORIGIN`과 같아야 한다. private schema, 전용 DB 역할, 트랜잭션별 actor RLS가
   함께 적용된다. DB TLS는 인증서 검증을 끌 수 없다. 필요하면 `DATABASE_CA_CERT`에
   Supabase CA PEM을 제공한다. 연결 문자열의 sslmode로 검증을 우회하지 않는다.
-- 운영 `/api/admin`, `/api/lab`, 개발 trace는 닫힌다. 운영 도구는 보호된 CLI에서 사용한다.
+- 로컬 인증이 아니면(공개 모드) `/api/admin`, `/api/lab`, 개발 trace가 404이고 화면의
+  `/admin`(DB)·`/lab`(실험실) 경로와 링크도 없다. 운영 도구는 보호된 CLI에서 사용한다.
 - Pages Function은 고정 `API_ORIGIN`으로 `/api/*`만 전달하며 쿠키·상태를 보존하고
   오류까지 no-store 처리한다. 원본 Cloud Run 주소에도 인증·Origin 검사가 적용된다.
 
 ## 작업과 저장 계약
 
 변경 POST는 `Idempotency-Key`가 필요하다. 같은 key·같은 내용은 같은 작업, 다른 내용은
-409다. 일반 작업은 사용자당·게임당 하나다. 접수 후 202의 `jobId`를
-`GET /api/jobs/:id?after=<seq>`로 조회한다. 브라우저 연결이 끊겨도 작업은 계속된다.
+409다. 일반 작업은 사용자당·게임당 하나다. 앞선 작업이 있으면 409와 그 `activeJobId`를
+돌려주고, 브라우저는 그 작업이 끝난 뒤 같은 key로 다시 접수한다. 경기 지시는 서버가
+제어권 epoch와 `commandId`로 key를 정하므로 다시 보내도 한 번만 적용된다. 형식이 틀린
+턴은 접수 전에 400으로 돌려준다. `?settled=1` 조회는 진행 중인 작업의 확정을 최대 30초
+기다린다. 접수 후 202의 `jobId`를 `GET /api/jobs/:id?after=<seq>`로 조회한다. 브라우저
+연결이 끊겨도 작업은 계속된다. 조회 간격은 0.2초에서 두 배씩 늘어 1.2초에 머문다. 경기
+정지점의 checkpoint가 늦었거나 경기가 이미 끝났으면 상태가 그대로이므로 새 세이브를 쓰지 않는다.
 브라우저는 관측한 revision별 영수증을 15분 유지하며 재접속 시 활성 작업을 조회한다.
 델타는 약 1초 단위, 24시간 보관하며 attempt가 바뀌면 이전 미확정 델타를 지운다.
 
@@ -111,6 +124,7 @@ SQL 포인터를 바꾼다. 삭제되거나 제어권을 잃은 작업은 늦게
 주 화면 view와 목록은 저장된 결과를 읽고, 카탈로그는 인스턴스에서 재사용한다.
 선수 카드·경기 리포트 등 일부 상세 조회는 별도 Worker에서 세이브를 읽는다. 이 경로의
 Cloud Run 냉간 지연과 메모리는 공개 전 측정 대상이다. Worker 수는 부모가 제한한다.
+조회는 작업과 별도의 Worker 자리를 쓴다. 자리가 없으면 최대 15초 기다린 뒤 503을 돌려준다.
 
 경기는 브라우저에서 결정적으로 진행하고 실제 정지점의 checkpoint를 서버가 검증한다.
 정기 5분/골/경고 정지점은 추가하지 않는다. client ID·epoch와 sim build를 검증한다.

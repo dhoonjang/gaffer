@@ -1,5 +1,6 @@
 "use client";
 import { useSession } from "@/shared/session";
+import { AccountControls } from "@/shared/account-controls";
 import { apiFetch as fetch } from "@/shared/api";
 
 import { useCallback, useEffect, useState } from "react";
@@ -120,6 +121,7 @@ export default function HomePage() {
           <Link href="/new" className={buttonClass("primary")} data-testid="new-game">
             <IconPlus />새 게임
           </Link>
+          <AccountControls />
         </div>
       </header>
 

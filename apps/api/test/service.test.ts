@@ -161,6 +161,7 @@ describe("durable service boundary", () => {
     expect(session).toBeTruthy();
     const me = await auth.identity(new Request(c.APP_ORIGIN, { headers: { cookie: session! } }));
     expect(me.role).toBe("admin");
+    expect(me.email).toBe("owner@example.com");
 
     // Everyone else needs an invite issued to their own verified email
     attempt = await begin();
@@ -319,6 +320,10 @@ describe("durable service boundary", () => {
     await expect(
       jobs.submit(owner, "/api/games", "POST", { teamId: "b" }, key),
     ).rejects.toMatchObject({ status: 409 });
+    // The browser waits for exactly this job before it submits again
+    await expect(
+      jobs.submit(owner, "/api/games", "POST", { teamId: "b" }, randomUUID()),
+    ).rejects.toMatchObject({ status: 409, detail: { activeJobId: job.id } });
     await expect(jobs.game(other, job.game_id)).rejects.toMatchObject({ status: 404 });
     await expect(jobs.get(other, job.id)).rejects.toMatchObject({ status: 404 });
     const claimed = await jobs.claim(job.id);

@@ -74,12 +74,14 @@ app.use(async (req: ExpressRequest, res: ExpressResponse) => {
     const status =
       error instanceof HttpError ? error.status : error instanceof z.ZodError ? 400 : 500;
     res.status(status).json({
+      // A Zod message is the raw issue JSON — it never reaches the client.
       error:
         status === 500
           ? "서버 요청에 실패했습니다"
-          : error instanceof Error
+          : error instanceof HttpError
             ? error.message
             : "잘못된 요청입니다",
+      ...(error instanceof HttpError ? error.detail : {}),
       requestId,
     });
     console.error(JSON.stringify({ event: "request_failed", requestId, status }));
@@ -99,6 +101,9 @@ app.use(
   },
 );
 let busy = false;
+// Started jobs are not awaited here: one slow turn must not hold the next queued job
+// behind it while a slot is free.
+const started = new Set<string>();
 const timer =
   c.GAFFER_MODE === "local"
     ? setInterval(() => {
@@ -106,10 +111,19 @@ const timer =
         busy = true;
         void (async () => {
           await service.jobs.recover();
+          const free = service.runner.free();
+          if (!free) return;
           const rows = await db.query<{ id: string }>(
-            "SELECT id FROM private.jobs WHERE status='queued' AND id IN (SELECT job_id FROM private.outbox WHERE next_at<=now()) ORDER BY (path='/internal/lorebook'),created_at LIMIT 2",
+            "SELECT id FROM private.jobs WHERE status='queued' AND id IN (SELECT job_id FROM private.outbox WHERE next_at<=now()) ORDER BY (path='/internal/lorebook'),created_at LIMIT $1",
+            [free + started.size],
           );
-          await Promise.all(rows.map((row) => service.runner.job(row.id)));
+          for (const { id } of rows.filter((row) => !started.has(row.id)).slice(0, free)) {
+            started.add(id);
+            void service.runner
+              .job(id)
+              .catch(() => console.error(JSON.stringify({ event: "local_dispatch_failed" })))
+              .finally(() => started.delete(id));
+          }
         })()
           .catch(() => console.error(JSON.stringify({ event: "local_dispatch_failed" })))
           .finally(() => {

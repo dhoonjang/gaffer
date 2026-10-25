@@ -24,7 +24,9 @@ import { toPayload } from "./store";
 
 /**
  * 응답을 잃고 다시 보낸 조작을 가르는 표 — 게임마다 최근 명령 id. 프로세스 메모리다:
- * 세이브에 남길 사실이 아니라 한 연결의 되풀이를 막는 표일 뿐이다.
+ * 세이브에 남길 사실이 아니라 한 연결의 되풀이를 막는 표일 뿐이다. 서비스는 작업마다
+ * 새 Worker라 이 표가 비어 있다 — 거기서는 서버가 `commandId`로 정한 작업 키가 같은
+ * 명령을 한 작업으로 묶는다 (apps/api/src/service.ts).
  */
 const appliedCommands = new Map<string, string[]>();
 const COMMANDS_KEPT = 64;
@@ -63,7 +65,8 @@ export async function handleLiveAction(id: string, action: LiveAction): Promise<
           const verdict = commitCheckpoint(state, action.checkpoint);
           const { events, ...rest } = verdict;
           const snapshot = { ...snapshotOf(state), verdict: rest, events };
-          saveGame(state);
+          // 늦게 닿았거나 끝난 경기의 구간은 상태를 건드리지 않는다 — 새 세이브를 쓰지 않는다
+          if (verdict.ok || verdict.reason === "digest") saveGame(state);
           return snapshot;
         }
         case "orders": {

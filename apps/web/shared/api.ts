@@ -15,6 +15,15 @@ interface JobStatus {
   error: string | null;
 }
 const revisions = new Map<string, number>();
+/** 앞선 작업을 기다렸다가 다시 접수하는 횟수 — 그 사이 또 다른 작업이 끼어드는 일까지 받는다 */
+const BUSY_ROUNDS = 3;
+/**
+ * 작업 조회 간격 — 짧게 시작해 두 배씩 늘려 상한에 머문다. 저장·읽음 표시처럼 1초 안에
+ * 끝나는 작업이 조회 한 칸을 통째로 기다리지 않게 하고, 긴 턴은 상한 간격으로 묻는다.
+ */
+const POLL_FIRST_MS = 200;
+const POLL_MAX_MS = 1200;
+const pollDelay = (polls: number) => Math.min(POLL_MAX_MS, POLL_FIRST_MS * 2 ** polls);
 const pause = (ms: number, signal?: AbortSignal | null) =>
   new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -34,7 +43,7 @@ export async function pollJob(
   signal?: AbortSignal | null,
 ): Promise<Response> {
   let seq = 0;
-  for (;;) {
+  for (let polls = 0; ; polls++) {
     const res = await nativeFetch(`/api/jobs/${id}?after=${seq}`, {
       ...(signal ? { signal } : {}),
     });
@@ -59,7 +68,7 @@ export async function pollJob(
     if (!["queued", "running"].includes(job.status))
       return Response.json({ error: job.error ?? "작업이 완료되지 않았습니다" }, { status: 409 });
     onEvent({ type: "ping" });
-    await pause(document.hidden ? 10_000 : 1200, signal);
+    await pause(document.hidden ? 10_000 : pollDelay(polls), signal);
   }
 }
 async function receiptKey(path: string, body: BodyInit | null | undefined): Promise<string> {
@@ -133,6 +142,20 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   let response: Response;
   if (receipt.jobId) response = Response.json({ jobId: receipt.jobId }, { status: 202 });
   else response = await nativeFetch(input, { ...init, headers });
+  /*
+   * 일반 작업은 사용자당 하나다 — 읽음 표시·자동 저장 같은 앞선 작업이 돌고 있으면 서버가
+   * 그 작업을 알려 준다. 그것이 끝나기를 기다렸다가 같은 키로 다시 접수한다 (거절된 접수는
+   * 키를 남기지 않는다).
+   */
+  for (let round = 0; response.status === 409 && round < BUSY_ROUNDS; round++) {
+    const busy = (await response
+      .clone()
+      .json()
+      .catch(() => ({}))) as { activeJobId?: unknown };
+    if (typeof busy.activeJobId !== "string") break;
+    await pollJob(busy.activeJobId, () => {}, init?.signal);
+    response = await nativeFetch(input, { ...init, headers });
+  }
   if (response.status !== 202) {
     localStorage.removeItem(storageKey);
     return response;

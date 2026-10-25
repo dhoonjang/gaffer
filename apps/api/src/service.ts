@@ -1,4 +1,9 @@
 import { GET as catalogGet } from "../../web/app/api/games/route";
+import { parseTurn } from "../../web/app/api/games/[id]/turn/stream/route";
+import { toPayload } from "../../web/game/store";
+import { LiveActionSchema } from "../../web/screens/match/live-match-protocol";
+import { LOCK_WAIT_MS } from "../../web/game/turn-runner";
+import { setTimeout as pause } from "node:timers/promises";
 import { simBuildId } from "../../../scripts/sim-build";
 const SIM_BUILD = simBuildId();
 import { decode, encode, hash } from "./objects";
@@ -15,7 +20,7 @@ import { gameVersion } from "@gaffer/llm";
 import type { Config } from "./config";
 import { HttpError } from "./config";
 import { Auth } from "./auth";
-import { Jobs } from "./jobs";
+import { Jobs, type Game } from "./jobs";
 import { Dispatcher } from "./dispatch";
 import { Runner } from "./runner";
 import { Usage } from "./usage";
@@ -43,6 +48,8 @@ const Feedback = z.object({
 });
 const mutationPath =
   /^\/api\/games(?:\/[0-9a-f-]+\/(?:turn\/stream|lineup|match\/(?:live|close)|mail|negotiation))?$/;
+/** How often `?settled=1` looks again for the running job's commit. */
+const SETTLE_POLL_MS = 250;
 export class Service {
   readonly auth: Auth;
   readonly jobs: Jobs;
@@ -59,7 +66,26 @@ export class Service {
     this.jobs = new Jobs(db, objects, 2);
     this.dispatcher = new Dispatcher(c, db);
     this.usage = new Usage(c, db);
-    this.runner = new Runner(this.jobs, this.usage, c.SERVICE_ROLE === "sim" ? 1 : 2);
+    // A local process is every role at once, so it gets the job slots of the whole
+    // deployed worker tier (2 instances × concurrency 2).
+    this.runner = new Runner(
+      this.jobs,
+      this.usage,
+      c.SERVICE_ROLE === "sim" ? 1 : c.GAFFER_MODE === "local" ? 4 : 2,
+    );
+  }
+  /**
+   * `?settled=1` reads after the running job commits, waiting as long as the save lock
+   * once did. Past that the client is told to ask again.
+   */
+  private async settled(owner: string, gameId: string): Promise<Game | null> {
+    const until = Date.now() + LOCK_WAIT_MS.settled;
+    for (;;) {
+      await pause(SETTLE_POLL_MS);
+      const game = await this.jobs.game(owner, gameId);
+      if (!game.active_job) return game;
+      if (Date.now() >= until) return null;
+    }
   }
   async internal(req: Request): Promise<void> {
     if (this.c.GAFFER_MODE === "local") return;
@@ -140,7 +166,7 @@ export class Service {
       const fresh = this.auth.development && !this.auth.cookies(req)["gaffer_local"];
       const id = fresh ? randomUUID() : owner;
       return Response.json(
-        { id, role: identity.role, local: this.auth.development },
+        { id, role: identity.role, local: this.auth.development, email: identity.email ?? null },
         // 로컬 계정은 브라우저에 오래 남아야 지난 테스트 게임을 다시 연다 (브라우저 상한 400일)
         {
           headers: fresh ? { "Set-Cookie": this.auth.cookie("gaffer_local", id, 400 * 86400) } : {},
@@ -168,18 +194,34 @@ export class Service {
       const body = z.object({ id: Id }).parse(await req.json());
       const state = loadGame(body.id);
       if (!state) throw new HttpError(404, "Fixture missing");
-      await this.db.query("INSERT INTO private.games(id,owner_id) VALUES($1,$2)", [
-        state.id,
-        owner,
-      ]);
-      const saved = await this.jobs.object(state.id, "save", {
-        ...state,
-        saveVersion: SAVE_VERSION,
+      // recover() deletes an idle game row without a snapshot, so the row is born with
+      // its save and screen view — the same pair a committed job leaves behind.
+      const put = async (kind: string, value: unknown) => {
+        const bytes = encode(value);
+        const key = `${state.id}/${kind}/${randomUUID()}`;
+        await this.jobs.objects.put(key, bytes);
+        return { key, checksum: hash(bytes) };
+      };
+      const saved = await put("save", { ...state, saveVersion: SAVE_VERSION });
+      const view = await put("view", toPayload(state));
+      await this.db.transaction(async (sql) => {
+        await sql.query(
+          "INSERT INTO private.games(id,owner_id,snapshot_key,snapshot_hash,view_key,view_hash,summary) VALUES($1,$2,$3,$4,$5,$6,$7)",
+          [
+            state.id,
+            owner,
+            saved.key,
+            saved.checksum,
+            view.key,
+            view.checksum,
+            JSON.stringify(gameSummary(state)),
+          ],
+        );
+        await sql.query(
+          "INSERT INTO private.objects(key,game_id,checksum,state) VALUES($1,$2,$3,'committed'),($4,$2,$5,'committed')",
+          [saved.key, state.id, saved.checksum, view.key, view.checksum],
+        );
       });
-      await this.db.query(
-        "UPDATE private.games SET snapshot_key=$2,snapshot_hash=$3,summary=$4 WHERE id=$1",
-        [state.id, saved.key, saved.checksum, JSON.stringify(gameSummary(state))],
-      );
       return Response.json({ ok: true });
     }
     if (path === "/api/feedback" && req.method === "POST") {
@@ -302,7 +344,13 @@ export class Service {
     let epoch: number | undefined;
     if (gameId) {
       Id.parse(gameId);
-      const game = await this.jobs.game(owner, gameId);
+      let game = await this.jobs.game(owner, gameId);
+      if (req.method === "GET" && url.searchParams.get("settled") === "1" && game.active_job) {
+        const settled = await this.settled(owner, gameId);
+        if (!settled)
+          return Response.json({ error: "작업이 진행 중입니다", retry: true }, { status: 409 });
+        game = settled;
+      }
       if (path === `/api/games/${gameId}` && req.method === "DELETE") {
         await this.jobs.remove(owner, gameId);
         return Response.json({ ok: true });
@@ -382,8 +430,6 @@ export class Service {
         );
       }
       if (req.method === "GET" && path === `/api/games/${gameId}` && game.view_key) {
-        if (game.active_job && url.searchParams.get("settled") === "1")
-          return Response.json({ error: "작업이 진행 중입니다", retry: true }, { status: 409 });
         return Response.json(
           decode(await this.jobs.objects.get(game.view_key), game.view_hash ?? undefined),
           { headers: { "X-Gaffer-Revision": String(game.revision) } },
@@ -396,9 +442,6 @@ export class Service {
           )
         )
           throw new HttpError(404, "Not found");
-        if (game.active_job && url.searchParams.get("settled") === "1")
-          return Response.json({ error: "작업이 진행 중입니다", retry: true }, { status: 409 });
-        if (!this.runner.available()) throw new HttpError(503, "Busy");
         const out = await this.runner.read(game, path + url.search);
         return Response.json(out.result.body, {
           status: out.result.status,
@@ -421,12 +464,22 @@ export class Service {
         if (!backup) throw new HttpError(503, "백업 상태 확인 중입니다");
       }
       const body: unknown = await req.json();
+      // A malformed turn is answered here, with its reason, instead of taking a job slot.
+      if (path.endsWith("/turn/stream")) {
+        const turn = parseTurn(body);
+        if (!turn.ok) return turn.response;
+      }
+      // A match order names itself: within one control epoch a resend after a lost reply
+      // joins the same job even under a new request key, since every job gets a fresh Worker.
+      const action = path.endsWith("/match/live") ? LiveActionSchema.safeParse(body) : null;
       const job = await this.jobs.submit(
         owner,
         path,
         req.method,
         body,
-        req.headers.get("idempotency-key") ?? "",
+        action?.success && action.data.kind === "orders"
+          ? `order-${epoch}-${action.data.commandId}`
+          : (req.headers.get("idempotency-key") ?? ""),
         gameId,
         epoch,
       );
@@ -452,6 +505,11 @@ export class Service {
           console.warn(JSON.stringify({ event: "sim_deferred", jobId: job.id }));
         }
       }
+      // Locally this process is also the worker: start now instead of on the next sweep.
+      if (this.c.GAFFER_MODE === "local")
+        void this.runner
+          .job(job.id)
+          .catch(() => console.warn(JSON.stringify({ event: "dispatch_deferred", jobId: job.id })));
       try {
         await this.dispatcher.dispatch();
       } catch {

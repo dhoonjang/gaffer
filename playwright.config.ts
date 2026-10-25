@@ -94,6 +94,8 @@ export default defineConfig({
       // The isolated local fixture server permits catalog edits.
       ADMIN_ENABLED: "1",
       GAFFER_DATA_DIR: DATA_DIR,
+      // mock 기록은 개발자의 기록 창고(apps/web/.log)에 섞이지 않는다 — 슬롯의 디렉터리를 따라간다
+      GAFFER_LOG_DIR: `${DATA_DIR}/log`,
     },
   },
 });

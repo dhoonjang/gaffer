@@ -73,6 +73,8 @@ export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Facts the client acts on, sent beside `error` (e.g. the job it must wait for). */
+    readonly detail: Record<string, string> = {},
   ) {
     super(message);
   }

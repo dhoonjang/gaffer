@@ -14,7 +14,7 @@ description: >-
 
 이 스킬은 **정해진 시나리오의 게임을 열어 한 시즌(7월 1일 → 다음 7월 1일)을
 감독으로 끝까지 진행**한다. 목적은 둘이다 — 실제 플레이어가 남길 만한 기록
-(`apps/web/.log` · `apps/web/.data`)을 남기는 것, 그리고 그 과정에서 게임이
+(`apps/web/.log` · 서비스 저장소)을 남기는 것, 그리고 그 과정에서 게임이
 어긋나는 자리를 발견해 이슈로 올리는 것. 이기려고 무리하는 것이 아니라
 **그럴듯한 감독이 하는 일을 빠짐없이** 하는 것이 기준이다.
 
@@ -46,8 +46,10 @@ description: >-
 
 ### 2-1. 서버
 
-- 게임은 **`http://localhost:3000`의 dev 서버**를 통해 돌린다. 유저의 서버다 —
-  절대 죽이지 않는다. `curl -s localhost:5173/api/games`가 답하면 그대로 쓴다.
+- 게임은 **`http://localhost:5173`의 dev 서버**(`pnpm dev` — 화면 5173 · API 5174)를 통해
+  돌린다. `curl -s localhost:5173/api/games`가 답하면 그대로 쓴다. 로컬은 `development`
+  인증이라 로그인 없이 쿠키 없는 요청이 고정 로컬 계정으로 들어간다. 유저의 3000 · 3311은
+  절대 죽이지 않는다.
 - 아무것도 듣지 않으면 `pnpm dev`를 백그라운드로 띄우고(에이전트의 백그라운드 실행 기능)
   `GET /api/games`가 200을 줄 때까지 기다린다. 띄운 서버는 시뮬이 끝나도
   그대로 둔다 — 로그 · 세이브를 유저가 열어 볼 자리다.
@@ -55,9 +57,9 @@ description: >-
   `GOOGLE_API_KEY`)가 서버의 환경에 있어야 한다. `LLM_MODE=mock`으로는
   시뮬레이션의 의미가 없다 — 첫 장면의 서사가 규칙 문장으로만 오면 멈추고
   유저에게 말한다.
-- 기록은 기본 자리(`apps/web/.log` · `apps/web/.data`)에 남긴다.
-  `GAFFER_DATA_DIR` · `GAFFER_LOG_DIR`를 옮기지 않는다. **`.log`는 절대
-  비우지 않는다.**
+- 기록은 기본 자리에 남긴다 — 호출 원문·타임라인은 `apps/web/.log`(`pnpm dev`가
+  `GAFFER_LOG_DIR`를 그리로 둔다), 세이브는 서비스 저장소(`GAFFER_DATA_DIR`의 PGlite ·
+  객체 폴더)다. 둘 다 옮기지 않는다. **`.log`는 절대 비우지 않는다.**
 
 ### 2-2. 작업 폴더와 환경
 
@@ -66,7 +68,7 @@ description: >-
 
 ```bash
 export SIM_DIR=$(mktemp -d /tmp/gaffer-simulation.XXXXXX)      # 상태 · 저널 · 요청 원문
-export SIM_HOST=http://localhost:3000
+export SIM_HOST=http://localhost:5173
 B=.agents/skills/simulation/bin              # 이 스킬의 스크립트 다섯
 ```
 
@@ -113,8 +115,8 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
 ## 3. 단 하나의 진행 규칙 — 순서대로, 읽고, 결정하고
 
 - **요청은 언제나 하나만 날아 있다.** `turn.sh`가 돌아오기 전에 다른 `turn.sh` ·
-  `lineup.sh`를 보내지 않는다. 서버는 게임 하나에 잠금 하나라 두 번째 요청은
-  3초 뒤 409로 물러난다 — 그 409가 보이면 내가 병렬로 보낸 것이다.
+  `lineup.sh`를 보내지 않는다. 서버는 게임마다 작업을 하나만 받아 두 번째 변경 요청은
+  409(`이전 작업이 진행 중입니다`)로 물러난다 — 그 409가 보이면 내가 병렬로 보낸 것이다.
 - **백그라운드 없음.** 에이전트의 백그라운드 실행 기능으로 턴을 보내지 않는다.
   서브에이전트에게 경기를 나눠 주지 않는다. `for … turn.sh` 루프로 여러 턴을
   한 번에 돌리지 않는다 — 「경기 끝까지 `match.sh` N번」도 안 된다. 정지점마다
@@ -173,7 +175,10 @@ $B/new-game.sh && export SIM_GAME=$(cat $SIM_DIR/game.txt)
    템포 · 폭)과 패스 스타일도 같은 body에 싣는다 — 상대와 상황이 정한다.
 4. **팀토크** — 한 턴, 상황에서 나온 말. 약속으로 읽힐 말("다음 경기도 네가
    선발이다")은 뜻이 있을 때만.
-5. `match.sh` — 경기장에 들어서고 시계를 민다(§5-2). 입장에는 턴이 없다.
+5. 경기를 여는 한 턴 — 경기일(phase `matchday`)에 감독의 말을 받은 GM이 `start_match`로
+   경기 판을 세운다. `state.sh`로 phase가 `match`가 된 것을 확인한다. 판이 서기 전에
+   `match.sh`를 부르면 `진행 중인 경기가 없습니다`로 멈춘다.
+6. `match.sh` — 경기장에 들어서고 시계를 민다(§5-2). 입장에는 턴이 없다.
 
 ### 5-2. 경기 중 (phase `match`)
 

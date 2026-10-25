@@ -112,6 +112,8 @@ describe("실시간 경기 체크포인트", () => {
     });
     expect(stale.verdict?.ok).toBe(false);
     expect(memory.db.pendingMatch.live.committedTick).toBe(40);
+    // 바뀐 것이 없으니 새 세이브(새 revision)를 쓰지 않는다
+    expect(memory.writes).toBe(1);
   });
   it("digest가 어긋나도 서버의 상태가 이기고 그대로 저장된다", async () => {
     const result = await handleLiveAction("live", {

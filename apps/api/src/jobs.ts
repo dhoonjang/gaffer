@@ -97,15 +97,11 @@ export class Jobs {
           throw new HttpError(409, "같은 요청 키의 내용이 달라졌습니다");
         return old;
       }
-      if (
-        (
-          await sql.query(
-            "SELECT id FROM private.jobs WHERE owner_id=$1 AND status IN ('queued','running') AND path <> '/internal/lorebook'",
-            [owner],
-          )
-        ).length
-      )
-        throw new HttpError(409, "이전 작업이 진행 중입니다");
+      const [active] = await sql.query<{ id: string }>(
+        "SELECT id FROM private.jobs WHERE owner_id=$1 AND status IN ('queued','running') AND path <> '/internal/lorebook' LIMIT 1",
+        [owner],
+      );
+      if (active) throw new HttpError(409, "이전 작업이 진행 중입니다", { activeJobId: active.id });
       if (!gameId) {
         const [count] = await sql.query<{ n: string }>(
           "SELECT count(*)::text AS n FROM private.games WHERE owner_id=$1 AND deleted_at IS NULL",
