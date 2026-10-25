@@ -5,6 +5,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { decode } from "./objects";
 import type { Game } from "./jobs";
 import { Worker } from "node:worker_threads";
+import { catalogCacheKey } from "@gaffer/engine";
 import type { HttpAttempt, HttpUsage } from "@gaffer/llm";
 import type { Jobs, Job } from "./jobs";
 import type { Usage } from "./usage";
@@ -15,9 +16,32 @@ import type { Command, Executed } from "./game/execute";
  * finishes in about a second, so a full line drains well inside this.
  */
 export const READ_WAIT_MS = 15_000;
+/** How long a finished Worker stays warm for the next command before it is let go. */
+export const WARM_IDLE_MS = 5 * 60_000;
+
+/** An execution Worker and the catalog generation its module graph loaded. */
+interface Executor {
+  worker: Worker;
+  catalog: string;
+}
+
+interface WorkerMessage {
+  type: string;
+  id: string;
+  value: unknown;
+  text: string;
+  result: Executed;
+  error: string;
+  kind?: LlmErrorKind;
+}
 
 export class Runner {
   private active = 0;
+  /**
+   * Finished Workers kept for the next command — starting one loads the whole engine and
+   * catalog, which costs more than most commands. One runs a single command at a time.
+   */
+  private readonly warm: { executor: Executor; idle: ReturnType<typeof setTimeout> }[] = [];
   /** Reads have their own Worker slots: a long turn must not turn a player card into a 503. */
   private reading = 0;
   private readonly readers: (() => void)[] = [];
@@ -59,23 +83,61 @@ export class Runner {
     if (next) next();
     else this.reading--;
   }
+  /** A warm Worker on the current catalog, or a new one. */
+  private acquire(): Executor {
+    const catalog = catalogCacheKey();
+    for (let entry = this.warm.pop(); entry; entry = this.warm.pop()) {
+      clearTimeout(entry.idle);
+      if (entry.executor.catalog === catalog) {
+        entry.executor.worker.ref();
+        return entry.executor;
+      }
+      void entry.executor.worker.terminate();
+    }
+    const worker = new Worker(new URL("./worker-bootstrap.mjs", import.meta.url));
+    // A warm Worker that dies while idle simply leaves the pool.
+    worker.on("exit", () => {
+      const at = this.warm.findIndex((entry) => entry.executor.worker === worker);
+      if (at >= 0) this.warm.splice(at, 1);
+    });
+    return { worker, catalog };
+  }
+  /**
+   * Keeps a Worker that finished its command cleanly. One still running (deadline, lost
+   * lease) or on an older catalog is stopped instead.
+   */
+  private release(executor: Executor, reusable: boolean): Promise<void> | void {
+    if (
+      !reusable ||
+      executor.catalog !== catalogCacheKey() ||
+      this.warm.length >= this.capacity + this.readCapacity
+    )
+      return executor.worker.terminate().then(() => undefined);
+    executor.worker.unref();
+    const idle = setTimeout(() => {
+      const at = this.warm.findIndex((entry) => entry.executor === executor);
+      if (at >= 0) this.warm.splice(at, 1);
+      void executor.worker.terminate();
+    }, WARM_IDLE_MS);
+    idle.unref();
+    this.warm.push({ executor, idle });
+  }
   async run(command: Command, job?: Job, reserved = false): Promise<Executed> {
     if (!reserved && !this.available()) throw new Error("Runner capacity exhausted");
     if (!reserved) this.active++;
-    let worker: Worker;
+    let executor: Executor;
+    let diagnostics: boolean;
     try {
-      worker = new Worker(new URL("./worker-bootstrap.mjs", import.meta.url), {
-        workerData: {
-          ...command,
-          diagnostics: job
-            ? Boolean((await this.jobs.game(job.owner_id, job.game_id)).diagnostics_consent)
-            : false,
-        },
-      });
+      diagnostics = job
+        ? Boolean((await this.jobs.game(job.owner_id, job.game_id)).diagnostics_consent)
+        : false;
+      executor = this.acquire();
     } catch (error) {
       if (!reserved) this.active--;
       throw error;
     }
+    const { worker } = executor;
+    let reusable = false;
     let lastHeartbeat = Date.now();
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let batch: ReturnType<typeof setInterval> | undefined;
@@ -94,6 +156,9 @@ export class Runner {
           }),
       );
     };
+    let onMessage: (m: WorkerMessage) => void = () => undefined;
+    let onError: (e: unknown) => void = () => undefined;
+    let onExit: () => void = () => undefined;
     try {
       return await new Promise<Executed>((resolve, reject) => {
         const timeout = setTimeout(
@@ -105,6 +170,52 @@ export class Runner {
           if (error) reject(error);
           else if (result) resolve(result);
         };
+        onMessage = (m: WorkerMessage) => {
+          if (m.type === "delta") {
+            delta += m.text;
+            return;
+          }
+          if (m.type === "done") {
+            reusable = true;
+            while (delta) flush();
+            void events
+              .then(() => finish(eventError ? new Error("Event write failed") : null, m.result))
+              .catch((e: unknown) =>
+                finish(e instanceof Error ? e : new Error("Event write failed")),
+              );
+            return;
+          }
+          if (m.type === "error") {
+            reusable = true;
+            finish(new LlmCallError(m.kind ?? "unknown", m.error));
+            return;
+          }
+          if (m.type === "reserve" || m.type === "settle" || m.type === "capture") {
+            const work = async () => {
+              if (!job) throw new Error("Read requests cannot call an LLM");
+              if (m.type === "capture") {
+                await capture(configuration(), this.jobs, job, m.value);
+                return null;
+              }
+              if (m.type === "reserve") return this.usage.reserve(job, m.value as HttpAttempt);
+              const v = m.value as { id: string; usage: HttpUsage | null };
+              await this.usage.settle(v.id, v.usage);
+              return null;
+            };
+            void work()
+              .then((value) => worker.postMessage({ type: "rpc_result", id: m.id, value }))
+              .catch((error: unknown) =>
+                worker.postMessage({
+                  type: "rpc_result",
+                  id: m.id,
+                  error: "LLM admission denied",
+                  kind: llmErrorKind(error),
+                }),
+              );
+          }
+        };
+        onError = (e: unknown) => finish(e instanceof Error ? e : new Error("Worker failed"));
+        onExit = () => finish(new Error("Execution worker stopped"));
         if (job)
           heartbeat = setInterval(() => {
             void this.jobs
@@ -118,68 +229,18 @@ export class Runner {
               });
           }, 10_000);
         batch = setInterval(flush, 1000);
-        worker.on(
-          "message",
-          (m: {
-            type: string;
-            id: string;
-            value: unknown;
-            text: string;
-            result: Executed;
-            error: string;
-            kind?: LlmErrorKind;
-          }) => {
-            if (m.type === "delta") {
-              delta += m.text;
-              return;
-            }
-            if (m.type === "done") {
-              while (delta) flush();
-              void events
-                .then(() => finish(eventError ? new Error("Event write failed") : null, m.result))
-                .catch((e: unknown) =>
-                  finish(e instanceof Error ? e : new Error("Event write failed")),
-                );
-              return;
-            }
-            if (m.type === "error") {
-              finish(new LlmCallError(m.kind ?? "unknown", m.error));
-              return;
-            }
-            if (m.type === "reserve" || m.type === "settle" || m.type === "capture") {
-              const work = async () => {
-                if (!job) throw new Error("Read requests cannot call an LLM");
-                if (m.type === "capture") {
-                  await capture(configuration(), this.jobs, job, m.value);
-                  return null;
-                }
-                if (m.type === "reserve") return this.usage.reserve(job, m.value as HttpAttempt);
-                const v = m.value as { id: string; usage: HttpUsage | null };
-                await this.usage.settle(v.id, v.usage);
-                return null;
-              };
-              void work()
-                .then((value) => worker.postMessage({ type: "rpc_result", id: m.id, value }))
-                .catch((error: unknown) =>
-                  worker.postMessage({
-                    type: "rpc_result",
-                    id: m.id,
-                    error: "LLM admission denied",
-                    kind: llmErrorKind(error),
-                  }),
-                );
-            }
-          },
-        );
-        worker.once("error", (e) => finish(e instanceof Error ? e : new Error("Worker failed")));
-        worker.once("exit", (code) => {
-          if (code !== 0) finish(new Error("Execution worker stopped"));
-        });
+        worker.on("message", onMessage);
+        worker.once("error", onError);
+        worker.once("exit", onExit);
+        worker.postMessage({ type: "run", command: { ...command, diagnostics } });
       });
     } finally {
       if (heartbeat) clearInterval(heartbeat);
       if (batch) clearInterval(batch);
-      await worker.terminate();
+      worker.off("message", onMessage);
+      worker.off("error", onError);
+      worker.off("exit", onExit);
+      await this.release(executor, reusable);
       if (!reserved) this.active--;
     }
   }

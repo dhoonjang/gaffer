@@ -1,4 +1,4 @@
-import { loadGame, saveGame } from "../../api/src/game/persistence";
+import { execution, loadGame, saveGame } from "../../api/src/game/persistence";
 import {
   awaitingShootout,
   advanceShootout,
@@ -24,9 +24,10 @@ import { toPayload } from "./store";
 
 /**
  * 응답을 잃고 다시 보낸 조작을 가르는 표 — 게임마다 최근 명령 id. 프로세스 메모리다:
- * 세이브에 남길 사실이 아니라 한 연결의 되풀이를 막는 표일 뿐이다. 서비스는 작업마다
- * 새 Worker라 이 표가 비어 있다 — 거기서는 서버가 `commandId`로 정한 작업 키가 같은
- * 명령을 한 작업으로 묶는다 (apps/api/src/service.ts).
+ * 세이브에 남길 사실이 아니라 한 연결의 되풀이를 막는 표일 뿐이다. 서비스 실행
+ * (`execution()`)에서는 쓰지 않는다 — 서버가 `commandId`로 정한 작업 키가 같은 명령을
+ * 한 작업으로 묶고(apps/api/src/service.ts), Worker를 다음 작업에 다시 쓰므로 이 표가
+ * 남아 있으면 같은 명령의 재시도(실패한 시도 뒤의 다음 attempt)를 건너뛴다.
  */
 const appliedCommands = new Map<string, string[]>();
 const COMMANDS_KEPT = 64;
@@ -70,7 +71,8 @@ export async function handleLiveAction(id: string, action: LiveAction): Promise<
           return snapshot;
         }
         case "orders": {
-          const seen = appliedCommands.get(id) ?? [];
+          const memory = execution() ? null : appliedCommands;
+          const seen = memory?.get(id) ?? [];
           if (!seen.includes(action.commandId)) {
             for (const order of action.orders) {
               const result = applyMatchBoardOrder(state, order);
@@ -80,7 +82,7 @@ export async function handleLiveAction(id: string, action: LiveAction): Promise<
             syncLiveTactics(state);
             const snapshot = { ...snapshotOf(state), slice: toPayload(state, ["squad", "match"]) };
             saveGame(state);
-            appliedCommands.set(id, [...seen, action.commandId].slice(-COMMANDS_KEPT));
+            memory?.set(id, [...seen, action.commandId].slice(-COMMANDS_KEPT));
             return snapshot;
           }
           return { ...snapshotOf(state), slice: toPayload(state, ["squad", "match"]) };
