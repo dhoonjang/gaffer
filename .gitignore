@@ -62,3 +62,5 @@ config/llm-prices.json
 gha-creds-*.json
 
 server-image.tar.gz
+
+prod-ca-2021.crt
