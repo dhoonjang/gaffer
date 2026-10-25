@@ -6,6 +6,17 @@ import type { Database, Sql } from "./database";
 import { HttpError } from "./config";
 import { hash, encode, decode, type ObjectStore } from "./objects";
 
+/**
+ * 세이브에서 떼어 **내용 해시 조각**으로 두는 큰 표 — 바뀌지 않았으면 다시 올리지 않는다.
+ *
+ * 선수·계약·로어북이 세이브의 대부분인데, 경기 체크포인트·전술판·대화 턴에서는 거의 그대로다.
+ * 세이브 본문은 조각 이름만 들고(`CHUNKS`), 읽을 때 붙여 같은 GameState로 되돌린다.
+ */
+const CHUNKED_TABLES = ["players", "contracts", "lorebook"] as const;
+const CHUNKS = "__chunks";
+/** 조각 이름 `<게임>/chunk/<표>-<내용 해시>-<무작위>` — 해시가 읽을 때의 검증값이다 */
+const CHUNK_KEY = /\/chunk\/([a-z]+)-([0-9a-f]{64})-[0-9a-f-]{36}$/;
+
 export interface Game extends Record<string, unknown> {
   id: string;
   owner_id: string;
@@ -197,19 +208,63 @@ export class Jobs {
     gameId: string,
     kind: string,
     value: unknown,
+    refs: string[] = [],
   ): Promise<{ key: string; checksum: string }> {
-    const key = `${gameId}/${kind}/${randomUUID()}`;
-    const bytes = encode(value);
+    return this.upload(`${gameId}/${kind}/${randomUUID()}`, gameId, encode(value), refs);
+  }
+  private async upload(
+    key: string,
+    gameId: string,
+    bytes: Uint8Array,
+    refs: string[] = [],
+  ): Promise<{ key: string; checksum: string }> {
     const checksum = hash(bytes);
-    await this.db.query("INSERT INTO private.objects(key,game_id,checksum) VALUES($1,$2,$3)", [
-      key,
-      gameId,
-      checksum,
-    ]);
+    await this.db.query(
+      "INSERT INTO private.objects(key,game_id,checksum,refs) VALUES($1,$2,$3,$4)",
+      [key, gameId, checksum, JSON.stringify(refs)],
+    );
     await this.objects.put(key, bytes);
     if (hash(await this.objects.get(key)) !== checksum)
       throw new Error("Object verification failed");
     return { key, checksum };
+  }
+  /**
+   * 조각 하나 — 같은 내용의 확정된 조각이 있으면 그것을 다시 쓴다.
+   *
+   * 다시 쓰는 그 갱신이 `created_at`을 지금으로 옮겨 GC의 하루 유예를 새로 건다. GC는 행을
+   * 조건부로 먼저 지우고 성공했을 때만 바이트를 지우므로(maintenance), 갱신에 성공한 조각은
+   * 커밋 전에 사라지지 않는다. 갱신할 행이 없으면 **새 이름**으로 올린다 — 이름을 되쓰지
+   * 않으니 지워지는 중인 바이트와 겹치지 않는다.
+   */
+  private async chunk(gameId: string, table: string, value: unknown): Promise<string> {
+    const json = JSON.stringify(value);
+    const prefix = `${gameId}/chunk/${table}-${hash(json)}-`;
+    const [kept] = await this.db.query<{ key: string }>(
+      `UPDATE private.objects SET created_at=now() WHERE key=(SELECT key FROM private.objects WHERE game_id=$1 AND state='committed' AND starts_with(key,$2) ORDER BY created_at DESC LIMIT 1) RETURNING key`,
+      [gameId, prefix],
+    );
+    if (kept) return kept.key;
+    const { key } = await this.upload(`${prefix}${randomUUID()}`, gameId, encode(value));
+    // 조각은 내용이 이름에 묶인 불변 객체다 — 올리고 검증한 순간부터 다시 쓸 수 있다
+    await this.db.query("UPDATE private.objects SET state='committed' WHERE key=$1", [key]);
+    return key;
+  }
+  /** 세이브 — 큰 표는 조각으로, 본문은 조각 이름과 나머지 상태만 든다 */
+  private async save(
+    gameId: string,
+    snapshot: unknown,
+  ): Promise<{ key: string; checksum: string }> {
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot))
+      return this.object(gameId, "save", snapshot);
+    const body: Record<string, unknown> = { ...(snapshot as Record<string, unknown>) };
+    const chunks: Record<string, string> = {};
+    for (const table of CHUNKED_TABLES) {
+      if (body[table] === undefined) continue;
+      chunks[table] = await this.chunk(gameId, table, body[table]);
+      delete body[table];
+    }
+    body[CHUNKS] = chunks;
+    return this.object(gameId, "save", body, Object.values(chunks));
   }
   async commit(
     job: Job,
@@ -220,7 +275,7 @@ export class Jobs {
     tasks: LoreTask[] = [],
     expectedRevision?: number,
   ): Promise<boolean> {
-    const saved = snapshot === null ? null : await this.object(job.game_id, "save", snapshot);
+    const saved = snapshot === null ? null : await this.save(job.game_id, snapshot);
     const cached = saved && view ? await this.object(job.game_id, "view", view) : null;
     const answer = await this.object(job.game_id, "result", result);
     return this.db.transaction(async (sql) => {
@@ -430,9 +485,21 @@ export class Jobs {
     });
   }
   async snapshot(game: Game): Promise<unknown> {
-    return game.snapshot_key
-      ? decode(await this.objects.get(game.snapshot_key), game.snapshot_hash ?? undefined)
-      : null;
+    if (!game.snapshot_key) return null;
+    const body = decode(await this.objects.get(game.snapshot_key), game.snapshot_hash ?? undefined);
+    if (!body || typeof body !== "object" || !(CHUNKS in body)) return body;
+    const { [CHUNKS]: chunks, ...rest } = body as Record<string, unknown>;
+    const state: Record<string, unknown> = rest;
+    for (const [table, key] of Object.entries(chunks as Record<string, string>)) {
+      const parts = CHUNK_KEY.exec(key);
+      if (!parts || parts[1] !== table) throw new Error("Invalid snapshot chunk");
+      const value = decode(await this.objects.get(key));
+      // 이름의 해시가 곧 검증값이다 — 상하거나 다른 조각이면 세이브를 읽지 않는다
+      if (hash(JSON.stringify(value)) !== parts[2])
+        throw new Error("Snapshot chunk checksum mismatch");
+      state[table] = value;
+    }
+    return state;
   }
   async result(job: Job): Promise<unknown> {
     return job.result_key ? decode(await this.objects.get(job.result_key)) : null;

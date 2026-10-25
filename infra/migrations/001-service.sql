@@ -118,3 +118,5 @@ ALTER TABLE private.sessions DROP COLUMN IF EXISTS refresh_claim;
 ALTER TABLE private.sessions DROP COLUMN IF EXISTS refresh_until;
 -- Signed-in email for display only, encrypted with SESSION_KEY and gone with the session.
 ALTER TABLE private.sessions ADD COLUMN IF NOT EXISTS email_cipher text;
+-- Snapshot bodies list the content-hash chunks they reference; GC and backups follow these.
+ALTER TABLE private.objects ADD COLUMN IF NOT EXISTS refs jsonb NOT NULL DEFAULT '[]'::jsonb;

@@ -1,6 +1,17 @@
 import type { Config } from "./config";
 import type { Database } from "./database";
 import type { ObjectStore } from "./objects";
+/**
+ * 거둘 수 있는 객체 — 하루가 지났고, 게임·작업·진단 어디서도 직접 가리키지 않고, 지금
+ * 세이브나 작업 객체가 조각으로 가리키지도 않는다(`refs`). 선택과 삭제가 같은 조건을 쓴다.
+ */
+const COLLECTABLE = `o.created_at<now()-interval '1 day'
+  AND NOT EXISTS(SELECT 1 FROM private.games g WHERE g.snapshot_key=o.key OR g.view_key=o.key)
+  AND NOT EXISTS(SELECT 1 FROM private.jobs j WHERE j.result_key=o.key OR j.work_key=o.key)
+  AND NOT EXISTS(SELECT 1 FROM private.diagnostics d WHERE d.object_key=o.key)
+  AND NOT EXISTS(SELECT 1 FROM private.objects r WHERE r.refs ? o.key
+    AND (EXISTS(SELECT 1 FROM private.games g WHERE g.snapshot_key=r.key)
+      OR EXISTS(SELECT 1 FROM private.jobs j WHERE j.result_key=r.key OR j.work_key=r.key)))`;
 export async function maintenance(c: Config, db: Database, objects: ObjectStore): Promise<void> {
   await db.transaction(async (sql) => {
     // Deleting the rows returned by this CTE makes repeated aggregation idempotent.
@@ -41,12 +52,16 @@ export async function maintenance(c: Config, db: Database, objects: ObjectStore)
       );
     });
     const rows = await db.query<{ key: string }>(
-      `SELECT o.key FROM private.objects o WHERE o.created_at<now()-interval '1 day' AND NOT EXISTS(SELECT 1 FROM private.games g WHERE g.snapshot_key=o.key OR g.view_key=o.key) AND NOT EXISTS(SELECT 1 FROM private.jobs j WHERE j.result_key=o.key OR j.work_key=o.key) AND NOT EXISTS(SELECT 1 FROM private.diagnostics d WHERE d.object_key=o.key) LIMIT 100`,
+      `SELECT o.key FROM private.objects o WHERE ${COLLECTABLE} LIMIT 100`,
     );
     for (const row of rows) {
       if ((await db.query("SELECT key FROM private.operations WHERE key='gc_pin'")).length) break;
-      await objects.delete(row.key);
-      await db.query("DELETE FROM private.objects WHERE key=$1", [row.key]);
+      // 행을 조건부로 먼저 지운다 — 그사이 다시 쓰인 조각(created_at 갱신)은 여기서 살아남는다
+      const [gone] = await db.query(
+        `DELETE FROM private.objects o WHERE o.key=$1 AND ${COLLECTABLE} RETURNING o.key`,
+        [row.key],
+      );
+      if (gone) await objects.delete(row.key);
     }
   }
   const [backup] = await db.query<{ age: string }>(

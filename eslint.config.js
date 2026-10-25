@@ -127,6 +127,8 @@ export default tseslint.config(
       "test-results/**",
       "playwright-report/**",
       ".data/**",
+      // 에이전트 워크트리는 저장소 안에 놓인 다른 체크아웃이다 — 함께 읽으면 힙이 넘친다
+      ".claude/worktrees/**",
     ],
   },
   js.configs.recommended,

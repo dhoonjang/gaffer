@@ -79,8 +79,15 @@ export class Backup {
         return output;
       }, "repeatable read");
       const refs = new Set<string>();
+      // 세이브 본문이 가리키는 조각도 함께 — 본문만 복제하면 복원한 세이브가 열리지 않는다
+      const chunks = new Map(rows.objects.map((o) => [o.key, o.refs]));
       for (const game of rows.games) {
-        if (typeof game.snapshot_key === "string") refs.add(game.snapshot_key);
+        if (typeof game.snapshot_key === "string") {
+          refs.add(game.snapshot_key);
+          const listed = chunks.get(game.snapshot_key);
+          if (Array.isArray(listed))
+            for (const key of listed) if (typeof key === "string") refs.add(key);
+        }
         if (typeof game.view_key === "string") refs.add(game.view_key);
       }
       // Completed operation receipts survive; the latest game/view reconstructs UI after restore.

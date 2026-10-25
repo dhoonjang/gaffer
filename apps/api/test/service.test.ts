@@ -439,6 +439,46 @@ describe("durable service boundary", () => {
       ),
     ).toBe(true);
   });
+  it("saves keep unchanged tables as one verified chunk and collect a chunk only once no current save lists it", async () => {
+    const created = await jobs.submit(owner, "/api/games", "POST", {}, randomUUID());
+    const id = created.game_id;
+    const first = {
+      id,
+      date: "2026-07-01",
+      players: [{ id: "p1", form: 6 }],
+      contracts: [{ id: "c1", wage: 10 }],
+      lorebook: [],
+    };
+    await jobs.commit((await jobs.claim(created.id))!, { status: 200, body: {} }, first, {});
+    const chunks = async () =>
+      (
+        await db.query<{ key: string }>(
+          "SELECT key FROM private.objects WHERE game_id=$1 AND key LIKE '%/chunk/%'",
+          [id],
+        )
+      ).map((row) => row.key);
+    expect(await chunks()).toHaveLength(3);
+    const next = await jobs.submit(owner, `/api/games/${id}/lineup`, "POST", {}, randomUUID(), id);
+    const second = { ...first, date: "2026-07-02", players: [{ id: "p1", form: 7 }] };
+    await jobs.commit((await jobs.claim(next.id))!, { status: 200, body: {} }, second, {});
+    expect(await chunks()).toHaveLength(4);
+    expect(await jobs.snapshot(await jobs.game(owner, id))).toEqual(second);
+    await db.query(
+      "UPDATE private.objects SET created_at=now()-interval '2 days' WHERE game_id=$1",
+      [id],
+    );
+    await maintenance(configuration({ GAFFER_DATA_DIR: directory }), db, jobs.objects);
+    const kept = await chunks();
+    expect(kept).toHaveLength(3);
+    expect(kept.some((key) => key.includes(hash(JSON.stringify(first.players))))).toBe(false);
+    expect(await jobs.snapshot(await jobs.game(owner, id))).toEqual(second);
+    const players = kept.find((key) => key.includes("/chunk/players-"))!;
+    await jobs.objects.delete(players);
+    await jobs.objects.put(players, encode([{ id: "p1", form: 99 }]));
+    await expect(jobs.snapshot(await jobs.game(owner, id))).rejects.toThrow("checksum");
+    await jobs.objects.delete(players);
+    await jobs.objects.put(players, encode(second.players));
+  });
   it("unknown usage counts toward the $5 daily cap, including its exact boundary", async () => {
     const job = await jobs.submit(owner, "/api/games", "POST", {}, randomUUID());
     const active = (await jobs.claim(job.id))!;
@@ -580,10 +620,15 @@ describe("durable service boundary", () => {
     const [game] = await db.query<{ snapshot_key: string }>(
       "SELECT snapshot_key FROM private.games WHERE snapshot_key IS NOT NULL LIMIT 1",
     );
+    const [chunked] = await db.query<{ key: string; refs: string[] }>(
+      "SELECT o.key,o.refs FROM private.objects o JOIN private.games g ON g.snapshot_key=o.key WHERE jsonb_array_length(o.refs)>0 LIMIT 1",
+    );
     await jobs.objects.delete(game!.snapshot_key);
+    await jobs.objects.delete(chunked!.refs[0]!);
     await jobs.objects.put(`tombstones/${other}`, encode({ ownerId: other }));
     await backup.restore(manifest, 1);
     expect((await jobs.objects.get(game!.snapshot_key)).byteLength).toBeGreaterThan(0);
+    expect((await jobs.objects.get(chunked!.refs[0]!)).byteLength).toBeGreaterThan(0);
     expect(await db.query("SELECT token_hash FROM private.sessions")).toEqual([]);
     expect(
       (await db.query("SELECT active FROM private.members WHERE id=$1", [other]))[0]?.active,
