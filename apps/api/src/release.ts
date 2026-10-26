@@ -11,7 +11,7 @@ try {
   if (command === "pause") {
     const lock = await sql.query(
       "INSERT INTO private.operations(key,value) VALUES('deployment_lock',$1) ON CONFLICT DO NOTHING RETURNING key",
-      [JSON.stringify(process.env.GITHUB_SHA ?? "operator")],
+      [JSON.stringify(process.env.DEPLOY_SHA ?? "operator")],
     );
     if (!lock.rows.length) throw new Error("Another deployment requires inspection");
     const existing = await sql.query(

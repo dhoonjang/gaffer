@@ -14,10 +14,11 @@ on:
   push:
     branches: [main]
 
-# 같은 브랜치에 푸시가 이어지면 앞선 실행은 버린다 — 프라이빗 저장소라 러너 분이
-# 과금되고, 어차피 마지막 커밋의 결과만 머지 게이트로 쓴다.
+# PR 브랜치에 푸시가 이어지면 앞선 실행은 버린다 — 어차피 마지막 커밋의 결과만 머지
+# 게이트로 쓴다. main은 커밋마다 따로 돈다: 성공한 실행이 그 커밋을 운영에 올리므로
+# (deploy.yml), 코드 커밋의 실행이 뒤따른 문서 커밋에 끊기면 그 코드는 운영에 오르지 않는다.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 # 잡은 두 러너로 갈린다 — 코어가 아쉬운 잡 하나와, 아쉽지 않은 나머지. 어느 러너로

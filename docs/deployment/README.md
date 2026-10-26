@@ -287,11 +287,17 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
    `GCP_DEPLOY_SERVICE_ACCOUNT`, `CLOUDFLARE_ACCOUNT_ID`, `PAGES_PROJECT`.
    Secrets: `DEPLOY_DATABASE_URL`(maintenance 역할), `MIGRATION_DATABASE_URL`(owner),
    필요한 `DATABASE_CA_CERT`, Pages 배포 범위로 제한한 `CLOUDFLARE_API_TOKEN`.
-8. 일반 Deploy beta는 exact commit의 성공 CI 이미지 artifact를 가져온다(보관 1일).
+8. main에 push된 commit의 CI가 성공하면 Deploy beta가 이어서 돈다(`workflow_run`). 그 CI
+   실행의 이미지 artifact(보관 1일)를 가져오고, 문서만 바뀌어 이미지가 없는 commit은 배포하지
+   않는다. main의 CI는 commit마다 끝까지 돌고(PR만 앞선 실행을 끊는다), 배포는 하나씩 줄을 서서
+   운영 api가 서비스 중인 commit보다 **앞선** commit만 올린다 — CI가 끝나는 순서가 push 순서와
+   달라도 운영이 되돌아가지 않는다. 서비스 중인 commit은 revision의 이미지 digest에 붙은
+   Artifact Registry 태그로 읽는다.
    SQL expand → 접수 중지/실행 정리 → SAVE_VERSION·진행 경기 호환 검사 → 무트래픽 revision
    기동 → candidate API health smoke → backend traffic 전환 → 같은 commit의 Pages → 재개 순서다.
-   artifact가 만료됐거나 문서만 바뀐 commit이면 main에서 CI를 수동 실행한다.
-   수동 CI는 전체 검증과 이미지 생성을 수행한다. 문서 변경의 자동 CI는 기존대로 생략한다.
+   수동 실행은 main의 지금 commit을 순서 검사 없이 다시 올린다. artifact가 만료됐거나 지금
+   commit이 문서만 바꿨으면 main에서 CI를 수동 실행한 뒤 배포한다(수동 CI는 전체 검증과 이미지
+   생성을 수행한다).
 9. sim hash가 바뀌고 미완료 경기가 있으면 배포를 거절하고 **기존 서비스를 다시 연다**.
    기존 경기 완료 후 재배포한다. 현재 베타에는 여러 runtime cohort를 동시에 운영하는 기능이 없다.
    revision 전환 도중 실패하면 점검을 유지한다. 모든 서비스와 Pages를 같은 검증된 commit으로

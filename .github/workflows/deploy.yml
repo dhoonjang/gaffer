@@ -1,5 +1,12 @@
 name: Deploy beta
+# A successful CI run for a push to main ships that commit. This is its own workflow, not a CI
+# job: a deployment pauses admission, so it must run to the end whatever CI cancels. A manual
+# run ships main's current commit as is — also the way to finish a stopped deployment.
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish_image_only:
@@ -10,16 +17,54 @@ permissions:
   contents: read
   actions: read
   id-token: write
-concurrency:
-  group: production-deployment
-  cancel-in-progress: false
 jobs:
+  gate:
+    name: CI image
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success' &&
+      contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.ci.outputs.sha }}
+      ci_run: ${{ steps.ci.outputs.ci_run }}
+    steps:
+      - name: Find the successful CI run and its image
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ -z "$RUN" ]; then
+            RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&branch=main&status=success" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].id // empty')
+            if [ -z "$RUN" ]; then echo "::error::$SHA has no successful CI run on main"; exit 1; fi
+          fi
+          images=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/artifacts" \
+            --jq '[.artifacts[] | select(.name == "server-image" and .expired == false)] | length')
+          if [ "$images" = 0 ]; then
+            # A commit that only touched docs builds no image — there is nothing to ship.
+            if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then echo "::notice::$SHA built no image"; exit 0; fi
+            echo "::error::CI run $RUN has no unexpired server image — run CI on main again, then deploy"
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "ci_run=$RUN" >> "$GITHUB_OUTPUT"
   deploy:
-    if: github.ref == 'refs/heads/main'
+    needs: gate
+    if: needs.gate.outputs.sha != ''
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 35
+    # Only this job queues, so a docs-only run never displaces a deployment waiting its turn.
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
     env:
+      DEPLOY_SHA: ${{ needs.gate.outputs.sha }}
+      CI_RUN: ${{ needs.gate.outputs.ci_run }}
       GH_TOKEN: ${{ github.token }}
       GCP_PROJECT: ${{ vars.GCP_PROJECT }}
       GCP_REGION: ${{ vars.GCP_REGION || 'asia-northeast1' }}
@@ -31,64 +76,84 @@ jobs:
       PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Require successful CI on this exact commit
-        run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main" > "$RUNNER_TEMP/ci.json"
-          node -e 'const fs=require("node:fs");const p=process.env.RUNNER_TEMP+"/ci.json";const r=JSON.parse(fs.readFileSync(p));r.workflow_runs=r.workflow_runs.filter(x=>x.head_sha===process.env.GITHUB_SHA&&x.conclusion==="success"&&["push","workflow_dispatch"].includes(x.event));if(!r.workflow_runs.length)process.exit(1);fs.writeFileSync(p,JSON.stringify(r))'
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.4
         with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @gaffer/web build
-      - name: Load the exact image built by successful CI
-        run: |
-          CI_RUN=$(node -e 'const r=require(process.env.RUNNER_TEMP+"/ci.json");console.log(r.workflow_runs.find(x=>x.head_sha===process.env.GITHUB_SHA&&x.conclusion==="success").id)')
-          gh run download "$CI_RUN" --name server-image --dir "$RUNNER_TEMP/image"
-          docker load -i "$RUNNER_TEMP/image/server-image.tar.gz"
-          docker tag gaffer-ci "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$GITHUB_SHA"
+          ref: ${{ needs.gate.outputs.sha }}
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Move production only forward
+        id: forward
+        run: |
+          # CI runs finish in any order; a commit production already serves, or one behind it,
+          # is not shipped again. A manual run ships as asked.
+          if [ "$GITHUB_EVENT_NAME" != workflow_run ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          gcloud run services describe gaffer-api --region "$GCP_REGION" --project "$GCP_PROJECT" --format=json > "$RUNNER_TEMP/api.json"
+          REVISION=$(node -e 'const r=require(process.env.RUNNER_TEMP+"/api.json");console.log(r.status.traffic.find(x=>x.percent===100)?.revisionName??"")')
+          SERVING=""
+          if [ -n "$REVISION" ]; then
+            IMAGE=$(gcloud run revisions describe "$REVISION" --region "$GCP_REGION" --project "$GCP_PROJECT" --format='value(spec.containers[0].image)')
+            # A revision pins the digest; the push below tagged that digest with its commit.
+            SERVING=$(gcloud artifacts docker tags list "${IMAGE%@*}" --filter="version:${IMAGE##*@}" --format='value(tag)' 2>/dev/null)
+          fi
+          if ! STATE=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SERVING...$DEPLOY_SHA" --jq .status 2>/dev/null); then STATE=unknown; fi
+          if [ "$STATE" = ahead ] || [ "$STATE" = unknown ]; then echo "go=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::Production serves $SERVING; $DEPLOY_SHA is $STATE of it — not deploying"; fi
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        if: steps.forward.outputs.go == 'true'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.4
+        if: steps.forward.outputs.go == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.forward.outputs.go == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.forward.outputs.go == 'true'
+        run: pnpm --filter @gaffer/web build
+      - name: Load the exact image built by successful CI
+        if: steps.forward.outputs.go == 'true'
+        run: |
+          gh run download "$CI_RUN" --name server-image --dir "$RUNNER_TEMP/image"
+          docker load -i "$RUNNER_TEMP/image/server-image.tar.gz"
+          docker tag gaffer-ci "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$DEPLOY_SHA"
       - name: Push image
+        if: steps.forward.outputs.go == 'true'
         run: |
           gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
-          docker push "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$GITHUB_SHA"
+          docker push "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$DEPLOY_SHA"
       - name: Apply compatible SQL expansion
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         run: pnpm service:ops migrate
       - name: Pause admission, drain running work, check match and save compatibility
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         run: pnpm exec tsx apps/api/src/release.ts pause
       - name: Start all revisions without serving traffic
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         run: |
-          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$GITHUB_SHA"
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/gaffer/service:$DEPLOY_SHA"
           for role in api worker sim maintenance; do
             gcloud run services update "gaffer-$role" --image "$IMAGE" --region "$GCP_REGION" --project "$GCP_PROJECT" --no-traffic --tag candidate --quiet
           done
       - name: Smoke the candidate API before switching traffic
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         run: |
           gcloud run services describe gaffer-api --region "$GCP_REGION" --project "$GCP_PROJECT" --format=json > "$RUNNER_TEMP/api.json"
           CANDIDATE=$(node -e 'const r=require(process.env.RUNNER_TEMP+"/api.json");console.log(r.status.traffic.find(x=>x.tag==="candidate").url)')
           curl --fail --silent --show-error "$CANDIDATE/health"
       - name: Switch all ready revisions
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         run: |
           for role in worker sim maintenance api; do
             gcloud run services update-traffic "gaffer-$role" --to-latest --region "$GCP_REGION" --project "$GCP_PROJECT" --quiet
           done
       - name: Deploy matching static frontend and API proxy
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         working-directory: infra/cloudflare
         # pnpm exec would run from the workspace root and miss functions/ and wrangler.toml here.
-        run: $GITHUB_WORKSPACE/node_modules/.bin/wrangler pages deploy ../../apps/web/dist --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        run: $GITHUB_WORKSPACE/node_modules/.bin/wrangler pages deploy ../../apps/web/dist --project-name "$PAGES_PROJECT" --branch main --commit-hash "$DEPLOY_SHA"
       - name: Resume admission
-        if: ${{ !inputs.publish_image_only }}
+        if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
         run: pnpm exec tsx apps/api/src/release.ts resume
       - name: Deployment failure is intentionally closed
         if: failure()
