@@ -1,5 +1,6 @@
 import { apiFetch as fetch } from "@/shared/api";
 import type { TurnOperation } from "@gaffer/agents";
+import type { Exhibit } from "@gaffer/engine";
 import type { GamePayload } from "@/game/store";
 import type { MatchBoardOrder } from "@/shared/match-orders";
 
@@ -16,6 +17,8 @@ type TurnStreamEvent = {
   type: string;
   settled?: boolean;
   text?: string;
+  index?: number;
+  exhibit?: Exhibit | null;
   payload?: GamePayload;
   error?: string;
   retry?: boolean;
@@ -60,6 +63,11 @@ export type TurnStreamFailure = {
 type TurnStreamHandlers = {
   /** 글자가 왔다 — 화면의 공개 펌프가 받는다 */
   onDelta: (text: string) => void;
+  /**
+   * 흐른 자료 카드의 값 — `index`번째 카드이고 null이면 서지 않을 카드다. 서버가 카드 줄을
+   * 실은 조각보다 먼저 보낸다.
+   */
+  onExhibit?: (index: number, exhibit: Exhibit | null) => void;
   onReset?: () => void;
   /**
    * 턴이 끝났다. **여기서 화면에 앉히지는 않는다** — 흘러오던 글자가 다 공개된
@@ -161,6 +169,8 @@ export async function streamTurn(
           handlers.onReset?.();
         } else if (evt.type === "delta" && evt.text) {
           handlers.onDelta(evt.text);
+        } else if (evt.type === "exhibit" && evt.index !== undefined) {
+          handlers.onExhibit?.(evt.index, evt.exhibit ?? null);
         } else if (evt.type === "done" && evt.payload) {
           handlers.onDone(evt.payload);
           closed = true;

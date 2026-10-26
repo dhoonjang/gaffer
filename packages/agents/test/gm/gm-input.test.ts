@@ -20,6 +20,7 @@ import {
   subLimitsOf,
   playersOf,
   userPlayers,
+  type Exhibit,
   type GameState,
 } from "@gaffer/engine";
 import { describe, expect, it, vi } from "vitest";
@@ -30,6 +31,7 @@ import {
   awardTitle,
   placeOf,
   normalizeSpeaker,
+  readSceneMarkup,
 } from "@gaffer/domain";
 import {
   SKILL_CATALOG,
@@ -40,6 +42,7 @@ import {
   sanitizeCasterText,
   sanitizeSceneText,
   fileExhibits,
+  watchExhibitStream,
   stampMatchScene,
   noteSceneHeader,
   operationLabel,
@@ -1490,6 +1493,43 @@ describe("자료 카드", () => {
     expect(filed.exhibits.map((e) => e.kind)).toEqual(["player", "finance"]);
     const [card] = filed.exhibits;
     expect(card?.kind === "player" && card.players[0]?.knowledge).toBe("own");
+  });
+
+  it("흐르는 카드는 그 줄을 실은 조각보다 먼저, 화면이 세는 자리와 저장될 값으로 풀린다", () => {
+    const state = game();
+    const ours = state.players.find((p) => p.teamId === state.userTeamId)!;
+    const body = [
+      MARK,
+      coach("이 친구 보시죠."),
+      `<player_card players="${ours.id}" type="fitness" />`,
+      '<player_card players="세상에 없는 선수" />',
+      "<finance_card />",
+      coach("다음 주에 다시 보죠."),
+    ].join("\n");
+    let shown = "";
+    const filed: Array<{ index: number; exhibit: Exhibit | null; before: number }> = [];
+    const cardsIn = (text: string) =>
+      readSceneMarkup(text).filter((item) => item.kind === "exhibit").length;
+    const feed = filterSceneStream(
+      watchExhibitStream(
+        state,
+        (delta) => (shown += delta),
+        (index, exhibit) => filed.push({ index, exhibit, before: cardsIn(shown) }),
+      ),
+    );
+    for (let at = 0; at < body.length; at += 7) feed(body.slice(at, at + 7));
+    // n번째 값은 n번째 카드 줄이 화면에 닿기 전에 온다
+    expect(filed.map((f) => [f.index, f.before])).toEqual([
+      [0, 0],
+      [1, 1],
+      [2, 2],
+    ]);
+    expect(cardsIn(shown)).toBe(filed.length);
+    // 저장이 걷을 카드는 null, 나머지는 턴이 닫힐 때와 같은 값이다(그 사이 장부가 그대로면)
+    expect(filed[1]?.exhibit).toBeNull();
+    expect(filed.flatMap((f) => (f.exhibit ? [f.exhibit] : []))).toEqual(
+      fileExhibits(state, sanitizeSceneText(body)).exhibits,
+    );
   });
 
   it("다른 자리는 칸 코드를 자리 하나로 접고, 주 자리는 싣지 않는다", () => {

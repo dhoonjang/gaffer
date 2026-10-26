@@ -27,6 +27,7 @@ import {
   speak,
   SCENE_TAG,
   SPEAK_TAG,
+  type ExhibitTag,
   type MarkupToken,
   type SceneMarker,
   type VoiceTag,
@@ -302,9 +303,9 @@ export function fileExhibits(
   state: GameState,
   body: string,
 ): { body: string; exhibits: Exhibit[]; dropped: number[] } {
+  const file = exhibitFiler(state);
   const exhibits: Exhibit[] = [];
   const dropped: number[] = [];
-  const seen = new Set<string>();
   const kept: string[] = [];
   let written = 0;
   for (const line of body.split("\n")) {
@@ -318,17 +319,64 @@ export function fileExhibits(
       kept.push(line);
       continue;
     }
-    const resolved = resolveExhibit(state, item.tag, item.attrs);
-    const canonical = resolved ? exhibitTag(item.tag, resolved.attrs) : null;
-    if (!resolved || canonical === null || seen.has(canonical)) {
+    const filed = file(item.tag, item.attrs);
+    if (!filed) {
       dropped.push(written);
       continue;
     }
-    seen.add(canonical);
-    exhibits.push(resolved.exhibit);
-    kept.push(canonical);
+    exhibits.push(filed.exhibit);
+    kept.push(filed.canonical);
   }
   return { body: kept.join("\n"), exhibits, dropped };
+}
+
+/** 카드 하나를 푼다 — 풀리지 않거나 이름으로 편 정본이 앞의 카드와 겹치면 null */
+function exhibitFiler(
+  state: GameState,
+): (
+  tag: ExhibitTag,
+  attrs: Record<string, string>,
+) => { canonical: string; exhibit: Exhibit } | null {
+  const seen = new Set<string>();
+  return (tag, attrs) => {
+    const resolved = resolveExhibit(state, tag, attrs);
+    if (!resolved) return null;
+    const canonical = exhibitTag(tag, resolved.attrs);
+    if (seen.has(canonical)) return null;
+    seen.add(canonical);
+    return { canonical, exhibit: resolved.exhibit };
+  };
+}
+
+/**
+ * **흐르는 카드를 그 순간의 장부로 푼다** — 카드가 서는 조각마다 그 조각을 내보내기 **전에**
+ * `onExhibit(n, 값)`을 부른다: 화면이 카드 줄을 공개할 때 값이 이미 와 있다. n은 흘러간
+ * 본문의 n번째 카드다 — 화면이 같은 본문을 같은 파서(`readSceneMarkup`)로 세어 자리가
+ * 맞는다. 저장이 걷을 카드는 null이고, 턴이 닫히면 저장된 값(`fileExhibits`)이 이것을
+ * 갈아 끼운다 (prompts.md §1 「자료 카드」).
+ */
+export function watchExhibitStream(
+  state: GameState,
+  emit: (delta: string) => void,
+  onExhibit: (index: number, exhibit: Exhibit | null) => void,
+): (delta: string) => void {
+  const file = exhibitFiler(state);
+  let text = "";
+  let filed = 0;
+  return (delta) => {
+    text += delta;
+    // 카드는 스스로 닫는 태그라 `>`가 와야 선다
+    if (delta.includes(">")) {
+      const cards = readSceneMarkup(text).flatMap((item) =>
+        item.kind === "exhibit" ? [item] : [],
+      );
+      for (; filed < cards.length; filed++) {
+        const card = cards[filed]!;
+        onExhibit(filed, file(card.tag, card.attrs)?.exhibit ?? null);
+      }
+    }
+    emit(delta);
+  };
 }
 
 /** 중계 위생 — 같은 체다. 모델의 표식은 걷히고 장부의 분은 `stampMatchScene`이 세운다 */

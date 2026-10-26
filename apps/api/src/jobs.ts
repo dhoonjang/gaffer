@@ -16,6 +16,14 @@ const CHUNKED_TABLES = ["players", "contracts", "lorebook"] as const;
 const CHUNKS = "__chunks";
 /** 조각 이름 `<게임>/chunk/<표>-<내용 해시>-<무작위>` — 해시가 읽을 때의 검증값이다 */
 const CHUNK_KEY = /\/chunk\/([a-z]+)-([0-9a-f]{64})-[0-9a-f-]{36}$/;
+/**
+ * 이벤트 한 줄로 쓰는 본문의 상한 — `events.body`의 CHECK(16,384바이트)는 공백이 붙는 jsonb
+ * 텍스트로 재므로 넉넉히 안쪽이다. 넘는 본문(여러 명을 견주는 자료 카드)은 같은 트랜잭션에
+ * `part` 줄로 잇달아 쓰고 브라우저가 이어 붙인다 (web `shared/api.ts` `followJob`).
+ */
+const EVENT_BYTES = 10_000;
+/** `part` 한 줄이 싣는 글자 수 — 한글 3바이트 · 이스케이프된 따옴표 2바이트라도 한도 안이다 */
+const EVENT_PART_CHARS = 3_000;
 
 export interface Game extends Record<string, unknown> {
   id: string;
@@ -192,6 +200,23 @@ export class Jobs {
     return rows.length === 1;
   }
   async event(sql: Sql, job: Job, body: unknown): Promise<void> {
+    const text = JSON.stringify(body);
+    if (Buffer.byteLength(text) <= EVENT_BYTES) return this.eventRow(sql, job, text);
+    for (let at = 0; at < text.length;) {
+      let end = Math.min(text.length, at + EVENT_PART_CHARS);
+      // 서로게이트 쌍을 가르지 않는다 — 짝 잃은 반쪽은 jsonb가 받지 않는다
+      const last = text.charCodeAt(end - 1);
+      if (end < text.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
+      const data = text.slice(at, end);
+      await this.eventRow(
+        sql,
+        job,
+        JSON.stringify({ type: "part", data, last: end === text.length }),
+      );
+      at = end;
+    }
+  }
+  private async eventRow(sql: Sql, job: Job, body: string): Promise<void> {
     const [seq] = await sql.query<{ next_seq: number }>(
       "UPDATE private.jobs SET next_seq=next_seq+1 WHERE id=$1 AND attempt=$2 AND status='running' AND lease_until>now() RETURNING next_seq",
       [job.id, job.attempt],
@@ -201,7 +226,7 @@ export class Jobs {
         job.id,
         seq.next_seq,
         job.attempt,
-        JSON.stringify(body),
+        body,
       ]);
   }
   async object(

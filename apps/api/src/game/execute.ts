@@ -3,7 +3,7 @@ import { saveGame } from "./persistence";
 import { toPayload } from "../../../web/game/store";
 import { SAVE_VERSION, validateSave, gameSummary, type GameState } from "@gaffer/engine";
 import { execution, withExecution, type Execution } from "./persistence";
-import { runTurnLocked } from "../../../web/game/turn-runner";
+import { runTurnLocked, type TurnStreamEvent } from "../../../web/game/turn-runner";
 import { parseTurn } from "../../../web/app/api/games/[id]/turn/stream/route";
 import * as games from "../../../web/app/api/games/route";
 import * as game from "../../../web/app/api/games/[id]/route";
@@ -33,7 +33,7 @@ export interface Executed {
 }
 export async function execute(
   command: Command,
-  onDelta: (text: string) => void,
+  onStream: (event: TurnStreamEvent) => void,
 ): Promise<Executed> {
   let state: GameState | null = null;
   if (command.snapshot !== null) {
@@ -95,7 +95,7 @@ export async function execute(
         const out = await runTurnLocked(
           command.id,
           b.message,
-          onDelta,
+          onStream,
           b.operation,
           b.orders,
           b.mailMessageIds,

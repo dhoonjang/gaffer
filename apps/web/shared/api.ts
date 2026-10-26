@@ -88,7 +88,8 @@ function finished(end: JobEnd): Response {
 }
 /**
  * 작업을 SSE로 따라가 결과를 돌려준다. 서버는 일정 시간마다 연결을 닫으므로 마지막 seq부터
- * 다시 붙고, 아무것도 받지 못한 채 끊기는 일이 거듭될 때만 포기한다.
+ * 다시 붙고, 아무것도 받지 못한 채 끊기는 일이 거듭될 때만 포기한다. 한 줄에 들지 않아
+ * `part`로 나뉘어 온 이벤트는 마지막 조각에서 이어 붙여 하나로 넘긴다.
  */
 export async function followJob(
   id: string,
@@ -96,6 +97,7 @@ export async function followJob(
   signal?: AbortSignal | null,
 ): Promise<Response> {
   let seq = 0;
+  let parts = "";
   for (let failures = 0; ;) {
     // 프레임 콜백이 채운다 — 흐름 분석이 콜백 안의 대입을 보지 못해 객체에 담는다
     const round: { end: JobEnd | null; received: boolean } = { end: null, received: false };
@@ -110,7 +112,16 @@ export async function followJob(
         if (frame.event === "end") round.end = JSON.parse(frame.data) as JobEnd;
         else if (frame.event === "job") {
           seq = Number(frame.id);
-          onEvent(JSON.parse(frame.data) as { type: string; text?: string });
+          const body = JSON.parse(frame.data) as { type: string; data?: string; last?: boolean };
+          if (body.type !== "part") onEvent(body);
+          else {
+            parts += body.data ?? "";
+            if (body.last) {
+              const whole = parts;
+              parts = "";
+              onEvent(JSON.parse(whole) as { type: string });
+            }
+          }
         } else if (frame.event === "ping") onEvent({ type: "ping" });
       });
     } catch (error) {

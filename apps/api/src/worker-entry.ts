@@ -45,7 +45,7 @@ async function run(command: Command): Promise<void> {
           await rpc("settle", { id, usage });
         },
       },
-      () => execute(command, (text) => port.postMessage({ type: "delta", text })),
+      () => execute(command, (event) => port.postMessage(event)),
     );
     port.postMessage({ type: "done", result });
   } catch (error) {

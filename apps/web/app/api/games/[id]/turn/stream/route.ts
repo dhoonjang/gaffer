@@ -77,6 +77,7 @@ const HEARTBEAT_MS = 10_000;
 /**
  * 스트리밍 턴 — 줄 단위 JSON(NDJSON)으로 이벤트를 흘려보낸다.
  *   {"type":"delta","text":"..."}  서사 텍스트 조각
+ *   {"type":"exhibit","index":0,"exhibit":{...}|null} 흐른 자료 카드를 그 순간의 장부로 푼 값
  *   {"type":"ping"}                아직 살아 있다 — 도구만 도는 구간의 침묵을 메운다
  *   {"type":"done","payload":{...}} 최종 게임 페이로드
  *   {"type":"error","error":"...","retry":false,"detail":"..."} 실패 — 채팅에 남지 않는다
@@ -122,7 +123,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         const outcome = await runTurnLocked(
           id,
           body.message,
-          (text) => send({ type: "delta", text }),
+          send,
           body.operation,
           body.orders,
           body.mailMessageIds,

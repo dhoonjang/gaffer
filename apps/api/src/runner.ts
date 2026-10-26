@@ -35,6 +35,8 @@ interface WorkerMessage {
   id: string;
   value: unknown;
   text: string;
+  index: number;
+  exhibit: unknown;
   result: Executed;
   error: string;
   kind?: LlmErrorKind;
@@ -157,17 +159,20 @@ export class Runner {
     let delta = "";
     let events = Promise.resolve();
     let eventError: unknown;
-    const flush = () => {
-      if (!job || !delta) return;
-      const text = delta.slice(0, 3000);
-      delta = delta.slice(3000);
+    const write = (body: unknown) => {
+      if (!job) return;
       events = events.then(() =>
         this.jobs.db
-          .transaction((sql) => this.jobs.event(sql, job, { type: "delta", text }))
+          .transaction((sql) => this.jobs.event(sql, job, body))
           .catch((error: unknown) => {
             eventError = error;
           }),
       );
+    };
+    const flush = () => {
+      if (!delta) return;
+      write({ type: "delta", text: delta });
+      delta = "";
     };
     let onMessage: (m: WorkerMessage) => void = () => undefined;
     let onError: (e: unknown) => void = () => undefined;
@@ -188,9 +193,16 @@ export class Runner {
             delta += m.text;
             return;
           }
+          // A card's value goes out ahead of the text that carries its line, so the reader
+          // never reveals the line before the value it shows.
+          if (m.type === "exhibit") {
+            flush();
+            write({ type: "exhibit", index: m.index, exhibit: m.exhibit });
+            return;
+          }
           if (m.type === "done") {
             reusable = true;
-            while (delta) flush();
+            flush();
             void events
               .then(() => finish(eventError ? new Error("Event write failed") : null, m.result))
               .catch((e: unknown) =>

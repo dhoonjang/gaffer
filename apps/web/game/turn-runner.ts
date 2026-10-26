@@ -15,6 +15,7 @@ import {
   tacticsOf,
   takeEdits,
   turnDigestOf,
+  type Exhibit,
   type GameState,
   type SaveLockHandle,
 } from "@gaffer/engine";
@@ -300,8 +301,15 @@ export function errorDetail(error: unknown): { detail?: string } {
 }
 
 /**
+ * 턴이 흘려보내는 것 — 장면 조각, 그리고 카드 줄이 흐른 순간의 장부로 푼 자료 카드
+ * (`index`는 흘러간 본문의 n번째 카드, null은 저장이 걷을 카드다).
+ */
+export type TurnStreamEvent =
+  { type: "delta"; text: string } | { type: "exhibit"; index: number; exhibit: Exhibit | null };
+
+/**
  * 유저 턴 → GM 실행 → 모델 턴 (agents.md §2), 잠금·원자성 포함.
- * onDelta를 주면 GM 서사 텍스트를 스트리밍으로 흘려보낸다.
+ * onStream을 주면 GM 서사 텍스트와 자료 카드를 스트리밍으로 흘려보낸다.
  *
  * 원자성 — 성공할 때만 저장한다. GM 턴이 중간에 실패하면 부분 실행된 도구
  * 효과는 이 메모리 상태에만 있었으므로 저장하지 않는 것이 곧 롤백이다
@@ -316,7 +324,7 @@ export function runTurnLocked(
   id: string,
   /** 감독이 친 말 — 조작 턴에는 없다 (`operation`이 문장을 만든다) */
   message: string | undefined,
-  onDelta?: (text: string) => void,
+  onStream?: (event: TurnStreamEvent) => void,
   /**
    * 감독의 발화가 아니라 **화면 조작**인가 (시간 이동·경기 진행 손잡이).
    * 채팅에 그리지 않고, 모델 이력에도 오퍼레이터 지시로 들어간다.
@@ -470,9 +478,20 @@ export function runTurnLocked(
           ...mark,
         });
         try {
-          const turn = await runGmTurn(state, said, onDelta, operation, appliedOrders, boardMoves, {
-            mailAttachments: validAttachments,
-          });
+          const turn = await runGmTurn(
+            state,
+            said,
+            onStream && ((text) => onStream({ type: "delta", text })),
+            operation,
+            appliedOrders,
+            boardMoves,
+            {
+              mailAttachments: validAttachments,
+              ...(onStream
+                ? { onExhibit: (index, exhibit) => onStream({ type: "exhibit", index, exhibit }) }
+                : {}),
+            },
+          );
           state.chat.push({
             role: "model",
             text: turn.text,

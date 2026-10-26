@@ -2,7 +2,14 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import type { CardMark, ChatTurn, GoalMark, ToolCallRecord, SpeakerRole } from "@gaffer/engine";
+import type {
+  CardMark,
+  ChatTurn,
+  Exhibit,
+  GoalMark,
+  ToolCallRecord,
+  SpeakerRole,
+} from "@gaffer/engine";
 import { cutStamps, sceneLines } from "./scene-stamp";
 import { hasRailHint } from "./panel-hints";
 import { groupChips, groupPieces, splitStaging, weaveTurn } from "./turn-pieces";
@@ -403,6 +410,7 @@ function useLongPress(onLongPress?: () => void): PressHandlers {
 export function ChatTurnView({
   turn,
   streaming = false,
+  streamExhibits,
   playerNames,
   speakerRoles,
   prevStamp = null,
@@ -414,6 +422,11 @@ export function ChatTurnView({
   turn: ChatTurn;
   /** 스트리밍 중인 미완성 턴 — 마지막 미완성 줄을 보류해 파싱 깨짐 방지 */
   streaming?: boolean | undefined;
+  /**
+   * 흐르는 턴의 자료 카드 값 — 카드 줄이 흐른 순간의 장부다. null이면 저장이 걷을 카드라
+   * 서지 않는다. 저장된 턴은 `turn.exhibits`를 그린다.
+   */
+  streamExhibits?: readonly (Exhibit | null)[] | undefined;
   playerNames?: Record<string, string> | undefined;
   /** 화자 이름→직책 — `스티브 홀랜드 (수석코치)`처럼 함께 보여 준다 */
   speakerRoles?: Record<string, SpeakerRole> | undefined;
@@ -534,15 +547,13 @@ export function ChatTurnView({
               <span>{mark.stamp}</span>
             </div>
           );
-        if (mark.kind === "exhibit")
+        if (mark.kind === "exhibit") {
+          const exhibit = (streamExhibits ?? turn.exhibits)?.[mark.index];
+          if (exhibit === null) return null;
           return (
-            <ExhibitCard
-              key={mark.key}
-              tag={mark.tag}
-              exhibit={turn.exhibits?.[mark.index]}
-              streaming={streaming}
-            />
+            <ExhibitCard key={mark.key} tag={mark.tag} exhibit={exhibit} streaming={streaming} />
           );
+        }
         if (mark.kind === "goal") return <GoalCard goal={mark.goal} key={mark.key} />;
         if (mark.kind === "card") return <BookingCard card={mark.card} key={mark.key} />;
         // 같은 자리에서 연달아 불린 호출은 한 줄에 나란히 — 칩마다 문단을 끊지 않는다.

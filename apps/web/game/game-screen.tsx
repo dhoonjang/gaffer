@@ -15,7 +15,7 @@ import { matchHeadFacts, matchScoreOf, matchTitleOf } from "@/screens/match/matc
 import { mergeSlice } from "@/game/game-slice";
 import { reducedMotion } from "@/shared/motion";
 import { isLabGame } from "@gaffer/domain";
-import type { AttentionItemView, ChatTurn } from "@gaffer/engine";
+import type { AttentionItemView, ChatTurn, Exhibit } from "@gaffer/engine";
 import type { TurnOperation } from "@gaffer/agents";
 import { ChatTurnFeedback, ChatTurnError } from "../screens/chat/chat-feedback";
 import { ChatTurnView, turnStamp } from "../screens/chat/chat";
@@ -408,6 +408,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
   }, []);
   /* `busy`는 위에 있다 — 문을 지나는 낙관이 그 턴만큼만 살아야 해서 `liveMatch`가 읽는다 */
   const [streamText, setStreamText] = useState("");
+  /** 흐르는 턴의 자료 카드 값 — 서버가 카드 줄보다 먼저 보낸다 (`streamTurn`의 `onExhibit`) */
+  const [streamExhibits, setStreamExhibits] = useState<readonly (Exhibit | null)[]>([]);
   const [error, setError] = useState<string | null>(null);
   /** 실패 원인(기술적) — 배너 툴팁으로만 보인다. 채팅·서사에는 절대 넣지 않는다 */
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
@@ -620,6 +622,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
       revealedRef.current = 0;
       pendingPayloadRef.current = null;
       setStreamText("");
+      setStreamExhibits([]);
       /**
        * 낙관적 표시 — 유저 턴 먼저. 턴이 실패하면 이 항목을 정확히 되돌린다
        * (서버도 실패한 턴은 저장하지 않는다 — game/turn-runner.ts).
@@ -713,6 +716,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
         // 지난 알림의 "읽음"은 새 GM 턴이 들어오는 렌더에서 함께 풀린다 (`hintTurn`)
         if (payload) adoptPayload(payload);
         setStreamText("");
+        setStreamExhibits([]);
         refocusRef.current = true;
         setBusy(false);
       };
@@ -767,9 +771,17 @@ export function GameScreen({ gameId }: { gameId: string }) {
             streamAccRef.current = "";
             revealedRef.current = 0;
             setStreamText("");
+            setStreamExhibits([]);
           },
           onDelta: (text) => {
             streamAccRef.current += text;
+          },
+          onExhibit: (index, exhibit) => {
+            setStreamExhibits((list) => {
+              const next = [...list];
+              next[index] = exhibit;
+              return next;
+            });
           },
           onDone: (payload) => {
             pendingPayloadRef.current = payload; // 공개가 끝나면 pump가 커밋
@@ -1130,6 +1142,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
           <ChatTurnView
             turn={{ role: "model", text: streamText, toolCalls: [], at: game.date }}
             streaming
+            streamExhibits={streamExhibits}
             playerNames={game.playerNames}
             speakerRoles={game.speakerRoles}
             /* 흘러오는 턴에도 앞 시각을 물려 준다 — 안 주면 같은 시각이 스트리밍

@@ -422,6 +422,24 @@ describe("durable service boundary", () => {
     await vi.waitFor(() => expect(notified.filter((id) => id === job.id).length).toBe(4));
     await stop();
   });
+  it("an event past one row's limit goes out as parts in one transaction and joins back whole", async () => {
+    const job = await jobs.submit(owner, "/api/games", "POST", {}, randomUUID());
+    const claimed = (await jobs.claim(job.id))!;
+    // 한글과 따옴표로 한도를 넘기고, 첫 조각의 경계(3,000자)에 서로게이트 쌍을 걸친다
+    const head = JSON.stringify({ type: "exhibit", index: 0, exhibit: { note: "" } }).length - 3;
+    const note = `${"가".repeat(2_999 - head)}🏆${'"선수"'.repeat(2_000)}`;
+    const body = { type: "exhibit", index: 0, exhibit: { note } };
+    expect(JSON.stringify(body).charAt(2_999)).toBe("\ud83c");
+    await db.transaction((sql) => jobs.event(sql, claimed, body));
+    const rows = await db.query<{ body: { type: string; data: string; last: boolean } }>(
+      "SELECT body FROM private.events WHERE job_id=$1 AND seq>1 ORDER BY seq",
+      [job.id],
+    );
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.map((r) => r.body.last)).toEqual(rows.map((_, i) => i === rows.length - 1));
+    expect(JSON.parse(rows.map((r) => r.body.data).join(""))).toEqual(body);
+    await jobs.commit(claimed, { status: 200, body: {} }, { id: job.game_id }, {});
+  });
   it("deletion prevents an in-flight result from reviving a game", async () => {
     const job = await jobs.submit(owner, "/api/games", "POST", {}, randomUUID());
     const claimed = (await jobs.claim(job.id))!;

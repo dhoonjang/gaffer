@@ -81,6 +81,7 @@ import {
   parseSceneHeader,
   sanitizeCasterText,
   sanitizeSceneText,
+  watchExhibitStream,
 } from "../shared/context";
 import {
   GmTurnFailure,
@@ -751,7 +752,11 @@ export async function runGmTurn(
    * 문장이라면 이쪽은 어느 축이 어디서 어디로 갔는가다 (agents.md §3 지시 해석).
    */
   boardMoves?: readonly BoardMove[],
-  options?: { mailAttachments?: readonly MailMessage[] },
+  options?: {
+    mailAttachments?: readonly MailMessage[];
+    /** 흐른 카드를 그 순간의 장부로 푼 값 — `onText`와 함께일 때만 온다 (`watchExhibitStream`) */
+    onExhibit?: (index: number, exhibit: Exhibit | null) => void;
+  },
 ): Promise<GmTurnResult> {
   const inMatch = state.phase === "match";
   const shape: TurnShape = {
@@ -774,6 +779,7 @@ export async function runGmTurn(
     ...(boardMoves ? { boardMoves } : {}),
   };
   const opening = await openTurn(state, message, shape, operation, ledger);
+  const onExhibit = options?.onExhibit;
   const call = await callGm(
     state,
     message,
@@ -781,7 +787,7 @@ export async function runGmTurn(
     opening,
     ledger,
     matchCtx,
-    onText,
+    onText && onExhibit ? watchExhibitStream(state, onText, onExhibit) : onText,
     operatorOrders,
     boardMoves,
     options?.mailAttachments,
