@@ -6,5 +6,10 @@
       "@/*": ["../web/*"]
     }
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "../../infra/cloudflare/functions/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts",
+    "../../infra/cloudflare/functions/**/*.ts"
+  ]
 }

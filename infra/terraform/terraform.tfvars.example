@@ -22,6 +22,10 @@ database_secret_ids = {
   sim = "gaffer-db-worker"
   maintenance = "gaffer-db-maintenance"
 }
+# Session-mode URL (Supavisor port 5432) for the API's LISTEN; same role as gaffer-db-api.
+listen_database_secret_ids = {
+  api = "gaffer-db-api-listen"
+}
 llm_secret_ids = {
   GOOGLE_API_KEY = "gaffer-google-key"
   TYPESAFE_API_KEY = "gaffer-typesafe-key"

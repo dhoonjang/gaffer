@@ -58,6 +58,11 @@
     "database_secret_ids": {
       "type": "map(string)"
     },
+    "listen_database_secret_ids": {
+      "type": "map(string)",
+      "default": {},
+      "description": "Role to a session-mode database URL secret for LISTEN; the transaction pooler cannot LISTEN"
+    },
     "llm_secret_ids": {
       "type": "map(string)",
       "default": {}
@@ -107,7 +112,7 @@
     "roles": {
       "api": {
         "max": 2,
-        "concurrency": 20,
+        "concurrency": 80,
         "timeout": "65s"
       },
       "worker": {
@@ -127,7 +132,7 @@
       }
     },
     "urls": "${{for role in keys(local.roles): role => \"https://gaffer-${role}-${data.google_project.current.number}.${var.region}.run.app\"}}",
-    "role_secrets": "${{for role in keys(local.roles):role=>merge(var.secret_ids,{DATABASE_URL=var.database_secret_ids[role]},role==\"worker\"?var.llm_secret_ids:{},role==\"maintenance\"?var.maintenance_secret_ids:{},var.observability_secret_ids)}}",
+    "role_secrets": "${{for role in keys(local.roles):role=>merge(var.secret_ids,{DATABASE_URL=var.database_secret_ids[role]},{for r,secret in var.listen_database_secret_ids:\"DATABASE_LISTEN_URL\"=>secret if r==role},role==\"worker\"?var.llm_secret_ids:{},role==\"maintenance\"?var.maintenance_secret_ids:{},var.observability_secret_ids)}}",
     "secret_grants": "${merge([for role,secrets in local.role_secrets:{for name,secret in secrets:\"${role}-${name}\"=>{role=role,secret=secret}}]...)}"
   },
   "resource": {
@@ -293,8 +298,8 @@
               "http_get": {
                 "path": "/health"
               },
-              "period_seconds": 10,
-              "failure_threshold": 12
+              "period_seconds": 1,
+              "failure_threshold": 120
             },
             "liveness_probe": {
               "http_get": {

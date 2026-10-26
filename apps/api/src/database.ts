@@ -17,6 +17,15 @@ export interface Sql {
 export interface Database extends Sql {
   transaction<T>(fn: (sql: Sql) => Promise<T>, isolation?: "repeatable read"): Promise<T>;
   close(): Promise<void>;
+  /**
+   * NOTIFY 채널을 듣는다 — 돌려받은 함수로 그만 듣는다. 들을 연결이 없으면 null이고,
+   * 연결이 끊기면 `onLost`를 한 번 부른다(다시 듣는 것은 부른 쪽의 몫).
+   */
+  listen(
+    channel: string,
+    onPayload: (payload: string) => void,
+    onLost: () => void,
+  ): Promise<(() => Promise<void>) | null>;
 }
 export async function database(c: Config, operator = false): Promise<Database> {
   if (c.GAFFER_MODE === "local") {
@@ -40,6 +49,10 @@ export async function database(c: Config, operator = false): Promise<Database> {
           return fn(wrap(tx));
         }),
       close: () => db.close(),
+      listen: async (channel, onPayload) => {
+        const stop = await db.listen(channel, onPayload);
+        return async () => stop();
+      },
     };
   }
   const pool = new pg.Pool({
@@ -97,5 +110,32 @@ export async function database(c: Config, operator = false): Promise<Database> {
       }
     },
     close: () => pool.end(),
+    listen: async (channel, onPayload, onLost) => {
+      if (!c.DATABASE_LISTEN_URL) return null;
+      const client = new pg.Client({ ...postgresOptions(c.DATABASE_LISTEN_URL), keepAlive: true });
+      let lost = false;
+      const drop = () => {
+        if (lost) return;
+        lost = true;
+        onLost();
+      };
+      client.on("error", drop);
+      client.on("end", drop);
+      client.on("notification", (message) => {
+        if (message.channel === channel && message.payload) onPayload(message.payload);
+      });
+      try {
+        await client.connect();
+        await client.query(`LISTEN ${client.escapeIdentifier(channel)}`);
+      } catch (error) {
+        lost = true;
+        await client.end().catch(() => undefined);
+        throw error;
+      }
+      return async () => {
+        lost = true;
+        await client.end().catch(() => undefined);
+      };
+    },
   };
 }

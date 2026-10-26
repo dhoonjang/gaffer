@@ -23,6 +23,7 @@ import { Auth } from "./auth";
 import { Jobs, type Game } from "./jobs";
 import { Dispatcher } from "./dispatch";
 import { Runner } from "./runner";
+import { JobFeed, jobEventStream } from "./job-stream";
 import { Usage } from "./usage";
 import type { Database } from "./database";
 import type { ObjectStore } from "./objects";
@@ -56,6 +57,7 @@ export class Service {
   readonly dispatcher: Dispatcher;
   readonly runner: Runner;
   readonly usage: Usage;
+  readonly feed: JobFeed;
   private catalog: unknown;
   constructor(
     readonly c: Config,
@@ -66,6 +68,7 @@ export class Service {
     this.jobs = new Jobs(db, objects, 2);
     this.dispatcher = new Dispatcher(c, db);
     this.usage = new Usage(c, db);
+    this.feed = new JobFeed(db);
     // A local process is every role at once, so it gets the job slots of the whole
     // deployed worker tier (2 instances × concurrency 2).
     this.runner = new Runner(
@@ -299,6 +302,30 @@ export class Service {
       return Response.json({
         spentMicros: Number(row?.spent),
         limitMicros: this.c.USER_DAILY_BUDGET_MICROS,
+      });
+    }
+    const streamed = path.match(/^\/api\/jobs\/([^/]+)\/events$/)?.[1];
+    if (streamed && req.method === "GET") {
+      Id.parse(streamed);
+      const job = await this.jobs.get(owner, streamed);
+      if (job.path.startsWith("/internal/")) throw new HttpError(404, "작업을 찾을 수 없습니다");
+      // 다시 붙는 EventSource는 마지막 id를 헤더로, fetch 구독은 쿼리로 보낸다
+      const after = Math.max(
+        ...[url.searchParams.get("after"), req.headers.get("last-event-id")].map((v) =>
+          z.coerce
+            .number()
+            .int()
+            .min(0)
+            .catch(0)
+            .parse(v ?? 0),
+        ),
+      );
+      return new Response(jobEventStream(this.feed, this.db, this.jobs, owner, job.id, after), {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Accel-Buffering": "no",
+        },
       });
     }
     const jobId = path.match(/^\/api\/jobs\/([^/]+)$/)?.[1];

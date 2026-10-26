@@ -12,6 +12,9 @@ function files(directory: string): string[] {
   );
 }
 export function simBuildId(): string {
+  // 서버 묶음은 소스 트리 없이 돈다 — 빌드 때 굳힌 값이 있으면 그것이다 (build-server.ts)
+  const baked = process.env.GAFFER_SIM_BUILD_ID;
+  if (baked) return baked;
   const digest = createHash("sha256");
   for (const path of ["packages/sim/src", "packages/domain/src", "packages/engine/src/match"]
     .flatMap((p) => files(resolve(root, p)))

@@ -28,19 +28,24 @@ flowchart LR
   M --> BK[(암호화 R2 + 다른 리전 GCS 백업)]
 ```
 
-| 역할        | 실행 상한                          | 책임                                 |
-| ----------- | ---------------------------------- | ------------------------------------ |
-| api         | 2 instances, concurrency 20, 1 GiB | 인증·소유권·작업 접수·목록·결과 조회 |
-| worker      | 2 instances, concurrency 2, 2 GiB  | 온보딩·턴·장부 변경·lorebook         |
-| sim         | 4 instances, concurrency 1, 1 GiB  | 결정적 경기 명령·checkpoint 재실행   |
-| maintenance | 1 instance, concurrency 1, 1 GiB   | 재전달·만료·삭제·분석 전송·백업      |
+| 역할        | 실행 상한                          | 책임                                |
+| ----------- | ---------------------------------- | ----------------------------------- |
+| api         | 2 instances, concurrency 80, 1 GiB | 인증·소유권·작업 접수·목록·결과 SSE |
+| worker      | 2 instances, concurrency 2, 2 GiB  | 온보딩·턴·장부 변경·lorebook        |
+| sim         | 4 instances, concurrency 1, 1 GiB  | 결정적 경기 명령·checkpoint 재실행  |
+| maintenance | 1 instance, concurrency 1, 1 GiB   | 재전달·만료·삭제·분석 전송·백업     |
 
 모든 서비스는 최소 인스턴스 0, 요청 기반 과금이다. 초기에는 Redis나 상주 VM이 없다.
 무료 제공량은 공급자·계정 전체 사용량에 따라 달라지며 LLM 호출과 무료 초과분은 유료다.
 [Terraform](../../infra/terraform/main.tf.json)이 실제 인스턴스·큐·IAM·스케줄·알림 설정을 소유한다.
 
 `apps/api/src`는 Nest 진입점과 프레임워크에 의존하지 않는 저장·작업 서비스를 함께 둔다.
-역할별 배포는 같은 이미지다. `apps/web/app/api`와 `game/`의 기존 게임 핸들러를
+역할별 배포는 같은 이미지다. 이미지는 빌드 때 서버를 ESM 묶음 둘(`dist/main.mjs`, 실행 Worker
+`dist/worker-bootstrap.mjs`)로 굳혀 기동마다 TS 변환을 하지 않는다. 워크스페이스 소스만 묶고
+npm 패키지는 평탄하게 설치한 `node_modules`에서 읽는다(`apps/api/scripts/build.ts`). CI는 이
+이미지를 local·mock으로 띄워 게임 하나를 SSE로 끝까지 만들어 본다(`infra/smoke-image.mjs`).
+인스턴스가 서면 Worker 하나를 미리 띄워 첫 명령이 엔진 적재를 기다리지 않고, 시작 프로브는
+1초 간격이다. `apps/web/app/api`와 `game/`의 기존 게임 핸들러를
 Request/Response 함수로 재사용한다. 파일에 남은 `NextResponse`는 표준 `Response`의
 호환 별칭이며 Next 서버를 기동하지 않는다. 화면은 `main.tsx`의 React Router로 이동한다.
 
@@ -110,11 +115,16 @@ CLI용이며 서비스 SQL에 자동 등록되지 않는다. 테스트 import는
 돌려주고, 브라우저는 그 작업이 끝난 뒤 같은 key로 다시 접수한다. 경기 지시는 서버가
 제어권 epoch와 `commandId`로 key를 정하므로 다시 보내도 한 번만 적용된다. 형식이 틀린
 턴은 접수 전에 400으로 돌려준다. `?settled=1` 조회는 진행 중인 작업의 확정을 최대 30초
-기다린다. 접수 후 202의 `jobId`를 `GET /api/jobs/:id?after=<seq>`로 조회한다. 브라우저
-연결이 끊겨도 작업은 계속된다. 조회 간격은 0.2초에서 두 배씩 늘어 1.2초에 머문다. 경기
+기다린다. 접수 후 202의 `jobId`를 `GET /api/jobs/:id/events?after=<seq>` SSE로 받는다. 이벤트는
+`job`(id가 seq), 끝은 결과를 실은 `end`다. 서버는 45초마다 연결을 닫고(Cloud Run 65초·Pages
+70초 시한 안) 브라우저가 마지막 seq부터 다시 붙는다. 유휴 연결에는 15초마다 주석 줄을 보낸다.
+브라우저 연결이 끊겨도 작업은 계속된다. 워커가 이벤트를 쓰거나 작업 상태가 바뀌면 DB 트리거가
+`NOTIFY gaffer_job`을 내고, api는 인스턴스마다 세션 연결 하나(`DATABASE_LISTEN_URL`, Supavisor
+5432)로 들어 해당 스트림을 깨운다. 트랜잭션 풀러로는 LISTEN이 안 되므로 이 연결이 없거나
+끊기면 0.3초 간격 조회로 따라가고, 들을 때도 5초마다 다시 본다. 경기
 정지점의 checkpoint가 늦었거나 경기가 이미 끝났으면 상태가 그대로이므로 새 세이브를 쓰지 않는다.
 브라우저는 관측한 revision별 영수증을 15분 유지하며 재접속 시 활성 작업을 조회한다.
-델타는 약 1초 단위, 24시간 보관하며 attempt가 바뀌면 이전 미확정 델타를 지운다.
+델타는 0.2초 단위로 묶어 쓰고 24시간 보관하며 attempt가 바뀌면 이전 미확정 델타를 지운다.
 
 DB claim은 60초 lease와 증가하는 attempt를 발급한다. 실행기 부모가 heartbeat를 보내고
 Node Worker가 기존 엔진을 실행한다. 결과·gzip 세이브·화면 view를 불변 객체로
@@ -239,7 +249,9 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
    쓰면 `private`는 Data API 노출 schema에 추가하지 않는다.
 2. `pnpm service:ops migrate`를 migration owner로 실행한다. 런타임 역할 `gaffer_api`,
    `gaffer_worker`, `gaffer_maintenance`에 각각 비밀번호를 부여한다. runtime에는 owner URL을
-   넣지 않는다. Supavisor transaction URL과 CA를 실제 연결해 검증한다.
+   넣지 않는다. Supavisor transaction URL과 CA를 실제 연결해 검증한다. api의 LISTEN용으로
+   같은 `gaffer_api` 역할의 session URL(포트 5432)을 `gaffer-db-api-listen`에 따로 둔다 —
+   api 비밀번호를 바꾸면 두 비밀값을 함께 갱신한다.
 3. Session key와 backup key는 각각 독립된 32바이트 랜덤 base64, email hash key는 별도
    랜덤 secret으로 만든다. Google client secret과 함께 Secret Manager에 저장한다. 키는 명령
    출력·채팅·저장소에 남기지 않는다. 복구용 SESSION_KEY·EMAIL_HASH_KEY·BACKUP_KEY는 원본

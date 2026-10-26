@@ -501,7 +501,7 @@ export class Jobs {
     }
     return state;
   }
-  async result(job: Job): Promise<unknown> {
+  async result(job: Pick<Job, "result_key">): Promise<unknown> {
     return job.result_key ? decode(await this.objects.get(job.result_key)) : null;
   }
 }

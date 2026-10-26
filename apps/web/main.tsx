@@ -15,7 +15,7 @@ const Admin = lazy(() => import("./app/admin/page"));
 import { GameScreen } from "./game/game-screen";
 const MatchLab = lazy(() => import("./game/match-lab").then((m) => ({ default: m.MatchLab })));
 import { Button } from "./shared/button";
-import { pollJob } from "./shared/api";
+import { followJob } from "./shared/api";
 import "./app/globals.css";
 function Game() {
   const { id } = useParams();
@@ -73,7 +73,7 @@ function Shell({ children }: { children: ReactNode }) {
       .then(async (r) => {
         if (!r.ok) return;
         const data = (await r.json()) as { jobs: { id: string }[] };
-        for (const job of data.jobs) await pollJob(job.id, () => {}, abort.signal);
+        for (const job of data.jobs) await followJob(job.id, () => {}, abort.signal);
         if (!abort.signal.aborted && data.jobs.length) {
           setGeneration((n) => n + 1);
         }

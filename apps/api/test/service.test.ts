@@ -15,6 +15,7 @@ import { configuration } from "../src/config";
 import { database, type Database } from "../src/database";
 import { objectStore } from "../src/objects";
 import { Jobs } from "../src/jobs";
+import { JobFeed, jobEventStream } from "../src/job-stream";
 import { Auth, type GoogleClaims, type GoogleOidc } from "../src/auth";
 
 describe("durable service boundary", () => {
@@ -374,6 +375,52 @@ describe("durable service boundary", () => {
     await jobs.recover();
     expect((await jobs.get(owner, abandoned.id)).status).toBe("expired");
     await expect(jobs.game(owner, abandoned.game_id)).rejects.toMatchObject({ status: 404 });
+  });
+  it("a job stream is woken by written events, resumes after a seq and ends with the committed result", async () => {
+    const job = await jobs.submit(owner, "/api/games", "POST", {}, randomUUID());
+    const notified: string[] = [];
+    const stop = (await db.listen(
+      "gaffer_job",
+      (id) => notified.push(id),
+      () => undefined,
+    ))!;
+    const claimed = (await jobs.claim(job.id))!;
+    const read = async (after: number) => {
+      const reader = jobEventStream(new JobFeed(db), db, jobs, owner, job.id, after).getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read())
+        text += decoder.decode(chunk.value, { stream: true });
+      return text
+        .split("\n\n")
+        .filter((block) => block.includes("data: "))
+        .map((block) => ({
+          id: /^id: (\d+)/m.exec(block)?.[1] ?? null,
+          event: /^event: (\w+)/m.exec(block)?.[1],
+          data: JSON.parse(/^data: (.*)$/m.exec(block)![1]!) as unknown,
+        }));
+    };
+    const live = read(0);
+    for (const text of ["첫 조각", "둘째 조각"])
+      await db.transaction((sql) => jobs.event(sql, claimed, { type: "delta", text }));
+    expect(
+      await jobs.commit(claimed, { status: 200, body: { ok: true } }, { id: job.game_id }, {}),
+    ).toBe(true);
+    const frames = await live;
+    expect(frames.slice(0, 3)).toEqual([
+      { id: "1", event: "job", data: { type: "attempt_reset" } },
+      { id: "2", event: "job", data: { type: "delta", text: "첫 조각" } },
+      { id: "3", event: "job", data: { type: "delta", text: "둘째 조각" } },
+    ]);
+    expect(frames[3]).toMatchObject({
+      event: "end",
+      data: { status: "succeeded", result: { status: 200, body: { ok: true } } },
+    });
+    // 이어 붙은 연결은 받은 seq 뒤부터, 끝난 작업이면 곧바로 결과까지
+    expect((await read(2)).map((f) => f.id ?? f.event)).toEqual(["3", "end"]);
+    // 커밋마다 알림 하나 — 집어 든 전이와 attempt_reset은 한 트랜잭션이라 하나로 합쳐진다
+    await vi.waitFor(() => expect(notified.filter((id) => id === job.id).length).toBe(4));
+    await stop();
   });
   it("deletion prevents an in-flight result from reviving a game", async () => {
     const job = await jobs.submit(owner, "/api/games", "POST", {}, randomUUID());

@@ -120,3 +120,18 @@ ALTER TABLE private.sessions DROP COLUMN IF EXISTS refresh_until;
 ALTER TABLE private.sessions ADD COLUMN IF NOT EXISTS email_cipher text;
 -- Snapshot bodies list the content-hash chunks they reference; GC and backups follow these.
 ALTER TABLE private.objects ADD COLUMN IF NOT EXISTS refs jsonb NOT NULL DEFAULT '[]'::jsonb;
+-- Job events and status changes wake the API's SSE streams at once; the payload is the job id.
+CREATE OR REPLACE FUNCTION private.notify_job_event() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_notify('gaffer_job', NEW.job_id::text);
+  RETURN NULL;
+END $$;
+CREATE OR REPLACE FUNCTION private.notify_job_status() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_notify('gaffer_job', NEW.id::text);
+  RETURN NULL;
+END $$;
+CREATE OR REPLACE TRIGGER job_event_notify AFTER INSERT ON private.events
+  FOR EACH ROW EXECUTE FUNCTION private.notify_job_event();
+CREATE OR REPLACE TRIGGER job_status_notify AFTER UPDATE OF status ON private.jobs
+  FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION private.notify_job_status();

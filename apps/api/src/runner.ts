@@ -18,6 +18,11 @@ import type { Command, Executed } from "./game/execute";
 export const READ_WAIT_MS = 15_000;
 /** How long a finished Worker stays warm for the next command before it is let go. */
 export const WARM_IDLE_MS = 5 * 60_000;
+/**
+ * How often streamed text is written as one event. Each write is a transaction and wakes
+ * the SSE streams, so this is the delay the reader sees between pieces of a turn.
+ */
+const DELTA_FLUSH_MS = 200;
 
 /** An execution Worker and the catalog generation its module graph loaded. */
 interface Executor {
@@ -101,6 +106,14 @@ export class Runner {
       if (at >= 0) this.warm.splice(at, 1);
     });
     return { worker, catalog };
+  }
+  /**
+   * Starts one Worker before any command arrives, so the first command on a fresh
+   * instance does not also pay for loading the engine. It waits in the warm pool.
+   */
+  prewarm(): void {
+    if (this.warm.length) return;
+    void this.release(this.acquire(), true);
   }
   /**
    * Keeps a Worker that finished its command cleanly. One still running (deadline, lost
@@ -228,7 +241,7 @@ export class Runner {
                 if (Date.now() - lastHeartbeat > 45000) finish(new Error("Heartbeat failed"));
               });
           }, 10_000);
-        batch = setInterval(flush, 1000);
+        batch = setInterval(flush, DELTA_FLUSH_MS);
         worker.on("message", onMessage);
         worker.once("error", onError);
         worker.once("exit", onExit);

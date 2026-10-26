@@ -69,6 +69,21 @@ app.use(async (req: ExpressRequest, res: ExpressResponse) => {
     });
     const cookies = response.headers.getSetCookie();
     if (cookies.length) res.setHeader("Set-Cookie", cookies);
+    if (response.body && response.headers.get("content-type")?.startsWith("text/event-stream")) {
+      // 이벤트 스트림은 조각마다 바로 내보내고, 클라이언트가 끊으면 읽기를 멈춘다
+      res.flushHeaders();
+      const reader = response.body.getReader();
+      res.on("close", () => void reader.cancel().catch(() => undefined));
+      try {
+        for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read())
+          res.write(chunk.value);
+      } catch {
+        // 머리를 이미 보냈다 — 닫기만 하면 클라이언트가 마지막 seq부터 다시 붙는다
+      } finally {
+        res.end();
+      }
+      return;
+    }
     res.send(Buffer.from(await response.arrayBuffer()));
   } catch (error) {
     const status =
@@ -132,6 +147,7 @@ const timer =
       }, 500)
     : undefined;
 await app.listen(c.PORT, c.GAFFER_MODE === "local" ? "127.0.0.1" : "0.0.0.0");
+if (c.SERVICE_ROLE !== "maintenance") service.runner.prewarm();
 console.info(
   JSON.stringify({ event: "listening", role: c.SERVICE_ROLE, port: c.PORT, mode: c.GAFFER_MODE }),
 );

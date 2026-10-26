@@ -154,6 +154,13 @@ jobs:
         run: pnpm format:check
       - run: pnpm --filter @gaffer/web build
       - run: docker build --build-arg BUILD_ID="$GITHUB_SHA" -f infra/Dockerfile -t gaffer-ci .
+      # 운영 이미지는 묶음으로 돈다 — 기동·실행 Worker·SSE를 local 모드로 한 번 지나 본다
+      - name: Smoke the server image
+        run: |
+          docker run -d --name gaffer-smoke --network host -e NODE_ENV=development -e GAFFER_MODE=local \
+            -e GAFFER_AUTH_MODE=development -e LLM_MODE=mock -e GAFFER_LOG_DIR=/tmp/gaffer-log gaffer-ci
+          pnpm exec tsx apps/api/scripts/smoke-image.ts || (docker logs gaffer-smoke; exit 1)
+          docker rm -f gaffer-smoke
       - name: Save verified production image
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: docker save gaffer-ci | gzip > server-image.tar.gz

@@ -5,25 +5,25 @@ interface Receipt {
   jobId?: string;
   gameId?: string;
 }
-interface JobStatus {
-  id: string;
+/** 작업 스트림의 마지막 `end` 이벤트 — 결과가 있으면 그것이 답이다 */
+interface JobEnd {
   status: string;
   gameId: string;
   revision: number | null;
-  events: { seq: number; attempt: number; body: { type: string; text?: string } }[];
   result: { status: number; body: unknown } | null;
   error: string | null;
+}
+interface Frame {
+  event: string;
+  data: string;
+  id: string;
 }
 const revisions = new Map<string, number>();
 /** 앞선 작업을 기다렸다가 다시 접수하는 횟수 — 그 사이 또 다른 작업이 끼어드는 일까지 받는다 */
 const BUSY_ROUNDS = 3;
-/**
- * 작업 조회 간격 — 짧게 시작해 두 배씩 늘려 상한에 머문다. 저장·읽음 표시처럼 1초 안에
- * 끝나는 작업이 조회 한 칸을 통째로 기다리지 않게 하고, 긴 턴은 상한 간격으로 묻는다.
- */
-const POLL_FIRST_MS = 200;
-const POLL_MAX_MS = 1200;
-const pollDelay = (polls: number) => Math.min(POLL_MAX_MS, POLL_FIRST_MS * 2 ** polls);
+/** 아무것도 받지 못한 채 끊긴 연결을 다시 여는 횟수와 그 사이 간격 */
+const RECONNECT_TRIES = 5;
+const RECONNECT_MS = 1000;
 const pause = (ms: number, signal?: AbortSignal | null) =>
   new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -37,38 +37,89 @@ const pause = (ms: number, signal?: AbortSignal | null) =>
     if (signal?.aborted) abort();
     else signal?.addEventListener("abort", abort, { once: true });
   });
-export async function pollJob(
+/** text/event-stream을 프레임 단위로 넘긴다. 주석 줄(하트비트)은 `ping`이다. */
+async function readFrames(
+  body: ReadableStream<Uint8Array>,
+  onFrame: (frame: Frame) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+    let at: number;
+    while ((at = buffer.indexOf("\n\n")) >= 0) {
+      const frame: Frame = { event: "message", data: "", id: "" };
+      const data: string[] = [];
+      for (const line of buffer.slice(0, at).split("\n")) {
+        if (line.startsWith(":")) {
+          frame.event = "ping";
+          continue;
+        }
+        const colon = line.indexOf(":");
+        const field = colon < 0 ? line : line.slice(0, colon);
+        const text = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
+        if (field === "event") frame.event = text;
+        else if (field === "id") frame.id = text;
+        else if (field === "data") data.push(text);
+      }
+      buffer = buffer.slice(at + 2);
+      frame.data = data.join("\n");
+      onFrame(frame);
+    }
+  }
+}
+function finished(end: JobEnd): Response {
+  if (end.result) {
+    if (end.revision !== null) revisions.set(end.gameId, end.revision);
+    return Response.json(end.result.body, { status: end.result.status });
+  }
+  if (end.status === "succeeded")
+    return Response.json(
+      {
+        error: "이전 작업은 완료되었습니다. 게임을 다시 열어 최신 상태를 확인해 주세요",
+        completed: true,
+      },
+      { status: 410 },
+    );
+  return Response.json({ error: end.error ?? "작업이 완료되지 않았습니다" }, { status: 409 });
+}
+/**
+ * 작업을 SSE로 따라가 결과를 돌려준다. 서버는 일정 시간마다 연결을 닫으므로 마지막 seq부터
+ * 다시 붙고, 아무것도 받지 못한 채 끊기는 일이 거듭될 때만 포기한다.
+ */
+export async function followJob(
   id: string,
   onEvent: (body: { type: string; text?: string }) => void = () => {},
   signal?: AbortSignal | null,
 ): Promise<Response> {
   let seq = 0;
-  for (let polls = 0; ; polls++) {
-    const res = await nativeFetch(`/api/jobs/${id}?after=${seq}`, {
-      ...(signal ? { signal } : {}),
-    });
-    if (!res.ok) return res;
-    const job = (await res.json()) as JobStatus;
-    for (const event of job.events) {
-      seq = event.seq;
-      onEvent(event.body);
+  for (let failures = 0; ;) {
+    // 프레임 콜백이 채운다 — 흐름 분석이 콜백 안의 대입을 보지 못해 객체에 담는다
+    const round: { end: JobEnd | null; received: boolean } = { end: null, received: false };
+    try {
+      const res = await nativeFetch(`/api/jobs/${id}/events?after=${seq}`, {
+        headers: { Accept: "text/event-stream" },
+        ...(signal ? { signal } : {}),
+      });
+      if (!res.ok || !res.body) return res;
+      await readFrames(res.body, (frame) => {
+        round.received = true;
+        if (frame.event === "end") round.end = JSON.parse(frame.data) as JobEnd;
+        else if (frame.event === "job") {
+          seq = Number(frame.id);
+          onEvent(JSON.parse(frame.data) as { type: string; text?: string });
+        } else if (frame.event === "ping") onEvent({ type: "ping" });
+      });
+    } catch (error) {
+      if (signal?.aborted || failures + 1 > RECONNECT_TRIES) throw error;
     }
-    if (job.result) {
-      if (job.revision !== null) revisions.set(job.gameId, job.revision);
-      return Response.json(job.result.body, { status: job.result.status });
-    }
-    if (job.status === "succeeded")
-      return Response.json(
-        {
-          error: "이전 작업은 완료되었습니다. 게임을 다시 열어 최신 상태를 확인해 주세요",
-          completed: true,
-        },
-        { status: 410 },
-      );
-    if (!["queued", "running"].includes(job.status))
-      return Response.json({ error: job.error ?? "작업이 완료되지 않았습니다" }, { status: 409 });
-    onEvent({ type: "ping" });
-    await pause(document.hidden ? 10_000 : pollDelay(polls), signal);
+    if (round.end) return finished(round.end);
+    if (round.received) failures = 0;
+    else if (++failures > RECONNECT_TRIES) throw new Error("작업 스트림이 거듭 끊겼습니다");
+    else await pause(RECONNECT_MS, signal);
   }
 }
 async function receiptKey(path: string, body: BodyInit | null | undefined): Promise<string> {
@@ -153,7 +204,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       .json()
       .catch(() => ({}))) as { activeJobId?: unknown };
     if (typeof busy.activeJobId !== "string") break;
-    await pollJob(busy.activeJobId, () => {}, init?.signal);
+    await followJob(busy.activeJobId, () => {}, init?.signal);
     response = await nativeFetch(input, { ...init, headers });
   }
   if (response.status !== 202) {
@@ -181,7 +232,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
           }
         };
         try {
-          const result = await pollJob(accepted.jobId, send, init?.signal);
+          const result = await followJob(accepted.jobId, send, init?.signal);
           const payload: unknown = await result.json();
           send(result.ok ? { type: "done", payload } : { type: "error", ...(payload as object) });
           done();
@@ -203,7 +254,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     });
     return new Response(stream, { headers: { "Content-Type": "application/x-ndjson" } });
   }
-  const result = await pollJob(accepted.jobId, () => {}, init?.signal);
+  const result = await followJob(accepted.jobId, () => {}, init?.signal);
   done();
   return result;
 }

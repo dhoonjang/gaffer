@@ -9,6 +9,11 @@ const Env = z.object({
   APP_ORIGIN: z.string().url().default("http://localhost:5173"),
   GAFFER_DATA_DIR: z.string().default("/tmp/gaffer-service"),
   DATABASE_URL: z.string().optional(),
+  /**
+   * 작업 알림(NOTIFY)을 듣는 세션 연결 — 트랜잭션 풀러(`DATABASE_URL`)로는 LISTEN이 안 된다.
+   * 없으면 SSE가 짧은 간격 조회로 따라간다.
+   */
+  DATABASE_LISTEN_URL: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   /** 초대 없이 운영자로 가입하는 확인된 Google 이메일 — 쉼표로 여럿 */
