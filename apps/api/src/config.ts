@@ -16,8 +16,10 @@ const Env = z.object({
   DATABASE_LISTEN_URL: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  /** 초대 없이 운영자로 가입하는 확인된 Google 이메일 — 쉼표로 여럿 */
+  /** 운영자(admin)로 가입하는 확인된 Google 이메일 — 쉼표로 여럿 */
   ADMIN_EMAILS: z.string().optional(),
+  /** 새 계정이 처음 로그인하면 알리는 Slack Incoming Webhook — 없으면 알리지 않는다 */
+  SIGNUP_SLACK_WEBHOOK_URL: z.string().url().optional(),
   SESSION_KEY: z.string().optional(),
   EMAIL_HASH_KEY: z.string().optional(),
   R2_ENDPOINT: z.string().url().optional(),

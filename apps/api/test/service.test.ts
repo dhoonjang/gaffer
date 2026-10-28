@@ -86,12 +86,10 @@ describe("durable service boundary", () => {
       configuration({ GAFFER_MODE: "production", GAFFER_AUTH_MODE: "development" }),
     ).toThrow("Google authentication");
   });
-  it("signs in with Google only after state, nonce, a verified email and an invite or operator email match", async () => {
-    await expect(
-      new Auth(configuration({ GAFFER_DATA_DIR: directory }), db).start(
-        new Request("http://localhost:5173/api/auth/start", { method: "POST", body: "{}" }),
-      ),
-    ).rejects.toMatchObject({ status: 503 });
+  it("signs in with Google only after state, nonce and a verified email, and tells Slack about each new account once", async () => {
+    expect(() => new Auth(configuration({ GAFFER_DATA_DIR: directory }), db).start()).toThrow(
+      "로그인을 준비 중입니다",
+    );
     const c = configuration({
       GAFFER_DATA_DIR: directory,
       GOOGLE_CLIENT_ID: "client.apps.googleusercontent.com",
@@ -99,6 +97,16 @@ describe("durable service boundary", () => {
       SESSION_KEY: Buffer.alloc(32, 7).toString("base64"),
       EMAIL_HASH_KEY: "email-key",
       ADMIN_EMAILS: " Owner@Example.com ",
+      SIGNUP_SLACK_WEBHOOK_URL: "https://hooks.slack.test/services/T/B/x",
+    });
+    const notices: string[] = [];
+    let slackUp = true;
+    const realFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (!url.startsWith("https://hooks.slack.test/")) return realFetch(input, init);
+      notices.push((JSON.parse(init?.body as string) as { text: string }).text);
+      return Promise.resolve(new Response(null, { status: slackUp ? 200 : 500 }));
     });
     let claims: GoogleClaims = { sub: "g-owner", email: "owner@example.com", email_verified: true };
     const exchanged: string[] = [];
@@ -110,13 +118,8 @@ describe("durable service boundary", () => {
       verify: () => Promise.resolve(claims),
     };
     const auth = new Auth(c, db, google);
-    const begin = async (invite = "") => {
-      const response = await auth.start(
-        new Request(`${c.APP_ORIGIN}/api/auth/start`, {
-          method: "POST",
-          body: JSON.stringify({ invite }),
-        }),
-      );
+    const begin = async () => {
+      const response = auth.start();
       const url = new URL(((await response.json()) as { url: string }).url);
       const cookie = response.headers.get("set-cookie")!.split(";")[0]!;
       return {
@@ -156,45 +159,40 @@ describe("durable service boundary", () => {
     claims = { ...claims, nonce: "another-login" };
     expect(errorOf(await finish(attempt.state, attempt.cookie))).toBeTruthy();
     expect(exchanged).toEqual([`c1|${c.APP_ORIGIN}/api/auth/callback|43`]);
-    // The configured operator joins without an invite and the session opens the API
+    // The configured operator joins as admin and the session opens the API
     claims = { ...claims, nonce: attempt.nonce };
     const session = sessionOf(await finish(attempt.state, attempt.cookie));
     expect(session).toBeTruthy();
     const me = await auth.identity(new Request(c.APP_ORIGIN, { headers: { cookie: session! } }));
     expect(me.role).toBe("admin");
     expect(me.email).toBe("owner@example.com");
+    expect(notices).toEqual([expect.stringContaining("owner@example.com")]);
 
-    // Everyone else needs an invite issued to their own verified email
+    // Anyone else joins as a member on a verified email alone
     attempt = await begin();
     claims = {
       sub: "g-guest",
       email: "guest@example.com",
-      email_verified: true,
+      email_verified: false,
       nonce: attempt.nonce,
     };
-    expect(errorOf(await finish(attempt.state, attempt.cookie))).toBe(
-      "이 이메일로 발급된 초대가 필요합니다",
-    );
-    const invite = new URLSearchParams(
-      new URL(await auth.invite("guest@example.com")).hash.slice(1),
-    ).get("invite")!;
-    attempt = await begin(invite);
-    claims = { ...claims, email_verified: false, nonce: attempt.nonce };
-    const unverified = await finish(attempt.state, attempt.cookie);
-    expect(errorOf(unverified)).toBe("확인된 이메일이 필요합니다");
-    // The failed callback hands the invite back so the player can retry from the same link
-    expect(new URL(unverified.headers.get("location")!).hash).toContain(`invite=${invite}`);
-    attempt = await begin(invite);
+    expect(errorOf(await finish(attempt.state, attempt.cookie))).toBe("확인된 이메일이 필요합니다");
+    expect(notices).toHaveLength(1);
+    // Slack being down costs the notice, not the login
+    slackUp = false;
+    attempt = await begin();
     claims = { ...claims, email_verified: true, nonce: attempt.nonce };
     const guest = sessionOf(await finish(attempt.state, attempt.cookie));
     expect(
       (await auth.identity(new Request(c.APP_ORIGIN, { headers: { cookie: guest! } }))).role,
     ).toBe("member");
-    // The invite is spent; the same Google subject keeps signing in without it
-    await expect(begin(invite)).rejects.toMatchObject({ status: 403 });
+    expect(notices.at(-1)).toContain("guest@example.com");
+    // A returning Google subject signs in without another notice
+    slackUp = true;
     attempt = await begin();
     claims = { ...claims, nonce: attempt.nonce };
     expect(sessionOf(await finish(attempt.state, attempt.cookie))).toBeTruthy();
+    expect(notices).toHaveLength(2);
     // A deleted account loses its Google link; signing in again starts a new member
     await auth.deleteAccount(me.id);
     attempt = await begin();
@@ -211,6 +209,8 @@ describe("durable service boundary", () => {
     expect(
       (await auth.identity(new Request(c.APP_ORIGIN, { headers: { cookie: rejoined! } }))).id,
     ).not.toBe(me.id);
+    expect(notices).toHaveLength(3);
+    vi.restoreAllMocks();
   });
   it("rejects foreign nested resources, CSRF and production developer routes before execution", async () => {
     const c = {

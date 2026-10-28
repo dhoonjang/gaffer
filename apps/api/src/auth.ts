@@ -41,12 +41,13 @@ const GOOGLE_AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth";
 const PENDING_SECONDS = 600;
 const SESSION_SECONDS = 7 * 24 * 3600;
 const GOOGLE_TIMEOUT_MS = 10_000;
+/** 가입 알림을 기다리는 한도 — 넘기면 알림만 빠지고 로그인은 이어진다 */
+const SIGNUP_NOTICE_TIMEOUT_MS = 3_000;
 
 const Pending = z.object({
   state: z.string().min(1),
   nonce: z.string().min(1),
   verifier: z.string().min(43),
-  invite: z.string(),
   expires: z.number(),
 });
 type Pending = z.infer<typeof Pending>;
@@ -156,18 +157,6 @@ export class Auth {
       return undefined;
     }
   }
-  async invite(email: string): Promise<string> {
-    const token = randomToken();
-    await this.db.query(
-      "INSERT INTO private.invites(token_hash,email_hash,expires_at) VALUES($1,$2,now()+interval '7 days')",
-      [hash(token), this.emailHash(email)],
-    );
-    await this.db.query(
-      "INSERT INTO private.audit(id,action,subject) VALUES($1,'invite_created',$2)",
-      [randomUUID(), this.emailHash(email)],
-    );
-    return `${this.c.APP_ORIGIN}/#invite=${token}`;
-  }
   /** 로그인에 필요한 설정이 모두 있을 때만 Google과 대화한다 */
   private oidc(): GoogleOidc {
     const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_KEY, EMAIL_HASH_KEY } = this.c;
@@ -196,28 +185,13 @@ export class Auth {
       },
     };
   }
-  async start(req: Request): Promise<Response> {
+  start(): Response {
     if (this.development) return Response.json({ url: this.c.APP_ORIGIN });
     this.oidc();
-    const body = z
-      .object({ invite: z.string().max(200).optional() })
-      .safeParse(await req.json().catch(() => ({})));
-    const invite = body.success ? (body.data.invite ?? "") : "";
-    if (
-      invite &&
-      !(
-        await this.db.query(
-          "SELECT token_hash FROM private.invites WHERE token_hash=$1 AND expires_at>now() AND accepted_by IS NULL",
-          [hash(invite)],
-        )
-      ).length
-    )
-      throw new HttpError(403, "유효한 초대가 아닙니다");
     const pending: Pending = {
       state: randomToken(),
       nonce: randomToken(),
       verifier: randomToken(),
-      invite,
       expires: Date.now() + PENDING_SECONDS * 1000,
     };
     const url = new URL(GOOGLE_AUTHORIZE);
@@ -243,14 +217,13 @@ export class Auth {
   }
   /**
    * Google이 돌려보낸 자리. 실패도 화면으로 돌아가야 하므로 JSON이 아니라
-   * `/#login_error=`로 보낸다. 초대 링크로 들어왔으면 그 초대를 다시 싣는다.
+   * `/#login_error=`로 보낸다.
    */
   async callback(req: Request): Promise<Response> {
-    let pending: Pending | null = null;
     try {
       const raw = this.cookies(req)["gaffer_oauth"];
-      if (raw) pending = this.pending(raw);
-      const token = await this.signIn(req, pending);
+      const { token, joined } = await this.signIn(req, raw ? this.pending(raw) : null);
+      if (joined) await this.announce(joined);
       const headers = new Headers({ Location: `${this.c.APP_ORIGIN}/` });
       headers.append("Set-Cookie", this.cookie("gaffer_session", token, SESSION_SECONDS));
       headers.append("Set-Cookie", this.cookie("gaffer_oauth", "", 0));
@@ -258,9 +231,9 @@ export class Auth {
     } catch (error) {
       const known = error instanceof HttpError;
       console.warn(JSON.stringify({ event: "login_failed", status: known ? error.status : 500 }));
-      const back = new URLSearchParams();
-      if (pending?.invite) back.set("invite", pending.invite);
-      back.set("login_error", known ? error.message : "로그인에 실패했습니다");
+      const back = new URLSearchParams({
+        login_error: known ? error.message : "로그인에 실패했습니다",
+      });
       const headers = new Headers({ Location: `${this.c.APP_ORIGIN}/#${back.toString()}` });
       headers.append("Set-Cookie", this.cookie("gaffer_oauth", "", 0));
       return new Response(null, { status: 302, headers });
@@ -274,7 +247,11 @@ export class Auth {
       return null;
     }
   }
-  private async signIn(req: Request, pending: Pending | null): Promise<string> {
+  /** 세션 토큰과, 이번 로그인으로 처음 가입했으면 그 이메일 */
+  private async signIn(
+    req: Request,
+    pending: Pending | null,
+  ): Promise<{ token: string; joined: string | null }> {
     const params = new URL(req.url).searchParams;
     if (params.get("error")) throw new HttpError(401, "로그인을 취소했습니다");
     const code = params.get("code");
@@ -294,8 +271,8 @@ export class Auth {
       throw new HttpError(403, "확인된 이메일이 필요합니다");
     const email = claims.email;
     const emailHash = this.emailHash(email);
-    const invited = pending.invite;
     const token = randomToken();
+    let joined: string | null = null;
     await this.db.transaction(async (sql) => {
       const [member] = await sql.query<{ id: string; active: boolean }>(
         "SELECT id,active FROM private.members WHERE google_sub=$1 FOR UPDATE",
@@ -310,37 +287,43 @@ export class Auth {
             .length
         )
           throw new HttpError(403, "이 이메일은 다른 Google 계정에 연결되어 있습니다");
-        if (this.adminEmail(email)) {
-          await sql.query(
-            "INSERT INTO private.members(id,google_sub,email_hash,role) VALUES($1,$2,$3,'admin')",
-            [id, claims.sub, emailHash],
-          );
-        } else {
-          const [invite] = await sql.query(
-            "SELECT token_hash FROM private.invites WHERE token_hash=$1 AND email_hash=$2 AND accepted_by IS NULL AND expires_at>now() FOR UPDATE",
-            [hash(invited), emailHash],
-          );
-          if (!invite) throw new HttpError(403, "이 이메일로 발급된 초대가 필요합니다");
-          await sql.query(
-            "INSERT INTO private.members(id,google_sub,email_hash) VALUES($1,$2,$3)",
-            [id, claims.sub, emailHash],
-          );
-          await sql.query("UPDATE private.invites SET accepted_by=$1 WHERE token_hash=$2", [
-            id,
-            hash(invited),
-          ]);
-        }
         await sql.query(
-          "INSERT INTO private.analytics(id,owner_id,name) VALUES($1,$2,'invite_accepted')",
+          "INSERT INTO private.members(id,google_sub,email_hash,role) VALUES($1,$2,$3,$4)",
+          [id, claims.sub, emailHash, this.adminEmail(email) ? "admin" : "member"],
+        );
+        await sql.query(
+          "INSERT INTO private.analytics(id,owner_id,name) VALUES($1,$2,'signed_up')",
           [randomUUID(), id],
         );
+        joined = email;
       }
       await sql.query(
         `INSERT INTO private.sessions(token_hash,owner_id,expires_at,email_cipher) VALUES($1,$2,now()+interval '${SESSION_SECONDS} seconds',$3)`,
         [hash(token), id, this.encrypt(email)],
       );
     });
-    return token;
+    return { token, joined };
+  }
+  /** 운영자 Slack에 새 계정을 알린다. 실패해도 로그인은 그대로 간다 */
+  private async announce(email: string): Promise<void> {
+    const webhook = this.c.SIGNUP_SLACK_WEBHOOK_URL;
+    if (!webhook) return;
+    try {
+      const [members] = await this.db.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM private.members WHERE active",
+      );
+      const response = await fetch(webhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `새 Google 계정이 가입했습니다: ${email} (활성 회원 ${members?.count ?? "?"}명)`,
+        }),
+        signal: AbortSignal.timeout(SIGNUP_NOTICE_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`Slack ${response.status}`);
+    } catch {
+      console.warn(JSON.stringify({ event: "signup_notice_failed" }));
+    }
   }
   async logout(req: Request): Promise<Response> {
     await this.db.query("DELETE FROM private.sessions WHERE token_hash=$1", [
@@ -353,7 +336,7 @@ export class Auth {
   }
   async deleteAccount(owner: string): Promise<void> {
     await this.db.transaction(async (sql) => {
-      // 로그인 식별자를 지운다 — 같은 Google 계정은 다시 초대받아야 들어온다
+      // 로그인 식별자를 지운다 — 같은 Google 계정이 다시 들어오면 새 회원이다
       await sql.query(
         "UPDATE private.members SET active=false,google_sub=NULL,email_hash='deleted:'||id::text WHERE id=$1",
         [owner],

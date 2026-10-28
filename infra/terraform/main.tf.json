@@ -70,6 +70,10 @@
     "maintenance_secret_ids": {
       "type": "map(string)"
     },
+    "api_secret_ids": {
+      "type": "map(string)",
+      "default": {}
+    },
     "observability_secret_ids": {
       "type": "map(string)",
       "default": {}
@@ -132,7 +136,7 @@
       }
     },
     "urls": "${{for role in keys(local.roles): role => \"https://gaffer-${role}-${data.google_project.current.number}.${var.region}.run.app\"}}",
-    "role_secrets": "${{for role in keys(local.roles):role=>merge(var.secret_ids,{DATABASE_URL=var.database_secret_ids[role]},{for r,secret in var.listen_database_secret_ids:\"DATABASE_LISTEN_URL\"=>secret if r==role},role==\"worker\"?var.llm_secret_ids:{},role==\"maintenance\"?var.maintenance_secret_ids:{},var.observability_secret_ids)}}",
+    "role_secrets": "${{for role in keys(local.roles):role=>merge(var.secret_ids,{DATABASE_URL=var.database_secret_ids[role]},{for r,secret in var.listen_database_secret_ids:\"DATABASE_LISTEN_URL\"=>secret if r==role},role==\"worker\"?var.llm_secret_ids:{},role==\"maintenance\"?var.maintenance_secret_ids:{},role==\"api\"?var.api_secret_ids:{},var.observability_secret_ids)}}",
     "secret_grants": "${merge([for role,secrets in local.role_secrets:{for name,secret in secrets:\"${role}-${name}\"=>{role=role,secret=secret}}]...)}"
   },
   "resource": {

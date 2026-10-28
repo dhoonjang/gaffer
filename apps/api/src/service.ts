@@ -146,7 +146,7 @@ export class Service {
       req.headers.get("origin") !== this.c.APP_ORIGIN
     )
       throw new HttpError(403, "Invalid origin");
-    if (path === "/api/auth/start" && req.method === "POST") return this.auth.start(req);
+    if (path === "/api/auth/start" && req.method === "POST") return this.auth.start();
     if (path === "/api/auth/callback" && req.method === "GET") return this.auth.callback(req);
     if (
       (

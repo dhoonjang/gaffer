@@ -48,10 +48,6 @@ if (command === "price-template") {
   const objects = objectStore(c);
   try {
     switch (command ?? "") {
-      case "invite":
-        if (!arg?.includes("@")) throw new Error("Usage: service:ops invite email");
-        console.info(await new Auth(c, db).invite(arg));
-        break;
       case "reconcile":
         await new Jobs(db, objects).recover();
         break;
@@ -162,7 +158,7 @@ if (command === "price-template") {
         break;
       default:
         throw new Error(
-          "Commands: migrate, invite, reconcile, backup, restore, resume-after-restore, status",
+          "Commands: migrate, reconcile, backup, restore, resume-after-restore, status",
         );
     }
   } finally {

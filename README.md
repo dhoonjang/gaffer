@@ -28,7 +28,7 @@ pnpm dev
 mock 모드로 실행되며, 실제 LLM을 사용하려면 [`config/llm.yml`](config/llm.yml)에
 설정된 제공자의 API 키를 환경 변수로 지정합니다.
 
-## 초대 베타 배포
+## 베타 배포
 
 React/Vite와 NestJS는 `pnpm dev`에서 함께 실행됩니다. 로컬 기본 데이터는
 `/tmp/gaffer-service`의 PGlite·객체 저장소에 있으며 기존 `.data`는 자동 이전하지 않습니다.

@@ -1,14 +1,7 @@
 import { SessionContext, useSession } from "./shared/session";
 import { StrictMode, useEffect, useState, Suspense, lazy, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  useParams,
-  useSearchParams,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams, useSearchParams } from "react-router-dom";
 import Home from "./app/page";
 import NewGame from "./app/new/page";
 const Admin = lazy(() => import("./app/admin/page"));
@@ -35,7 +28,6 @@ function Shell({ children }: { children: ReactNode }) {
   );
   const [pending, setPending] = useState(false);
   const [generation, setGeneration] = useState(0);
-  const location = useLocation();
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.slice(1));
     if (!hash.has("login_error")) return;
@@ -87,10 +79,7 @@ function Shell({ children }: { children: ReactNode }) {
         <p>로그인 확인 중…</p>
       </main>
     );
-  if (auth === "out") {
-    const invite =
-      new URLSearchParams(location.hash.slice(1)).get("invite") ??
-      new URLSearchParams(location.search).get("invite");
+  if (auth === "out")
     return (
       <main className="service-login">
         <h1>Gaffer</h1>
@@ -100,11 +89,7 @@ function Shell({ children }: { children: ReactNode }) {
           onClick={() => {
             setPending(true);
             setNotice("");
-            void fetch("/api/auth/start", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ invite: invite ?? "" }),
-            })
+            void fetch("/api/auth/start", { method: "POST" })
               .then(async (response) => {
                 const data = (await response.json()) as { url?: string; error?: string };
                 if (response.ok && data.url) window.location.assign(data.url);
@@ -119,7 +104,6 @@ function Shell({ children }: { children: ReactNode }) {
         {notice && <p role="alert">{notice}</p>}
       </main>
     );
-  }
   const logout = () => {
     setNotice("");
     void fetch("/api/auth/logout", { method: "POST" })

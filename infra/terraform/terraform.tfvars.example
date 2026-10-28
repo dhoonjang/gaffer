@@ -2,7 +2,7 @@ project_id = "your-gaffer-project"
 image = "asia-northeast1-docker.pkg.dev/your-gaffer-project/gaffer/service:COMMIT_SHA"
 app_origin = "https://your-gaffer-domain"
 google_client_id = "NUMBER-xxxx.apps.googleusercontent.com" # Web application OAuth client
-admin_emails = "operator@example.com" # Verified Google emails that join as operators without an invite
+admin_emails = "operator@example.com" # Verified Google emails that join as operators; anyone else joins as a member
 r2_endpoint = "https://ACCOUNT.r2.cloudflarestorage.com"
 r2_bucket = "gaffer-saves"
 backup_project_id = "your-independent-backup-project"
@@ -36,10 +36,14 @@ maintenance_secret_ids = {
   BACKUP_R2_ACCESS_KEY_ID = "gaffer-backup-r2-key-id"
   BACKUP_R2_SECRET_ACCESS_KEY = "gaffer-backup-r2-key-secret"
 }
+# Slack Incoming Webhook that hears about each new account; leave out to send nothing.
+api_secret_ids = {
+  SIGNUP_SLACK_WEBHOOK_URL = "gaffer-slack-signup-webhook"
+}
 
 github_repository = "OWNER/gaffer"
 github_repository_id = "NUMERIC_GITHUB_REPOSITORY_ID"
-notification_channels = [] # Add verified Cloud Monitoring notification channel IDs before inviting users.
+notification_channels = [] # Add verified Cloud Monitoring notification channel IDs before opening sign-up.
 
 # Optional billing-account budget (requires billing budget management permission).
 # billing_account_id = "XXXXXX-XXXXXX-XXXXXX"

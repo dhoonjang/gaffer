@@ -1,7 +1,7 @@
 # 배포 런타임과 운영
 
-Gaffer의 공개 런타임은 React/Vite 화면과 NestJS 서버다. 초대제·동시 접속 10명 이하를
-초기 운영 범위로 삼는다. 계정마다 독립 게임을 최대 2개 보유한다. 게임 규칙과
+Gaffer의 공개 런타임은 React/Vite 화면과 NestJS 서버다. 확인된 Google 계정이면 누구나
+로그인해 바로 가입하고, 동시 접속 10명 이하를 초기 운영 범위로 삼는다. 계정마다 독립 게임을 최대 2개 보유한다. 게임 규칙과
 `SAVE_VERSION`은 기존 엔진이 소유한다. 구현 검증과 미실행 환경 검증은
 [구현 상태](../../plans/deployment/implementation-status.md)에 기록한다.
 
@@ -76,7 +76,8 @@ CLI용이며 서비스 SQL에 자동 등록되지 않는다. 테스트 import는
 애플리케이션)의 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`과 `SESSION_KEY`, `EMAIL_HASH_KEY`가
 필요하다. 클라이언트의 승인된 리디렉션 URI에 `http://localhost:5173/api/auth/callback`을 등록하고
 화면은 `http://localhost:5173`으로 연다(`127.0.0.1`은 Origin 검사에서 거부된다).
-`ADMIN_EMAILS`에 적은 확인된 Google 이메일은 초대 없이 운영자로 가입한다. 두 모드의 회원은
+`ADMIN_EMAILS`에 적은 확인된 Google 이메일은 운영자로, 그 밖의 확인된 계정은 일반 회원으로
+가입한다. 두 모드의 회원은
 서로 다른 계정이라 Google로 만든 게임은 로컬 인증에서 보이지 않는다.
 운영에서는 development 인증과 mock을 금지하고 worker의 모델별 가격·제공자 키를 검사한다.
 시뮬레이션 스크립트와 match-cli는 202 작업 조회와 경기 제어권 계약을 사용한다.
@@ -94,8 +95,13 @@ CLI용이며 서비스 SQL에 자동 등록되지 않는다. 테스트 import는
   client secret과 verifier로 코드를 교환한다. ID token은 Google 공개키 서명·발급자·
   `aud`·만료와 nonce를 검증하며 `email_verified`인 계정만 받는다.
 - 회원은 Google `sub`로 식별한다. 이메일이 같다는 이유로 다른 identity와 병합하지 않는다.
-  처음 가입하는 계정은 그 이메일로 발급된 초대(`/#invite=...`, token과 이메일은 해시로
-  저장)나 `ADMIN_EMAILS`가 필요하다. 실패한 callback은 `/#login_error=...`로 돌아간다.
+  확인된 이메일의 계정은 처음 로그인할 때 바로 회원이 된다(`ADMIN_EMAILS`면 운영자).
+  실패한 callback은 `/#login_error=...`로 돌아간다. 회원을 늘리는 비용은 계정당·전체 일
+  예산이 막는다.
+- 새 회원이 생기면 api가 `SIGNUP_SLACK_WEBHOOK_URL`(Slack Incoming Webhook)로 그 이메일과
+  활성 회원 수를 운영자에게 보낸다. 가입 commit 뒤 최대 3초 기다리고, 실패하면
+  `signup_notice_failed`만 남기고 로그인은 이어진다. 다시 로그인하는 계정은 알리지 않고,
+  삭제한 뒤 다시 들어온 계정은 새 회원이라 다시 알린다.
 - 서버가 발급한 7일 opaque 세션 쿠키는 HttpOnly·Secure·SameSite=Lax다. Google의
   access·refresh token은 저장하지 않는다. 화면에 보일 이메일만 세션 행에 AES-GCM으로
   암호화해 두며, 로그아웃·만료·계정 삭제로 세션 행과 함께 지워진다.
@@ -180,9 +186,9 @@ stdout은 request/job/attempt/오류 종류와 메트릭만 남긴다. Sentry는
 마스킹한다. 하루 사용자당 20개·건당 512 KiB 상한, 7일 보관이며 진단 실패는 게임을 막지 않는다.
 원문 조회는 CLI `diagnostic <id>`이며 감사 기록을 남긴다.
 
-제품 이벤트의 원본은 SQL이다. 초대 수락, 게임 생성, 턴 확정, 첫 턴, 경기 시작/완료,
+제품 이벤트의 원본은 SQL이다. 가입, 게임 생성, 턴 확정, 첫 턴, 경기 시작/완료,
 피드백을 기록한다. `pnpm service:ops report`는 30일 퍼널, 사용자 수, D1/D7의 복귀 수/대상 수,
-작업 상태, 비용, DB 크기를 JSON으로 반환한다. D1/D7은 UTC 초대 수락 cohort에서 해당 날짜의
+작업 상태, 비용, DB 크기를 JSON으로 반환한다. D1/D7은 UTC 가입 cohort에서 해당 날짜의
 턴/경기 완료로 계산하고 아직 관측 기간이 지나지 않은 사용자는 분모에서 뺀다.
 
 외부 PostHog 전송은 사용자 동의가 있어야 한다. 자동 수집·화면 녹화·대화 전송은 없다.
@@ -228,7 +234,7 @@ AES-GCM 암호화해 별도 R2 bucket과 다른 리전(US-WEST1)의 GCS bucket�
 전체를 백업하지 않는다. 복원 후 영수증과 최신 게임은 남고, 만료된 결과 조회는 최신 화면으로
 복구한다. 백업 pin은 실행 중 갱신하며 실패 시 해제하고, 죽은 실행의 pin은 15분 뒤 재취득한다.
 복원 pin은 자동 만료하지 않는다. 마지막 두 사본의 성공이 26시간 넘으면 알리고 48시간
-넘으면 신규 게임·LLM 턴 접수를 막는다. 첫 초대 전 최초 백업을 실행한다.
+넘으면 신규 게임·LLM 턴 접수를 막는다. 첫 배포 직후 최초 백업을 실행한다.
 
 ```sh
 pnpm service:ops backup
@@ -258,8 +264,8 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
 3. Session key와 backup key는 각각 독립된 32바이트 랜덤 base64, email hash key는 별도
    랜덤 secret으로 만든다. Google client secret과 함께 Secret Manager에 저장한다. 키는 명령
    출력·채팅·저장소에 남기지 않는다. 복구용 SESSION_KEY·EMAIL_HASH_KEY·BACKUP_KEY는 원본
-   프로젝트와 독립된 비밀 관리소에도 보관한다. 첫 운영자는 `admin_emails`로 가입하고,
-   이후 참가자는 `pnpm service:ops invite user@example.com`의 링크로 초대한다.
+   프로젝트와 독립된 비밀 관리소에도 보관한다. 운영자는 `admin_emails`로 가입한다. 가입 알림을
+   받을 Slack Incoming Webhook URL도 Secret Manager에 두고 `api_secret_ids`로 api에만 연결한다.
 4. `infra/terraform/terraform.tfvars.example`을 복사해 비밀값 대신 secret ID만 지정한다.
    notification channel은 실제 수신 가능한 채널을 지정한다. Terraform state는 접근 제한된
    원격 backend에 보관한다. 예제 파일을 운영값으로 채운 파일은 gitignore 대상이다.
@@ -302,8 +308,8 @@ pin을 해제한다. RPO는 마지막 성공 백업 이후(일일 정상 실행 
    기존 경기 완료 후 재배포한다. 현재 베타에는 여러 runtime cohort를 동시에 운영하는 기능이 없다.
    revision 전환 도중 실패하면 점검을 유지한다. 모든 서비스와 Pages를 같은 검증된 commit으로
    돌린 뒤 `tsx apps/api/src/release.ts resume`으로 재개한다.
-10. 최초 백업·격리 복원·Google 초대 로그인·다른 계정 접근 차단·실제 R2 conditional write·
-    Cloud Tasks 재전달·선택 진단/삭제·10세션 mock 부하를 초대 전의 빈 운영 환경에서 검증한 뒤 초대한다.
+10. 최초 백업·격리 복원·Google 로그인·가입 알림·다른 계정 접근 차단·실제 R2 conditional write·
+    Cloud Tasks 재전달·선택 진단/삭제·10세션 mock 부하를 운영 환경에서 검증한다.
     소수의 실제 LLM 호출로 price/usage와 provider 제한을 대조한다. `billing_account_id`를 지정하면 월 예산 50/90/100% 경보도 생성한다. 이 경보는 LLM 코드 예산과 혼동하지 않는다.
 
 설정 참고: [Google OAuth 웹 서버 흐름](https://developers.google.com/identity/protocols/oauth2/web-server),
