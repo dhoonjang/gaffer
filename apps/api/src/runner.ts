@@ -37,6 +37,7 @@ interface WorkerMessage {
   text: string;
   index: number;
   exhibit: unknown;
+  payload: unknown;
   result: Executed;
   error: string;
   kind?: LlmErrorKind;
@@ -198,6 +199,18 @@ export class Runner {
           if (m.type === "exhibit") {
             flush();
             write({ type: "exhibit", index: m.index, exhibit: m.exhibit });
+            return;
+          }
+          // A new game's world before its first scene, and a retried scene dropping what it
+          // streamed — both in order with the text around them.
+          if (m.type === "opening") {
+            flush();
+            write({ type: "opening", payload: m.payload });
+            return;
+          }
+          if (m.type === "attempt_reset") {
+            flush();
+            write({ type: "attempt_reset" });
             return;
           }
           if (m.type === "done") {

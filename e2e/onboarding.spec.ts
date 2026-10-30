@@ -14,6 +14,8 @@ test("새 게임 첫 메시지가 부임 장면과 수석코치 브리핑으로 
     .getByTestId("manager-background")
     .fill("K리그 주장 출신으로 은퇴 후 데이터 분석과 유소년 지도를 공부했다.");
   await page.getByTestId("start-game").click();
+  // 화면은 첫 장면의 첫 글자에 넘어오고 장면은 이어 흐른다 — 다 앉은 것은 입력이 풀린 것으로 안다
+  await expect(page.getByTestId("chat-input")).toBeEnabled({ timeout: COLD_MS });
 
   const firstTurn = page.getByTestId("model-turn").first();
   await expect(firstTurn).toBeVisible({ timeout: COLD_MS });

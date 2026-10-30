@@ -303,9 +303,15 @@ export function errorDetail(error: unknown): { detail?: string } {
 /**
  * 턴이 흘려보내는 것 — 장면 조각, 그리고 카드 줄이 흐른 순간의 장부로 푼 자료 카드
  * (`index`는 흘러간 본문의 n번째 카드, null은 저장이 걷을 카드다).
+ *
+ * 새 게임은 첫 장면보다 먼저 그 장면이 앉을 세계(`opening` — 대화가 빈 화면)를 보내고,
+ * 첫 장면을 다시 부르면 앞서 흘린 글자를 버리라고(`attempt_reset`) 알린다.
  */
 export type TurnStreamEvent =
-  { type: "delta"; text: string } | { type: "exhibit"; index: number; exhibit: Exhibit | null };
+  | { type: "delta"; text: string }
+  | { type: "exhibit"; index: number; exhibit: Exhibit | null }
+  | { type: "opening"; payload: GamePayload }
+  | { type: "attempt_reset" };
 
 /**
  * 유저 턴 → GM 실행 → 모델 턴 (agents.md §2), 잠금·원자성 포함.

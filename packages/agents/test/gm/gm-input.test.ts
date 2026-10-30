@@ -67,7 +67,9 @@ import {
   recordCharacterInjection,
   runGmTurn,
   runOnboarding,
+  onboardingSceneStream,
   type GmToolCall,
+  type OnboardingStream,
 } from "@gaffer/agents";
 import { agentConfig, ScriptedGameLLM } from "@gaffer/llm";
 import type { GameLLM, StopReason, TurnRequest, TurnResult } from "@gaffer/llm";
@@ -495,11 +497,11 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
   };
 
   /** 실모드에서 온보딩을 돌린다 — LLM_MODE를 되돌리는 것까지 한 자리에서 */
-  async function onboardInRealMode(state: GameState, llm: GameLLM) {
+  async function onboardInRealMode(state: GameState, llm: GameLLM, stream?: OnboardingStream) {
     const previousMode = process.env.LLM_MODE;
     process.env.LLM_MODE = "real";
     try {
-      return await runOnboarding(state, "선수 출신으로 라커룸 장악에 능하다.", llm);
+      return await runOnboarding(state, "선수 출신으로 라커룸 장악에 능하다.", llm, stream);
     } finally {
       if (previousMode === undefined) delete process.env.LLM_MODE;
       else process.env.LLM_MODE = previousMode;
@@ -605,6 +607,52 @@ describe("새 게임 온보딩 — 판정과 첫 장면이 한 호출이다", ()
 
     await expect(onboardInRealMode(state, llm)).rejects.toThrow("출력 문법");
     expect(call).toBe(2);
+  });
+
+  /**
+   * 본문이 JSON이라 델타는 이스케이프째 온다 — 조각이 `\"`·`\n`·서로게이트 `\uXXXX` 한복판에서
+   * 잘려도 화면에 흐른 장면은 저장될 본문과 글자까지 같다.
+   */
+  it("흐르는 첫 장면은 JSON 조각이 어디서 잘려도 저장될 본문 그대로다", async () => {
+    const state = game();
+    const coach = headCoachOf(state).characterId;
+    const body = [
+      '<narration>이른 아침, "첫날"의 훈련장 😀</narration>',
+      `<speak name="${coach}">감독님, 오시느라 고생 많으셨습니다.\n*고개를 숙인다*</speak>`,
+      `<speak name="${coach}">무엇부터 보시겠습니까?</speak>`,
+    ].join("\n");
+    const json = JSON.stringify({ scene: body, ...report }).replace("😀", "\\ud83d\\ude00");
+    const turn = await onboardInRealMode(state, { runTurn: async (input) => reply(input, body) });
+
+    for (const size of [1, 2, 3, 5, 8, json.length]) {
+      let shown = "";
+      const feed = onboardingSceneStream(state, (delta) => (shown += delta));
+      for (let at = 0; at < json.length; at += size) feed(json.slice(at, at + size));
+      expect(shown).toBe(turn.text);
+    }
+  });
+
+  it("다시 부르는 첫 장면은 앞서 흘린 장면을 지우고 처음부터 흐른다", async () => {
+    const state = game();
+    let call = 0;
+    const llm: GameLLM = {
+      runTurn: async (input) => {
+        const text = scene(state, ++call === 1 ? "시즌 목표 파" : "선수단부터 보시겠습니까.");
+        input.onText?.(JSON.stringify({ scene: text, ...report }));
+        return reply(input, text, call === 1 ? { stopReason: "truncated" } : {});
+      },
+    };
+    let shown = "";
+    let resets = 0;
+    const turn = await onboardInRealMode(state, llm, {
+      onText: (delta) => (shown += delta),
+      onReset: () => {
+        resets++;
+        shown = "";
+      },
+    });
+    expect(resets).toBe(1);
+    expect(shown).toBe(turn.text);
   });
 });
 

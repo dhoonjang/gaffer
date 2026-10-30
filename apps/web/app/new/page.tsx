@@ -1,5 +1,6 @@
 "use client";
 import { apiFetch as fetch } from "@/shared/api";
+import { clearFailedOpening, failedOpening, startOpening } from "@/game/opening";
 
 import { type CSSProperties, useEffect, useState } from "react";
 import { useRouter } from "@/shared/navigation";
@@ -57,15 +58,18 @@ const leagueStyle = (tone: string | undefined): CSSProperties | undefined =>
 
 export default function NewGamePage() {
   const router = useRouter();
+  /** 첫 장면이 게임을 세우지 못해 돌아왔다 — 고른 것과 이유가 그대로 다시 선다 */
+  const [restored] = useState(failedOpening);
+  useEffect(() => clearFailedOpening(), []);
   const [teams, setTeams] = useState<TeamEntry[]>([]);
   const [leagues, setLeagues] = useState<LeagueEntry[]>([]);
-  const [wanted, setStep] = useState<Step>("league");
-  const [leagueId, setLeagueId] = useState<string | null>(null);
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [background, setBackground] = useState("");
+  const [wanted, setStep] = useState<Step>(restored ? "manager" : "league");
+  const [leagueId, setLeagueId] = useState<string | null>(restored?.form.leagueId ?? null);
+  const [teamId, setTeamId] = useState<string | null>(restored?.form.teamId ?? null);
+  const [name, setName] = useState(restored?.form.managerName ?? "");
+  const [background, setBackground] = useState(restored?.form.background ?? "");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(restored?.reason ?? null);
 
   useEffect(() => {
     // dev 서버 첫 요청은 라우트 컴파일로 느리거나 실패할 수 있어 재시도한다
@@ -112,23 +116,19 @@ export default function NewGamePage() {
   const prevStep = STEPS[stepIndex - 1];
   const leagueTeams = teams.filter((t) => t.leagueId === leagueId).sort(byTier);
 
-  async function start() {
-    if (!teamId || !name.trim() || !background.trim()) return;
+  /** 첫 장면의 첫 글자가 닿는 순간 게임으로 넘어간다 — 나머지는 게임 화면에서 흐른다 */
+  function start() {
+    if (!leagueId || !teamId || !name.trim() || !background.trim()) return;
     setBusy(true);
     setError(null);
-    try {
-      const res = await fetch("/api/games", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId, managerName: name.trim(), background: background.trim() }),
-      });
-      const data = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok || data.id === undefined) throw new Error(data.error ?? "생성 실패");
-      router.push(`/game/${data.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(false);
-    }
+    startOpening(
+      { leagueId, teamId, managerName: name.trim(), background: background.trim() },
+      (id) => router.push(`/game/${id}`),
+      (reason) => {
+        setError(reason);
+        setBusy(false);
+      },
+    );
   }
 
   /**
@@ -136,7 +136,7 @@ export default function NewGamePage() {
    *
    * 세계를 만드는 데 걸리는 동안 폼을 그대로 두면 감독 이름·배경이 아직 고칠 수
    * 있는 것처럼 보이고, 버튼 글자만 바뀌는 것으로는 화면이 넘어갔다는 느낌이
-   * 없다. 여기서 선 로딩이 `/game/[id]`의 로딩으로 이어져 한 몸으로 읽힌다.
+   * 없다. 이 로딩은 첫 장면의 첫 글자까지만 서고, 그 뒤는 게임 화면에서 흐른다.
    */
   if (busy)
     return (
@@ -295,7 +295,7 @@ export default function NewGamePage() {
           {/* 누르는 순간 화면이 로딩으로 넘어가므로 버튼에 기다리는 글자를 두지 않는다 */}
           <Button
             variant="primary"
-            onClick={() => void start()}
+            onClick={start}
             disabled={!name.trim() || !background.trim()}
             data-testid="start-game"
           >

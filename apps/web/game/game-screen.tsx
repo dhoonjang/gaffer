@@ -8,7 +8,7 @@ import { PlayerContactActions } from "../screens/mailbox/player-contact-actions"
 import { PlayerCardProvider, type PlayerCardDefaultActions } from "../shared/player-card";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "@/shared/navigation";
+import Link, { useRouter } from "@/shared/navigation";
 import type { GamePayload, GameSlice } from "@/game/store";
 import { humanDate } from "@/shared/dateline";
 import { matchHeadFacts, matchScoreOf, matchTitleOf } from "@/screens/match/match-head";
@@ -23,7 +23,8 @@ import { chatForActiveMatch } from "@/screens/match/match-chat";
 import { buildTraceIndex } from "@/dev/turn-trace-index";
 import { TurnTracePopup } from "../dev/turn-trace";
 import { mergeMatchOrders, type MatchBoardOrder } from "@/shared/match-orders";
-import { streamTurn, type TurnStreamFailure } from "@/game/turn-stream";
+import { streamTurn, type TurnStreamFailure, type TurnStreamHandlers } from "@/game/turn-stream";
+import { openingOf } from "@/game/opening";
 import { Composer } from "../screens/chat/composer";
 import { useMatchViewport } from "@/screens/match/use-match-viewport";
 import { useLiveMatch } from "@/screens/match/use-live-match";
@@ -198,6 +199,7 @@ function Agenda({ items }: { items: readonly AttentionItemView[] }) {
 }
 
 export function GameScreen({ gameId }: { gameId: string }) {
+  const router = useRouter();
   const [game, setGame] = useState<GamePayload | null>(null);
   /**
    * 지금 화면에 선 경기 — **입장 전에는 아직 평시다.**
@@ -494,13 +496,118 @@ export function GameScreen({ gameId }: { gameId: string }) {
   const rafRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /**
+   * 흘러오는 장면을 푼다 — 받은 글자는 버퍼에 붓고, 끝난 payload는 **글자가 다 공개된
+   * 뒤에** `adopt`로 앉힌다. 감독의 턴과 새 게임의 첫 장면이 같은 펌프를 쓴다.
+   */
+  const playStream = useCallback(
+    async (
+      run: (handlers: TurnStreamHandlers) => Promise<TurnStreamFailure | null>,
+      adopt: (payload: GamePayload) => void,
+    ): Promise<TurnStreamFailure | null> => {
+      streamAccRef.current = "";
+      revealedRef.current = 0;
+      pendingPayloadRef.current = null;
+      setStreamText("");
+      setStreamExhibits([]);
+      let finished = false;
+      const stopPump = () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      };
+      const commit = (payload: GamePayload | null) => {
+        if (finished) return;
+        finished = true;
+        stopPump();
+        // 지난 알림의 "읽음"은 새 GM 턴이 들어오는 렌더에서 함께 풀린다 (`hintTurn`)
+        if (payload) adopt(payload);
+        setStreamText("");
+        setStreamExhibits([]);
+        refocusRef.current = true;
+        setBusy(false);
+      };
+      // 글자 공개 속도: 기본 ~60자/초, 밀린 만큼 가속. 진행량은 경과 시간
+      // 기준이라 rAF·인터벌 어느 틱이 와도 총 속도는 같다.
+      let lastTick = performance.now();
+      const step = (): boolean => {
+        if (finished) return true;
+        const now = performance.now();
+        const dt = Math.min(1000, now - lastTick);
+        lastTick = now;
+        const target = streamAccRef.current.length;
+        const r = revealedRef.current;
+        if (r < target) {
+          const backlog = target - r;
+          const cps = 60 + backlog * 2;
+          const chars = Math.max(1, Math.round((cps * dt) / 1000));
+          revealedRef.current = Math.min(target, r + chars);
+          setStreamText(streamAccRef.current.slice(0, revealedRef.current));
+          return false;
+        }
+        if (pendingPayloadRef.current) {
+          const payload = pendingPayloadRef.current;
+          pendingPayloadRef.current = null;
+          commit(payload);
+          return true;
+        }
+        return false;
+      };
+      const rafLoop = () => {
+        if (step()) return;
+        rafRef.current = requestAnimationFrame(rafLoop);
+      };
+      rafRef.current = requestAnimationFrame(rafLoop);
+      // 백그라운드 탭에서는 rAF가 멈추므로 인터벌이 진행·커밋을 보장한다
+      intervalRef.current = setInterval(step, 300);
+
+      /**
+       * 줄 하나가 이벤트 하나 — 프로토콜은 `game/turn-stream.ts`가 안다. 여기서는
+       * **글자를 버퍼에 붓고, 끝난 턴을 공개가 끝난 뒤에 앉힐 자리에 둘 뿐**이다.
+       */
+      const failure = await run({
+        onReset: () => {
+          streamAccRef.current = "";
+          revealedRef.current = 0;
+          setStreamText("");
+          setStreamExhibits([]);
+        },
+        onDelta: (text) => {
+          streamAccRef.current += text;
+        },
+        onExhibit: (index, exhibit) => {
+          setStreamExhibits((list) => {
+            const next = [...list];
+            next[index] = exhibit;
+            return next;
+          });
+        },
+        onDone: (payload) => {
+          pendingPayloadRef.current = payload; // 공개가 끝나면 pump가 커밋
+        },
+      });
+      // `onDone`이 기다리는 동안 채운다 — 흐름 분석은 콜백 안의 대입을 보지 못해 위의
+      // `null` 대입에 묶어 둔다
+      if (!(pendingPayloadRef.current as GamePayload | null)) commit(null);
+      return failure;
+    },
+    [],
+  );
+
+  /** 첫 장면이 게임을 세우지 못했다 — 부임 화면으로 돌아가면 고른 것이 되살아 있다 */
+  const [openingFailed, setOpeningFailed] = useState(false);
+  useEffect(() => {
+    if (openingFailed) router.replace("/new");
+  }, [openingFailed, router]);
+
   useEffect(() => {
     const mounted = { alive: true };
     /**
      * 처음 열 때도 `settled=1`로 읽는다 — 떠나기 전에 보낸 턴이 아직 돌고 있으면 그 턴이
      * 커밋한 뒤의 상태를 받아야 한다. 바로 읽으면 그 턴이 빠진 옛 대화가 선다.
      */
-    void (async () => {
+    const load = async () => {
       for (let tries = 0; tries < RESYNC_TRIES; tries++) {
         try {
           const res = await fetch(`/api/games/${gameId}?settled=1`);
@@ -519,13 +626,41 @@ export function GameScreen({ gameId }: { gameId: string }) {
           return;
         }
       }
-    })();
+    };
+    /**
+     * 막 부임한 게임 — 첫 장면이 아직 흐르고 있다. 그 장면이 앉을 세계로 먼저 서고 첫
+     * 장면은 턴처럼 흐른다. 연결만 끊겼으면 서버가 마저 저장했을 수 있어 세이브를 읽는다.
+     */
+    const opening = openingOf(gameId);
+    if (!opening) void load();
+    else {
+      setGame(opening.payload);
+      setBusy(true);
+      void playStream(
+        (handlers) =>
+          opening.follow({
+            ...handlers,
+            onOpening: (payload) => {
+              if (mounted.alive) setGame(payload);
+            },
+          }),
+        (payload) => {
+          if (mounted.alive) setGame(payload);
+        },
+      ).then((failure) => {
+        if (!mounted.alive) return;
+        opening.release();
+        if (failure?.settled) setOpeningFailed(true);
+        else if (failure) void load();
+      });
+    }
     return () => {
       mounted.alive = false;
+      opening?.detach();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [gameId]);
+  }, [gameId, playStream]);
 
   /**
    * 대화는 늘 바닥에 붙어 있다.
@@ -618,11 +753,6 @@ export function GameScreen({ gameId }: { gameId: string }) {
       const orders = mergeMatchOrders([], ordersRef.current);
       ordersRef.current = [];
       if (!operation && text === undefined) setInput("");
-      streamAccRef.current = "";
-      revealedRef.current = 0;
-      pendingPayloadRef.current = null;
-      setStreamText("");
-      setStreamExhibits([]);
       /**
        * 낙관적 표시 — 유저 턴 먼저. 턴이 실패하면 이 항목을 정확히 되돌린다
        * (서버도 실패한 턴은 저장하지 않는다 — game/turn-runner.ts).
@@ -702,101 +832,26 @@ export function GameScreen({ gameId }: { gameId: string }) {
         }
       };
 
-      let finished = false;
-      const stopPump = () => {
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      };
-      const commit = (payload: GamePayload | null) => {
-        if (finished) return;
-        finished = true;
-        stopPump();
-        // 지난 알림의 "읽음"은 새 GM 턴이 들어오는 렌더에서 함께 풀린다 (`hintTurn`)
-        if (payload) adoptPayload(payload);
-        setStreamText("");
-        setStreamExhibits([]);
-        refocusRef.current = true;
-        setBusy(false);
-      };
-      // 글자 공개 속도: 기본 ~60자/초, 밀린 만큼 가속. 진행량은 경과 시간
-      // 기준이라 rAF·인터벌 어느 틱이 와도 총 속도는 같다.
-      let lastTick = performance.now();
-      const step = (): boolean => {
-        if (finished) return true;
-        const now = performance.now();
-        const dt = Math.min(1000, now - lastTick);
-        lastTick = now;
-        const target = streamAccRef.current.length;
-        const r = revealedRef.current;
-        if (r < target) {
-          const backlog = target - r;
-          const cps = 60 + backlog * 2;
-          const chars = Math.max(1, Math.round((cps * dt) / 1000));
-          revealedRef.current = Math.min(target, r + chars);
-          setStreamText(streamAccRef.current.slice(0, revealedRef.current));
-          return false;
-        }
-        if (pendingPayloadRef.current) {
-          const payload = pendingPayloadRef.current;
-          pendingPayloadRef.current = null;
-          commit(payload);
-          return true;
-        }
-        return false;
-      };
-      const rafLoop = () => {
-        if (step()) return;
-        rafRef.current = requestAnimationFrame(rafLoop);
-      };
-      rafRef.current = requestAnimationFrame(rafLoop);
-      // 백그라운드 탭에서는 rAF가 멈추므로 인터벌이 진행·커밋을 보장한다
-      intervalRef.current = setInterval(step, 300);
-
-      /**
-       * 줄 하나가 이벤트 하나 — 프로토콜은 `game/turn-stream.ts`가 안다. 여기서는
-       * **글자를 버퍼에 붓고, 끝난 턴을 공개가 끝난 뒤에 앉힐 자리에 둘 뿐**이다.
-       */
-      const failure = await streamTurn(
-        gameId,
-        {
-          ...(operation ? { operation } : message ? { message } : {}),
-          orders,
-          ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
-          ...(talkTo ? { addresseeId: talkTo.playerId } : {}),
-        },
-        {
-          onReset: () => {
-            streamAccRef.current = "";
-            revealedRef.current = 0;
-            setStreamText("");
-            setStreamExhibits([]);
-          },
-          onDelta: (text) => {
-            streamAccRef.current += text;
-          },
-          onExhibit: (index, exhibit) => {
-            setStreamExhibits((list) => {
-              const next = [...list];
-              next[index] = exhibit;
-              return next;
-            });
-          },
-          onDone: (payload) => {
-            pendingPayloadRef.current = payload; // 공개가 끝나면 pump가 커밋
-          },
-        },
+      const failure = await playStream(
+        (handlers) =>
+          streamTurn(
+            gameId,
+            {
+              ...(operation ? { operation } : message ? { message } : {}),
+              orders,
+              ...(attachmentIds.length ? { mailMessageIds: attachmentIds } : {}),
+              ...(talkTo ? { addresseeId: talkTo.playerId } : {}),
+            },
+            handlers,
+          ),
+        adoptPayload,
       );
       if (failure) {
         fail(failure);
         // 서버가 그 턴을 마저 돌려 저장했을 수 있다 — 화면을 서버에 맞춘다
         if (!failure.settled) void resync();
       }
-      // `onDone`이 기다리는 동안 채운다 — 흐름 분석은 콜백 안의 대입을 보지 못해 위의
-      // `null` 대입에 묶어 둔다
-      if (!(pendingPayloadRef.current as GamePayload | null)) commit(null);
-      return failure ?? null;
+      return failure;
     },
     [
       input,
@@ -810,6 +865,7 @@ export function GameScreen({ gameId }: { gameId: string }) {
       gameId,
       saver,
       pauseLive,
+      playStream,
     ],
   );
 

@@ -86,7 +86,7 @@ export async function execute(
     const suffix = url.pathname.replace(/^\/api\/games(?:\/[^/]+)?/, "");
     let response: Response;
     if (url.pathname === "/api/games")
-      response = command.method === "GET" ? games.GET(req) : await games.POST(req);
+      response = command.method === "GET" ? games.GET(req) : await games.POST(req, onStream);
     else if (suffix === "/turn/stream") {
       const parsed = parseTurn(command.payload);
       if (!parsed.ok) response = parsed.response;

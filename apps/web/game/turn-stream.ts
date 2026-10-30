@@ -60,7 +60,12 @@ export type TurnStreamFailure = {
   retry: boolean;
 };
 
-type TurnStreamHandlers = {
+/** 새 게임 하나 — 부임할 구단과 감독 */
+type OpeningBody = { teamId: string; managerName: string; background: string };
+
+export type TurnStreamHandlers = {
+  /** 새 게임의 첫 장면이 앉을 세계 — 대화가 빈 화면이 첫 글자보다 먼저 온다 */
+  onOpening?: (payload: GamePayload) => void;
   /** 글자가 왔다 — 화면의 공개 펌프가 받는다 */
   onDelta: (text: string) => void;
   /**
@@ -104,6 +109,35 @@ export async function streamTurn(
   body: TurnStreamBody,
   handlers: TurnStreamHandlers,
 ): Promise<TurnStreamFailure | null> {
+  return followStream(
+    `/api/games/${gameId}/turn/stream`,
+    {
+      ...(body.message !== undefined ? { message: body.message } : {}),
+      ...(body.operation !== undefined ? { operation: body.operation } : {}),
+      ...(body.orders && body.orders.length > 0 ? { orders: body.orders } : {}),
+      ...(body.mailMessageIds?.length ? { mailMessageIds: body.mailMessageIds } : {}),
+      ...(body.addresseeId !== undefined ? { addresseeId: body.addresseeId } : {}),
+    },
+    handlers,
+  );
+}
+
+/**
+ * 새 게임을 흘려 받는다 — 첫 장면이 앉을 세계가 `onOpening`으로 먼저 오고, 첫 장면이
+ * 턴처럼 흐른다. 실패하면 게임은 저장되지 않았다(`settled`).
+ */
+export async function streamOpening(
+  body: OpeningBody,
+  handlers: TurnStreamHandlers,
+): Promise<TurnStreamFailure | null> {
+  return followStream("/api/games", body, handlers);
+}
+
+async function followStream(
+  path: string,
+  body: object,
+  handlers: TurnStreamHandlers,
+): Promise<TurnStreamFailure | null> {
   const abort = new AbortController();
   let idle: ReturnType<typeof setTimeout> | null = null;
   const stopWatch = () => {
@@ -117,16 +151,10 @@ export async function streamTurn(
 
   try {
     armWatch();
-    const res = await fetch(`/api/games/${gameId}/turn/stream`, {
+    const res = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...(body.message !== undefined ? { message: body.message } : {}),
-        ...(body.operation !== undefined ? { operation: body.operation } : {}),
-        ...(body.orders && body.orders.length > 0 ? { orders: body.orders } : {}),
-        ...(body.mailMessageIds?.length ? { mailMessageIds: body.mailMessageIds } : {}),
-        ...(body.addresseeId !== undefined ? { addresseeId: body.addresseeId } : {}),
-      }),
+      body: JSON.stringify(body),
       signal: abort.signal,
     });
     if (!res.ok || !res.body) {
@@ -167,6 +195,8 @@ export async function streamTurn(
         }
         if (evt.type === "attempt_reset") {
           handlers.onReset?.();
+        } else if (evt.type === "opening" && evt.payload) {
+          handlers.onOpening?.(evt.payload);
         } else if (evt.type === "delta" && evt.text) {
           handlers.onDelta(evt.text);
         } else if (evt.type === "exhibit" && evt.index !== undefined) {

@@ -14,7 +14,7 @@ import {
 import { runOnboarding } from "@gaffer/agents";
 import { withGameUsage, bindTurnTrace, llmErrorKind, noteTurn, traceTurn } from "@gaffer/llm";
 import { toPayload } from "@/game/store";
-import { errorDetail, turnErrorMessage } from "@/game/turn-runner";
+import { errorDetail, turnErrorMessage, type TurnStreamEvent } from "@/game/turn-runner";
 
 const CreateSchema = z.object({
   teamId: z.string().min(1),
@@ -40,8 +40,13 @@ export function GET(request: Request) {
   });
 }
 
-/** 새 게임 생성 — 배경 직접 입력 → 능력치 배분 (career.md §1) */
-export async function POST(request: Request) {
+/**
+ * 새 게임 생성 — 배경 직접 입력 → 능력치 배분 (career.md §1).
+ *
+ * `onStream`을 주면 첫 장면이 앉을 세계를 먼저 보내고 첫 장면을 흐르는 대로 보낸다 —
+ * 화면은 첫 글자가 닿을 때 게임으로 넘어간다. 저장은 여전히 첫 장면이 검증된 뒤다.
+ */
+export async function POST(request: Request, onStream?: (event: TurnStreamEvent) => void) {
   let raw: unknown;
   try {
     raw = await request.json();
@@ -81,7 +86,16 @@ export async function POST(request: Request) {
         before: turnDigestOf(state),
       });
       try {
-        const intro = await runOnboarding(state, background);
+        onStream?.({ type: "opening", payload: toPayload(state) });
+        const intro = await runOnboarding(
+          state,
+          background,
+          undefined,
+          onStream && {
+            onText: (text) => onStream({ type: "delta", text }),
+            onReset: () => onStream({ type: "attempt_reset" }),
+          },
+        );
         state.chat.push({
           role: "model",
           text: intro.text,

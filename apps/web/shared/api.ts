@@ -231,7 +231,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     localStorage.removeItem(storageKey);
     window.dispatchEvent(new Event("gaffer:job-finished"));
   };
-  if (path.endsWith("/turn/stream")) {
+  // 새 게임도 턴처럼 흐른다 — 첫 장면이 닿는 순간 화면이 넘어간다 (game/turn-stream.ts)
+  if (path.endsWith("/turn/stream") || path === "/api/games") {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
