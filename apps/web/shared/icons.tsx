@@ -54,6 +54,8 @@ const base = (size: number) => ({
  * 이 게임의 한 줄은 "말이 축구가 된다"이다. 그래서 마크도 둘을 겹친다 — 둥근
  * 몸통은 공(가운데 오각형 한 조각)이고, 왼쪽 아래로 꼬리가 나와 말풍선이 된다.
  * 22px에서도 읽히도록 안쪽은 오각형 **하나만** 둔다(솔기까지 그리면 뭉개진다).
+ * `public/favicon.svg`(와 거기서 뽑은 `favicon.ico` · `apple-touch-icon.png`)가 같은
+ * path를 쓴다 — 모양을 바꾸면 함께 바꾼다.
  */
 export function IconMark({ size = 22 }: IconProps) {
   return (
