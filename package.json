@@ -22,6 +22,7 @@
     "fill-squad-roles": "tsx scripts/fill-squad-roles.ts",
     "ea-ratings": "tsx scripts/ea-ratings.ts",
     "slot-reference": "tsx scripts/slot-reference.ts",
+    "portraits": "tsx scripts/portraits.ts",
     "e2e": "playwright test",
     "dev": "tsx scripts/dev.ts",
     "service": "pnpm --filter @gaffer/api start",

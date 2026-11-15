@@ -33,6 +33,13 @@
   text-underline-offset: 3px;
   transition: color var(--ease);
 }
+/* 얼굴이 앞에 선 이름 — 한 줄 안에서 얼굴과 이름이 한 덩어리로 붙는다 */
+.player-face {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  vertical-align: middle;
+}
 .player-name:hover,
 .player-name:focus-visible {
   color: var(--accent);
@@ -74,6 +81,52 @@
   padding: var(--pc-padding);
 }
 
+/**
+ * 얼굴과 머리 — 카드의 윗변을 가득 채우는 띠. 구단 색이 흉상 쪽에서 켜져 오른쪽으로 꺼진다.
+ * 본문 패딩을 되물려 카드의 세 변에 붙는다 — 띠가 패딩 안에 갇히면 색이 상자로 읽힌다.
+ */
+.pc-hero {
+  --kit: var(--dim);
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-5);
+  margin: calc(-1 * var(--pc-padding)) calc(-1 * var(--pc-padding)) 0;
+  padding: var(--pc-padding);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--kit) 24%, var(--pop)) 0%,
+    var(--pop) 72%
+  );
+}
+.pc-hero-side {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+/* 두드러진 축 셋 — 숫자가 주어라 스코어 서체로 크게 서고, 이름은 그 아래 한 줄 */
+.pc-edge {
+  display: flex;
+  gap: var(--sp-5);
+}
+.pc-edge-axis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-hair);
+}
+.pc-edge-axis b {
+  font-family: var(--font-score);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  line-height: var(--lh-fig);
+  font-variant-numeric: tabular-nums;
+}
+.pc-edge-axis em {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
 /* 머리 — 이름이 주어이고 종합이 오른쪽 끝에 홀로 선다 */
 .pc-head {
   display: flex;
@@ -236,6 +289,13 @@
 @media (max-width: 699px) {
   .player-card-veil {
     --pc-padding: 16px;
+  }
+  /* 좁은 카드 — 흉상이 한 단 줄고 띠의 간격이 따라 준다 */
+  .pc-hero {
+    gap: var(--sp-4);
+  }
+  .pc-hero .portrait {
+    width: 112px;
   }
 }
 /**

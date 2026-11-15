@@ -15,7 +15,6 @@ import {
   formatMoney,
   placeOf,
   positionAtPoint,
-  positionGroupOf,
   positionProficiency,
   sameCard,
   separateBoardPoints,
@@ -38,10 +37,12 @@ import {
   swappedLists,
   type BoardState,
 } from "@/screens/squad/board-cards";
-import { IconBoard, IconClose, IconPerson, SPEAKER_ICON } from "@/shared/icons";
+import { IconBoard, IconClose } from "@/shared/icons";
 import { usePlayerCardActions } from "@/shared/player-card";
 import { contractUntil, humanDate } from "@/shared/dateline";
 import { PitchChip, PitchGround } from "../../shared/pitch";
+import { shortName } from "../../shared/player-names";
+import { Portrait } from "../../shared/portrait";
 import { createLineupSaver, type LineupSaveOutcome, type LineupSaver } from "./lineup-saver";
 import { useBoardDrag } from "./board-drag";
 import { Margin } from "../../shared/player-marks";
@@ -770,23 +771,11 @@ export function SquadView({
   }
 
   /**
-   * 칩의 클래스 — **자리의 색과 상태의 테두리는 다른 채널이다.**
-   *
-   * 색(배경)은 "이 자리가 무슨 자리인가"를 말한다: 최전방 붉게 · 중원 초록 ·
-   * 수비 파랑 · 골키퍼 노랑. 판을 훑을 때 라인이 색 띠로 먼저 읽힌다.
-   * 테두리는 **상태**가 이미 쓰고 있다(선택=초록, 못 뛰는 선수=빨강) — 여기에
-   * 자리 색까지 얹으면 초록 테두리가 "고른 것"인지 "미드필더"인지 알 수 없다.
-   *
-   * 색의 근거는 선수의 주 포지션군이 아니라 **지금 서 있는 자리**다. 센터백을
-   * 윙에 세우면 그 칩은 최전방 색이어야 판이 실제 배치대로 읽힌다.
+   * 칩의 **상태** — 고른 칩과 못 뛰는 선수. 얼굴의 링이 그것을 말한다
+   * (`.pitch-chip.selected` · `.unavailable`).
    */
-  const chipClass = (p: SquadRow | undefined, selected: boolean, code: string | null) => {
-    const group = code ? (positionGroupOf(code) ?? null) : null;
-    return (
-      (group ? `g-${group.toLowerCase()}` : "") +
-      `${selected ? " selected" : ""}${p && !p.available ? " unavailable" : ""}`
-    );
-  };
+  const chipClass = (p: SquadRow | undefined, selected: boolean) =>
+    `${selected ? "selected" : ""}${p && !p.available ? " unavailable" : ""}`;
 
   /**
    * 명단은 **드래그 프레임마다 다시 그리지 않는다.** 43행 × (게이지·상태바·화살표
@@ -799,6 +788,7 @@ export function SquadView({
         players={localRows.filter((p) =>
           roster === "reserve" ? localReserve.has(p.id) : !localReserve.has(p.id),
         )}
+        team={game.team}
         sort={sort}
         onSort={onSortRow}
         selectedId={selectedPlayer?.id ?? null}
@@ -875,6 +865,7 @@ export function SquadView({
       onMoveSquadRow,
       onSortRow,
       tierById,
+      game.team,
     ],
   );
 
@@ -1058,7 +1049,7 @@ export function SquadView({
                   <PitchChip
                     key={i}
                     as="button"
-                    variant={`${chipClass(p, selected, code)}${dragging ? " dragging" : ""}`}
+                    variant={`${chipClass(p, selected)}${dragging ? " dragging" : ""}`}
                     style={{ left: `${point.x}%`, top: `${point.y}%` }}
                     onPointerDown={(e) => drag.onPointerDown(i, e)}
                     onClick={() => {
@@ -1082,6 +1073,10 @@ export function SquadView({
                         : (code ?? "")
                     }
                     code={code}
+                    playerId={p?.id}
+                    teamId={game.team.id}
+                    colours={game.team.colours}
+                    condition={p?.condition}
                     squadNumber={p?.squadNumber}
                     cardTag={cardTag}
                     captain={p?.isCaptain ? "captain" : p?.isViceCaptain ? "vice" : null}
@@ -1107,6 +1102,37 @@ export function SquadView({
                 );
               })}
             </PitchGround>
+
+            {/* 벤치 — 판 바로 아래 같은 얼굴로 선다. 누르면 고르기만 한다(명단 행과 같다):
+                자리를 바꾸는 손잡이는 고른 뒤의 화살표 하나뿐이다 */}
+            {benchDesignated.length > 0 && (
+              <div className="bench-strip" data-testid="bench-strip" aria-label="벤치">
+                {benchDesignated.map((p) => (
+                  <Button
+                    variant="bare"
+                    key={p.id}
+                    className={`bench-seat${
+                      selection?.kind === "bench" && selection.id === p.id ? " selected" : ""
+                    }${p.available ? "" : " unavailable"}`}
+                    title={`${p.name} · ${p.position} ${p.overall}`}
+                    onClick={() => clickRoster(p.id)}
+                  >
+                    <Portrait
+                      playerId={p.id}
+                      name={p.name}
+                      squadNumber={p.squadNumber}
+                      teamId={game.team.id}
+                      colours={game.team.colours}
+                      size="s"
+                    />
+                    <span className="bench-name">{shortName(p.name)}</span>
+                    <span className="bench-meta">
+                      {p.position} <b>{p.overall}</b>
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            )}
 
             <TacticsPanel tactics={board.tactics} editing={usable} onChange={changeTactics} />
             {/* 죽은 공은 접히지 않는다 — 절반이 읽는 값이고, 접어 두면 지정한 적 없는
@@ -1159,7 +1185,7 @@ export function SquadView({
             </span>
           </div>
           <div className="roster-scroll">{rosterTable}</div>
-          <StaffPanel staff={squad.staff} today={game.views.calendar.today} />
+          <StaffPanel staff={squad.staff} today={game.views.calendar.today} teamId={game.team.id} />
         </div>
       </div>
     </div>
@@ -1174,10 +1200,18 @@ export function SquadView({
  * 테두리 없는 칸으로만 선다 — 버튼처럼 생긴 것이 하나라도 있으면 감독은 여기서
  * 사람을 자를 수 있다고 읽는다.
  *
- * 아이콘은 채팅의 화자 머리와 **같은 표**(`SPEAKER_ICON`)를 본다: 훈련장에서 본 얼굴이
+ * 얼굴 자리는 채팅의 화자 머리와 **같은 틀**(`Portrait`)이다: 훈련장에서 본 얼굴이
  * 대화에서 말을 걸 때 같은 그림이어야 그 사람인 줄 안다.
  */
-function StaffPanel({ staff, today }: { staff: OfficeStaff[]; today: string }) {
+function StaffPanel({
+  staff,
+  today,
+  teamId,
+}: {
+  staff: OfficeStaff[];
+  today: string;
+  teamId: string;
+}) {
   if (staff.length === 0) return null;
   return (
     <div className="club-staff" data-testid="club-staff">
@@ -1187,12 +1221,9 @@ function StaffPanel({ staff, today }: { staff: OfficeStaff[]; today: string }) {
       </div>
       <ul className="club-staff-list">
         {staff.map((person) => {
-          const Icon = SPEAKER_ICON[person.role] ?? IconPerson;
           return (
             <li key={person.name}>
-              <span className="cs-icon" aria-hidden>
-                <Icon size={13} />
-              </span>
+              <Portrait name={person.name} teamId={teamId} size="s" />
               <div className="cs-person">
                 <div className="cs-heading">
                   <span className="cs-name">{person.name}</span>

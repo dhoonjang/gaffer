@@ -37,6 +37,8 @@ export * from "./app/turn-operation";
 export * from "./app/lab-game";
 export * from "./core/money";
 export * from "./team/crest";
+export * from "./team/club-colours";
+export * from "./players/portrait";
 export * from "./core/tick-event";
 export * from "./season/league-tone";
 export * from "./core/josa";

@@ -18,7 +18,7 @@ import {
  * 그래프를 끌어오지 않는다. 불변식은 색이 어디 살든 문장이 지켜야 하므로 여기서 잰다
  * (tokens.css 불변식).
  */
-import { CLUB_COLOURS } from "../../../engine/src/core/catalog/club-colours";
+import { CLUB_COLOURS } from "../../src/team/club-colours";
 
 /** 절차 생성 문장 (crest.ts · team.md §3.1) */
 

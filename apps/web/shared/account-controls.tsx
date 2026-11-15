@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, buttonClass } from "./button";
 import { IconSettings } from "./icons";
+import { PORTRAIT_BASE } from "./portrait";
 import { useSession } from "./session";
 
 /** 피드백 메일의 수신처 — 화면에는 드러내지 않는다 */
 const FEEDBACK_MAILTO = "mailto:dhoonjang@gmail.com";
+
+/** 초상의 원본 저작자·라이선스 표 — 초상과 같은 폴더에 선다. 초상이 없는 배포에는 링크도 없다 */
+const PORTRAIT_CREDITS = PORTRAIT_BASE === null ? null : `${PORTRAIT_BASE}/credits.html`;
 
 /**
  * 설정 — **톱니바퀴 하나.** 게임 밖의 일만 모은다: 로그인한 계정, 피드백 보내기, 로그아웃.
@@ -66,6 +70,16 @@ export function AccountControls({ inRail = false }: { inRail?: boolean }) {
           <a className={buttonClass("ghost", "sm")} href={FEEDBACK_MAILTO}>
             피드백 보내기
           </a>
+          {PORTRAIT_CREDITS !== null && (
+            <a
+              className={buttonClass("ghost", "sm")}
+              href={PORTRAIT_CREDITS}
+              target="_blank"
+              rel="noreferrer"
+            >
+              초상 출처
+            </a>
+          )}
           {!local && (
             <Button variant="ghost" size="sm" onClick={logout}>
               로그아웃
@@ -85,6 +99,16 @@ export function AccountControls({ inRail = false }: { inRail?: boolean }) {
         <a className="account-drawer-link" href={FEEDBACK_MAILTO}>
           피드백 보내기
         </a>
+        {PORTRAIT_CREDITS !== null && (
+          <a
+            className="account-drawer-link"
+            href={PORTRAIT_CREDITS}
+            target="_blank"
+            rel="noreferrer"
+          >
+            초상 출처
+          </a>
+        )}
         {!local && (
           <Button variant="bare" className="account-drawer-link" onClick={logout}>
             로그아웃

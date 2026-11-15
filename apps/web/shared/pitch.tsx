@@ -2,8 +2,11 @@
 
 import { useCallback, useState, type KeyboardEvent } from "react";
 import type { CSSProperties, PointerEvent, ReactNode, Ref } from "react";
+import { type ClubColours, conditionBand } from "@gaffer/domain";
+import type { ConditionRead } from "@gaffer/engine";
 import { nextInDirection, type MarkerDirection } from "@/shared/pitch-layout";
 import { Button } from "./button";
+import { Portrait } from "./portrait";
 
 /**
  * ── 전술판 ────────────────────────────────────────────────
@@ -12,7 +15,7 @@ import { Button } from "./button";
  * 견주므로, 칩 한 줄의 구성이 갈리면 같은 것을 두 번 배워야 한다. 두 파일이
  * 각자 그리면 한쪽에만 들어간 손질이 다른 쪽에서는 빠진 채로 남는다.
  *
- * 여기가 **구조**를 갖는다 — 그라운드의 선, 칩의 세 줄. 상태(고른 칩·못 뛰는
+ * 여기가 **구조**를 갖는다 — 그라운드의 선, 칩의 얼굴과 두 줄. 상태(고른 칩·못 뛰는
  * 선수·지친 상대)는 부르는 쪽이 클래스로 얹는다.
  */
 
@@ -114,6 +117,11 @@ type PitchChipProps = {
   as?: "button" | "span" | undefined;
   /** 지금 서 있는 자리 (좌표에서 나온 코드) */
   code: string | null;
+  /** 얼굴을 찾는 열쇠 — 빈 자리는 없다 */
+  playerId?: string | null | undefined;
+  /** 티셔츠 색을 정하는 소속 */
+  teamId?: string | null | undefined;
+  colours?: ClubColours | undefined;
   squadNumber?: number | null | undefined;
   cardTag?: PitchCardTag | null | undefined;
   /**
@@ -126,9 +134,11 @@ type PitchChipProps = {
   name: string | null;
   /** 이 자리에서 내는 전력 */
   ovr: ReactNode;
+  /** 남은 체력 — 얼굴 둘레의 호가 된다. 모르면 호가 서지 않는다 */
+  condition?: ConditionRead | undefined;
   /** 전력 뒤에 서는 표식 — 오차·부상·경고 */
   metaExtra?: ReactNode | undefined;
-  /** 상태 클래스 (`g-mf` · `selected` · `theirs` …) — 구조는 여기가, 상태는 부르는 쪽이 */
+  /** 상태 클래스 (`selected` · `theirs` · `unavailable` …) — 구조는 여기가, 상태는 부르는 쪽이 */
   variant?: string | undefined;
   style?: CSSProperties | undefined;
   title?: string | undefined;
@@ -142,20 +152,27 @@ type PitchChipProps = {
 };
 
 /**
- * 칩 — **세 줄.** (번호 · 자리 · 카드) / (Ⓒ 이름) / (전력 · 표식)
+ * 칩 — **얼굴 하나와 두 줄.** 얼굴(번호 · 완장 · 전력) / 이름 / (자리 · 카드)
  *
- * 등번호는 **자리 줄**에 선다. 이름 옆에 붙이던 때는 칩 폭(13cqw)에서 두 글자를
- * 빼앗아 다섯 자짜리 성이 통째로 잘렸다 — 자리 줄은 세 글자뿐이라 번호를 앉힐
- * 자리가 있다. 순서(번호 → 자리)는 명단 표와 같다.
+ * 누구인지는 얼굴이 말하고, 숫자 셋은 얼굴의 모서리에 붙는다: 왼쪽 위가 등번호, 오른쪽 위가
+ * 완장, 오른쪽 아래가 이 자리의 전력이다. **둘레의 호는 남은 체력이다** — 명단으로 건너가지
+ * 않아도 판에서 누가 지쳤는지가 보인다 (색은 명단 막대와 같은 밴드다).
+ *
+ * 얼굴은 여기서 손잡이가 아니다 — 칩 전체가 고르고 끄는 손잡이라 그 안에 또 하나를 두지
+ * 않는다. 카드는 칩을 고른 뒤의 상세가 연다.
  */
 export function PitchChip({
   as = "span",
   code,
+  playerId,
+  teamId,
+  colours,
   squadNumber,
   cardTag,
   captain,
   name,
   ovr,
+  condition,
   metaExtra,
   variant,
   style,
@@ -168,11 +185,38 @@ export function PitchChip({
 }: PitchChipProps) {
   const body = (
     <>
-      <span className="slot-pos">
+      <span
+        className={`chip-face${condition ? ` ${conditionBand(condition.value)}` : ""}`}
+        style={condition ? ({ "--fit": condition.low } as CSSProperties) : undefined}
+      >
+        {name === null ? (
+          <span className="chip-empty" aria-hidden />
+        ) : (
+          <Portrait
+            playerId={playerId}
+            name={name}
+            squadNumber={squadNumber}
+            teamId={teamId}
+            colours={colours}
+            size="m"
+          />
+        )}
         {squadNumber !== null && squadNumber !== undefined && (
           <i className="shirt-no">{squadNumber}</i>
         )}
-        {/* 자리 코드는 자기 요소를 갖는다 — 한 줄에 번호·카드가 함께 서므로
+        {captain && (
+          <b className="slot-cap" title={captain === "captain" ? "주장" : "부주장"}>
+            {captain === "captain" ? "C" : "V"}
+          </b>
+        )}
+        <span className="slot-meta">
+          <b>{ovr}</b>
+          {metaExtra}
+        </span>
+      </span>
+      <span className="slot-name">{name || "—"}</span>
+      <span className="slot-pos">
+        {/* 자리 코드는 자기 요소를 갖는다 — 한 줄에 카드가 함께 서므로
             "이 칩의 자리"를 가리킬 자리가 하나 있어야 한다 */}
         <span className="slot-code">{code}</span>
         {cardTag && (
@@ -185,18 +229,6 @@ export function PitchChip({
               : cardTag.title}
           </em>
         )}
-      </span>
-      <span className="slot-name">
-        {captain && (
-          <b className="slot-cap" title={captain === "captain" ? "주장" : "부주장"}>
-            {captain === "captain" ? "Ⓒ" : "Ⓥ"}
-          </b>
-        )}
-        {name || "—"}
-      </span>
-      <span className="slot-meta">
-        <b>{ovr}</b>
-        {metaExtra}
       </span>
     </>
   );

@@ -9,7 +9,6 @@ import {
   TACTIC_TOGGLES,
   anchorOf,
   formatScore,
-  positionGroupOf,
   separateBoardPoints,
   tacticToggleValue,
   tacticToggleWord,
@@ -19,6 +18,7 @@ import { XG_BOX, xgRaceOf } from "@/screens/match/xg-race";
 import { IconBoard } from "@/shared/icons";
 import { ConditionBar } from "@/shared/condition-bar";
 import { PitchChip, PitchGround, useRovingMarkers } from "../../shared/pitch";
+import { Portrait } from "../../shared/portrait";
 import { usePlayerCard } from "../../shared/player-card";
 import { Crest } from "../../shared/crest";
 import { Button } from "@/shared/button";
@@ -123,13 +123,13 @@ export function MatchOpponent({
         <div className="squad-board-col">
           {/* 우리 쪽과 같은 덩어리 — 판과 전술이 한 장으로 붙는다 (SquadView 참고) */}
           <div className="board-stack">
-            <OpponentBoard players={players} tactics={tactics} />
+            <OpponentBoard players={players} tactics={tactics} team={match[them]} />
             <SideTactics tactics={tactics} />
           </div>
         </div>
         <div className="squad-side-col">
           <div className="roster-scroll">
-            <OpponentTable players={players} bench={bench} />
+            <OpponentTable players={players} bench={bench} team={match[them]} />
           </div>
         </div>
       </div>
@@ -471,9 +471,12 @@ function Dots({ value, align, title }: { value: number; align: "left" | "right";
 function OpponentBoard({
   players,
   tactics,
+  team,
 }: {
   players: MatchPlayer[];
   tactics: Match["tactics"]["home"];
+  /** 얼굴의 티셔츠 색을 정하는 구단 */
+  team: Match["home"];
 }) {
   const card = usePlayerCard();
   const points = separateBoardPoints(players.map((p) => anchorOf(p.position)));
@@ -490,7 +493,6 @@ function OpponentBoard({
       >
         {players.map((p, i) => {
           const point = points[i]!;
-          const group = positionGroupOf(p.position);
           return (
             <PitchChip
               key={p.id}
@@ -498,7 +500,7 @@ function OpponentBoard({
               onClick={card ? () => card.open(p.id) : undefined}
               markerId={card ? p.id : undefined}
               tabIndex={card ? roving.tabIndexOf(p.id) : undefined}
-              variant={`theirs${group ? ` g-${group.toLowerCase()}` : ""}${p.gassed ? " gassed" : ""}`}
+              variant={`theirs${p.gassed ? " gassed" : ""}`}
               style={{ left: `${point.x}%`, top: `${point.y}%` }}
               testId={`opp-slot-${p.id}`}
               title={[
@@ -507,6 +509,10 @@ function OpponentBoard({
                 `${p.condition.label} — 체력 ${p.condition.low}~${p.condition.high}`,
               ].join("\n")}
               code={p.position}
+              playerId={p.id}
+              teamId={team.id}
+              colours={team.colours}
+              condition={p.condition}
               squadNumber={p.squadNumber}
               name={p.name}
               ovr={p.effective}
@@ -659,7 +665,15 @@ function TeamTotals({ totals }: { totals: MatchTotals }) {
  * 표기로 선다. 우리 표에서 나이·평점은 `hide-sm`으로 좁을 때 접히는 열이라,
  * 좁은 화면에서는 두 표가 같은 열을 세운다.
  */
-function OpponentTable({ players, bench }: { players: MatchPlayer[]; bench: MatchPlayer[] }) {
+function OpponentTable({
+  players,
+  bench,
+  team,
+}: {
+  players: MatchPlayer[];
+  bench: MatchPlayer[];
+  team: Match["home"];
+}) {
   const groups = [
     { slug: "start", rows: players },
     { slug: "bench", rows: bench },
@@ -695,6 +709,15 @@ function OpponentTable({ players, bench }: { players: MatchPlayer[]; bench: Matc
                 <td className="squad-name">
                   {/* 등번호는 이름 앞에 — 우리 명단·전술판 칩과 같은 자리·같은 모양 */}
                   <span className="row-name">
+                    <Portrait
+                      playerId={p.id}
+                      name={p.name}
+                      squadNumber={p.squadNumber}
+                      teamId={team.id}
+                      colours={team.colours}
+                      size="s"
+                      opens
+                    />
                     {p.squadNumber !== null && (
                       <i className="shirt-no" title={`${p.squadNumber}번`}>
                         {p.squadNumber}

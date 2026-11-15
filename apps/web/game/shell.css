@@ -2239,6 +2239,14 @@ textarea {
     /* 모서리를 자식이 넘지 않게 — 판의 초록이 각진 채로 삐져나온다 */
     overflow: hidden;
   }
+  /* 벤치 줄이 선 덩어리 — 그 줄의 높이만큼 판이 더 물러난다. 안 빼면 줄이 덩어리 밖으로 잘린다 */
+  .board-open .board-stack:has(.bench-strip) {
+    width: min(
+      100cqw,
+      calc((100cqh - var(--board-foot) - var(--bench-foot)) * var(--pitch-ratio-portrait)),
+      720px
+    );
+  }
   /* 판은 이제 **폭이 먼저**다 — 남는 높이를 재던 계산은 덩어리가 이미 했다 */
   .board-open .board-stack .pitch-wrap {
     flex: none;

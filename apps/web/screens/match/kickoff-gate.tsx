@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 import type { MatchView } from "@gaffer/engine";
 import {
+  anchorOf,
   TACTIC_AXES,
   TACTIC_SCALE_NEUTRAL,
   TACTIC_TOGGLES,
@@ -13,6 +14,8 @@ import {
 import { Crest } from "@/shared/crest";
 import { humanDate } from "@/shared/dateline";
 import { Button } from "@/shared/button";
+import { shortName } from "@/shared/player-names";
+import { Portrait } from "@/shared/portrait";
 
 type GateTeam = MatchView["home"];
 type GateTactics = MatchView["tactics"]["home"];
@@ -30,7 +33,7 @@ const FIXTURE_CREST = 64;
  * 손잡이를 두면 되돌아간 자리에서 다시 열 방법이 없다.
  *
  * 경기장에 들어서기 전 감독이 마지막으로 읽는 한 장이라 오늘의 판이 통째로 선다:
- * 데이트라인 · 대진 · 팀시트 · 감독 노트 · 입장. 값은 전부 뷰가 이미 접어 온
+ * 데이트라인 · 대진 · 얼굴로 선 팀시트 · 감독 노트 · 입장. 값은 전부 뷰가 이미 접어 온
  * 것이고 게이트가 새로 만드는 사실은 없다.
  */
 export function KickoffGate({
@@ -125,23 +128,80 @@ function FixtureSide({ team, venue, rating }: { team: GateTeam; venue: string; r
   );
 }
 
+/** 같은 줄로 묶는 세로 거리(%) — 이 안이면 한 줄에 선 선수들이다 */
+const SHEET_LINE_SPAN = 7;
+/** 팀시트 판의 위아래 여백(%) — 맨 윗줄과 맨 아랫줄의 얼굴이 판 밖으로 나가지 않는 자리 */
+const SHEET_TOP = 10;
+const SHEET_BOTTOM = 88;
+/** 한 줄 안에서 얼굴 사이가 이보다 좁으면(%) 그 줄을 고르게 다시 편다 */
+const SHEET_MIN_GAP = 19;
+const SHEET_SPREAD = 22;
+
 /**
- * 팀시트 한 열 — **등번호 · 포지션 · 이름뿐이다.**
+ * 팀시트의 자리 — 경기 좌표를 **줄 단위로 고르게 편다.**
  *
+ * 전술판의 좌표를 그대로 옮기면 작은 판에서 얼굴과 이름이 서로 덮는다(수비 넷과 골키퍼,
+ * 겹친 미드필드). 팀시트가 말할 것은 정확한 거리가 아니라 **어느 줄에 누가 서는가**라,
+ * 세로가 가까운 선수를 한 줄로 묶어 줄 사이를 같은 간격으로 놓고, 줄 안이 좁으면 좌우로 편다.
+ */
+function sheetLayout(points: readonly { x: number; y: number }[]): { x: number; y: number }[] {
+  const order = points.map((p, i) => ({ ...p, i })).sort((a, b) => a.y - b.y);
+  const lines: (typeof order)[] = [];
+  for (const p of order) {
+    const line = lines[lines.length - 1];
+    if (line && p.y - line[0]!.y <= SHEET_LINE_SPAN) line.push(p);
+    else lines.push([p]);
+  }
+  const out = points.map((p) => ({ x: p.x, y: p.y }));
+  lines.forEach((line, row) => {
+    const y =
+      lines.length === 1
+        ? (SHEET_TOP + SHEET_BOTTOM) / 2
+        : SHEET_TOP + ((SHEET_BOTTOM - SHEET_TOP) * row) / (lines.length - 1);
+    const across = [...line].sort((a, b) => a.x - b.x);
+    const tight = across.some((p, k) => k > 0 && p.x - across[k - 1]!.x < SHEET_MIN_GAP);
+    across.forEach((p, k) => {
+      const x = tight ? 50 + (k - (across.length - 1) / 2) * SHEET_SPREAD : p.x;
+      out[p.i] = { x, y };
+    });
+  });
+  return out;
+}
+
+/**
+ * 팀시트 — **열한 얼굴이 포메이션 모양 그대로 선다.** 두 팀 모두 공격이 위다.
+ *
+ * 얼굴 · 짧은 이름뿐이다(열한 얼굴 아래에 전체 이름이 서면 줄이 서로 덮는다). 자리는 서 있는 곳이 말하고, 등번호는 얼굴이 없는 선수의 틀에 선다.
  * 셋은 90분 동안 보이는 공개 사실이라 안개를 지나지 않지만 선수별 전력은 상대 쪽에서
- * 흐린 값이다 — 열한 줄에 흐린 숫자를 세우면 팀시트가 스카우팅 리포트가 된다
+ * 흐린 값이다 — 열한 자리에 흐린 숫자를 세우면 팀시트가 스카우팅 리포트가 된다
  * (match.md §8).
+ *
+ * 자리는 경기가 쓰는 좌표이고(`point`), 없으면 포지션의 기준 자리다 — 줄 단위로 고르게
+ * 펴서 세운다(`sheetLayout`).
  */
 function TeamSheet({ team, players }: { team: GateTeam; players: GatePlayer[] }) {
+  const points = sheetLayout(players.map((p) => p.point ?? anchorOf(p.position)));
   return (
     <div className={`kg-sheet ${team.ours ? "ours" : "theirs"}`}>
       <b className="kg-sheet-head">{team.name}</b>
       <ol className="kg-xi-list">
-        {players.map((p) => (
-          <li className="kg-line" key={p.id}>
-            <span className="kg-no fig">{p.squadNumber ?? "—"}</span>
-            <span className="kg-pos">{p.position}</span>
-            <span className="kg-player">{p.name}</span>
+        {players.map((p, i) => (
+          <li
+            className="kg-line"
+            key={p.id}
+            style={{ left: `${points[i]!.x}%`, top: `${points[i]!.y}%` }}
+            title={`${p.name} · ${p.position}`}
+          >
+            <Portrait
+              playerId={p.id}
+              name={p.name}
+              squadNumber={p.squadNumber}
+              teamId={team.id}
+              colours={team.colours}
+              size="s"
+              opens
+            />
+            <span className="kg-player">{shortName(p.name)}</span>
           </li>
         ))}
       </ol>

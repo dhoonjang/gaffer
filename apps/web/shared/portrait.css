@@ -1,0 +1,112 @@
+/**
+ * ── 초상 (tokens.css 「초상」 · shared/portrait.tsx) ─────────────────────
+ *
+ * 틀은 둘뿐이다 — 원(머리)과 4:5(흉상). 자산이 그 비율로 잘려 오므로 화면은 틀의 폭만 정한다:
+ * 높이를 따로 주면 사람이 눌리거나 틀에 빈 띠가 선다.
+ */
+.portrait {
+  --kit: var(--dim);
+  position: relative;
+  display: inline-block;
+  flex: none;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 0;
+  border: 0;
+  vertical-align: middle;
+  color: var(--text);
+  /* 구단 색은 위에서 켜지고 바닥으로 가라앉는다 — 얼굴 뒤가 가장 밝아 머리의 윤곽이 선다 */
+  background: radial-gradient(
+    120% 85% at 50% 22%,
+    color-mix(in srgb, var(--kit) 58%, var(--bg)) 0%,
+    color-mix(in srgb, var(--kit) 26%, var(--bg)) 62%,
+    color-mix(in srgb, var(--kit) 10%, var(--bg)) 100%
+  );
+}
+.portrait.head {
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.portrait.bust {
+  aspect-ratio: 4 / 5;
+  border-radius: var(--r-sm);
+}
+.portrait.xs {
+  width: 24px;
+}
+.portrait.s {
+  width: 32px;
+}
+.portrait.m {
+  width: 48px;
+}
+.portrait.l {
+  width: 72px;
+}
+.portrait.xl {
+  width: 168px;
+}
+/* 한 장의 왼쪽 칸이 사람이다 — 두 칸짜리 그림을 틀의 두 배 폭으로 놓고 오른쪽을 가린다 */
+.portrait img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  max-width: none;
+  height: 100%;
+  user-select: none;
+  pointer-events: none;
+}
+/* 오른쪽 칸이 티셔츠 마스크다 — 회색 음영 위에 구단 색을 곱한다 */
+.portrait-kit {
+  position: absolute;
+  inset: 0;
+  background: var(--kit);
+  mix-blend-mode: multiply;
+  mask-image: var(--portrait-src);
+  mask-size: 200% 100%;
+  mask-position: 100% 0;
+  mask-repeat: no-repeat;
+  pointer-events: none;
+}
+/* 초상이 없는 자리 — 등번호(스코어 서체)나 머리글자 */
+.portrait.blank {
+  display: inline-grid;
+  place-items: center;
+}
+.portrait.blank b {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  line-height: var(--lh-fig);
+  letter-spacing: 0;
+}
+.portrait.blank b.fig {
+  font-family: var(--font-score);
+  font-size: var(--fs-sm);
+}
+.portrait.blank.m b {
+  font-size: var(--fs-md);
+}
+.portrait.blank.m b.fig {
+  font-size: var(--fs-lg);
+}
+.portrait.blank.l b,
+.portrait.blank.l b.fig {
+  font-size: var(--fs-xl);
+}
+.portrait.blank.xl b,
+.portrait.blank.xl b.fig {
+  font-size: var(--fs-3xl);
+}
+/* 카드를 여는 손잡이 — 테두리가 아니라 링으로 켜진다 (tokens.css 「조작」) */
+.portrait.opens {
+  cursor: pointer;
+  transition: box-shadow var(--ease);
+}
+.portrait.opens:hover {
+  box-shadow: 0 0 0 2px var(--text-2);
+}
+.portrait.opens:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}

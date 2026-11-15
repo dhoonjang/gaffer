@@ -1,7 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { FIELD, type LiveMatchFrame } from "@gaffer/domain";
+import { FIELD, kitInkIsLight, type LiveMatchFrame, matchKitsOf } from "@gaffer/domain";
 import type { MatchView } from "@gaffer/engine";
+import { Portrait } from "@/shared/portrait";
+
+/** 공에서 이 거리(m) 안에 있고 공이 낮게 깔려 있으면 그 선수가 공을 가진 것으로 본다 */
+const CARRY_REACH = 2.2;
+const CARRY_HEIGHT = 1;
+/** 골 카드가 판 위에 머무는 시간 (ms) */
+const GOAL_CARD_MS = 4500;
 
 const EVENT_LABEL: Record<string, string> = {
   goal: "골",
@@ -60,6 +67,12 @@ export function LivePitch({
   }>({ previous: null, current: frame, at: 0 });
   const model = useRef(match);
   model.current = match;
+  /**
+   * 두 팀의 말 색 — 구단의 색이다 (`matchKitsOf`). 색을 모르는 구단이 끼면 토큰의 기본
+   * 두 색으로 선다. 그리는 루프가 매 프레임 읽으므로 ref에 둔다.
+   */
+  const kits = useRef(matchKitsOf(match.home.colours, match.away.colours));
+  kits.current = matchKitsOf(match.home.colours, match.away.colours);
   const [selected, setSelected] = useState<string | null>(null);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
@@ -153,11 +166,21 @@ export function LivePitch({
           ctx.beginPath();
           ctx.ellipse(x + 0.25, y + 0.6, 1.55, 0.9, 0, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = ours ? palette["ours"]! : palette["theirs"]!;
+          const kit = kits.current?.[player.side];
+          // 말 위의 잉크 — 구단 색 위에서는 그 색이 밝은지 어두운지가 정한다
+          const light = kit !== undefined && kitInkIsLight(kit);
+          ctx.fillStyle = kit ?? (ours ? palette["ours"]! : palette["theirs"]!);
           ctx.beginPath();
           ctx.arc(x, y, 1.65, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = ours ? palette["our-outline"]! : palette["their-outline"]!;
+          ctx.strokeStyle =
+            kit === undefined
+              ? ours
+                ? palette["our-outline"]!
+                : palette["their-outline"]!
+              : light
+                ? palette["ball"]!
+                : palette["number"]!;
           ctx.lineWidth = 0.22;
           ctx.stroke();
           const speed = Math.hypot(player.vx, player.vy);
@@ -167,16 +190,11 @@ export function LivePitch({
             ctx.lineTo(x + (player.vx / speed) * 2.25, y + (player.vy / speed) * 2.25);
             ctx.stroke();
           }
-          ctx.fillStyle = palette["number"]!;
+          ctx.fillStyle = light ? palette["ball"]! : palette["number"]!;
           ctx.font = "bold 1.65px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(String(info?.squadNumber ?? "·"), x, y + 0.1);
-          if (selectedRef.current === player.id && info) {
-            ctx.font = "1.65px sans-serif";
-            ctx.fillStyle = palette["ball"]!;
-            ctx.fillText(info.name, x, Math.max(3, y - 3.3));
-          }
         }
         const x = interpolate(previous?.ball.x, current.ball.x),
           y = interpolate(previous?.ball.y, current.ball.y);
@@ -198,6 +216,60 @@ export function LivePitch({
     return () => cancelAnimationFrame(request);
   }, []);
   const seconds = Math.floor(frame?.seconds ?? match.minute * 60);
+
+  const sideOf = (id: string) => frame?.players.find((p) => p.id === id)?.side;
+  const infoOf = (id: string) =>
+    match.onPitch.home.find((p) => p.id === id) ?? match.onPitch.away.find((p) => p.id === id);
+
+  /**
+   * 지금 공을 가진 선수 — 공 곁에 선 가장 가까운 한 명. 패스가 날아가는 동안은 아무도
+   * 가깝지 않으므로 **마지막으로 가졌던 선수가 남는다**: 그때마다 지우면 이름표가 깜빡인다.
+   */
+  const carrier = useRef<string | null>(null);
+  if (frame && frame.ball.z < CARRY_HEIGHT) {
+    let best: string | null = null;
+    let reach = CARRY_REACH;
+    for (const p of frame.players) {
+      const d = Math.hypot(p.x - frame.ball.x, p.y - frame.ball.y);
+      if (d < reach) {
+        reach = d;
+        best = p.id;
+      }
+    }
+    if (best !== null) carrier.current = best;
+  }
+  // 고른 선수가 있으면 그 사람이, 없으면 공을 가진 선수가 이름표에 선다
+  const taggedId = selected ?? carrier.current;
+  const tagged = taggedId ? infoOf(taggedId) : undefined;
+  const taggedSide = taggedId ? sideOf(taggedId) : undefined;
+
+  /**
+   * 골 카드 — 골이 들어간 순간 판 위에 그 선수의 얼굴이 선다. 스코어는 적지 않는다 —
+   * 스코어보드가 그 값을 갖고, 두 자리가 다른 순간에 바뀌면 같은 화면이 두 점수를 말한다. 사건 목록의 골 수가 늘어난
+   * 때에만 켜지므로, 이미 골이 있는 경기를 다시 열었을 때는 서지 않는다.
+   */
+  const goals = (frame?.events ?? []).filter((e) => e.type === "goal");
+  const goalCount = goals.length;
+  const seenGoals = useRef<number | null>(null);
+  const [goalCard, setGoalCard] = useState<number | null>(null);
+  useEffect(() => {
+    if (seenGoals.current === null) {
+      seenGoals.current = goalCount;
+      return;
+    }
+    if (goalCount <= seenGoals.current) {
+      seenGoals.current = goalCount;
+      return;
+    }
+    seenGoals.current = goalCount;
+    setGoalCard(goalCount - 1);
+    const timer = setTimeout(() => setGoalCard(null), GOAL_CARD_MS);
+    return () => clearTimeout(timer);
+  }, [goalCount]);
+  const goal = goalCard === null ? undefined : goals[goalCard];
+  const scorer = goal?.actors[0] ? infoOf(goal.actors[0]) : undefined;
+  const scorerTeam = goal?.team ? match[goal.team] : undefined;
+
   return (
     <section
       className={`live-pitch${running ? "" : " stopped"}`}
@@ -218,6 +290,42 @@ export function LivePitch({
               setSelected(hit?.id ?? null);
             }}
           />
+          {tagged && taggedSide && (
+            <div className="live-tag" data-testid="live-tag">
+              <Portrait
+                playerId={tagged.id}
+                name={tagged.name}
+                squadNumber={tagged.squadNumber}
+                teamId={match[taggedSide].id}
+                colours={match[taggedSide].colours}
+                size="s"
+                opens
+              />
+              <b>{tagged.name}</b>
+              <span>
+                {tagged.squadNumber !== null && `${tagged.squadNumber} · `}
+                {tagged.position}
+              </span>
+            </div>
+          )}
+          {goal && scorer && scorerTeam && (
+            <div className="live-goal-card" role="status" data-testid="live-goal-card">
+              <Portrait
+                playerId={scorer.id}
+                name={scorer.name}
+                squadNumber={scorer.squadNumber}
+                teamId={scorerTeam.id}
+                colours={scorerTeam.colours}
+                size="l"
+              />
+              <div className="live-goal-text">
+                <span>
+                  {goal.minute}′ 골 · {scorerTeam.short}
+                </span>
+                <b>{scorer.name}</b>
+              </div>
+            </div>
+          )}
           <span className="live-goal-tag home" aria-hidden>
             {match.home.short}
           </span>
@@ -251,13 +359,32 @@ export function LiveEvents({
   if (events.length === 0) return null;
   return (
     <ol className="live-events" aria-label="경기 사건">
-      {events.map((event, i) => (
-        <li key={`${event.minute}-${event.type}-${events.length - i}`}>
-          <time>{event.minute}′</time>
-          <b>{EVENT_LABEL[event.type] ?? event.type}</b>
-          <span>{event.actors.map(name).filter(Boolean).join(" · ")}</span>
-        </li>
-      ))}
+      {events.map((event, i) => {
+        const lead = event.actors[0];
+        const who = lead === undefined ? undefined : players.find((p) => p.id === lead);
+        const team = event.team ? match[event.team] : undefined;
+        return (
+          <li key={`${event.minute}-${event.type}-${events.length - i}`}>
+            <time>{event.minute}′</time>
+            {/* 사건의 주인 — 팀 전체의 사건(전술 변경·휘슬)에는 얼굴이 없다 */}
+            {who ? (
+              <Portrait
+                playerId={who.id}
+                name={who.name}
+                squadNumber={who.squadNumber}
+                teamId={team?.id}
+                colours={team?.colours}
+                size="xs"
+                opens
+              />
+            ) : (
+              <span className="live-event-gap" aria-hidden />
+            )}
+            <b>{EVENT_LABEL[event.type] ?? event.type}</b>
+            <span>{event.actors.map(name).filter(Boolean).join(" · ")}</span>
+          </li>
+        );
+      })}
     </ol>
   );
 }

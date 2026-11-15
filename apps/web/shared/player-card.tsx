@@ -14,20 +14,25 @@ import {
   type ReactNode,
 } from "react";
 import {
+  AXIS_GROUPS,
+  AXIS_KO,
   SQUAD_STATUS_KO,
   formatMoney,
   formatRating,
   injuryHistoryBrief,
   injuryHistoryText,
+  kitColourOf,
   physiqueLabel,
   proficiencyLabel,
 } from "@gaffer/domain";
+import type { CSSProperties } from "react";
 import type { PlayerCardView } from "@gaffer/engine";
 import { IconClose } from "@/shared/icons";
 import { useDialog } from "@/shared/use-dialog";
 import { contractUntil, humanDate } from "@/shared/dateline";
 import { AxisGrid, CareerBlock, FootMarks } from "@/shared/player-facts";
 import { RatingTrend } from "@/shared/player-marks";
+import { Portrait } from "@/shared/portrait";
 import {
   buildPlayerNameIndex,
   splitPlayerNames,
@@ -62,6 +67,10 @@ interface PlayerCardHandle {
   names: PlayerNameIndex;
   /** 카드 아래 조작 줄에 세울 것을 화면이 맡긴다 (`usePlayerCardActions`) */
   setActions: (actions: PlayerCardActions | null) => void;
+  /** 사전에 선 선수의 소속 — 초상이 입을 색을 찾는다. 사전 밖이면 `undefined` */
+  teamOf: (playerId: string) => string | undefined;
+  /** 감독의 구단 — 우리 스태프의 얼굴도 이 색을 입는다 */
+  userTeamId: string;
 }
 
 const PlayerCardContext = createContext<PlayerCardHandle | null>(null);
@@ -94,12 +103,17 @@ function cachedCard(gameId: string, playerId: string, stamp: string): PlayerCard
 export function PlayerCardProvider({
   gameId,
   playerNames,
+  playerTeams,
+  userTeamId,
   stamp,
   inMatch,
   children,
   defaultActions,
 }: {
   gameId: string;
+  /** 사전에 선 선수의 소속 (id→구단 id) */
+  playerTeams: Record<string, string>;
+  userTeamId: string;
   /** 서버가 고른 사전 — 우리 선수단과 이야기가 부른 선수 (`namesForChat`) */
   playerNames: Record<string, string>;
   stamp: string;
@@ -117,9 +131,10 @@ export function PlayerCardProvider({
     (next: PlayerCardActions | null) => setActionsState(() => next),
     [],
   );
+  const teamOf = useCallback((playerId: string) => playerTeams[playerId], [playerTeams]);
   const handle = useMemo<PlayerCardHandle>(
-    () => ({ open, names, setActions }),
-    [open, names, setActions],
+    () => ({ open, names, setActions, teamOf, userTeamId }),
+    [open, names, setActions, teamOf, userTeamId],
   );
   return (
     <PlayerCardContext.Provider value={handle}>
@@ -175,12 +190,25 @@ export function PlayerName({
   id,
   name,
   className,
+  face = false,
+  teamId,
 }: {
   id: string | null | undefined;
   name: string;
   className?: string;
+  /** 이름 앞에 얼굴을 세운다 — 순위·평점표처럼 이름이 줄의 주어인 자리 */
+  face?: boolean;
+  /** 그 얼굴이 입을 색의 구단 — 주지 않으면 이름 사전에서 찾는다 */
+  teamId?: string | undefined;
 }) {
   const card = usePlayerCard();
+  if (face)
+    return (
+      <span className="player-face">
+        <Portrait playerId={id} name={name} teamId={teamId} size="xs" opens />
+        <PlayerName id={id} name={name} {...(className ? { className } : {})} />
+      </span>
+    );
   if (!card || !id) return <span className={className}>{name}</span>;
   return (
     <Button
@@ -318,6 +346,27 @@ function PlayerCardOverlay({
   );
 }
 
+/** 머리에 크게 서는 축의 수 — 이 선수가 어떤 선수인지를 숫자 셋이 먼저 말한다 */
+const EDGE_AXES = 3;
+
+/**
+ * 두드러진 축 — 관측값이 가장 높은 셋. 골키퍼는 GK 묶음에서, 필드 선수는 기술·정신·신체에서
+ * 고른다(필드 선수의 선방 능력이 순위에 끼지 않게). 같은 값이면 격자에 선 순서가 이긴다.
+ */
+function edgeAxes(card: PlayerCardView): PlayerCardView["attributes"] {
+  const pool = new Set<string>(
+    card.position === "GK"
+      ? [...AXIS_GROUPS.goalkeeping, ...AXIS_GROUPS.mental, ...AXIS_GROUPS.physical]
+      : [...AXIS_GROUPS.technical, ...AXIS_GROUPS.mental, ...AXIS_GROUPS.physical],
+  );
+  return card.attributes
+    .filter((a) => pool.has(a.key))
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => y.a.value - x.a.value || x.i - y.i)
+    .slice(0, EDGE_AXES)
+    .map((x) => x.a);
+}
+
 /** 사실 한 칸 — 이름표와 값. 값이 없으면 칸 자체가 서지 않는다 */
 function Fact({
   label,
@@ -337,7 +386,10 @@ function Fact({
 }
 
 /**
- * 카드 한 장 — **머리 · 사실 줄 · 자리 · 16축 · 기록 · 커리어**.
+ * 카드 한 장 — **얼굴과 머리 · 사실 줄 · 자리 · 능력치 · 기록 · 커리어**.
+ *
+ * 머리는 사람이 먼저다: 구단 색 위의 흉상, 이름과 종합, 그리고 두드러진 축 셋. 아래의
+ * 격자는 그대로 전부 선다 — 머리는 요약이지 대신이 아니다.
  *
  * 남의 선수에게 없는 칸은 아예 서지 않는다(`card.ours`가 null이다) — 「모름」으로
  * 채우면 없는 자리를 있는 것처럼 그린다 (player.md §9.5).
@@ -354,23 +406,45 @@ function PlayerCardBody({ card }: { card: PlayerCardView; inMatch: boolean }) {
     card.career.seasons.length > 1 || (card.career.seasons.length === 1 && season.apps === 0);
   return (
     <div className="pc" data-testid="player-card-body">
-      <header className="pc-head">
-        <div className="pc-who">
-          <b className="pc-name">{card.name}</b>
-          {ours && ours.squadNumber !== null && <i className="pc-number">{ours.squadNumber}</i>}
-          <span className="pc-meta">
-            {card.team} · {card.age}세 · {card.position}
-            {card.nationality && ` · ${card.nationality}`}
-            {card.secondNationality && `/${card.secondNationality}`}
-          </span>
+      <header
+        className="pc-hero"
+        style={{ "--kit": kitColourOf(card.teamId) ?? undefined } as CSSProperties}
+      >
+        <Portrait
+          playerId={card.id}
+          name={card.name}
+          squadNumber={ours?.squadNumber}
+          teamId={card.teamId}
+          size="xl"
+        />
+        <div className="pc-hero-side">
+          <div className="pc-head">
+            <div className="pc-who">
+              <b className="pc-name">{card.name}</b>
+              {ours && ours.squadNumber !== null && <i className="pc-number">{ours.squadNumber}</i>}
+              <span className="pc-meta">
+                {card.team} · {card.age}세 · {card.position}
+                {card.nationality && ` · ${card.nationality}`}
+                {card.secondNationality && `/${card.secondNationality}`}
+              </span>
+            </div>
+            <span className="pc-ovr" title={`가장 잘 맞는 자리 기준 종합 (${card.knowledgeLabel})`}>
+              <em>종합</em>
+              <b>
+                {card.overall}
+                {card.overallMargin > 0 && <i className="est">±{card.overallMargin}</i>}
+              </b>
+            </span>
+          </div>
+          <div className="pc-edge">
+            {edgeAxes(card).map((a) => (
+              <span className="pc-edge-axis" key={a.key}>
+                <b>{a.value}</b>
+                <em>{AXIS_KO[a.key]}</em>
+              </span>
+            ))}
+          </div>
         </div>
-        <span className="pc-ovr" title={`가장 잘 맞는 자리 기준 종합 (${card.knowledgeLabel})`}>
-          <em>종합</em>
-          <b>
-            {card.overall}
-            {card.overallMargin > 0 && <i className="est">±{card.overallMargin}</i>}
-          </b>
-        </span>
       </header>
 
       {/* 지금 심경 한 줄 — 아래 숫자들이 왜 그런지 (우리 선수만 아는 사실이다).

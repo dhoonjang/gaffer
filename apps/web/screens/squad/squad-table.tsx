@@ -1,8 +1,9 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
-import { formatRating, josaOf } from "@gaffer/domain";
+import { type ClubColours, formatRating, josaOf } from "@gaffer/domain";
 import { PlayerName } from "@/shared/player-card";
+import { Portrait } from "@/shared/portrait";
 import { ConditionBar } from "@/shared/condition-bar";
 import { IconArrowLeft, IconArrowRight, IconChevron, IconChevronUp } from "@/shared/icons";
 import { humanDate } from "@/shared/dateline";
@@ -33,6 +34,7 @@ const GROUP_ORDER: Record<string, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
 /** 명단 표 — 열 머리를 눌러 정렬한다. 기본은 역할 → 포지션 라인 → OVR */
 export function SquadTable({
   players,
+  team,
   sort,
   onSort,
   selectedId,
@@ -45,6 +47,8 @@ export function SquadTable({
   inMatch,
 }: {
   players: SquadRow[];
+  /** 이 명단의 구단 — 행의 얼굴이 입는 색이다 */
+  team: { id: string; colours?: ClubColours | undefined };
   sort: { key: SortKey; desc: boolean };
   onSort: (key: SortKey) => void;
   selectedId: string | null;
@@ -238,6 +242,15 @@ export function SquadTable({
                 {/* 이름은 자체 요소로 — 같은 칸에 화살표·표식·배지가 함께 서므로
                     "이 행의 선수 이름"을 읽을 자리가 하나 있어야 한다 */}
                 <span className="row-name">
+                  <Portrait
+                    playerId={p.id}
+                    name={p.name}
+                    squadNumber={p.squadNumber}
+                    teamId={team.id}
+                    colours={team.colours}
+                    size="s"
+                    opens
+                  />
                   {p.squadNumber !== null && (
                     <i className="shirt-no" title={`${p.squadNumber}번`}>
                       {p.squadNumber}

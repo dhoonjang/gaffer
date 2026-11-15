@@ -388,8 +388,8 @@
 button.pitch-slot.theirs {
   cursor: pointer;
 }
-.pitch-slot.theirs.gassed {
-  border-color: var(--loss);
+.pitch-slot.theirs.gassed .chip-face {
+  box-shadow: 0 0 0 2px var(--loss);
 }
 /* 전력 옆의 오차 — 이 숫자를 얼마나 믿을 수 있나 (안개) */
 .slot-margin {
@@ -709,6 +709,72 @@ button.pitch-slot.theirs {
 .live-goal-tag.away {
   right: 8px;
 }
+/**
+ * 이름표 — 고른 선수, 없으면 지금 공을 가진 선수. 판의 왼쪽 위 모서리에 얹는다: 말 곁에
+ * 띄우면 스물두 개의 말 사이에서 이름이 판을 가린다. 얼굴은 선수 카드를 여는 손잡이다.
+ */
+.live-tag {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  font-size: var(--fs-sm);
+}
+.live-tag span {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+/**
+ * 골 카드 — 골이 들어간 순간 그 선수의 얼굴이 판 위에 선다 (tokens.css 「모션」의 골 카드).
+ * 판을 덮지 않게 오른쪽 위 모서리에 서고, 손을 받지 않는다 — 그 아래의 말을 고를 수 있다.
+ */
+.live-goal-card {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-2);
+  border-radius: var(--r-md);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+  animation: live-goal-in var(--dur-goal) var(--ease-panel) both;
+}
+.live-goal-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-hair);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.live-goal-text b {
+  color: var(--text);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+@keyframes live-goal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-goal-card {
+    animation: none;
+  }
+}
+/* 사건 줄의 얼굴 자리 — 얼굴이 없는 사건도 같은 폭을 비워 글자의 줄이 맞는다 */
+.live-event-gap {
+  flex: none;
+  width: 24px;
+}
 .live-indicator {
   width: 6px;
   height: 6px;
@@ -726,6 +792,7 @@ button.pitch-slot.theirs {
 }
 .live-events li {
   display: flex;
+  align-items: center;
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);

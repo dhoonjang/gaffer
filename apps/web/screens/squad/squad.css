@@ -1445,17 +1445,14 @@
 }
 /**
  * 보드 위 칩은 **보드 폭에 비례**해 크기가 정해진다 (cqw = pitch-board 폭의 1%).
- * domain의 CHIP_SIZE(겹침 판정 기준, 14%×8%)보다 작게 유지해야 화면에서
- * 카드가 겹치지 않는다 — 둘 중 하나만 바꾸면 판정과 그림이 어긋난다.
+ * domain의 CHIP_SIZE(겹침 판정 기준, 14%×8%)보다 좁게 유지해야 화면에서
+ * 칩이 겹치지 않는다 — 둘 중 하나만 바꾸면 판정과 그림이 어긋난다.
  */
 .pitch-slot.pitch-chip {
   width: 13cqw;
   min-width: 0;
   max-width: none;
-  /* 좌우 여백은 **글자에 준다** — 칩 폭은 겹침 판정에 묶여 늘릴 수 없으니, 안에서
-     빼앗을 수 있는 것은 패딩뿐이다. 이 4px가 한 줄에 담기는 이름의 길이를 정한다 */
-  padding: 0.8cqw 0.45cqw;
-  border-radius: var(--r-xs);
+  padding: 0;
   gap: 0;
   /* 포인터 드래그가 스크롤·확대로 가로채이지 않게 */
   touch-action: none;
@@ -1478,50 +1475,175 @@
   z-index: 5;
   cursor: grabbing;
   transition: none;
-  border-color: var(--accent);
   transform: translate(-50%, -50%) scale(1.08);
 }
 /**
- * 자리 줄 — 번호 · 자리 · (역할). 자간을 벌리지 않는다: 0.5px씩 세 곳이면 역할
- * 약칭이 칩 밖으로 밀린다.
+ * ── 칩 — **얼굴 하나와 두 줄** (shared/pitch.tsx · tokens.css 「초상」) ──────
  *
- * **좁아지면 접는다.** 판이 채팅 옆에 설 때 칩은 52px까지 줄어드는데, 그 폭에
- * 세 조각을 한 줄로 넣을 방법은 없다(글자를 6px로 만드는 것은 방법이 아니다).
- * 역할 약칭이 아래로 내려가고 칩이 한 줄만큼 높아진다 — 넘쳐서 이름 위로
- * 겹치던 것보다 낫다.
+ * 칩은 면을 갖지 않는다: 잔디 위에 얼굴이 서고 그 아래 이름과 자리가 붙는다. 상태는 얼굴의
+ * 링이 말한다 — 고른 칩은 키 컬러, 못 뛰는 선수와 다리가 멈춘 상대는 `--loss`.
  */
-.pitch-slot .slot-pos {
+.pitch-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-width: 64px;
+  max-width: 86px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: transform var(--ease);
+}
+/**
+ * 얼굴 — **둘레의 호가 남은 체력이다.** 호는 열두 시에서 시계 방향으로 차고, 색은 명단
+ * 막대와 같은 밴드다(`conditionBand`). 체력을 모르는 칩은 호 없이 어두운 테만 갖는다.
+ */
+.chip-face {
+  --fit: 0;
+  --cond-tone: var(--accent);
+  position: relative;
+  display: block;
+  width: 9cqw;
+  aspect-ratio: 1;
+  padding: 0.55cqw;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--cond-tone) calc(var(--fit) * 1%),
+    color-mix(in srgb, var(--bg) 72%, transparent) 0
+  );
+  transition: box-shadow var(--ease);
+}
+.chip-face.low {
+  --cond-tone: var(--warn);
+}
+.chip-face.spent {
+  --cond-tone: var(--loss);
+}
+.chip-face .portrait {
+  display: block;
+  width: 100%;
+}
+/* 빈 자리 — 얼굴이 설 틀만 남는다 */
+.chip-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.pitch-chip:hover .chip-face {
+  box-shadow: 0 0 0 2px var(--text-2);
+}
+.pitch-chip.selected {
+  transform: translate(-50%, -50%) scale(1.06);
+}
+.pitch-chip.selected .chip-face {
+  box-shadow: var(--ring);
+}
+.pitch-chip.unavailable .chip-face {
+  box-shadow: 0 0 0 2px var(--loss);
+}
+.pitch-chip.unavailable .portrait {
+  opacity: 0.5;
+}
+/* 얼굴 모서리의 표식 셋 — 바닥색 알약 위의 글자라 어느 얼굴 위에서도 읽힌다 */
+.chip-face .shirt-no,
+.chip-face .slot-cap,
+.chip-face .slot-meta {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.1cqw;
+  height: 3.1cqw;
+  margin: 0;
+  padding: 0 0.6cqw;
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  line-height: var(--lh-fig);
+}
+/* 등번호 — 왼쪽 위. 셔츠에 적힌 수라 전력보다 한 층 흐리다 */
+.chip-face .shirt-no {
+  top: -0.6cqw;
+  left: -1cqw;
+  color: var(--text-2);
+  font-size: clamp(7px, 2cqw, 10px);
+  font-style: normal;
+}
+/* 완장 — 오른쪽 위. 금색 바탕에 한 글자 */
+.chip-face .slot-cap {
+  top: -0.6cqw;
+  right: -1cqw;
+  background: var(--gold);
+  color: var(--accent-ink);
+  font-size: clamp(6px, 1.8cqw, 9px);
+  font-weight: 700;
+}
+/* 이 자리의 전력 — 오른쪽 아래. 칩에서 가장 먼저 읽히는 숫자라 스코어 서체로 선다 */
+.chip-face .slot-meta {
+  right: -1.4cqw;
+  bottom: -0.6cqw;
+  gap: var(--sp-hair);
+  color: var(--text-2);
+  font-size: clamp(7px, 2cqw, 10px);
+}
+.chip-face .slot-meta b {
+  color: var(--text);
+  font-family: var(--font-score);
+  font-size: clamp(8px, 2.5cqw, 13px);
+  font-weight: 600;
+}
+/* 판 안의 게이지는 판 크기를 따라 줄어든다 */
+.pitch-slot .fit-gauge {
+  width: clamp(7px, 2.1cqw, 10.5px);
+  height: clamp(7px, 2.1cqw, 10.5px);
+}
+/* 이름 — 잔디 위에 바로 서므로 바닥색 알약을 깐다. 안 들어가면 어절로 접힌다 */
+.slot-name {
+  max-width: 100%;
+  margin-top: 0.7cqw;
+  padding: 0 0.7cqw;
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  font-size: clamp(8px, 2.3cqw, 11px);
+  font-weight: 600;
+  text-align: center;
+  line-height: var(--lh-table);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+/**
+ * 자리 줄 — 자리 · (카드). 자간을 벌리지 않는다: 카드 이름이 칩 밖으로 밀린다.
+ * 좁아지면 카드가 아래로 접히고 칩이 한 줄만큼 높아진다.
+ */
+.slot-pos {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  font-size: clamp(7px, 2.05cqw, 9.5px);
   gap: 0 var(--sp-hair);
   max-width: 100%;
+  color: var(--gold);
+  font-size: clamp(7px, 2.05cqw, 9.5px);
+  font-weight: 600;
   letter-spacing: 0;
 }
-.pitch-slot .slot-name {
-  font-size: clamp(8px, 2.3cqw, 11px);
-  max-width: 100%;
-}
-/* 자리 줄의 등번호 — 자리(금색)와 **다른 층**이라 색을 나눠 갖지 않는다.
-   여기서는 여백을 스스로 만들지 않는다 (`.slot-pos`의 gap이 그 몫이다) */
-.pitch-slot .slot-pos .shirt-no {
-  min-width: 0;
-  margin-right: 0;
-  color: var(--silver);
-  font-size: 0.95em;
-}
-/* 역할 약칭 — 판 위에서는 번호·자리와 한 줄을 나눠 쓰므로 표보다 작다 */
-.pitch-slot .slot-role {
-  font-size: clamp(6px, 1.7cqw, 8.5px);
+/**
+ * 맡은 카드 — 기본 행동이 아닐 때만 붙는 이름. 자리 코드와 같은 줄에 두되
+ * 금색을 나눠 갖지 않는다: 자리는 좌표가 정하고 카드는 감독이 고른 것이라
+ * 서로 다른 층이다.
+ */
+.slot-role {
   padding: 0 4px;
-}
-/* 주장 표식 — 이름 앞의 한 글자. 이름과 같은 크기로 두면 성 한 자를 먹는다.
-   작아진 만큼 색은 원색으로 — 옅은 금색은 이 크기에서 그냥 회색 점이 된다 */
-.slot-cap {
-  font-size: 0.82em;
-  font-weight: 400;
-  color: var(--gold);
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  color: var(--text);
+  font-size: clamp(6px, 1.7cqw, 8.5px);
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0.06em;
 }
 /* 완장·서열 표식 — 이름 앞의 원문자 하나 (주장 Ⓒ · 부주장 Ⓥ · 리더 Ⓛ).
    셋이 같은 크기·같은 자리에 서야 한 계열로 읽힌다. 완장은 금색이고 리더 그룹은
@@ -1548,121 +1670,72 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.pitch-slot .slot-meta {
-  font-size: clamp(7px, 2cqw, 10.5px);
-  gap: 4px;
-}
-/* 전술판은 판 크기를 따라 줄어드는 컨테이너라 게이지도 함께 줄인다 */
-.pitch-slot .fit-gauge {
-  /* 이전의 두 자리 숫자와 **같은 폭**으로 — 칩이 넓어지면 전술판 배치가 통째로
-     흔들린다 (자유 배치 e2e가 그걸 잡았다) */
-  width: clamp(7px, 2.1cqw, 10.5px);
-  height: clamp(7px, 2.1cqw, 10.5px);
-}
-.pitch-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  min-width: 64px;
-  max-width: 86px;
-  padding: 4px 8px;
-  border-radius: var(--r-xs);
-  background: var(--chip-base);
-  /* stylelint-disable-next-line gaffer/no-container-border -- 경기장의 분필 라인 — 선이 곧 그림이다 */
-  border: 1.5px solid var(--pitch-line);
-  color: var(--text);
-  cursor: pointer;
-  transition:
-    border-color var(--ease),
-    transform var(--ease);
-}
-/**
- * **자리의 색** — 배경 톤만 바꾼다(18%, tokens.css 「의미」). 윤곽은 상태 규칙의
- * 몫이라 여기서 border-color를 건드리지 않는다. 톤이 옅은 건 칩 안의 글자가 먼저
- * 읽혀야 하기 때문이다 — 색은 라인을 훑을 때 배경에서 알아채는 층이다.
- * 중원은 잔디와 같은 색상이라 판에 묻히면 이 한 줄만 올린다.
- */
-.pitch-chip.g-fw {
-  background:
-    linear-gradient(rgba(var(--pos-fw), 0.18), rgba(var(--pos-fw), 0.18)), var(--chip-base);
-}
-.pitch-chip.g-mf {
-  background:
-    linear-gradient(rgba(var(--pos-mf), 0.18), rgba(var(--pos-mf), 0.18)), var(--chip-base);
-}
-.pitch-chip.g-df {
-  background:
-    linear-gradient(rgba(var(--pos-df), 0.18), rgba(var(--pos-df), 0.18)), var(--chip-base);
-}
-.pitch-chip.g-gk {
-  background:
-    linear-gradient(rgba(var(--pos-gk), 0.18), rgba(var(--pos-gk), 0.18)), var(--chip-base);
-}
-
-.pitch-chip:hover {
-  border-color: var(--text);
-}
-.pitch-chip.selected {
-  border-color: var(--accent);
-  transform: translate(-50%, -50%) scale(1.06);
-}
-.pitch-chip.unavailable {
-  border-style: dashed;
-  border-color: var(--loss);
-  opacity: 0.75;
-}
-.slot-pos {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-2xs);
-  font-weight: 600;
-  color: var(--gold);
-  letter-spacing: 0.06em;
-}
-/**
- * 맡은 역할 — 기본 역할이 아닐 때만 붙는 FM 약칭. 자리 코드와 같은 줄에 두되
- * 금색을 나눠 갖지 않는다: 자리는 좌표가 정하고 역할은 감독이 고른 것이라
- * 서로 다른 층이다.
- *
- * 자리 색은 칩 배경 18%에만 선다(tokens.css 「의미」) — 약칭은 한 톤의 밝은 꼬리표다.
- */
-.slot-role {
-  padding: 0 4px;
-  border-radius: var(--r-xs);
-  background: color-mix(in srgb, var(--text) 24%, transparent);
-  color: var(--text);
-  font-size: clamp(6px, 1.9cqw, 9px);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-.slot-name {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  /* 이름은 온전히 선다 — 칸에 안 들어가면 어절로 접히고, 칩이 그만큼 높아진다 */
-  text-align: center;
-  line-height: var(--lh-table);
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-.slot-meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-2xs);
-  color: var(--text-2);
-}
-.slot-meta b {
-  color: var(--text);
-  font-size: var(--fs-xs);
-}
 .slot-flag {
   color: var(--loss);
   font-size: var(--fs-2xs);
 }
 .slot-flag.warn {
   color: var(--warn);
+  font-weight: 600;
+}
+/**
+ * 벤치 줄 — 판 아래에 같은 얼굴로 앉는다. 아홉이 한 줄에 안 서면 옆으로 민다: 줄을 접으면
+ * 판과 전술 줄 사이가 벤치 인원에 따라 들썩인다.
+ */
+.bench-strip {
+  display: flex;
+  /* 세로로 눌리지 않는다 — 옆으로 미는 칸(`overflow-x`)은 최소 높이가 0이라 덩어리가 좁아지면 접힌다 */
+  flex: none;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  overflow-x: auto;
+  background: var(--panel);
+  scrollbar-width: none;
+}
+.bench-seat {
+  display: flex;
+  flex: 1 0 44px;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-hair);
+  min-width: 0;
+  max-width: 72px;
+  padding: var(--sp-1) 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--ease);
+}
+.bench-seat:hover {
+  background: var(--panel-2);
+}
+.bench-seat.selected {
+  background: var(--panel-2);
+}
+.bench-seat.selected .portrait {
+  box-shadow: var(--ring);
+}
+.bench-seat.unavailable .portrait {
+  opacity: 0.5;
+}
+.bench-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  line-height: var(--lh-table);
+  white-space: nowrap;
+  text-overflow: clip;
+}
+.bench-meta {
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  line-height: var(--lh-fig);
+}
+.bench-meta b {
+  color: var(--text-2);
   font-weight: 600;
 }
 /* 명단 열(오른쪽) — 머리글 줄 + 표는 자체 스크롤이라 전술판이 항상 보인다 */
@@ -1911,6 +1984,17 @@
 .squad-name .row-name {
   margin-right: 4px;
 }
+/* 행의 얼굴 — 이름 줄의 맨 앞. 표의 줄 높이는 이 얼굴이 정하므로 눈금(32)보다 한 단 작다:
+   스물여덟 행이 한 화면에 서던 밀도를 지킨다 */
+.row-name .portrait {
+  width: 28px;
+  margin-right: var(--sp-2);
+}
+/* 얼굴이 선 행은 위아래 여백을 얼굴에 내준다 — 장부 표의 8px를 그대로 두면 행이 45px가 된다 */
+.squad-table tbody tr.row-tier td {
+  padding-top: var(--sp-1);
+  padding-bottom: var(--sp-1);
+}
 /* 배지 열을 없앤 폭이 전부 이름으로 가면 표가 휑해진다 — 이름은 필요한 만큼만 */
 .squad-table th:first-child,
 .squad-table td:first-child {
@@ -2022,7 +2106,7 @@
 }
 .club-staff-list li {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-hair) 8px;
   padding: 4px 0;
@@ -2061,15 +2145,9 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.cs-icon {
-  align-self: start;
-  display: inline-flex;
-  margin-top: 4px;
-  color: var(--text-2);
-}
 @container (max-width: 380px) {
   .club-staff-list li {
-    grid-template-columns: 14px minmax(0, 1fr);
+    grid-template-columns: 32px minmax(0, 1fr);
   }
   .cs-contract {
     grid-column: 2;

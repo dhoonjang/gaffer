@@ -117,11 +117,11 @@
 }
 
 /**
- * 팀시트 — 두 열, 각 1–11. 한 줄은 등번호 · 포지션 · 이름뿐이다.
+ * 팀시트 — 두 열, 열한 얼굴이 포메이션 모양으로 선다 (공격이 위).
  * 열 머리는 팀 이름 하나다 — **레일은 없다.** 바로 위 대진에서 우리 열이 이미 구단
  * 워시로 물들어 있고 열의 자리도 그대로라, 여기 띠를 한 번 더 세우면 같은 카드에서
- * 구단 색이 두 벌이 된다 (tokens.css 「구단 색」 충돌 규칙 7). 상대 열은 잉크가 한 단
- * 물러나는 것으로 갈린다.
+ * 구단 색이 두 벌이 된다 (tokens.css 「구단 색」 충돌 규칙 7). 구단 색은 얼굴의 티셔츠가
+ * 이미 입고 있다.
  */
 .kg-sheets {
   display: grid;
@@ -143,33 +143,30 @@
 .kg-sheet.theirs .kg-sheet-head {
   color: var(--text-2);
 }
+/* 판 — 좌표는 전술판과 같은 백분율이다. 높이는 다섯 줄의 얼굴과 이름이 서로 덮지 않는 비 */
 .kg-xi-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
+  position: relative;
+  aspect-ratio: 5 / 6;
   list-style: none;
+  border-radius: var(--r-md);
+  background: var(--panel-2);
 }
 .kg-line {
-  display: grid;
-  grid-template-columns: 20px 24px 1fr;
-  align-items: baseline;
-  gap: var(--sp-2);
-  font-size: var(--fs-md);
-  line-height: var(--lh-table);
-}
-.kg-no {
-  color: var(--text-3);
-  font-size: var(--fs-sm);
-  text-align: right;
-}
-.kg-pos {
-  color: var(--text-3);
-  font-size: var(--fs-2xs);
-  letter-spacing: 0.06em;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-hair);
+  width: 64px;
+  transform: translate(-50%, -50%);
 }
 .kg-player {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-2xs);
   font-weight: 500;
-  word-break: keep-all;
+  line-height: var(--lh-table);
+  white-space: nowrap;
 }
 
 /**

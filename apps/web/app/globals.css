@@ -13,6 +13,8 @@
 @import "../shared/shared.css";
 /* 채팅의 표시 네 층 — 확인 카드(메일함)와 자료 카드(채팅)가 같은 몸을 써서 뷰 파일 밖이다 */
 @import "../shared/marks.css";
+/* 초상 — 사람이 서는 모든 뷰가 같은 틀을 쓴다 */
+@import "../shared/portrait.css";
 @import "../screens/squad/squad.css";
 @import "../screens/office/calendar.css";
 @import "../screens/office/finance.css";

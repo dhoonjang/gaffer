@@ -10,8 +10,7 @@ import type {
  * 실선수 시드 적용과 절차 생성 분기는 catalog.ts의 buildFromSeed가 결정한다.
  * shortName은 리그 간 표시 충돌을 피하는 약어다. 숫자를 포함하는 약어도 허용한다.
  */
-import { DEFAULT_FORMATION, leagueTonesOf, separatedBandsOf } from "@gaffer/domain";
-import { CLUB_COLOURS } from "./club-colours";
+import { CLUB_COLOURS, DEFAULT_FORMATION, leagueTonesOf, separatedBandsOf } from "@gaffer/domain";
 import {
   leagueCatalog,
   isCupOnlyLeague,

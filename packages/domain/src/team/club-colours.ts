@@ -23,7 +23,8 @@
  *
  * 문장의 도형(방패·분할)은 여전히 id 해시다 — 엠블럼은 미탑재다 (sources.md §7.1).
  */
-import type { ClubColours } from "@gaffer/domain";
+import { bandDistance, contrastRatio } from "./crest";
+import type { ClubColours } from "./team";
 
 export const CLUB_COLOURS: Readonly<Record<string, ClubColours>> = {
   // ── 프리미어리그 ──
@@ -128,3 +129,48 @@ export const CLUB_COLOURS: Readonly<Record<string, ClubColours>> = {
   troyes: { primary: "#003169", secondary: "#ffffff", accent: "#003169" }, // 파랑·흰 — 공식 사이트 CSS 프리셋; 밝은 파랑 #006bb3은 출처가 없어 뺐다 · https://www.estac.fr/
   lemans: { primary: "#c30808", secondary: "#fabe01", accent: "#c30808" }, // 노랑(or)·빨강(sang) · https://shop.lemansfc.fr/12-produits-officiels · https://www.lemansfc.fr/vue/img/interface/logo_lemansfc.png · https://fr.wikipedia.org/wiki/Fichier:Logo_Le_Mans_FC_(2010).svg
 };
+
+/**
+ * 초상의 티셔츠를 칠하는 색 — 구단의 첫 색이다 (tokens.css 「초상」).
+ *
+ * 부르는 쪽이 색을 들고 있으면(뷰가 실어 준 `colours` — 어드민이 고친 값까지 담는다) 그 값이
+ * 먼저이고, 없으면 이 표다. 표에도 없는 구단(2부·어드민이 만든 클럽)과 소속을 모르는 자리는
+ * `null` — 초상은 무채색 티셔츠로 선다.
+ */
+export function kitColourOf(
+  teamId: string | null | undefined,
+  colours?: ClubColours,
+): string | null {
+  if (colours !== undefined) return colours.primary;
+  if (teamId === null || teamId === undefined) return null;
+  return CLUB_COLOURS[teamId]?.primary ?? null;
+}
+
+/**
+ * 실시간 판에서 두 팀의 말이 갈려 보이는 최소 거리 — OKLab ΔE. 띠의 문턱
+ * (`BAND_MIN_DISTANCE`)보다 훨씬 넓다: 말은 작고 움직이며 스물둘이 섞여 선다.
+ */
+const KIT_MIN_DISTANCE = 0.25;
+
+/**
+ * 실시간 판의 두 팀 말 색 — **홈은 첫 색, 원정은 홈과 갈리는 첫 색이다** (원정 킷의 규칙).
+ *
+ * 원정의 첫 색이 홈과 가까우면 둘째 색으로 물러나고, 그것도 가까우면 둘 중 홈에서 더 먼
+ * 쪽이다. 한쪽이라도 공식 색을 모르면 `null` — 판은 토큰의 기본 두 색으로 선다.
+ */
+export function matchKitsOf(
+  home: ClubColours | undefined,
+  away: ClubColours | undefined,
+): { home: string; away: string } | null {
+  if (home === undefined || away === undefined) return null;
+  const apart = (hex: string) => bandDistance(hex, home.primary);
+  const away1 = away.primary;
+  const away2 = away.secondary;
+  const pick = apart(away1) >= KIT_MIN_DISTANCE || apart(away1) >= apart(away2) ? away1 : away2;
+  return { home: home.primary, away: pick };
+}
+
+/** 말 위의 등번호가 밝은 잉크로 서야 하는가 — 흰 글자가 3:1을 넘는 바탕이면 밝게 */
+export function kitInkIsLight(kit: string): boolean {
+  return contrastRatio(kit, "#ffffff") >= 3;
+}

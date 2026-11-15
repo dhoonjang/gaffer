@@ -1317,6 +1317,8 @@ export function GameScreen({ gameId }: { gameId: string }) {
     <PlayerCardProvider
       gameId={gameId}
       playerNames={game.playerNames}
+      playerTeams={game.playerTeams}
+      userTeamId={game.team.id}
       stamp={`${game.date}/${game.chat.length}/${game.views.negotiation.cases.map((n) => `${n.id}:${n.revision}:${n.status}`).join(",")}`}
       inMatch={inMatch}
       defaultActions={playerCardActions}

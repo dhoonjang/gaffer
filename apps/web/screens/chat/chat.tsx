@@ -23,8 +23,9 @@ import {
 import type { TickEvent } from "@gaffer/domain";
 import { tickEventLabel } from "@/screens/chat/tick-event-display";
 import { CALL_LABEL } from "@/screens/chat/call-label";
-import { IconBroadcast, IconPerson, SPEAKER_ICON } from "@/shared/icons";
-import { useProseNames } from "@/shared/player-card";
+import { IconBroadcast } from "@/shared/icons";
+import { usePlayerCard, useProseNames } from "@/shared/player-card";
+import { Portrait } from "@/shared/portrait";
 import { ExhibitCard } from "./exhibit-card";
 import { Button } from "@/shared/button";
 
@@ -72,18 +73,35 @@ function UtteranceBlock({
   roles?: Record<string, SpeakerRole> | undefined;
 }) {
   const prose = useProseNames();
+  const card = usePlayerCard();
   const { speaker, lines } = utterance;
   if (speaker === "") return <NarrationLines lines={lines} />;
   const isBroadcast = speaker === BROADCAST_SPEAKER;
   // 직책은 모델이 아니라 세이브가 안다 — 이름만 맞으면 어떤 턴에서도 함께 보인다
   const role = roles?.[normalizeSpeaker(speaker)];
-  const Icon = isBroadcast ? IconBroadcast : (role && SPEAKER_ICON[role.kind]) || IconPerson;
+  // 화자가 선수면 얼굴로 선다 — 이름 사전이 그 사람을 하나로 짚을 때만이다
+  const playerId =
+    role?.kind === "player" || role?.kind === "captain"
+      ? card?.names.byName.get(speaker.trim())
+      : undefined;
+  // 우리 구단이 고용한 사람은 우리 색을 입는다 — 기자와 자리를 모르는 화자는 무채색이다
+  const ours = role !== undefined && role.kind !== "reporter" && role.kind !== "player";
   return (
     <div className={`say${isBroadcast ? " broadcast" : ""}`}>
       <div className="say-who">
-        <span className="speaker-icon" aria-hidden>
-          <Icon />
-        </span>
+        {isBroadcast ? (
+          <span className="speaker-icon" aria-hidden>
+            <IconBroadcast />
+          </span>
+        ) : (
+          <Portrait
+            playerId={playerId}
+            name={speaker}
+            teamId={playerId === undefined && ours ? card?.userTeamId : undefined}
+            size="s"
+            opens
+          />
+        )}
         <span className="speaker">{speaker}</span>
         {/**
          * 직함은 **칩**이다 — 괄호로 묶으면 이름과 같은 줄의 같은 글자라서

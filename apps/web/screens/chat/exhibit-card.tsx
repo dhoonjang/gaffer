@@ -310,7 +310,7 @@ function PlayerTable({
           {players.map((p) => (
             <tr key={p.id}>
               <td className="ex-who-cell">
-                <PlayerName id={p.id} name={p.name} className="ex-name" />
+                <PlayerName id={p.id} name={p.name} className="ex-name" face />
                 <span className="ex-team">{p.team}</span>
               </td>
               {columns.map((c) => {

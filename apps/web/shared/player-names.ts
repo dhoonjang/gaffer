@@ -209,3 +209,11 @@ export function playerIdsIn(text: string, index: PlayerNameIndex): string[] {
   }
   return ids;
 }
+
+/**
+ * 얼굴 아래에 서는 짧은 이름 — 마지막 어절이다 (「가브리엘 마갈량이스」 → 「마갈량이스」).
+ * 얼굴이 누구인지를 이미 말하는 좁은 자리(팀시트·벤치 줄)에서만 쓴다 — 전체 이름은 툴팁이 든다.
+ */
+export function shortName(name: string): string {
+  return name.trim().split(/\s+/).pop() ?? name;
+}

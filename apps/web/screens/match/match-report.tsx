@@ -272,7 +272,7 @@ function ReportHead({
               <span className="mr-motm" data-testid="match-report-motm">
                 {/* 알약 안이 `inline-flex`라 칸 사이는 `gap`이 낸다 — 공백 노드가 아니다 */}
                 MOTM
-                <PlayerName id={motm.id} name={motm.name} />
+                <PlayerName id={motm.id} name={motm.name} face />
                 <b>{formatRating(motm.rating, "match")}</b>
               </span>
             )}
@@ -472,7 +472,7 @@ function PlayerTable({
                       <IconArrowUp size={10} />
                     </span>
                   )}
-                  <PlayerName id={p.id} name={p.name} />
+                  <PlayerName id={p.id} name={p.name} face teamId={team.id} />
                 </td>
                 <td>{p.minutes}</td>
                 {COLS.map((c) => (

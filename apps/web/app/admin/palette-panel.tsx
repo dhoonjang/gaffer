@@ -20,7 +20,7 @@ import { Button } from "@/shared/button";
  *
  * 조율은 개별 구단이 아니라 전체 팔레트를 상대로만 한다 — 한 구단을 보기 좋게 고치는
  * 순간 규칙이 아니라 취향이 된다(team.md §3.1). 그래서 여기는 **읽기 전용**이다: 값은
- * `packages/engine/src/core/catalog/club-colours.ts` 하나가 갖고, 팀 편집 창은 `colours`를
+ * `packages/domain/src/team/club-colours.ts` 하나가 갖고, 팀 편집 창은 `colours`를
  * 노출하지 않는다.
  *
  * 견본은 저마다 **실제로 설 표면** 위에 앉는다. 밝힘은 `--panel-2`, 워시는

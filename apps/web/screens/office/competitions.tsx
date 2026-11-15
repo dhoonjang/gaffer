@@ -285,7 +285,12 @@ function LeadersSection({ competition }: { competition: Competition }) {
                 <tr key={row.gamePlayerId} className={row.ours ? "me" : ""}>
                   <td>{i + 1}</td>
                   <td className="team-cell">
-                    <PlayerName id={row.gamePlayerId} name={row.playerName} />
+                    <PlayerName
+                      id={row.gamePlayerId}
+                      name={row.playerName}
+                      face
+                      teamId={row.teamId}
+                    />
                   </td>
                   <td className="dim-cell">{row.teamShortName}</td>
                   {columns.map((c) => (

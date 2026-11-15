@@ -57,6 +57,8 @@ export interface GamePayload {
   views: OfficeViews;
   /** 대화에 설 수 있는 선수 id→이름 — 서사에 흘러든 id의 클라이언트 치환용 */
   playerNames: Record<string, string>;
+  /** 그 선수들의 지금 소속 id→구단 id — 초상의 티셔츠 색을 정한다 (tokens.css 「초상」) */
+  playerTeams: Record<string, string>;
   /**
    * 화자 이름→직책 — 채팅이 `스티브 홀랜드 (수석코치)`로 보여 준다.
    * 모델은 이름만 뱉으므로 직책은 세이브가 알려 준다 (people.md §3).
@@ -246,6 +248,7 @@ export function toPayload(state: GameState, only?: readonly ViewKey[]): GamePayl
     };
   }
   const views = buildOfficeViews(state);
+  const playerNames = namesForConversations(state, views.negotiation);
   return {
     id: state.id,
     date: state.date,
@@ -261,7 +264,10 @@ export function toPayload(state: GameState, only?: readonly ViewKey[]): GamePayl
     managerName: state.manager.name,
     chat: visibleChat(state.chat),
     views,
-    playerNames: namesForConversations(state, views.negotiation),
+    playerNames,
+    playerTeams: Object.fromEntries(
+      state.players.filter((p) => p.id in playerNames).map((p) => [p.id, p.teamId]),
+    ),
     speakerRoles: speakerRoles(state),
     ...((state.sceneHeaderMisses ?? 0) >= STALLED_CLOCK_TURNS
       ? { clockStalled: state.sceneHeaderMisses }
