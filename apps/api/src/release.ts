@@ -39,10 +39,25 @@ try {
         "SELECT id FROM private.games WHERE deleted_at IS NULL AND match_build IS NOT NULL AND match_build<>$1",
         [simBuildId()],
       );
-      if (matches.rows.length)
-        throw new Error(
-          "Finish active matches before changing the simulator; existing version stays online",
+      if (matches.rows.length) {
+        /**
+         * The build id hashes every file the simulator can read, so a change that never touches
+         * match logic (a colour table, a generated index) still moves it. An operator who has
+         * read the diff and found the simulator's behaviour unchanged may carry the unfinished
+         * matches to the new build instead of waiting for them — they resume from their last
+         * verified checkpoint. Carrying a match across a real simulator change makes the next
+         * checkpoint fail verification, so this is never the default.
+         */
+        if (process.env.CARRY_MATCHES !== "true")
+          throw new Error(
+            "Finish active matches before changing the simulator; existing version stays online",
+          );
+        const carried = await sql.query(
+          "UPDATE private.games SET match_build=$1 WHERE deleted_at IS NULL AND match_build IS NOT NULL AND match_build<>$1",
+          [simBuildId()],
         );
+        console.info(`Carried ${String(carried.rowCount)} unfinished matches to the new build`);
+      }
       const { rows } = await sql.query<{ value: unknown }>(
         "SELECT value FROM private.operations WHERE key='save_version'",
       );

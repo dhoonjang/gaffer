@@ -13,6 +13,10 @@ on:
         description: Bootstrap only - push verified image before the first Terraform apply
         type: boolean
         default: false
+      carry_matches:
+        description: Simulator behaviour is unchanged - carry unfinished matches to the new build
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -127,6 +131,8 @@ jobs:
         run: pnpm service:ops migrate
       - name: Pause admission, drain running work, check match and save compatibility
         if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
+        env:
+          CARRY_MATCHES: ${{ inputs.carry_matches }}
         run: pnpm exec tsx apps/api/src/release.ts pause
       - name: Start all revisions without serving traffic
         if: steps.forward.outputs.go == 'true' && !inputs.publish_image_only
