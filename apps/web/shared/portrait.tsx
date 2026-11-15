@@ -81,9 +81,13 @@ export const Portrait = memo(function Portrait({
       <i className="portrait-kit" aria-hidden />
     </>
   ) : (
-    <b className={squadNumber == null ? undefined : "fig"} aria-hidden>
-      {portraitFallback(name, squadNumber)}
-    </b>
+    // 글자는 CSS가 세운다(`attr(data-mark)`) — 이름 줄 안에 서는 틀이라, 글자를 내용으로 두면
+    // 그 줄의 글(`textContent`)에 등번호·머리글자가 섞여 이름으로 읽힌다
+    <b
+      className={squadNumber == null ? undefined : "fig"}
+      data-mark={portraitFallback(name, squadNumber)}
+      aria-hidden
+    />
   );
 
   if (opens && card && playerId)

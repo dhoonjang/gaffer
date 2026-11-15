@@ -74,6 +74,9 @@
   display: inline-grid;
   place-items: center;
 }
+.portrait.blank b::before {
+  content: attr(data-mark);
+}
 .portrait.blank b {
   font-size: var(--fs-2xs);
   font-weight: 600;
