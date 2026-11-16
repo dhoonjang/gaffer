@@ -5,7 +5,7 @@
  *   pnpm portraits --keep            초상은 다시 자르지 않고 목록과 출처 표만 다시 쓴다
  *
  * 세 가지를 낸다:
- *   apps/web/public/portraits/{h,p}/<선수 id>.webp   초상 (저장소 밖 — .gitignore)
+ *   apps/web/public/portraits/{h,p}/<선수 id>.webp   초상
  *   apps/web/public/portraits/credits.html          원본 사진의 저작자·라이선스 (설정 메뉴가 연다)
  *   packages/domain/src/players/portrait-index.ts   초상을 가진 선수 id 목록 (저장소 안)
  *

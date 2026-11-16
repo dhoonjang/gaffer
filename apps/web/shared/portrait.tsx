@@ -11,14 +11,17 @@ import { Button } from "./button";
  * 한 장이 가로 두 칸이다: 왼쪽이 사람, 오른쪽이 같은 틀의 티셔츠 마스크. 사람 위에 구단 색을
  * 그 마스크로 곱해 칠하므로 이적한 선수는 다음 렌더에 새 구단의 색을 입는다.
  *
- * 초상이 없는 사람(게임이 만든 선수·스태프·기자)과 자산이 올라와 있지 않은 배포에서는 같은
+ * 초상이 없는 사람(게임이 만든 선수·스태프·기자)과 파일을 못 불러온 자리에는 같은
  * 틀에 등번호나 머리글자가 선다 — 틀의 크기가 같아 표와 판의 줄이 흐트러지지 않는다.
  */
 
-/** 자산 폴더 — 배포가 주소를 주지 않으면 초상 없이 폴백만으로 선다 (player.md §9.6) */
+/**
+ * 자산 폴더 — 앱과 같은 자리(`public/portraits`)에서 함께 나간다 (player.md §9.6).
+ * `VITE_PORTRAIT_BASE`가 다른 주소를 가리킬 수 있고, 빈 문자열이면 초상 없이 폴백만으로 선다.
+ */
+const configured = import.meta.env.VITE_PORTRAIT_BASE as string | undefined;
 export const PORTRAIT_BASE: string | null =
-  (import.meta.env.VITE_PORTRAIT_BASE as string | undefined) ??
-  (import.meta.env.DEV ? "/portraits" : null);
+  configured === undefined ? "/portraits" : configured === "" ? null : configured;
 
 /** 크기 눈금 — 원형 셋(xs 24 · s 32 · m 48)은 머리, 4:5 둘(l 72 · xl 168)은 흉상 */
 export type PortraitSize = "xs" | "s" | "m" | "l" | "xl";

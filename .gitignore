@@ -64,7 +64,3 @@ gha-creds-*.json
 server-image.tar.gz
 
 prod-ca-2021.crt
-
-# 선수 초상 — `pnpm portraits`가 내보내는 화면용 자산. 실존 인물의 사진에서 온 것이라
-# 저장소에 올리지 않고, 올릴 곳은 배포가 따로 정한다 (docs/players/player.md §9.6).
-apps/web/public/portraits/
